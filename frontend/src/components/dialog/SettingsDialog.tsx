@@ -82,6 +82,7 @@ import { supportedI18nLanguages, languageNativeNames, type SupportedI18nLanguage
 import { ThemeSettingsSection } from './ThemeSettingsSection'
 import { FontSettingsSection } from './FontSettingsSection'
 import { RulesSettingsSection } from './RulesSettingsSection'
+import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
@@ -913,6 +914,8 @@ function GeneralSection() {
           }}
         />
       </SettingsGroup>
+
+      <LabelsSettingsSection />
 
       <RulesSettingsSection />
 

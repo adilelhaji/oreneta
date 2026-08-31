@@ -1,4 +1,5 @@
 import { Plus, X } from 'lucide-react'
+import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { SelectInput, TextInput } from '../field/Field'
 import {
@@ -10,11 +11,17 @@ import {
   type RuleCondition,
 } from '../../states/rules'
 import type { Account } from '../../types'
+import { labels$ } from '../../states/labels'
 
-const ACTION_TYPES: RuleAction['type'][] = ['moveTo', 'markRead', 'star', 'stop']
+const ACTION_TYPES: RuleAction['type'][] = ['moveTo', 'markRead', 'star', 'addLabel', 'stop']
 
-function blankAction(type: RuleAction['type']): RuleAction {
-  return type === 'moveTo' ? { type: 'moveTo', folder: '' } : ({ type } as RuleAction)
+function blankAction(type: RuleAction['type'], firstLabelId: string): RuleAction {
+  if (type === 'moveTo') return { type: 'moveTo', folder: '' }
+  // Seeded with a label rather than left blank: the picker below can only
+  // offer labels that exist, and an empty one would be a rule that cannot be
+  // saved for a reason the reader did not choose.
+  if (type === 'addLabel') return { type: 'addLabel', labelId: firstLabelId }
+  return { type } as RuleAction
 }
 
 /**
@@ -34,6 +41,7 @@ export function RuleEditor({
   onChange: (rule: Rule) => void
 }) {
   const { t } = useTranslation()
+  const labels = useValue(labels$.labels)
   const problem = ruleProblem(rule)
 
   const setCondition = (index: number, condition: RuleCondition) =>
@@ -154,7 +162,9 @@ export function RuleEditor({
           <div key={index} className="flex items-center gap-1.5">
             <SelectInput
               value={action.type}
-              onChange={(event) => setAction(index, blankAction(event.target.value as RuleAction['type']))}
+              onChange={(event) =>
+                setAction(index, blankAction(event.target.value as RuleAction['type'], labels[0]?.id ?? ''))
+              }
               className="w-40 shrink-0 rounded-xl py-1.5 pl-2.5 text-[0.75rem]"
             >
               {ACTION_TYPES.map((type) => (
@@ -171,6 +181,23 @@ export function RuleEditor({
                 className="min-w-0 flex-1"
               />
             )}
+            {action.type === 'addLabel' &&
+              (labels.length === 0 ? (
+                <span className="min-w-0 flex-1 text-[0.6875rem] text-secondary">{t('labels.noneYet')}</span>
+              ) : (
+                <SelectInput
+                  value={action.labelId}
+                  onChange={(event) => setAction(index, { type: 'addLabel', labelId: event.target.value })}
+                  aria-label={t('labels.label')}
+                  className="min-w-0 flex-1 rounded-xl py-1.5 pl-2.5 text-[0.75rem]"
+                >
+                  {labels.map((label) => (
+                    <option key={label.id} value={label.id}>
+                      {label.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              ))}
             <button
               type="button"
               title={t('rules.remove')}
@@ -184,7 +211,7 @@ export function RuleEditor({
         ))}
         <button
           type="button"
-          onClick={() => onChange({ ...rule, actions: [...rule.actions, blankAction('markRead')] })}
+          onClick={() => onChange({ ...rule, actions: [...rule.actions, blankAction('markRead', '')] })}
           className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-[0.6875rem] font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
         >
           <Plus size={12} />

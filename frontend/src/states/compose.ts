@@ -588,20 +588,31 @@ function normalizeQuickReplyDraftId(value: string): string {
   return value.trim().replace(/^<|>$/g, '').toLowerCase()
 }
 
-mail$.messages.onChange(({ value }) => {
-  for (const [tempId, guard] of quickReplySendHydrationGuards) {
-    // A guard whose send is still in flight outlives its bubble: on success the
-    // pending payload is dropped *before* the post-send draft discard resolves,
-    // and a refresh landing in that window can already have swapped the bubble
-    // for the canonical Sent copy. Dropping the guard there would let the
-    // still-persisted server draft hydrate the just-cleared composer — the very
-    // race the guard exists to close.
-    if (guard.inFlight) continue
-    if (!value.some((message) => message.id === tempId) && !getPendingSend(tempId)) {
-      quickReplySendHydrationGuards.delete(tempId)
+// Registered after this module finishes evaluating, not during it.
+//
+// `mail` and `compose` are in an import cycle (mail → kanban → compose →
+// mail), so whichever is reached first sees the other only half built. Reading
+// `mail$` at module scope therefore worked or threw depending on which file
+// the bundler happened to evaluate first — the app booted by luck, and any new
+// module that imported `mail` before `compose` broke it. A microtask runs once
+// every module in the cycle has finished, and nothing can change the message
+// list in between.
+queueMicrotask(() => {
+  mail$.messages.onChange(({ value }) => {
+    for (const [tempId, guard] of quickReplySendHydrationGuards) {
+      // A guard whose send is still in flight outlives its bubble: on success
+      // the pending payload is dropped *before* the post-send draft discard
+      // resolves, and a refresh landing in that window can already have
+      // swapped the bubble for the canonical Sent copy. Dropping the guard
+      // there would let the still-persisted server draft hydrate the
+      // just-cleared composer — the very race the guard exists to close.
+      if (guard.inFlight) continue
+      if (!value.some((message) => message.id === tempId) && !getPendingSend(tempId)) {
+        quickReplySendHydrationGuards.delete(tempId)
+      }
     }
-  }
-  hydrateQuickReplyFromTailDraft(value)
+    hydrateQuickReplyFromTailDraft(value)
+  })
 })
 
 // The app signature is read out of the prefs table after the first render, and

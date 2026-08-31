@@ -31,12 +31,18 @@ export const isFilterMode = (value: unknown): value is FilterMode =>
 /** The one narrowing a single-valued surface holds, as a set. */
 export const facetsOf = (mode: FilterMode): FilterFacet[] => (mode === 'all' ? [] : [mode])
 
-export type FilterFacet = 'unread' | 'starred' | 'snoozed'
+export type FilterFacet = 'unread' | 'starred' | 'snoozed' | `label:${string}`
 
 export const FILTER_FACETS: FilterFacet[] = ['unread', 'starred', 'snoozed']
 
 const isFilterFacet = (value: unknown): value is FilterFacet =>
-  value === 'unread' || value === 'starred' || value === 'snoozed'
+  value === 'unread' ||
+  value === 'starred' ||
+  value === 'snoozed' ||
+  // A label facet names the label it means. The id is not checked here: a
+  // label the reader has since deleted is dropped by whoever knows the label
+  // set, not by a string test.
+  (typeof value === 'string' && value.startsWith('label:') && value.length > 'label:'.length)
 
 /**
  * The set as the core reads it: sorted and comma-joined, `all` when empty.
@@ -61,7 +67,20 @@ export const hasFilter = (filters: FilterFacet[], facet: FilterFacet) => filters
 export function nextFilters(filters: FilterFacet[], facet: FilterFacet): FilterFacet[] {
   if (filters.includes(facet)) return filters.filter((item) => item !== facet)
   if (facet === 'snoozed') return ['snoozed']
-  return [...filters.filter((item) => item !== 'snoozed'), facet]
+  const kept = filters.filter((item) => item !== 'snoozed')
+  // One label at a time. Asking for two would mean a conversation carrying
+  // both, which is almost never what someone picking a second one meant, and
+  // the answer to the other reading — either of them — is the one they can
+  // already get by picking one and then the other.
+  if (facet.startsWith('label:')) {
+    return [...kept.filter((item) => !item.startsWith('label:')), facet]
+  }
+  return [...kept, facet]
+}
+
+/** The label a filter set is narrowed to, if any. */
+export function activeLabelId(filters: FilterFacet[]): string {
+  return filters.find((facet) => facet.startsWith('label:'))?.slice('label:'.length) ?? ''
 }
 
 /**

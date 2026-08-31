@@ -32,6 +32,11 @@ export function filterThreads(
   if (facets.includes('starred')) {
     out = out.filter((thread) => thread.starred || thread.has_starred_items || kept(thread))
   }
+  const labelFacet = facets.find((facet) => facet.startsWith('label:'))
+  if (labelFacet) {
+    const labelId = labelFacet.slice('label:'.length)
+    out = out.filter((thread) => thread.labels?.includes(labelId) || kept(thread))
+  }
   // Nothing for 'snoozed': it is answered by a different query, and every row
   // that came back is one of its own.
   return out

@@ -2,7 +2,9 @@ import { Clock, Mail, Pin, Star } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
-import { nextFilters, ui$, type FilterFacet } from '../../states/ui'
+import { activeLabelId, nextFilters, ui$, type FilterFacet } from '../../states/ui'
+import { labels$ } from '../../states/labels'
+import { SelectInput } from '../field/Field'
 import { settings$ } from '../../states/settings'
 
 const FACETS: { facet: FilterFacet; icon: typeof Star; labelKey: string }[] = [
@@ -27,6 +29,8 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
   const { t } = useTranslation()
   const filters = useValue(ui$.filters)
   const sticky = useValue(settings$.stickyFilters)
+  const labels = useValue(labels$.labels)
+  const activeLabel = activeLabelId(filters)
 
   const offered = FACETS.filter(({ facet }) => !(hideSnoozed && facet === 'snoozed'))
 
@@ -50,6 +54,31 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
           </button>
         )
       })}
+
+      {/* One label at a time, as a picker rather than a chip each: a mailbox
+          can have twenty labels and the bar has room for none of them. */}
+      {labels.length > 0 && (
+        <SelectInput
+          value={activeLabel}
+          onChange={(event) => {
+            const id = event.target.value
+            const withoutLabel = filters.filter((facet) => !facet.startsWith('label:'))
+            ui$.filters.set(id ? [...withoutLabel, `label:${id}` as const] : withoutLabel)
+          }}
+          aria-label={t('labels.filterBy')}
+          className={clsx(
+            'ml-1 max-w-[10rem] rounded-lg py-1 pl-2 text-[0.6875rem] font-semibold',
+            activeLabel && 'text-accent',
+          )}
+        >
+          <option value="">{t('labels.anyLabel')}</option>
+          {labels.map((label) => (
+            <option key={label.id} value={label.id}>
+              {label.name}
+            </option>
+          ))}
+        </SelectInput>
+      )}
 
       <button
         type="button"

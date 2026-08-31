@@ -165,6 +165,8 @@ export type Message = {
   has_starred_items?: boolean
   has_draft?: boolean
   has_attachments: boolean
+  /** Ids of the local labels on this conversation, in the reader's order. */
+  labels?: string[]
   attachments?: Attachment[]
   /** Source feed URL; present on RSS feed threads only. */
   feed_url?: string

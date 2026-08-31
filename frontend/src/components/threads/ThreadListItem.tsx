@@ -9,6 +9,7 @@ import { useTranslation } from '../../lib/i18n'
 import { isDraftFolder } from '../../states/mail'
 import { settings$ } from '../../states/settings'
 import { densityStyle } from './listDensity'
+import { LabelChips } from './LabelChips'
 
 /** What a row offers without being opened. */
 export type QuickRowAction = 'archive' | 'trash' | 'snooze' | 'read'
@@ -85,6 +86,13 @@ export function ThreadListItem({
   // to keep in step for no gain.
   const subjectLine = (
     <p className={clsx('flex-1 truncate text-[0.75rem] leading-snug', unread ? 'font-semibold' : 'font-normal')}>
+      {/* Before the subject, where they read as what this conversation is
+          rather than as an afterthought at the end of a line that truncates. */}
+      {!!thread.labels?.length && (
+        <span className="mr-1 inline-flex align-middle">
+          <LabelChips ids={thread.labels} max={density.singleLine ? 1 : 2} />
+        </span>
+      )}
       {hasDraft && <span className="mr-1 font-normal text-rose-500">{t('chat.draft')}</span>}
       <span className={clsx(unread ? 'text-primary' : 'text-primary/85')}>{threadTitle}</span>
       {/* The preview trails the subject unless it has been given its own line,

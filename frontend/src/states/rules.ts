@@ -28,6 +28,8 @@ export type RuleAction =
   | { type: 'moveTo'; folder: string }
   | { type: 'markRead' }
   | { type: 'star' }
+  /** Adds one of the reader's local labels, leaving the others in place. */
+  | { type: 'addLabel'; labelId: string }
   | { type: 'stop' }
 
 export type Rule = {
@@ -99,12 +101,15 @@ export function newRule(): Rule {
  * so the reader is told while they are still writing the rule, rather than
  * after pressing save.
  */
-export function ruleProblem(rule: Rule): 'name' | 'conditions' | 'value' | 'actions' | 'folder' | null {
+export function ruleProblem(
+  rule: Rule,
+): 'name' | 'conditions' | 'value' | 'actions' | 'folder' | 'label' | null {
   if (!rule.name.trim()) return 'name'
   if (rule.conditions.length === 0) return 'conditions'
   if (rule.conditions.some((condition) => !condition.value.trim())) return 'value'
   if (rule.actions.length === 0) return 'actions'
   if (rule.actions.some((action) => action.type === 'moveTo' && !action.folder.trim())) return 'folder'
+  if (rule.actions.some((action) => action.type === 'addLabel' && !action.labelId.trim())) return 'label'
   return null
 }
 

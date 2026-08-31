@@ -23,6 +23,7 @@ import { applyUpdateStatus, loadUpdateStatus, runUpdateCheck } from './states/up
 import type { UpdateStatus } from './lib/update'
 import { useFoldersByAccount } from './lib/kanbanData'
 import { setTrayUnread } from './lib/trayUnread'
+import { loadLabels } from './states/labels'
 import {
   forgetScheduledSend,
   markScheduledSendFailed,
@@ -232,6 +233,10 @@ export function useAppEffects() {
   // off yesterday is visible today without having to go looking for it.
   useEffect(() => {
     void refreshScheduledSends()
+    // The label set, once: every chip in the list is painted from it, so a
+    // list that arrives before the labels do would show conversations with
+    // labels it cannot name.
+    void loadLabels()
   }, [])
 
   // The updater's state machine lives in Go and pushes its whole status on every

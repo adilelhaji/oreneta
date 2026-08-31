@@ -32,6 +32,7 @@ import {
   starThread,
 } from '../../states/mail'
 import { printConversation } from '../../lib/print'
+import { LabelPicker } from './LabelPicker'
 import { thread$, type ConversationMode } from '../../states/thread'
 import { closeKanbanPane, kanban$, openCorrespondentMail } from '../../states/kanban'
 import { openComposeTab } from '../../states/compose'
@@ -255,6 +256,7 @@ export function ConversationHeader({
               />
               {!isRSS && (
                 <>
+                  <LabelPicker threadId={activeThread.thread_id} applied={activeThread.labels ?? []} />
                   <IconButton
                     icon={Archive}
                     label={t('threads.actions.archiveThread')}
