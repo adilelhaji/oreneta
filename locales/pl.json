@@ -479,6 +479,7 @@
   "feeds.urlHint": "Wklej URL kanału lub adres witryny, aby automatycznie wykryć jej kanał.",
   "filters.all": "Wszystkie",
   "filters.allFeeds": "Wszystkie kanały",
+  "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Filtr",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Oznaczone gwiazdką",

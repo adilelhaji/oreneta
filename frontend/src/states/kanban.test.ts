@@ -37,7 +37,7 @@ describe('openCorrespondentMail', () => {
     kanban$.activeBoardId.set('')
     ui$.selectedAccount.set('other')
     ui$.selectedFolder.set('Archive')
-    ui$.filterMode.set('unread')
+    ui$.filters.set(['unread'])
     ui$.query.set('old query')
     ui$.selectedThread.set('old-thread')
     ui$.mobilePane.set('conversation')
@@ -47,7 +47,7 @@ describe('openCorrespondentMail', () => {
 
     expect(ui$.selectedAccount.get()).toBe('acc1')
     expect(ui$.selectedFolder.get()).toBe('INBOX')
-    expect(ui$.filterMode.get()).toBe('all')
+    expect(ui$.filters.get()).toEqual([])
     expect(ui$.query.get()).toBe('sender@example.com')
     expect(ui$.selectedThread.get()).toBe('')
     expect(ui$.mobilePane.get()).toBe('threads')

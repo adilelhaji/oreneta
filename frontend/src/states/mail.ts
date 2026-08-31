@@ -2,7 +2,15 @@ import { observable } from '@legendapp/state'
 import type { Folder, Message } from '../types'
 import { invoke } from '../lib/bridge'
 import { t } from '../lib/i18n'
-import { clearBulkSelection, confirmAction, ui$, showToast, showUndoToast, type BulkSelectionItem } from './ui'
+import {
+  clearBulkSelection,
+  confirmAction,
+  filterKey,
+  ui$,
+  showToast,
+  showUndoToast,
+  type BulkSelectionItem,
+} from './ui'
 import { accounts$, unifiedAccounts } from './accounts'
 import { kanban$, forgetDeletedMailViewFolder, removeKanbanColumnsForFolder } from './kanban'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
@@ -479,9 +487,9 @@ export function getFilteredThreads() {
   // The starred folder already lists starred threads only; a leftover filter
   // mode from the previous mailbox must not hide rows here.
   if (isUnifiedStarred(ui$.selectedAccount.get(), ui$.selectedFolder.get())) return threads
-  const filterMode = ui$.filterMode.get()
+  const facets = ui$.filters.get()
   const selected = ui$.selectedThread.get()
-  return filterThreads(threads, filterMode, selected, mail$.readThreads.get())
+  return filterThreads(threads, facets, selected, mail$.readThreads.get())
 }
 
 // Move the selection up (delta -1) or down (delta +1) through the visible
@@ -749,7 +757,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const initialAccount = ui$.selectedAccount.get()
   const initialFolder = ui$.selectedFolder.get()
   const initialQuery = ui$.query.get()
-  const initialFilter = ui$.filterMode.get()
+  const initialFilter = filterKey(ui$.filters.get())
   const activeAccount = accounts$.get().find((account) => account.id === initialAccount)
   // Starred is answered from the local cache, so there is no live stage to run.
   const canSearchLive =
@@ -765,7 +773,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       ui$.selectedAccount.get() !== initialAccount ||
       ui$.selectedFolder.get() !== initialFolder ||
       ui$.query.get() !== initialQuery ||
-      ui$.filterMode.get() !== initialFilter
+      filterKey(ui$.filters.get()) !== initialFilter
     ) {
       return
     }
@@ -776,7 +784,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const selectedAcc = ui$.selectedAccount.get()
   const selectedFol = ui$.selectedFolder.get()
   const q = ui$.query.get()
-  const filter = ui$.filterMode.get()
+  const filter = filterKey(ui$.filters.get())
   const viewKey = threadListViewKey(selectedAcc, selectedFol, q, filter)
 
   // A background refresh steps aside for a server-bound load already running for
@@ -794,7 +802,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     ui$.selectedAccount.get() !== selectedAcc ||
     ui$.selectedFolder.get() !== selectedFol ||
     ui$.query.get() !== q ||
-    ui$.filterMode.get() !== filter
+    filterKey(ui$.filters.get()) !== filter
   const previousThreads = mail$.threads.get()
   const currentSelected = ui$.selectedThread.get()
   const previousThreadsCursor = mail$.threadsCursor.get()
@@ -980,14 +988,14 @@ export async function loadMoreThreads() {
   const selectedAcc = ui$.selectedAccount.get()
   const selectedFol = ui$.selectedFolder.get()
   const q = ui$.query.get()
-  const filter = ui$.filterMode.get()
+  const filter = filterKey(ui$.filters.get())
   const version = threadLoadVersion
   const stillCurrent = (cursor: string) =>
     threadLoadVersion === version &&
     ui$.selectedAccount.get() === selectedAcc &&
     ui$.selectedFolder.get() === selectedFol &&
     ui$.query.get() === q &&
-    ui$.filterMode.get() === filter &&
+    filterKey(ui$.filters.get()) === filter &&
     mail$.threadsCursor.get() === cursor
   // The starred filter is one unpaginated page; a search over it is paged like
   // any other, and every other view stops on an empty cursor below.

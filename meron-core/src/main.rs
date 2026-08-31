@@ -2683,13 +2683,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     store::get_snoozed_headers(&engine.db.lock().unwrap(), &account)?,
                     None,
                 ),
-                thread_list::MailSource::Recent { unread_only } => store::get_recent_page(
+                thread_list::MailSource::Recent { unread_only, starred_only } => store::get_recent_page(
                     &engine.db.lock().unwrap(),
                     &account,
                     &folder,
                     limit,
                     request.before_cursor,
-                    unread_only,
+                    store::RecentFilter { unread_only, starred_only },
                 )?,
                 thread_list::MailSource::Search => {
                     // Chat-view search spans the selected folder plus Sent, so a

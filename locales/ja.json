@@ -479,6 +479,7 @@
   "feeds.urlHint": "フィードURL、またはサイトのアドレスを貼り付けてフィードを自動検出します。",
   "filters.all": "すべて",
   "filters.allFeeds": "すべてのフィード",
+  "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "フィルター",
   "filters.snoozed": "Snoozed",
   "filters.starred": "スター付き",

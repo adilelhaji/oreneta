@@ -479,6 +479,7 @@
   "feeds.urlHint": "Επικολλήστε ένα URL ροής ή μια διεύθυνση ιστότοπου για αυτόματο εντοπισμό της ροής του.",
   "filters.all": "Όλα",
   "filters.allFeeds": "Όλες οι ροές",
+  "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Φίλτρο",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Με αστέρι",

@@ -25,7 +25,14 @@ import {
 } from 'lucide-react'
 import { createElement } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { ui$, closeCommandPalette, focusGlobalSearch, focusQuickReply } from '../../states/ui'
+import {
+  ui$,
+  closeCommandPalette,
+  facetsOf,
+  focusGlobalSearch,
+  focusQuickReply,
+  type FilterMode,
+} from '../../states/ui'
 import { selectTheme, settings$ } from '../../states/settings'
 import { accounts$ } from '../../states/accounts'
 import { BUILTIN_THEMES } from '../../lib/themes'
@@ -59,7 +66,7 @@ export function useCommandList(): Command[] {
   const activeBoardId = useValue(kanban$.activeBoardId)
   const themeId = useValue(settings$.themeId)
   const customThemes = useValue(settings$.customThemes)
-  const filterMode = useValue(ui$.filterMode)
+  const filters = useValue(ui$.filters)
   const kanbanFilterMode = useValue(kanban$.globalFilter)
   const selectedAccount = useValue(ui$.selectedAccount)
   const selectedFolder = useValue(ui$.selectedFolder)
@@ -74,10 +81,14 @@ export function useCommandList(): Command[] {
       fn()
     }
     const icon = (component: typeof Mail) => createElement(component, { size: 15 })
-    const activeFilterMode = activeBoardId ? kanbanFilterMode : filterMode
+    // The palette offers one narrowing at a time, which is what a command
+    // list is for; the filter bar is where they are combined.
+    const activeFilterMode: FilterMode = activeBoardId
+      ? kanbanFilterMode
+      : (filters[0] ?? 'all')
     const setActiveFilterMode = activeBoardId
       ? setGlobalKanbanFilter
-      : (mode: typeof filterMode) => ui$.filterMode.set(mode)
+      : (mode: FilterMode) => ui$.filters.set(facetsOf(mode))
     const railShortcut = (slot: number) => RAIL_SHORTCUT_IDS[slot - 1] as ShortcutId | undefined
 
     const list: Command[] = [
@@ -310,7 +321,7 @@ export function useCommandList(): Command[] {
     activeBoardId,
     themeId,
     customThemes,
-    filterMode,
+    filters,
     kanbanFilterMode,
     selectedAccount,
     selectedFolder,

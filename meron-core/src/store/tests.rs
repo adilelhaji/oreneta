@@ -201,6 +201,52 @@ fn a_thread_put_aside_stays_out_of_the_way_until_its_time() {
 }
 
 #[test]
+fn a_recent_page_can_be_narrowed_by_more_than_one_thing_at_once() {
+    let conn = test_conn();
+    let message = |uid: u32, date: i64, seen: bool, starred: bool| MessageHeader {
+        uid,
+        subject: format!("Message {uid}"),
+        date,
+        seen,
+        starred,
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            message(1, 100, true, true),   // read, starred
+            message(2, 200, false, false), // unread, plain
+            message(3, 300, false, true),  // unread and starred
+        ],
+    )
+    .unwrap();
+
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(uids(RecentFilter::default()), vec![3, 2, 1]);
+    assert_eq!(uids(RecentFilter::unread()), vec![3, 2]);
+    assert_eq!(
+        uids(RecentFilter { unread_only: false, starred_only: true }),
+        vec![3, 1]
+    );
+    // Both at once is one question, answered by the query rather than by
+    // narrowing a page after it was already counted out.
+    assert_eq!(
+        uids(RecentFilter { unread_only: true, starred_only: true }),
+        vec![3]
+    );
+}
+
+#[test]
 fn recent_headers_carry_what_a_rule_needs_to_match_on() {
     let conn = test_conn();
     let recipient = |name: &str, addr: &str| crate::imap::Recipient {
@@ -973,7 +1019,7 @@ fn card_message_counts_span_the_folder_not_the_page() {
 
     // The unread view hands grouping only the two unread messages, so the cards
     // it produces tally one message each.
-    let (page, _) = get_recent_page(&conn, "acct", "INBOX", 50, None, true).unwrap();
+    let (page, _) = get_recent_page(&conn, "acct", "INBOX", 50, None, RecentFilter::unread()).unwrap();
     let cards = group_thread_cards(page, "INBOX");
     let keys = cards
         .iter()
@@ -1096,11 +1142,11 @@ fn get_recent_page_can_return_only_unread_messages() {
     // insert_message stamps every row with the same date, so the date-ordered
     // list ties break on uid DESC and the cursor carries that shared date.
     const D: i64 = 1779580800;
-    let (all, all_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, false).unwrap();
+    let (all, all_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, RecentFilter::default()).unwrap();
     assert_eq!(all.iter().map(|m| m.uid).collect::<Vec<_>>(), vec![5, 4]);
     assert_eq!(all_cursor.as_deref(), Some(format!("date:{D}:4").as_str()));
 
-    let (unread, unread_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, true).unwrap();
+    let (unread, unread_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, RecentFilter::unread()).unwrap();
     assert_eq!(unread.iter().map(|m| m.uid).collect::<Vec<_>>(), vec![5, 3]);
     assert_eq!(
         unread_cursor.as_deref(),
@@ -1109,7 +1155,7 @@ fn get_recent_page_can_return_only_unread_messages() {
     assert!(unread.iter().all(|m| !m.seen));
 
     let (next_unread, next_cursor) =
-        get_recent_page(&conn, "acct", "INBOX", 2, Some((D, 3)), true).unwrap();
+        get_recent_page(&conn, "acct", "INBOX", 2, Some((D, 3)), RecentFilter::unread()).unwrap();
     assert_eq!(
         next_unread.iter().map(|m| m.uid).collect::<Vec<_>>(),
         vec![2]

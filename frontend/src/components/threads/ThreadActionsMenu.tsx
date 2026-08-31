@@ -195,6 +195,7 @@ export function ThreadActionsMenu({
   syncingLabel,
   allLabel,
   hideSnoozed,
+  hideFilters = false,
   onRemove,
   onSearch,
   searchLabel,
@@ -214,6 +215,8 @@ export function ThreadActionsMenu({
   syncingLabel?: string
   allLabel?: string
   hideSnoozed?: boolean
+  /** Set where the narrowings live somewhere the reader can already see. */
+  hideFilters?: boolean
   onRemove?: () => void
   onSearch?: () => void
   searchLabel?: string
@@ -230,7 +233,7 @@ export function ThreadActionsMenu({
     () => setOpen(false),
   )
 
-  const filterActive = filterMode !== 'all'
+  const filterActive = !hideFilters && filterMode !== 'all'
 
   return (
     <div ref={rootRef} className="relative">
@@ -265,6 +268,7 @@ export function ThreadActionsMenu({
             syncingLabel={syncingLabel}
             allLabel={allLabel}
             hideSnoozed={hideSnoozed}
+            hideFilters={hideFilters}
             onRemove={onRemove}
             onSearch={onSearch}
             searchLabel={searchLabel}

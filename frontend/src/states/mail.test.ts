@@ -25,7 +25,14 @@ import {
   moveThreadToFolder,
 } from './mail'
 import { settings$ } from './settings'
-import { runToastUndo, settleConfirm, toggleBulkSelection, ui$, type BulkSelectionItem } from './ui'
+import {
+  filterKey,
+  runToastUndo,
+  settleConfirm,
+  toggleBulkSelection,
+  ui$,
+  type BulkSelectionItem,
+} from './ui'
 
 const thread = (overrides: Partial<Message> = {}): Message => ({
   id: 'acc:inbox:thread:1#101',
@@ -294,7 +301,7 @@ describe('thread list paging', () => {
     ui$.selectedFolder.set('inbox')
     ui$.selectedThread.set('')
     ui$.query.set('old')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
   })
 
   afterEach(() => {
@@ -390,7 +397,7 @@ describe('thread selection on load', () => {
     ui$.selectedFolder.set('inbox')
     ui$.selectedThread.set('')
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     kanban$.activeBoardId.set('')
     ;(window as any).go = {
       main: {
@@ -1642,7 +1649,7 @@ describe('ensureAccountFolders', () => {
 
 describe('thread list view identity', () => {
   const currentKey = () =>
-    threadListViewKey(ui$.selectedAccount.get(), ui$.selectedFolder.get(), ui$.query.get(), ui$.filterMode.get())
+    threadListViewKey(ui$.selectedAccount.get(), ui$.selectedFolder.get(), ui$.query.get(), filterKey(ui$.filters.get()))
 
   beforeEach(() => {
     mail$.threads.set([])
@@ -1653,7 +1660,7 @@ describe('thread list view identity', () => {
     ui$.selectedFolder.set('inbox')
     ui$.selectedThread.set('')
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     ;(window as any).go = {
       main: { App: { Invoke: async () => ({ threads: [], next_cursor: '' }) } },
     }
@@ -1661,7 +1668,7 @@ describe('thread list view identity', () => {
 
   afterEach(() => {
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     mail$.threadsLoadedKey.set('')
   })
 
@@ -1686,7 +1693,7 @@ describe('thread list view identity', () => {
     await loadThreads()
     expect(mail$.threadsLoadedKey.get()).toBe(currentKey())
 
-    ui$.filterMode.set('unread')
+    ui$.filters.set(['unread'])
     expect(mail$.threadsLoadedKey.get()).not.toBe(currentKey())
   })
 

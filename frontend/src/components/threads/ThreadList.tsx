@@ -14,6 +14,7 @@ import {
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import {
   clearBulkSelection,
+  filterKey,
   isWailsDesktopRuntime,
   selectedBulkItems,
   setBulkSelection,
@@ -54,6 +55,7 @@ import { QuickSettingsMenu } from '../sidenav/QuickSettingsMenu'
 import { FolderSwitcher } from '../menu/FolderSwitcher'
 import { ThreadActionsMenu } from './ThreadActionsMenu'
 import { ScheduledSendsBar } from './ScheduledSendsBar'
+import { QuickFilterBar } from './QuickFilterBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
@@ -77,7 +79,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const folders = useValue(mail$.folders)
   const system = useValue(ui$.system)
   const filteredThreads = useValue(getFilteredThreads)
-  const filterMode = useValue(ui$.filterMode)
+  const filters = useValue(ui$.filters)
   const threadsCursor = useValue(mail$.threadsCursor)
   const threadsLoadingMore = useValue(mail$.threadsLoadingMore)
   // The rows on hand belong to the view they were loaded for. Until that is the
@@ -85,7 +87,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // true from the first paint of a navigation, which is a frame or more before
   // the effect that starts the load.
   const threadsLoadedKey = useValue(mail$.threadsLoadedKey)
-  const threadsLoading = threadsLoadedKey !== threadListViewKey(selectedAccount, selectedFolder, query, filterMode)
+  const threadsLoading = threadsLoadedKey !== threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters))
   const threadMenu = useThreadContextMenu(accounts)
   // Starred is a folder of the unified view whose rows span every account. It
   // lists ordinary threads, so it shares this list's selection, context menu and
@@ -152,7 +154,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // A search pages on the cursor the core mints for it, whatever the filter chip
   // says — a query is answered by a search, not by a filtered listing. Without a
   // cursor (feeds, starred) there is nothing more to load.
-  const canLoadMore = !!threadsCursor && (!!query.trim() || filterMode === 'all')
+  const canLoadMore = !!threadsCursor && (!!query.trim() || filters.length === 0)
   const feedRowsDraggable = !isStarredView && isRSSAccount
   // The folder switcher needs a folder list to offer. That is an account's real
   // folders, or — in the unified view — the synthetic per-role list, where each
@@ -164,7 +166,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // wording holds while a search or filter is hiding the threads that are there.
   const inboxFolder = folders.find((folder) => folder.role === 'inbox' || folder.id === 'inbox')
   const inInbox = selectedFolder === (inboxFolder?.id ?? 'inbox')
-  const narrowed = !!query.trim() || filterMode !== 'all'
+  const narrowed = !!query.trim() || filters.length > 0
   const emptyStateTitle = narrowed
     ? t('empty.noMatchingMail')
     : isRSSAccount
@@ -353,12 +355,14 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                     onClick={() => openComposeTab()}
                   />
                 )}
-                {/* Filter + mark-all-read overflow menu (shared with kanban columns).
-                Hidden in the starred view, where the list is starred-only by definition. */}
+                {/* Mark-all-read and the folder actions. The narrowings moved
+                out to the bar below, where they can be seen and combined; the
+                menu keeps what is done rarely. */}
                 {!isStarredView && (
                   <ThreadActionsMenu
-                    filterMode={filterMode}
-                    onFilterChange={(mode) => ui$.filterMode.set(mode)}
+                    hideFilters
+                    filterMode="all"
+                    onFilterChange={() => {}}
                     hasUnread={hasUnread}
                     onMarkAllRead={() => markAllRead()}
                     onEmptyFolder={
@@ -428,6 +432,10 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           onClose={() => setQuickMenu(null)}
         />
       )}
+
+      {/* Not in the starred view, which is starred-only by definition, and not
+          while searching, where the query is the narrowing. */}
+      {!isStarredView && !query.trim() && <QuickFilterBar hideSnoozed={isRSSAccount} />}
 
       <ScheduledSendsBar />
 

@@ -1,6 +1,6 @@
 import { invoke } from './bridge'
 import type { Account, Message } from '../types'
-import type { FilterMode } from '../states/ui'
+import type { FilterFacet } from '../states/ui'
 
 export function isRssAccount(account: Account | undefined, accountId: string): boolean {
   return account?.provider === 'rss' || account?.auth_type === 'rss' || accountId.startsWith('rss-')
@@ -9,22 +9,32 @@ export function isRssAccount(account: Account | undefined, accountId: string): b
 // Pure thread filter shared by the chat thread list and kanban columns. `keepId`
 // is an open thread to keep visible even when it no longer matches the filter
 // (e.g. selecting an unread thread marks it read but it shouldn't vanish).
+/**
+ * Narrows a page the core already narrowed, by every facet asked for.
+ *
+ * The core answers the same question, so this is not the filter — it is what
+ * keeps a row in place for the moment after it stops qualifying. A thread read
+ * while the unread filter is on must not vanish under the pointer that read
+ * it; `keepId` and `keepIds` are what hold it there until the list is asked
+ * for again.
+ */
 export function filterThreads(
   threads: Message[],
-  mode: FilterMode,
+  facets: FilterFacet[],
   keepId?: string,
   keepIds?: Record<string, boolean>,
 ): Message[] {
-  if (mode === 'unread') {
-    return threads.filter((thread) => thread.unread || thread.thread_id === keepId || !!keepIds?.[thread.thread_id])
+  const kept = (thread: Message) => thread.thread_id === keepId || !!keepIds?.[thread.thread_id]
+  let out = threads
+  if (facets.includes('unread')) {
+    out = out.filter((thread) => thread.unread || kept(thread))
   }
-  if (mode === 'starred') {
-    return threads.filter(
-      (thread) =>
-        thread.starred || thread.has_starred_items || thread.thread_id === keepId || !!keepIds?.[thread.thread_id],
-    )
+  if (facets.includes('starred')) {
+    out = out.filter((thread) => thread.starred || thread.has_starred_items || kept(thread))
   }
-  return threads
+  // Nothing for 'snoozed': it is answered by a different query, and every row
+  // that came back is one of its own.
+  return out
 }
 
 // Mark a set of threads read on the backend. Mail accounts are marked folder-wide

@@ -391,13 +391,30 @@ fn reconcile_thread_keys_from(
     Ok(())
 }
 
+/// Which messages a recent page is narrowed to.
+///
+/// A set rather than a mode: a reader looking for what is both unread and
+/// starred is asking one question, and answering it by filtering a page of
+/// fifty after the fact would hand back three rows and call it a page.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RecentFilter {
+    pub unread_only: bool,
+    pub starred_only: bool,
+}
+
+impl RecentFilter {
+    pub fn unread() -> Self {
+        Self { unread_only: true, starred_only: false }
+    }
+}
+
 pub fn get_recent_page(
     conn: &Connection,
     account: &str,
     folder: &str,
     limit: u32,
     before_cursor: Option<(i64, u32)>,
-    unread_only: bool,
+    filter: RecentFilter,
 ) -> Result<(Vec<MessageHeader>, Option<String>)> {
     let probe = limit.saturating_add(1);
     // Newest-first by send time. The cursor is the (date, uid) of the last row of
@@ -408,6 +425,7 @@ pub fn get_recent_page(
                 json_extract(json, '$.to') FROM messages
          WHERE account = ?1 AND folder = ?2
            AND (?6 = 0 OR seen = 0)
+           AND (?7 = 0 OR starred = 1)
            AND (?3 IS NULL
                 OR date < ?3
                 OR (date = ?3 AND uid < ?4))
@@ -422,7 +440,8 @@ pub fn get_recent_page(
             cursor_date,
             cursor_uid,
             probe as i64,
-            unread_only as i64
+            filter.unread_only as i64,
+            filter.starred_only as i64
         ],
         |row| {
             let uid = row.get(0)?;

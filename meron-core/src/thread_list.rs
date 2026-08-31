@@ -85,15 +85,35 @@ impl ThreadListQuery {
     }
 
     /// Which page the (filter, query) pair asks for.
+    ///
+    /// The filter is a set, written comma-separated: a reader can ask for what
+    /// is both unread and starred, and that is one question with one answer,
+    /// not a page of fifty narrowed afterwards to three rows.
+    ///
+    /// Two of the names are not refinements but different questions, and stay
+    /// whole views of their own: `snoozed` reads what has been set aside, and
+    /// `starred` on its own is the starred view the side navigation offers.
+    /// Only when starred is asked for *alongside* something else does it
+    /// become a narrowing of the ordinary page.
     pub fn source(&self) -> MailSource {
         if !self.query.is_empty() {
             return MailSource::Search;
         }
-        match self.filter.as_str() {
-            "starred" => MailSource::Starred,
-            "snoozed" => MailSource::Snoozed,
-            "unread" => MailSource::Recent { unread_only: true },
-            _ => MailSource::Recent { unread_only: false },
+        let names: Vec<&str> = self
+            .filter
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty() && *name != "all")
+            .collect();
+        if names.iter().any(|name| *name == "snoozed") {
+            return MailSource::Snoozed;
+        }
+        if names == ["starred"] {
+            return MailSource::Starred;
+        }
+        MailSource::Recent {
+            unread_only: names.contains(&"unread"),
+            starred_only: names.contains(&"starred"),
         }
     }
 
@@ -115,8 +135,9 @@ pub enum MailSource {
     /// what someone has set aside is a short list by nature, and a long one is
     /// a sign they need to see all of it.
     Snoozed,
-    /// Newest-first page, cursor paged, optionally unread-only.
-    Recent { unread_only: bool },
+    /// Newest-first page, cursor paged, narrowed by any combination of the
+    /// facets a reader can ask for.
+    Recent { unread_only: bool, starred_only: bool },
     /// Text search across the folder plus Sent, cursor-paginated.
     Search,
 }
@@ -268,11 +289,11 @@ mod tests {
         let query = |params: Value| ThreadListQuery::from_params(&params, "folder");
         assert_eq!(
             query(json!({"filter": "all"})).source(),
-            MailSource::Recent { unread_only: false }
+            MailSource::Recent { unread_only: false, starred_only: false }
         );
         assert_eq!(
             query(json!({"filter": "unread"})).source(),
-            MailSource::Recent { unread_only: true }
+            MailSource::Recent { unread_only: true, starred_only: false }
         );
         assert_eq!(query(json!({"filter": "snoozed"})).source(), MailSource::Snoozed);
         // A search names its own source whatever the filter says, so looking
@@ -293,7 +314,50 @@ mod tests {
         // A blank search is not a search.
         assert_eq!(
             query(json!({"query": "   "})).source(),
-            MailSource::Recent { unread_only: false }
+            MailSource::Recent { unread_only: false, starred_only: false }
+        );
+    }
+
+    #[test]
+    fn filters_asked_for_together_narrow_one_page_rather_than_two() {
+        let query = |params: Value| ThreadListQuery::from_params(&params, "folder");
+
+        // One question with one answer. Answering it by filtering a page of
+        // fifty afterwards would hand back three rows and call it a page.
+        assert_eq!(
+            query(json!({"filter": "unread,starred"})).source(),
+            MailSource::Recent { unread_only: true, starred_only: true }
+        );
+        // Order and spacing are the caller's business, not the meaning's.
+        assert_eq!(
+            query(json!({"filter": " starred , unread "})).source(),
+            MailSource::Recent { unread_only: true, starred_only: true }
+        );
+        // "All" alongside something else says nothing, and must not turn the
+        // set into the unfiltered page.
+        assert_eq!(
+            query(json!({"filter": "all,unread"})).source(),
+            MailSource::Recent { unread_only: true, starred_only: false }
+        );
+        // Starred on its own stays the whole starred view the side navigation
+        // offers; only alongside something else is it a narrowing.
+        assert_eq!(query(json!({"filter": "starred"})).source(), MailSource::Starred);
+        // What has been set aside is a different question, not a refinement,
+        // so it stays a view of its own however it is combined.
+        assert_eq!(
+            query(json!({"filter": "snoozed,unread"})).source(),
+            MailSource::Snoozed
+        );
+        // An empty set is the ordinary page, not an impossible one.
+        assert_eq!(
+            query(json!({"filter": ",, ,"})).source(),
+            MailSource::Recent { unread_only: false, starred_only: false }
+        );
+        // A name from a later version is ignored rather than narrowing to
+        // nothing: an unknown facet must not empty a mailbox.
+        assert_eq!(
+            query(json!({"filter": "unread,attachments"})).source(),
+            MailSource::Recent { unread_only: true, starred_only: false }
         );
     }
 

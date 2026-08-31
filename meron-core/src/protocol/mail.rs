@@ -634,13 +634,13 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
         // with nothing rather than pretending the view is empty of its own
         // accord.
         thread_list::MailSource::Snoozed => (Vec::new(), None),
-        thread_list::MailSource::Recent { unread_only } => get_cached_mobile_mail_page(
+        thread_list::MailSource::Recent { unread_only, starred_only } => get_cached_mobile_mail_page(
             data_dir,
             &account_id,
             &folder_id,
             limit,
             request.before_cursor,
-            unread_only,
+            store::RecentFilter { unread_only, starred_only },
         )?,
         thread_list::MailSource::Search => {
             // One folder list for both halves: the live search and the offline
@@ -806,18 +806,11 @@ fn get_cached_mobile_mail_page(
     folder_id: &str,
     limit: u32,
     before_cursor: Option<(i64, u32)>,
-    unread_only: bool,
+    filter: store::RecentFilter,
 ) -> Result<(Vec<MessageHeader>, Option<String>), String> {
     let conn = open_mobile_db(data_dir)?;
-    store::get_recent_page(
-        &conn,
-        account_id,
-        folder_id,
-        limit,
-        before_cursor,
-        unread_only,
-    )
-    .map_err(|err| err.to_string())
+    store::get_recent_page(&conn, account_id, folder_id, limit, before_cursor, filter)
+        .map_err(|err| err.to_string())
 }
 
 fn get_cached_mobile_starred(

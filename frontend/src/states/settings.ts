@@ -143,6 +143,13 @@ export type Settings = {
   conversationLayout: ConversationLayout
   /** Searches the reader has kept, in the order they were saved. */
   savedSearches: SavedSearch[]
+  /**
+   * Whether a narrowing survives changing folder.
+   *
+   * Off by default, which is what someone triaging one mailbox wants; on is
+   * for working the same question through several.
+   */
+  stickyFilters: boolean
   /** How much room a thread-list row is given. */
   listDensity: ListDensity
   /** How wide a message body is allowed to run. */
@@ -245,6 +252,7 @@ const DB_KEY = {
   sendShortcut: 'send_shortcut',
   conversationLayout: 'conversation_layout',
   savedSearches: 'saved_searches',
+  stickyFilters: 'sticky_filters',
   listDensity: 'list_density',
   readingWidth: 'reading_width',
   markReadMode: 'mark_read_mode',
@@ -416,6 +424,7 @@ export const settings$ = observable<Settings>({
   sendShortcut: 'mod_enter',
   conversationLayout: 'chat',
   savedSearches: [],
+  stickyFilters: false,
   listDensity: 'cosy',
   readingWidth: 'comfortable',
   // What the app has always done, so nobody's mailbox changes behaviour
@@ -715,6 +724,10 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const saved = sanitizeSavedSearches(prefs[DB_KEY.savedSearches])
     if (saved) settings$.savedSearches.set(saved)
+
+    if (typeof prefs[DB_KEY.stickyFilters] === 'boolean') {
+      settings$.stickyFilters.set(prefs[DB_KEY.stickyFilters] as boolean)
+    }
 
     const listDensity = prefs[DB_KEY.listDensity]
     if (LIST_DENSITIES.includes(listDensity as ListDensity)) {

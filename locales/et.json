@@ -479,6 +479,7 @@
   "feeds.urlHint": "Kleebi voo URL või saidi aadress, et selle voog automaatselt tuvastada.",
   "filters.all": "Kõik",
   "filters.allFeeds": "Kõik vood",
+  "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Filter",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Tärniga",

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { boot } from './boot'
 import { invoke } from './lib/bridge'
-import { ui$, showToast } from './states/ui'
+import { filterKey, ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
 import {
@@ -50,7 +50,7 @@ export function useAppEffects() {
   const selectedFolder = useValue(ui$.selectedFolder)
   const selectedThread = useValue(ui$.selectedThread)
   const query = useValue(ui$.query)
-  const filterMode = useValue(ui$.filterMode)
+  const filters = useValue(ui$.filters)
   const activeBoardId = useValue(kanban$.activeBoardId)
   const startupSyncDone = useRef(false)
   const language = useValue(settings$.language)
@@ -100,9 +100,23 @@ export function useAppEffects() {
   }, [])
 
   useEffect(() => {
-    const unsubAccount = ui$.selectedAccount.onChange(() => mail$.readThreads.set({}))
-    const unsubFolder = ui$.selectedFolder.onChange(() => mail$.readThreads.set({}))
-    const unsubFilter = ui$.filterMode.onChange(() => mail$.readThreads.set({}))
+    // A narrowing is dropped when the mailbox changes, unless it was pinned.
+    // Someone triaging one folder wants it gone at the next; someone working
+    // the same question through several wants it kept, which is what the pin
+    // is for. Nothing is hidden either way — the bar says what is on.
+    const dropUnpinnedFilters = () => {
+      if (settings$.stickyFilters.peek()) return
+      if (ui$.filters.peek().length > 0) ui$.filters.set([])
+    }
+    const unsubAccount = ui$.selectedAccount.onChange(() => {
+      mail$.readThreads.set({})
+      dropUnpinnedFilters()
+    })
+    const unsubFolder = ui$.selectedFolder.onChange(() => {
+      mail$.readThreads.set({})
+      dropUnpinnedFilters()
+    })
+    const unsubFilter = ui$.filters.onChange(() => mail$.readThreads.set({}))
     const unsubBoard = kanban$.activeBoardId.onChange(() => mail$.readThreads.set({}))
     const unsubGlobalFilter = kanban$.globalFilter.onChange(() => mail$.readThreads.set({}))
     return () => {
@@ -282,7 +296,7 @@ export function useAppEffects() {
       void loadThreads()
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [selectedAccount, selectedFolder, query, filterMode, activeBoardId])
+  }, [selectedAccount, selectedFolder, query, filterKey(filters), activeBoardId])
 
   useEffect(() => {
     if (!selectedThread) return

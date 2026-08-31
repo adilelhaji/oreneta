@@ -479,6 +479,7 @@
   "feeds.urlHint": "الصق رابط خلاصة، أو عنوان موقع لاكتشاف خلاصته تلقائيًا.",
   "filters.all": "الكل",
   "filters.allFeeds": "كل الخلاصات",
+  "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "تصفية",
   "filters.snoozed": "Snoozed",
   "filters.starred": "المميزة بنجمة",

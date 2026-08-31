@@ -10,6 +10,7 @@ import { accounts$ } from '../../states/accounts'
 import { deletableFolder, deleteFolder, emptiableFolder, emptyFolder, isDraftFolder, mail$ } from '../../states/mail'
 import {
   clearBulkSelection,
+  facetsOf,
   isWailsDesktopRuntime,
   setBulkSelection,
   toggleBulkSelection,
@@ -115,7 +116,7 @@ function KanbanColumnContent({
   // e.g. selecting an unread card marks it read (tracked in readThreads) — not
   // merely because it's the open thread. So switching to Unread/Starred yields a
   // clean filtered list instead of pinning the currently-open conversation.
-  const threads = filterThreads(rawThreads, filterMode, undefined, readThreads)
+  const threads = filterThreads(rawThreads, facetsOf(filterMode), undefined, readThreads)
   const unreadCount = kanbanColumnUnreadCount(column, allUnreadCounts[key], rawThreads)
   const hasUnread = unreadCount > 0
   const loading = allLoading[key] ?? false

@@ -177,7 +177,7 @@ export function ThreadContextMenu({
 }) {
   // Read here rather than threaded through every caller: which view is open
   // decides whether setting aside or bringing back is the useful offer.
-  const filterMode = useValue(ui$.filterMode)
+  const filters = useValue(ui$.filters)
   const { t } = useTranslation()
   const { menu, close } = controller
   const foldersByAccount = useValue(mail$.foldersByAccount)
@@ -440,7 +440,7 @@ export function ThreadContextMenu({
           for what is finished. */}
       {/* Already set aside: the useful action is bringing it back, not
           putting it away again. */}
-      {filterMode === 'snoozed' ? (
+      {filters.includes('snoozed') ? (
         <MenuItem
           icon={<Clock size={13} className="text-secondary" />}
           label={t('threads.snooze.bringBack', { defaultValue: 'Bring back now' })}
