@@ -13,9 +13,13 @@ export function useMessageFrameFont(): MessageFrameFont {
   const messageFontFamily = useValue(settings$.messageFontFamily)
   const fontScale = useValue(settings$.fontScale)
   const messageFontScale = useValue(settings$.messageFontScale)
+  const simplify = useValue(settings$.simplifyMessages)
 
   return useMemo(
-    () => messageFrameFont({ fontFamily, messageFontFamily, fontScale, messageFontScale }),
-    [fontFamily, messageFontFamily, fontScale, messageFontScale],
+    () => ({
+      ...messageFrameFont({ fontFamily, messageFontFamily, fontScale, messageFontScale }),
+      simplify,
+    }),
+    [fontFamily, messageFontFamily, fontScale, messageFontScale, simplify],
   )
 }

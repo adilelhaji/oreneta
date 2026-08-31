@@ -157,6 +157,48 @@ export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT
     `
     doc.head.appendChild(style)
 
+    // Making the message read like the rest of the app, when asked.
+    //
+    // Appended after the base sheet and inside the head, so a sender's own
+    // `<style>` — which the parser leaves in the body — still comes later in
+    // the document. `!important` is what settles that, and it is used here
+    // deliberately: overriding the sender is the whole point of the mode.
+    //
+    // Colours are left alone. A sender who wrote in a colour usually meant
+    // something by it, and a rule that repainted everything would turn a
+    // highlighted warning into ordinary prose.
+    if (font.simplify) {
+      const simplified = doc.createElement('style')
+      simplified.textContent = `
+        /* The sender's font and size give way to the reader's. Mail written
+           at 11px in a face nobody has is mail nobody reads. */
+        body, body * {
+          font-family: inherit !important;
+          font-size: inherit !important;
+          line-height: 1.5 !important;
+        }
+        /* Except code, which is monospaced because it has to be. */
+        pre, pre *, code, kbd, samp {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+          font-size: ${BUBBLE_CODE_BASE_PX}px !important;
+        }
+        /* Layout tables and fixed-width wrappers: a message laid out for a
+           600px column reflows to the pane it is actually in. */
+        table, tr, td, th, div, section, article, center {
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          height: auto !important;
+        }
+        table { table-layout: auto !important; }
+        /* Padding measured for that 600px column leaves a narrow pane with
+           almost no room for the words. */
+        td, th { padding: 4px 6px !important; }
+        img { max-width: 100% !important; height: auto !important; }
+      `
+      doc.head.appendChild(simplified)
+    }
+
     // A self-sizing frame needs its document boxes to follow the message.
     // Newsletter resets commonly force both boxes to height:100%, which pins
     // them to the placeholder viewport; with overflow hidden that also hides

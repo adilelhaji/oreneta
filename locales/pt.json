@@ -923,6 +923,8 @@
   "settings.reading.markReadDelayHint": "Quanto tempo a mensagem tem de ficar no ecrã.",
   "settings.reading.markReadHint": "Quando uma mensagem à sua frente deixa de contar como não lida.",
   "settings.reading.seconds": "{count, plural, one {# segundo} other {# segundos}}",
+  "settings.reading.simplify": "Simplificar a formatação das mensagens",
+  "settings.reading.simplifyHint": "Usa a sua letra e largura em vez das do remetente. As cores ficam como foram escritas.",
   "settings.reading.width": "Largura de leitura",
   "settings.reading.width.comfortable": "Confortável",
   "settings.reading.width.full": "Total",

@@ -923,6 +923,8 @@
   "settings.reading.markReadDelayHint": "Combien de temps le message doit rester à l'écran.",
   "settings.reading.markReadHint": "Quand un message affiché cesse de compter comme non lu.",
   "settings.reading.seconds": "{count, plural, one {# seconde} other {# secondes}}",
+  "settings.reading.simplify": "Simplifier la mise en forme des messages",
+  "settings.reading.simplifyHint": "Utilise votre police et votre largeur plutôt que celles de l'expéditeur. Les couleurs sont conservées.",
   "settings.reading.width": "Largeur de lecture",
   "settings.reading.width.comfortable": "Confortable",
   "settings.reading.width.full": "Pleine",

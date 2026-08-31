@@ -46,8 +46,14 @@ export const MAX_MESSAGE_FONT_SCALE = 400
 /** Root font size the rem-based text utilities are sized against at 100%. */
 export const BASE_ROOT_FONT_SIZE = 16
 
-/** Base sizes the message surfaces are drawn at before any scaling. */
-export const BUBBLE_HTML_BASE_PX = 14
+/**
+ * Base sizes the message surfaces are drawn at before any scaling.
+ *
+ * Fifteen, not fourteen: a message is prose to be read, not chrome to be
+ * scanned, and it was being drawn a point smaller than the interface around
+ * it. Anyone who wants it smaller has the message font scale.
+ */
+export const BUBBLE_HTML_BASE_PX = 15
 export const BUBBLE_CODE_BASE_PX = 12.5
 
 /** Whether a stored choice names one of the built-in stacks. */
@@ -96,6 +102,15 @@ export type MessageFrameFont = {
   family: string | null
   /** CSS `zoom` for the body; 1 leaves the frame at its own base sizes. */
   zoom: number
+  /**
+   * Whether to override the message's own typography and widths.
+   *
+   * Off by default: a newsletter or an invoice is laid out on purpose, and
+   * flattening it would be destroying the thing the sender wrote. On, it makes
+   * a mail read like the rest of the app — which is what someone reading a
+   * hundred a day is asking for.
+   */
+  simplify?: boolean
 }
 
 export type FontPreferences = {

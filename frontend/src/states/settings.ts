@@ -144,6 +144,12 @@ export type Settings = {
   /** Searches the reader has kept, in the order they were saved. */
   savedSearches: SavedSearch[]
   /**
+   * Whether a message's own typography and widths give way to the app's.
+   *
+   * Off by default: a newsletter or an invoice is laid out on purpose.
+   */
+  simplifyMessages: boolean
+  /**
    * Whether a narrowing survives changing folder.
    *
    * Off by default, which is what someone triaging one mailbox wants; on is
@@ -253,6 +259,7 @@ const DB_KEY = {
   conversationLayout: 'conversation_layout',
   savedSearches: 'saved_searches',
   stickyFilters: 'sticky_filters',
+  simplifyMessages: 'simplify_messages',
   listDensity: 'list_density',
   readingWidth: 'reading_width',
   markReadMode: 'mark_read_mode',
@@ -425,6 +432,7 @@ export const settings$ = observable<Settings>({
   conversationLayout: 'chat',
   savedSearches: [],
   stickyFilters: false,
+  simplifyMessages: false,
   listDensity: 'cosy',
   readingWidth: 'comfortable',
   // What the app has always done, so nobody's mailbox changes behaviour
@@ -727,6 +735,10 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     if (typeof prefs[DB_KEY.stickyFilters] === 'boolean') {
       settings$.stickyFilters.set(prefs[DB_KEY.stickyFilters] as boolean)
+    }
+
+    if (typeof prefs[DB_KEY.simplifyMessages] === 'boolean') {
+      settings$.simplifyMessages.set(prefs[DB_KEY.simplifyMessages] as boolean)
     }
 
     const listDensity = prefs[DB_KEY.listDensity]

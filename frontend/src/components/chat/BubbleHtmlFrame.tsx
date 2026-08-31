@@ -42,7 +42,7 @@ export function BubbleHtmlFrame({
   // Typography is part of the key: the same HTML measures to a different height
   // once the message font or text size changes.
   const cacheKey = useMemo(
-    () => `${messageFont.family ?? ''}:${messageFont.zoom}:${cacheKeyForHtml(html)}`,
+    () => `${messageFont.family ?? ''}:${messageFont.zoom}:${messageFont.simplify ? 's' : 'o'}:${cacheKeyForHtml(html)}`,
     [html, messageFont],
   )
   const cachedHeight = measuredHeights.get(cacheKey)

@@ -45,6 +45,7 @@ import {
   AlignLeft,
   Eye,
   Timer,
+  WrapText,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
@@ -812,6 +813,7 @@ function GeneralSection() {
   const readingWidth = useValue(settings$.readingWidth)
   const markReadMode = useValue(settings$.markReadMode)
   const markReadDelaySeconds = useValue(settings$.markReadDelaySeconds)
+  const simplifyMessages = useValue(settings$.simplifyMessages)
 
   return (
     <div className="flex flex-col gap-4">
@@ -861,6 +863,13 @@ function GeneralSection() {
           value={readingWidth}
           options={READING_WIDTH_OPTIONS(t)}
           onChange={(value) => settings$.readingWidth.set(value)}
+        />
+        <ToggleRow
+          icon={<WrapText size={15} />}
+          title={t('settings.reading.simplify')}
+          hint={t('settings.reading.simplifyHint')}
+          checked={simplifyMessages}
+          onChange={() => settings$.simplifyMessages.set(!simplifyMessages)}
         />
         <SegmentedRow
           icon={<Eye size={15} />}

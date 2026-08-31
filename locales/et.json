@@ -923,6 +923,8 @@
   "settings.reading.markReadDelayHint": "How long a message must stay on screen.",
   "settings.reading.markReadHint": "When a message you are looking at stops counting as unread.",
   "settings.reading.seconds": "{count, plural, one {# second} other {# seconds}}",
+  "settings.reading.simplify": "Simplify message formatting",
+  "settings.reading.simplifyHint": "Uses your own font and width instead of the sender's. Colours are left as written.",
   "settings.reading.width": "Reading width",
   "settings.reading.width.comfortable": "Comfortable",
   "settings.reading.width.full": "Full",
