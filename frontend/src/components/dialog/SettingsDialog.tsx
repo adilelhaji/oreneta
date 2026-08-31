@@ -80,6 +80,7 @@ import { NumberRow, SegmentedRow, SettingRow, SettingsGroup, Switch, ToggleRow, 
 import { supportedI18nLanguages, languageNativeNames, type SupportedI18nLanguage } from '../../lib/i18n'
 import { ThemeSettingsSection } from './ThemeSettingsSection'
 import { FontSettingsSection } from './FontSettingsSection'
+import { RulesSettingsSection } from './RulesSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
@@ -903,6 +904,8 @@ function GeneralSection() {
           }}
         />
       </SettingsGroup>
+
+      <RulesSettingsSection />
 
       <SettingsGroup title={t('settings.sections.sideNav')}>
         <ToggleRow

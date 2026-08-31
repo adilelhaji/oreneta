@@ -32,6 +32,7 @@ import { SettingsDialog } from './components/dialog/SettingsDialog'
 import { AddFeedDialog } from './components/dialog/AddFeedDialog'
 import { FeedEditDialog } from './components/dialog/FeedEditDialog'
 import { ScheduledSendsDialog } from './components/dialog/ScheduledSendsDialog'
+import { RuleLogDialog } from './components/dialog/RuleLogDialog'
 
 export default function App() {
   const { t } = useTranslation()
@@ -50,6 +51,7 @@ export default function App() {
   const addFeedAccount = useValue(ui$.addFeedAccount)
   const editFeed = useValue(ui$.editFeed)
   const scheduledSendsOpen = useValue(ui$.scheduledSendsOpen)
+  const ruleLogOpen = useValue(ui$.ruleLogOpen)
 
   useAppEffects()
 
@@ -123,6 +125,7 @@ export default function App() {
         {addFeedAccount && <AddFeedDialog />}
         {editFeed && <FeedEditDialog />}
         {scheduledSendsOpen && <ScheduledSendsDialog />}
+        {ruleLogOpen && <RuleLogDialog />}
 
         <AppToast />
         <AppConfirm />

@@ -68,6 +68,9 @@ export const ui$ = observable({
   // Account id whose per-account settings panel is open ("" = closed).
   accountSettingsId: '',
   addFeedAccount: '',
+  // The record of what the local rules did. A mailbox that changes by itself
+  // needs somewhere the reader can find out why.
+  ruleLogOpen: false,
   // The list of messages waiting to be sent later. A message put off must be
   // findable, or putting it off is losing it.
   scheduledSendsOpen: false,
