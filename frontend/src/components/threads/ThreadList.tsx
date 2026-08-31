@@ -46,6 +46,7 @@ import { IconButton } from '../button/IconButton'
 import { QuickSettingsMenu } from '../sidenav/QuickSettingsMenu'
 import { FolderSwitcher } from '../menu/FolderSwitcher'
 import { ThreadActionsMenu } from './ThreadActionsMenu'
+import { ScheduledSendsBar } from './ScheduledSendsBar'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem } from './ThreadListItem'
 import { BulkActionBar } from './BulkActionBar'
@@ -392,6 +393,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           onClose={() => setQuickMenu(null)}
         />
       )}
+
+      <ScheduledSendsBar />
 
       {/* Thread List Items */}
       <div

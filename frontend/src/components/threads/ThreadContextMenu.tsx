@@ -38,6 +38,7 @@ import {
 } from '../../states/mail'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
+import { formatDeferredWhen } from '../../lib/date'
 import type { Account, Message } from '../../types'
 import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { MessageContextMenu } from '../chat/MessageContextMenu'
@@ -150,20 +151,6 @@ export function useThreadContextMenu(accounts: Account[]): ThreadContextMenuCont
       })
     },
   }
-}
-
-/// The hour a choice lands on, so "tomorrow" is not left to the imagination.
-function formatSnoozeWhen(at: number): string {
-  const date = new Date(at * 1000)
-  const today = new Date()
-  const sameDay = date.toDateString() === today.toDateString()
-  return sameDay
-    ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleString(undefined, {
-        weekday: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
 }
 
 export function ThreadContextMenu({
@@ -470,7 +457,7 @@ export function ThreadContextMenu({
           icon={<Clock size={13} className="text-secondary" />}
           label={t(`threads.snooze.${choice.key}`, {
             defaultValue: choice.key,
-            when: formatSnoozeWhen(choice.at),
+            when: formatDeferredWhen(choice.at),
           })}
           onClick={() => {
             const threadId = menu.threadId

@@ -582,6 +582,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 15 {
         migrate_v15(&tx)?;
     }
+    if version < 16 {
+        migrate_v16(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -783,6 +786,22 @@ fn migrate_v15(conn: &Connection) -> Result<()> {
          CREATE INDEX IF NOT EXISTS scheduled_sends_due ON scheduled_sends(due_at);",
     )?;
     conn.execute_batch("PRAGMA user_version = 15;")?;
+    Ok(())
+}
+
+/// What became of a scheduled send that could not go.
+///
+/// A message due at eight and refused at eight must not disappear quietly nor
+/// hammer the server for the rest of the day: the count is what lets the watch
+/// give up, the instant is what spaces the tries out, and the reason is what
+/// lets the reader be told why.
+fn migrate_v16(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE scheduled_sends ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE scheduled_sends ADD COLUMN last_error TEXT NOT NULL DEFAULT '';
+         ALTER TABLE scheduled_sends ADD COLUMN last_attempt INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 16;")?;
     Ok(())
 }
 

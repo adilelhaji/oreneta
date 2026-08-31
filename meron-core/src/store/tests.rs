@@ -201,6 +201,100 @@ fn a_thread_put_aside_stays_out_of_the_way_until_its_time() {
 }
 
 #[test]
+fn a_message_written_now_waits_for_its_hour_and_then_is_due() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+
+    schedule_send(&conn, "s-1", "acct", now + 3600, "Later", r#"{"to":"you@example.com"}"#)
+        .unwrap();
+    schedule_send(&conn, "s-2", "acct", now - 60, "Now", r#"{"to":"you@example.com"}"#).unwrap();
+
+    // Both are findable: a message put off is one the writer can still change
+    // their mind about.
+    let waiting = scheduled_sends(&conn, Some("acct")).unwrap();
+    assert_eq!(waiting.len(), 2);
+    assert_eq!(waiting[0].id, "s-2", "soonest first");
+
+    // Only the one whose hour has come is handed to the watch.
+    let due = due_scheduled_sends(&conn, now).unwrap();
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].id, "s-2");
+    assert_eq!(due[0].payload, r#"{"to":"you@example.com"}"#, "the message itself is kept");
+
+    // Cancelling gives the message back rather than taking it away.
+    let cancelled = cancel_scheduled_send(&conn, "s-2").unwrap().expect("was scheduled");
+    assert_eq!(cancelled.payload, r#"{"to":"you@example.com"}"#);
+    assert!(due_scheduled_sends(&conn, now).unwrap().is_empty());
+    assert_eq!(scheduled_sends(&conn, Some("acct")).unwrap().len(), 1);
+
+    // Cancelling something already gone is not an error, and says so.
+    assert!(cancel_scheduled_send(&conn, "s-2").unwrap().is_none());
+}
+
+#[test]
+fn a_refused_message_waits_longer_each_time_and_eventually_stops() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+    schedule_send(&conn, "s-1", "acct", now - 10, "Later", "{}").unwrap();
+
+    let mut attempts = 0;
+    let mut clock = now;
+    // Each refusal doubles the wait, so the tries spread over half an hour
+    // rather than being spent in five minutes of one outage.
+    for _ in 0..MAX_SEND_ATTEMPTS {
+        assert_eq!(due_scheduled_sends(&conn, clock).unwrap().len(), 1, "due at {clock}");
+        attempts = record_send_failure(&conn, "s-1", "no route to host", clock).unwrap();
+        assert!(
+            due_scheduled_sends(&conn, clock).unwrap().is_empty(),
+            "not tried twice in the same moment"
+        );
+        clock += RETRY_BACKOFF_SECONDS * (1 << attempts);
+    }
+    assert_eq!(attempts, MAX_SEND_ATTEMPTS);
+
+    // Having given up, it is no longer tried — but it is still there, with the
+    // reason, because a message that failed is the one its writer most needs
+    // to see.
+    assert!(due_scheduled_sends(&conn, clock + 86_400).unwrap().is_empty());
+    let left = scheduled_sends(&conn, None).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].last_error, "no route to host");
+    assert_eq!(left[0].attempts, MAX_SEND_ATTEMPTS);
+}
+
+#[test]
+fn a_message_no_retry_could_help_is_failed_at_once() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+    schedule_send(&conn, "s-1", "acct", now - 10, "Later", "not json").unwrap();
+
+    give_up_on_send(&conn, "s-1", "this message can no longer be read", now).unwrap();
+
+    // Not retried for half an hour on the pretence that something might
+    // change, and not dropped either.
+    assert!(due_scheduled_sends(&conn, now + 86_400).unwrap().is_empty());
+    let left = scheduled_sends(&conn, None).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].attempts, MAX_SEND_ATTEMPTS);
+    assert_eq!(left[0].last_error, "this message can no longer be read");
+}
+
+#[test]
+fn rescheduling_a_message_moves_it_rather_than_copying_it() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+    schedule_send(&conn, "s-1", "acct", now + 3600, "Later", "{}").unwrap();
+    record_send_failure(&conn, "s-1", "refused", now).unwrap();
+    schedule_send(&conn, "s-1", "acct", now + 7200, "Later", "{}").unwrap();
+
+    let waiting = scheduled_sends(&conn, None).unwrap();
+    assert_eq!(waiting.len(), 1, "one message goes once");
+    assert_eq!(waiting[0].due_at, now + 7200);
+    assert_eq!(waiting[0].attempts, 0, "a new hour is a fresh start, not a spent one");
+    assert_eq!(waiting[0].last_error, "");
+}
+
+#[test]
 fn putting_one_thread_aside_twice_replaces_the_first_answer() {
     let conn = test_conn();
     let now = 1_700_000_000i64;
@@ -1664,7 +1758,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 16);
 
     for table in [
         "accounts",
@@ -1699,7 +1793,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 16);
 }
 
 #[test]
@@ -1727,7 +1821,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 16);
 
     let _ = std::fs::remove_dir_all(dir);
 }

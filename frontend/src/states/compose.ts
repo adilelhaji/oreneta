@@ -1219,7 +1219,7 @@ export function setTabViewMode(id: string, mode: 'html' | 'plain') {
 // Send a composed message via the same mail.send path used by replies. When
 // `rich`, the HTML is sent with a derived plaintext fallback. Throws on failure
 // so the caller can surface the error inline.
-export async function sendComposed(args: {
+export type ComposedMessage = {
   accountId: string
   from?: string
   to: string
@@ -1232,10 +1232,22 @@ export async function sendComposed(args: {
   inReplyTo?: string
   references?: string
   attachments: ComposerAttachment[]
-}) {
+}
+
+export async function sendComposed(args: ComposedMessage) {
+  await invoke('mail.send', composedPayload(args))
+}
+
+/// The bridge payload for a composed message.
+///
+/// Shared by sending now and sending later, so a message held until eight is
+/// the same message in every respect as the one that would have gone at six —
+/// two builders would sooner or later disagree about one field, and the reader
+/// would never know which.
+export function composedPayload(args: ComposedMessage) {
   const html = args.rich ? args.content : ''
   const body = args.rich ? htmlToText(args.content) : args.content
-  await invoke('mail.send', {
+  return {
     account_id: args.accountId,
     from: args.from ?? '',
     to: args.to,
@@ -1253,7 +1265,7 @@ export async function sendComposed(args: {
       data: a.data,
       inline_id: a.inlineId ?? '',
     })),
-  })
+  }
 }
 
 // Surface a just-sent compose-tab message in the open conversation so the user

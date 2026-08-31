@@ -86,7 +86,8 @@ export function Composer({ tabId }: { tabId: string }) {
         onPickInlineImages={() => void pickInlineImages()}
         onToggleRich={toggleRich}
         onDiscard={() => void closeMessageTab(tabId)}
-        onSubmit={submit}
+        onSubmit={() => void submit()}
+        onSchedule={(at) => void submit(at)}
       />
     </div>
   )

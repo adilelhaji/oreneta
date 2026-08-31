@@ -68,6 +68,9 @@ export const ui$ = observable({
   // Account id whose per-account settings panel is open ("" = closed).
   accountSettingsId: '',
   addFeedAccount: '',
+  // The list of messages waiting to be sent later. A message put off must be
+  // findable, or putting it off is losing it.
+  scheduledSendsOpen: false,
   editFeed: null as EditFeed | null,
   // Command palette (⌘/Ctrl+K). Ephemeral: open flag, search query, and the
   // highlighted row index.

@@ -1259,6 +1259,159 @@ pub fn due_snoozes(conn: &Connection, now: i64) -> Result<Vec<(String, String, S
     Ok(rows.filter_map(Result::ok).collect())
 }
 
+/// A message written now and due to go later.
+///
+/// The whole send travels as `payload` — recipients, body, attachments — so
+/// the message that leaves at eight is the message that was written at six,
+/// not a reconstruction of it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduledSend {
+    pub id: String,
+    pub account: String,
+    pub due_at: i64,
+    pub subject: String,
+    pub payload: String,
+    /// How many times sending it has been tried and refused.
+    pub attempts: i64,
+    /// Why the last try failed, empty while none has.
+    pub last_error: String,
+    /// When it was last tried, zero while it never has been.
+    pub last_attempt: i64,
+}
+
+/// After this many refusals a scheduled send stops being retried.
+///
+/// A message that cannot go is usually one that will never go — a bad
+/// recipient, a rejected attachment — and retrying it every minute until the
+/// reader next opens the app would be a great deal of noise in service of
+/// nothing. It stays in the list, with its reason, waiting for a person.
+pub const MAX_SEND_ATTEMPTS: i64 = 5;
+
+/// The wait before a refused send is tried again, doubling with each refusal.
+pub const RETRY_BACKOFF_SECONDS: i64 = 60;
+
+fn scheduled_send_from_row(row: &rusqlite::Row) -> rusqlite::Result<ScheduledSend> {
+    Ok(ScheduledSend {
+        id: row.get(0)?,
+        account: row.get(1)?,
+        due_at: row.get(2)?,
+        subject: row.get(3)?,
+        payload: row.get(4)?,
+        attempts: row.get(5)?,
+        last_error: row.get(6)?,
+        last_attempt: row.get(7)?,
+    })
+}
+
+/// Files a message to be sent at `due_at`.
+///
+/// Replacing any earlier row with the same id: rescheduling a message is
+/// changing when one message goes, not adding a second copy of it.
+pub fn schedule_send(
+    conn: &Connection,
+    id: &str,
+    account: &str,
+    due_at: i64,
+    subject: &str,
+    payload: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO scheduled_sends(id, account, due_at, subject, payload,
+                                                attempts, last_error, last_attempt)
+         VALUES(?1, ?2, ?3, ?4, ?5, 0, '', 0)",
+        params![id, account, due_at, subject, payload],
+    )?;
+    Ok(())
+}
+
+/// Everything still waiting to go, soonest first.
+///
+/// Including what has given up trying: a message that failed is exactly the
+/// one its writer most needs to see.
+pub fn scheduled_sends(conn: &Connection, account: Option<&str>) -> Result<Vec<ScheduledSend>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, account, due_at, subject, payload, attempts, last_error, last_attempt
+           FROM scheduled_sends
+          WHERE ?1 IS NULL OR account = ?1
+          ORDER BY due_at",
+    )?;
+    let rows = stmt.query_map(params![account], scheduled_send_from_row)?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// One scheduled send, by id.
+pub fn scheduled_send(conn: &Connection, id: &str) -> Result<Option<ScheduledSend>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, account, due_at, subject, payload, attempts, last_error, last_attempt
+           FROM scheduled_sends WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map(params![id], scheduled_send_from_row)?;
+    Ok(rows.next().transpose()?)
+}
+
+/// Calls a scheduled send off, handing back what it was.
+///
+/// The payload comes back so the message can return to the composer it was
+/// written in: cancelling a send should give the reader their words, not
+/// take them away.
+pub fn cancel_scheduled_send(conn: &Connection, id: &str) -> Result<Option<ScheduledSend>> {
+    let existing = scheduled_send(conn, id)?;
+    if existing.is_some() {
+        conn.execute("DELETE FROM scheduled_sends WHERE id = ?1", params![id])?;
+    }
+    Ok(existing)
+}
+
+/// Stops trying a scheduled send outright, recording why.
+///
+/// For a message no retry could help — one whose stored form can no longer be
+/// read. Counting it up one refusal at a time would mean half an hour of
+/// pretending there was something left to wait for.
+pub fn give_up_on_send(conn: &Connection, id: &str, error: &str, now: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE scheduled_sends
+            SET attempts = ?2, last_error = ?3, last_attempt = ?4
+          WHERE id = ?1",
+        params![id, MAX_SEND_ATTEMPTS, error, now],
+    )?;
+    Ok(())
+}
+
+/// The messages whose hour has come and which are still worth trying.
+///
+/// A refused message waits twice as long before each new try — a minute, then
+/// two, then four. A submission server that is down for ten minutes should not
+/// exhaust a message's tries in ten minutes, and the reader gains nothing from
+/// the same failure being attempted sixty times an hour.
+pub fn due_scheduled_sends(conn: &Connection, now: i64) -> Result<Vec<ScheduledSend>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, account, due_at, subject, payload, attempts, last_error, last_attempt
+           FROM scheduled_sends
+          WHERE due_at <= ?1 AND attempts < ?2
+            AND ?1 >= last_attempt + (?3 * (1 << attempts))
+          ORDER BY due_at",
+    )?;
+    let rows = stmt.query_map(
+        params![now, MAX_SEND_ATTEMPTS, RETRY_BACKOFF_SECONDS],
+        scheduled_send_from_row,
+    )?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Records that a scheduled send was refused, and why.
+///
+/// Returns the new count of attempts, so the caller can tell a try that will
+/// come round again from one that has given up.
+pub fn record_send_failure(conn: &Connection, id: &str, error: &str, now: i64) -> Result<i64> {
+    conn.execute(
+        "UPDATE scheduled_sends
+            SET attempts = attempts + 1, last_error = ?2, last_attempt = ?3
+          WHERE id = ?1",
+        params![id, error, now],
+    )?;
+    Ok(scheduled_send(conn, id)?.map(|row| row.attempts).unwrap_or_default())
+}
+
 pub fn draft_thread_keys(conn: &Connection, account: &str) -> Result<HashSet<String>> {
     let mut stmt = conn.prepare(
         "SELECT DISTINCT COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid), m.folder, f.special_use

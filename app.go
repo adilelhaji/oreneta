@@ -325,6 +325,14 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailUnsnooze(payload)
 	case "mail.snoozed":
 		return a.mailSnoozed(payload)
+	case "mail.scheduleSend":
+		return a.mailScheduleSend(payload)
+	case "mail.scheduledSends":
+		return a.mailScheduledSends(payload)
+	case "mail.cancelScheduledSend":
+		return a.mailCancelScheduledSend(payload)
+	case "mail.sendScheduledNow":
+		return a.mailSendScheduledNow(payload)
 	case "mail.markStarred":
 		return a.markStarred(payload)
 	case "mail.markAllRead":

@@ -31,6 +31,7 @@ import { AccountDialog } from './components/dialog/AccountDialog'
 import { SettingsDialog } from './components/dialog/SettingsDialog'
 import { AddFeedDialog } from './components/dialog/AddFeedDialog'
 import { FeedEditDialog } from './components/dialog/FeedEditDialog'
+import { ScheduledSendsDialog } from './components/dialog/ScheduledSendsDialog'
 
 export default function App() {
   const { t } = useTranslation()
@@ -48,6 +49,7 @@ export default function App() {
   const settingsOpen = useValue(ui$.settingsOpen)
   const addFeedAccount = useValue(ui$.addFeedAccount)
   const editFeed = useValue(ui$.editFeed)
+  const scheduledSendsOpen = useValue(ui$.scheduledSendsOpen)
 
   useAppEffects()
 
@@ -120,6 +122,7 @@ export default function App() {
         {setupOpen && <AccountDialog />}
         {addFeedAccount && <AddFeedDialog />}
         {editFeed && <FeedEditDialog />}
+        {scheduledSendsOpen && <ScheduledSendsDialog />}
 
         <AppToast />
         <AppConfirm />

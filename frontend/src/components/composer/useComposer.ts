@@ -19,6 +19,8 @@ import { htmlToText } from '../../lib/html'
 import { invoke } from '../../lib/bridge'
 import { contextualErrorMessage } from '../../lib/errors'
 import { discardSavedDraftCopy } from '../../states/mail'
+import { scheduleComposed } from '../../states/scheduledSends'
+import { formatDeferredWhen } from '../../lib/date'
 import { pickFiles, pickImageFiles } from '../../lib/nativeFilePicker'
 import { getComposeSession, registerComposeSession } from '../../states/composeSessions'
 import { accounts$, isSendableAccount } from '../../states/accounts'
@@ -520,7 +522,14 @@ export function useComposer(tabId: string) {
 
   const canSend = !sending && !!draft?.accountId && !!draft?.to.trim()
 
-  const submit = async () => {
+  /**
+   * Sends the message, or files it to go at `scheduleAt`.
+   *
+   * One path for both: everything before the message leaves — the checks, the
+   * confirmation, the inline images, the draft to discard — is the same work,
+   * and a second copy of it would be a second set of things to forget.
+   */
+  const submit = async (scheduleAt?: number) => {
     if (!canSend || !draft) return
     setSending(true)
     setError('')
@@ -581,7 +590,7 @@ export function useComposer(tabId: string) {
         content = inlineRichStyles(prepared.html)
         attachments = prepared.attachments
       }
-      await sendComposed({
+      const message = {
         accountId: current.accountId,
         from: current.fromEmail,
         to: current.to.trim(),
@@ -594,7 +603,15 @@ export function useComposer(tabId: string) {
         inReplyTo: current.inReplyTo,
         references: current.references,
         attachments,
-      })
+      }
+      if (scheduleAt) {
+        await scheduleComposed(message, scheduleAt)
+        await discardRemoteDraft(current)
+        showToast(t('sendLater.toast.scheduled', { when: formatDeferredWhen(scheduleAt) }))
+        finishClosingMessageTab(tabId)
+        return
+      }
+      await sendComposed(message)
       // When this tab is a reply to the open conversation, drop the sent message
       // into the thread immediately so it shows without waiting for the next sync.
       if (tab?.threadId) {

@@ -606,6 +606,74 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                 )
                 .await;
             }
+
+            // And the other half of the same promise: messages written to go
+            // later. The row is only dropped once the message has actually
+            // gone, so a crash between sending and forgetting costs a repeat
+            // rather than a message that silently never left.
+            let due = {
+                let db = engine.db.lock().unwrap();
+                store::due_scheduled_sends(&db, now).unwrap_or_default()
+            };
+            // A message whose account the core has not opened yet is not a
+            // message that failed: at launch nothing is connected, and letting
+            // those minutes count as refusals would use up a message's tries
+            // before anything had actually been tried.
+            let known: std::collections::HashSet<String> =
+                engine.accounts.lock().await.keys().cloned().collect();
+            for row in due {
+                if !known.contains(&row.account) {
+                    continue;
+                }
+                let message: Value = match serde_json::from_str(&row.payload) {
+                    Ok(message) => message,
+                    Err(err) => {
+                        // Unreadable: trying again cannot help, so it is
+                        // failed outright rather than retried, and left where
+                        // its writer will see it.
+                        let reason = format!("this message can no longer be read: {err}");
+                        {
+                            let db = engine.db.lock().unwrap();
+                            let _ = store::give_up_on_send(&db, &row.id, &reason, now);
+                        }
+                        emit(&out, "mail.scheduledSendFailed", failed_send_json(&row, &reason))
+                            .await;
+                        continue;
+                    }
+                };
+                match perform_send(&engine, &message).await {
+                    Ok(_) => {
+                        {
+                            let db = engine.db.lock().unwrap();
+                            let _ = store::cancel_scheduled_send(&db, &row.id);
+                        }
+                        emit(
+                            &out,
+                            "mail.scheduledSent",
+                            json!({
+                                "id": row.id,
+                                "account": row.account,
+                                "subject": row.subject,
+                            }),
+                        )
+                        .await;
+                    }
+                    Err(err) => {
+                        let reason = format!("{err:#}");
+                        let attempts = {
+                            let db = engine.db.lock().unwrap();
+                            store::record_send_failure(&db, &row.id, &reason, now).unwrap_or_default()
+                        };
+                        // Told once, when there is nothing left to wait for.
+                        // A message that will be tried again in a minute is
+                        // not yet news.
+                        if attempts >= store::MAX_SEND_ATTEMPTS {
+                            emit(&out, "mail.scheduledSendFailed", failed_send_json(&row, &reason))
+                                .await;
+                        }
+                    }
+                }
+            }
         }
     });
 }
@@ -1359,6 +1427,83 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     }))
                     .collect::<Vec<_>>()
             }))
+        }
+
+        // Files a message to go at a chosen hour. The whole send is kept, so
+        // what leaves then is what was written now — and it is kept in the
+        // store rather than in a timer, because a message due at eight must
+        // go whether or not the app was open at eight.
+        "mail.scheduleSend" => {
+            let id = req_str(p, "id")?;
+            let account = req_str(p, "account")?;
+            let due_at = p
+                .get("due_at")
+                .and_then(Value::as_i64)
+                .context("missing param: due_at")?;
+            if due_at <= now_seconds() {
+                anyhow::bail!("a message cannot be scheduled for a moment already past");
+            }
+            let message = p.get("message").cloned().context("missing param: message")?;
+            if req_str(&message, "to").unwrap_or_default().trim().is_empty() {
+                anyhow::bail!("a scheduled message needs a recipient");
+            }
+            let subject = req_str(&message, "subject").unwrap_or_default();
+            store::schedule_send(
+                &engine.db.lock().unwrap(),
+                &id,
+                &account,
+                due_at,
+                &subject,
+                &serde_json::to_string(&message)?,
+            )?;
+            Ok(json!({ "ok": true, "id": id, "due_at": due_at }))
+        }
+
+        // What is still waiting to go, so a message put off is a message the
+        // reader can still find, change their mind about, or be told failed.
+        "mail.scheduledSends" => {
+            let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
+            let rows = store::scheduled_sends(&engine.db.lock().unwrap(), account.as_deref())?;
+            Ok(json!({ "messages": rows.iter().map(scheduled_send_json).collect::<Vec<_>>() }))
+        }
+
+        // Calls a scheduled send off and hands the message back, so its words
+        // return to the composer instead of being taken away.
+        "mail.cancelScheduledSend" => {
+            let id = req_str(p, "id")?;
+            let cancelled = store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
+            match cancelled {
+                Some(row) => Ok(json!({
+                    "ok": true,
+                    "message": serde_json::from_str::<Value>(&row.payload).unwrap_or(Value::Null),
+                })),
+                None => Ok(json!({ "ok": true, "message": Value::Null })),
+            }
+        }
+
+        // Lets a scheduled message go now, rather than at its hour. Also the
+        // way back for one that gave up trying: the row is only dropped once
+        // the message has actually gone.
+        "mail.sendScheduledNow" => {
+            let id = req_str(p, "id")?;
+            let row = {
+                let db = engine.db.lock().unwrap();
+                store::scheduled_send(&db, &id)?
+            };
+            let row = row.context("no such scheduled message")?;
+            let message: Value = serde_json::from_str(&row.payload)
+                .context("this scheduled message can no longer be read")?;
+            match perform_send(engine, &message).await {
+                Ok(_) => {
+                    store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
+                    Ok(json!({ "ok": true }))
+                }
+                Err(err) => {
+                    let reason = format!("{err:#}");
+                    store::record_send_failure(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
+                    Err(err)
+                }
+            }
         }
 
         // Serialize accounts, prefs, feeds and settings to a backup document
@@ -2515,90 +2660,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "queued": true }))
         }
 
-        "send" => {
-            let account = req_str(p, "account")?;
-            let to = req_str(p, "to")?;
-            let cc = req_str(p, "cc").unwrap_or_default();
-            let bcc = req_str(p, "bcc").unwrap_or_default();
-            let subject = req_str(p, "subject").unwrap_or_default();
-            let body = req_str(p, "body").unwrap_or_default();
-            let html = req_str(p, "html").unwrap_or_default();
-            let in_reply_to = req_str(p, "in_reply_to").unwrap_or_default();
-            let references = req_str(p, "references").unwrap_or_default();
-            let reply_to = req_str(p, "reply_to").unwrap_or_default();
-            // Client-generated Message-ID so the optimistic bubble and a quick
-            // follow-up reply share the id the Sent copy will carry.
-            let message_id = req_str(p, "message_id").unwrap_or_default();
-            let attachments = opt_attachments(p)?;
-            let requested_from = req_str(p, "from").unwrap_or_default();
-            let creds = engine.ensure_valid_creds(&account).await?;
-            let (from_addr, sender_name) =
-                resolve_send_from(engine, &account, &creds, &requested_from)?;
-            if creds.is_ews() {
-                // Exchange submits the MIME itself and files the Sent copy in
-                // the same call, so there is no separate append.
-                //
-                // The Bcc header is written into the message here, unlike the
-                // SMTP path: SMTP carries blind recipients in the envelope,
-                // while Exchange has only the MIME to read them from. It
-                // strips the header before delivering, so recipients still do
-                // not see the list.
-                let raw = smtp::build_message(
-                    &sender_name,
-                    &from_addr,
-                    &to,
-                    &cc,
-                    &bcc,
-                    true,
-                    &subject,
-                    &body,
-                    &html,
-                    &attachments,
-                    &in_reply_to,
-                    &references,
-                    &reply_to,
-                    &message_id,
-                )?;
-                engine
-                    .with_write_session(&account, |session| {
-                        let raw = raw.clone();
-                        Box::pin(async move { session.send_mime(raw).await })
-                    })
-                    .await?;
-                // The server files its own copy, so this only refreshes the
-                // local Sent view — the upload is suppressed for Exchange in
-                // `should_append_sent_copy`.
-                if let Err(err) = append_to_sent(engine, &account, &raw).await {
-                    eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
-                }
-                return Ok(json!({ "ok": true }));
-            }
-            let raw = smtp::send(
-                &creds,
-                &from_addr,
-                &sender_name,
-                &to,
-                &cc,
-                &bcc,
-                &subject,
-                &body,
-                &html,
-                &attachments,
-                &in_reply_to,
-                &references,
-                &reply_to,
-                &message_id,
-            )
-            .await?;
-            // Finalize the Sent view. For Gmail/Outlook defaults this only
-            // refreshes the provider-created copy; other accounts get Meron's
-            // best-effort APPEND plus refresh. The mail already left via SMTP,
-            // so Sent-folder issues should not surface as "send failed".
-            if let Err(err) = append_to_sent(engine, &account, &raw).await {
-                eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
-            }
-            Ok(json!({ "ok": true }))
-        }
+        "send" => perform_send(engine, p).await,
 
         "save_draft" => {
             let account = req_str(p, "account")?;
@@ -3922,6 +3984,130 @@ fn opt_attachments(params: &Value) -> anyhow::Result<Vec<smtp::AttachmentInput>>
         Some(Value::Null) | None => Ok(Vec::new()),
         Some(_) => Err(anyhow::anyhow!("attachments must be an array")),
     }
+}
+
+/// A scheduled message that will not be tried again, and why.
+fn failed_send_json(row: &store::ScheduledSend, reason: &str) -> Value {
+    json!({
+        "id": row.id,
+        "account": row.account,
+        "subject": row.subject,
+        "error": reason,
+    })
+}
+
+/// One scheduled message as the interface reads it.
+///
+/// The payload is left out: it is the message itself, sometimes with megabytes
+/// of attachment, and a list of what is waiting has no use for it.
+fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
+    json!({
+        "id": row.id,
+        "account": row.account,
+        "dueAt": row.due_at,
+        "subject": row.subject,
+        "to": serde_json::from_str::<Value>(&row.payload)
+            .ok()
+            .and_then(|message| message.get("to").and_then(Value::as_str).map(str::to_owned))
+            .unwrap_or_default(),
+        "attempts": row.attempts,
+        "lastError": row.last_error,
+        // Whether the watch has stopped trying, so the interface can say so
+        // rather than leave a failed message looking merely late.
+        "gaveUp": row.attempts >= store::MAX_SEND_ATTEMPTS,
+    })
+}
+
+/// Sends one message, from the parameters the composer wrote.
+///
+/// Its own function because two callers need it and they must not drift: the
+/// `send` request, and the watch that lets go of a message scheduled for
+/// later. A message posted at eight has to be the same message in every
+/// respect as the one that would have gone at six.
+async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> {
+        let account = req_str(p, "account")?;
+        let to = req_str(p, "to")?;
+        let cc = req_str(p, "cc").unwrap_or_default();
+        let bcc = req_str(p, "bcc").unwrap_or_default();
+        let subject = req_str(p, "subject").unwrap_or_default();
+        let body = req_str(p, "body").unwrap_or_default();
+        let html = req_str(p, "html").unwrap_or_default();
+        let in_reply_to = req_str(p, "in_reply_to").unwrap_or_default();
+        let references = req_str(p, "references").unwrap_or_default();
+        let reply_to = req_str(p, "reply_to").unwrap_or_default();
+        // Client-generated Message-ID so the optimistic bubble and a quick
+        // follow-up reply share the id the Sent copy will carry.
+        let message_id = req_str(p, "message_id").unwrap_or_default();
+        let attachments = opt_attachments(p)?;
+        let requested_from = req_str(p, "from").unwrap_or_default();
+        let creds = engine.ensure_valid_creds(&account).await?;
+        let (from_addr, sender_name) =
+            resolve_send_from(engine, &account, &creds, &requested_from)?;
+        if creds.is_ews() {
+            // Exchange submits the MIME itself and files the Sent copy in
+            // the same call, so there is no separate append.
+            //
+            // The Bcc header is written into the message here, unlike the
+            // SMTP path: SMTP carries blind recipients in the envelope,
+            // while Exchange has only the MIME to read them from. It
+            // strips the header before delivering, so recipients still do
+            // not see the list.
+            let raw = smtp::build_message(
+                &sender_name,
+                &from_addr,
+                &to,
+                &cc,
+                &bcc,
+                true,
+                &subject,
+                &body,
+                &html,
+                &attachments,
+                &in_reply_to,
+                &references,
+                &reply_to,
+                &message_id,
+            )?;
+            engine
+                .with_write_session(&account, |session| {
+                    let raw = raw.clone();
+                    Box::pin(async move { session.send_mime(raw).await })
+                })
+                .await?;
+            // The server files its own copy, so this only refreshes the
+            // local Sent view — the upload is suppressed for Exchange in
+            // `should_append_sent_copy`.
+            if let Err(err) = append_to_sent(engine, &account, &raw).await {
+                eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
+            }
+            return Ok(json!({ "ok": true }));
+        }
+        let raw = smtp::send(
+            &creds,
+            &from_addr,
+            &sender_name,
+            &to,
+            &cc,
+            &bcc,
+            &subject,
+            &body,
+            &html,
+            &attachments,
+            &in_reply_to,
+            &references,
+            &reply_to,
+            &message_id,
+        )
+        .await?;
+        // Finalize the Sent view. For Gmail/Outlook defaults this only
+        // refreshes the provider-created copy; other accounts get Meron's
+        // best-effort APPEND plus refresh. The mail already left via SMTP,
+        // so Sent-folder issues should not surface as "send failed".
+        if let Err(err) = append_to_sent(engine, &account, &raw).await {
+            eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
+        }
+        Ok(json!({ "ok": true }))
+    
 }
 
 fn req_str(params: &Value, key: &str) -> anyhow::Result<String> {

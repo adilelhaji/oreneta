@@ -540,6 +540,88 @@ func (a *App) mailSnoozed(payload map[string]any) (any, error) {
 	return a.sidecar.Call("mail.snoozed", map[string]any{"account": req.AccountID})
 }
 
+// sendParams turns a composed message into the parameters the core's send
+// expects. Shared by sending now and sending later so the two cannot drift:
+// the message that goes at eight must be the message written at six.
+func sendParams(req SendMailRequest) map[string]any {
+	return map[string]any{
+		"account":     req.AccountID,
+		"to":          req.To,
+		"cc":          req.Cc,
+		"bcc":         req.Bcc,
+		"subject":     req.Subject,
+		"body":        req.Body,
+		"html":        req.Html,
+		"in_reply_to": req.InReplyTo,
+		"references":  req.References,
+		"reply_to":    req.ReplyTo,
+		"from":        req.From,
+		"message_id":  req.MessageID,
+		"attachments": req.Attachments,
+	}
+}
+
+// mailScheduleSend files a message to go at a chosen hour. It is kept in the
+// store rather than in a timer here, so it goes whether or not the app is open
+// at that hour.
+func (a *App) mailScheduleSend(payload map[string]any) (any, error) {
+	var req struct {
+		ID      string          `json:"id"`
+		DueAt   int64           `json:"due_at"`
+		Message SendMailRequest `json:"message"`
+	}
+	if err := decode(payload, &req); err != nil {
+		return nil, err
+	}
+	if req.ID == "" || req.Message.To == "" {
+		return nil, errors.New("invalid message")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("mail.scheduleSend", map[string]any{
+		"id":      req.ID,
+		"account": req.Message.AccountID,
+		"due_at":  req.DueAt,
+		"message": sendParams(req.Message),
+	})
+}
+
+// mailScheduledSends lists what is still waiting to go.
+func (a *App) mailScheduledSends(payload map[string]any) (any, error) {
+	accountID, _ := payload["account_id"].(string)
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return map[string]any{"messages": []any{}}, nil
+	}
+	return a.sidecar.Call("mail.scheduledSends", map[string]any{"account": accountID})
+}
+
+// mailCancelScheduledSend calls a scheduled message off and hands it back, so
+// its words return to the composer instead of being taken away.
+func (a *App) mailCancelScheduledSend(payload map[string]any) (any, error) {
+	id, _ := payload["id"].(string)
+	if id == "" {
+		return nil, errors.New("invalid message")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("mail.cancelScheduledSend", map[string]any{"id": id})
+}
+
+// mailSendScheduledNow lets a scheduled message go ahead of its hour, and is
+// also the way back for one that gave up trying.
+func (a *App) mailSendScheduledNow(payload map[string]any) (any, error) {
+	id, _ := payload["id"].(string)
+	if id == "" {
+		return nil, errors.New("invalid message")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("mail.sendScheduledNow", map[string]any{"id": id})
+}
+
 func (a *App) markStarred(payload map[string]any) (any, error) {
 	threadID, _ := payload["thread_id"].(string)
 	if threadID == "" {
@@ -836,21 +918,7 @@ func (a *App) mailSend(payload map[string]any) (any, error) {
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}
-	if _, err := a.sidecar.Call("send", map[string]any{
-		"account":     req.AccountID,
-		"to":          req.To,
-		"cc":          req.Cc,
-		"bcc":         req.Bcc,
-		"subject":     req.Subject,
-		"body":        req.Body,
-		"html":        req.Html,
-		"in_reply_to": req.InReplyTo,
-		"references":  req.References,
-		"reply_to":    req.ReplyTo,
-		"from":        req.From,
-		"message_id":  req.MessageID,
-		"attachments": req.Attachments,
-	}); err != nil {
+	if _, err := a.sidecar.Call("send", sendParams(req)); err != nil {
 		return nil, err
 	}
 	return map[string]any{"ok": true, "queued": false}, nil

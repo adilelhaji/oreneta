@@ -23,6 +23,11 @@ import { applyUpdateStatus, loadUpdateStatus, runUpdateCheck } from './states/up
 import type { UpdateStatus } from './lib/update'
 import { useFoldersByAccount } from './lib/kanbanData'
 import { setTrayUnread } from './lib/trayUnread'
+import {
+  forgetScheduledSend,
+  markScheduledSendFailed,
+  refreshScheduledSends,
+} from './states/scheduledSends'
 import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -208,6 +213,13 @@ export function useAppEffects() {
     }
   }, [])
 
+  // What is waiting to be sent, read once at launch. The promise itself lives
+  // in the core and does not need this; the reader does, so that a message put
+  // off yesterday is visible today without having to go looking for it.
+  useEffect(() => {
+    void refreshScheduledSends()
+  }, [])
+
   // The updater's state machine lives in Go and pushes its whole status on every
   // transition, including download progress.
   useEffect(() => {
@@ -341,13 +353,6 @@ export function useAppEffects() {
       if (selectedAccount) void refreshCurrentMailbox().catch(console.error)
     })
 
-    // A calendar window is fetched from the cache and refreshed behind the
-    // request, so the agenda renders whatever was already stored and needs
-    // telling when the server's answer lands — on a first open the cache is
-    // empty, and without this the view would simply stay that way.
-    // A calendar refresh that failed. Nothing consumed this before, so the
-    // agenda simply went stale in silence — the worst way for it to be wrong,
-    // since it still looks current.
     // A thread whose time has come. The core cleared it already; the list
     // just has to look again, or it would stay hidden until something else
     // happened to refresh it.
@@ -356,6 +361,28 @@ export function useAppEffects() {
       void refreshCurrentMailbox().catch(console.error)
     })
 
+    // A message written earlier that has now gone. Dropped from the waiting
+    // list here rather than on the next read, so the reader is not shown a
+    // message still waiting to be sent that has already been sent.
+    const offScheduledSent = eventsOn('mail.scheduledSent', (detail: { id?: string }) => {
+      if (detail?.id) forgetScheduledSend(detail.id)
+      void refreshCurrentMailbox().catch(console.error)
+    })
+
+    // And one that could not go, after the core stopped trying. Said plainly:
+    // a message the writer believes is on its way and is not would be the
+    // worst thing this feature could do to them.
+    const offScheduledFailed = eventsOn(
+      'mail.scheduledSendFailed',
+      (detail: { id?: string; subject?: string; error?: string }) => {
+        if (detail?.id) markScheduledSendFailed(detail.id, detail.error ?? '')
+        showToast(t('sendLater.toast.failed', { subject: detail?.subject ?? '' }), 'error')
+      },
+    )
+
+    // A calendar refresh that failed. Nothing consumed this before, so the
+    // agenda simply went stale in silence — the worst way for it to be wrong,
+    // since it still looks current.
     const offCalendarError = eventsOn(
       'calendar.syncError',
       (detail: { message?: string }) => {
@@ -363,6 +390,10 @@ export function useAppEffects() {
       },
     )
 
+    // A calendar window is fetched from the cache and refreshed behind the
+    // request, so the agenda renders whatever was already stored and needs
+    // telling when the server's answer lands — on a first open the cache is
+    // empty, and without this the view would simply stay that way.
     const offCalendarSynced = eventsOn(
       'calendar.synced',
       (detail: { from?: number; to?: number }) => {
@@ -408,6 +439,8 @@ export function useAppEffects() {
       if (typeof offCalendarSynced === 'function') offCalendarSynced()
       if (typeof offCalendarError === 'function') offCalendarError()
       if (typeof offUnsnoozed === 'function') offUnsnoozed()
+      if (typeof offScheduledSent === 'function') offScheduledSent()
+      if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])
 }

@@ -2,6 +2,7 @@ import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type } from 'lucide-rea
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
 import { IconButton } from '../button/IconButton'
+import { SendLaterMenu } from './SendLaterMenu'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -18,6 +19,7 @@ export function ComposerFooter({
   onToggleRich,
   onDiscard,
   onSubmit,
+  onSchedule,
 }: {
   rich: boolean
   sending: boolean
@@ -29,6 +31,8 @@ export function ComposerFooter({
   onToggleRich: () => void
   onDiscard: () => void
   onSubmit: () => void
+  /** Holds the message until `at` instead of sending it now. */
+  onSchedule: (at: number) => void
 }) {
   const { t } = useTranslation()
   const draftAutosaveFailed = t('composer.status.draftAutosaveFailed')
@@ -91,6 +95,7 @@ export function ComposerFooter({
         >
           {t('buttons.discard')}
         </button>
+        <SendLaterMenu disabled={!canSend} onSchedule={onSchedule} />
         <button
           onClick={onSubmit}
           disabled={!canSend}
