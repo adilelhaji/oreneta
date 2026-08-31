@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Przenieś do kosza",
   "threads.actions.openInNewTab": "Otwórz w nowej karcie",
   "threads.actions.selectAll": "Zaznacz wszystko",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Dodaj gwiazdkę do wątku",
   "threads.actions.syncMailbox": "Synchronizuj skrzynkę pocztową",

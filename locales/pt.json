@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Mover para o lixo",
   "threads.actions.openInNewTab": "Abrir num novo separador",
   "threads.actions.selectAll": "Selecionar tudo",
+  "threads.actions.selectThread": "Selecionar esta conversa",
   "threads.actions.snoozeTomorrow": "Adiar para amanhã",
   "threads.actions.starThread": "Marcar tópico com estrela",
   "threads.actions.syncMailbox": "Sincronizar caixa de correio",

@@ -484,6 +484,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   bulkSelectable={desktopBulk && bulkInThisList}
                   bulkSelected={!!bulkSelection[bulkItem.key]}
                   onQuickAction={(action) => runQuickAction(action, thread)}
+                  onToggleSelect={desktopBulk ? () => toggleBulkSelection(bulkItem) : undefined}
                   onSelect={(event) => {
                     if (desktopBulk && (event.metaKey || event.ctrlKey)) {
                       toggleBulkSelection(bulkItem)

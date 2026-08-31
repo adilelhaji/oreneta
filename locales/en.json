@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Move to Trash",
   "threads.actions.openInNewTab": "Open in new tab",
   "threads.actions.selectAll": "Select all",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Star thread",
   "threads.actions.syncMailbox": "Sync mailbox",

@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Placer dans la corbeille",
   "threads.actions.openInNewTab": "Ouvrir dans un nouvel onglet",
   "threads.actions.selectAll": "Tout sélectionner",
+  "threads.actions.selectThread": "Sélectionner cette conversation",
   "threads.actions.snoozeTomorrow": "Reporter à demain",
   "threads.actions.starThread": "Suivre le fil",
   "threads.actions.syncMailbox": "Synchroniser la boîte",

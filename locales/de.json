@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "In den Papierkorb verschieben",
   "threads.actions.openInNewTab": "In neuem Tab öffnen",
   "threads.actions.selectAll": "Alle auswählen",
+  "threads.actions.selectThread": "Diese Unterhaltung auswählen",
   "threads.actions.snoozeTomorrow": "Bis morgen zurückstellen",
   "threads.actions.starThread": "Thread markieren",
   "threads.actions.syncMailbox": "Postfach synchronisieren",

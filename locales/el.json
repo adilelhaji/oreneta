@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Μετακίνηση στα Απορρίμματα",
   "threads.actions.openInNewTab": "Άνοιγμα σε νέα καρτέλα",
   "threads.actions.selectAll": "Επιλογή όλων",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Προσθήκη αστεριού στο νήμα",
   "threads.actions.syncMailbox": "Συγχρονισμός γραμματοκιβωτίου",

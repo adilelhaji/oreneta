@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Pārvietot uz miskasti",
   "threads.actions.openInNewTab": "Atvērt jaunā cilnē",
   "threads.actions.selectAll": "Atlasīt visus",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Pievienot zvaigznīti pavedienam",
   "threads.actions.syncMailbox": "Sinhronizēt pastkasti",

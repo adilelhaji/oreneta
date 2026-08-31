@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Flytta till papperskorgen",
   "threads.actions.openInNewTab": "Öppna i ny flik",
   "threads.actions.selectAll": "Markera alla",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Stjärnmärk tråd",
   "threads.actions.syncMailbox": "Synkronisera brevlåda",

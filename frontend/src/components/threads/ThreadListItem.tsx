@@ -30,6 +30,7 @@ export function ThreadListItem({
   bulkSelectable = false,
   bulkSelected = false,
   onQuickAction,
+  onToggleSelect,
 }: {
   thread: Message
   accounts: Account[]
@@ -48,6 +49,8 @@ export function ThreadListItem({
   bulkSelected?: boolean
   /** Triage from the row itself. Omitted where the actions do not apply. */
   onQuickAction?: (action: QuickRowAction) => void
+  /** Starts selecting from this row. Omitted where selecting is not offered. */
+  onToggleSelect?: () => void
 }) {
   const { t } = useTranslation()
   const density = densityStyle(useValue(settings$.listDensity))
@@ -155,7 +158,37 @@ export function ThreadListItem({
             </span>
           </span>
         ) : (
-          <div className="relative shrink-0">
+          <div className="group/avatar relative shrink-0">
+            {/* The avatar turns into a checkbox under the pointer. Selecting
+                several conversations was reachable only by Ctrl- or
+                Shift-clicking, which is a feature nobody finds unless they
+                already knew it was there. Here it is where the eye already
+                goes, and it costs the row nothing when the pointer is
+                elsewhere. */}
+            {onToggleSelect && (
+              <span
+                role="checkbox"
+                aria-checked={false}
+                aria-label={t('threads.actions.selectThread')}
+                title={t('threads.actions.selectThread')}
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onToggleSelect()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onToggleSelect()
+                }}
+                className="absolute inset-0 z-10 hidden items-center justify-center rounded-full bg-chats cursor-pointer group-hover/avatar:flex focus-visible:flex"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary/40 text-secondary/50 transition-colors hover:border-accent hover:text-accent">
+                  <Check size={17} strokeWidth={2.6} />
+                </span>
+              </span>
+            )}
             <Avatar
               name={thread.from_name || thread.from_addr}
               email={isRSS ? undefined : thread.from_addr}

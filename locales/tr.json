@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Çöp Kutusuna Taşı",
   "threads.actions.openInNewTab": "Yeni sekmede aç",
   "threads.actions.selectAll": "Tümünü seç",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "İleti dizisine yıldız ekle",
   "threads.actions.syncMailbox": "Posta kutusunu senkronize et",

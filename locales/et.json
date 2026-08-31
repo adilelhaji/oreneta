@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Teisalda prügikasti",
   "threads.actions.openInNewTab": "Ava uuel vahekaardil",
   "threads.actions.selectAll": "Vali kõik",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Märgi lõim tärniga",
   "threads.actions.syncMailbox": "Sünkrooni postkast",

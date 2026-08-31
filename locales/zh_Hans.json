@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "移至废纸篓",
   "threads.actions.openInNewTab": "在新标签页中打开",
   "threads.actions.selectAll": "全选",
+  "threads.actions.selectThread": "Select this conversation",
   "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "星标会话",
   "threads.actions.syncMailbox": "同步邮箱",

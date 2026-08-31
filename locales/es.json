@@ -1030,6 +1030,7 @@
   "threads.actions.moveToTrash": "Mover a la papelera",
   "threads.actions.openInNewTab": "Abrir en una pestaña nueva",
   "threads.actions.selectAll": "Seleccionar todo",
+  "threads.actions.selectThread": "Seleccionar esta conversación",
   "threads.actions.snoozeTomorrow": "Posponer hasta mañana",
   "threads.actions.starThread": "Destacar hilo",
   "threads.actions.syncMailbox": "Sincronizar buzón",
