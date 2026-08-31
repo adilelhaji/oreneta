@@ -28,8 +28,8 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
-    backup, calendar, changelog, exchange, imap, mail_model, parse, proxy, rss, secrets, smtp, store,
-    thread_list, thread_read, unified,
+    backup, calendar, changelog, exchange, imap, mail_model, parse, proxy, rss, rules, secrets,
+    smtp, store, thread_list, thread_read, unified,
 };
 
 /// Shared, serialized writer so responses and events never interleave on stdout.
@@ -1134,7 +1134,23 @@ async fn sync_and_notify(
         None
     };
 
-    if let Some(headers) = new_inbox {
+    // Rules run before anything is announced. Mail a rule files away is mail
+    // the reader has already said they do not want interrupting them, and a
+    // notification for a message that is no longer in the inbox sends them
+    // looking for something that is not there.
+    let handled = if let Some(headers) = new_inbox.as_deref() {
+        apply_rules_to_arrivals(engine, out, account, folder, headers).await
+    } else {
+        std::collections::HashSet::new()
+    };
+    let new_inbox = new_inbox.map(|headers| {
+        headers
+            .into_iter()
+            .filter(|header| !handled.contains(&header.uid))
+            .collect::<Vec<_>>()
+    });
+
+    if let Some(headers) = new_inbox.filter(|headers| !headers.is_empty()) {
         // Building the detail fetches the arrivals' own bodies (the notification
         // shows a snippet of each); warm the rest of the backlog behind it so the
         // first open of anything else is instant too.
@@ -1427,6 +1443,127 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     }))
                     .collect::<Vec<_>>()
             }))
+        }
+
+        // The rules as they stand, in the order they run.
+        "rules.list" => {
+            let stored = {
+                let db = engine.db.lock().unwrap();
+                store::rules(&db)?
+            };
+            Ok(json!({
+                "rules": stored
+                    .iter()
+                    .filter_map(|definition| serde_json::from_str::<Value>(definition).ok())
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        // Replaces the whole list. All at once because the order is part of
+        // the meaning — rules run top to bottom and one can stop the rest —
+        // so saving them one at a time would leave moments where the list
+        // means something nobody asked for.
+        "rules.save" => {
+            let incoming = p
+                .get("rules")
+                .and_then(Value::as_array)
+                .context("missing param: rules")?;
+            let mut rows = Vec::with_capacity(incoming.len());
+            for value in incoming {
+                let rule: rules::Rule = serde_json::from_value(value.clone())
+                    .context("this rule cannot be read")?;
+                // Refused here rather than tolerated and worked around later:
+                // this files people's mail, and a rule nobody can predict is
+                // not a rule worth keeping.
+                rules::validate(&rule).map_err(|err| anyhow::anyhow!("{}: {err}", rule.name))?;
+                rows.push((
+                    rule.id.clone(),
+                    rule.account.clone(),
+                    rule.enabled,
+                    serde_json::to_string(&rule)?,
+                ));
+            }
+            store::replace_rules(&engine.db.lock().unwrap(), &rows)?;
+            Ok(json!({ "ok": true, "saved": rows.len() }))
+        }
+
+        // What the rules would do to mail already in a folder, without doing
+        // any of it. The same `plan` the real run uses, so this cannot drift
+        // into showing something other than what would happen.
+        "rules.preview" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let limit = p.get("limit").and_then(Value::as_i64).unwrap_or(200).clamp(1, 1000);
+            // Rules as sent when given, so an unsaved draft can be tried
+            // before it is trusted with a mailbox; the stored ones otherwise.
+            let candidates: Vec<rules::Rule> = match p.get("rules").and_then(Value::as_array) {
+                Some(values) => values
+                    .iter()
+                    .map(|value| serde_json::from_value::<rules::Rule>(value.clone()))
+                    .collect::<Result<Vec<_>, _>>()
+                    .context("this rule cannot be read")?,
+                None => stored_rules(engine),
+            };
+
+            let headers = {
+                let db = engine.db.lock().unwrap();
+                store::recent_headers(&db, &account, &folder, limit)?
+            };
+            let mut hits = Vec::new();
+            for header in &headers {
+                let planned = rules::plan(&candidates, &account, &rule_subject(header));
+                if planned.is_empty() {
+                    continue;
+                }
+                hits.push(json!({
+                    "uid": header.uid,
+                    "subject": header.subject,
+                    "from": header.from_addr,
+                    "date": header.date,
+                    "actions": planned
+                        .iter()
+                        .map(|step| json!({
+                            "ruleId": step.rule_id,
+                            "ruleName": step.rule_name,
+                            "action": action_label(&step.action),
+                        }))
+                        .collect::<Vec<_>>(),
+                }));
+            }
+            Ok(json!({ "examined": headers.len(), "matches": hits }))
+        }
+
+        // What the rules have actually done. A mailbox that changes by itself
+        // needs somewhere the reader can find out why.
+        "rules.log" => {
+            let limit = p.get("limit").and_then(Value::as_i64).unwrap_or(200);
+            let entries = {
+                let db = engine.db.lock().unwrap();
+                store::rule_log(&db, limit)?
+            };
+            Ok(json!({
+                "entries": entries
+                    .iter()
+                    .map(|entry| json!({
+                        "at": entry.at,
+                        "account": entry.account,
+                        "ruleId": entry.rule_id,
+                        "ruleName": entry.rule_name,
+                        "folder": entry.folder,
+                        "uid": entry.uid,
+                        "subject": entry.subject,
+                        "from": entry.from_addr,
+                        "action": entry.action,
+                        "outcome": entry.outcome,
+                    }))
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        "rules.clearLog" => {
+            store::clear_rule_log(&engine.db.lock().unwrap())?;
+            Ok(json!({ "ok": true }))
         }
 
         // Files a message to go at a chosen hour. The whole send is kept, so
@@ -3984,6 +4121,153 @@ fn opt_attachments(params: &Value) -> anyhow::Result<Vec<smtp::AttachmentInput>>
         Some(Value::Null) | None => Ok(Vec::new()),
         Some(_) => Err(anyhow::anyhow!("attachments must be an array")),
     }
+}
+
+/// The rules as they are stored, in the order they run.
+///
+/// A rule that no longer parses is skipped rather than sinking the rest: one
+/// bad row must not stop every other rule from filing mail.
+fn stored_rules(engine: &Arc<Engine>) -> Vec<rules::Rule> {
+    let definitions = {
+        let db = engine.db.lock().unwrap();
+        store::rules(&db).unwrap_or_default()
+    };
+    definitions
+        .iter()
+        .filter_map(|definition| match serde_json::from_str::<rules::Rule>(definition) {
+            Ok(rule) => Some(rule),
+            Err(err) => {
+                eprintln!("meron-core: unreadable rule skipped: {err}");
+                None
+            }
+        })
+        .collect()
+}
+
+/// What a message offers the rules to match on.
+fn rule_subject(header: &imap::MessageHeader) -> rules::Subject<'_> {
+    rules::Subject {
+        from_name: &header.from_name,
+        from_addr: &header.from_addr,
+        to: header.to.iter().map(|r| format!("{} {}", r.name, r.addr)).collect(),
+        cc: header.cc.iter().map(|r| format!("{} {}", r.name, r.addr)).collect(),
+        subject: &header.subject,
+    }
+}
+
+/// How an action reads in the record.
+fn action_label(action: &rules::Action) -> String {
+    match action {
+        rules::Action::MoveTo { folder } => format!("moveTo:{folder}"),
+        rules::Action::MarkRead => "markRead".to_string(),
+        rules::Action::Star => "star".to_string(),
+        rules::Action::Stop => "stop".to_string(),
+    }
+}
+
+/// Carries out one planned action, through the same request a person's own
+/// gesture would make.
+///
+/// Deliberately not a second implementation of moving and flagging: a rule
+/// that files mail must do exactly what filing mail by hand does, including
+/// every cache and folder-count update that comes with it.
+async fn run_rule_action(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    folder: &str,
+    uid: u32,
+    action: &rules::Action,
+) -> anyhow::Result<()> {
+    let (method, params) = match action {
+        rules::Action::MoveTo { folder: target } => (
+            "messages.move",
+            json!({
+                "account": account,
+                "folder": folder,
+                "target_folder": target,
+                "uids": [uid],
+            }),
+        ),
+        rules::Action::MarkRead => (
+            "messages.markRead",
+            json!({ "account": account, "folder": folder, "uids": [uid], "seen": true }),
+        ),
+        rules::Action::Star => (
+            "messages.markStarred",
+            json!({ "account": account, "folder": folder, "uids": [uid], "starred": true }),
+        ),
+        // Never reaches here: `plan` returns before emitting a Stop.
+        rules::Action::Stop => return Ok(()),
+    };
+    let request = Request {
+        id: 0,
+        method: method.to_string(),
+        params,
+    };
+    dispatch(engine, &request, out).await.map(|_| ())
+}
+
+/// Applies the rules to mail that has just arrived.
+///
+/// Every action is recorded, whether it worked or not. A rule failing in
+/// silence is worse than a rule that never ran: the reader believes their mail
+/// was filed and it is in the inbox, or believes it is in the inbox and it is
+/// not.
+///
+/// Returns the arrivals the rules dealt with — filed away or marked read — so
+/// the caller does not announce mail that is no longer waiting to be read.
+async fn apply_rules_to_arrivals(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    folder: &str,
+    arrivals: &[imap::MessageHeader],
+) -> std::collections::HashSet<u32> {
+    let mut handled = std::collections::HashSet::new();
+    let rules = stored_rules(engine);
+    if rules.is_empty() || arrivals.is_empty() {
+        return handled;
+    }
+
+    for header in arrivals {
+        for step in rules::plan(&rules, account, &rule_subject(header)) {
+            let moved = matches!(step.action, rules::Action::MoveTo { .. });
+            let done = run_rule_action(engine, out, account, folder, header.uid, &step.action).await;
+            let outcome = match &done {
+                Ok(()) => "done".to_string(),
+                Err(err) => format!("failed: {err:#}"),
+            };
+            if done.is_ok() {
+                handled.insert(header.uid);
+            }
+            {
+                let db = engine.db.lock().unwrap();
+                let _ = store::log_rule_action(
+                    &db,
+                    &store::RuleLogEntry {
+                        at: now_seconds(),
+                        account: account.to_string(),
+                        rule_id: step.rule_id.clone(),
+                        rule_name: step.rule_name.clone(),
+                        folder: folder.to_string(),
+                        uid: header.uid,
+                        subject: header.subject.clone(),
+                        from_addr: header.from_addr.clone(),
+                        action: action_label(&step.action),
+                        outcome,
+                    },
+                );
+            }
+            // A message that has been filed elsewhere is no longer where the
+            // next action would look for it, so the rest of its plan is
+            // abandoned rather than run against a UID that has left.
+            if moved && done.is_ok() {
+                break;
+            }
+        }
+    }
+    handled
 }
 
 /// A scheduled message that will not be tried again, and why.

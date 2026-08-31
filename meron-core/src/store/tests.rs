@@ -201,6 +201,56 @@ fn a_thread_put_aside_stays_out_of_the_way_until_its_time() {
 }
 
 #[test]
+fn recent_headers_carry_what_a_rule_needs_to_match_on() {
+    let conn = test_conn();
+    let recipient = |name: &str, addr: &str| crate::imap::Recipient {
+        name: name.to_string(),
+        addr: addr.to_string(),
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader {
+                uid: 1,
+                subject: "Older".to_string(),
+                from_name: "Team".to_string(),
+                from_addr: "team@example.com".to_string(),
+                date: 100,
+                to: vec![recipient("Me", "me@example.com")],
+                cc: vec![recipient("List", "list@example.com")],
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 2,
+                subject: "Newer".to_string(),
+                from_addr: "other@example.com".to_string(),
+                date: 200,
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+
+    let headers = recent_headers(&conn, "acct", "INBOX", 10).unwrap();
+    assert_eq!(headers.len(), 2);
+    assert_eq!(headers[0].subject, "Newer", "newest first");
+
+    // Cc comes along with To: a rule can match on either, and a dry run that
+    // looked at less than the real run would be a dry run that lies.
+    let older = &headers[1];
+    assert_eq!(older.to.len(), 1);
+    assert_eq!(older.cc.len(), 1);
+    assert_eq!(older.cc[0].addr, "list@example.com");
+    assert_eq!(older.from_name, "Team");
+    assert_eq!(older.folder, "INBOX");
+
+    assert_eq!(recent_headers(&conn, "acct", "INBOX", 1).unwrap().len(), 1);
+    assert!(recent_headers(&conn, "acct", "Archive", 10).unwrap().is_empty());
+}
+
+#[test]
 fn rules_are_kept_and_returned_in_the_order_they_run() {
     let conn = test_conn();
     replace_rules(

@@ -1259,6 +1259,32 @@ pub fn due_snoozes(conn: &Connection, now: i64) -> Result<Vec<(String, String, S
     Ok(rows.filter_map(Result::ok).collect())
 }
 
+/// The most recent messages of one folder, for trying rules against.
+///
+/// Cc comes along with To: a rule can match on either, and a dry run that
+/// looked at less than the real run would be a dry run that lies.
+pub fn recent_headers(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    limit: i64,
+) -> Result<Vec<MessageHeader>> {
+    let mut stmt = conn.prepare(
+        "SELECT uid, subject, from_name, from_addr, date, seen, starred, thread_key,
+                json_extract(json, '$.to'), json_extract(json, '$.cc')
+           FROM messages
+          WHERE account = ?1 AND folder = ?2 AND uid <> 0
+          ORDER BY date DESC LIMIT ?3",
+    )?;
+    let rows = stmt.query_map(params![account, folder, limit.max(0)], |row| {
+        let mut header = message_header_from_row(row)?;
+        header.cc = parse_recipients_json(row.get::<_, Option<String>>(9)?);
+        header.folder = folder.to_string();
+        Ok(header)
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
 /// One entry of the record of what the rules did.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuleLogEntry {
