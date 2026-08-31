@@ -585,6 +585,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 16 {
         migrate_v16(&tx)?;
     }
+    if version < 17 {
+        migrate_v17(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -802,6 +805,40 @@ fn migrate_v16(conn: &Connection) -> Result<()> {
          ALTER TABLE scheduled_sends ADD COLUMN last_attempt INTEGER NOT NULL DEFAULT 0;",
     )?;
     conn.execute_batch("PRAGMA user_version = 16;")?;
+    Ok(())
+}
+
+/// Rules the reader writes, and a record of what they did.
+///
+/// The log is not an extra: a rule files mail away on its own, and a reader
+/// who cannot find out what moved their mail has been given a mailbox that
+/// changes by itself. `position` is what makes the order of rules a property
+/// of the rules and not of however SQLite felt like returning them.
+fn migrate_v17(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS rules (
+           id         TEXT PRIMARY KEY,
+           account    TEXT NOT NULL,
+           position   INTEGER NOT NULL,
+           enabled    INTEGER NOT NULL,
+           definition TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS rule_log (
+           id         INTEGER PRIMARY KEY AUTOINCREMENT,
+           at         INTEGER NOT NULL,
+           account    TEXT NOT NULL,
+           rule_id    TEXT NOT NULL,
+           rule_name  TEXT NOT NULL,
+           folder     TEXT NOT NULL,
+           uid        INTEGER NOT NULL,
+           subject    TEXT NOT NULL,
+           from_addr  TEXT NOT NULL,
+           action     TEXT NOT NULL,
+           outcome    TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS rule_log_at ON rule_log(at);",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 17;")?;
     Ok(())
 }
 

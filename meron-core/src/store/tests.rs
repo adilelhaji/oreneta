@@ -201,6 +201,89 @@ fn a_thread_put_aside_stays_out_of_the_way_until_its_time() {
 }
 
 #[test]
+fn rules_are_kept_and_returned_in_the_order_they_run() {
+    let conn = test_conn();
+    replace_rules(
+        &conn,
+        &[
+            ("r-1".into(), String::new(), true, "{\"name\":\"first\"}".into()),
+            ("r-2".into(), "acct".into(), false, "{\"name\":\"second\"}".into()),
+        ],
+    )
+    .unwrap();
+
+    // Order is part of the meaning: rules run top to bottom and one can stop
+    // the rest, so it cannot be left to however SQLite feels like answering.
+    let stored = rules(&conn).unwrap();
+    assert_eq!(stored, vec!["{\"name\":\"first\"}", "{\"name\":\"second\"}"]);
+
+    // Saving replaces the whole list rather than adding to it.
+    replace_rules(&conn, &[("r-3".into(), String::new(), true, "{\"name\":\"only\"}".into())]).unwrap();
+    assert_eq!(rules(&conn).unwrap(), vec!["{\"name\":\"only\"}"]);
+
+    replace_rules(&conn, &[]).unwrap();
+    assert!(rules(&conn).unwrap().is_empty());
+}
+
+#[test]
+fn the_record_of_what_the_rules_did_is_kept_newest_first_and_bounded() {
+    let conn = test_conn();
+    let entry = |n: i64| RuleLogEntry {
+        at: 1_700_000_000 + n,
+        account: "acct".into(),
+        rule_id: "r-1".into(),
+        rule_name: "Reports".into(),
+        folder: "INBOX".into(),
+        uid: n as u32,
+        subject: format!("Message {n}"),
+        from_addr: "team@example.com".into(),
+        action: "moveTo:Reports".into(),
+        outcome: "done".into(),
+    };
+    for n in 0..3 {
+        log_rule_action(&conn, &entry(n)).unwrap();
+    }
+
+    // Most recent first: the question a reader asks is "what just moved my
+    // mail", not "what moved it first".
+    let read = rule_log(&conn, 10).unwrap();
+    assert_eq!(read.len(), 3);
+    assert_eq!(read[0].subject, "Message 2");
+    assert_eq!(read[0].action, "moveTo:Reports");
+
+    assert_eq!(rule_log(&conn, 1).unwrap().len(), 1);
+
+    clear_rule_log(&conn).unwrap();
+    assert!(rule_log(&conn, 10).unwrap().is_empty());
+}
+
+#[test]
+fn the_record_stops_growing_at_its_limit() {
+    let conn = test_conn();
+    let entry = |n: i64| RuleLogEntry {
+        at: n,
+        account: "acct".into(),
+        rule_id: "r-1".into(),
+        rule_name: "Reports".into(),
+        folder: "INBOX".into(),
+        uid: n as u32,
+        subject: format!("Message {n}"),
+        from_addr: "team@example.com".into(),
+        action: "star".into(),
+        outcome: "done".into(),
+    };
+    for n in 0..(RULE_LOG_LIMIT + 5) {
+        log_rule_action(&conn, &entry(n)).unwrap();
+    }
+
+    // A busy mailbox must not grow a log without end.
+    let read = rule_log(&conn, RULE_LOG_LIMIT * 2).unwrap();
+    assert_eq!(read.len() as i64, RULE_LOG_LIMIT);
+    // And what is dropped is the oldest, not the newest.
+    assert_eq!(read[0].subject, format!("Message {}", RULE_LOG_LIMIT + 4));
+}
+
+#[test]
 fn a_message_written_now_waits_for_its_hour_and_then_is_due() {
     let conn = test_conn();
     let now = 1_700_000_000i64;
@@ -1758,7 +1841,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 16);
+    assert_eq!(version, 17);
 
     for table in [
         "accounts",
@@ -1793,7 +1876,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 16);
+    assert_eq!(version, 17);
 }
 
 #[test]
@@ -1821,7 +1904,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 16);
+    assert_eq!(version, 17);
 
     let _ = std::fs::remove_dir_all(dir);
 }

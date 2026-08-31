@@ -1259,6 +1259,108 @@ pub fn due_snoozes(conn: &Connection, now: i64) -> Result<Vec<(String, String, S
     Ok(rows.filter_map(Result::ok).collect())
 }
 
+/// One entry of the record of what the rules did.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuleLogEntry {
+    pub at: i64,
+    pub account: String,
+    pub rule_id: String,
+    pub rule_name: String,
+    pub folder: String,
+    pub uid: u32,
+    pub subject: String,
+    pub from_addr: String,
+    /// What was done, as the interface shows it, e.g. `moveTo:Archive`.
+    pub action: String,
+    /// `done`, or why it did not happen.
+    pub outcome: String,
+}
+
+/// How much of the record is kept.
+///
+/// Enough to answer "what moved my mail last week", bounded so a busy mailbox
+/// does not grow a log without end.
+pub const RULE_LOG_LIMIT: i64 = 1000;
+
+/// Replaces the whole set of rules, in the order given.
+///
+/// All at once because the order is part of the meaning: rules run top to
+/// bottom and one of them can stop the rest, so saving them one by one would
+/// leave moments where the list means something nobody asked for.
+pub fn replace_rules(conn: &Connection, rules: &[(String, String, bool, String)]) -> Result<()> {
+    conn.execute("DELETE FROM rules", [])?;
+    let mut stmt = conn.prepare(
+        "INSERT INTO rules(id, account, position, enabled, definition) VALUES(?1, ?2, ?3, ?4, ?5)",
+    )?;
+    for (position, (id, account, enabled, definition)) in rules.iter().enumerate() {
+        stmt.execute(params![id, account, position as i64, *enabled, definition])?;
+    }
+    Ok(())
+}
+
+/// Every rule, in the order they run.
+pub fn rules(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT definition FROM rules ORDER BY position")?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Records one thing a rule did, and trims the record to its limit.
+pub fn log_rule_action(conn: &Connection, entry: &RuleLogEntry) -> Result<()> {
+    conn.execute(
+        "INSERT INTO rule_log(at, account, rule_id, rule_name, folder, uid, subject,
+                              from_addr, action, outcome)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            entry.at,
+            entry.account,
+            entry.rule_id,
+            entry.rule_name,
+            entry.folder,
+            entry.uid,
+            entry.subject,
+            entry.from_addr,
+            entry.action,
+            entry.outcome,
+        ],
+    )?;
+    conn.execute(
+        "DELETE FROM rule_log WHERE id NOT IN
+           (SELECT id FROM rule_log ORDER BY id DESC LIMIT ?1)",
+        params![RULE_LOG_LIMIT],
+    )?;
+    Ok(())
+}
+
+/// What the rules have done, most recent first.
+pub fn rule_log(conn: &Connection, limit: i64) -> Result<Vec<RuleLogEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT at, account, rule_id, rule_name, folder, uid, subject, from_addr, action, outcome
+           FROM rule_log ORDER BY id DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit.max(0)], |row| {
+        Ok(RuleLogEntry {
+            at: row.get(0)?,
+            account: row.get(1)?,
+            rule_id: row.get(2)?,
+            rule_name: row.get(3)?,
+            folder: row.get(4)?,
+            uid: row.get(5)?,
+            subject: row.get(6)?,
+            from_addr: row.get(7)?,
+            action: row.get(8)?,
+            outcome: row.get(9)?,
+        })
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Forgets the record. The reader's own, so theirs to clear.
+pub fn clear_rule_log(conn: &Connection) -> Result<()> {
+    conn.execute("DELETE FROM rule_log", [])?;
+    Ok(())
+}
+
 /// A message written now and due to go later.
 ///
 /// The whole send travels as `payload` — recipients, body, attachments — so
