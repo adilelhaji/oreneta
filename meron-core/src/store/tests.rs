@@ -296,6 +296,106 @@ fn recent_headers_carry_what_a_rule_needs_to_match_on() {
     assert!(recent_headers(&conn, "acct", "Archive", 10).unwrap().is_empty());
 }
 
+#[test]
+fn an_unknown_attachment_answer_is_not_a_no() {
+    let conn = test_conn();
+    let msg = |uid: u32, has: Option<bool>| MessageHeader {
+        uid,
+        date: 100 + uid as i64,
+        thread_key: format!("t-{uid}"),
+        has_attachments: has,
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[msg(1, Some(true)), msg(2, Some(false)), msg(3, None)],
+    )
+    .unwrap();
+
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+
+    // Only what is known to carry one. A message nobody has looked at is not
+    // a message without an attachment.
+    assert_eq!(
+        uids(RecentFilter { with_attachments: true, ..Default::default() }),
+        vec![1]
+    );
+    assert_eq!(uids(RecentFilter::default()), vec![3, 2, 1]);
+
+    // And the one nobody has looked at is exactly what the backfill asks about.
+    assert_eq!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap(), vec![3]);
+}
+
+#[test]
+fn a_resync_carrying_no_structure_does_not_forget_what_was_known() {
+    let conn = test_conn();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader { uid: 1, has_attachments: Some(true), ..Default::default() }],
+    )
+    .unwrap();
+
+    // A flag-only resync carries no BODYSTRUCTURE. Turning a known answer back
+    // into an unknown one would make the filter forget mail it had already
+    // found, over and over.
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader { uid: 1, seen: true, has_attachments: None, ..Default::default() }],
+    )
+    .unwrap();
+
+    assert!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap().is_empty());
+    let found = get_recent_page(
+        &conn,
+        "acct",
+        "INBOX",
+        50,
+        None,
+        RecentFilter { with_attachments: true, ..Default::default() },
+    )
+    .unwrap()
+    .0;
+    assert_eq!(found.len(), 1);
+}
+
+#[test]
+fn asking_the_server_makes_an_unknown_message_known() {
+    let conn = test_conn();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, thread_key: "t-2".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    assert_eq!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap().len(), 2);
+
+    set_has_attachments(&conn, "acct", "INBOX", &[(1, true), (2, false)]).unwrap();
+
+    assert!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap().is_empty());
+    // A paperclip belongs to the conversation: the thread whose message
+    // carries the invoice has an invoice in it.
+    let flagged = threads_with_attachments(&conn, "acct", &["t-1".into(), "t-2".into()]).unwrap();
+    assert!(flagged.contains("t-1"));
+    assert!(!flagged.contains("t-2"));
+}
+
 fn label(id: &str, name: &str) -> Label {
     Label {
         id: id.to_string(),
@@ -2055,7 +2155,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 18);
+    assert_eq!(version, 19);
 
     for table in [
         "accounts",
@@ -2090,7 +2190,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 18);
+    assert_eq!(version, 19);
 }
 
 #[test]
@@ -2118,7 +2218,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 18);
+    assert_eq!(version, 19);
 
     let _ = std::fs::remove_dir_all(dir);
 }

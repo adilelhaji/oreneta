@@ -8,6 +8,7 @@
 //! dedicated long-lived connections, separate from that pool.
 
 use anyhow::{Context, Result, anyhow};
+use async_imap::imap_proto::{self, BodyStructure};
 use futures::StreamExt;
 use mailparse::MailHeaderMap;
 use std::collections::HashSet;
@@ -179,6 +180,14 @@ pub struct MessageHeader {
     /// Normalized RFC In-Reply-To from the envelope, when available.
     #[serde(default)]
     pub in_reply_to: String,
+    /// Whether the message carries an attachment, or `None` when nothing has
+    /// looked yet.
+    ///
+    /// Three states on purpose. A message whose structure has never been
+    /// fetched is *unknown*, and saying "no" for it would be a filter quietly
+    /// hiding mail that does have one.
+    #[serde(default)]
+    pub has_attachments: Option<bool>,
     /// Envelope `To`/`Cc` addressees. Populated by the envelope-fetch paths and
     /// persisted for recipient autocomplete; the cached-row SELECT paths that
     /// don't need them leave these empty.
@@ -579,6 +588,7 @@ pub async fn fetch_recent(session: &mut Session, folder: &str, limit: u32) -> Re
             gmail_msg_id: fetch.gmail_msg_id().copied(),
             in_reply_to: ef.in_reply_to,
             folder: String::new(),
+            has_attachments: fetch.bodystructure().map(structure_has_attachment),
             to: ef.to,
             cc: ef.cc,
             recipient_overflow: 0,
@@ -746,6 +756,7 @@ pub async fn fetch_by_message_ids(
                 message_id: ef.message_id,
                 gmail_msg_id: fetch.gmail_msg_id().copied(),
                 in_reply_to: ef.in_reply_to,
+                has_attachments: fetch.bodystructure().map(structure_has_attachment),
                 to: ef.to,
                 cc: ef.cc,
                 recipient_overflow: 0,
@@ -823,6 +834,7 @@ pub async fn fetch_headers_by_uid(
             gmail_msg_id: fetch.gmail_msg_id().copied(),
             in_reply_to: ef.in_reply_to,
             folder: String::new(),
+            has_attachments: fetch.bodystructure().map(structure_has_attachment),
             to: ef.to,
             cc: ef.cc,
             recipient_overflow: 0,
@@ -855,6 +867,44 @@ pub struct FlagSync {
 /// connection reads the previous command's reply. The desynced session then
 /// reports empty mailboxes and an empty folder LIST while still looking
 /// healthy, so it goes back into the pool and poisons the account's syncs.
+/// Asks the server which of these messages carry an attachment.
+///
+/// The structure only — no body bytes — so this is cheap enough to run when
+/// the reader turns the attachment filter on and some of the folder has never
+/// been asked. It is what makes that filter exact instead of approximate:
+/// rather than assuming about a message nobody has looked at, look.
+pub async fn fetch_attachment_flags(
+    session: &mut Session,
+    folder: &str,
+    uids: &[u32],
+) -> Result<Vec<(u32, bool)>> {
+    if uids.is_empty() {
+        return Ok(Vec::new());
+    }
+    session.select(folder).await.context("SELECT")?;
+    let set = uids
+        .iter()
+        .map(|uid| uid.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut out = Vec::with_capacity(uids.len());
+    let mut stream = session
+        .uid_fetch(&set, "(UID BODYSTRUCTURE)")
+        .await
+        .context("UID FETCH BODYSTRUCTURE")?;
+    while let Some(item) = stream.next().await {
+        let fetch = item.context("FETCH item")?;
+        let Some(uid) = fetch.uid else { continue };
+        // A message the server answered without a structure stays unknown
+        // rather than being recorded as carrying nothing.
+        if let Some(structure) = fetch.bodystructure() {
+            out.push((uid, structure_has_attachment(structure)));
+        }
+    }
+    drop(stream);
+    Ok(out)
+}
+
 pub async fn sync_flags(
     session: &mut Session,
     folder: &str,
@@ -1598,12 +1648,53 @@ fn push_recipient(out: &mut Vec<Recipient>, info: &mailparse::SingleInfo) {
 
 /// FETCH item list. Adds `X-GM-THRID` on Gmail so messages thread by Gmail's
 /// server-side thread id, and `BODY.PEEK[]` when the full message is wanted.
+/// Whether a message carries something the reader would call an attachment.
+///
+/// Read from BODYSTRUCTURE, which the server computes and sends with the
+/// envelope, so knowing costs no body bytes.
+///
+/// A part counts when the sender marked it `attachment`, or when it is a leaf
+/// that is neither text nor multipart and carries no Content-ID. The
+/// Content-ID test is what keeps a signature logo out of the answer: an inline
+/// image referenced from the HTML is part of the message being read, not a
+/// file that came with it, and a filter that matched every corporate signature
+/// would match almost everything and mean nothing.
+pub fn structure_has_attachment(structure: &BodyStructure<'_>) -> bool {
+    match structure {
+        BodyStructure::Multipart { bodies, .. } => bodies.iter().any(structure_has_attachment),
+        BodyStructure::Text { common, .. } => is_marked_attachment(common),
+        BodyStructure::Basic { common, other, .. } => {
+            is_marked_attachment(common) || (!is_inline_image(common, other))
+        }
+        // A forwarded message is a file the reader can save, whether or not
+        // the sender troubled to mark it as one.
+        BodyStructure::Message { .. } => true,
+    }
+}
+
+fn is_marked_attachment(common: &imap_proto::BodyContentCommon<'_>) -> bool {
+    common
+        .disposition
+        .as_ref()
+        .is_some_and(|disposition| disposition.ty.eq_ignore_ascii_case("attachment"))
+}
+
+/// A non-text part the HTML refers to by `cid:` — a logo, a tracking pixel, a
+/// diagram in the body. Part of the message, not a file that came with it.
+fn is_inline_image(
+    common: &imap_proto::BodyContentCommon<'_>,
+    other: &imap_proto::BodyContentSinglePart<'_>,
+) -> bool {
+    other.id.as_ref().is_some_and(|id| !id.trim().is_empty())
+        && common.ty.ty.eq_ignore_ascii_case("image")
+}
+
 fn fetch_items(gmail: bool, body: bool) -> &'static str {
     match (gmail, body) {
-        (true, true) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID BODY.PEEK[])",
-        (true, false) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID)",
-        (false, true) => "(UID FLAGS RFC822.HEADER BODY.PEEK[])",
-        (false, false) => "(UID FLAGS RFC822.HEADER)",
+        (true, true) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID BODYSTRUCTURE BODY.PEEK[])",
+        (true, false) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID BODYSTRUCTURE)",
+        (false, true) => "(UID FLAGS RFC822.HEADER BODYSTRUCTURE BODY.PEEK[])",
+        (false, false) => "(UID FLAGS RFC822.HEADER BODYSTRUCTURE)",
     }
 }
 
@@ -1698,9 +1789,180 @@ pub(crate) fn first_message_id(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        civil_from_days, first_message_id, header_fields, imap_quote, looks_like_drafts,
-        message_id_search_criteria, normalize_message_id, search_criteria, thread_key,
+        civil_from_days, fetch_items, first_message_id, header_fields, imap_quote,
+        looks_like_drafts, message_id_search_criteria, normalize_message_id, search_criteria,
+        structure_has_attachment, thread_key,
     };
+    use async_imap::imap_proto::{
+        BodyContentCommon, BodyContentSinglePart, BodyStructure, ContentDisposition,
+        ContentEncoding, ContentType, Envelope,
+    };
+    use std::borrow::Cow;
+
+    fn content_type(ty: &'static str, subtype: &'static str) -> ContentType<'static> {
+        ContentType {
+            ty: Cow::Borrowed(ty),
+            subtype: Cow::Borrowed(subtype),
+            params: None,
+        }
+    }
+
+    fn common(
+        ty: &'static str,
+        subtype: &'static str,
+        disposition: Option<&'static str>,
+    ) -> BodyContentCommon<'static> {
+        BodyContentCommon {
+            ty: content_type(ty, subtype),
+            disposition: disposition.map(|ty| ContentDisposition {
+                ty: Cow::Borrowed(ty),
+                params: None,
+            }),
+            language: None,
+            location: None,
+        }
+    }
+
+    fn single(cid: Option<&'static str>) -> BodyContentSinglePart<'static> {
+        BodyContentSinglePart {
+            id: cid.map(Cow::Borrowed),
+            md5: None,
+            description: None,
+            transfer_encoding: ContentEncoding::Binary,
+            octets: 128,
+        }
+    }
+
+    fn text_part() -> BodyStructure<'static> {
+        BodyStructure::Text {
+            common: common("text", "html", None),
+            other: single(None),
+            lines: 4,
+            extension: None,
+        }
+    }
+
+    fn basic(
+        ty: &'static str,
+        subtype: &'static str,
+        disposition: Option<&'static str>,
+        cid: Option<&'static str>,
+    ) -> BodyStructure<'static> {
+        BodyStructure::Basic {
+            common: common(ty, subtype, disposition),
+            other: single(cid),
+            extension: None,
+        }
+    }
+
+    fn multipart(bodies: Vec<BodyStructure<'static>>) -> BodyStructure<'static> {
+        BodyStructure::Multipart {
+            common: common("multipart", "mixed", None),
+            bodies,
+            extension: None,
+        }
+    }
+
+    #[test]
+    fn the_structure_comes_with_the_envelope_so_knowing_costs_no_body_bytes() {
+        for items in [
+            fetch_items(false, false),
+            fetch_items(true, false),
+            fetch_items(false, true),
+            fetch_items(true, true),
+        ] {
+            assert!(items.contains("BODYSTRUCTURE"), "{items}");
+        }
+        // The listing fetch still asks for no body: the structure is what says
+        // whether there is an attachment, not the attachment itself.
+        assert!(!fetch_items(false, false).contains("BODY.PEEK"));
+    }
+
+    #[test]
+    fn a_plain_message_carries_nothing() {
+        assert!(!structure_has_attachment(&text_part()));
+        assert!(!structure_has_attachment(&multipart(vec![text_part(), text_part()])));
+    }
+
+    #[test]
+    fn a_part_the_sender_marked_as_an_attachment_counts() {
+        assert!(structure_has_attachment(&basic(
+            "application",
+            "pdf",
+            Some("attachment"),
+            None
+        )));
+        // Even a text part, when the sender said so: an attached .csv is a
+        // file, not the message.
+        assert!(structure_has_attachment(&BodyStructure::Text {
+            common: common("text", "csv", Some("attachment")),
+            other: single(None),
+            lines: 20,
+            extension: None,
+        }));
+        // And whatever case they wrote it in.
+        assert!(structure_has_attachment(&basic(
+            "application",
+            "pdf",
+            Some("ATTACHMENT"),
+            None
+        )));
+    }
+
+    #[test]
+    fn a_signature_logo_does_not_count() {
+        // An inline image referenced from the HTML is part of the message
+        // being read. A filter that matched every corporate signature would
+        // match almost everything and mean nothing.
+        assert!(!structure_has_attachment(&multipart(vec![
+            text_part(),
+            basic("image", "png", Some("inline"), Some("<logo@example.com>")),
+        ])));
+    }
+
+    #[test]
+    fn a_photo_with_no_content_id_counts_even_unmarked() {
+        // Plenty of senders attach a file without a disposition at all; it is
+        // still a file, because nothing in the message refers to it.
+        assert!(structure_has_attachment(&multipart(vec![
+            text_part(),
+            basic("image", "jpeg", None, None),
+        ])));
+    }
+
+    #[test]
+    fn a_forwarded_message_counts() {
+        // Something the reader can save, whether or not the sender troubled to
+        // mark it.
+        let forwarded = BodyStructure::Message {
+            common: common("message", "rfc822", None),
+            other: single(None),
+            envelope: Envelope {
+                date: None,
+                subject: None,
+                from: None,
+                sender: None,
+                reply_to: None,
+                to: None,
+                cc: None,
+                bcc: None,
+                in_reply_to: None,
+                message_id: None,
+            },
+            body: Box::new(text_part()),
+            lines: 30,
+            extension: None,
+        };
+        assert!(structure_has_attachment(&multipart(vec![text_part(), forwarded])));
+    }
+
+    #[test]
+    fn a_nested_attachment_is_found() {
+        assert!(structure_has_attachment(&multipart(vec![
+            multipart(vec![text_part(), text_part()]),
+            multipart(vec![basic("application", "zip", Some("attachment"), None)]),
+        ])));
+    }
 
     #[test]
     fn looks_like_drafts_matches_common_names_case_insensitively() {

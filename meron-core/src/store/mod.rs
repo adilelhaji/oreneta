@@ -259,8 +259,8 @@ pub fn upsert_messages(
             upserted_ids.insert(message_id);
         }
         tx.execute(
-            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients)
-             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments)
+             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(account, folder, msg_id) DO UPDATE SET
                subject    = excluded.subject,
                from_name  = excluded.from_name,
@@ -272,7 +272,10 @@ pub fn upsert_messages(
                json       = json_patch(messages.json, excluded.json),
                -- Same rule as the recipient lists in `json`: a flag-only resync
                -- carries no envelope, so it must not blank what we already indexed.
-               recipients = COALESCE(excluded.recipients, messages.recipients)",
+               recipients = COALESCE(excluded.recipients, messages.recipients),
+               -- And the same again: a resync that carried no structure must
+               -- not turn a known answer back into an unknown one.
+               has_attachments = COALESCE(excluded.has_attachments, messages.has_attachments)",
             params![
                 account,
                 folder,
@@ -285,7 +288,8 @@ pub fn upsert_messages(
                 m.starred as i64,
                 thread_key,
                 extra_json,
-                recipients_index_text(&m.to, &m.cc)
+                recipients_index_text(&m.to, &m.cc),
+                m.has_attachments
             ],
         )?;
     }
@@ -402,6 +406,8 @@ pub struct RecentFilter {
     pub starred_only: bool,
     /// Only conversations carrying this label, when set.
     pub label_id: Option<String>,
+    /// Only messages known to carry an attachment.
+    pub with_attachments: bool,
 }
 
 impl RecentFilter {
@@ -428,6 +434,10 @@ pub fn get_recent_page(
          WHERE account = ?1 AND folder = ?2
            AND (?6 = 0 OR seen = 0)
            AND (?7 = 0 OR starred = 1)
+           -- `= 1`, never `IS NOT 0`: a message nobody has looked at is not a
+           -- message without an attachment, and offering it here would make
+           -- the filter mean nothing.
+           AND (?9 = 0 OR has_attachments = 1)
            -- A label is on the conversation, so the row is matched by the key
            -- it shares with the rest of its thread, not by its own uid.
            AND (?8 IS NULL OR EXISTS (
@@ -451,7 +461,8 @@ pub fn get_recent_page(
             probe as i64,
             filter.unread_only as i64,
             filter.starred_only as i64,
-            filter.label_id.as_deref()
+            filter.label_id.as_deref(),
+            filter.with_attachments as i64
         ],
         |row| {
             let uid = row.get(0)?;
@@ -1334,6 +1345,82 @@ pub fn thread_key_for_uid(
         )
         .optional()?;
     Ok(key.unwrap_or_else(|| format!("uid:{uid}")))
+}
+
+/// Which of these conversations are known to carry an attachment.
+///
+/// By conversation, because that is what a row is: a thread whose third
+/// message has the invoice has an invoice in it, and a paperclip on the row is
+/// the honest way to say so.
+///
+/// Absent from the set means either no attachment or nobody has looked, and
+/// the two are deliberately not told apart here — a row shows a paperclip when
+/// there is something to show one for, and nothing otherwise.
+pub fn threads_with_attachments(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashSet<String>> {
+    let mut found = HashSet::new();
+    if thread_keys.is_empty() {
+        return Ok(found);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) FROM messages
+          WHERE account = ?1 AND has_attachments = 1",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| row.get::<_, String>(0))?;
+    for key in rows.filter_map(Result::ok) {
+        if wanted.contains(&key) {
+            found.insert(key);
+        }
+    }
+    Ok(found)
+}
+
+/// The messages of a folder whose structure nobody has fetched yet.
+///
+/// What makes the attachment filter honest rather than approximate: instead of
+/// guessing about them, the caller asks the server, and the answer becomes
+/// known. Capped, because a mailbox of fifty thousand should not turn one
+/// filter click into one enormous FETCH.
+pub fn uids_without_structure(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    limit: i64,
+) -> Result<Vec<u32>> {
+    let mut stmt = conn.prepare(
+        "SELECT uid FROM messages
+          WHERE account = ?1 AND folder = ?2 AND uid <> 0 AND has_attachments IS NULL
+          ORDER BY date DESC LIMIT ?3",
+    )?;
+    let rows = stmt.query_map(params![account, folder, limit.max(0)], |row| {
+        row.get::<_, i64>(0).map(|uid| uid as u32)
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Records what the server said about a message's structure.
+pub fn set_has_attachments(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    answers: &[(u32, bool)],
+) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "UPDATE messages SET has_attachments = ?4
+              WHERE account = ?1 AND folder = ?2 AND uid = ?3",
+        )?;
+        for (uid, has) in answers {
+            stmt.execute(params![account, folder, uid, *has as i64])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
 }
 
 /// A label the reader has made.

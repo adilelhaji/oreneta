@@ -32,6 +32,9 @@ export function filterThreads(
   if (facets.includes('starred')) {
     out = out.filter((thread) => thread.starred || thread.has_starred_items || kept(thread))
   }
+  if (facets.includes('attachments')) {
+    out = out.filter((thread) => thread.has_attachments || kept(thread))
+  }
   const labelFacet = facets.find((facet) => facet.startsWith('label:'))
   if (labelFacet) {
     const labelId = labelFacet.slice('label:'.length)

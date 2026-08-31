@@ -2044,6 +2044,10 @@ impl EwsEnvelope {
             message_id: self.message_id,
             gmail_msg_id: None,
             in_reply_to: self.in_reply_to,
+            // Exchange answers this as a property of the item, but the sync
+            // path does not request it yet. Unknown, not "no": saying no would
+            // be a filter quietly hiding mail that does carry a file.
+            has_attachments: None,
             to: self.to,
             cc: self.cc,
             recipient_overflow: 0,

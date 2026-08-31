@@ -31,14 +31,15 @@ export const isFilterMode = (value: unknown): value is FilterMode =>
 /** The one narrowing a single-valued surface holds, as a set. */
 export const facetsOf = (mode: FilterMode): FilterFacet[] => (mode === 'all' ? [] : [mode])
 
-export type FilterFacet = 'unread' | 'starred' | 'snoozed' | `label:${string}`
+export type FilterFacet = 'unread' | 'starred' | 'snoozed' | 'attachments' | `label:${string}`
 
-export const FILTER_FACETS: FilterFacet[] = ['unread', 'starred', 'snoozed']
+export const FILTER_FACETS: FilterFacet[] = ['unread', 'starred', 'snoozed', 'attachments']
 
 const isFilterFacet = (value: unknown): value is FilterFacet =>
   value === 'unread' ||
   value === 'starred' ||
   value === 'snoozed' ||
+  value === 'attachments' ||
   // A label facet names the label it means. The id is not checked here: a
   // label the reader has since deleted is dropped by whoever knows the label
   // set, not by a string test.

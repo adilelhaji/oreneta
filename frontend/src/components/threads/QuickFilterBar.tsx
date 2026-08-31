@@ -1,4 +1,4 @@
-import { Clock, Mail, Pin, Star } from 'lucide-react'
+import { Clock, Mail, Paperclip, Pin, Star } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
@@ -10,6 +10,7 @@ import { settings$ } from '../../states/settings'
 const FACETS: { facet: FilterFacet; icon: typeof Star; labelKey: string }[] = [
   { facet: 'unread', icon: Mail, labelKey: 'filters.unread' },
   { facet: 'starred', icon: Star, labelKey: 'filters.starred' },
+  { facet: 'attachments', icon: Paperclip, labelKey: 'filters.attachments' },
   { facet: 'snoozed', icon: Clock, labelKey: 'filters.snoozed' },
 ]
 

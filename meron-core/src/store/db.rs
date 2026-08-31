@@ -591,6 +591,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 18 {
         migrate_v18(&tx)?;
     }
+    if version < 19 {
+        migrate_v19(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -872,6 +875,19 @@ fn migrate_v18(conn: &Connection) -> Result<()> {
          CREATE INDEX IF NOT EXISTS thread_labels_label ON thread_labels(label_id);",
     )?;
     conn.execute_batch("PRAGMA user_version = 18;")?;
+    Ok(())
+}
+
+/// Whether a message carries an attachment, as the server's BODYSTRUCTURE says.
+///
+/// Nullable on purpose, and that is the whole point of the column. A message
+/// synced before this existed has never been asked, and answering "no" for it
+/// would be a filter quietly hiding mail that does carry a file — the one
+/// failure this feature must not have. Unknown stays unknown until something
+/// looks.
+fn migrate_v19(conn: &Connection) -> Result<()> {
+    conn.execute_batch("ALTER TABLE messages ADD COLUMN has_attachments INTEGER;")?;
+    conn.execute_batch("PRAGMA user_version = 19;")?;
     Ok(())
 }
 

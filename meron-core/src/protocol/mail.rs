@@ -634,14 +634,19 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
         // with nothing rather than pretending the view is empty of its own
         // accord.
         thread_list::MailSource::Snoozed => (Vec::new(), None),
-        thread_list::MailSource::Recent { unread_only, starred_only, label_id } => {
+        thread_list::MailSource::Recent {
+            unread_only,
+            starred_only,
+            label_id,
+            with_attachments,
+        } => {
             get_cached_mobile_mail_page(
                 data_dir,
                 &account_id,
                 &folder_id,
                 limit,
                 request.before_cursor,
-                store::RecentFilter { unread_only, starred_only, label_id },
+                store::RecentFilter { unread_only, starred_only, label_id, with_attachments },
             )?
         }
         thread_list::MailSource::Search => {

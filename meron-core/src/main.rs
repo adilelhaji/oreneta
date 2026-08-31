@@ -2744,14 +2744,35 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     store::get_snoozed_headers(&engine.db.lock().unwrap(), &account)?,
                     None,
                 ),
-                thread_list::MailSource::Recent { unread_only, starred_only, label_id } => store::get_recent_page(
-                    &engine.db.lock().unwrap(),
-                    &account,
-                    &folder,
-                    limit,
-                    request.before_cursor,
-                    store::RecentFilter { unread_only, starred_only, label_id },
-                )?,
+                thread_list::MailSource::Recent {
+                    unread_only,
+                    starred_only,
+                    label_id,
+                    with_attachments,
+                } => {
+                    // Asking for what has an attachment is asking a question
+                    // about every message, and some of them have never been
+                    // looked at. Look now, rather than answering for them:
+                    // treating "nobody asked" as "no" would hide mail that
+                    // does carry a file, which is the one thing this filter
+                    // must not do.
+                    if with_attachments {
+                        fill_in_attachment_flags(engine, &account, &folder).await;
+                    }
+                    store::get_recent_page(
+                        &engine.db.lock().unwrap(),
+                        &account,
+                        &folder,
+                        limit,
+                        request.before_cursor,
+                        store::RecentFilter {
+                            unread_only,
+                            starred_only,
+                            label_id,
+                            with_attachments,
+                        },
+                    )?
+                }
                 thread_list::MailSource::Search => {
                     // Chat-view search spans the selected folder plus Sent, so a
                     // lookup surfaces both received and self-sent mail (and old
@@ -4181,6 +4202,46 @@ fn opt_attachments(params: &Value) -> anyhow::Result<Vec<smtp::AttachmentInput>>
             .collect(),
         Some(Value::Null) | None => Ok(Vec::new()),
         Some(_) => Err(anyhow::anyhow!("attachments must be an array")),
+    }
+}
+
+/// How many unlooked-at messages one filter click is willing to ask about.
+///
+/// Bounded so turning the filter on in a mailbox of fifty thousand is one
+/// reasonable FETCH rather than an enormous one. Whatever is left stays
+/// unknown and is filled in by later syncs.
+const ATTACHMENT_BACKFILL_LIMIT: i64 = 500;
+
+/// Asks the server about the messages of a folder nobody has looked at yet.
+///
+/// Failure is quiet on purpose. This makes an answer more complete; it is not
+/// the answer. A folder that cannot be reached still lists what is already
+/// known, which is better than refusing to list anything.
+async fn fill_in_attachment_flags(engine: &Arc<Engine>, account: &str, folder: &str) {
+    let unknown = {
+        let db = engine.db.lock().unwrap();
+        store::uids_without_structure(&db, account, folder, ATTACHMENT_BACKFILL_LIMIT)
+            .unwrap_or_default()
+    };
+    if unknown.is_empty() {
+        return;
+    }
+    let folder_owned = folder.to_string();
+    let answers = engine
+        .with_read_session(account, move |session| {
+            let folder = folder_owned.clone();
+            let uids = unknown.clone();
+            Box::pin(async move { session.attachment_flags(&folder, &uids).await })
+        })
+        .await;
+    match answers {
+        Ok(answers) => {
+            let db = engine.db.lock().unwrap();
+            let _ = store::set_has_attachments(&db, account, folder, &answers);
+        }
+        Err(err) => {
+            eprintln!("meron-core: attachment structures for {account}/{folder}: {err:#}");
+        }
     }
 }
 

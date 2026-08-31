@@ -480,6 +480,7 @@
   "feeds.urlHint": "Cole o URL do feed ou o endereço de um site para descobrir automaticamente o seu feed.",
   "filters.all": "Todos",
   "filters.allFeeds": "Todos os feeds",
+  "filters.attachments": "Anexos",
   "filters.keepAcrossFolders": "Manter os filtros ao mudar de pasta",
   "filters.label": "Filtro",
   "filters.snoozed": "Adiados",

@@ -480,6 +480,7 @@
   "feeds.urlHint": "Bir besleme URL'si veya beslemesini otomatik keşfetmek için bir site adresi yapıştırın.",
   "filters.all": "Tümü",
   "filters.allFeeds": "Tüm beslemeler",
+  "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Filtre",
   "filters.snoozed": "Snoozed",

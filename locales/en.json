@@ -480,6 +480,7 @@
   "feeds.urlHint": "Paste a feed URL, or a site address to auto-discover its feed.",
   "filters.all": "All",
   "filters.allFeeds": "All feeds",
+  "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Filter",
   "filters.snoozed": "Snoozed",

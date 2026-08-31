@@ -480,6 +480,7 @@
   "feeds.urlHint": "Collez l'URL d'un flux ou l'adresse d'un site pour découvrir automatiquement son flux.",
   "filters.all": "Tout",
   "filters.allFeeds": "Tous les flux",
+  "filters.attachments": "Pièces jointes",
   "filters.keepAcrossFolders": "Conserver les filtres en changeant de dossier",
   "filters.label": "Filtrer",
   "filters.snoozed": "Reportés",

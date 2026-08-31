@@ -480,6 +480,7 @@
   "feeds.urlHint": "フィードURL、またはサイトのアドレスを貼り付けてフィードを自動検出します。",
   "filters.all": "すべて",
   "filters.allFeeds": "すべてのフィード",
+  "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "フィルター",
   "filters.snoozed": "Snoozed",

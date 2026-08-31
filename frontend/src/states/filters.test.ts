@@ -41,10 +41,16 @@ describe('narrowing the list by more than one thing', () => {
   it('keeps the default rather than honouring a name it does not know', () => {
     // A facet from a later version must not leave the reader with a filter
     // the app cannot apply, nor an empty list nobody asked for.
-    expect(parseFilters('attachments')).toBeUndefined()
-    expect(parseFilters(['attachments' as FilterFacet])).toBeUndefined()
+    expect(parseFilters('nonsense')).toBeUndefined()
+    expect(parseFilters(['nonsense' as FilterFacet])).toBeUndefined()
     expect(parseFilters(42)).toBeUndefined()
     // A set that is partly known keeps the part it knows.
-    expect(parseFilters('unread,attachments')).toEqual(['unread'])
+    expect(parseFilters('unread,nonsense')).toEqual(['unread'])
+  })
+
+  it('narrows to what carries an attachment, alongside anything else', () => {
+    expect(parseFilters('attachments')).toEqual(['attachments'])
+    expect(nextFilters(['unread'], 'attachments')).toEqual(['unread', 'attachments'])
+    expect(filterKey(['attachments', 'unread'])).toBe('attachments,unread')
   })
 })

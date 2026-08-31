@@ -163,6 +163,23 @@ impl Session {
         }
     }
 
+    /// Which of these messages carry an attachment, as the server sees it.
+    ///
+    /// Exchange answers nothing here rather than answering "none": the sync
+    /// path does not ask it for that property yet, and reporting no
+    /// attachments for a mailbox that has them would be worse than saying
+    /// nothing and leaving them unknown.
+    pub async fn attachment_flags(
+        &mut self,
+        folder: &str,
+        uids: &[u32],
+    ) -> Result<Vec<(u32, bool)>> {
+        match self {
+            Session::Imap(session) => imap::fetch_attachment_flags(session, folder, uids).await,
+            Session::Ews(_) => Ok(Vec::new()),
+        }
+    }
+
     pub async fn sync_flags(
         &mut self,
         folder: &str,

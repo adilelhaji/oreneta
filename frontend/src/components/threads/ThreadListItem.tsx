@@ -1,6 +1,6 @@
 import type { DragEvent, MouseEvent, Ref } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { Archive, Check, Clock, Mail, MailOpen, Star, Trash2 } from 'lucide-react'
+import { Archive, Check, Clock, Mail, MailOpen, Paperclip, Star, Trash2 } from 'lucide-react'
 import type { Account, Message } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { formatThreadDate } from '../../lib/date'
@@ -238,9 +238,16 @@ export function ThreadListItem({
               <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />
             )}
             {density.singleLine && subjectLine}
+            {/* Only shown when the server has actually said so. A message
+                nobody has asked about carries no clip rather than a doubtful
+                one. */}
+            {thread.has_attachments && (
+              <Paperclip size={11} className="ml-auto shrink-0 text-secondary/70" />
+            )}
             <time
               className={clsx(
-                'ml-auto shrink-0 text-[0.6875rem] font-normal',
+                'shrink-0 text-[0.6875rem] font-normal',
+                thread.has_attachments ? 'ml-1' : 'ml-auto',
                 unread ? 'text-accent' : 'text-secondary/65',
               )}
             >
