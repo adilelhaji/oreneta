@@ -134,12 +134,14 @@ func TestCheckProtocolVersionLogsMissingAndMismatch(t *testing.T) {
 }
 
 func TestNotifyIconWritesEmbeddedIconOnce(t *testing.T) {
-	oldOnce := notifyIconOnce
+	// A sync.Once cannot be copied, so it is reset rather than saved and put
+	// back. Nothing is lost: writing the embedded icon again is harmless, and
+	// the path — the part that carries state — is restored.
 	oldPath := notifyIconPath
 	notifyIconOnce = sync.Once{}
 	notifyIconPath = ""
 	t.Cleanup(func() {
-		notifyIconOnce = oldOnce
+		notifyIconOnce = sync.Once{}
 		notifyIconPath = oldPath
 	})
 

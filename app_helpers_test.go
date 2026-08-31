@@ -119,10 +119,40 @@ func TestFileExists(t *testing.T) {
 	}
 }
 
-func TestOAuthConfigIgnoresEnvironmentOverrides(t *testing.T) {
+// Google's credentials come from the environment when one is set, because
+// Oreneta must not sign in with Meron's: those were verified by, and belong
+// to, someone else. A build with none of its own falls back to what is baked
+// in, so nothing is broken for a developer who has not registered a client.
+//
+// Outlook's is the opposite and stays baked-in only — there is no equivalent
+// reason to let the environment choose who the app claims to be.
+func TestGoogleOAuthTakesCredentialsFromEnvironment(t *testing.T) {
 	t.Setenv("MERON_GOOGLE_CLIENT_ID", "google-id")
 	t.Setenv("MERON_GOOGLE_CLIENT_SECRET", "google-secret")
 	t.Setenv("MERON_OUTLOOK_CLIENT_ID", "outlook-id")
+
+	if got, want := googleClientID(), "google-id"; got != want {
+		t.Fatalf("googleClientID = %q, want %q", got, want)
+	}
+	if got, want := googleClientSecret(), "google-secret"; got != want {
+		t.Fatalf("googleClientSecret = %q, want %q", got, want)
+	}
+	if !gmailOAuthConfigured() {
+		t.Fatal("gmailOAuthConfigured = false with credentials from the environment")
+	}
+	if got := outlookClientID(); got == "" || got == "outlook-id" {
+		t.Fatalf("outlookClientID = %q, want baked id", got)
+	}
+	if !outlookOAuthConfigured() {
+		t.Fatal("outlookOAuthConfigured = false with baked client id")
+	}
+}
+
+// With nothing in the environment the baked-in credentials still answer, so a
+// build that ships its own keeps working.
+func TestGoogleOAuthFallsBackToBakedCredentials(t *testing.T) {
+	t.Setenv("MERON_GOOGLE_CLIENT_ID", "")
+	t.Setenv("MERON_GOOGLE_CLIENT_SECRET", "")
 
 	if got := googleClientID(); got == "" || got == "google-id" {
 		t.Fatalf("googleClientID = %q, want baked id", got)
@@ -132,12 +162,6 @@ func TestOAuthConfigIgnoresEnvironmentOverrides(t *testing.T) {
 	}
 	if !gmailOAuthConfigured() {
 		t.Fatal("gmailOAuthConfigured = false with baked credentials")
-	}
-	if got := outlookClientID(); got == "" || got == "outlook-id" {
-		t.Fatalf("outlookClientID = %q, want baked id", got)
-	}
-	if !outlookOAuthConfigured() {
-		t.Fatal("outlookOAuthConfigured = false with baked client id")
 	}
 }
 

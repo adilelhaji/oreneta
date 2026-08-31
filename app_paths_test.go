@@ -17,17 +17,17 @@ func TestAppDirsUseProductionProfileByDefault(t *testing.T) {
 
 	var wantConfig, wantCache string
 	if runtime.GOOS == "darwin" {
-		wantConfig = filepath.Join(home, "Library", "Application Support", "meron")
-		wantCache = filepath.Join(home, "Library", "Caches", "meron")
+		wantConfig = filepath.Join(home, "Library", "Application Support", "oreneta")
+		wantCache = filepath.Join(home, "Library", "Caches", "oreneta")
 	} else {
-		wantConfig = filepath.Join(home, ".config", "meron")
-		wantCache = filepath.Join(home, ".cache", "meron")
+		wantConfig = filepath.Join(home, ".config", "oreneta")
+		wantCache = filepath.Join(home, ".cache", "oreneta")
 	}
 
-	if got, want := appDirName(), "meron"; got != want {
+	if got, want := appDirName(), "oreneta"; got != want {
 		t.Fatalf("appDirName() = %q, want %q", got, want)
 	}
-	if got, want := appUniqueID(), "jp.nonbili.meron"; got != want {
+	if got, want := appUniqueID(), "io.github.adilelhaji.oreneta"; got != want {
 		t.Fatalf("appUniqueID() = %q, want %q", got, want)
 	}
 	if got, want := appConfigDir(), wantConfig; got != want {
@@ -48,17 +48,17 @@ func TestAppDirsUseDevProfileForWailsDev(t *testing.T) {
 
 	var wantConfig, wantCache string
 	if runtime.GOOS == "darwin" {
-		wantConfig = filepath.Join(home, "Library", "Application Support", "meron-dev")
-		wantCache = filepath.Join(home, "Library", "Caches", "meron-dev")
+		wantConfig = filepath.Join(home, "Library", "Application Support", "oreneta-dev")
+		wantCache = filepath.Join(home, "Library", "Caches", "oreneta-dev")
 	} else {
-		wantConfig = filepath.Join(home, ".config", "meron-dev")
-		wantCache = filepath.Join(home, ".cache", "meron-dev")
+		wantConfig = filepath.Join(home, ".config", "oreneta-dev")
+		wantCache = filepath.Join(home, ".cache", "oreneta-dev")
 	}
 
-	if got, want := appDirName(), "meron-dev"; got != want {
+	if got, want := appDirName(), "oreneta-dev"; got != want {
 		t.Fatalf("appDirName() = %q, want %q", got, want)
 	}
-	if got, want := appUniqueID(), "jp.nonbili.meron-dev"; got != want {
+	if got, want := appUniqueID(), "io.github.adilelhaji.oreneta-dev"; got != want {
 		t.Fatalf("appUniqueID() = %q, want %q", got, want)
 	}
 	if got, want := appConfigDir(), wantConfig; got != want {
@@ -102,10 +102,10 @@ func TestAppDirsRespectXDGBaseDirs(t *testing.T) {
 		gotCacheReal = gotCache
 	}
 
-	if got, want := gotConfigReal, filepath.Join(configHomeReal, "meron-dev"); got != want {
+	if got, want := gotConfigReal, filepath.Join(configHomeReal, "oreneta-dev"); got != want {
 		t.Fatalf("appConfigDir() = %q, want %q", got, want)
 	}
-	if got, want := gotCacheReal, filepath.Join(cacheHomeReal, "meron-dev"); got != want {
+	if got, want := gotCacheReal, filepath.Join(cacheHomeReal, "oreneta-dev"); got != want {
 		t.Fatalf("appCacheDir() = %q, want %q", got, want)
 	}
 }
@@ -120,11 +120,11 @@ func TestSidecarEnvUsesProfileDirs(t *testing.T) {
 
 	var wantConfig, wantCache string
 	if runtime.GOOS == "darwin" {
-		wantConfig = filepath.Join(home, "Library", "Application Support", "meron-dev")
-		wantCache = filepath.Join(home, "Library", "Caches", "meron-dev")
+		wantConfig = filepath.Join(home, "Library", "Application Support", "oreneta-dev")
+		wantCache = filepath.Join(home, "Library", "Caches", "oreneta-dev")
 	} else {
-		wantConfig = filepath.Join(home, ".config", "meron-dev")
-		wantCache = filepath.Join(home, ".cache", "meron-dev")
+		wantConfig = filepath.Join(home, ".config", "oreneta-dev")
+		wantCache = filepath.Join(home, ".cache", "oreneta-dev")
 	}
 
 	env := sidecarEnv()

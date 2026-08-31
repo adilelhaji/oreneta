@@ -30,7 +30,7 @@ const testManifest = `{
 
 func TestFetchUpdateManifest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.Header.Get("User-Agent"), "Meron/") {
+		if !strings.HasPrefix(r.Header.Get("User-Agent"), "Oreneta/") {
 			t.Errorf("missing User-Agent, got %q", r.Header.Get("User-Agent"))
 		}
 		_, _ = w.Write([]byte(testManifest))
