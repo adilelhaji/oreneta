@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
 import { AlertCircle, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Paperclip, Star , Undo2} from 'lucide-react'
@@ -10,6 +11,8 @@ import { AddressRow } from './AddressList'
 import { MessageContent } from './MessageContent'
 import { formatFullTimestamp, formatMessageStamp, normalizeBodyText } from './messageHelpers'
 import { useMessageView } from './useMessageView'
+import { settings$ } from '../../states/settings'
+import { readingMeasure } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
 
 const COLLAPSED_PREVIEW_CHARS = 200
@@ -41,6 +44,7 @@ export function MessageRow({
   onLinkHover?: (url: string | null) => void
 }) {
   const { t } = useTranslation()
+  const readingWidth = useValue(settings$.readingWidth)
   const [metaOpen, setMetaOpen] = useState(false)
   const view = useMessageView(message)
   const {
@@ -130,7 +134,10 @@ export function MessageRow({
           }
         }}
         title={t('chat.expandMessage')}
-        className="group/message-row flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
+        // Held to the same measure as an expanded message, so a collapsed row
+        // does not sit wider than the one it opens into.
+        style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
+        className="group/message-row mx-auto flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
       >
         <Avatar name={view.avatarName} email={view.avatarEmail} src={view.avatarSrc} size={26} className="shrink-0" />
         <span
@@ -150,7 +157,10 @@ export function MessageRow({
   }
 
   return (
-    <div className="group/message-row w-full rounded-xl border border-border/40 bg-chats px-4 py-3 shadow-sm">
+    <div
+      style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
+      className="group/message-row mx-auto w-full rounded-xl border border-border/40 bg-chats px-4 py-3 shadow-sm"
+    >
       <div className="relative flex items-start gap-2.5">
         <Avatar
           name={view.avatarName}

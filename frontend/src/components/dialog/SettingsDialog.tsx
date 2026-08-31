@@ -41,6 +41,10 @@ import {
   CalendarDays,
   Lock,
   Undo2,
+  Rows3,
+  AlignLeft,
+  Eye,
+  Timer,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
@@ -59,6 +63,13 @@ import {
   type KanbanBoard,
   type SendShortcut,
   UNDO_SEND_CHOICES,
+  LIST_DENSITIES,
+  READING_WIDTHS,
+  MARK_READ_MODES,
+  MARK_READ_DELAY_CHOICES,
+  type ListDensity,
+  type ReadingWidth,
+  type MarkReadMode,
 } from '../../states/settings'
 import { createKanbanBoard } from '../../states/kanban'
 import { update$ } from '../../states/update'
@@ -91,6 +102,21 @@ const SEND_SHORTCUT_OPTIONS: { value: SendShortcut; label: string }[] = [
   { value: 'enter', label: sendShortcutLabel('enter') },
   { value: 'mod_enter', label: sendShortcutLabel('mod_enter') },
 ]
+
+const LIST_DENSITY_OPTIONS = (
+  t: ReturnType<typeof useTranslation>['t'],
+): { value: ListDensity; label: string }[] =>
+  LIST_DENSITIES.map((value) => ({ value, label: t(`settings.reading.density.${value}`) }))
+
+const READING_WIDTH_OPTIONS = (
+  t: ReturnType<typeof useTranslation>['t'],
+): { value: ReadingWidth; label: string }[] =>
+  READING_WIDTHS.map((value) => ({ value, label: t(`settings.reading.width.${value}`) }))
+
+const MARK_READ_OPTIONS = (
+  t: ReturnType<typeof useTranslation>['t'],
+): { value: MarkReadMode; label: string }[] =>
+  MARK_READ_MODES.map((value) => ({ value, label: t(`settings.reading.markRead.${value}`) }))
 
 const CONVERSATION_LAYOUT_OPTIONS = (
   t: ReturnType<typeof useTranslation>['t'],
@@ -781,6 +807,10 @@ function GeneralSection() {
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
   const kanbanColumnWidth = useValue(settings$.kanbanColumnWidth)
   const language = useValue(settings$.language)
+  const listDensity = useValue(settings$.listDensity)
+  const readingWidth = useValue(settings$.readingWidth)
+  const markReadMode = useValue(settings$.markReadMode)
+  const markReadDelaySeconds = useValue(settings$.markReadDelaySeconds)
 
   return (
     <div className="flex flex-col gap-4">
@@ -812,6 +842,47 @@ function GeneralSection() {
 
       <SettingsGroup title={t('settings.sections.typography')}>
         <FontSettingsSection />
+      </SettingsGroup>
+
+      <SettingsGroup title={t('settings.sections.reading')}>
+        <SegmentedRow
+          icon={<Rows3 size={15} />}
+          title={t('settings.reading.density')}
+          hint={t('settings.reading.densityHint')}
+          value={listDensity}
+          options={LIST_DENSITY_OPTIONS(t)}
+          onChange={(value) => settings$.listDensity.set(value)}
+        />
+        <SegmentedRow
+          icon={<AlignLeft size={15} />}
+          title={t('settings.reading.width')}
+          hint={t('settings.reading.widthHint')}
+          value={readingWidth}
+          options={READING_WIDTH_OPTIONS(t)}
+          onChange={(value) => settings$.readingWidth.set(value)}
+        />
+        <SegmentedRow
+          icon={<Eye size={15} />}
+          title={t('settings.reading.markRead')}
+          hint={t('settings.reading.markReadHint')}
+          value={markReadMode}
+          options={MARK_READ_OPTIONS(t)}
+          onChange={(value) => settings$.markReadMode.set(value)}
+        />
+        {/* Only worth asking about once the answer can matter. */}
+        {markReadMode === 'delayed' && (
+          <SelectRow
+            icon={<Timer size={15} />}
+            title={t('settings.reading.markReadDelay')}
+            hint={t('settings.reading.markReadDelayHint')}
+            value={String(markReadDelaySeconds)}
+            options={MARK_READ_DELAY_CHOICES.map((seconds) => ({
+              value: String(seconds),
+              label: t('settings.reading.seconds', { count: seconds }),
+            }))}
+            onChange={(value) => settings$.markReadDelaySeconds.set(Number(value))}
+          />
+        )}
       </SettingsGroup>
 
       <SettingsGroup title={t('settings.language.label')}>

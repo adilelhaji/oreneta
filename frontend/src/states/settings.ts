@@ -45,6 +45,32 @@ export type SendShortcut = 'enter' | 'mod_enter'
  * except the newest and the unread ones (the classic mail-client reading view).
  */
 export type ConversationLayout = 'chat' | 'traditional'
+
+/**
+ * How much room a row in the thread list is given.
+ * 'compact': one line, for seeing as much of a mailbox at once as possible.
+ * 'cosy': sender and subject on two lines, the default.
+ * 'relaxed': the preview on a line of its own, two lines of it.
+ */
+export type ListDensity = 'compact' | 'cosy' | 'relaxed'
+
+/**
+ * How wide a message body is allowed to run.
+ * 'comfortable' and 'wide' cap the measure; 'full' lets it fill the pane.
+ *
+ * Long lines are hard to read — the eye loses the start of the next one — and
+ * a maximised window otherwise gives a plain-text message lines hundreds of
+ * characters across.
+ */
+export type ReadingWidth = 'comfortable' | 'wide' | 'full'
+
+/**
+ * When a message the reader is looking at counts as read.
+ * 'immediately': as soon as it has been on screen, which is what Oreneta has
+ * always done. 'delayed': only after {@link MARK_READ_DELAY_SECONDS} of it
+ * staying there. 'manual': never on its own.
+ */
+export type MarkReadMode = 'immediately' | 'delayed' | 'manual'
 export type KanbanBoardColumn = {
   accountId: string
   folderId: string
@@ -102,6 +128,14 @@ export type Settings = {
   sendShortcut: SendShortcut
   /** Chat bubbles or the traditional stacked reading view (desktop only). */
   conversationLayout: ConversationLayout
+  /** How much room a thread-list row is given. */
+  listDensity: ListDensity
+  /** How wide a message body is allowed to run. */
+  readingWidth: ReadingWidth
+  /** When a message on screen counts as read. */
+  markReadMode: MarkReadMode
+  /** Seconds a message must stay on screen before 'delayed' marks it read. */
+  markReadDelaySeconds: number
   /**
    * Seconds a sent message waits before it actually goes, so it can be taken
    * back. Zero sends at once.
@@ -144,6 +178,18 @@ export type Settings = {
 /** The windows a sent message can wait in, in seconds. Zero sends at once. */
 export const UNDO_SEND_CHOICES = [0, 5, 10, 20, 30] as const
 
+/** The room a thread-list row can be given, tightest first. */
+export const LIST_DENSITIES = ['compact', 'cosy', 'relaxed'] as const
+
+/** The measures a message body can be held to, narrowest first. */
+export const READING_WIDTHS = ['comfortable', 'wide', 'full'] as const
+
+/** When a message on screen can count as read. */
+export const MARK_READ_MODES = ['immediately', 'delayed', 'manual'] as const
+
+/** The delays 'delayed' can wait, in seconds. */
+export const MARK_READ_DELAY_CHOICES = [1, 2, 3, 5, 10] as const
+
 export const KANBAN_COLUMN_DEFAULT_WIDTH = 360
 export const KANBAN_COLUMN_MIN_WIDTH = 240
 export const KANBAN_COLUMN_MAX_WIDTH = 700
@@ -161,6 +207,10 @@ const DB_KEY = {
   showUnreadAccountBadge: 'show_unread_account_badge',
   sendShortcut: 'send_shortcut',
   conversationLayout: 'conversation_layout',
+  listDensity: 'list_density',
+  readingWidth: 'reading_width',
+  markReadMode: 'mark_read_mode',
+  markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   spellCheck: 'spell_check',
   signature: 'signature',
@@ -327,6 +377,12 @@ export const settings$ = observable<Settings>({
   showUnreadAccountBadge: false,
   sendShortcut: 'mod_enter',
   conversationLayout: 'chat',
+  listDensity: 'cosy',
+  readingWidth: 'comfortable',
+  // What the app has always done, so nobody's mailbox changes behaviour
+  // because a setting appeared.
+  markReadMode: 'immediately',
+  markReadDelaySeconds: 3,
   // A few seconds by default: long enough to catch the reply sent to the wrong
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
@@ -616,6 +672,28 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     const conversationLayout = prefs[DB_KEY.conversationLayout]
     if (conversationLayout === 'chat' || conversationLayout === 'traditional') {
       settings$.conversationLayout.set(conversationLayout)
+    }
+
+    const listDensity = prefs[DB_KEY.listDensity]
+    if (LIST_DENSITIES.includes(listDensity as ListDensity)) {
+      settings$.listDensity.set(listDensity as ListDensity)
+    }
+
+    const readingWidth = prefs[DB_KEY.readingWidth]
+    if (READING_WIDTHS.includes(readingWidth as ReadingWidth)) {
+      settings$.readingWidth.set(readingWidth as ReadingWidth)
+    }
+
+    const markReadMode = prefs[DB_KEY.markReadMode]
+    if (MARK_READ_MODES.includes(markReadMode as MarkReadMode)) {
+      settings$.markReadMode.set(markReadMode as MarkReadMode)
+    }
+
+    // Only a delay this app offers: a stored value from a future version, or a
+    // hand-edited one, must not leave a message unread for an hour.
+    const markReadDelay = Number(prefs[DB_KEY.markReadDelaySeconds])
+    if (MARK_READ_DELAY_CHOICES.includes(markReadDelay as (typeof MARK_READ_DELAY_CHOICES)[number])) {
+      settings$.markReadDelaySeconds.set(markReadDelay)
     }
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {

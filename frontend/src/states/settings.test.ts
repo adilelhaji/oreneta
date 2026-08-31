@@ -105,3 +105,51 @@ describe('proxy setting', () => {
     expect(isProxyUsable({ mode: 'http', host: 'h', port: 8080, username: '', password: '' })).toBe(true)
   })
 })
+
+describe('reading settings', () => {
+  afterEach(() => {
+    settings$.listDensity.set('cosy')
+    settings$.readingWidth.set('comfortable')
+    settings$.markReadMode.set('immediately')
+    settings$.markReadDelaySeconds.set(3)
+  })
+
+  it('leaves a mailbox reading as it always has until asked otherwise', () => {
+    expect(settings$.listDensity.get()).toBe('cosy')
+    expect(settings$.readingWidth.get()).toBe('comfortable')
+    // Marking on sight is what Oreneta has always done: nobody's mailbox
+    // changes behaviour because a setting appeared.
+    expect(settings$.markReadMode.get()).toBe('immediately')
+  })
+
+  it('hydrates persisted reading preferences', () => {
+    hydrateSettings({
+      list_density: 'compact',
+      reading_width: 'full',
+      mark_read_mode: 'delayed',
+      mark_read_delay_seconds: 10,
+    })
+
+    expect(settings$.listDensity.get()).toBe('compact')
+    expect(settings$.readingWidth.get()).toBe('full')
+    expect(settings$.markReadMode.get()).toBe('delayed')
+    expect(settings$.markReadDelaySeconds.get()).toBe(10)
+  })
+
+  it('ignores stored values this version does not offer', () => {
+    // A value written by a later version, or edited by hand. A density nobody
+    // can render, or a delay of an hour, would leave the list unreadable or a
+    // message unread for reasons the reader never chose.
+    hydrateSettings({
+      list_density: 'spacious',
+      reading_width: 'infinite',
+      mark_read_mode: 'never',
+      mark_read_delay_seconds: 3600,
+    })
+
+    expect(settings$.listDensity.get()).toBe('cosy')
+    expect(settings$.readingWidth.get()).toBe('comfortable')
+    expect(settings$.markReadMode.get()).toBe('immediately')
+    expect(settings$.markReadDelaySeconds.get()).toBe(3)
+  })
+})

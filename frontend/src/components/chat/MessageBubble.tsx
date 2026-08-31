@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
 import {
@@ -18,6 +19,8 @@ import { formatFullTimestamp, formatMessageStamp } from './messageHelpers'
 import { AddressRow } from './AddressList'
 import { MessageContent } from './MessageContent'
 import { useMessageView } from './useMessageView'
+import { settings$ } from '../../states/settings'
+import { bubbleMaxWidth } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
 
 interface MessageBubbleProps {
@@ -30,6 +33,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLinkHover }: MessageBubbleProps) {
   const { t } = useTranslation()
+  const readingWidth = useValue(settings$.readingWidth)
   const [metaOpen, setMetaOpen] = useState(false)
   const view = useMessageView(message)
   const {
@@ -61,6 +65,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
   return (
     <div className={`flex w-full animate-slide-up ${outgoing ? 'justify-end' : 'justify-start'}`}>
       <div
+        style={{ maxWidth: bubbleMaxWidth(readingWidth, '70%') }}
         className={`group/message-bubble relative ${useHtmlBody ? 'w-[70%]' : 'max-w-[70%]'} min-w-[100px] p-3.5 border transition-shadow duration-200 ${
           isDraft
             ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-2xl rounded-tr-sm shadow-none'

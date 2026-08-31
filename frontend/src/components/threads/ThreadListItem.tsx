@@ -1,4 +1,5 @@
 import type { DragEvent, MouseEvent, Ref } from 'react'
+import { useValue } from '@legendapp/state/react'
 import { Check, Star } from 'lucide-react'
 import type { Account, Message } from '../../types'
 import { Avatar } from '../avatar/Avatar'
@@ -6,6 +7,8 @@ import { formatThreadDate } from '../../lib/date'
 import { clsx } from '../../lib/utils'
 import { useTranslation } from '../../lib/i18n'
 import { isDraftFolder } from '../../states/mail'
+import { settings$ } from '../../states/settings'
+import { densityStyle } from './listDensity'
 
 export function ThreadListItem({
   thread,
@@ -41,6 +44,7 @@ export function ThreadListItem({
   bulkSelected?: boolean
 }) {
   const { t } = useTranslation()
+  const density = densityStyle(useValue(settings$.listDensity))
   const isActive = active ?? thread.thread_id === selectedThread
   const threadAccount = accounts.find((acc) => acc.id === thread.account_id)
   const badgeLabel = threadAccount ? threadAccount.display_name || threadAccount.email : ''
@@ -51,6 +55,33 @@ export function ThreadListItem({
   const isRSS = !!thread.feed_url
   const unread = thread.unread
   const hasDraft = !isRSS && (thread.has_draft || isDraftFolder(thread.folder_id, thread.account_id))
+
+  // Built once and placed by density: compact puts them on the sender's line,
+  // the others on a line below. Two copies of this markup would be two things
+  // to keep in step for no gain.
+  const subjectLine = (
+    <p className={clsx('flex-1 truncate text-[0.75rem] leading-snug', unread ? 'font-semibold' : 'font-normal')}>
+      {hasDraft && <span className="mr-1 font-normal text-rose-500">{t('chat.draft')}</span>}
+      <span className={clsx(unread ? 'text-primary' : 'text-primary/85')}>{threadTitle}</span>
+      {/* The preview trails the subject unless it has been given its own line,
+          where repeating it here would show it twice. */}
+      {!!thread.preview && !density.previewOnOwnLine && (
+        <span className={clsx(unread ? 'text-secondary/90 font-medium' : 'text-secondary/75 font-normal')}>
+          {' - '}
+          {thread.preview}
+        </span>
+      )}
+    </p>
+  )
+
+  const unreadBadge =
+    unread && bulkSelectable ? (
+      <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+    ) : unread ? (
+      <span className="h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[0.625rem] font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+        {thread.unread_count ?? 1}
+      </span>
+    ) : null
 
   return (
     <div
@@ -66,7 +97,8 @@ export function ThreadListItem({
     >
       <button
         className={clsx(
-          'relative w-full px-2 py-3 transition-all duration-150 flex items-center gap-2 cursor-pointer select-none text-left',
+          'relative w-full px-2 transition-all duration-150 flex items-center gap-2 cursor-pointer select-none text-left',
+          density.rowPadding,
           bulkSelectable
             ? bulkSelected
               ? 'bg-accent/[0.13] text-primary'
@@ -85,7 +117,11 @@ export function ThreadListItem({
           <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
         )}
         {bulkSelectable ? (
-          <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center">
+          <span
+            aria-hidden="true"
+            className="flex shrink-0 items-center justify-center"
+            style={{ width: density.avatarSize, height: density.avatarSize }}
+          >
             <span
               className={clsx(
                 'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
@@ -103,6 +139,7 @@ export function ThreadListItem({
               name={thread.from_name || thread.from_addr}
               email={isRSS ? undefined : thread.from_addr}
               src={isRSS && thread.feed_icon ? `/media/${thread.feed_icon}` : undefined}
+              size={density.avatarSize}
             />
             {accountBadgeVisible && threadAccount && (
               <div className="absolute -bottom-1 -left-1 rounded-full ring-2 ring-chats overflow-hidden">
@@ -112,9 +149,9 @@ export function ThreadListItem({
           </div>
         )}
 
-        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+        <div className={clsx('flex-1 min-w-0 flex flex-col justify-center', density.rowGap)}>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex min-w-0 items-center gap-1">
+            <div className={clsx('flex min-w-0 items-center gap-1', density.singleLine && 'max-w-[40%] shrink-0')}>
               <span
                 className={clsx('text-[0.8125rem] font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}
               >
@@ -132,6 +169,13 @@ export function ThreadListItem({
                 <span className="shrink-0 text-[0.75rem] font-normal text-secondary/70">{thread.message_count}</span>
               )}
             </div>
+            {/* Compact folds the subject onto the sender's line: one row per
+                thread is the whole point of it. The star comes with it — a
+                thread does not stop being starred because the list is tight. */}
+            {density.singleLine && !bulkSelectable && thread.starred && (
+              <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />
+            )}
+            {density.singleLine && subjectLine}
             <time
               className={clsx(
                 'ml-auto shrink-0 text-[0.6875rem] font-normal',
@@ -140,30 +184,24 @@ export function ThreadListItem({
             >
               {formatThreadDate(thread.date)}
             </time>
+            {density.singleLine && unreadBadge}
           </div>
 
-          <div className="flex items-center gap-1.5 min-w-0">
-            {!bulkSelectable && thread.starred && <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />}
-            <p
-              className={clsx('flex-1 truncate text-[0.75rem] leading-snug', unread ? 'font-semibold' : 'font-normal')}
-            >
-              {hasDraft && <span className="mr-1 font-normal text-rose-500">{t('chat.draft')}</span>}
-              <span className={clsx(unread ? 'text-primary' : 'text-primary/85')}>{threadTitle}</span>
-              {thread.preview && (
-                <span className={clsx(unread ? 'text-secondary/90 font-medium' : 'text-secondary/75 font-normal')}>
-                  {' - '}
-                  {thread.preview}
-                </span>
+          {!density.singleLine && (
+            <div className="flex items-center gap-1.5 min-w-0">
+              {!bulkSelectable && thread.starred && (
+                <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />
               )}
-            </p>
-            {unread && bulkSelectable ? (
-              <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
-            ) : unread ? (
-              <span className="h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[0.625rem] font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
-                {thread.unread_count ?? 1}
-              </span>
-            ) : null}
-          </div>
+              {subjectLine}
+              {unreadBadge}
+            </div>
+          )}
+
+          {/* Relaxed gives the preview a line of its own — two of them — so a
+              subject and the message under it stop competing for one line. */}
+          {density.previewOnOwnLine && !!thread.preview && (
+            <p className="line-clamp-2 text-[0.75rem] leading-snug text-secondary/75">{thread.preview}</p>
+          )}
         </div>
       </button>
     </div>
