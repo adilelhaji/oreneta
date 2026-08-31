@@ -16,11 +16,13 @@ import {
   Star,
   Trash2,
   X,
+  Printer,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { showToast, ui$ } from '../../states/ui'
-import { archiveThread, deleteThread, starThread } from '../../states/mail'
+import { archiveThread, deleteThread, mail$, starThread } from '../../states/mail'
+import { printConversation } from '../../lib/print'
 import { thread$, type ConversationMode } from '../../states/thread'
 import { closeKanbanPane, kanban$, openCorrespondentMail } from '../../states/kanban'
 import { openComposeTab } from '../../states/compose'
@@ -254,6 +256,27 @@ export function ConversationHeader({
                   <FileText size={15} className="shrink-0" /> {t('chat.viewAsPlainText')}
                 </button>
                 <div className="my-1 h-px bg-border" />
+                <button
+                  onClick={() => {
+                    setActionsMenuOpen(false)
+                    void printConversation({
+                      subject: activeThread.subject,
+                      // Every message of the conversation, in the order they
+                      // were written: a printout of one message out of twelve
+                      // is a printout of a fragment.
+                      messages: mail$.messages
+                        .peek()
+                        .filter((message) => message.thread_id === activeThread.thread_id),
+                      printedLabel: t('print.printedOn'),
+                      toLabel: t('print.to'),
+                      ccLabel: t('print.cc'),
+                      attachmentsLabel: t('print.attachments'),
+                    })
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
+                >
+                  <Printer size={15} className="shrink-0" /> {t('print.action')}
+                </button>
                 <button
                   onClick={() => {
                     void starThread(activeThread.thread_id, !activeThread.starred)

@@ -153,3 +153,42 @@ describe('reading settings', () => {
     expect(settings$.markReadDelaySeconds.get()).toBe(3)
   })
 })
+
+describe('saved searches', () => {
+  afterEach(() => {
+    settings$.savedSearches.set([])
+  })
+
+  it('keeps a name and the text that was typed', () => {
+    hydrateSettings({ saved_searches: [{ id: 's1', name: 'Invoices', query: 'from:billing' }] })
+    expect(settings$.savedSearches.get()).toEqual([{ id: 's1', name: 'Invoices', query: 'from:billing' }])
+  })
+
+  it('drops a stored row that would do nothing when clicked', () => {
+    hydrateSettings({
+      saved_searches: [
+        { id: 's1', name: 'Good', query: 'invoice' },
+        { id: 's2', name: 'No query', query: '   ' },
+        { id: 's3', name: '  ', query: 'nameless' },
+        { id: '', name: 'No id', query: 'orphan' },
+        'not an object',
+        null,
+      ],
+    })
+
+    // A row with nothing to search for sits in the list doing nothing, which
+    // is worse than not being there at all.
+    expect(settings$.savedSearches.get().map((search) => search.id)).toEqual(['s1'])
+  })
+
+  it('leaves the list alone when the stored value is not a list', () => {
+    settings$.savedSearches.set([{ id: 's1', name: 'Kept', query: 'invoice' }])
+    hydrateSettings({ saved_searches: 'nonsense' })
+    expect(settings$.savedSearches.get()).toHaveLength(1)
+  })
+
+  it('trims what it stores', () => {
+    hydrateSettings({ saved_searches: [{ id: 's1', name: '  Invoices  ', query: '  invoice  ' }] })
+    expect(settings$.savedSearches.get()[0]).toEqual({ id: 's1', name: 'Invoices', query: 'invoice' })
+  })
+})

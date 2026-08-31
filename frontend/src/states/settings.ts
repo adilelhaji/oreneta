@@ -52,6 +52,19 @@ export type ConversationLayout = 'chat' | 'traditional'
  * 'cosy': sender and subject on two lines, the default.
  * 'relaxed': the preview on a line of its own, two lines of it.
  */
+/**
+ * A search worth keeping.
+ *
+ * Just a name and the text that was typed: a saved search that also pinned an
+ * account and a folder would go stale the moment either was renamed, and
+ * would surprise the reader by jumping them somewhere else.
+ */
+export type SavedSearch = {
+  id: string
+  name: string
+  query: string
+}
+
 export type ListDensity = 'compact' | 'cosy' | 'relaxed'
 
 /**
@@ -128,6 +141,8 @@ export type Settings = {
   sendShortcut: SendShortcut
   /** Chat bubbles or the traditional stacked reading view (desktop only). */
   conversationLayout: ConversationLayout
+  /** Searches the reader has kept, in the order they were saved. */
+  savedSearches: SavedSearch[]
   /** How much room a thread-list row is given. */
   listDensity: ListDensity
   /** How wide a message body is allowed to run. */
@@ -175,6 +190,28 @@ export type Settings = {
   proxy: ProxySettings
 }
 
+/**
+ * Reads back stored saved searches, dropping anything that is not one.
+ *
+ * A row with no query would sit in the list doing nothing when clicked, which
+ * is worse than not being there. Returns null when the stored value is not a
+ * list at all, so the caller can leave the defaults alone.
+ */
+export function sanitizeSavedSearches(value: unknown): SavedSearch[] | null {
+  if (!Array.isArray(value)) return null
+  const clean: SavedSearch[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const candidate = entry as Partial<SavedSearch>
+    const name = typeof candidate.name === 'string' ? candidate.name.trim() : ''
+    const query = typeof candidate.query === 'string' ? candidate.query.trim() : ''
+    const id = typeof candidate.id === 'string' ? candidate.id : ''
+    if (!name || !query || !id) continue
+    clean.push({ id, name, query })
+  }
+  return clean
+}
+
 /** The windows a sent message can wait in, in seconds. Zero sends at once. */
 export const UNDO_SEND_CHOICES = [0, 5, 10, 20, 30] as const
 
@@ -207,6 +244,7 @@ const DB_KEY = {
   showUnreadAccountBadge: 'show_unread_account_badge',
   sendShortcut: 'send_shortcut',
   conversationLayout: 'conversation_layout',
+  savedSearches: 'saved_searches',
   listDensity: 'list_density',
   readingWidth: 'reading_width',
   markReadMode: 'mark_read_mode',
@@ -377,6 +415,7 @@ export const settings$ = observable<Settings>({
   showUnreadAccountBadge: false,
   sendShortcut: 'mod_enter',
   conversationLayout: 'chat',
+  savedSearches: [],
   listDensity: 'cosy',
   readingWidth: 'comfortable',
   // What the app has always done, so nobody's mailbox changes behaviour
@@ -673,6 +712,9 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     if (conversationLayout === 'chat' || conversationLayout === 'traditional') {
       settings$.conversationLayout.set(conversationLayout)
     }
+
+    const saved = sanitizeSavedSearches(prefs[DB_KEY.savedSearches])
+    if (saved) settings$.savedSearches.set(saved)
 
     const listDensity = prefs[DB_KEY.listDensity]
     if (LIST_DENSITIES.includes(listDensity as ListDensity)) {

@@ -47,6 +47,7 @@ import { QuickSettingsMenu } from '../sidenav/QuickSettingsMenu'
 import { FolderSwitcher } from '../menu/FolderSwitcher'
 import { ThreadActionsMenu } from './ThreadActionsMenu'
 import { ScheduledSendsBar } from './ScheduledSendsBar'
+import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem } from './ThreadListItem'
 import { BulkActionBar } from './BulkActionBar'
@@ -294,6 +295,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 </button>
               )}
             </div>
+
+            <SavedSearchMenu query={query} />
 
             {!searchExpanded && (
               <>
