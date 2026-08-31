@@ -37,7 +37,7 @@ pub(crate) fn run_migrations(conn: &Connection) -> Result<()> {
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::imap::{Folder, MessageHeader};
@@ -396,15 +396,17 @@ fn reconcile_thread_keys_from(
 /// A set rather than a mode: a reader looking for what is both unread and
 /// starred is asking one question, and answering it by filtering a page of
 /// fifty after the fact would hand back three rows and call it a page.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RecentFilter {
     pub unread_only: bool,
     pub starred_only: bool,
+    /// Only conversations carrying this label, when set.
+    pub label_id: Option<String>,
 }
 
 impl RecentFilter {
     pub fn unread() -> Self {
-        Self { unread_only: true, starred_only: false }
+        Self { unread_only: true, ..Default::default() }
     }
 }
 
@@ -426,6 +428,13 @@ pub fn get_recent_page(
          WHERE account = ?1 AND folder = ?2
            AND (?6 = 0 OR seen = 0)
            AND (?7 = 0 OR starred = 1)
+           -- A label is on the conversation, so the row is matched by the key
+           -- it shares with the rest of its thread, not by its own uid.
+           AND (?8 IS NULL OR EXISTS (
+                 SELECT 1 FROM thread_labels tl
+                  WHERE tl.account = messages.account
+                    AND tl.label_id = ?8
+                    AND tl.thread_key = COALESCE(NULLIF(messages.thread_key, ''), 'uid:' || messages.uid)))
            AND (?3 IS NULL
                 OR date < ?3
                 OR (date = ?3 AND uid < ?4))
@@ -441,7 +450,8 @@ pub fn get_recent_page(
             cursor_uid,
             probe as i64,
             filter.unread_only as i64,
-            filter.starred_only as i64
+            filter.starred_only as i64,
+            filter.label_id.as_deref()
         ],
         |row| {
             let uid = row.get(0)?;
@@ -1302,6 +1312,156 @@ pub fn recent_headers(
         Ok(header)
     })?;
     Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// The conversation a message belongs to.
+///
+/// Falls back to `uid:<n>` exactly as the rest of the store does for a message
+/// the server gave no thread of its own, so a label put on it lands on the same
+/// key every other query would look it up by.
+pub fn thread_key_for_uid(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    uid: u32,
+) -> Result<String> {
+    let key: Option<String> = conn
+        .query_row(
+            "SELECT COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) FROM messages
+              WHERE account = ?1 AND folder = ?2 AND uid = ?3",
+            params![account, folder, uid],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(key.unwrap_or_else(|| format!("uid:{uid}")))
+}
+
+/// A label the reader has made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Label {
+    pub id: String,
+    pub name: String,
+    /// A colour the interface paints it in, as `#rrggbb`.
+    pub colour: String,
+}
+
+/// Every label, in the order they were arranged.
+pub fn labels(conn: &Connection) -> Result<Vec<Label>> {
+    let mut stmt = conn.prepare("SELECT id, name, colour FROM labels ORDER BY position")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(Label {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            colour: row.get(2)?,
+        })
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Replaces the whole set of labels, in the order given.
+///
+/// A label that is gone takes its assignments with it. Leaving them behind
+/// would mean conversations carrying a label nobody can see, name or remove —
+/// and a filter counting them without being able to show them.
+pub fn replace_labels(conn: &Connection, labels: &[Label]) -> Result<()> {
+    conn.execute("DELETE FROM labels", [])?;
+    {
+        let mut stmt =
+            conn.prepare("INSERT INTO labels(id, name, colour, position) VALUES(?1, ?2, ?3, ?4)")?;
+        for (position, label) in labels.iter().enumerate() {
+            stmt.execute(params![label.id, label.name, label.colour, position as i64])?;
+        }
+    }
+    conn.execute(
+        "DELETE FROM thread_labels WHERE label_id NOT IN (SELECT id FROM labels)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// The labels on one conversation.
+pub fn thread_labels(conn: &Connection, account: &str, thread_key: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.id FROM thread_labels t
+           JOIN labels l ON l.id = t.label_id
+          WHERE t.account = ?1 AND t.thread_key = ?2
+          ORDER BY l.position",
+    )?;
+    let rows = stmt.query_map(params![account, thread_key], |row| row.get::<_, String>(0))?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Puts exactly this set of labels on a conversation.
+///
+/// The whole set at once, because "these are its labels" is one statement;
+/// adding and removing one at a time would leave moments where a conversation
+/// carried a combination nobody asked for.
+pub fn set_thread_labels(
+    conn: &Connection,
+    account: &str,
+    thread_key: &str,
+    label_ids: &[String],
+) -> Result<()> {
+    conn.execute(
+        "DELETE FROM thread_labels WHERE account = ?1 AND thread_key = ?2",
+        params![account, thread_key],
+    )?;
+    let mut stmt = conn.prepare(
+        "INSERT OR IGNORE INTO thread_labels(account, thread_key, label_id)
+         SELECT ?1, ?2, id FROM labels WHERE id = ?3",
+    )?;
+    for label_id in label_ids {
+        stmt.execute(params![account, thread_key, label_id])?;
+    }
+    Ok(())
+}
+
+/// Adds one label to a conversation, leaving its others alone.
+///
+/// For the rules, which say "also label this" rather than "these are now its
+/// labels" — a rule that replaced the set would quietly strip whatever the
+/// reader had put there by hand.
+pub fn add_thread_label(
+    conn: &Connection,
+    account: &str,
+    thread_key: &str,
+    label_id: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO thread_labels(account, thread_key, label_id)
+         SELECT ?1, ?2, id FROM labels WHERE id = ?3",
+        params![account, thread_key, label_id],
+    )?;
+    Ok(())
+}
+
+/// The labels on each of a set of conversations, so a list can show them
+/// without asking once per row.
+pub fn labels_for_threads(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashMap<String, Vec<String>>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    if thread_keys.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT t.thread_key, t.label_id FROM thread_labels t
+           JOIN labels l ON l.id = t.label_id
+          WHERE t.account = ?1
+          ORDER BY l.position",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    for (thread_key, label_id) in rows.filter_map(Result::ok) {
+        if wanted.contains(&thread_key) {
+            out.entry(thread_key).or_default().push(label_id);
+        }
+    }
+    Ok(out)
 }
 
 /// One entry of the record of what the rules did.

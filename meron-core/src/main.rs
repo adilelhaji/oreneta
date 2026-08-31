@@ -1445,6 +1445,67 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }))
         }
 
+        // Labels the reader has made. Local to this install by design: an
+        // IMAP keyword is not carried by every server and an Exchange
+        // category is a different thing again, so a label that appeared on
+        // one device and silently not on another would be worse than one that
+        // never claimed to travel.
+        "labels.list" => {
+            let stored = store::labels(&engine.db.lock().unwrap())?;
+            Ok(json!({
+                "labels": stored
+                    .iter()
+                    .map(|label| json!({ "id": label.id, "name": label.name, "colour": label.colour }))
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        // Replaces the whole set. A label that is gone takes its conversations
+        // with it, so nothing carries a label nobody can see or remove.
+        "labels.save" => {
+            let incoming = p
+                .get("labels")
+                .and_then(Value::as_array)
+                .context("missing param: labels")?;
+            let mut labels = Vec::with_capacity(incoming.len());
+            for value in incoming {
+                let name = req_str(value, "name")?;
+                if name.trim().is_empty() {
+                    anyhow::bail!("a label needs a name");
+                }
+                labels.push(store::Label {
+                    id: req_str(value, "id")?,
+                    name: name.trim().to_string(),
+                    colour: req_str(value, "colour").unwrap_or_else(|_| "#2056dd".to_string()),
+                });
+            }
+            store::replace_labels(&engine.db.lock().unwrap(), &labels)?;
+            Ok(json!({ "ok": true, "saved": labels.len() }))
+        }
+
+        // The labels on one conversation, stated whole: "these are its labels"
+        // is one statement, and applying it one at a time would leave moments
+        // where it carried a combination nobody asked for.
+        "labels.assign" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let label_ids: Vec<String> = p
+                .get("label_ids")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let db = engine.db.lock().unwrap();
+            store::set_thread_labels(&db, &parsed.account, &parsed.thread_key, &label_ids)?;
+            Ok(json!({ "labels": store::thread_labels(&db, &parsed.account, &parsed.thread_key)? }))
+        }
+
         // The rules as they stand, in the order they run.
         "rules.list" => {
             let stored = {
@@ -2683,13 +2744,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     store::get_snoozed_headers(&engine.db.lock().unwrap(), &account)?,
                     None,
                 ),
-                thread_list::MailSource::Recent { unread_only, starred_only } => store::get_recent_page(
+                thread_list::MailSource::Recent { unread_only, starred_only, label_id } => store::get_recent_page(
                     &engine.db.lock().unwrap(),
                     &account,
                     &folder,
                     limit,
                     request.before_cursor,
-                    store::RecentFilter { unread_only, starred_only },
+                    store::RecentFilter { unread_only, starred_only, label_id },
                 )?,
                 thread_list::MailSource::Search => {
                     // Chat-view search spans the selected folder plus Sent, so a
@@ -4161,6 +4222,7 @@ fn action_label(action: &rules::Action) -> String {
         rules::Action::MoveTo { folder } => format!("moveTo:{folder}"),
         rules::Action::MarkRead => "markRead".to_string(),
         rules::Action::Star => "star".to_string(),
+        rules::Action::AddLabel { label_id } => format!("label:{label_id}"),
         rules::Action::Stop => "stop".to_string(),
     }
 }
@@ -4197,6 +4259,18 @@ async fn run_rule_action(
             "messages.markStarred",
             json!({ "account": account, "folder": folder, "uids": [uid], "starred": true }),
         ),
+        // Labels live only here, so this one is a store write rather than a
+        // request. Added to whatever the conversation already carries: a rule
+        // must not strip what someone put on by hand.
+        rules::Action::AddLabel { label_id } => {
+            let thread_key = {
+                let db = engine.db.lock().unwrap();
+                store::thread_key_for_uid(&db, account, folder, uid)?
+            };
+            let db = engine.db.lock().unwrap();
+            store::add_thread_label(&db, account, &thread_key, label_id)?;
+            return Ok(());
+        }
         // Never reaches here: `plan` returns before emitting a Stop.
         rules::Action::Stop => return Ok(()),
     };

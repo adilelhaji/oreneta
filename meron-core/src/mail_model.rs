@@ -176,6 +176,16 @@ fn thread_cards_json_keyed(
         counts.extend(store::card_message_counts(conn, account_id, folder, &keys)?);
     }
 
+    // Labels come from one query for the whole page rather than one per row: a
+    // list of fifty conversations should not be fifty round trips to answer a
+    // question about all of them.
+    let card_labels = store::labels_for_threads(
+        conn,
+        account_id,
+        &cards.iter().map(|card| card.thread_key.clone()).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+
     cards
         .into_iter()
         .map(|card| {
@@ -213,6 +223,7 @@ fn thread_cards_json_keyed(
                 "starred": card.header.starred,
                 "has_draft": card.has_draft,
                 "has_attachments": false,
+                "labels": card_labels.get(&card.thread_key).cloned().unwrap_or_default(),
                 "recipient_overflow": card.header.recipient_overflow,
                 }),
             ))

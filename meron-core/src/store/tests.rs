@@ -235,13 +235,13 @@ fn a_recent_page_can_be_narrowed_by_more_than_one_thing_at_once() {
     assert_eq!(uids(RecentFilter::default()), vec![3, 2, 1]);
     assert_eq!(uids(RecentFilter::unread()), vec![3, 2]);
     assert_eq!(
-        uids(RecentFilter { unread_only: false, starred_only: true }),
+        uids(RecentFilter { unread_only: false, starred_only: true, ..Default::default() }),
         vec![3, 1]
     );
     // Both at once is one question, answered by the query rather than by
     // narrowing a page after it was already counted out.
     assert_eq!(
-        uids(RecentFilter { unread_only: true, starred_only: true }),
+        uids(RecentFilter { unread_only: true, starred_only: true, ..Default::default() }),
         vec![3]
     );
 }
@@ -294,6 +294,124 @@ fn recent_headers_carry_what_a_rule_needs_to_match_on() {
 
     assert_eq!(recent_headers(&conn, "acct", "INBOX", 1).unwrap().len(), 1);
     assert!(recent_headers(&conn, "acct", "Archive", 10).unwrap().is_empty());
+}
+
+fn label(id: &str, name: &str) -> Label {
+    Label {
+        id: id.to_string(),
+        name: name.to_string(),
+        colour: "#2056dd".to_string(),
+    }
+}
+
+#[test]
+fn labels_are_kept_in_the_order_they_were_arranged() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+
+    let stored = labels(&conn).unwrap();
+    assert_eq!(stored.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), vec!["l-1", "l-2"]);
+    assert_eq!(stored[0].name, "Work");
+
+    // Saving replaces the whole set rather than adding to it.
+    replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
+    assert_eq!(labels(&conn).unwrap().len(), 1);
+}
+
+#[test]
+fn a_label_that_is_deleted_takes_its_conversations_with_it() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into(), "l-2".into()]).unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1", "l-2"]);
+
+    replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
+
+    // Left behind, they would be a label nobody can see, name or remove — and
+    // a filter counting conversations it cannot show.
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-2"]);
+}
+
+#[test]
+fn setting_the_labels_of_a_conversation_states_the_whole_set() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-2".into()]).unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-2"]);
+
+    // A label nobody made cannot be put on anything, however it is asked for.
+    set_thread_labels(&conn, "acct", "t-1", &["l-9".into()]).unwrap();
+    assert!(thread_labels(&conn, "acct", "t-1").unwrap().is_empty());
+
+    // Another account's conversation of the same name is a different one.
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+    assert!(thread_labels(&conn, "other", "t-1").unwrap().is_empty());
+}
+
+#[test]
+fn a_rule_adds_a_label_without_removing_the_ones_already_there() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+
+    add_thread_label(&conn, "acct", "t-1", "l-2").unwrap();
+
+    // "Also label this" is not "these are now its labels": a rule must not
+    // quietly strip what the reader put there by hand.
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1", "l-2"]);
+
+    // Saying it twice changes nothing.
+    add_thread_label(&conn, "acct", "t-1", "l-2").unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap().len(), 2);
+}
+
+#[test]
+fn a_page_can_be_narrowed_to_one_label() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work")]).unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, date: 100, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 200, thread_key: "t-2".into(), ..Default::default() },
+            // A second message of the labelled thread: a label is on the
+            // conversation, so this one is in the answer too.
+            MessageHeader { uid: 3, date: 300, thread_key: "t-1".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+
+    let labelled = RecentFilter {
+        label_id: Some("l-1".into()),
+        ..Default::default()
+    };
+    let uids = get_recent_page(&conn, "acct", "INBOX", 50, None, labelled)
+        .unwrap()
+        .0
+        .into_iter()
+        .map(|header| header.uid)
+        .collect::<Vec<_>>();
+    assert_eq!(uids, vec![3, 1]);
+}
+
+#[test]
+fn the_labels_of_a_whole_page_are_read_in_one_go() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-2".into(), "l-1".into()]).unwrap();
+    set_thread_labels(&conn, "acct", "t-2", &["l-2".into()]).unwrap();
+
+    let found = labels_for_threads(&conn, "acct", &["t-1".into(), "t-2".into(), "t-3".into()]).unwrap();
+    // In the order the labels were arranged, not the order they were applied.
+    assert_eq!(found.get("t-1"), Some(&vec!["l-1".to_string(), "l-2".to_string()]));
+    assert_eq!(found.get("t-2"), Some(&vec!["l-2".to_string()]));
+    assert_eq!(found.get("t-3"), None);
+    assert!(labels_for_threads(&conn, "acct", &[]).unwrap().is_empty());
 }
 
 #[test]
@@ -1937,7 +2055,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 17);
+    assert_eq!(version, 18);
 
     for table in [
         "accounts",
@@ -1972,7 +2090,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 17);
+    assert_eq!(version, 18);
 }
 
 #[test]
@@ -2000,7 +2118,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 17);
+    assert_eq!(version, 18);
 
     let _ = std::fs::remove_dir_all(dir);
 }

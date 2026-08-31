@@ -325,6 +325,12 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailUnsnooze(payload)
 	case "mail.snoozed":
 		return a.mailSnoozed(payload)
+	case "labels.list":
+		return a.labelsList(payload)
+	case "labels.save":
+		return a.labelsSave(payload)
+	case "labels.assign":
+		return a.labelsAssign(payload)
 	case "rules.list":
 		return a.rulesList(payload)
 	case "rules.save":

@@ -588,6 +588,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 17 {
         migrate_v17(&tx)?;
     }
+    if version < 18 {
+        migrate_v18(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -839,6 +842,36 @@ fn migrate_v17(conn: &Connection) -> Result<()> {
          CREATE INDEX IF NOT EXISTS rule_log_at ON rule_log(at);",
     )?;
     conn.execute_batch("PRAGMA user_version = 17;")?;
+    Ok(())
+}
+
+/// Labels the reader puts on conversations, kept here and nowhere else.
+///
+/// Local on purpose: IMAP keywords are not carried by every server, Exchange
+/// categories are a different thing again, and a label that appears on one
+/// device and silently not on another is worse than one that never claimed to
+/// travel. What it costs is honesty about its own scope.
+///
+/// A label is put on a conversation, not on a message, and without the folder:
+/// a thread filed in Archive is the same thread that was in the inbox, and a
+/// label that fell off when it moved would be a label nobody could trust.
+fn migrate_v18(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS labels (
+           id       TEXT PRIMARY KEY,
+           name     TEXT NOT NULL,
+           colour   TEXT NOT NULL,
+           position INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS thread_labels (
+           account    TEXT NOT NULL,
+           thread_key TEXT NOT NULL,
+           label_id   TEXT NOT NULL,
+           PRIMARY KEY (account, thread_key, label_id)
+         );
+         CREATE INDEX IF NOT EXISTS thread_labels_label ON thread_labels(label_id);",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 18;")?;
     Ok(())
 }
 

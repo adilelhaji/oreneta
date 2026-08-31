@@ -67,6 +67,12 @@ pub enum Action {
     MoveTo { folder: String },
     MarkRead,
     Star,
+    /// Put one of the reader's labels on the conversation.
+    ///
+    /// Added, not set: a rule saying "also label this" must not quietly strip
+    /// whatever the reader put on it by hand.
+    #[serde(rename_all = "camelCase")]
+    AddLabel { label_id: String },
     /// Stop here: later rules do not see this message.
     Stop,
 }
@@ -214,6 +220,8 @@ pub enum Invalid {
     NoActions,
     /// A move with no destination would silently do nothing.
     MoveWithoutFolder,
+    /// So would labelling with no label.
+    LabelWithoutName,
 }
 
 impl std::fmt::Display for Invalid {
@@ -224,6 +232,7 @@ impl std::fmt::Display for Invalid {
             Invalid::EmptyCondition => "a condition needs something to look for",
             Invalid::NoActions => "a rule needs at least one action",
             Invalid::MoveWithoutFolder => "a move needs a destination folder",
+            Invalid::LabelWithoutName => "labelling needs a label",
         };
         f.write_str(text)
     }
@@ -249,6 +258,12 @@ pub fn validate(rule: &Rule) -> Result<(), Invalid> {
         _ => false,
     }) {
         return Err(Invalid::MoveWithoutFolder);
+    }
+    if rule.actions.iter().any(|action| match action {
+        Action::AddLabel { label_id } => label_id.trim().is_empty(),
+        _ => false,
+    }) {
+        return Err(Invalid::LabelWithoutName);
     }
     Ok(())
 }

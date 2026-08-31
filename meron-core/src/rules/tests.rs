@@ -215,6 +215,25 @@ fn a_rule_that_cannot_say_what_it_does_is_refused() {
 }
 
 #[test]
+fn labelling_needs_a_label_and_travels_as_camel_case() {
+    let mut labelling = rule(
+        vec![contains(Field::From, "team")],
+        vec![Action::AddLabel { label_id: "l-1".into() }],
+    );
+    assert_eq!(validate(&labelling), Ok(()));
+
+    labelling.actions = vec![Action::AddLabel { label_id: "  ".into() }];
+    assert_eq!(validate(&labelling), Err(Invalid::LabelWithoutName));
+
+    // The interface speaks camelCase; the Rust field is snake_case. A rule
+    // stored by one and read by the other has to be the same rule.
+    let stored = serde_json::to_string(&Action::AddLabel { label_id: "l-1".into() }).unwrap();
+    assert!(stored.contains("\"labelId\":\"l-1\""), "{stored}");
+    let read_back: Action = serde_json::from_str(&stored).unwrap();
+    assert_eq!(read_back, Action::AddLabel { label_id: "l-1".into() });
+}
+
+#[test]
 fn a_rule_survives_a_round_trip_through_storage() {
     let original = Rule {
         id: "r-1".into(),

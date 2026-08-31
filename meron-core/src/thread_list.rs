@@ -114,6 +114,11 @@ impl ThreadListQuery {
         MailSource::Recent {
             unread_only: names.contains(&"unread"),
             starred_only: names.contains(&"starred"),
+            label_id: names
+                .iter()
+                .find_map(|name| name.strip_prefix("label:"))
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned),
         }
     }
 
@@ -127,7 +132,7 @@ impl ThreadListQuery {
 
 /// Where a mail page comes from. Both frontends map filters to the same source;
 /// what each source *reads* (live IMAP vs the local cache) is theirs to decide.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MailSource {
     /// Starred-only view, unpaginated.
     Starred,
@@ -137,7 +142,12 @@ pub enum MailSource {
     Snoozed,
     /// Newest-first page, cursor paged, narrowed by any combination of the
     /// facets a reader can ask for.
-    Recent { unread_only: bool, starred_only: bool },
+    Recent {
+        unread_only: bool,
+        starred_only: bool,
+        /// A label the reader has made, named as `label:<id>` in the filter.
+        label_id: Option<String>,
+    },
     /// Text search across the folder plus Sent, cursor-paginated.
     Search,
 }
@@ -289,11 +299,11 @@ mod tests {
         let query = |params: Value| ThreadListQuery::from_params(&params, "folder");
         assert_eq!(
             query(json!({"filter": "all"})).source(),
-            MailSource::Recent { unread_only: false, starred_only: false }
+            MailSource::Recent { unread_only: false, starred_only: false, label_id: None }
         );
         assert_eq!(
             query(json!({"filter": "unread"})).source(),
-            MailSource::Recent { unread_only: true, starred_only: false }
+            MailSource::Recent { unread_only: true, starred_only: false, label_id: None }
         );
         assert_eq!(query(json!({"filter": "snoozed"})).source(), MailSource::Snoozed);
         // A search names its own source whatever the filter says, so looking
@@ -314,7 +324,7 @@ mod tests {
         // A blank search is not a search.
         assert_eq!(
             query(json!({"query": "   "})).source(),
-            MailSource::Recent { unread_only: false, starred_only: false }
+            MailSource::Recent { unread_only: false, starred_only: false, label_id: None }
         );
     }
 
@@ -326,18 +336,18 @@ mod tests {
         // fifty afterwards would hand back three rows and call it a page.
         assert_eq!(
             query(json!({"filter": "unread,starred"})).source(),
-            MailSource::Recent { unread_only: true, starred_only: true }
+            MailSource::Recent { unread_only: true, starred_only: true, label_id: None }
         );
         // Order and spacing are the caller's business, not the meaning's.
         assert_eq!(
             query(json!({"filter": " starred , unread "})).source(),
-            MailSource::Recent { unread_only: true, starred_only: true }
+            MailSource::Recent { unread_only: true, starred_only: true, label_id: None }
         );
         // "All" alongside something else says nothing, and must not turn the
         // set into the unfiltered page.
         assert_eq!(
             query(json!({"filter": "all,unread"})).source(),
-            MailSource::Recent { unread_only: true, starred_only: false }
+            MailSource::Recent { unread_only: true, starred_only: false, label_id: None }
         );
         // Starred on its own stays the whole starred view the side navigation
         // offers; only alongside something else is it a narrowing.
@@ -351,13 +361,13 @@ mod tests {
         // An empty set is the ordinary page, not an impossible one.
         assert_eq!(
             query(json!({"filter": ",, ,"})).source(),
-            MailSource::Recent { unread_only: false, starred_only: false }
+            MailSource::Recent { unread_only: false, starred_only: false, label_id: None }
         );
         // A name from a later version is ignored rather than narrowing to
         // nothing: an unknown facet must not empty a mailbox.
         assert_eq!(
             query(json!({"filter": "unread,attachments"})).source(),
-            MailSource::Recent { unread_only: true, starred_only: false }
+            MailSource::Recent { unread_only: true, starred_only: false, label_id: None }
         );
     }
 
