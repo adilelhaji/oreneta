@@ -1957,6 +1957,51 @@ export async function deleteMessage(message: Message) {
   }
 }
 
+/**
+ * Files one message of a conversation away, leaving the rest where it is.
+ *
+ * The thread-level archive in the header moves the whole conversation; this is
+ * for the message, which is what a long thread needs — the reply worth keeping
+ * and the eleven "thanks" above it do not belong in the same place.
+ */
+export async function archiveMessage(message: Message) {
+  if (!message?.id || isLocalSendId(message.id)) return
+
+  const threadId = message.thread_id
+  const previousMessages = mail$.messages.get()
+  const nextMessages = previousMessages.filter((item) => item.id !== message.id)
+  mail$.messages.set(nextMessages)
+
+  try {
+    const res = await invoke<MutationResult>('mail.archive', {
+      thread_id: threadId,
+      message_ids: [message.id],
+      folder: message.folder_id,
+    })
+    assertMoveAffected(res, 'Archive')
+    applyMutationFolderUnreads(res)
+    showToast(t('mail.toast.archivedCount', { count: 1 }))
+    // Nothing of this thread left in view: the conversation is over here.
+    if (!nextMessages.some((item) => item.thread_id === threadId)) {
+      if (ui$.selectedThread.get() === threadId) {
+        ui$.selectedThread.set('')
+        requestThreadReselect()
+      }
+      removeKanbanThread(threadId)
+    }
+    await loadThreads(false)
+    const selectedAcc = ui$.selectedAccount.get()
+    if (selectedAcc) void loadFolders(selectedAcc, false)
+    if (message.account_id && message.account_id !== selectedAcc) {
+      void loadFolders(message.account_id, false)
+    }
+  } catch (error) {
+    // Back on screen: a message that did not move must not look as if it had.
+    mail$.messages.set(previousMessages)
+    showToast(error instanceof Error ? error.message : t('mail.toast.archiveFailed'), 'error')
+  }
+}
+
 // Mark the current folder/view as read. Mail accounts are marked folder-wide, so
 // unread messages outside the loaded page are cleared too; RSS feeds are marked
 // per visible thread because they do not have an IMAP-style folder flag.

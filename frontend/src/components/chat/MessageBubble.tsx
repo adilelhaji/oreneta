@@ -19,6 +19,7 @@ import { formatFullTimestamp, formatMessageStamp } from './messageHelpers'
 import { AddressRow } from './AddressList'
 import { MessageContent } from './MessageContent'
 import { useMessageView } from './useMessageView'
+import { MessageActions } from './MessageActions'
 import { settings$ } from '../../states/settings'
 import { bubbleMaxWidth } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
@@ -74,26 +75,13 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
               : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-2xl rounded-tl-sm shadow-bubble-in'
         }`}
       >
-        <div className="absolute right-2 -top-3.5 z-20 flex items-center gap-1 rounded-full border border-border/40 bg-header/95 p-0.5 text-secondary opacity-0 shadow-sm transition-opacity group-hover/message-bubble:opacity-100 focus-within:opacity-100">
-          <button
-            type="button"
-            title={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            aria-label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            onClick={openMessageOrDraftTab}
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-hover hover:text-primary cursor-pointer transition-colors"
-          >
-            <ExternalLink size={13} />
-          </button>
-          <button
-            type="button"
-            title={t('common.more')}
-            aria-label={t('chat.moreMessageActions')}
-            onClick={openActionsMenu}
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-hover hover:text-primary cursor-pointer transition-colors"
-          >
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
+        <MessageActions
+          message={message}
+          isDraft={isDraft}
+          isRSS={isRSS}
+          onOpen={openMessageOrDraftTab}
+          onMore={openActionsMenu}
+        />
 
         {/* Header: sender + optional meta toggle on the left, timestamp on the right */}
         <div className="relative flex items-center justify-between gap-2 mb-1.5">

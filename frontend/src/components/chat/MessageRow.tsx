@@ -11,6 +11,7 @@ import { AddressRow } from './AddressList'
 import { MessageContent } from './MessageContent'
 import { formatFullTimestamp, formatMessageStamp, normalizeBodyText } from './messageHelpers'
 import { useMessageView } from './useMessageView'
+import { MessageActions } from './MessageActions'
 import { settings$ } from '../../states/settings'
 import { readingMeasure } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
@@ -216,24 +217,14 @@ export function MessageRow({
           {message.starred && <Star size={12} className="fill-amber-500 text-amber-500" />}
           <span title={fullStamp}>{stamp}</span>
           {statusIcon}
-          <button
-            type="button"
-            title={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            aria-label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            onClick={openMessageOrDraftTab}
-            className="flex h-5 w-5 items-center justify-center rounded text-secondary hover:bg-black/[0.05] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer transition-colors"
-          >
-            <ExternalLink size={12} />
-          </button>
-          <button
-            type="button"
-            title={t('common.more')}
-            aria-label={t('chat.moreMessageActions')}
-            onClick={openActionsMenu}
-            className="flex h-5 w-5 items-center justify-center rounded text-secondary hover:bg-black/[0.05] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer transition-colors"
-          >
-            <MoreHorizontal size={13} />
-          </button>
+          <MessageActions
+            message={message}
+            isDraft={isDraft}
+            isRSS={view.isRSS}
+            onOpen={openMessageOrDraftTab}
+            onMore={openActionsMenu}
+            variant="inline"
+          />
         </div>
         {metaOpen && (
           <>

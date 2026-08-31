@@ -263,6 +263,7 @@
   "changelog.error": "Could not load the changelog.",
   "changelog.loading": "Loading changelog…",
   "changelog.title": "Changelog",
+  "chat.actions.archiveMessage": "Archiver ce message",
   "chat.actions.copyImage": "Copier l'image",
   "chat.actions.copyLinkAddress": "Copier l'adresse du lien",
   "chat.actions.deleteMessage": "Supprimer le message",
