@@ -1028,6 +1028,7 @@
   "threads.actions.moveToTrash": "移至垃圾桶",
   "threads.actions.openInNewTab": "在新分頁中開啟",
   "threads.actions.selectAll": "全選",
+  "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "為對話串加星號",
   "threads.actions.syncMailbox": "同步信箱",
   "threads.actions.syncing": "正在同步...",

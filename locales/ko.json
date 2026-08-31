@@ -1028,6 +1028,7 @@
   "threads.actions.moveToTrash": "휴지통으로 이동",
   "threads.actions.openInNewTab": "새 탭에서 열기",
   "threads.actions.selectAll": "모두 선택",
+  "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "스레드 별표 표시",
   "threads.actions.syncMailbox": "편지함 동기화",
   "threads.actions.syncing": "동기화 중...",

@@ -9,6 +9,7 @@ import {
   Copy,
   FileText,
   Mail,
+  MailOpen,
   MoreVertical,
   PanelRight,
   Search,
@@ -20,8 +21,16 @@ import {
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
+import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
-import { archiveThread, deleteThread, mail$, starThread } from '../../states/mail'
+import {
+  archiveThread,
+  deleteThread,
+  mail$,
+  markThreadRead,
+  markThreadUnread,
+  starThread,
+} from '../../states/mail'
 import { printConversation } from '../../lib/print'
 import { thread$, type ConversationMode } from '../../states/thread'
 import { closeKanbanPane, kanban$, openCorrespondentMail } from '../../states/kanban'
@@ -217,6 +226,48 @@ export function ConversationHeader({
                 <ChevronDown size={14} />
               </button>
             </div>
+          )}
+          {/* The actions a reader reaches for constantly, as buttons rather
+              than as three lines inside a menu. Archiving a conversation
+              should not cost two clicks and a read of five other options.
+              They step aside while the thread search is open, which needs the
+              width more than they do. */}
+          {!threadSearchOpen && (
+            <>
+              {/* The two that give way first when the pane is narrow. They
+                  stay in the menu below, so nothing becomes unreachable —
+                  only less immediate. */}
+              <IconButton
+                icon={Star}
+                label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
+                className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-amber-500')}
+                onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
+              />
+              <IconButton
+                icon={activeThread.unread ? MailOpen : Mail}
+                label={activeThread.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
+                className="hidden min-[860px]:flex"
+                onClick={() =>
+                  void (activeThread.unread
+                    ? markThreadRead(activeThread.thread_id)
+                    : markThreadUnread(activeThread.thread_id))
+                }
+              />
+              {!isRSS && (
+                <>
+                  <IconButton
+                    icon={Archive}
+                    label={t('threads.actions.archiveThread')}
+                    onClick={() => void archiveThread(activeThread.thread_id)}
+                  />
+                  <IconButton
+                    icon={Trash2}
+                    label={t('threads.actions.moveToTrash')}
+                    onClick={() => void deleteThread(activeThread.thread_id)}
+                  />
+                </>
+              )}
+            </>
           )}
           <IconButton
             icon={PanelRight}

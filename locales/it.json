@@ -1028,6 +1028,7 @@
   "threads.actions.moveToTrash": "Sposta nel Cestino",
   "threads.actions.openInNewTab": "Apri in una nuova scheda",
   "threads.actions.selectAll": "Seleziona tutto",
+  "threads.actions.snoozeTomorrow": "Rimanda a domani",
   "threads.actions.starThread": "Evidenzia thread",
   "threads.actions.syncMailbox": "Sincronizza casella",
   "threads.actions.syncing": "Sincronizzazione in corso...",

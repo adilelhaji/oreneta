@@ -36,7 +36,14 @@ import {
   deleteFolder,
   loadThreads,
   threadListViewKey,
+  archiveThread,
+  deleteThread,
+  markThreadRead,
+  markThreadUnread,
+  snoozeChoices,
+  snoozeThread,
 } from '../../states/mail'
+import type { Message } from '../../types'
 import { clsx } from '../../lib/utils'
 import { isRssAccount } from '../../lib/threadActions'
 import { folderLabel } from '../../lib/kanbanData'
@@ -49,7 +56,7 @@ import { ThreadActionsMenu } from './ThreadActionsMenu'
 import { ScheduledSendsBar } from './ScheduledSendsBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
-import { ThreadListItem } from './ThreadListItem'
+import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { BulkActionBar } from './BulkActionBar'
 
 type ThreadListProps = {
@@ -201,6 +208,31 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       starred: thread.starred,
       draft: isDraftFolder(thread.folder_id, thread.account_id),
       trash: folders.some((folder) => folder.id === thread.folder_id && folder.role === 'trash'),
+    }
+  }
+
+  // Triage from the row. Each of these already exists as a menu item; this is
+  // the same work without the two clicks and the reading in between.
+  const runQuickAction = (action: QuickRowAction, thread: Message) => {
+    const threadId = thread.thread_id
+    switch (action) {
+      case 'archive':
+        void archiveThread(threadId)
+        return
+      case 'trash':
+        void deleteThread(threadId)
+        return
+      case 'read':
+        void (thread.unread ? markThreadRead(threadId) : markThreadUnread(threadId))
+        return
+      case 'snooze': {
+        // One time, named on the button, rather than a menu opening from a
+        // button that already had to be hovered for. The full set of times
+        // stays on the right-click menu.
+        const tomorrow = snoozeChoices().find((choice) => choice.key === 'tomorrow')
+        if (tomorrow) void snoozeThread(threadId, tomorrow.at)
+        return
+      }
     }
   }
 
@@ -443,6 +475,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   onDragStart={(event) => startFeedDrag(event, thread)}
                   bulkSelectable={desktopBulk && bulkInThisList}
                   bulkSelected={!!bulkSelection[bulkItem.key]}
+                  onQuickAction={(action) => runQuickAction(action, thread)}
                   onSelect={(event) => {
                     if (desktopBulk && (event.metaKey || event.ctrlKey)) {
                       toggleBulkSelection(bulkItem)

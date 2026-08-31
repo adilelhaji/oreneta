@@ -1028,6 +1028,7 @@
   "threads.actions.moveToTrash": "Di chuyển vào Thùng rác",
   "threads.actions.openInNewTab": "Mở trong tab mới",
   "threads.actions.selectAll": "Chọn tất cả",
+  "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "Gắn sao luồng",
   "threads.actions.syncMailbox": "Đồng bộ hộp thư",
   "threads.actions.syncing": "Đang đồng bộ...",

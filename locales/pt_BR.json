@@ -1028,6 +1028,7 @@
   "threads.actions.moveToTrash": "Mover para a Lixeira",
   "threads.actions.openInNewTab": "Abrir em nova aba",
   "threads.actions.selectAll": "Selecionar tudo",
+  "threads.actions.snoozeTomorrow": "Adiar para amanhã",
   "threads.actions.starThread": "Marcar conversa com estrela",
   "threads.actions.syncMailbox": "Sincronizar caixa de correio",
   "threads.actions.syncing": "Sincronizando...",

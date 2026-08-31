@@ -1028,6 +1028,7 @@
   "threads.actions.moveToTrash": "ゴミ箱に移動",
   "threads.actions.openInNewTab": "新しいタブで開く",
   "threads.actions.selectAll": "すべて選択",
+  "threads.actions.snoozeTomorrow": "Snooze until tomorrow",
   "threads.actions.starThread": "スレッドにスターを付ける",
   "threads.actions.syncMailbox": "メールボックスを同期",
   "threads.actions.syncing": "同期中...",

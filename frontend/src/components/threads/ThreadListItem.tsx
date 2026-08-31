@@ -1,6 +1,6 @@
 import type { DragEvent, MouseEvent, Ref } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { Check, Star } from 'lucide-react'
+import { Archive, Check, Clock, Mail, MailOpen, Star, Trash2 } from 'lucide-react'
 import type { Account, Message } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { formatThreadDate } from '../../lib/date'
@@ -9,6 +9,9 @@ import { useTranslation } from '../../lib/i18n'
 import { isDraftFolder } from '../../states/mail'
 import { settings$ } from '../../states/settings'
 import { densityStyle } from './listDensity'
+
+/** What a row offers without being opened. */
+export type QuickRowAction = 'archive' | 'trash' | 'snooze' | 'read'
 
 export function ThreadListItem({
   thread,
@@ -26,6 +29,7 @@ export function ThreadListItem({
   showAccountBadge,
   bulkSelectable = false,
   bulkSelected = false,
+  onQuickAction,
 }: {
   thread: Message
   accounts: Account[]
@@ -42,6 +46,8 @@ export function ThreadListItem({
   showAccountBadge?: boolean
   bulkSelectable?: boolean
   bulkSelected?: boolean
+  /** Triage from the row itself. Omitted where the actions do not apply. */
+  onQuickAction?: (action: QuickRowAction) => void
 }) {
   const { t } = useTranslation()
   const density = densityStyle(useValue(settings$.listDensity))
@@ -55,6 +61,21 @@ export function ThreadListItem({
   const isRSS = !!thread.feed_url
   const unread = thread.unread
   const hasDraft = !isRSS && (thread.has_draft || isDraftFolder(thread.folder_id, thread.account_id))
+
+  // The row's own actions, built here so the markup below stays a loop. Read
+  // and unread are one control that says which it will do, not two.
+  const quickActions: { key: QuickRowAction; icon: typeof Star; label: string; danger?: boolean }[] = isRSS
+    ? []
+    : [
+        {
+          key: 'read',
+          icon: unread ? MailOpen : Mail,
+          label: unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread'),
+        },
+        { key: 'snooze', icon: Clock, label: t('threads.actions.snoozeTomorrow') },
+        { key: 'archive', icon: Archive, label: t('threads.actions.archiveThread') },
+        { key: 'trash', icon: Trash2, label: t('threads.actions.moveToTrash'), danger: true },
+      ]
 
   // Built once and placed by density: compact puts them on the sender's line,
   // the others on a line below. Two copies of this markup would be two things
@@ -204,6 +225,41 @@ export function ThreadListItem({
           )}
         </div>
       </button>
+
+      {/* Triage without opening anything. Thunderbird has no equivalent — it
+          is a Gmail and Outlook habit — but going through a conversation is
+          most of what a morning at a mailbox is, and a menu per message is a
+          poor way to spend it.
+
+          Outside the row's own button, not inside it: a button within a
+          button is invalid markup, and clicking Archive must not also open
+          the conversation on its way past. Hidden while selecting, where the
+          gesture belongs to the selection, and in compact rows, where there
+          is no room that is not already the subject's. */}
+      {!bulkSelectable && !density.singleLine && onQuickAction && (
+        <div className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-border/60 bg-chats/95 p-0.5 shadow-sm group-hover:flex">
+          {quickActions.map(({ key, icon: Icon, label, danger }) => (
+            <button
+              key={key}
+              type="button"
+              title={label}
+              aria-label={label}
+              onClick={(event) => {
+                event.stopPropagation()
+                onQuickAction(key)
+              }}
+              className={clsx(
+                'flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer',
+                danger
+                  ? 'text-secondary hover:bg-rose-500/10 hover:text-rose-500'
+                  : 'text-secondary hover:bg-hover hover:text-primary',
+              )}
+            >
+              <Icon size={14} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
