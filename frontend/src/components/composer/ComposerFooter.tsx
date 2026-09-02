@@ -58,7 +58,7 @@ export function ComposerFooter({
         )}
         <button
           onClick={onToggleRich}
-          className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-[0.6875rem] font-semibold transition-colors cursor-pointer ${
+          className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
             rich ? 'bg-accent/10 text-accent' : 'text-secondary hover:bg-hover'
           }`}
           title={rich ? t('composer.actions.switchToPlainText') : t('composer.actions.switchToRichText')}
@@ -69,20 +69,20 @@ export function ComposerFooter({
       </div>
       <div className="flex items-center gap-3">
         {saveStatus === 'saving' && (
-          <span className="flex items-center gap-1.5 text-[0.6875rem] text-secondary">
+          <span className="flex items-center gap-1.5 text-caption text-secondary">
             <RefreshCw size={11} className="animate-spin" />
             <span>{t('composer.status.savingDraft')}</span>
           </span>
         )}
         {saveStatus === 'saved' && (
-          <span className="flex items-center gap-1.5 text-[0.6875rem] text-emerald-500 font-medium">
+          <span className="flex items-center gap-1.5 text-caption text-emerald-500 font-medium">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>{t('composer.status.savedToServer')}</span>
           </span>
         )}
         {saveStatus === 'error' && (
           <span
-            className="max-w-[360px] truncate text-[0.6875rem] text-rose-500 font-medium"
+            className="max-w-[360px] truncate text-caption text-rose-500 font-medium"
             title={saveError || draftAutosaveFailed}
           >
             {saveError || draftAutosaveFailed}

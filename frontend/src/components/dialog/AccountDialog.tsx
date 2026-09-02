@@ -57,7 +57,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
           <h2 className="text-[1.625rem] max-[640px]:text-2xl font-bold tracking-tight leading-tight">
             {t('accounts.setup.connectMailAccount')}
           </h2>
-          <p className="mt-2 text-[0.9375rem] leading-6 text-secondary">{t('accounts.setup.chooseProvider')}</p>
+          <p className="mt-2 text-title leading-6 text-secondary">{t('accounts.setup.chooseProvider')}</p>
         </div>
 
         <AccountProviderGrid mode={mode} setMode={setMode} isSetup />
@@ -92,7 +92,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
       <div className="bg-chats border border-border text-primary w-full max-w-[760px] max-h-[92vh] rounded-3xl shadow-2xl animate-slide-up flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border/70 shrink-0">
-          <h2 className="text-[0.9375rem] font-bold tracking-tight leading-tight">
+          <h2 className="text-title font-bold tracking-tight leading-tight">
             {ctl.editing
               ? t('accounts.actions.editAccountTitle', { defaultValue: 'Account server settings' })
               : reconnecting
@@ -108,8 +108,8 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
           {!reconnecting && <AccountProviderRail mode={mode} setMode={setMode} />}
           <div className="flex-1 min-w-0 overflow-y-auto p-5 flex flex-col gap-4">
             <div>
-              <h3 className="text-[0.8125rem] font-bold tracking-tight leading-tight">{active?.label}</h3>
-              <p className="text-[0.65625rem] text-secondary mt-0.5 font-medium">
+              <h3 className="text-ui font-bold tracking-tight leading-tight">{active?.label}</h3>
+              <p className="text-caption text-secondary mt-0.5 font-medium">
                 {active ? t(active.descriptionKey, { defaultValue: active.defaultDescription }) : null}
               </p>
             </div>
@@ -168,7 +168,7 @@ function AccountDialogForm({
           inputClassName={classes.inputClass}
           labelClassName={classes.fieldLabelClass}
         />
-        <p className="text-[0.6875rem] text-secondary px-1 -mt-1">{t('accounts.setup.feedAccountHint')}</p>
+        <p className="text-caption text-secondary px-1 -mt-1">{t('accounts.setup.feedAccountHint')}</p>
       </>
     )
   }
@@ -184,7 +184,7 @@ function AccountDialogForm({
 function AccountDialogError({ error }: { error: string }) {
   if (!error) return null
   return (
-    <p className="rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-[0.6875rem] leading-relaxed text-red-600 dark:text-red-400 font-medium">
+    <p className="rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-caption leading-relaxed text-red-600 dark:text-red-400 font-medium">
       {error}
     </p>
   )
@@ -197,7 +197,7 @@ function SaveButton({ ctl, isSetup }: { ctl: AccountDialogController; isSetup: b
     <button
       onClick={save}
       disabled={saveDisabled}
-      className={`${isSetup ? 'w-full rounded-2xl py-4 text-[1.125rem]' : 'rounded-xl px-4.5 py-2 text-xs'} font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+      className={`${isSetup ? 'w-full rounded-2xl py-4 text-lg' : 'rounded-xl px-4.5 py-2 text-xs'} font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
         saveDisabled
           ? isSetup
             ? 'bg-hover text-secondary/70 cursor-not-allowed border border-transparent shadow-none'

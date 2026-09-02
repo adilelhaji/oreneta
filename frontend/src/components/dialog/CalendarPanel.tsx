@@ -99,14 +99,14 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
       <SettingsGroup title={t('calendar.dangerZone', { defaultValue: 'Remove' })}>
         <div className="px-4 py-3.5">
           {calendar.is_default ? (
-            <p className="text-[0.6875rem] text-secondary">
+            <p className="text-caption text-secondary">
               {t('calendar.cannotDeleteDefault', {
                 defaultValue:
                   "The account's main calendar cannot be removed — the server does not allow it.",
               })}
             </p>
           ) : onlyOne ? (
-            <p className="text-[0.6875rem] text-secondary">
+            <p className="text-caption text-secondary">
               {t('calendar.cannotDeleteLast', {
                 defaultValue: 'An account keeps at least one calendar.',
               })}
@@ -115,7 +115,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             <div className="flex flex-col gap-2.5">
               {/* Said plainly: this is the destructive operation on this
                   screen, and its cost is the events, not the calendar. */}
-              <p className="text-[0.6875rem] text-primary">
+              <p className="text-caption text-primary">
                 {t('calendar.deleteWarning', {
                   defaultValue:
                     'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
@@ -153,7 +153,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
         </div>
       </SettingsGroup>
 
-      {error && <p className="px-1 text-[0.6875rem] text-rose-500">{error}</p>}
+      {error && <p className="px-1 text-caption text-rose-500">{error}</p>}
     </div>
   )
 }

@@ -98,7 +98,7 @@ export function ShortcutsDialog() {
             {customized && (
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-[0.75rem] font-medium text-secondary hover:bg-app hover:text-primary"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-secondary hover:bg-app hover:text-primary"
                 onClick={() => {
                   resetAllShortcutBindings()
                   setRecording(null)
@@ -120,10 +120,10 @@ export function ShortcutsDialog() {
         </div>
 
         <div className="overflow-y-auto px-5 py-4 space-y-4">
-          <p className="text-[0.75rem] text-secondary">{t('shortcuts.customizeHint')}</p>
+          <p className="text-xs text-secondary">{t('shortcuts.customizeHint')}</p>
           {SHORTCUT_GROUPS.map((group) => (
             <section key={group.title}>
-              <h3 className="mb-1.5 text-[0.75rem] font-semibold text-secondary">{group.title}</h3>
+              <h3 className="mb-1.5 text-xs font-semibold text-secondary">{group.title}</h3>
               <div className="overflow-hidden rounded-lg border border-border">
                 {group.ids.map((id, i) => (
                   <ShortcutRow
@@ -170,7 +170,7 @@ function ShortcutRow({
   const { t } = useTranslation()
 
   return (
-    <div className={`px-3 py-2 text-[0.8125rem] text-primary ${first ? '' : 'border-t border-border'}`}>
+    <div className={`px-3 py-2 text-ui text-primary ${first ? '' : 'border-t border-border'}`}>
       <div className="flex items-center justify-between gap-4">
         <span>{SHORTCUT_LABELS[id]}</span>
         <div className="flex shrink-0 items-center gap-1">
@@ -187,7 +187,7 @@ function ShortcutRow({
           <button
             type="button"
             aria-label={t('shortcuts.rebind')}
-            className={`rounded border px-1.5 py-0.5 text-[0.6875rem] font-medium ${
+            className={`rounded border px-1.5 py-0.5 text-caption font-medium ${
               recording
                 ? 'border-accent text-accent'
                 : 'border-border bg-app text-secondary hover:border-accent hover:text-primary'
@@ -199,7 +199,7 @@ function ShortcutRow({
         </div>
       </div>
       {conflict && (
-        <p className="mt-1 text-right text-[0.6875rem] text-rose-600 dark:text-rose-400">
+        <p className="mt-1 text-right text-caption text-rose-600 dark:text-rose-400">
           {t('shortcuts.conflict', { name: SHORTCUT_LABELS[conflict] })}
         </p>
       )}

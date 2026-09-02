@@ -88,7 +88,7 @@ export function MonthView({
         {weekdays.map((name) => (
           <div
             key={name}
-            className="px-2 py-1.5 text-center text-[0.625rem] font-semibold uppercase tracking-wide text-secondary"
+            className="px-2 py-1.5 text-center text-2xs font-semibold uppercase tracking-wide text-secondary"
           >
             {name}
           </div>
@@ -115,7 +115,7 @@ export function MonthView({
               <button
                 type="button"
                 onClick={() => openDay(date)}
-                className={`self-start rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums cursor-pointer transition-colors ${
+                className={`self-start rounded-md px-1.5 py-0.5 text-caption font-semibold tabular-nums cursor-pointer transition-colors ${
                   isToday
                     ? 'bg-accent text-white'
                     : inMonth
@@ -134,7 +134,7 @@ export function MonthView({
                     mouse.preventDefault()
                     onEventMenu(mouse.clientX, mouse.clientY, event)
                   }}
-                  className={`flex min-w-0 items-center gap-1 rounded px-1 py-px text-left text-[0.625rem] leading-4 text-primary transition-colors hover:bg-hover cursor-pointer ${
+                  className={`flex min-w-0 items-center gap-1 rounded px-1 py-px text-left text-2xs leading-4 text-primary transition-colors hover:bg-hover cursor-pointer ${
                     event.is_cancelled ? 'line-through opacity-55' : ''
                   }`}
                 >
@@ -156,7 +156,7 @@ export function MonthView({
                 <button
                   type="button"
                   onClick={() => openDay(date)}
-                  className="self-start rounded px-1 text-[0.625rem] font-medium text-accent hover:bg-accent/10 cursor-pointer"
+                  className="self-start rounded px-1 text-2xs font-medium text-accent hover:bg-accent/10 cursor-pointer"
                 >
                   {t('calendar.moreEvents', { defaultValue: '{count} more', count: overflow })}
                 </button>

@@ -41,13 +41,13 @@ export function ScheduledSendsDialog() {
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
               <Clock size={17} />
             </div>
-            <h2 className="text-[0.9375rem] font-bold leading-tight tracking-tight">{t('sendLater.title')}</h2>
+            <h2 className="text-title font-bold leading-tight tracking-tight">{t('sendLater.title')}</h2>
           </div>
           <IconButton icon={X} iconSize={16} label={t('buttons.close')} radius="xl" onClick={onClose} />
         </div>
 
         {messages.length === 0 ? (
-          <p className="py-6 text-center text-[0.8125rem] text-secondary">{t('sendLater.empty')}</p>
+          <p className="py-6 text-center text-ui text-secondary">{t('sendLater.empty')}</p>
         ) : (
           <ul className="flex max-h-[24rem] flex-col gap-2 overflow-y-auto">
             {messages.map((message) => (
@@ -56,20 +56,20 @@ export function ScheduledSendsDialog() {
                 className="flex flex-col gap-2 rounded-2xl border border-border bg-panel px-3.5 py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-[0.8125rem] font-semibold">
+                  <p className="truncate text-ui font-semibold">
                     {message.subject || t('sendLater.noSubject')}
                   </p>
-                  <p className="mt-0.5 truncate text-[0.6875rem] text-secondary">{message.to}</p>
+                  <p className="mt-0.5 truncate text-caption text-secondary">{message.to}</p>
                 </div>
                 {message.gaveUp ? (
-                  <p className="flex items-start gap-1.5 text-[0.6875rem] font-medium text-rose-500">
+                  <p className="flex items-start gap-1.5 text-caption font-medium text-rose-500">
                     <AlertTriangle size={12} className="mt-px shrink-0" />
                     <span className="min-w-0">
                       {t('sendLater.failedReason', { reason: message.lastError })}
                     </span>
                   </p>
                 ) : (
-                  <p className="text-[0.6875rem] text-secondary">
+                  <p className="text-caption text-secondary">
                     {t('sendLater.willSend', { when: formatDeferredWhen(message.dueAt) })}
                   </p>
                 )}
@@ -77,7 +77,7 @@ export function ScheduledSendsDialog() {
                   <button
                     type="button"
                     onClick={() => void sendScheduledNow(message.id)}
-                    className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-[0.6875rem] font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
                   >
                     <Send size={11} />
                     {t('sendLater.sendNow')}
@@ -88,7 +88,7 @@ export function ScheduledSendsDialog() {
                       onClose()
                       void cancelAndReopen(message.id)
                     }}
-                    className="rounded-xl px-3 py-1.5 text-[0.6875rem] font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
+                    className="rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
                   >
                     {t('sendLater.cancelSend')}
                   </button>

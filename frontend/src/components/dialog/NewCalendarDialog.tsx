@@ -96,7 +96,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        <p className="mb-3 px-0.5 text-[0.6875rem] text-secondary">
+        <p className="mb-3 px-0.5 text-caption text-secondary">
           {kind === 'account'
             ? t('calendar.kindAccountHint', {
                 defaultValue: 'Created on the account’s server, and available wherever you read that account.',
@@ -113,7 +113,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
         </p>
 
         {kind === 'account' && capable.length === 0 ? (
-          <p className="px-0.5 text-[0.6875rem] text-secondary">
+          <p className="px-0.5 text-caption text-secondary">
             {t('calendar.noServerAccounts', {
               defaultValue:
                 'None of these accounts keeps calendars on a server. Exchange accounts do — their calendars arrive with the account.',
@@ -158,7 +158,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
             </Labelled>
           )}
 
-          {error && <p className="text-[0.6875rem] text-rose-500">{error}</p>}
+          {error && <p className="text-caption text-rose-500">{error}</p>}
         </div>
         )}
 
@@ -206,7 +206,7 @@ function KindTab({
       }`}
     >
       <span className={active ? 'text-accent' : ''}>{icon}</span>
-      <span className="text-[0.625rem] font-semibold leading-tight">{label}</span>
+      <span className="text-2xs font-semibold leading-tight">{label}</span>
     </button>
   )
 }
@@ -217,7 +217,7 @@ const inputClass =
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex w-full flex-col gap-1.5">
-      <span className="pl-0.5 text-[0.6875rem] font-semibold text-secondary">{label}</span>
+      <span className="pl-0.5 text-caption font-semibold text-secondary">{label}</span>
       {children}
     </label>
   )

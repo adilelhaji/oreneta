@@ -103,11 +103,11 @@ export function WeekView({
               }}
               className="flex items-baseline justify-center gap-1.5 px-1 py-2 cursor-pointer transition-colors hover:bg-hover"
             >
-              <span className="text-[0.625rem] font-semibold uppercase tracking-wide text-secondary">
+              <span className="text-2xs font-semibold uppercase tracking-wide text-secondary">
                 {date.toLocaleDateString(undefined, { weekday: 'short' })}
               </span>
               <span
-                className={`rounded-md px-1 text-[0.8125rem] font-semibold tabular-nums ${
+                className={`rounded-md px-1 text-ui font-semibold tabular-nums ${
                   date.getTime() === todayMs ? 'bg-accent text-white' : 'text-primary'
                 }`}
               >
@@ -115,7 +115,7 @@ export function WeekView({
               </span>
             </button>
           ))}
-          <div className="row-start-2 pb-1 pr-1 text-right text-[0.5625rem] uppercase tracking-wide text-secondary/70">
+          <div className="row-start-2 pb-1 pr-1 text-right text-2xs uppercase tracking-wide text-secondary/70">
             {t('calendar.allDay', { defaultValue: 'All day' })}
           </div>
           {allDayByColumn.map((dayEvents, i) => (
@@ -129,7 +129,7 @@ export function WeekView({
                     mouse.preventDefault()
                     onEventMenu(mouse.clientX, mouse.clientY, event)
                   }}
-                  className="truncate rounded px-1.5 py-px text-left text-[0.625rem] font-medium text-white cursor-pointer hover:opacity-90"
+                  className="truncate rounded px-1.5 py-px text-left text-2xs font-medium text-white cursor-pointer hover:opacity-90"
                   style={{ backgroundColor: colorOf(event) }}
                 >
                   {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
@@ -147,7 +147,7 @@ export function WeekView({
             {hours.map((hour) => (
               <span
                 key={hour}
-                className="absolute right-2 -translate-y-1/2 text-[0.625rem] tabular-nums text-secondary/80"
+                className="absolute right-2 -translate-y-1/2 text-2xs tabular-nums text-secondary/80"
                 style={{ top: hour * HOUR_PX }}
               >
                 {hour === 0 ? '' : `${String(hour).padStart(2, '0')}:00`}
@@ -186,7 +186,7 @@ export function WeekView({
                       mouse.preventDefault()
                       onEventMenu(mouse.clientX, mouse.clientY, event)
                     }}
-                    className={`absolute overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left text-[0.625rem] leading-tight transition-opacity hover:opacity-90 cursor-pointer ${
+                    className={`absolute overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left text-2xs leading-tight transition-opacity hover:opacity-90 cursor-pointer ${
                       event.is_cancelled ? 'line-through opacity-55' : ''
                     }`}
                     style={{

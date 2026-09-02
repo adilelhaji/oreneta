@@ -45,10 +45,10 @@ export function LabelsSettingsSection() {
       <div className="flex flex-col gap-3 px-3.5 py-3">
         {/* Said plainly, because the alternative is someone discovering it by
             not finding their labels on another machine. */}
-        <p className="text-[0.65625rem] text-secondary">{t('labels.localOnly')}</p>
+        <p className="text-caption text-secondary">{t('labels.localOnly')}</p>
 
         {labels.length === 0 ? (
-          <p className="py-2 text-[0.8125rem] text-secondary">{t('labels.noneYet')}</p>
+          <p className="py-2 text-ui text-secondary">{t('labels.noneYet')}</p>
         ) : (
           <ul className="flex flex-col gap-1.5">
             {labels.map((label, index) => (
@@ -109,7 +109,7 @@ export function LabelsSettingsSection() {
         <button
           type="button"
           onClick={() => setDraft([...labels, newLabel(labels)])}
-          className="flex w-fit items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-[0.6875rem] font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+          className="flex w-fit items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
         >
           <Plus size={12} />
           {t('labels.add')}
@@ -117,7 +117,7 @@ export function LabelsSettingsSection() {
 
         {/* Deleting is the one that cannot be shrugged off, so it is said here
             rather than only in the confirmation. */}
-        <p className="flex items-start gap-1.5 text-[0.65625rem] text-secondary">
+        <p className="flex items-start gap-1.5 text-caption text-secondary">
           <Tag size={11} className="mt-px shrink-0" />
           <span>{t('labels.deleteWarning')}</span>
         </p>

@@ -293,7 +293,7 @@ function KanbanColumnContent({
     >
       {wrapper.isOver && wrapper.dropRejection && (
         <div className="pointer-events-none absolute inset-x-3 top-1/2 z-20 -translate-y-1/2">
-          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-[0.6875rem] font-medium leading-relaxed text-red-600 shadow-sm dark:border-red-900/50 dark:bg-red-950/90 dark:text-red-400">
+          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-caption font-medium leading-relaxed text-red-600 shadow-sm dark:border-red-900/50 dark:bg-red-950/90 dark:text-red-400">
             {wrapper.dropRejection}
           </p>
         </div>
@@ -361,7 +361,7 @@ function KanbanColumnContent({
               <Loader2 size={13} className="shrink-0 animate-spin text-accent" />
             )}
             {unreadCount > 0 && (
-              <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[0.625rem] font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+              <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
                 {unreadCount}
               </span>
             )}

@@ -52,7 +52,7 @@ export function ThreadSearchBarMobile({
         >
           <X size={12} />
         </button>
-        <span className="w-12 text-center text-[0.625rem] font-semibold text-secondary">
+        <span className="w-12 text-center text-2xs font-semibold text-secondary">
           {normalizedThreadSearch ? `${searchMatches.length ? activeSearchIndex + 1 : 0}/${searchMatches.length}` : ''}
         </span>
       </div>

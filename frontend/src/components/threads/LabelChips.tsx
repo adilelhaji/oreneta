@@ -29,12 +29,12 @@ export function LabelChips({ ids, max = 3 }: { ids?: string[]; max?: number }) {
           key={label.id}
           title={label.name}
           style={{ color: label.colour, borderColor: `${label.colour}55`, backgroundColor: `${label.colour}14` }}
-          className="max-w-[8rem] truncate rounded border px-1 py-px text-[0.625rem] font-semibold leading-tight"
+          className="max-w-[8rem] truncate rounded border px-1 py-px text-2xs font-semibold leading-tight"
         >
           {label.name}
         </span>
       ))}
-      {hidden > 0 && <span className="shrink-0 text-[0.625rem] font-semibold text-secondary">+{hidden}</span>}
+      {hidden > 0 && <span className="shrink-0 text-2xs font-semibold text-secondary">+{hidden}</span>}
     </span>
   )
 }

@@ -211,7 +211,7 @@ export function EventDetails() {
                       {person.name || person.addr}
                     </span>
                     {person.response && (
-                      <span className="shrink-0 text-[0.625rem] text-secondary">
+                      <span className="shrink-0 text-2xs text-secondary">
                         {responseLabel(person.response, t)}
                       </span>
                     )}
@@ -238,7 +238,7 @@ export function EventDetails() {
             the three buttons are the whole mechanism. */}
         {invitation && (
           <div className="shrink-0 border-t border-border/60 px-5 py-3">
-            <p className="mb-2 text-[0.6875rem] text-secondary">
+            <p className="mb-2 text-caption text-secondary">
               {answered
                 ? t('calendar.yourAnswer', {
                     defaultValue: 'Your answer: {answer}',
@@ -275,7 +275,7 @@ export function EventDetails() {
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
           {readOnly ? (
-            <p className="mr-auto text-[0.6875rem] text-secondary">
+            <p className="mr-auto text-caption text-secondary">
               {t('calendar.readOnlyEvent', {
                 defaultValue: 'This calendar is read-only — it belongs to whoever publishes it.',
               })}

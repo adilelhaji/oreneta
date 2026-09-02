@@ -55,10 +55,10 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
               <ShieldCheck size={17} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-[0.9375rem] font-bold tracking-tight leading-tight">
+              <h2 className="text-title font-bold tracking-tight leading-tight">
                 {exporting ? t('settings.backup.exportTitle') : t('settings.backup.restoreTitle')}
               </h2>
-              <p className="text-[0.65625rem] text-secondary mt-1 font-medium">
+              <p className="text-caption text-secondary mt-1 font-medium">
                 {exporting ? t('settings.backup.exportSubtitle') : t('settings.backup.restoreSubtitle')}
               </p>
             </div>
@@ -77,8 +77,8 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
                 className="mt-0.5 accent-accent cursor-pointer"
               />
               <span className="min-w-0">
-                <span className="block text-[0.75rem] font-semibold">{t('settings.backup.includeSecrets')}</span>
-                <span className="block text-[0.65625rem] text-secondary mt-0.5 leading-relaxed font-medium">
+                <span className="block text-xs font-semibold">{t('settings.backup.includeSecrets')}</span>
+                <span className="block text-caption text-secondary mt-0.5 leading-relaxed font-medium">
                   {t('settings.backup.includeSecretsHint')}
                 </span>
               </span>
@@ -86,7 +86,7 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
           )}
 
           <div className="flex flex-col gap-2">
-            <label className="text-[0.6875rem] font-semibold text-secondary px-1">
+            <label className="text-caption font-semibold text-secondary px-1">
               {t('settings.backup.passphrase')}
               {exporting && !includeSecrets && (
                 <span className="font-medium text-secondary"> · {t('settings.network.optional')}</span>
@@ -100,13 +100,13 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
               onKeyDown={(event) => {
                 if (event.key === 'Enter') submit()
               }}
-              className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-[0.8125rem] text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
+              className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
             />
           </div>
 
           {exporting && (
             <div className="flex flex-col gap-2">
-              <label className="text-[0.6875rem] font-semibold text-secondary px-1">
+              <label className="text-caption font-semibold text-secondary px-1">
                 {t('settings.backup.passphraseConfirm')}
               </label>
               <input
@@ -116,18 +116,18 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') submit()
                 }}
-                className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-[0.8125rem] text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
+                className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
               />
             </div>
           )}
 
-          <p className="text-[0.65625rem] text-secondary px-1 leading-relaxed font-medium">
+          <p className="text-caption text-secondary px-1 leading-relaxed font-medium">
             {exporting ? t('settings.backup.passphraseHint') : t('settings.backup.restoreHint')}
           </p>
           {mismatched && confirmation.length > 0 && (
-            <p className="text-[0.6875rem] text-rose-500 px-1 font-medium">{t('settings.backup.passphraseMismatch')}</p>
+            <p className="text-caption text-rose-500 px-1 font-medium">{t('settings.backup.passphraseMismatch')}</p>
           )}
-          {error && <p className="text-[0.6875rem] text-rose-500 px-1 font-medium">{error}</p>}
+          {error && <p className="text-caption text-rose-500 px-1 font-medium">{error}</p>}
         </div>
 
         {/* Footer */}

@@ -55,7 +55,7 @@ function SignatureEditor({
     content: value,
     editorProps: {
       attributes: {
-        class: 'tiptap-body focus:outline-none min-h-[110px] px-3.5 py-2.5 text-[0.8125rem] leading-relaxed',
+        class: 'tiptap-body focus:outline-none min-h-[110px] px-3.5 py-2.5 text-ui leading-relaxed',
         spellcheck: String(spellCheck),
       },
     },
@@ -118,7 +118,7 @@ export function SignatureSettingsSection() {
   return (
     <SettingsGroup title={t('settings.sections.signature')}>
       <SignatureEditor owner="app" value={signature} onChange={(html) => settings$.signature.set(html)} />
-      <p className="px-3.5 py-2 text-[0.6875rem] text-secondary">{t('settings.signature.hint')}</p>
+      <p className="px-3.5 py-2 text-caption text-secondary">{t('settings.signature.hint')}</p>
     </SettingsGroup>
   )
 }

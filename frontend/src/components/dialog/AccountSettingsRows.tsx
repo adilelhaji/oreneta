@@ -28,7 +28,7 @@ export function Switch({ checked, onChange }: { checked: boolean; onChange: () =
 export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 px-1 text-[0.75rem] font-semibold text-secondary">{title}</h3>
+      <h3 className="mb-2 px-1 text-xs font-semibold text-secondary">{title}</h3>
       <div className="rounded-2xl bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
         {children}
       </div>
@@ -158,7 +158,7 @@ export function NumberRow({
       control={
         <div className="flex items-center gap-2">
           {note && (
-            <span className={`text-[0.65625rem] font-semibold ${invalid ? 'text-rose-500' : 'text-secondary'}`}>
+            <span className={`text-caption font-semibold ${invalid ? 'text-rose-500' : 'text-secondary'}`}>
               {note}
             </span>
           )}
@@ -186,7 +186,7 @@ export function NumberRow({
               aria-invalid={invalid}
               className="w-20 font-semibold"
             />
-            <span className="text-[0.65625rem] font-bold text-secondary">{suffix}</span>
+            <span className="text-caption font-bold text-secondary">{suffix}</span>
           </label>
         </div>
       }

@@ -33,7 +33,7 @@ export function ScopeAsk({
             ? t('calendar.scopeDeleteTitle', { defaultValue: 'Delete a repeating event' })
             : t('calendar.scopeSaveTitle', { defaultValue: 'Change a repeating event' })}
         </h2>
-        <p className="mt-1.5 text-[0.6875rem] text-secondary">
+        <p className="mt-1.5 text-caption text-secondary">
           {action === 'delete'
             ? t('calendar.scopeDeleteHint', {
                 defaultValue: 'This event is one of a series. What should be deleted?',

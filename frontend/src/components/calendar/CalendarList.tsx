@@ -40,7 +40,7 @@ export function CalendarList() {
     <aside className="hidden w-56 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-raised/40 px-3 py-4 md:flex">
       {groups.map(({ account, calendars }) => (
         <div key={account.id}>
-          <p className="mb-1.5 truncate px-1 text-[0.625rem] font-semibold uppercase tracking-wide text-secondary/70">
+          <p className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
             {account.email}
           </p>
           <ul className="flex flex-col">

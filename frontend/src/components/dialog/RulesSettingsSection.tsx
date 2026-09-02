@@ -80,7 +80,7 @@ export function RulesSettingsSection() {
               type="button"
               disabled={!!problem || trying}
               onClick={() => void tryRules([editing])}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[0.6875rem] font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FlaskConical size={12} />
               {trying ? t('rules.trying') : t('rules.try')}
@@ -96,7 +96,7 @@ export function RulesSettingsSection() {
                 setPreview(null)
                 void persist(next)
               }}
-              className="rounded-xl bg-accent px-4 py-1.5 text-[0.6875rem] font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('buttons.save')}
             </button>
@@ -106,13 +106,13 @@ export function RulesSettingsSection() {
                 setEditing(null)
                 setPreview(null)
               }}
-              className="rounded-xl px-3 py-1.5 text-[0.6875rem] font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
+              className="rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
             >
               {t('buttons.cancel')}
             </button>
           </div>
 
-          <p className="text-[0.65625rem] text-secondary">{t('rules.tryHint')}</p>
+          <p className="text-caption text-secondary">{t('rules.tryHint')}</p>
           <PreviewResult preview={preview} />
         </div>
       </SettingsGroup>
@@ -122,10 +122,10 @@ export function RulesSettingsSection() {
   return (
     <SettingsGroup title={t('settings.sections.rules')}>
       <div className="flex flex-col gap-3 px-3.5 py-3">
-        <p className="text-[0.65625rem] text-secondary">{t('rules.intro')}</p>
+        <p className="text-caption text-secondary">{t('rules.intro')}</p>
 
         {stored.length === 0 ? (
-          <p className="py-2 text-[0.8125rem] text-secondary">{t('rules.empty')}</p>
+          <p className="py-2 text-ui text-secondary">{t('rules.empty')}</p>
         ) : (
           <ul className="flex flex-col gap-1.5">
             {stored.map((rule, index) => (
@@ -148,8 +148,8 @@ export function RulesSettingsSection() {
                   onClick={() => setEditing(rule)}
                   className="min-w-0 flex-1 text-left cursor-pointer"
                 >
-                  <span className="block truncate text-[0.8125rem] font-semibold">{rule.name}</span>
-                  <span className="block truncate text-[0.65625rem] text-secondary">
+                  <span className="block truncate text-ui font-semibold">{rule.name}</span>
+                  <span className="block truncate text-caption text-secondary">
                     {ruleSummary(rule, t)}
                   </span>
                 </button>
@@ -203,7 +203,7 @@ export function RulesSettingsSection() {
               setPreview(null)
               setEditing(newRule())
             }}
-            className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-[0.6875rem] font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
           >
             <Plus size={12} />
             {t('rules.add')}
@@ -213,7 +213,7 @@ export function RulesSettingsSection() {
               type="button"
               disabled={trying}
               onClick={() => void tryRules(stored)}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[0.6875rem] font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
             >
               <FlaskConical size={12} />
               {trying ? t('rules.trying') : t('rules.try')}
@@ -222,7 +222,7 @@ export function RulesSettingsSection() {
           <button
             type="button"
             onClick={() => ui$.ruleLogOpen.set(true)}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[0.6875rem] font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
           >
             <ScrollText size={12} />
             {t('rules.log')}
@@ -261,7 +261,7 @@ function PreviewResult({ preview }: { preview: RulePreview | null }) {
 
   if (preview.matches.length === 0) {
     return (
-      <p className="rounded-xl border border-border bg-panel px-3 py-2 text-[0.6875rem] text-secondary">
+      <p className="rounded-xl border border-border bg-panel px-3 py-2 text-caption text-secondary">
         {t('rules.tryNone', { examined: preview.examined })}
       </p>
     )
@@ -269,14 +269,14 @@ function PreviewResult({ preview }: { preview: RulePreview | null }) {
 
   return (
     <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-panel px-3 py-2">
-      <p className="text-[0.6875rem] font-semibold text-primary">
+      <p className="text-caption font-semibold text-primary">
         {t('rules.tryResult', { count: preview.matches.length, examined: preview.examined })}
       </p>
       <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
         {preview.matches.map((hit) => (
           <li key={hit.uid} className="min-w-0">
-            <p className="truncate text-[0.6875rem] text-primary">{hit.subject}</p>
-            <p className="truncate text-[0.625rem] text-secondary">
+            <p className="truncate text-caption text-primary">{hit.subject}</p>
+            <p className="truncate text-2xs text-secondary">
               {hit.from} · {hit.actions.map((action) => `${action.ruleName}: ${action.action}`).join(' · ')}
             </p>
           </li>

@@ -59,13 +59,13 @@ export function RuleEditor({
           aria-label={t('rules.name')}
         />
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[0.6875rem] font-semibold text-secondary">
+          <span className="shrink-0 text-caption font-semibold text-secondary">
             {t('rules.appliesTo')}
           </span>
           <SelectInput
             value={rule.account}
             onChange={(event) => onChange({ ...rule, account: event.target.value })}
-            className="min-w-0 flex-1 rounded-xl py-1.5 pl-3 text-[0.8125rem]"
+            className="min-w-0 flex-1 rounded-xl py-1.5 pl-3 text-ui"
           >
             <option value="">{t('rules.allAccounts')}</option>
             {accounts.map((account) => (
@@ -79,13 +79,13 @@ export function RuleEditor({
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-[0.6875rem] font-bold uppercase tracking-wide text-secondary">
+          <span className="text-caption font-bold uppercase tracking-wide text-secondary">
             {t('rules.when')}
           </span>
           <SelectInput
             value={rule.matchMode}
             onChange={(event) => onChange({ ...rule, matchMode: event.target.value as Rule['matchMode'] })}
-            className="rounded-xl py-1 pl-2.5 text-[0.75rem]"
+            className="rounded-xl py-1 pl-2.5 text-xs"
           >
             <option value="all">{t('rules.match.all')}</option>
             <option value="any">{t('rules.match.any')}</option>
@@ -99,7 +99,7 @@ export function RuleEditor({
               onChange={(event) =>
                 setCondition(index, { ...condition, field: event.target.value as RuleCondition['field'] })
               }
-              className="w-32 shrink-0 rounded-xl py-1.5 pl-2.5 text-[0.75rem]"
+              className="w-32 shrink-0 rounded-xl py-1.5 pl-2.5 text-xs"
             >
               {RULE_FIELDS.map((field) => (
                 <option key={field} value={field}>
@@ -112,7 +112,7 @@ export function RuleEditor({
               onChange={(event) =>
                 setCondition(index, { ...condition, op: event.target.value as RuleCondition['op'] })
               }
-              className="w-36 shrink-0 rounded-xl py-1.5 pl-2.5 text-[0.75rem]"
+              className="w-36 shrink-0 rounded-xl py-1.5 pl-2.5 text-xs"
             >
               {RULE_OPS.map((op) => (
                 <option key={op} value={op}>
@@ -147,7 +147,7 @@ export function RuleEditor({
               conditions: [...rule.conditions, { field: 'from', op: 'contains', value: '' }],
             })
           }
-          className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-[0.6875rem] font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+          className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
         >
           <Plus size={12} />
           {t('rules.addCondition')}
@@ -155,7 +155,7 @@ export function RuleEditor({
       </section>
 
       <section className="flex flex-col gap-2">
-        <span className="text-[0.6875rem] font-bold uppercase tracking-wide text-secondary">
+        <span className="text-caption font-bold uppercase tracking-wide text-secondary">
           {t('rules.then')}
         </span>
         {rule.actions.map((action, index) => (
@@ -165,7 +165,7 @@ export function RuleEditor({
               onChange={(event) =>
                 setAction(index, blankAction(event.target.value as RuleAction['type'], labels[0]?.id ?? ''))
               }
-              className="w-40 shrink-0 rounded-xl py-1.5 pl-2.5 text-[0.75rem]"
+              className="w-40 shrink-0 rounded-xl py-1.5 pl-2.5 text-xs"
             >
               {ACTION_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -183,13 +183,13 @@ export function RuleEditor({
             )}
             {action.type === 'addLabel' &&
               (labels.length === 0 ? (
-                <span className="min-w-0 flex-1 text-[0.6875rem] text-secondary">{t('labels.noneYet')}</span>
+                <span className="min-w-0 flex-1 text-caption text-secondary">{t('labels.noneYet')}</span>
               ) : (
                 <SelectInput
                   value={action.labelId}
                   onChange={(event) => setAction(index, { type: 'addLabel', labelId: event.target.value })}
                   aria-label={t('labels.label')}
-                  className="min-w-0 flex-1 rounded-xl py-1.5 pl-2.5 text-[0.75rem]"
+                  className="min-w-0 flex-1 rounded-xl py-1.5 pl-2.5 text-xs"
                 >
                   {labels.map((label) => (
                     <option key={label.id} value={label.id}>
@@ -212,16 +212,16 @@ export function RuleEditor({
         <button
           type="button"
           onClick={() => onChange({ ...rule, actions: [...rule.actions, blankAction('markRead', '')] })}
-          className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-[0.6875rem] font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+          className="flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
         >
           <Plus size={12} />
           {t('rules.addAction')}
         </button>
-        <p className="text-[0.65625rem] text-secondary">{t('rules.noDelete')}</p>
+        <p className="text-caption text-secondary">{t('rules.noDelete')}</p>
       </section>
 
       {problem && (
-        <p className="text-[0.6875rem] font-medium text-rose-500">{t(`rules.problem.${problem}`)}</p>
+        <p className="text-caption font-medium text-rose-500">{t(`rules.problem.${problem}`)}</p>
       )}
     </div>
   )

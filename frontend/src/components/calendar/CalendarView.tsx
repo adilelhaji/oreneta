@@ -75,7 +75,7 @@ export function CalendarView() {
               <button
                 type="button"
                 onClick={() => navigateCalendar(0)}
-                className="rounded-lg px-2 py-1 text-[0.6875rem] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+                className="rounded-lg px-2 py-1 text-caption font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
               >
                 {t('calendar.today', { defaultValue: 'Today' })}
               </button>
@@ -91,7 +91,7 @@ export function CalendarView() {
                 key={mode}
                 type="button"
                 onClick={() => setCalendarView(mode)}
-                className={`rounded-lg px-2.5 py-1 text-[0.6875rem] font-medium transition-colors cursor-pointer ${
+                className={`rounded-lg px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
                   view === mode
                     ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
                     : 'text-secondary hover:text-primary'
@@ -105,7 +105,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => newEvent()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-[0.6875rem] font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
           >
             <Plus size={13} />
             <span className="hidden sm:inline">
@@ -121,7 +121,7 @@ export function CalendarView() {
       {syncError && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-5 py-2">
           <TriangleAlert size={13} className="shrink-0 text-amber-600" />
-          <p className="min-w-0 flex-1 truncate text-[0.6875rem] text-primary">
+          <p className="min-w-0 flex-1 truncate text-caption text-primary">
             {t('calendar.staleWarning', {
               defaultValue: 'Could not reach the server; what you see may be out of date.',
             })}
@@ -129,7 +129,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => void retrySync()}
-            className="shrink-0 rounded-lg px-2 py-1 text-[0.6875rem] font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+            className="shrink-0 rounded-lg px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
           >
             {t('calendar.retry', { defaultValue: 'Try again' })}
           </button>

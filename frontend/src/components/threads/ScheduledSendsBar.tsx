@@ -21,7 +21,7 @@ export function ScheduledSendsBar() {
     <button
       type="button"
       onClick={() => ui$.scheduledSendsOpen.set(true)}
-      className={`flex w-full shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-left text-[0.6875rem] font-medium transition-colors cursor-pointer ${
+      className={`flex w-full shrink-0 items-center gap-2 border-b border-border px-4 py-2 text-left text-caption font-medium transition-colors cursor-pointer ${
         failed ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/15' : 'text-secondary hover:bg-hover'
       }`}
     >

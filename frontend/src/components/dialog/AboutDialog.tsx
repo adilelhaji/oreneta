@@ -94,7 +94,7 @@ export function AboutDialog() {
                   variant="secondary"
                   size="sm"
                   rightIcon={ExternalLink}
-                  className="px-2 text-[0.625rem]"
+                  className="px-2 text-2xs"
                   onClick={() => openExternal(link.url)}
                 >
                   {link.label}

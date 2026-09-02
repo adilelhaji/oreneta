@@ -33,7 +33,7 @@ export function NotifyAsk({
             ? t('calendar.notifyCancelTitle', { defaultValue: 'Cancel this meeting?' })
             : t('calendar.notifyTitle', { defaultValue: 'Tell the people on it?' })}
         </h2>
-        <p className="mt-1.5 text-[0.6875rem] text-secondary">
+        <p className="mt-1.5 text-caption text-secondary">
           {action === 'delete'
             ? t('calendar.notifyCancelHint', {
                 defaultValue: 'A cancellation can be sent to everyone on the meeting.',
@@ -47,7 +47,7 @@ export function NotifyAsk({
             should see who they are before it happens. */}
         <ul className="mt-3 max-h-32 overflow-y-auto rounded-xl bg-raised px-3 py-2">
           {people.map((person) => (
-            <li key={person} className="truncate text-[0.6875rem] text-primary">
+            <li key={person} className="truncate text-caption text-primary">
               {person}
             </li>
           ))}

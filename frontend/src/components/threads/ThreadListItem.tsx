@@ -85,7 +85,7 @@ export function ThreadListItem({
   // the others on a line below. Two copies of this markup would be two things
   // to keep in step for no gain.
   const subjectLine = (
-    <p className={clsx('flex-1 truncate text-[0.75rem] leading-snug', unread ? 'font-semibold' : 'font-normal')}>
+    <p className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}>
       {/* Before the subject, where they read as what this conversation is
           rather than as an afterthought at the end of a line that truncates. */}
       {!!thread.labels?.length && (
@@ -110,7 +110,7 @@ export function ThreadListItem({
     unread && bulkSelectable ? (
       <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
     ) : unread ? (
-      <span className="h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[0.625rem] font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+      <span className="h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
         {thread.unread_count ?? 1}
       </span>
     ) : null
@@ -215,7 +215,7 @@ export function ThreadListItem({
           <div className="flex items-center gap-2 min-w-0">
             <div className={clsx('flex min-w-0 items-center gap-1', density.singleLine && 'max-w-[40%] shrink-0')}>
               <span
-                className={clsx('text-[0.8125rem] font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}
+                className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}
               >
                 {thread.from_name || thread.from_addr.split('@')[0]}
                 {!!thread.recipient_overflow && (
@@ -228,7 +228,7 @@ export function ThreadListItem({
                   count, and outside the truncating span so a long sender
                   ellipsises itself instead of clipping the count. */}
               {(thread.message_count ?? 0) > 1 && (
-                <span className="shrink-0 text-[0.75rem] font-normal text-secondary/70">{thread.message_count}</span>
+                <span className="shrink-0 text-xs font-normal text-secondary/70">{thread.message_count}</span>
               )}
             </div>
             {/* Compact folds the subject onto the sender's line: one row per
@@ -246,7 +246,7 @@ export function ThreadListItem({
             )}
             <time
               className={clsx(
-                'shrink-0 text-[0.6875rem] font-normal',
+                'shrink-0 text-caption font-normal',
                 thread.has_attachments ? 'ml-1' : 'ml-auto',
                 unread ? 'text-accent' : 'text-secondary/65',
               )}
@@ -269,7 +269,7 @@ export function ThreadListItem({
           {/* Relaxed gives the preview a line of its own — two of them — so a
               subject and the message under it stop competing for one line. */}
           {density.previewOnOwnLine && !!thread.preview && (
-            <p className="line-clamp-2 text-[0.75rem] leading-snug text-secondary/75">{thread.preview}</p>
+            <p className="line-clamp-2 text-xs leading-snug text-secondary/75">{thread.preview}</p>
           )}
         </div>
       </button>

@@ -202,7 +202,7 @@ export function EventEditor() {
             // offering the choice would be offering something that cannot be
             // carried out.
             event.is_recurring && (
-              <p className="rounded-xl bg-raised px-3 py-2 text-[0.6875rem] text-secondary">
+              <p className="rounded-xl bg-raised px-3 py-2 text-caption text-secondary">
                 {t('calendar.seriesNotReachable', {
                   defaultValue:
                     'This event repeats, but its series has not been identified yet. Changes here apply to this day only; a refresh usually resolves it.',
@@ -233,7 +233,7 @@ export function EventEditor() {
           )}
 
           {event.attendees.length > 0 && (
-            <p className="text-[0.6875rem] text-secondary">
+            <p className="text-caption text-secondary">
               {t('calendar.attendeesNote', {
                 defaultValue: 'This event has {count} guests. Editing it here does not notify them.',
                 count: event.attendees.length,
@@ -242,14 +242,14 @@ export function EventEditor() {
           )}
 
           {event.end < event.start && (
-            <p className="text-[0.6875rem] text-rose-500">
+            <p className="text-caption text-rose-500">
               {t('calendar.endsBeforeStart', { defaultValue: 'It ends before it starts.' })}
             </p>
           )}
         </div>
 
         {error && (
-          <p className="shrink-0 px-5 pt-2 text-[0.6875rem] text-rose-500">{error}</p>
+          <p className="shrink-0 px-5 pt-2 text-caption text-rose-500">{error}</p>
         )}
 
         {asking && (
@@ -341,7 +341,7 @@ function reminderLabel(minutes: number, t: ReturnType<typeof useTranslation>['t'
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex w-full flex-col gap-1.5">
-      <span className="pl-0.5 text-[0.6875rem] font-semibold text-secondary">{label}</span>
+      <span className="pl-0.5 text-caption font-semibold text-secondary">{label}</span>
       {children}
     </label>
   )
@@ -502,7 +502,7 @@ function RepeatFields({
                   type="button"
                   onClick={() => toggleDay(day)}
                   aria-pressed={days.includes(day)}
-                  className={`h-7 w-7 rounded-full text-[0.625rem] font-semibold transition-colors cursor-pointer ${
+                  className={`h-7 w-7 rounded-full text-2xs font-semibold transition-colors cursor-pointer ${
                     days.includes(day)
                       ? 'bg-accent text-white'
                       : 'bg-raised text-secondary hover:text-primary'
@@ -515,7 +515,7 @@ function RepeatFields({
           )}
 
           <div className="flex items-center gap-2">
-            <span className="text-[0.6875rem] font-semibold text-secondary">
+            <span className="text-caption font-semibold text-secondary">
               {t('calendar.repeatEvery', { defaultValue: 'Every' })}
             </span>
             <input
@@ -526,7 +526,7 @@ function RepeatFields({
               onChange={(e) => onChange({ ...rule, interval: Math.max(1, Number(e.target.value)) })}
               className={`${inputClass} w-16`}
             />
-            <span className="text-[0.6875rem] text-secondary">{intervalUnit(rule.freq, rule.interval, t)}</span>
+            <span className="text-caption text-secondary">{intervalUnit(rule.freq, rule.interval, t)}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -564,7 +564,7 @@ function RepeatFields({
                   onChange={(e) => onChange({ ...rule, count: Math.max(1, Number(e.target.value)) })}
                   className={`${inputClass} w-20`}
                 />
-                <span className="text-[0.6875rem] text-secondary">
+                <span className="text-caption text-secondary">
                   {t('calendar.times', { defaultValue: 'times' })}
                 </span>
               </div>
@@ -638,7 +638,7 @@ function Attendees({
           {people.map((person) => (
             <li
               key={person.addr}
-              className="flex items-center gap-1 rounded-lg bg-raised px-2 py-1 text-[0.6875rem] text-primary"
+              className="flex items-center gap-1 rounded-lg bg-raised px-2 py-1 text-caption text-primary"
             >
               <span className="max-w-[12rem] truncate">{person.addr}</span>
               <button
@@ -677,11 +677,11 @@ function Attendees({
                 onClick={() => addPerson(person)}
                 className="flex w-full flex-col items-start px-3 py-1.5 text-left transition-colors hover:bg-hover cursor-pointer"
               >
-                <span className="text-[0.6875rem] font-medium text-primary">
+                <span className="text-caption font-medium text-primary">
                   {person.name || person.addr}
                 </span>
                 {person.name && (
-                  <span className="text-[0.625rem] text-secondary">{person.addr}</span>
+                  <span className="text-2xs text-secondary">{person.addr}</span>
                 )}
               </button>
             </li>

@@ -326,7 +326,7 @@ function AccountGroup({
   return (
     <>
       <div className="mt-5 mb-1.5 flex items-center justify-between px-3">
-        <span className="text-[0.6875rem] font-semibold text-secondary">{label}</span>
+        <span className="text-caption font-semibold text-secondary">{label}</span>
         <button
           onClick={onAdd}
           title={t('accounts.actions.addAccount')}
@@ -336,7 +336,7 @@ function AccountGroup({
         </button>
       </div>
       {accounts.length === 0 ? (
-        <p className="px-3 py-1 text-[0.65625rem] text-secondary font-medium">{emptyLabel}</p>
+        <p className="px-3 py-1 text-caption text-secondary font-medium">{emptyLabel}</p>
       ) : (
         accounts.map((account) => {
           const { displayName, subtitle } = accountMeta(account, t)
@@ -460,7 +460,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
     // Google itself.
     return (
       <SettingsGroup title={t('calendar.title', { defaultValue: 'Calendar' })}>
-        <p className="px-4 py-3.5 text-[0.6875rem] text-secondary">
+        <p className="px-4 py-3.5 text-caption text-secondary">
           {t('calendar.googleNeedsSignIn', {
             defaultValue:
               'This account signs in with a password, which covers mail only. Add it again with Google sign-in to bring its calendars.',
@@ -492,7 +492,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
     <>
     <SettingsGroup title={t('calendar.title', { defaultValue: 'Calendar' })}>
       {calendars.length === 0 && (
-        <p className="px-4 py-3.5 text-[0.6875rem] text-secondary">
+        <p className="px-4 py-3.5 text-caption text-secondary">
           {t('calendar.calendarsAppearOnSync', {
             defaultValue: "The account's calendars appear here once its first sync finishes.",
           })}
@@ -521,7 +521,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
                   calendar is not fetched at all, so it says that instead of
                   showing a time that stopped advancing for reasons of its
                   own. */}
-              <span className="block truncate text-[0.625rem] text-secondary">
+              <span className="block truncate text-2xs text-secondary">
                 {!calendar.enabled
                   ? t('calendar.notSyncedHidden', { defaultValue: 'Hidden — not fetched' })
                   : lastSyncedLabel(calendar.synced_at, t)}
@@ -647,7 +647,7 @@ function AddAccountCalendarDialog({
           {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
         </h2>
         <label className="flex w-full flex-col gap-1.5">
-          <span className="pl-0.5 text-[0.6875rem] font-semibold text-secondary">
+          <span className="pl-0.5 text-caption font-semibold text-secondary">
             {t('calendar.newCalendarName', { defaultValue: 'Calendar name' })}
           </span>
           <input
@@ -660,7 +660,7 @@ function AddAccountCalendarDialog({
             className="w-full rounded-xl border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent"
           />
         </label>
-        {error && <p className="mt-2 text-[0.6875rem] text-rose-500">{error}</p>}
+        {error && <p className="mt-2 text-caption text-rose-500">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
@@ -704,7 +704,7 @@ function CalendarGroup({
   return (
     <>
       <div className="mt-5 mb-1.5 flex items-center justify-between px-3">
-        <span className="text-[0.6875rem] font-semibold text-secondary">
+        <span className="text-caption font-semibold text-secondary">
           {t('calendar.title', { defaultValue: 'Calendar' })}
         </span>
         <button
@@ -717,7 +717,7 @@ function CalendarGroup({
       </div>
       {adding && <NewCalendarDialog onClose={() => setAdding(false)} />}
       {calendars.length === 0 ? (
-        <p className="px-3 py-1 text-[0.65625rem] font-medium text-secondary">
+        <p className="px-3 py-1 text-caption font-medium text-secondary">
           {t('calendar.noCalendars', { defaultValue: 'No calendars yet.' })}
         </p>
       ) : (
@@ -725,7 +725,7 @@ function CalendarGroup({
         // that decides how it syncs and whether it can be edited.
         groupsBySource(calendars, accounts, t).map((group) => (
           <div key={group.label}>
-            <p className="mt-2 mb-0.5 px-3 text-[0.625rem] font-semibold uppercase tracking-wide text-secondary/70">
+            <p className="mt-2 mb-0.5 px-3 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
               {group.label}
             </p>
             {group.calendars.map((calendar) => {
@@ -770,7 +770,7 @@ function BoardGroup({
   return (
     <>
       <div className="mt-5 mb-1.5 flex items-center justify-between px-3">
-        <span className="text-[0.6875rem] font-semibold text-secondary">{t('settings.sections.kanbanBoards')}</span>
+        <span className="text-caption font-semibold text-secondary">{t('settings.sections.kanbanBoards')}</span>
         <button
           onClick={() => onSelect(createKanbanBoard())}
           title={t('kanban.actions.addBoard')}
@@ -780,7 +780,7 @@ function BoardGroup({
         </button>
       </div>
       {boards.length === 0 ? (
-        <p className="px-3 py-1 text-[0.65625rem] text-secondary font-medium">{t('settings.sections.noBoards')}</p>
+        <p className="px-3 py-1 text-caption text-secondary font-medium">{t('settings.sections.noBoards')}</p>
       ) : (
         boards.map((board) => (
           <NavItem key={board.id} active={activeKey === board.id} onClick={() => onSelect(board.id)}>
@@ -996,7 +996,7 @@ function GeneralSection() {
           control={
             <button
               onClick={() => ui$.shortcutsOpen.set(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
               <Keyboard size={12} />
               {t('shortcuts.customize')}
@@ -1096,7 +1096,7 @@ function BackupGroup() {
               <button
                 onClick={() => runImport('', '')}
                 disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Upload size={12} />
                 {t('settings.backup.restoreAction')}
@@ -1107,7 +1107,7 @@ function BackupGroup() {
                   setPrompt('export')
                 }}
                 disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Archive size={12} />
                 {t('common.export')}
@@ -1228,7 +1228,7 @@ function StorageGroup() {
           <button
             onClick={clearCache}
             disabled={clearing || (usage?.cacheBytes ?? 0) === 0}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-[0.625rem] cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               confirming ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-hover hover:bg-active text-primary'
             }`}
           >
@@ -1252,7 +1252,7 @@ function LogsGroup() {
         control={
           <button
             onClick={() => setViewerOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
           >
             <ScrollText size={12} />
             {t('settings.viewSyncLog')}
@@ -1319,7 +1319,7 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
             <button
               onClick={() => void exportLog()}
               disabled={!log}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download size={12} />
               {t('common.export')}
@@ -1333,7 +1333,7 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
           ) : log === '' ? (
             <p className="text-xs text-secondary">{t('settings.syncLogEmpty')}</p>
           ) : (
-            <pre className="whitespace-pre-wrap break-all font-mono text-[0.6875rem] leading-4 text-primary">{log}</pre>
+            <pre className="whitespace-pre-wrap break-all font-mono text-caption leading-4 text-primary">{log}</pre>
           )}
         </div>
       </div>
@@ -1352,14 +1352,14 @@ function OpmlGroup({ account }: { account: string }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => importOpml(account)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
               <Upload size={12} />
               {t('common.import')}
             </button>
             <button
               onClick={() => exportOpml(account)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-[0.625rem] cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
               <Download size={12} />
               {t('common.export')}
@@ -1421,8 +1421,8 @@ function AccountPanel({ account }: { account: Account }) {
           />
         )}
         <div className="min-w-0 flex-1">
-          <h2 className="text-[0.9375rem] font-bold tracking-tight leading-tight truncate">{displayName}</h2>
-          <p className="text-[0.65625rem] text-secondary mt-0.5 font-medium truncate">{subtitle}</p>
+          <h2 className="text-title font-bold tracking-tight leading-tight truncate">{displayName}</h2>
+          <p className="text-caption text-secondary mt-0.5 font-medium truncate">{subtitle}</p>
         </div>
       </div>
 
@@ -1435,7 +1435,7 @@ function AccountPanel({ account }: { account: Account }) {
               <button
                 type="button"
                 onClick={reconnectAccount}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-border text-primary font-bold text-[0.625rem] cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
               >
                 <Server size={12} />
                 {t('settings.account.serverEdit', { defaultValue: 'Edit' })}
@@ -1456,7 +1456,7 @@ function AccountPanel({ account }: { account: Account }) {
               <button
                 type="button"
                 onClick={reconnectAccount}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-bold text-[0.625rem] cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-bold text-2xs cursor-pointer transition-colors"
               >
                 <KeyRound size={12} />
                 {t('settings.account.reconnectButton', { defaultValue: 'Reconnect' })}

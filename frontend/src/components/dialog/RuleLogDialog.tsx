@@ -34,13 +34,13 @@ export function RuleLogDialog() {
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
               <ScrollText size={17} />
             </div>
-            <h2 className="text-[0.9375rem] font-bold leading-tight tracking-tight">{t('rules.log')}</h2>
+            <h2 className="text-title font-bold leading-tight tracking-tight">{t('rules.log')}</h2>
           </div>
           <IconButton icon={X} iconSize={16} label={t('buttons.close')} radius="xl" onClick={onClose} />
         </div>
 
         {entries.length === 0 ? (
-          <p className="py-6 text-center text-[0.8125rem] text-secondary">{t('rules.logEmpty')}</p>
+          <p className="py-6 text-center text-ui text-secondary">{t('rules.logEmpty')}</p>
         ) : (
           <ul className="flex max-h-[24rem] flex-col gap-1.5 overflow-y-auto">
             {entries.map((entry, index) => {
@@ -51,14 +51,14 @@ export function RuleLogDialog() {
                   className="rounded-xl border border-border bg-panel px-3 py-2"
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 truncate text-[0.75rem] font-semibold">{entry.subject}</span>
-                    <time className="shrink-0 text-[0.625rem] text-secondary">
+                    <span className="min-w-0 truncate text-xs font-semibold">{entry.subject}</span>
+                    <time className="shrink-0 text-2xs text-secondary">
                       {new Date(entry.at * 1000).toLocaleString()}
                     </time>
                   </div>
-                  <p className="truncate text-[0.65625rem] text-secondary">{entry.from}</p>
+                  <p className="truncate text-caption text-secondary">{entry.from}</p>
                   <p
-                    className={`mt-0.5 flex items-center gap-1 text-[0.65625rem] font-medium ${
+                    className={`mt-0.5 flex items-center gap-1 text-caption font-medium ${
                       failed ? 'text-rose-500' : 'text-secondary'
                     }`}
                   >
@@ -78,7 +78,7 @@ export function RuleLogDialog() {
           <button
             type="button"
             onClick={() => void clearRuleLog()}
-            className="w-fit rounded-xl px-3 py-1.5 text-[0.6875rem] font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
+            className="w-fit rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
           >
             {t('rules.logClear')}
           </button>

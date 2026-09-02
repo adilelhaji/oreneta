@@ -57,8 +57,8 @@ export function AttachmentPreviewDialog({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[0.875rem] font-bold">{attachment.filename}</p>
-            <p className="text-[0.65625rem] text-secondary">{formatFileSize(attachment.size)}</p>
+            <p className="truncate text-sm font-bold">{attachment.filename}</p>
+            <p className="text-caption text-secondary">{formatFileSize(attachment.size)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <IconButton
@@ -74,7 +74,7 @@ export function AttachmentPreviewDialog({
 
         <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border bg-panel">
           {failed ? (
-            <p className="p-6 text-center text-[0.8125rem] text-secondary">{t('attachments.previewFailed')}</p>
+            <p className="p-6 text-center text-ui text-secondary">{t('attachments.previewFailed')}</p>
           ) : kind === 'image' ? (
             <img
               src={`/media/${attachment.key}`}
@@ -84,14 +84,14 @@ export function AttachmentPreviewDialog({
             />
           ) : kind === 'text' ? (
             text === null ? (
-              <p className="p-6 text-center text-[0.8125rem] text-secondary">{t('attachments.previewLoading')}</p>
+              <p className="p-6 text-center text-ui text-secondary">{t('attachments.previewLoading')}</p>
             ) : (
-              <pre className="max-h-[70vh] overflow-auto p-4 font-mono text-[0.75rem] leading-relaxed whitespace-pre-wrap break-words select-text">
+              <pre className="max-h-[70vh] overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words select-text">
                 {text}
               </pre>
             )
           ) : (
-            <p className="p-6 text-center text-[0.8125rem] text-secondary">{t('attachments.noPreview')}</p>
+            <p className="p-6 text-center text-ui text-secondary">{t('attachments.noPreview')}</p>
           )}
         </div>
       </div>

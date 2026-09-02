@@ -33,10 +33,10 @@ export function CertificateTrustPanel({
       <div className="flex items-start gap-2">
         <ShieldAlert size={14} className="shrink-0 mt-px text-amber-600 dark:text-amber-400" />
         <div className="flex flex-col gap-1">
-          <p className="text-[0.75rem] font-bold leading-tight text-amber-700 dark:text-amber-300">
+          <p className="text-xs font-bold leading-tight text-amber-700 dark:text-amber-300">
             {t('accounts.certificate.title', { defaultValue: "Can't verify this server's certificate" })}
           </p>
-          <p className="text-[0.6875rem] leading-relaxed text-amber-700/90 dark:text-amber-300/90">
+          <p className="text-caption leading-relaxed text-amber-700/90 dark:text-amber-300/90">
             {t('accounts.certificate.body', {
               defaultValue:
                 'Check the fingerprint below against the one {server} is supposed to have. Only continue if they match.',
@@ -45,7 +45,7 @@ export function CertificateTrustPanel({
           </p>
         </div>
       </div>
-      <dl className="flex flex-col gap-1 text-[0.6875rem] text-amber-700/90 dark:text-amber-300/90">
+      <dl className="flex flex-col gap-1 text-caption text-amber-700/90 dark:text-amber-300/90">
         {rows.map(([label, value]) =>
           value ? (
             <div key={label} className="flex gap-2">

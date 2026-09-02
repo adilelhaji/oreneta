@@ -59,7 +59,7 @@ export function AccountDialogEWS({
         labelClassName={fieldLabelClass}
       />
       <label className="flex flex-col gap-1.5 w-full">
-        <span className={`pl-0.5 ${fieldLabelClass ?? 'text-[0.6875rem] font-semibold text-secondary'}`}>
+        <span className={`pl-0.5 ${fieldLabelClass ?? 'text-caption font-semibold text-secondary'}`}>
           {editing ? t('accounts.fields.passwordUnchanged') : t('accounts.fields.password')}
         </span>
         <span className="relative flex items-center">
@@ -90,7 +90,7 @@ export function AccountDialogEWS({
           </button>
         </span>
       </label>
-      <p className="text-[0.6875rem] text-secondary px-1 -mt-1">
+      <p className="text-caption text-secondary px-1 -mt-1">
         {t('accounts.setup.ewsHint', {
           defaultValue:
             'For on-premises Exchange servers that expose Exchange Web Services over HTTPS. Mail and calendar are set up together.',
