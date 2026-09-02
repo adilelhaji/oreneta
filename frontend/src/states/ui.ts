@@ -163,6 +163,9 @@ export const ui$ = observable({
   // The record of what the local rules did. A mailbox that changes by itself
   // needs somewhere the reader can find out why.
   ruleLogOpen: false,
+  // The component catalogue: every piece of the library in every state, on
+  // one screen. Opens from the command palette only; nothing links to it.
+  catalogueOpen: false,
   // The list of messages waiting to be sent later. A message put off must be
   // findable, or putting it off is losing it.
   scheduledSendsOpen: false,

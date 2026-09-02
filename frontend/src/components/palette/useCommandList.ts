@@ -22,6 +22,7 @@ import {
   Trash2,
   Users,
   X,
+  Palette,
 } from 'lucide-react'
 import { createElement } from 'react'
 import { useValue } from '@legendapp/state/react'
@@ -165,6 +166,13 @@ export function useCommandList(): Command[] {
         keywords: 'layout list conversation account',
         active: !activeBoardId,
         run: run(() => closeKanbanBoard()),
+      },
+      {
+        id: 'design.catalogue',
+        label: 'Open design catalogue',
+        icon: icon(Palette),
+        keywords: 'components tokens library styleguide',
+        run: run(() => ui$.catalogueOpen.set(true)),
       },
       {
         id: 'kanban.create',

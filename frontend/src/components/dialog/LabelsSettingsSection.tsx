@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Tag, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
@@ -7,6 +7,7 @@ import { confirmAction, showToast } from '../../states/ui'
 import { LABEL_COLOURS, labels$, loadLabels, newLabel, saveLabels, type Label } from '../../states/labels'
 import { TextInput } from '../field/Field'
 import { SettingsGroup } from './AccountSettingsRows'
+import { Notice } from '../notice/Notice'
 
 /**
  * Making, naming and colouring labels.
@@ -45,7 +46,7 @@ export function LabelsSettingsSection() {
       <div className="flex flex-col gap-3 px-3.5 py-3">
         {/* Said plainly, because the alternative is someone discovering it by
             not finding their labels on another machine. */}
-        <p className="text-caption text-secondary">{t('labels.localOnly')}</p>
+        <Notice>{t('labels.localOnly')}</Notice>
 
         {labels.length === 0 ? (
           <p className="py-2 text-ui text-secondary">{t('labels.noneYet')}</p>
@@ -117,10 +118,7 @@ export function LabelsSettingsSection() {
 
         {/* Deleting is the one that cannot be shrugged off, so it is said here
             rather than only in the confirmation. */}
-        <p className="flex items-start gap-1.5 text-caption text-secondary">
-          <Tag size={11} className="mt-px shrink-0" />
-          <span>{t('labels.deleteWarning')}</span>
-        </p>
+        <Notice tone="warning">{t('labels.deleteWarning')}</Notice>
       </div>
     </SettingsGroup>
   )

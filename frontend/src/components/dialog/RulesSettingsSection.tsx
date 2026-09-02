@@ -18,6 +18,7 @@ import {
 import { isRssAccount } from '../../lib/threadActions'
 import { SettingsGroup, Switch } from './AccountSettingsRows'
 import { RuleEditor } from './RuleEditor'
+import { Notice } from '../notice/Notice'
 
 /**
  * The rules, in the order they run, with a way to try them before trusting
@@ -260,19 +261,12 @@ function PreviewResult({ preview }: { preview: RulePreview | null }) {
   if (!preview) return null
 
   if (preview.matches.length === 0) {
-    return (
-      <p className="rounded-xl border border-border bg-panel px-3 py-2 text-caption text-secondary">
-        {t('rules.tryNone', { examined: preview.examined })}
-      </p>
-    )
+    return <Notice tone="success">{t('rules.tryNone', { examined: preview.examined })}</Notice>
   }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-panel px-3 py-2">
-      <p className="text-caption font-semibold text-primary">
-        {t('rules.tryResult', { count: preview.matches.length, examined: preview.examined })}
-      </p>
-      <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+    <Notice tone="warning" title={t('rules.tryResult', { count: preview.matches.length, examined: preview.examined })}>
+      <ul className="mt-1 flex max-h-56 flex-col gap-1 overflow-y-auto">
         {preview.matches.map((hit) => (
           <li key={hit.uid} className="min-w-0">
             <p className="truncate text-caption text-primary">{hit.subject}</p>
@@ -282,6 +276,6 @@ function PreviewResult({ preview }: { preview: RulePreview | null }) {
           </li>
         ))}
       </ul>
-    </div>
+    </Notice>
   )
 }
