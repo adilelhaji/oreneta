@@ -73,13 +73,13 @@ export function AccountDialogEWS({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-xl border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
           />
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={
               showPassword
                 ? t('accounts.actions.hidePassword', { defaultValue: 'Hide password' })

@@ -61,7 +61,7 @@ export function MessageContent({
           }
 
           return (
-            <div className={`mb-2 grid gap-1.5 rounded-lg overflow-hidden border border-border/20 ${gridClass}`}>
+            <div className={`mb-2 grid gap-1.5 rounded-control-sm overflow-hidden border border-border/20 ${gridClass}`}>
               {bubbleAttachmentImages.map((image, idx) => (
                 <button
                   key={idx}
@@ -103,7 +103,7 @@ export function MessageContent({
       {hiddenRemoteCount > 0 && (
         <button
           onClick={() => revealRemote(message.id)}
-          className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/50 bg-black/[0.02] dark:bg-white/[0.02] py-2 text-caption font-semibold text-secondary hover:text-accent hover:border-accent/40 cursor-pointer transition-colors"
+          className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-control-sm border border-dashed border-border/50 bg-black/[0.02] dark:bg-white/[0.02] py-2 text-caption font-semibold text-secondary hover:text-accent hover:border-accent/40 cursor-pointer transition-colors"
         >
           <Image size={13} />
           {t('chat.showImages', { count: hiddenRemoteCount })}
@@ -136,7 +136,7 @@ export function MessageContent({
                   ? t('attachments.preview', { filename: file.filename })
                   : t('chat.saveFile', { filename: file.filename })
             }
-            className={`group mt-2.5 flex w-full items-center gap-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] p-2 text-xs font-semibold border border-border/20 text-left ${
+            className={`group mt-2.5 flex w-full items-center gap-2 rounded-control bg-black/[0.03] dark:bg-white/[0.03] p-2 text-xs font-semibold border border-border/20 text-left ${
               downloadable ? 'hover:bg-black/[0.06] dark:hover:bg-white/[0.06] cursor-pointer' : 'cursor-default'
             }`}
           >

@@ -44,11 +44,11 @@ export function FeedEditDialog() {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
-      <div className="bg-chats border border-border text-primary max-w-md w-full rounded-3xl p-6 shadow-2xl animate-slide-up flex flex-col gap-5">
+      <div className="bg-chats border border-border text-primary max-w-md w-full rounded-dialog p-6 shadow-2xl animate-slide-up flex flex-col gap-5">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent">
               <Rss size={17} />
             </div>
             <div className="min-w-0">
@@ -65,11 +65,11 @@ export function FeedEditDialog() {
         {feed.url && (
           <div className="flex flex-col gap-2">
             <label className="text-caption font-semibold text-secondary px-1">{t('feeds.url')}</label>
-            <div className="flex items-center gap-2 rounded-xl bg-hover px-3 py-2">
+            <div className="flex items-center gap-2 rounded-control bg-hover px-3 py-2">
               <span className="flex-1 min-w-0 truncate text-caption font-medium text-primary">{feed.url}</span>
               <button
                 onClick={onCopy}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-active text-secondary transition-colors cursor-pointer"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm hover:bg-active text-secondary transition-colors cursor-pointer"
                 title={copied ? t('common.copied') : t('feeds.copyUrl')}
               >
                 {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
@@ -89,7 +89,7 @@ export function FeedEditDialog() {
           <button
             onClick={onDelete}
             disabled={deleting}
-            className="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 rounded-control text-xs font-bold transition-all flex items-center gap-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer disabled:opacity-50"
           >
             <Trash2 size={13} />
             <span>{confirming ? t('feeds.actions.confirmDelete') : t('feeds.actions.deleteFeed')}</span>

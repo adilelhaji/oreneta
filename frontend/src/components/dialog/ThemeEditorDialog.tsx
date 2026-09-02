@@ -81,7 +81,7 @@ export function ThemeEditorDialog({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4 animate-fade-in">
-      <div className="w-full max-w-lg rounded-3xl border border-border bg-chats text-primary shadow-2xl animate-slide-up overflow-hidden">
+      <div className="w-full max-w-lg rounded-dialog border border-border bg-chats text-primary shadow-2xl animate-slide-up overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
           <h3 className="text-sm font-bold leading-tight">{initial ? t('theme.edit') : t('theme.new')}</h3>
           <IconButton icon={X} iconSize={15} label={t('buttons.cancel')} size="sm" onClick={onClose} />
@@ -95,9 +95,9 @@ export function ThemeEditorDialog({
               placeholder={t('theme.namePlaceholder')}
               onChange={(event) => setName(event.target.value)}
               surface="raised"
-              className="flex-1 rounded-xl px-3 py-2 font-semibold"
+              className="flex-1 rounded-control px-3 py-2 font-semibold"
             />
-            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-active/70 p-0.5">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5">
               {(['light', 'dark'] as const).map((mode) => (
                 <button
                   key={mode}
@@ -156,7 +156,7 @@ function ColorRow({
   const hex = toHex6(value)
   const invalid = !isValidColor(value)
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-raised border border-border/50 px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-control bg-raised border border-border/50 px-3 py-2">
       <div className="min-w-0">
         <span className="block text-caption font-bold text-primary">{label}</span>
         <span className="block text-2xs text-secondary font-medium truncate">{hint}</span>
@@ -189,15 +189,15 @@ function ThemePreview({ tokens }: { tokens: ReturnType<typeof deriveThemeTokens>
   const onAccent = luminance(tokens.accent) > 0.6 ? '#0f172a' : '#ffffff'
   return (
     <div
-      className="overflow-hidden rounded-2xl border select-none"
+      className="overflow-hidden rounded-panel border select-none"
       style={{ ...cssVarStyle(tokens), borderColor: tokens.border }}
     >
       <div className="flex h-40 bg-app">
         <div className="w-9 shrink-0 bg-sidenav p-1.5">
-          <div className="mx-auto h-6 w-6 rounded-lg" style={{ background: tokens.accent }} />
+          <div className="mx-auto h-6 w-6 rounded-control-sm" style={{ background: tokens.accent }} />
         </div>
         <div className="w-28 shrink-0 border-r border-border bg-chats p-1.5 flex flex-col gap-1">
-          <div className="rounded-lg bg-accent/15 px-1.5 py-1">
+          <div className="rounded-control-sm bg-accent/15 px-1.5 py-1">
             <div className="text-2xs font-bold text-accent">Alice</div>
             <div className="text-[0.4375rem] text-secondary truncate">See you tomorrow!</div>
           </div>
@@ -209,10 +209,10 @@ function ThemePreview({ tokens }: { tokens: ReturnType<typeof deriveThemeTokens>
         <div className="flex min-w-0 flex-1 flex-col bg-chat">
           <div className="border-b border-border bg-header px-2 py-1 text-2xs font-bold text-primary">Alice</div>
           <div className="flex flex-1 flex-col justify-end gap-1 p-2">
-            <div className="self-start rounded-lg bg-bubble-in px-1.5 py-1 text-[0.46875rem] text-bubble-in-text shadow-bubble-in">
+            <div className="self-start rounded-control-sm bg-bubble-in px-1.5 py-1 text-[0.46875rem] text-bubble-in-text shadow-bubble-in">
               Are we still on for lunch?
             </div>
-            <div className="self-end rounded-lg bg-bubble-out px-1.5 py-1 text-[0.46875rem] text-bubble-out-text shadow-bubble-out">
+            <div className="self-end rounded-control-sm bg-bubble-out px-1.5 py-1 text-[0.46875rem] text-bubble-out-text shadow-bubble-out">
               Yes — see you tomorrow!
             </div>
           </div>

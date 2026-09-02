@@ -35,7 +35,7 @@ export function UpdateBanner() {
       <button
         type="button"
         onClick={() => void (ready ? applyDownloadedUpdate() : startUpdateDownload())}
-        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-lg px-2 font-semibold text-accent hover:bg-accent/10"
+        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-control-sm px-2 font-semibold text-accent hover:bg-accent/10"
       >
         <Download size={12} />
         <span>{ready ? t('updates.restartAndInstall') : t('updates.download')}</span>
@@ -43,7 +43,7 @@ export function UpdateBanner() {
       <button
         type="button"
         onClick={() => ui$.aboutOpen.set(true)}
-        className="inline-flex h-6 shrink-0 items-center rounded-lg px-2 font-semibold text-secondary hover:bg-hover hover:text-primary"
+        className="inline-flex h-6 shrink-0 items-center rounded-control-sm px-2 font-semibold text-secondary hover:bg-hover hover:text-primary"
       >
         {t('updates.details')}
       </button>
@@ -52,7 +52,7 @@ export function UpdateBanner() {
         onClick={dismissUpdateBanner}
         title={t('connectivity.dismiss')}
         aria-label={t('connectivity.dismiss')}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-secondary hover:bg-hover hover:text-primary"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary"
       >
         <X size={13} />
       </button>

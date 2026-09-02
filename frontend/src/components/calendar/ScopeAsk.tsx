@@ -27,7 +27,7 @@ export function ScopeAsk({
         if (mouse.target === mouse.currentTarget) onCancel()
       }}
     >
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-app p-5 shadow-xl">
+      <div className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-xl">
         <h2 className="text-sm font-semibold text-primary">
           {action === 'delete'
             ? t('calendar.scopeDeleteTitle', { defaultValue: 'Delete a repeating event' })
@@ -47,14 +47,14 @@ export function ScopeAsk({
           <button
             type="button"
             onClick={() => onChoose('occurrence')}
-            className="rounded-xl border border-border bg-raised px-3 py-2.5 text-left text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
+            className="rounded-control border border-border bg-raised px-3 py-2.5 text-left text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
           >
             {t('calendar.scopeThisOne', { defaultValue: 'This event only' })}
           </button>
           <button
             type="button"
             onClick={() => onChoose('series')}
-            className="rounded-xl border border-border bg-raised px-3 py-2.5 text-left text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
+            className="rounded-control border border-border bg-raised px-3 py-2.5 text-left text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
           >
             {t('calendar.scopeAll', { defaultValue: 'The whole series' })}
           </button>
@@ -64,7 +64,7 @@ export function ScopeAsk({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
           >
             {t('calendar.cancel', { defaultValue: 'Cancel' })}
           </button>

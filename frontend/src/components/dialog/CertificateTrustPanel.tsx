@@ -29,7 +29,7 @@ export function CertificateTrustPanel({
     [t('accounts.certificate.expires', { defaultValue: 'Expires' }), cert.not_after],
   ]
   return (
-    <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-3 flex flex-col gap-2.5">
+    <div className="rounded-control bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-3 flex flex-col gap-2.5">
       <div className="flex items-start gap-2">
         <ShieldAlert size={14} className="shrink-0 mt-px text-amber-600 dark:text-amber-400" />
         <div className="flex flex-col gap-1">

@@ -40,7 +40,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type ?? 'button'}
       className={clsx(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl font-semibold whitespace-nowrap cursor-pointer transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-semibold whitespace-nowrap cursor-pointer transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50',
         sizing.box,
         VARIANTS[variant],
         className,

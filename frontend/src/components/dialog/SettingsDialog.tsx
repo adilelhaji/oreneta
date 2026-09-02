@@ -222,7 +222,7 @@ export function SettingsDialog() {
       onMouseDown={onBackdropMouseDown}
       className="fixed inset-0 flex items-center justify-center bg-black/35 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in"
     >
-      <div className="bg-chats border border-border/80 text-primary max-w-4xl w-full h-[620px] max-h-[90vh] rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
+      <div className="bg-chats border border-border/80 text-primary max-w-4xl w-full h-[620px] max-h-[90vh] rounded-dialog shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4.5 border-b border-border/60 shrink-0 bg-chats/95">
           <div className="min-w-0">
@@ -296,7 +296,7 @@ function NavItem({
     <button
       onClick={onClick}
       title={title}
-      className={`flex min-h-9 items-center gap-2.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer text-left ${
+      className={`flex min-h-9 items-center gap-2.5 rounded-control border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer text-left ${
         active
           ? 'bg-accent/10 border-accent/20 text-accent shadow-sm'
           : 'border-transparent text-secondary hover:text-primary hover:bg-hover/80'
@@ -330,7 +330,7 @@ function AccountGroup({
         <button
           onClick={onAdd}
           title={t('accounts.actions.addAccount')}
-          className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
         >
           <Plus size={13} />
         </button>
@@ -542,7 +542,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
           type="button"
           disabled={importing}
           onClick={() => void runImport()}
-          className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
+          className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
         >
           <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
           {t('calendar.importFromAccount', { defaultValue: "Import the account's calendars" })}
@@ -550,7 +550,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+          className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 cursor-pointer"
         >
           <Plus size={13} />
           {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
@@ -584,7 +584,7 @@ function CalendarPropertiesDialog({
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-app p-5 shadow-xl"
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-app p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -595,7 +595,7 @@ function CalendarPropertiesDialog({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
           >
             <X size={15} />
@@ -639,7 +639,7 @@ function AddAccountCalendarDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-2xl border border-border bg-app p-5 shadow-xl"
+        className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-primary">
@@ -657,7 +657,7 @@ function AddAccountCalendarDialog({
               if (event.key === 'Enter' && name.trim() && !busy) void submit()
             }}
             autoFocus
-            className="w-full rounded-xl border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent"
+            className="w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent"
           />
         </label>
         {error && <p className="mt-2 text-caption text-rose-500">{error}</p>}
@@ -665,7 +665,7 @@ function AddAccountCalendarDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
           >
             {t('calendar.cancel', { defaultValue: 'Cancel' })}
           </button>
@@ -673,7 +673,7 @@ function AddAccountCalendarDialog({
             type="button"
             disabled={!name.trim() || busy}
             onClick={() => void submit()}
-            className="rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+            className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
           >
             {t('calendar.add', { defaultValue: 'Add' })}
           </button>
@@ -710,7 +710,7 @@ function CalendarGroup({
         <button
             onClick={() => setAdding(true)}
             title={t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
-            className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
           >
             <Plus size={13} />
           </button>
@@ -774,7 +774,7 @@ function BoardGroup({
         <button
           onClick={() => onSelect(createKanbanBoard())}
           title={t('kanban.actions.addBoard')}
-          className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
         >
           <Plus size={13} />
         </button>
@@ -996,7 +996,7 @@ function GeneralSection() {
           control={
             <button
               onClick={() => ui$.shortcutsOpen.set(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
               <Keyboard size={12} />
               {t('shortcuts.customize')}
@@ -1096,7 +1096,7 @@ function BackupGroup() {
               <button
                 onClick={() => runImport('', '')}
                 disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Upload size={12} />
                 {t('settings.backup.restoreAction')}
@@ -1107,7 +1107,7 @@ function BackupGroup() {
                   setPrompt('export')
                 }}
                 disabled={busy}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Archive size={12} />
                 {t('common.export')}
@@ -1228,7 +1228,7 @@ function StorageGroup() {
           <button
             onClick={clearCache}
             disabled={clearing || (usage?.cacheBytes ?? 0) === 0}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-control font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               confirming ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-hover hover:bg-active text-primary'
             }`}
           >
@@ -1252,7 +1252,7 @@ function LogsGroup() {
         control={
           <button
             onClick={() => setViewerOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
           >
             <ScrollText size={12} />
             {t('settings.viewSyncLog')}
@@ -1312,14 +1312,14 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
       }}
       className="fixed inset-0 flex items-center justify-center bg-black/35 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in"
     >
-      <div className="bg-chats border border-border/80 text-primary max-w-3xl w-full h-[560px] max-h-[85vh] rounded-3xl shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
+      <div className="bg-chats border border-border/80 text-primary max-w-3xl w-full h-[560px] max-h-[85vh] rounded-dialog shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-4 px-6 py-4.5 border-b border-border/60 shrink-0 bg-chats/95">
           <h2 className="text-base font-bold tracking-tight leading-tight">{t('settings.viewSyncLog')}</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => void exportLog()}
               disabled={!log}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download size={12} />
               {t('common.export')}
@@ -1352,14 +1352,14 @@ function OpmlGroup({ account }: { account: string }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => importOpml(account)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
               <Upload size={12} />
               {t('common.import')}
             </button>
             <button
               onClick={() => exportOpml(account)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
               <Download size={12} />
               {t('common.export')}
@@ -1405,10 +1405,10 @@ function AccountPanel({ account }: { account: Account }) {
           title={t('settings.account.changeAvatar')}
           disabled={avatarBusy}
           onClick={() => void pickAvatarFile()}
-          className="relative shrink-0 rounded-2xl group disabled:cursor-default cursor-pointer"
+          className="relative shrink-0 rounded-panel group disabled:cursor-default cursor-pointer"
         >
-          <Avatar name={displayName} src={account.avatar_url} size={40} className="!rounded-2xl" />
-          <span className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Avatar name={displayName} src={account.avatar_url} size={40} className="!rounded-panel" />
+          <span className="absolute inset-0 flex items-center justify-center rounded-panel bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity">
             <Camera size={15} className="text-white" />
           </span>
         </button>
@@ -1435,7 +1435,7 @@ function AccountPanel({ account }: { account: Account }) {
               <button
                 type="button"
                 onClick={reconnectAccount}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
               >
                 <Server size={12} />
                 {t('settings.account.serverEdit', { defaultValue: 'Edit' })}
@@ -1456,7 +1456,7 @@ function AccountPanel({ account }: { account: Account }) {
               <button
                 type="button"
                 onClick={reconnectAccount}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-bold text-2xs cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-white font-bold text-2xs cursor-pointer transition-colors"
               >
                 <KeyRound size={12} />
                 {t('settings.account.reconnectButton', { defaultValue: 'Reconnect' })}
@@ -1480,7 +1480,7 @@ function AccountPanel({ account }: { account: Account }) {
       <button
         type="button"
         onClick={() => void deleteAccount(account.id)}
-        className="mt-1 self-start flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-secondary hover:text-rose-500 transition-colors cursor-pointer"
+        className="mt-1 self-start flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-xs font-semibold text-secondary hover:text-rose-500 transition-colors cursor-pointer"
       >
         <Trash2 size={12} />
         {t('settings.account.removeAccount')}

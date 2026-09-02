@@ -57,7 +57,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-2xl border border-border bg-app p-5 shadow-xl"
+        className="w-full max-w-md rounded-panel border border-border bg-app p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -68,14 +68,14 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
           >
             <X size={15} />
           </button>
         </div>
 
-        <div className="mb-4 grid grid-cols-3 gap-1 rounded-2xl border border-border/80 bg-raised p-1">
+        <div className="mb-4 grid grid-cols-3 gap-1 rounded-panel border border-border/80 bg-raised p-1">
           <KindTab
             active={kind === 'account'}
             icon={<Cloud size={16} />}
@@ -166,7 +166,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
           >
             {t('calendar.cancel', { defaultValue: 'Cancel' })}
           </button>
@@ -174,7 +174,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
             type="button"
             disabled={invalid || busy}
             onClick={() => void submit()}
-            className="rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+            className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
           >
             {t('calendar.add', { defaultValue: 'Add' })}
           </button>
@@ -199,7 +199,7 @@ function KindTab({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-center transition-all cursor-pointer ${
+      className={`flex min-w-0 flex-col items-center gap-1 rounded-control px-2 py-2.5 text-center transition-all cursor-pointer ${
         active
           ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
           : 'text-secondary hover:bg-chats/60 hover:text-primary'
@@ -212,7 +212,7 @@ function KindTab({
 }
 
 const inputClass =
-  'w-full rounded-xl border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
+  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
 
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (

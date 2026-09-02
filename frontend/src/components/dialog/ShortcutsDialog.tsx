@@ -87,7 +87,7 @@ export function ShortcutsDialog() {
       }}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-chats shadow-2xl"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-panel border border-border bg-chats shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={t('shortcuts.title')}
@@ -98,7 +98,7 @@ export function ShortcutsDialog() {
             {customized && (
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-xs font-medium text-secondary hover:bg-app hover:text-primary"
+                className="rounded-control-sm px-2 py-1 text-xs font-medium text-secondary hover:bg-app hover:text-primary"
                 onClick={() => {
                   resetAllShortcutBindings()
                   setRecording(null)
@@ -124,7 +124,7 @@ export function ShortcutsDialog() {
           {SHORTCUT_GROUPS.map((group) => (
             <section key={group.title}>
               <h3 className="mb-1.5 text-xs font-semibold text-secondary">{group.title}</h3>
-              <div className="overflow-hidden rounded-lg border border-border">
+              <div className="overflow-hidden rounded-control-sm border border-border">
                 {group.ids.map((id, i) => (
                   <ShortcutRow
                     key={id}

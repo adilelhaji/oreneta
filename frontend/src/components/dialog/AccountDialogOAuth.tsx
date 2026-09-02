@@ -37,8 +37,8 @@ export function AccountDialogOAuth({ ctl, isSetup }: { ctl: AccountDialogControl
                 onClick={() => void beginOAuth(provider.mode)}
                 className={`w-full flex items-center justify-center border bg-chats font-semibold transition-all ${
                   isSetup
-                    ? 'gap-3 rounded-2xl border-border px-5 py-4 text-lg text-primary hover:border-secondary/50 hover:bg-hover'
-                    : 'gap-2 rounded-xl border-border px-4 py-2.5 text-xs shadow-sm hover:bg-hover'
+                    ? 'gap-3 rounded-panel border-border px-5 py-4 text-lg text-primary hover:border-secondary/50 hover:bg-hover'
+                    : 'gap-2 rounded-control border-border px-4 py-2.5 text-xs shadow-sm hover:bg-hover'
                 } ${busy ? 'opacity-70 cursor-wait' : ''} ${
                   !provider.configured ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
                 }`}

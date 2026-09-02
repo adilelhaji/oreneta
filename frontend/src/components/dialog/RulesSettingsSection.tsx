@@ -81,7 +81,7 @@ export function RulesSettingsSection() {
               type="button"
               disabled={!!problem || trying}
               onClick={() => void tryRules([editing])}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FlaskConical size={12} />
               {trying ? t('rules.trying') : t('rules.try')}
@@ -97,7 +97,7 @@ export function RulesSettingsSection() {
                 setPreview(null)
                 void persist(next)
               }}
-              className="rounded-xl bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('buttons.save')}
             </button>
@@ -107,7 +107,7 @@ export function RulesSettingsSection() {
                 setEditing(null)
                 setPreview(null)
               }}
-              className="rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
+              className="rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
             >
               {t('buttons.cancel')}
             </button>
@@ -132,7 +132,7 @@ export function RulesSettingsSection() {
             {stored.map((rule, index) => (
               <li
                 key={rule.id}
-                className="flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2"
+                className="flex items-center gap-2 rounded-control border border-border bg-panel px-3 py-2"
               >
                 <Switch
                   checked={rule.enabled}
@@ -160,7 +160,7 @@ export function RulesSettingsSection() {
                   aria-label={t('rules.moveUp')}
                   disabled={index === 0}
                   onClick={() => void persist(reorderRules(stored, index, index - 1))}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <ChevronUp size={14} />
                 </button>
@@ -170,7 +170,7 @@ export function RulesSettingsSection() {
                   aria-label={t('rules.moveDown')}
                   disabled={index === stored.length - 1}
                   onClick={() => void persist(reorderRules(stored, index, index + 1))}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <ChevronDown size={14} />
                 </button>
@@ -188,7 +188,7 @@ export function RulesSettingsSection() {
                       if (confirmed) void persist(stored.filter((item) => item.id !== rule.id))
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -204,7 +204,7 @@ export function RulesSettingsSection() {
               setPreview(null)
               setEditing(newRule())
             }}
-            className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
           >
             <Plus size={12} />
             {t('rules.add')}
@@ -214,7 +214,7 @@ export function RulesSettingsSection() {
               type="button"
               disabled={trying}
               onClick={() => void tryRules(stored)}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
             >
               <FlaskConical size={12} />
               {trying ? t('rules.trying') : t('rules.try')}
@@ -223,7 +223,7 @@ export function RulesSettingsSection() {
           <button
             type="button"
             onClick={() => ui$.ruleLogOpen.set(true)}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
           >
             <ScrollText size={12} />
             {t('rules.log')}

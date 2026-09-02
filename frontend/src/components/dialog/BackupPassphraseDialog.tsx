@@ -47,11 +47,11 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
-      <div className="bg-chats border border-border text-primary max-w-md w-full rounded-3xl p-6 shadow-2xl animate-slide-up flex flex-col gap-5">
+      <div className="bg-chats border border-border text-primary max-w-md w-full rounded-dialog p-6 shadow-2xl animate-slide-up flex flex-col gap-5">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent">
               <ShieldCheck size={17} />
             </div>
             <div className="min-w-0">
@@ -100,7 +100,7 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
               onKeyDown={(event) => {
                 if (event.key === 'Enter') submit()
               }}
-              className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
+              className="w-full rounded-control bg-hover px-3.5 py-2.5 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
             />
           </div>
 
@@ -116,7 +116,7 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') submit()
                 }}
-                className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
+                className="w-full rounded-control bg-hover px-3.5 py-2.5 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
               />
             </div>
           )}

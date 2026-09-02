@@ -35,7 +35,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-1 rounded-lg bg-hover p-0.5">
+        <div className="flex items-center gap-1 rounded-control-sm bg-hover p-0.5">
           <button
             onClick={() => setTabViewMode(tab.id, 'html')}
             className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-caption font-semibold cursor-pointer ${

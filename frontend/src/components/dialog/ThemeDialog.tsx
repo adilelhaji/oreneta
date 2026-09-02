@@ -55,7 +55,7 @@ function ThemeSection({
         <button
           type="button"
           onClick={() => onEdit({ appearance: newTileAppearance, theme: null })}
-          className="flex min-h-[112px] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-secondary hover:text-accent hover:border-accent/50 cursor-pointer transition-colors"
+          className="flex min-h-[112px] flex-col items-center justify-center gap-1.5 rounded-control border border-dashed border-border text-secondary hover:text-accent hover:border-accent/50 cursor-pointer transition-colors"
         >
           <Plus size={16} />
           <span className="text-caption font-bold">{t('theme.custom')}</span>
@@ -98,7 +98,7 @@ export function ThemeDialog({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4 animate-fade-in">
-        <div className="w-full max-w-3xl h-[620px] max-h-[90vh] rounded-3xl border border-border bg-chats text-primary shadow-2xl animate-slide-up flex flex-col overflow-hidden">
+        <div className="w-full max-w-3xl h-[620px] max-h-[90vh] rounded-dialog border border-border bg-chats text-primary shadow-2xl animate-slide-up flex flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-border/70 px-6 py-4 shrink-0">
             <div className="flex items-center gap-2">
               <Palette className="text-accent" size={16} />

@@ -48,13 +48,13 @@ export function SavedSearchMenu({ query }: { query: string }) {
         onClick={() => (saved.length > 0 ? setOpen((was) => !was) : save())}
         title={saved.length > 0 ? t('search.saved') : t('search.save')}
         aria-label={saved.length > 0 ? t('search.saved') : t('search.save')}
-        className="flex h-9 w-9 items-center justify-center rounded-xl text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+        className="flex h-9 w-9 items-center justify-center rounded-control text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
       >
         {saved.length > 0 ? <Bookmark size={15} /> : <BookmarkPlus size={15} />}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[15rem] rounded-xl border border-border bg-panel p-1 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-lg">
           {trimmed && !alreadySaved && (
             <>
               <button type="button" onClick={() => { save(); setOpen(false) }} className={menuItemClass}>
@@ -84,7 +84,7 @@ export function SavedSearchMenu({ query }: { query: string }) {
                 onClick={() =>
                   settings$.savedSearches.set(saved.filter((item) => item.id !== search.id))
                 }
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
               >
                 <X size={13} />
               </button>

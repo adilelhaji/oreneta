@@ -44,7 +44,7 @@ export function EventContextMenu({
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"
-      className="fixed z-[61] min-w-[160px] rounded-xl border border-border bg-header p-1 shadow-xl"
+      className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-xl"
     >
       <MenuItem
         icon={<SquarePen size={13} className="text-accent" />}

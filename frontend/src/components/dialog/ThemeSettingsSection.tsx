@@ -30,7 +30,7 @@ export function ThemeSettingsSection() {
         <div className="flex items-center gap-3 select-none">
           <span className="text-caption font-semibold text-secondary truncate max-w-32">{active.name}</span>
           <div
-            className="h-7 w-11 rounded-lg border border-border/80 overflow-hidden relative shadow-inner shrink-0 flex"
+            className="h-7 w-11 rounded-control-sm border border-border/80 overflow-hidden relative shadow-inner shrink-0 flex"
             style={{ background: t.bgApp }}
           >
             <span className="w-1 shrink-0" style={{ background: t.bgSideNav }} />
@@ -47,7 +47,7 @@ export function ThemeSettingsSection() {
           <button
             type="button"
             onClick={() => setDialogOpen(true)}
-            className="rounded-xl bg-active border border-border/30 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-active hover:border-border/50 cursor-pointer transition-colors"
+            className="rounded-control bg-active border border-border/30 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-active hover:border-border/50 cursor-pointer transition-colors"
           >
             {translate('common.change')}
           </button>

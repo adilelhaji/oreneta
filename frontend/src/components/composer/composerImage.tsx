@@ -45,7 +45,7 @@ function ImageNodeView({ node, updateAttributes, selected }: any) {
   return (
     <NodeViewWrapper className="relative inline-block my-2 max-w-full">
       <div
-        className={`relative inline-block rounded-lg group overflow-hidden ${
+        className={`relative inline-block rounded-control-sm group overflow-hidden ${
           selected ? 'ring-2 ring-accent shadow-lg' : ''
         }`}
       >
@@ -55,7 +55,7 @@ function ImageNodeView({ node, updateAttributes, selected }: any) {
           alt={alt}
           width={width}
           height={height}
-          className="block max-w-full h-auto rounded-lg select-none"
+          className="block max-w-full h-auto rounded-control-sm select-none"
           style={{ width: width || '100%', height: height || 'auto' }}
         />
         {/* Resize Handles (4 Corners) */}

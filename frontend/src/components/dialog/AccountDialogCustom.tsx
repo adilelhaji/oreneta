@@ -78,13 +78,13 @@ export function AccountDialogCustom({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-xl border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
           />
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={
               showPassword
                 ? t('accounts.actions.hidePassword', { defaultValue: 'Hide password' })
@@ -98,7 +98,7 @@ export function AccountDialogCustom({
 
       {appPasswordHint && (
         <div
-          className={`${isSetup ? 'rounded-2xl p-4 text-sm gap-3' : 'rounded-xl p-3 text-caption gap-2'} flex items-start bg-accent/[0.06] border border-accent/15 leading-relaxed text-secondary -mt-1`}
+          className={`${isSetup ? 'rounded-panel p-4 text-sm gap-3' : 'rounded-control p-3 text-caption gap-2'} flex items-start bg-accent/[0.06] border border-accent/15 leading-relaxed text-secondary -mt-1`}
         >
           <Info size={isSetup ? 16 : 14} className="shrink-0 mt-0.5 text-accent" />
           <p className="flex-1 font-medium">{t('accounts.appPasswordHint', { provider: appPasswordHint.provider })}</p>
@@ -222,7 +222,7 @@ function SecurityField({
           onChange={(event) => onChange(event.target.value as MailSecurity)}
           className={`${
             inputClassName ??
-            'w-full text-xs py-2 px-3.5 rounded-xl border border-border bg-raised text-primary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
+            'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
           } appearance-none pr-10 cursor-pointer`}
         >
           <option value="tls">TLS</option>

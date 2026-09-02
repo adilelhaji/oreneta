@@ -98,7 +98,7 @@ export function LabelsSettingsSection() {
                       if (confirmed) void persist(labels.filter((_, i) => i !== index))
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -110,7 +110,7 @@ export function LabelsSettingsSection() {
         <button
           type="button"
           onClick={() => setDraft([...labels, newLabel(labels)])}
-          className="flex w-fit items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+          className="flex w-fit items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
         >
           <Plus size={12} />
           {t('labels.add')}

@@ -11,7 +11,7 @@ export function QuickReplyAttachments({ attachments }: { attachments: ComposerAt
 
   return (
     <>
-      <div className="flex flex-wrap gap-2 mb-1 p-1 bg-black/[0.02] dark:bg-white/[0.02] rounded-xl border border-border/10 max-h-40 overflow-y-auto select-none">
+      <div className="flex flex-wrap gap-2 mb-1 p-1 bg-black/[0.02] dark:bg-white/[0.02] rounded-control border border-border/10 max-h-40 overflow-y-auto select-none">
         <PendingAttachmentList
           attachments={attachments}
           onRemove={(id) => compose$.composerAttachments.set(attachments.filter((att) => att.id !== id))}

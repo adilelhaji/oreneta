@@ -315,7 +315,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 }}
                 placeholder={isRSSAccount ? t('threads.searchFeeds') : t('threads.searchMessages')}
                 className={clsx(
-                  'w-full rounded-xl bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-150',
+                  'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-150',
                   // The right padding only has to clear the clear button while there is one.
                   query ? 'pr-8' : 'pr-3',
                 )}
@@ -535,7 +535,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
             })}
             {canLoadMore && (
               <button
-                className="mx-3 my-3 flex h-9 shrink-0 items-center justify-center rounded-lg border border-border text-xs font-semibold text-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer transition-colors"
+                className="mx-3 my-3 flex h-9 shrink-0 items-center justify-center rounded-control-sm border border-border text-xs font-semibold text-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer transition-colors"
                 disabled={threadsLoadingMore}
                 onClick={() => void loadMoreThreads()}
               >

@@ -40,7 +40,7 @@ export function AboutDialog() {
       }}
     >
       <div
-        className="flex w-full max-w-sm flex-col overflow-hidden rounded-3xl border border-border bg-chats text-primary shadow-2xl shadow-black/20 animate-slide-up dark:shadow-black/45"
+        className="flex w-full max-w-sm flex-col overflow-hidden rounded-dialog border border-border bg-chats text-primary shadow-2xl shadow-black/20 animate-slide-up dark:shadow-black/45"
         role="dialog"
         aria-modal="true"
         aria-label={t('about.aboutProduct', { product: productName })}
@@ -82,7 +82,7 @@ export function AboutDialog() {
 
           <UpdateSection />
 
-          <div className="mt-6 w-full rounded-2xl border border-border/70 bg-raised/70 p-4">
+          <div className="mt-6 w-full rounded-panel border border-border/70 bg-raised/70 p-4">
             <div className="flex items-center justify-center gap-2 text-xs font-bold text-primary">
               <Heart size={14} className="text-accent" />
               <span>{t('about.supportDevelopment')}</span>

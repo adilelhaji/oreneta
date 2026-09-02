@@ -52,7 +52,7 @@ export function ChangelogDialog() {
       }}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-border bg-chats text-primary shadow-2xl shadow-black/20 animate-slide-up dark:shadow-black/45"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-dialog border border-border bg-chats text-primary shadow-2xl shadow-black/20 animate-slide-up dark:shadow-black/45"
         role="dialog"
         aria-modal="true"
         aria-label={t('changelog.title')}

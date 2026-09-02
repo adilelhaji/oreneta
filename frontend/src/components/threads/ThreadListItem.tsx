@@ -285,7 +285,7 @@ export function ThreadListItem({
           gesture belongs to the selection, and in compact rows, where there
           is no room that is not already the subject's. */}
       {!bulkSelectable && !density.singleLine && onQuickAction && (
-        <div className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-border/60 bg-chats/95 p-0.5 shadow-sm group-hover:flex">
+        <div className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-control-sm border border-border/60 bg-chats/95 p-0.5 shadow-sm group-hover:flex">
           {quickActions.map(({ key, icon: Icon, label, danger }) => (
             <button
               key={key}

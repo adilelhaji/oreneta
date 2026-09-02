@@ -50,7 +50,7 @@ export function LabelPicker({ threadId, applied }: { threadId: string; applied: 
         onClick={() => setOpen((was) => !was)}
       />
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[14rem] rounded-xl border border-border bg-chats p-1 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 min-w-[14rem] rounded-control border border-border bg-chats p-1 shadow-xl">
           {labels.length === 0 ? (
             <p className="px-3 py-2 text-xs text-secondary">{t('labels.noneYet')}</p>
           ) : (

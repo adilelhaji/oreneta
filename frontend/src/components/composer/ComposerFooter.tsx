@@ -58,7 +58,7 @@ export function ComposerFooter({
         )}
         <button
           onClick={onToggleRich}
-          className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
+          className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
             rich ? 'bg-accent/10 text-accent' : 'text-secondary hover:bg-hover'
           }`}
           title={rich ? t('composer.actions.switchToPlainText') : t('composer.actions.switchToRichText')}
@@ -91,7 +91,7 @@ export function ComposerFooter({
         <button
           onClick={onDiscard}
           disabled={sending}
-          className="rounded-xl px-4 py-2 text-xs font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+          className="rounded-control px-4 py-2 text-xs font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
         >
           {t('buttons.discard')}
         </button>
@@ -100,7 +100,7 @@ export function ComposerFooter({
           onClick={onSubmit}
           disabled={!canSend}
           title={t('composer.actions.sendWithShortcut', { shortcut: sendShortcutLabel('mod_enter') })}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-1.5 rounded-control px-5 py-2 text-xs font-bold transition-all ${
             !canSend
               ? 'cursor-not-allowed bg-hover text-secondary/70 shadow-none'
               : 'bg-accent text-white shadow-md shadow-accent/15 hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-98 cursor-pointer'

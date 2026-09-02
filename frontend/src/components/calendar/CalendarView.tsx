@@ -75,7 +75,7 @@ export function CalendarView() {
               <button
                 type="button"
                 onClick={() => navigateCalendar(0)}
-                className="rounded-lg px-2 py-1 text-caption font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+                className="rounded-control-sm px-2 py-1 text-caption font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
               >
                 {t('calendar.today', { defaultValue: 'Today' })}
               </button>
@@ -85,13 +85,13 @@ export function CalendarView() {
             </div>
           )}
 
-          <div className="flex items-center gap-0.5 rounded-xl border border-border/80 bg-raised p-0.5">
+          <div className="flex items-center gap-0.5 rounded-control border border-border/80 bg-raised p-0.5">
             {views.map(({ mode, label }) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setCalendarView(mode)}
-                className={`rounded-lg px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
+                className={`rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
                   view === mode
                     ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
                     : 'text-secondary hover:text-primary'
@@ -105,7 +105,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => newEvent()}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-caption font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
           >
             <Plus size={13} />
             <span className="hidden sm:inline">
@@ -129,7 +129,7 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => void retrySync()}
-            className="shrink-0 rounded-lg px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+            className="shrink-0 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
           >
             {t('calendar.retry', { defaultValue: 'Try again' })}
           </button>
@@ -161,7 +161,7 @@ function NavButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+      className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
     >
       {children}
     </button>

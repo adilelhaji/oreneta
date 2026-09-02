@@ -128,7 +128,7 @@ export function useComposer(tabId: string) {
       ResizableImage.configure({
         allowBase64: true,
         HTMLAttributes: {
-          class: 'my-2 max-w-full rounded-lg',
+          class: 'my-2 max-w-full rounded-control-sm',
         },
       }),
     ],

@@ -191,7 +191,7 @@ export function FolderSwitcher({
           offset={2}
           onClose={close}
           overlay
-          className="fixed z-50 flex max-h-[min(420px,calc(100vh-1rem))] w-60 flex-col rounded-xl border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
+          className="fixed z-50 flex max-h-[min(420px,calc(100vh-1rem))] w-60 flex-col rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
           onContextMenu={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -206,7 +206,7 @@ export function FolderSwitcher({
                 if (event.key === 'Escape') close()
               }}
               placeholder={t('folders.searchPlaceholder')}
-              className="mb-1 h-8 w-full shrink-0 rounded-lg bg-hover px-2 text-ui text-primary outline-none placeholder-secondary focus:ring-1 focus:ring-accent/40"
+              className="mb-1 h-8 w-full shrink-0 rounded-control-sm bg-hover px-2 text-ui text-primary outline-none placeholder-secondary focus:ring-1 focus:ring-accent/40"
             />
           )}
           <div className="min-h-0 flex-1 overflow-y-auto">

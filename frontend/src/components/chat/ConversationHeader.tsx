@@ -176,7 +176,7 @@ export function ConversationHeader({
           {!threadSearchOpen ? (
             <IconButton icon={Search} label={t('chat.searchThread')} onClick={() => thread$.searchOpen.set(true)} />
           ) : (
-            <div className="hidden min-[900px]:flex w-[286px] items-center gap-1 rounded-xl bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
+            <div className="hidden min-[900px]:flex w-[286px] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
               <Search size={14} className="text-secondary shrink-0" />
               <input
                 ref={desktopSearchInputRef}
@@ -213,7 +213,7 @@ export function ConversationHeader({
               <button
                 onClick={() => goToSearchMatch(-1)}
                 disabled={searchMatches.length === 0}
-                className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:bg-active disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
                 title={t('chat.previousMatch')}
               >
                 <ChevronUp size={14} />
@@ -221,7 +221,7 @@ export function ConversationHeader({
               <button
                 onClick={() => goToSearchMatch(1)}
                 disabled={searchMatches.length === 0}
-                className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:bg-active disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
                 title={t('chat.nextMatch')}
               >
                 <ChevronDown size={14} />
@@ -285,13 +285,13 @@ export function ConversationHeader({
               onClick={() => setActionsMenuOpen((open) => !open)}
             />
             {actionsMenuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-xl border border-border bg-chats p-1 shadow-xl">
+              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-xl">
                 <button
                   onClick={() => {
                     setQuickConversationMode('html')
                     setActionsMenuOpen(false)
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs cursor-pointer hover:bg-hover ${
+                  className={`flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs cursor-pointer hover:bg-hover ${
                     conversationMode === 'html' ? 'font-semibold text-accent' : 'font-medium text-primary'
                   }`}
                 >
@@ -302,7 +302,7 @@ export function ConversationHeader({
                     setQuickConversationMode('plain')
                     setActionsMenuOpen(false)
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs cursor-pointer hover:bg-hover ${
+                  className={`flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs cursor-pointer hover:bg-hover ${
                     conversationMode === 'plain' ? 'font-semibold text-accent' : 'font-medium text-primary'
                   }`}
                 >
@@ -326,7 +326,7 @@ export function ConversationHeader({
                       attachmentsLabel: t('print.attachments'),
                     })
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
+                  className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                 >
                   <Printer size={15} className="shrink-0" /> {t('print.action')}
                 </button>
@@ -335,7 +335,7 @@ export function ConversationHeader({
                     void starThread(activeThread.thread_id, !activeThread.starred)
                     setActionsMenuOpen(false)
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
+                  className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                 >
                   <Star
                     size={15}
@@ -350,7 +350,7 @@ export function ConversationHeader({
                         void archiveThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
+                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                     >
                       <Archive size={15} className="shrink-0" /> {t('threads.actions.archiveThread')}
                     </button>
@@ -359,7 +359,7 @@ export function ConversationHeader({
                         void deleteThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-950/25"
+                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-950/25"
                     >
                       <Trash2 size={15} className="shrink-0" /> {t('threads.actions.moveToTrash')}
                     </button>
@@ -377,7 +377,7 @@ export function ConversationHeader({
           onClose={() => setSenderMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[60]"
-          className="fixed z-[61] min-w-[180px] rounded-xl border border-border bg-header p-1 shadow-xl"
+          className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-xl"
           onContextMenu={(event) => event.preventDefault()}
         >
           <MenuItem

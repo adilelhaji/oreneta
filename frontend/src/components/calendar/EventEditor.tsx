@@ -92,7 +92,7 @@ export function EventEditor() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeEditor}>
       <div
-        className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-2xl border border-border bg-app shadow-xl"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-panel border border-border bg-app shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
@@ -104,7 +104,7 @@ export function EventEditor() {
           <button
             type="button"
             onClick={closeEditor}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
           >
             <X size={15} />
@@ -202,7 +202,7 @@ export function EventEditor() {
             // offering the choice would be offering something that cannot be
             // carried out.
             event.is_recurring && (
-              <p className="rounded-xl bg-raised px-3 py-2 text-caption text-secondary">
+              <p className="rounded-control bg-raised px-3 py-2 text-caption text-secondary">
                 {t('calendar.seriesNotReachable', {
                   defaultValue:
                     'This event repeats, but its series has not been identified yet. Changes here apply to this day only; a refresh usually resolves it.',
@@ -284,7 +284,7 @@ export function EventEditor() {
             <button
               type="button"
               onClick={() => begin('delete')}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
             >
               <Trash2 size={13} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
@@ -296,7 +296,7 @@ export function EventEditor() {
             <button
               type="button"
               onClick={closeEditor}
-              className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+              className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             >
               {t('calendar.cancel', { defaultValue: 'Cancel' })}
             </button>
@@ -304,7 +304,7 @@ export function EventEditor() {
               type="button"
               disabled={invalid || saving}
               onClick={() => begin('save')}
-              className="rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               {t('calendar.save', { defaultValue: 'Save' })}
             </button>
@@ -316,7 +316,7 @@ export function EventEditor() {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
+  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
 
 /// The usual ladder of reminder times, in minutes before the start.
 const REMINDER_CHOICES = [0, 5, 10, 15, 30, 60, 120, 24 * 60, 2 * 24 * 60, 7 * 24 * 60]
@@ -407,7 +407,7 @@ function DateAndTime({
           and framing them apart made the time look wider than the date it
           belongs to. */}
       {!allDay && (
-        <div className="flex shrink-0 items-center rounded-xl border border-border bg-raised px-2 focus-within:border-transparent focus-within:bg-chats focus-within:ring-1 focus-within:ring-accent">
+        <div className="flex shrink-0 items-center rounded-control border border-border bg-raised px-2 focus-within:border-transparent focus-within:bg-chats focus-within:ring-1 focus-within:ring-accent">
           <select
             value={date.getHours()}
             onChange={(e) => setClock(Number(e.target.value), date.getMinutes())}
@@ -638,7 +638,7 @@ function Attendees({
           {people.map((person) => (
             <li
               key={person.addr}
-              className="flex items-center gap-1 rounded-lg bg-raised px-2 py-1 text-caption text-primary"
+              className="flex items-center gap-1 rounded-control-sm bg-raised px-2 py-1 text-caption text-primary"
             >
               <span className="max-w-[12rem] truncate">{person.addr}</span>
               <button
@@ -669,7 +669,7 @@ function Attendees({
         className={inputClass}
       />
       {matches.length > 0 && (
-        <ul className="max-h-32 overflow-y-auto rounded-xl border border-border bg-raised">
+        <ul className="max-h-32 overflow-y-auto rounded-control border border-border bg-raised">
           {matches.slice(0, 8).map((person) => (
             <li key={person.addr}>
               <button

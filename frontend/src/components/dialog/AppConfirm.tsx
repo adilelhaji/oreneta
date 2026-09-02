@@ -25,11 +25,11 @@ export function AppConfirm() {
         aria-modal="true"
         aria-labelledby="app-confirm-title"
         aria-describedby="app-confirm-message"
-        className="w-full max-w-sm rounded-xl border border-border bg-chats p-4 shadow-2xl"
+        className="w-full max-w-sm rounded-control border border-border bg-chats p-4 shadow-2xl"
       >
         <div className="mb-3 flex items-start gap-3">
           <div
-            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-control ${
               isDanger ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400' : 'bg-accent/10 text-accent'
             }`}
           >

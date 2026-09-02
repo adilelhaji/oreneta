@@ -151,7 +151,7 @@ export function SideNav() {
             />
             <div className="relative">
               <button
-                className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 cursor-pointer ${
+                className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
                   isUnifiedActive
                     ? 'bg-accent text-white shadow-lg shadow-accent/25'
                     : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
@@ -181,7 +181,7 @@ export function SideNav() {
               }`}
             />
             <button
-              className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 cursor-pointer ${
+              className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
                 calendarOpen
                   ? 'bg-accent text-white shadow-lg shadow-accent/25'
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
@@ -265,7 +265,7 @@ export function SideNav() {
       {/* Utilities */}
       <div className="flex flex-col gap-3 items-center">
         <button
-          className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 cursor-pointer ${
+          className={`flex h-10 w-10 items-center justify-center rounded-control transition-all duration-150 cursor-pointer ${
             moreMenu ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
           }`}
           onClick={(e) => {

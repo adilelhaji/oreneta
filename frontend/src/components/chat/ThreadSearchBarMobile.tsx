@@ -23,7 +23,7 @@ export function ThreadSearchBarMobile({
 
   return (
     <div className="min-[900px]:hidden flex h-11 shrink-0 items-center gap-1 border-b border-border bg-header px-3 z-10">
-      <div className="flex flex-1 items-center gap-2 rounded-xl bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
+      <div className="flex flex-1 items-center gap-2 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
         <Search size={14} className="text-secondary shrink-0" />
         <input
           ref={inputRef}
@@ -59,7 +59,7 @@ export function ThreadSearchBarMobile({
       <button
         onClick={() => goToSearchMatch(-1)}
         disabled={searchMatches.length === 0}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-secondary hover:bg-hover disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+        className="flex h-8 w-8 items-center justify-center rounded-control-sm text-secondary hover:bg-hover disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
         title={t('chat.previousMatch')}
       >
         <ChevronUp size={15} />
@@ -67,7 +67,7 @@ export function ThreadSearchBarMobile({
       <button
         onClick={() => goToSearchMatch(1)}
         disabled={searchMatches.length === 0}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-secondary hover:bg-hover disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+        className="flex h-8 w-8 items-center justify-center rounded-control-sm text-secondary hover:bg-hover disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
         title={t('chat.nextMatch')}
       >
         <ChevronDown size={15} />

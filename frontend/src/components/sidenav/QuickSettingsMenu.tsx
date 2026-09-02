@@ -45,7 +45,7 @@ export function QuickSettingsMenu({
         }}
       />
       <div
-        className={`fixed z-50 w-60 rounded-lg border border-border bg-chats p-2 shadow-2xl animate-fade-in text-primary ${
+        className={`fixed z-50 w-60 rounded-control-sm border border-border bg-chats p-2 shadow-2xl animate-fade-in text-primary ${
           anchor.placement === 'up' ? '-translate-y-full' : ''
         }`}
         style={{ left: anchor.x, top: anchor.placement === 'up' ? anchor.y - 4 : anchor.y + 4 }}

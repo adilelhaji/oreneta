@@ -69,10 +69,10 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
         style={{ maxWidth: bubbleMaxWidth(readingWidth, '70%') }}
         className={`group/message-bubble relative ${useHtmlBody ? 'w-[70%]' : 'max-w-[70%]'} min-w-[100px] p-3.5 border transition-shadow duration-200 ${
           isDraft
-            ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-2xl rounded-tr-sm shadow-none'
+            ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-panel rounded-tr-sm shadow-none'
             : outgoing
-              ? 'bg-bubble-out text-bubble-out-text border-border/35 rounded-2xl rounded-tr-sm shadow-bubble-out'
-              : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-2xl rounded-tl-sm shadow-bubble-in'
+              ? 'bg-bubble-out text-bubble-out-text border-border/35 rounded-panel rounded-tr-sm shadow-bubble-out'
+              : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-panel rounded-tl-sm shadow-bubble-in'
         }`}
       >
         <MessageActions
@@ -165,7 +165,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
               <div
-                className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-lg border border-border bg-chats p-3 shadow-xl text-secondary select-text ${
+                className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-control-sm border border-border bg-chats p-3 shadow-xl text-secondary select-text ${
                   outgoing ? (useHtmlBody ? 'right-0 max-w-full' : 'right-0') : 'left-0'
                 }`}
               >

@@ -88,7 +88,7 @@ export function KanbanColumnMinimized({
       ref={wrapper.setNodeRef}
       style={{ width: KANBAN_COLUMN_MINIMIZED_WIDTH, ...wrapper.style }}
       className={clsx(
-        'relative flex h-full shrink-0 flex-col items-center gap-3 rounded-lg border p-2 transition-colors',
+        'relative flex h-full shrink-0 flex-col items-center gap-3 rounded-control-sm border p-2 transition-colors',
         columnSearchHighlightClass(searchActive, overWallpaper),
         columnDropTargetClass(wrapper.isOver, !!wrapper.dropRejection),
         wrapper.dragHandle ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-pointer',

@@ -17,11 +17,11 @@ export function FilterSwitch({ value, onChange }: { value: FilterMode; onChange:
     { mode: 'starred', label: t('filters.starred'), icon: <Star size={13} /> },
   ]
   return (
-    <div className="hidden @min-[640px]:flex h-9 shrink-0 items-center gap-0.5 rounded-xl bg-active/70 p-[3px]">
+    <div className="hidden @min-[640px]:flex h-9 shrink-0 items-center gap-0.5 rounded-control bg-active/70 p-[3px]">
       {options.map(({ mode, label, icon }) => (
         <button
           key={mode}
-          className={`flex h-7 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold cursor-pointer transition-all duration-200 ${
+          className={`flex h-7 items-center gap-1.5 rounded-control-sm px-3 text-xs font-semibold cursor-pointer transition-all duration-200 ${
             value === mode ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:bg-hover hover:text-primary'
           }`}
           onClick={() => onChange(mode)}
@@ -88,7 +88,7 @@ export function BoardMenu({
       />
       {open && (
         <div
-          className="absolute right-0 mt-1.5 z-50 min-w-[180px] w-max rounded-xl border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
+          className="absolute right-0 mt-1.5 z-50 min-w-[180px] w-max rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="@min-[640px]:hidden">

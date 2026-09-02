@@ -89,7 +89,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
   const active = PROVIDERS.find((p) => p.isActive(mode))
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
-      <div className="bg-chats border border-border text-primary w-full max-w-[760px] max-h-[92vh] rounded-3xl shadow-2xl animate-slide-up flex flex-col overflow-hidden">
+      <div className="bg-chats border border-border text-primary w-full max-w-[760px] max-h-[92vh] rounded-dialog shadow-2xl animate-slide-up flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border/70 shrink-0">
           <h2 className="text-title font-bold tracking-tight leading-tight">
@@ -184,7 +184,7 @@ function AccountDialogForm({
 function AccountDialogError({ error }: { error: string }) {
   if (!error) return null
   return (
-    <p className="rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-caption leading-relaxed text-red-600 dark:text-red-400 font-medium">
+    <p className="rounded-control bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-caption leading-relaxed text-red-600 dark:text-red-400 font-medium">
       {error}
     </p>
   )
@@ -197,7 +197,7 @@ function SaveButton({ ctl, isSetup }: { ctl: AccountDialogController; isSetup: b
     <button
       onClick={save}
       disabled={saveDisabled}
-      className={`${isSetup ? 'w-full rounded-2xl py-4 text-lg' : 'rounded-xl px-4.5 py-2 text-xs'} font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+      className={`${isSetup ? 'w-full rounded-panel py-4 text-lg' : 'rounded-control px-4.5 py-2 text-xs'} font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
         saveDisabled
           ? isSetup
             ? 'bg-hover text-secondary/70 cursor-not-allowed border border-transparent shadow-none'

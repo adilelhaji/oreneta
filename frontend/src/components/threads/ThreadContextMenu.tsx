@@ -286,7 +286,7 @@ export function ThreadContextMenu({
       <FloatingContextMenu
         x={menu.x}
         y={menu.y}
-        className="fixed z-50 min-w-[160px] rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+        className="fixed z-50 min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
         dataAttribute="data-thread-context-menu"
         onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
@@ -339,7 +339,7 @@ export function ThreadContextMenu({
               <FloatingContextMenu
                 x={moveFlyoutPosition.x}
                 y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
                 dataAttribute="data-thread-context-menu"
               >
                 {targetAccounts.map((account) => (
@@ -380,7 +380,7 @@ export function ThreadContextMenu({
     <FloatingContextMenu
       x={menu.x}
       y={menu.y}
-      className="fixed z-50 min-w-[190px] rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+      className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
       dataAttribute="data-thread-context-menu"
       onClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
@@ -496,7 +496,7 @@ export function ThreadContextMenu({
             <FloatingContextMenu
               x={moveFlyoutPosition.x}
               y={moveFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
               dataAttribute="data-thread-context-menu"
             >
               <FolderMenuTree
@@ -543,7 +543,7 @@ export function ThreadContextMenu({
             <FloatingContextMenu
               x={copyFlyoutPosition.x}
               y={copyFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
               dataAttribute="data-thread-context-menu"
             >
               {copyAccountGroups.map(({ account, folders, excluded }) => (

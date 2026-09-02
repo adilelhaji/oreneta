@@ -228,7 +228,7 @@ export function ConversationMessageList({
                     }
                     onOpenContextMenu({ x: event.clientX, y: event.clientY, message, linkUrl })
                   }}
-                  className={`rounded-2xl transition-shadow ${traditional ? 'space-y-2' : 'space-y-4'} ${
+                  className={`rounded-panel transition-shadow ${traditional ? 'space-y-2' : 'space-y-4'} ${
                     activeSearchId === message.id || jumpMessageId === message.id
                       ? 'ring-2 ring-amber-300/80 ring-offset-2 ring-offset-transparent'
                       : ''

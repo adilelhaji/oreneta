@@ -24,8 +24,8 @@ export function VideoAttachment({
   externalUrl,
   externalLabel,
   className = 'group relative w-full max-w-[320px]',
-  videoClassName = 'w-full max-h-80 rounded-lg border border-border/20 bg-black',
-  posterClassName = 'flex aspect-video w-full items-center justify-center rounded-lg border border-border/20 bg-black text-white/90 transition-colors hover:text-white cursor-pointer',
+  videoClassName = 'w-full max-h-80 rounded-control-sm border border-border/20 bg-black',
+  posterClassName = 'flex aspect-video w-full items-center justify-center rounded-control-sm border border-border/20 bg-black text-white/90 transition-colors hover:text-white cursor-pointer',
 }: VideoAttachmentProps) {
   const [active, setActive] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)

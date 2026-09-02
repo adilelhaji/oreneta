@@ -73,7 +73,7 @@ export function CommandPalette() {
       }}
     >
       <div
-        className="w-full max-w-[560px] overflow-hidden rounded-xl border border-border bg-chats shadow-2xl animate-fade-in"
+        className="w-full max-w-[560px] overflow-hidden rounded-control border border-border bg-chats shadow-2xl animate-fade-in"
         role="dialog"
         aria-modal="true"
         aria-label={t('palette.label')}
@@ -104,7 +104,7 @@ export function CommandPalette() {
                   key={command.id}
                   onMouseEnter={() => ui$.paletteIndex.set(i)}
                   onClick={() => command.run()}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-ui transition-colors cursor-pointer ${
+                  className={`flex w-full items-center gap-3 rounded-control-sm px-3 py-2 text-left text-ui transition-colors cursor-pointer ${
                     selected ? 'bg-accent/10 text-primary' : 'text-primary hover:bg-hover'
                   }`}
                 >

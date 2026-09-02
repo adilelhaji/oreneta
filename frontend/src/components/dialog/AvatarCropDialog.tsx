@@ -166,7 +166,7 @@ export function AvatarCropDialog({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4">
-      <div className="w-full max-w-sm rounded-3xl border border-border bg-chats text-primary shadow-2xl animate-slide-up overflow-hidden">
+      <div className="w-full max-w-sm rounded-dialog border border-border bg-chats text-primary shadow-2xl animate-slide-up overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
           <div className="min-w-0">
             <h3 className="text-sm font-bold leading-tight">{t('avatar.edit')}</h3>
@@ -184,7 +184,7 @@ export function AvatarCropDialog({
 
         <div className="flex flex-col items-center gap-4 px-5 py-5">
           <div
-            className="relative touch-none overflow-hidden rounded-3xl bg-app shadow-inner ring-1 ring-border"
+            className="relative touch-none overflow-hidden rounded-dialog bg-app shadow-inner ring-1 ring-border"
             style={{ width: CROP_SIZE, height: CROP_SIZE }}
             onPointerDown={startDrag}
             onPointerMove={moveDrag}
@@ -212,7 +212,7 @@ export function AvatarCropDialog({
                 }}
               />
             )}
-            <div className="pointer-events-none absolute inset-0 rounded-3xl ring-2 ring-white/90 dark:ring-white/70" />
+            <div className="pointer-events-none absolute inset-0 rounded-dialog ring-2 ring-white/90 dark:ring-white/70" />
           </div>
 
           <div className="flex w-full items-center gap-3">

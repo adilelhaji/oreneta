@@ -25,7 +25,7 @@ export function UpdateSection() {
   if (!status.supported) {
     if (!status.managed) return null
     return (
-      <div className="mt-5 w-full rounded-2xl border border-border/70 bg-raised/70 px-4 py-3 text-xs text-secondary">
+      <div className="mt-5 w-full rounded-panel border border-border/70 bg-raised/70 px-4 py-3 text-xs text-secondary">
         {t('updates.managedExternally')}
       </div>
     )
@@ -34,7 +34,7 @@ export function UpdateSection() {
   const percent = status.total > 0 ? Math.min(100, Math.round((status.downloaded / status.total) * 100)) : 0
 
   return (
-    <div className="mt-5 w-full rounded-2xl border border-border/70 bg-raised/70 px-4 py-3">
+    <div className="mt-5 w-full rounded-panel border border-border/70 bg-raised/70 px-4 py-3">
       {status.state === 'checking' && (
         <div className="flex items-center justify-center gap-2 text-xs font-semibold text-secondary">
           <Loader2 size={14} className="animate-spin" />

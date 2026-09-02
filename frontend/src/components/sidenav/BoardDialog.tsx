@@ -29,7 +29,7 @@ export function BoardDialog({
       }}
     >
       <form
-        className="w-full max-w-sm rounded-xl border border-border bg-chats p-4 shadow-2xl"
+        className="w-full max-w-sm rounded-control border border-border bg-chats p-4 shadow-2xl"
         onSubmit={(event) => {
           event.preventDefault()
           const name = state.name.trim()

@@ -27,7 +27,7 @@ function ToolbarButton({
     <button
       onClick={onClick}
       title={title}
-      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors cursor-pointer ${
+      className={`flex h-7 w-7 items-center justify-center rounded-control-sm transition-colors cursor-pointer ${
         active ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
       }`}
     >

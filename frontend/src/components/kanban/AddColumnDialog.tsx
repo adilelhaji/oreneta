@@ -53,7 +53,7 @@ export function AddColumnDialog({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-chats shadow-2xl"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-panel border border-border bg-chats shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
@@ -67,7 +67,7 @@ export function AddColumnDialog({
             return (
               <label
                 key={option.key}
-                className="mb-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-hover"
+                className="mb-1 flex cursor-pointer items-center gap-2 rounded-control-sm px-2 py-1.5 hover:bg-hover"
               >
                 <Checkbox
                   checked={selected.has(option.key)}

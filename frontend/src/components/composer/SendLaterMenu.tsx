@@ -31,7 +31,7 @@ export function SendLaterMenu({ disabled, onSchedule }: { disabled: boolean; onS
         onClick={() => setOpen((was) => !was)}
         title={t('sendLater.action')}
         aria-label={t('sendLater.action')}
-        className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+        className={`flex h-9 w-9 items-center justify-center rounded-control transition-colors ${
           disabled
             ? 'cursor-not-allowed text-secondary/50'
             : 'text-secondary hover:bg-hover cursor-pointer'
@@ -40,7 +40,7 @@ export function SendLaterMenu({ disabled, onSchedule }: { disabled: boolean; onS
         <Clock size={15} />
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[15rem] rounded-xl border border-border bg-panel p-1 shadow-lg">
+        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-lg">
           {sendLaterChoices().map((choice) => (
             <MenuItem
               key={choice.key}

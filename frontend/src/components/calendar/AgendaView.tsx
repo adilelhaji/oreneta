@@ -82,7 +82,7 @@ function EventRow({
         mouse.preventDefault()
         onContextMenu(mouse.clientX, mouse.clientY)
       }}
-      className={`flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-raised px-3 py-2.5 transition-colors hover:bg-hover ${
+      className={`flex cursor-pointer items-start gap-3 rounded-control border border-border bg-raised px-3 py-2.5 transition-colors hover:bg-hover ${
         event.is_cancelled ? 'opacity-55' : ''
       }`}
     >

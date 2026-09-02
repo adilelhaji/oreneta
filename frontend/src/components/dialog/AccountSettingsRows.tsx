@@ -29,7 +29,7 @@ export function SettingsGroup({ title, children }: { title: string; children: Re
   return (
     <section>
       <h3 className="mb-2 px-1 text-xs font-semibold text-secondary">{title}</h3>
-      <div className="rounded-2xl bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
+      <div className="rounded-panel bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
         {children}
       </div>
     </section>
@@ -96,7 +96,7 @@ export function SegmentedRow<T extends string>({
       title={title}
       hint={hint}
       control={
-        <div className="flex items-center gap-0.5 rounded-lg bg-active/70 p-0.5">
+        <div className="flex items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5">
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -168,7 +168,7 @@ export function NumberRow({
               onClick={reset.onReset}
               title={reset.title}
               aria-label={reset.title}
-              className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:bg-active hover:text-primary cursor-pointer transition-colors"
+              className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active hover:text-primary cursor-pointer transition-colors"
             >
               <RotateCcw size={13} />
             </button>
@@ -253,7 +253,7 @@ export function SelectRow({
         <SelectInput
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-44 rounded-xl py-1.5 pl-3 font-semibold"
+          className="w-44 rounded-control py-1.5 pl-3 font-semibold"
         >
           {options.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-chats text-primary">

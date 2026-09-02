@@ -91,7 +91,7 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-2xl border border-border bg-app shadow-xl">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-xl">
         {/* A band in the calendar's colour, so which calendar this belongs to
             is answered before the text is read. */}
         <div className="h-1.5 rounded-t-2xl" style={{ backgroundColor: color }} />
@@ -108,7 +108,7 @@ export function EventDetails() {
             type="button"
             onClick={closeDetails}
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
           >
             <X size={15} />
           </button>
@@ -256,7 +256,7 @@ export function EventDetails() {
                     setAnswering(true)
                     void respondToInvitation(event, choice).finally(() => setAnswering(false))
                   }}
-                  className={`flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer ${
+                  className={`flex-1 rounded-control border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer ${
                     answeredAs(event.my_response, choice)
                       ? 'border-accent bg-accent text-white'
                       : 'border-border bg-raised text-primary hover:bg-hover'
@@ -288,7 +288,7 @@ export function EventDetails() {
                   ? setAsking(true)
                   : void deleteEvent(event)
               }
-              className="mr-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
             >
               <Trash2 size={13} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
@@ -297,7 +297,7 @@ export function EventDetails() {
           <button
             type="button"
             onClick={closeDetails}
-            className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
           >
             {t('calendar.close', { defaultValue: 'Close' })}
           </button>
@@ -305,7 +305,7 @@ export function EventDetails() {
             <button
               type="button"
               onClick={() => editEvent(event)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
             >
               <SquarePen size={13} />
               {t('calendar.editEvent', { defaultValue: 'Edit event' })}

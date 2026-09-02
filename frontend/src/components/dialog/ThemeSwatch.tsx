@@ -53,7 +53,7 @@ export function ThemeSwatch({
           onSelect()
         }
       }}
-      className={`group relative overflow-hidden rounded-xl border cursor-pointer transition-all ${
+      className={`group relative overflow-hidden rounded-control border cursor-pointer transition-all ${
         selected ? 'border-accent ring-2 ring-accent/25' : 'border-border hover:border-secondary/40'
       }`}
     >

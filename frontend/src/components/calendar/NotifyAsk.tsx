@@ -27,7 +27,7 @@ export function NotifyAsk({
         if (mouse.target === mouse.currentTarget) onCancel()
       }}
     >
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-app p-5 shadow-xl">
+      <div className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-xl">
         <h2 className="text-sm font-semibold text-primary">
           {action === 'delete'
             ? t('calendar.notifyCancelTitle', { defaultValue: 'Cancel this meeting?' })
@@ -45,7 +45,7 @@ export function NotifyAsk({
 
         {/* Named, not counted: the reader is about to mail these people and
             should see who they are before it happens. */}
-        <ul className="mt-3 max-h-32 overflow-y-auto rounded-xl bg-raised px-3 py-2">
+        <ul className="mt-3 max-h-32 overflow-y-auto rounded-control bg-raised px-3 py-2">
           {people.map((person) => (
             <li key={person} className="truncate text-caption text-primary">
               {person}
@@ -57,7 +57,7 @@ export function NotifyAsk({
           <button
             type="button"
             onClick={() => onChoose(true)}
-            className="rounded-xl bg-accent px-3 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+            className="rounded-control bg-accent px-3 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
           >
             {action === 'delete'
               ? t('calendar.notifySendCancel', { defaultValue: 'Send a cancellation' })
@@ -66,7 +66,7 @@ export function NotifyAsk({
           <button
             type="button"
             onClick={() => onChoose(false)}
-            className="rounded-xl border border-border bg-raised px-3 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
+            className="rounded-control border border-border bg-raised px-3 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
           >
             {t('calendar.notifySilent', { defaultValue: 'Save without telling anyone' })}
           </button>
@@ -76,7 +76,7 @@ export function NotifyAsk({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
           >
             {t('calendar.cancel', { defaultValue: 'Cancel' })}
           </button>

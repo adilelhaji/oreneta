@@ -46,7 +46,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
             aria-pressed={on}
             onClick={() => ui$.filters.set(nextFilters(filters, facet))}
             className={clsx(
-              'flex items-center gap-1.5 rounded-lg px-2 py-1 text-caption font-semibold transition-colors cursor-pointer',
+              'flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-caption font-semibold transition-colors cursor-pointer',
               on ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
             )}
           >
@@ -68,7 +68,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
           }}
           aria-label={t('labels.filterBy')}
           className={clsx(
-            'ml-1 max-w-[10rem] rounded-lg py-1 pl-2 text-caption font-semibold',
+            'ml-1 max-w-[10rem] rounded-control-sm py-1 pl-2 text-caption font-semibold',
             activeLabel && 'text-accent',
           )}
         >
@@ -88,7 +88,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
         aria-label={t('filters.keepAcrossFolders')}
         onClick={() => settings$.stickyFilters.set(!sticky)}
         className={clsx(
-          'ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors cursor-pointer',
+          'ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm transition-colors cursor-pointer',
           sticky ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
         )}
       >

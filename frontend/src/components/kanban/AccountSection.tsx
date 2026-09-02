@@ -79,7 +79,7 @@ export function AccountSection({
 
   return (
     <div className="mb-1">
-      <div className="flex items-center gap-1 rounded-lg px-2 pb-1 pt-2 hover:bg-hover">
+      <div className="flex items-center gap-1 rounded-control-sm px-2 pb-1 pt-2 hover:bg-hover">
         <button
           type="button"
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-left text-2xs font-bold tracking-wide text-secondary hover:text-primary"
@@ -112,7 +112,7 @@ export function AccountSection({
                 void createFolder()
               }}
             >
-              <div className="flex items-center gap-1.5 rounded-lg bg-hover p-1">
+              <div className="flex items-center gap-1.5 rounded-control-sm bg-hover p-1">
                 <TextInput
                   ref={inputRef}
                   value={name}

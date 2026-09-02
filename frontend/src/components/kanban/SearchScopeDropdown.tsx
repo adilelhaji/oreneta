@@ -62,14 +62,14 @@ export function SearchScopeDropdown({
         />
       </button>
       {isOpen && (
-        <div className="absolute right-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-2xl border border-border bg-chats p-1.5 shadow-xl shadow-black/10 dark:shadow-black/35 animate-slide-up">
+        <div className="absolute right-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-xl shadow-black/10 dark:shadow-black/35 animate-slide-up">
           <button
             type="button"
             onClick={() => {
               onChange('all')
               setIsOpen(false)
             }}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-xl transition-colors cursor-pointer select-none ${
+            className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-control transition-colors cursor-pointer select-none ${
               value === 'all' ? 'bg-accent/10 text-accent font-bold' : 'text-primary hover:bg-hover'
             }`}
           >
@@ -97,7 +97,7 @@ export function SearchScopeDropdown({
                   onChange(key)
                   setIsOpen(false)
                 }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-xl transition-colors cursor-pointer select-none ${
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-control transition-colors cursor-pointer select-none ${
                   isSelected ? 'bg-accent/10 text-accent font-bold' : 'text-primary hover:bg-hover'
                 }`}
               >

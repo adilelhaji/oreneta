@@ -238,7 +238,7 @@ export function ThreadActionsMenu({
   return (
     <div ref={rootRef} className="relative">
       <button
-        className={`flex ${triggerClassName} shrink-0 items-center justify-center rounded-lg cursor-pointer transition-all ${
+        className={`flex ${triggerClassName} shrink-0 items-center justify-center rounded-control-sm cursor-pointer transition-all ${
           filterActive ? 'bg-accent text-white shadow-sm shadow-accent/20' : 'hover:bg-hover text-secondary'
         }`}
         onClick={(event) => {
@@ -251,7 +251,7 @@ export function ThreadActionsMenu({
       </button>
       {open && (
         <div
-          className="absolute right-0 mt-1.5 z-50 min-w-[160px] w-max rounded-xl border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
+          className="absolute right-0 mt-1.5 z-50 min-w-[160px] w-max rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
           onClick={(event) => event.stopPropagation()}
         >
           <ThreadActionsMenuItems

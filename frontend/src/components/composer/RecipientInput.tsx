@@ -113,7 +113,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
         }}
       />
       {open && suggestions.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border bg-chats py-1 shadow-xl">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-xl">
           {suggestions.map((c, i) => (
             <li
               key={c.addr}

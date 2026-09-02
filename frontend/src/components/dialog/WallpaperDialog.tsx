@@ -56,7 +56,7 @@ export function WallpaperDialog({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4 animate-fade-in">
-      <div className="w-full max-w-4xl h-[620px] max-h-[90vh] rounded-3xl border border-border bg-chats text-primary shadow-2xl animate-slide-up flex flex-col overflow-hidden">
+      <div className="w-full max-w-4xl h-[620px] max-h-[90vh] rounded-dialog border border-border bg-chats text-primary shadow-2xl animate-slide-up flex flex-col overflow-hidden">
         {/* Title Header */}
         <div className="flex items-center justify-between gap-3 border-b border-border/70 px-6 py-4 shrink-0">
           <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export function WallpaperDialog({
                 type="button"
                 onClick={() => void uploadWallpaper()}
                 disabled={busy}
-                className={`relative flex aspect-[16/10] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-dashed cursor-pointer transition-all ${
+                className={`relative flex aspect-[16/10] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-control border border-dashed cursor-pointer transition-all ${
                   selectedKey.startsWith('custom:')
                     ? 'border-accent text-accent bg-accent/5 ring-2 ring-accent/20'
                     : 'border-border text-secondary hover:text-accent hover:border-accent/50 hover:bg-accent/2'
@@ -90,7 +90,7 @@ export function WallpaperDialog({
                     }}
                   />
                 )}
-                <span className="relative flex flex-col items-center gap-1 rounded-lg bg-chats/90 px-3 py-2 border border-border/30 shadow-xs">
+                <span className="relative flex flex-col items-center gap-1 rounded-control-sm bg-chats/90 px-3 py-2 border border-border/30 shadow-xs">
                   <Upload size={15} />
                   <span className="text-2xs font-bold leading-none">
                     {busy ? t('wallpaper.uploading') : t('wallpaper.uploadCustom')}
@@ -112,7 +112,7 @@ export function WallpaperDialog({
                     type="button"
                     title={preset.name}
                     onClick={() => void onSelect({ kind: 'preset', presetId: preset.id })}
-                    className={`relative aspect-[16/10] overflow-hidden rounded-xl border cursor-pointer transition-all ${
+                    className={`relative aspect-[16/10] overflow-hidden rounded-control border cursor-pointer transition-all ${
                       selected
                         ? 'border-accent ring-2 ring-accent/20'
                         : 'border-border hover:border-secondary/40 hover:scale-[1.01]'
@@ -133,7 +133,7 @@ export function WallpaperDialog({
           {/* Right panel: Live Mockup Chat Preview */}
           <div className="w-full md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-border/70 bg-raised p-5 flex flex-col select-none">
             {/* Chat screen mockup frame */}
-            <div className="flex-1 rounded-2xl border border-border overflow-hidden flex flex-col bg-chat relative shadow-inner min-h-[280px]">
+            <div className="flex-1 rounded-panel border border-border overflow-hidden flex flex-col bg-chat relative shadow-inner min-h-[280px]">
               {/* Wallpaper background inside mockup */}
               <div
                 className={`absolute inset-0 transition-all duration-300 ${previewInfo.className}`}
@@ -154,14 +154,14 @@ export function WallpaperDialog({
                   <div className="h-5 w-5 rounded-full bg-accent/80 flex items-center justify-center text-[0.53125rem] font-bold text-white shadow-xs">
                     {previewName ? previewName.slice(0, 1) : 'U'}
                   </div>
-                  <div className="rounded-2xl rounded-bl-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
+                  <div className="rounded-panel rounded-bl-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
                     How does this chat wallpaper look on your screen?
                   </div>
                 </div>
 
                 {/* Right Bubble (Outgoing) */}
                 <div className="flex flex-col max-w-[80%] self-end">
-                  <div className="rounded-2xl rounded-br-sm border border-accent/20 bg-accent text-white p-2.5 text-caption leading-normal shadow-xs">
+                  <div className="rounded-panel rounded-br-sm border border-accent/20 bg-accent text-white p-2.5 text-caption leading-normal shadow-xs">
                     Looks fantastic! The text contrast and background pattern are perfectly balanced.
                   </div>
                 </div>

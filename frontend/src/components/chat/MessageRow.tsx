@@ -138,7 +138,7 @@ export function MessageRow({
         // Held to the same measure as an expanded message, so a collapsed row
         // does not sit wider than the one it opens into.
         style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
-        className="group/message-row mx-auto flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
+        className="group/message-row mx-auto flex w-full cursor-pointer items-center gap-2.5 rounded-control border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
       >
         <Avatar name={view.avatarName} email={view.avatarEmail} src={view.avatarSrc} size={26} className="shrink-0" />
         <span
@@ -160,7 +160,7 @@ export function MessageRow({
   return (
     <div
       style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
-      className="group/message-row mx-auto w-full rounded-xl border border-border/40 bg-chats px-4 py-3 shadow-sm"
+      className="group/message-row mx-auto w-full rounded-control border border-border/40 bg-chats px-4 py-3 shadow-sm"
     >
       <div className="relative flex items-start gap-2.5">
         <Avatar
@@ -229,7 +229,7 @@ export function MessageRow({
         {metaOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
-            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-lg border border-border bg-chats p-3 text-secondary shadow-xl select-text">
+            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-control-sm border border-border bg-chats p-3 text-secondary shadow-xl select-text">
               <AddressRow label={t('composer.fields.from')} rawList={fromRaw} />
               {toRaw && <AddressRow label={t('composer.fields.to')} rawList={toRaw} />}
               {ccRaw && <AddressRow label={t('composer.fields.cc')} rawList={ccRaw} />}

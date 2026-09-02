@@ -20,9 +20,9 @@ type FieldSize = 'sm' | 'md' | 'lg'
 type FieldSurface = 'app' | 'chats' | 'hover' | 'raised' | 'transparent'
 
 const INPUT_SIZES: Record<FieldSize, string> = {
-  sm: 'rounded-lg px-2.5 py-1 text-xs',
-  md: 'rounded-lg px-3 py-2 text-sm',
-  lg: 'rounded-xl px-3.5 py-2.5 text-ui',
+  sm: 'rounded-control-sm px-2.5 py-1 text-xs',
+  md: 'rounded-control-sm px-3 py-2 text-sm',
+  lg: 'rounded-control px-3.5 py-2.5 text-ui',
 }
 
 const INPUT_SURFACES: Record<FieldSurface, string> = {
@@ -115,7 +115,7 @@ export function Field({
         placeholder={placeholder}
         className={`${
           inputClassName ??
-          'w-full text-xs py-2 px-3.5 rounded-xl border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
+          'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
         } disabled:cursor-not-allowed disabled:opacity-60`}
       />
     </label>
