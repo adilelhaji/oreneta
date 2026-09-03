@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Kohandage otsingut või filtrit ja proovige uuesti.",
   "empty.inboxEmpty": "Sinu postkast on tühi.",
   "empty.kanbanSetupText": "Kanban-vaate kasutamiseks lisa konto.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Postkasti lugemise alustamiseks lisage meili- või RSS-konto.",
   "empty.mailSetupText": "Lisa tavapärane IMAP/SMTP konto, et sünkroonida oma postkast jututoa stiilis sõnumivestluseks.",
   "empty.noArchivedThreads": "Arhiivitud lõimi ei leitud.",

@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "調整搜尋或過濾器，然後重試。",
   "empty.inboxEmpty": "您的收件匣是空的。",
   "empty.kanbanSetupText": "新增帳戶以使用看板檢視。",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "新增郵件或 RSS 帳戶以開始閱讀收件匣。",
   "empty.mailSetupText": "新增傳統 IMAP/SMTP 帳戶以將您的信箱同步為 聊天風格的訊息對話串。",
   "empty.noArchivedThreads": "找不到封存的對話串。",

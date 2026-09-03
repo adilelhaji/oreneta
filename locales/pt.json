@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Ajuste a pesquisa ou o filtro e tente novamente.",
   "empty.inboxEmpty": "A sua caixa de entrada está vazia.",
   "empty.kanbanSetupText": "Adicione uma conta para utilizar a vista kanban.",
+  "empty.loadingConversation": "A carregar a conversa",
+  "empty.loadingThreads": "A carregar as mensagens",
   "empty.mailOrRssSetupText": "Adicione uma conta de e-mail ou RSS para começar a ler sua caixa de entrada.",
   "empty.mailSetupText": "Adicione uma conta IMAP/SMTP tradicional para sincronizar a sua caixa de correio num tópico de mensagens ao estilo de chat.",
   "empty.noArchivedThreads": "Nenhum tópico arquivado encontrado.",

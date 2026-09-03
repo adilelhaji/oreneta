@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "اضبط البحث أو التصفية، ثم حاول مرة أخرى.",
   "empty.inboxEmpty": "صندوق الوارد الخاص بك فارغ.",
   "empty.kanbanSetupText": "أضف حسابًا لاستخدام عرض كانبان.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "قم بإضافة حساب بريد أو RSS لبدء قراءة البريد الوارد الخاص بك.",
   "empty.mailSetupText": "أضف حساب IMAP/SMTP تقليدي لمزامنة صندوق بريدك في سلسلة رسائل بأسلوب دردشة.",
   "empty.noArchivedThreads": "لم يتم العثور على سلاسل رسائل مؤرشفة.",

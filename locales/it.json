@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Modifica la ricerca o il filtro, quindi riprova.",
   "empty.inboxEmpty": "La tua posta in arrivo è vuota.",
   "empty.kanbanSetupText": "Aggiungi un account per utilizzare la vista kanban.",
+  "empty.loadingConversation": "Caricamento della conversazione",
+  "empty.loadingThreads": "Caricamento dei messaggi",
   "empty.mailOrRssSetupText": "Aggiungi un account di posta o RSS per iniziare a leggere la tua casella di posta.",
   "empty.mailSetupText": "Aggiungi un account IMAP/SMTP tradizionale per sincronizzare la tua casella postale in un thread di messaggi in stile chat.",
   "empty.noArchivedThreads": "Nessun thread archiviato trovato.",

@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Ajustez la recherche ou le filtre, puis réessayez.",
   "empty.inboxEmpty": "Votre boîte de réception est vide.",
   "empty.kanbanSetupText": "Ajoutez un compte pour utiliser la vue Kanban.",
+  "empty.loadingConversation": "Chargement de la conversation",
+  "empty.loadingThreads": "Chargement des messages",
   "empty.mailOrRssSetupText": "Ajoutez un compte de messagerie ou RSS pour commencer à lire votre boîte de réception.",
   "empty.mailSetupText": "Ajoutez un compte IMAP/SMTP traditionnel pour synchroniser votre boîte de réception dans un fil de messages de style chat.",
   "empty.noArchivedThreads": "Aucun fil archivé trouvé.",

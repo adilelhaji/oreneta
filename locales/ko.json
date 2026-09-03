@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "검색 또는 필터를 조정한 후 다시 시도하세요.",
   "empty.inboxEmpty": "받은 편지함이 비어 있습니다.",
   "empty.kanbanSetupText": "칸반 보기를 사용하려면 계정을 추가하세요.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "받은편지함을 읽으려면 메일 또는 RSS 계정을 추가하세요.",
   "empty.mailSetupText": "기존 IMAP/SMTP 계정을 추가하여 편지함을 채팅 스타일의 메시지 스레드로 동기화해 보세요.",
   "empty.noArchivedThreads": "보관된 스레드가 없습니다.",

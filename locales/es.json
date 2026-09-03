@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Ajuste la búsqueda o el filtro y vuelva a intentarlo.",
   "empty.inboxEmpty": "Su bandeja de entrada está vacía.",
   "empty.kanbanSetupText": "Añada una cuenta para usar la vista Kanban.",
+  "empty.loadingConversation": "Cargando la conversación",
+  "empty.loadingThreads": "Cargando mensajes",
   "empty.mailOrRssSetupText": "Agrega una cuenta de correo o RSS para comenzar a leer tu bandeja de entrada.",
   "empty.mailSetupText": "Añada una cuenta IMAP/SMTP tradicional para sincronizar su buzón de correo en un hilo de mensajes al estilo de chat.",
   "empty.noArchivedThreads": "No se encontraron hilos archivados.",

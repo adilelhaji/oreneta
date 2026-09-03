@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Passen Sie die Suche oder den Filter an und versuchen Sie es dann erneut.",
   "empty.inboxEmpty": "Ihr Posteingang ist leer.",
   "empty.kanbanSetupText": "Fügen Sie ein Konto hinzu, um die Kanban-Ansicht zu nutzen.",
+  "empty.loadingConversation": "Unterhaltung wird geladen",
+  "empty.loadingThreads": "Nachrichten werden geladen",
   "empty.mailOrRssSetupText": "Fügen Sie ein E-Mail- oder RSS-Konto hinzu, um mit dem Lesen Ihres Posteingangs zu beginnen.",
   "empty.mailSetupText": "Fügen Sie ein klassisches IMAP/SMTP-Konto hinzu, um Ihr Postfach in einen Nachrichten-Thread im Chat-Stil zu synchronisieren.",
   "empty.noArchivedThreads": "Keine archivierten Threads gefunden.",

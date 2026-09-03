@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Dostosuj wyszukiwanie lub filtr, a następnie spróbuj ponownie.",
   "empty.inboxEmpty": "Twoja skrzynka odbiorcza jest pusta.",
   "empty.kanbanSetupText": "Dodaj konto, aby korzystać z widoku Kanban.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Dodaj konto pocztowe lub RSS, aby zacząć czytać swoją skrzynkę odbiorczą.",
   "empty.mailSetupText": "Dodaj tradycyjne konto IMAP/SMTP, aby zsynchronizować swoją skrzynkę pocztową w wątek wiadomości w stylu czatu.",
   "empty.noArchivedThreads": "Nie znaleziono zarchiwizowanych wątków.",

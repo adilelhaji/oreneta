@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Justera sökningen eller filtret och försök sedan igen.",
   "empty.inboxEmpty": "Din inkorg är tom.",
   "empty.kanbanSetupText": "Lägg till ett konto för att använda kanban-vyn.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Lägg till ett e-post- eller RSS-konto för att börja läsa din inkorg.",
   "empty.mailSetupText": "Lägg till ett vanligt IMAP/SMTP-konto för att synkronisera din brevlåda till en meddelandetråd i chat-stil.",
   "empty.noArchivedThreads": "Inga arkiverade trådar hittades.",

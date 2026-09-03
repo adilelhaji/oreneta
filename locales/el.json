@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Προσαρμόστε την αναζήτηση ή το φίλτρο και δοκιμάστε ξανά.",
   "empty.inboxEmpty": "Τα εισερχόμενά σας είναι άδεια.",
   "empty.kanbanSetupText": "Προσθέστε έναν λογαριασμό για να χρησιμοποιήσετε την προβολή kanban.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Προσθέστε έναν λογαριασμό αλληλογραφίας ή RSS για να ξεκινήσετε την ανάγνωση των εισερχομένων σας.",
   "empty.mailSetupText": "Προσθέστε έναν παραδοσιακό λογαριασμό IMAP/SMTP για να συγχρονίσετε το γραμματοκιβώτιό σας σε ένα νήμα μηνυμάτων τύπου chat.",
   "empty.noArchivedThreads": "Δεν βρέθηκαν αρχειοθετημένα νήματα.",

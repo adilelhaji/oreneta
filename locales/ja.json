@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "検索またはフィルターを調整して、もう一度お試しください。",
   "empty.inboxEmpty": "受信トレイは空です。",
   "empty.kanbanSetupText": "アカウントを追加してカンバン表示を使用します。",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "メールまたはRSSアカウントを追加して受信トレイを読み始めます。",
   "empty.mailSetupText": "従来のIMAP/SMTPアカウントを追加して、メールボックスをチャットスタイルのメッセージスレッドに同期します。",
   "empty.noArchivedThreads": "アーカイブされたスレッドは見つかりませんでした。",

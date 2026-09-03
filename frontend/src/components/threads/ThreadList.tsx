@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, DragEvent, PointerEventHandler } from 'react'
-import { Search, X, Plus, SquarePen, MoreHorizontal, Loader2 } from 'lucide-react'
+import { Search, X, Plus, SquarePen, MoreHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { openAddFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
@@ -50,6 +50,7 @@ import { isRssAccount } from '../../lib/threadActions'
 import { folderLabel } from '../../lib/kanbanData'
 import { isUnifiedStarred } from '../../lib/unifiedFolders'
 import { EmptyState } from '../empty-state/EmptyState'
+import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
 import { QuickSettingsMenu } from '../sidenav/QuickSettingsMenu'
 import { FolderSwitcher } from '../menu/FolderSwitcher'
@@ -458,9 +459,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           // the wrong answer twice. Spin until the load lands, same as the
           // conversation pane does while a thread is being fetched.
           threadsLoading ? (
-            <div className="flex h-full items-center justify-center" role="status" aria-label={t('common.loading')}>
-              <Loader2 size={28} className="animate-spin text-secondary/70" />
-            </div>
+            <LoadingState title={t('empty.loadingThreads')} />
           ) : isStarredView ? (
             <EmptyState title={t('empty.noStarredItems')} text={t('empty.noStarredItemsText')} />
           ) : (

@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Pielāgojiet meklēšanu vai filtru un pēc tam mēģiniet vēlreiz.",
   "empty.inboxEmpty": "Jūsu iesūtne ir tukša.",
   "empty.kanbanSetupText": "Pievienojiet kontu, lai izmantotu Kanban skatu.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Pievienojiet pasta vai RSS kontu, lai sāktu lasīt iesūtni.",
   "empty.mailSetupText": "Pievienojiet tradicionālo IMAP/SMTP kontu, lai sinhronizētu savu pastkasti tērzēšanas stila ziņojumu pavedienā.",
   "empty.noArchivedThreads": "Netika atrasts neviens arhivēts pavediens.",

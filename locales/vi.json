@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Điều chỉnh tìm kiếm hoặc bộ lọc, sau đó thử lại.",
   "empty.inboxEmpty": "Hộp thư đến của bạn trống.",
   "empty.kanbanSetupText": "Thêm một tài khoản để sử dụng chế độ xem kanban.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Thêm tài khoản thư hoặc RSS để bắt đầu đọc hộp thư đến của bạn.",
   "empty.mailSetupText": "Thêm một tài khoản IMAP/SMTP truyền thống để đồng bộ hộp thư của bạn thành một luồng tin nhắn kiểu trò chuyện.",
   "empty.noArchivedThreads": "Không tìm thấy luồng lưu trữ nào.",

@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "调整搜索或过滤器，然后重试。",
   "empty.inboxEmpty": "您的收件箱是空的。",
   "empty.kanbanSetupText": "添加账户以使用看板视图。",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "添加邮件或 RSS 帐户以开始阅读收件箱。",
   "empty.mailSetupText": "添加传统的 IMAP/SMTP 账户，将您的邮箱同步为 聊天风格的消息会话线索。",
   "empty.noArchivedThreads": "未找到归档会话。",

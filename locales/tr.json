@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Aramayı veya filtreyi ayarlayın ve tekrar deneyin.",
   "empty.inboxEmpty": "Gelen kutunuz boş.",
   "empty.kanbanSetupText": "Kanban görünümünü kullanmak için bir hesap ekleyin.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Gelen kutunuzu okumaya başlamak için bir posta veya RSS hesabı ekleyin.",
   "empty.mailSetupText": "Posta kutunuzu sohbet tarzı bir ileti dizisiyle senkronize etmek için geleneksel bir IMAP/SMTP hesabı ekleyin.",
   "empty.noArchivedThreads": "Arşivlenmiş ileti dizisi bulunamadı.",

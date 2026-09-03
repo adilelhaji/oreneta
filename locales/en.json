@@ -441,6 +441,8 @@
   "empty.adjustSearchFilter": "Adjust the search or filter, then try again.",
   "empty.inboxEmpty": "Your inbox is empty.",
   "empty.kanbanSetupText": "Add an account to use kanban view.",
+  "empty.loadingConversation": "Loading conversation",
+  "empty.loadingThreads": "Loading messages",
   "empty.mailOrRssSetupText": "Add a mail or RSS account to start reading your inbox.",
   "empty.mailSetupText": "Add a traditional IMAP/SMTP account to sync your mailbox into a chat-style message thread.",
   "empty.noArchivedThreads": "No archived threads found.",
