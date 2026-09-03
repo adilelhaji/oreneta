@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { CalendarDays, Cloud, HardDrive, Link2, X } from 'lucide-react'
+import { CalendarDays, Cloud, HardDrive, Link2 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import {
   accountSupportsCalendar,
@@ -11,6 +11,10 @@ import {
 } from '../../states/calendar'
 import { accounts$ } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
+import { Button } from '../button/Button'
+import { SelectInput, TextInput } from '../field/Field'
+import { Notice } from '../notice/Notice'
+import { Dialog } from './Dialog'
 
 /// Creating a calendar, asking first where it should live.
 ///
@@ -35,8 +39,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   const pool = kind === 'account' ? capable : accounts
   const chosen = pool.some((account) => account.id === accountId) ? accountId : (pool[0]?.id ?? '')
 
-  const invalid =
-    !name.trim() || !chosen || (kind === 'subscribed' && !/^https?:\/\//.test(url.trim()))
+  const invalid = !name.trim() || !chosen || (kind === 'subscribed' && !/^https?:\/\//.test(url.trim()))
 
   const submit = async () => {
     setBusy(true)
@@ -54,84 +57,67 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const hint =
+    kind === 'account'
+      ? t('calendar.kindAccountHint', {
+          defaultValue: 'Created on the account’s server, and available wherever you read that account.',
+        })
+      : kind === 'local'
+        ? t('calendar.kindLocalHint', {
+            defaultValue: 'Kept only in this copy of Oreneta. Nothing else has a copy, so it is lost if this profile is.',
+          })
+        : t('calendar.kindSubscribedHint', {
+            defaultValue: 'Follows a published calendar file. Read-only — it belongs to whoever publishes it.',
+          })
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-panel border border-border bg-app p-5 shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <CalendarDays size={15} className="text-accent" />
-            {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
-            aria-label={t('calendar.close', { defaultValue: 'Close' })}
-          >
-            <X size={15} />
-          </button>
-        </div>
+    <Dialog
+      title={t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
+      icon={CalendarDays}
+      layer="raised"
+      onClose={onClose}
+      closeDisabled={busy}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {t('calendar.cancel', { defaultValue: 'Cancel' })}
+          </Button>
+          <Button onClick={() => void submit()} disabled={invalid || busy}>
+            {t('calendar.add', { defaultValue: 'Add' })}
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-3 gap-1 rounded-panel border border-border/80 bg-raised p-1" role="radiogroup">
+        <KindTab active={kind === 'account'} icon={<Cloud size={16} />} label={t('calendar.kindAccount', { defaultValue: 'In an account' })} onClick={() => setKind('account')} />
+        <KindTab active={kind === 'local'} icon={<HardDrive size={16} />} label={t('calendar.kindLocal', { defaultValue: 'On this computer' })} onClick={() => setKind('local')} />
+        <KindTab active={kind === 'subscribed'} icon={<Link2 size={16} />} label={t('calendar.kindSubscribed', { defaultValue: 'From a link' })} onClick={() => setKind('subscribed')} />
+      </div>
 
-        <div className="mb-4 grid grid-cols-3 gap-1 rounded-panel border border-border/80 bg-raised p-1">
-          <KindTab
-            active={kind === 'account'}
-            icon={<Cloud size={16} />}
-            label={t('calendar.kindAccount', { defaultValue: 'In an account' })}
-            onClick={() => setKind('account')}
-          />
-          <KindTab
-            active={kind === 'local'}
-            icon={<HardDrive size={16} />}
-            label={t('calendar.kindLocal', { defaultValue: 'On this computer' })}
-            onClick={() => setKind('local')}
-          />
-          <KindTab
-            active={kind === 'subscribed'}
-            icon={<Link2 size={16} />}
-            label={t('calendar.kindSubscribed', { defaultValue: 'From a link' })}
-            onClick={() => setKind('subscribed')}
-          />
-        </div>
+      <p className="px-0.5 text-caption text-secondary">{hint}</p>
 
-        <p className="mb-3 px-0.5 text-caption text-secondary">
-          {kind === 'account'
-            ? t('calendar.kindAccountHint', {
-                defaultValue: 'Created on the account’s server, and available wherever you read that account.',
-              })
-            : kind === 'local'
-              ? t('calendar.kindLocalHint', {
-                  defaultValue:
-                    'Kept only in this copy of Oreneta. Nothing else has a copy, so it is lost if this profile is.',
-                })
-              : t('calendar.kindSubscribedHint', {
-                  defaultValue:
-                    'Follows a published calendar file. Read-only — it belongs to whoever publishes it.',
-                })}
-        </p>
-
-        {kind === 'account' && capable.length === 0 ? (
-          <p className="px-0.5 text-caption text-secondary">
-            {t('calendar.noServerAccounts', {
-              defaultValue:
-                'None of these accounts keeps calendars on a server. Exchange accounts do — their calendars arrive with the account.',
-            })}
-          </p>
-        ) : (
+      {kind === 'account' && capable.length === 0 ? (
+        <Notice tone="warning">
+          {t('calendar.noServerAccounts', {
+            defaultValue:
+              'None of these accounts keeps calendars on a server. Exchange accounts do — their calendars arrive with the account.',
+          })}
+        </Notice>
+      ) : (
         <div className="flex flex-col gap-3">
           <Labelled label={t('calendar.name', { defaultValue: 'Name' })}>
-            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus className={inputClass} />
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus fieldSize="md" surface="raised" className="w-full" />
           </Labelled>
 
           {kind === 'subscribed' && (
             <Labelled label={t('calendar.url', { defaultValue: 'Address' })}>
-              <input
+              <TextInput
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://example.org/calendar.ics"
-                className={inputClass}
+                fieldSize="md"
+                surface="raised"
+                className="w-full"
               />
             </Labelled>
           )}
@@ -144,65 +130,36 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
                   : t('calendar.listedUnder', { defaultValue: 'Listed under' })
               }
             >
-              <select
-                value={chosen}
-                onChange={(e) => setAccountId(e.target.value)}
-                className={inputClass}
-              >
+              <SelectInput value={chosen} onChange={(e) => setAccountId(e.target.value)} fieldSize="md" surface="raised">
                 {pool.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.email}
                   </option>
                 ))}
-              </select>
+              </SelectInput>
             </Labelled>
           )}
 
-          {error && <p className="text-caption text-rose-500">{error}</p>}
+          {error && (
+            <p role="alert" className="text-caption text-rose-500">
+              {error}
+            </p>
+          )}
         </div>
-        )}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
-          >
-            {t('calendar.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            disabled={invalid || busy}
-            onClick={() => void submit()}
-            className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-          >
-            {t('calendar.add', { defaultValue: 'Add' })}
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Dialog>
   )
 }
 
-function KindTab({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean
-  icon: React.ReactNode
-  label: string
-  onClick: () => void
-}) {
+function KindTab({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={active}
       onClick={onClick}
-      className={`flex min-w-0 flex-col items-center gap-1 rounded-control px-2 py-2.5 text-center transition-all cursor-pointer ${
-        active
-          ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
-          : 'text-secondary hover:bg-chats/60 hover:text-primary'
+      className={`flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-control px-2 py-2.5 text-center transition-all ${
+        active ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80' : 'text-secondary hover:bg-chats/60 hover:text-primary'
       }`}
     >
       <span className={active ? 'text-accent' : ''}>{icon}</span>
@@ -210,9 +167,6 @@ function KindTab({
     </button>
   )
 }
-
-const inputClass =
-  'w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent'
 
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (

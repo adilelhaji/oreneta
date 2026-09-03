@@ -1,10 +1,9 @@
-import { X } from 'lucide-react'
+import { Columns3 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import { createKanbanBoard } from '../../states/kanban'
 import { Button } from '../button/Button'
-import { IconButton } from '../button/IconButton'
 import { TextInput } from '../field/Field'
+import { Dialog } from '../dialog/Dialog'
 
 export type BoardDialogState = { mode: 'create'; name: string }
 
@@ -20,48 +19,50 @@ export function BoardDialog({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  useEscapeKey(onClose)
+  const submit = () => {
+    const name = state.name.trim()
+    if (!name) return
+    createKanbanBoard(name)
+    onClose()
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
+    <Dialog
+      title={t('kanban.actions.addBoard')}
+      icon={Columns3}
+      width="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            {t('buttons.cancel')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={submit} disabled={!state.name.trim()}>
+            {t('kanban.actions.addBoardShort')}
+          </Button>
+        </>
+      }
     >
       <form
-        className="w-full max-w-sm rounded-control border border-border bg-chats p-4 shadow-2xl"
+        className="flex flex-col gap-1.5"
         onSubmit={(event) => {
           event.preventDefault()
-          const name = state.name.trim()
-          if (!name) return
-          createKanbanBoard(name)
-          onClose()
+          submit()
         }}
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-bold text-primary">{t('kanban.actions.addBoard')}</h2>
-          <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" radius="lg" onClick={onClose} />
-        </div>
-        <label className="mb-1.5 block text-caption font-bold uppercase tracking-wide text-secondary">
+        <label htmlFor="board-name" className="text-caption font-bold uppercase tracking-wide text-secondary">
           {t('kanban.board.name')}
         </label>
         <TextInput
+          id="board-name"
           autoFocus
           value={state.name}
           onChange={(event) => onChange({ ...state, name: event.target.value })}
           fieldSize="md"
           surface="app"
-          className="mb-4 w-full font-semibold"
+          className="w-full font-semibold"
         />
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            {t('buttons.cancel')}
-          </Button>
-          <Button variant="primary" size="sm" type="submit" disabled={!state.name.trim()}>
-            {t('kanban.actions.addBoardShort')}
-          </Button>
-        </div>
       </form>
-    </div>
+    </Dialog>
   )
 }

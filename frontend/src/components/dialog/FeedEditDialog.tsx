@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { X, Rss, Trash2, Copy, Check } from 'lucide-react'
+import { Rss, Trash2, Copy, Check } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import { removeFeed } from '../../states/feeds'
 import { ui$ } from '../../states/ui'
 import { Button } from '../button/Button'
 import { IconButton } from '../button/IconButton'
+import { Dialog } from './Dialog'
 
 export function FeedEditDialog() {
   const { t } = useTranslation()
@@ -20,8 +20,6 @@ export function FeedEditDialog() {
     ui$.editFeed.set(null)
   }
 
-  useEscapeKey(onClose, Boolean(feed) && !deleting)
-
   if (!feed) return null
 
   const onCopy = async () => {
@@ -33,6 +31,8 @@ export function FeedEditDialog() {
 
   const onDelete = async () => {
     if (deleting) return
+    // Two presses, not a confirm dialog: the second press is the confirmation,
+    // and the button says so between them.
     if (!confirming) {
       setConfirming(true)
       return
@@ -43,62 +43,45 @@ export function FeedEditDialog() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
-      <div className="bg-chats border border-border text-primary max-w-md w-full rounded-dialog p-6 shadow-2xl animate-slide-up flex flex-col gap-5">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent">
-              <Rss size={17} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-title font-bold tracking-tight leading-tight truncate">{feed.name}</h2>
-              <p className="text-caption text-secondary mt-1 font-medium truncate">
-                {feed.url || t('feeds.manageSubscription')}
-              </p>
-            </div>
-          </div>
-          <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" onClick={onClose} />
-        </div>
-
-        {/* Feed URL */}
-        {feed.url && (
-          <div className="flex flex-col gap-2">
-            <label className="text-caption font-semibold text-secondary px-1">{t('feeds.url')}</label>
-            <div className="flex items-center gap-2 rounded-control bg-hover px-3 py-2">
-              <span className="flex-1 min-w-0 truncate text-caption font-medium text-primary">{feed.url}</span>
-              <button
-                onClick={onCopy}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm hover:bg-active text-secondary transition-colors cursor-pointer"
-                title={copied ? t('common.copied') : t('feeds.copyUrl')}
-              >
-                {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Danger zone */}
-        <div className="flex flex-col gap-2">
-          <label className="text-caption font-semibold text-secondary px-1">{t('feeds.actions.deleteFeed')}</label>
-          <p className="text-caption text-secondary px-1 leading-relaxed font-medium">{t('feeds.deleteHint')}</p>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-between gap-2 select-none">
-          <button
-            onClick={onDelete}
-            disabled={deleting}
-            className="px-4 py-2 rounded-control text-xs font-bold transition-all flex items-center gap-1.5 bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white cursor-pointer disabled:opacity-50"
-          >
-            <Trash2 size={13} />
-            <span>{confirming ? t('feeds.actions.confirmDelete') : t('feeds.actions.deleteFeed')}</span>
-          </button>
+    <Dialog
+      title={feed.name}
+      subtitle={feed.url || t('feeds.manageSubscription')}
+      icon={Rss}
+      onClose={onClose}
+      closeDisabled={deleting}
+      footer={
+        <>
+          <Button variant="danger" leftIcon={Trash2} onClick={onDelete} disabled={deleting} className="mr-auto">
+            {confirming ? t('feeds.actions.confirmDelete') : t('feeds.actions.deleteFeed')}
+          </Button>
           <Button variant="ghost" onClick={onClose} disabled={deleting}>
             {t('buttons.close')}
           </Button>
+        </>
+      }
+    >
+      {feed.url && (
+        <div className="flex flex-col gap-2">
+          <span className="px-1 text-caption font-semibold text-secondary">{t('feeds.url')}</span>
+          <div className="flex items-center gap-2 rounded-control bg-hover px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-caption font-medium text-primary select-text">{feed.url}</span>
+            <IconButton
+              icon={copied ? Check : Copy}
+              iconSize={14}
+              size="sm"
+              radius="lg"
+              label={copied ? t('common.copied') : t('feeds.copyUrl')}
+              className={copied ? 'text-emerald-500' : undefined}
+              onClick={() => void onCopy()}
+            />
+          </div>
         </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <span className="px-1 text-caption font-semibold text-secondary">{t('feeds.actions.deleteFeed')}</span>
+        <p className="px-1 text-caption font-medium leading-relaxed text-secondary">{t('feeds.deleteHint')}</p>
       </div>
-    </div>
+    </Dialog>
   )
 }

@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import { isValidColor, luminance } from '../../lib/color'
 import {
   cssVarStyle,
@@ -14,8 +13,8 @@ import {
 } from '../../lib/themes'
 import { upsertCustomTheme } from '../../states/settings'
 import { Button } from '../button/Button'
-import { IconButton } from '../button/IconButton'
 import { TextInput } from '../field/Field'
+import { Dialog } from './Dialog'
 
 // Custom theme editor, layered over Settings (same pattern as
 // AvatarCropDialog: z-[70] overlay + capture-phase Esc so the Settings dialog
@@ -53,8 +52,6 @@ export function ThemeEditorDialog({
   // dark theme doesn't start from light colors.
   const [dirty, setDirty] = useState(initial !== null)
 
-  useEscapeKey(onClose)
-
   const setColor = (key: ColorField, value: string) => {
     setDirty(true)
     setInput((current) => ({ ...current, [key]: value }))
@@ -80,64 +77,65 @@ export function ThemeEditorDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4 animate-fade-in">
-      <div className="w-full max-w-lg rounded-dialog border border-border bg-chats text-primary shadow-2xl animate-slide-up overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
-          <h3 className="text-sm font-bold leading-tight">{initial ? t('theme.edit') : t('theme.new')}</h3>
-          <IconButton icon={X} iconSize={15} label={t('buttons.cancel')} size="sm" onClick={onClose} />
-        </div>
-
-        <div className="flex flex-col gap-4 px-5 py-4 max-h-[65vh] overflow-y-auto">
-          <div className="flex items-center gap-2">
-            <TextInput
-              type="text"
-              value={name}
-              placeholder={t('theme.namePlaceholder')}
-              onChange={(event) => setName(event.target.value)}
-              surface="raised"
-              className="flex-1 rounded-control px-3 py-2 font-semibold"
-            />
-            <div className="flex shrink-0 items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5">
-              {(['light', 'dark'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setAppearance(mode)}
-                  className={`rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors cursor-pointer ${
-                    input.appearance === mode ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:text-primary'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {COLOR_FIELDS.map(({ key, labelKey, hintKey }) => (
-              <ColorRow
-                key={key}
-                label={t(labelKey)}
-                hint={t(hintKey)}
-                value={input[key]}
-                onChange={(value) => setColor(key, value)}
-              />
-            ))}
-          </div>
-
-          {tokens && <ThemePreview tokens={tokens} />}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-border/70 px-5 py-4">
+    <Dialog
+      title={initial ? t('theme.edit') : t('theme.new')}
+      icon={Palette}
+      width="lg"
+      layer="raised"
+      onClose={onClose}
+      className="max-h-[80vh]"
+      footer={
+        <>
           <Button variant="secondary" size="sm" onClick={onClose}>
             {t('buttons.cancel')}
           </Button>
           <Button size="sm" onClick={save} disabled={!valid}>
             {t('theme.save')}
           </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <TextInput
+            type="text"
+            value={name}
+            placeholder={t('theme.namePlaceholder')}
+            onChange={(event) => setName(event.target.value)}
+            surface="raised"
+            className="flex-1 rounded-control px-3 py-2 font-semibold"
+          />
+          <div className="flex shrink-0 items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5">
+            {(['light', 'dark'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAppearance(mode)}
+                className={`rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors cursor-pointer ${
+                  input.appearance === mode ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:text-primary'
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <div className="flex flex-col gap-2">
+          {COLOR_FIELDS.map(({ key, labelKey, hintKey }) => (
+            <ColorRow
+              key={key}
+              label={t(labelKey)}
+              hint={t(hintKey)}
+              value={input[key]}
+              onChange={(value) => setColor(key, value)}
+            />
+          ))}
+        </div>
+
+        {tokens && <ThemePreview tokens={tokens} />}
       </div>
-    </div>
+    </Dialog>
   )
 }
 

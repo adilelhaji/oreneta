@@ -1,5 +1,7 @@
+import { Send } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
+import { Button } from '../button/Button'
+import { Dialog } from '../dialog/Dialog'
 
 /// Asks whether the people on a meeting should be told.
 ///
@@ -18,70 +20,50 @@ export function NotifyAsk({
   onCancel: () => void
 }) {
   const { t } = useTranslation()
-  useEscapeKey(onCancel)
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
-      onMouseDown={(mouse) => {
-        if (mouse.target === mouse.currentTarget) onCancel()
-      }}
+    <Dialog
+      title={
+        action === 'delete'
+          ? t('calendar.notifyCancelTitle', { defaultValue: 'Cancel this meeting?' })
+          : t('calendar.notifyTitle', { defaultValue: 'Tell the people on it?' })
+      }
+      subtitle={
+        action === 'delete'
+          ? t('calendar.notifyCancelHint', { defaultValue: 'A cancellation can be sent to everyone on the meeting.' })
+          : t('calendar.notifyHint', { defaultValue: 'An invitation can be sent to everyone on the meeting.' })
+      }
+      icon={Send}
+      width="sm"
+      layer="raised"
+      role="alertdialog"
+      onClose={onCancel}
+      footer={
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          {t('calendar.cancel', { defaultValue: 'Cancel' })}
+        </Button>
+      }
     >
-      <div className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-xl">
-        <h2 className="text-sm font-semibold text-primary">
+      {/* Named, not counted: the reader is about to mail these people and
+          should see who they are before it happens. */}
+      <ul className="max-h-32 overflow-y-auto rounded-control bg-raised px-3 py-2">
+        {people.map((person) => (
+          <li key={person} className="truncate text-caption text-primary">
+            {person}
+          </li>
+        ))}
+      </ul>
+
+      <div className="flex flex-col gap-2">
+        <Button onClick={() => onChoose(true)}>
           {action === 'delete'
-            ? t('calendar.notifyCancelTitle', { defaultValue: 'Cancel this meeting?' })
-            : t('calendar.notifyTitle', { defaultValue: 'Tell the people on it?' })}
-        </h2>
-        <p className="mt-1.5 text-caption text-secondary">
-          {action === 'delete'
-            ? t('calendar.notifyCancelHint', {
-                defaultValue: 'A cancellation can be sent to everyone on the meeting.',
-              })
-            : t('calendar.notifyHint', {
-                defaultValue: 'An invitation can be sent to everyone on the meeting.',
-              })}
-        </p>
-
-        {/* Named, not counted: the reader is about to mail these people and
-            should see who they are before it happens. */}
-        <ul className="mt-3 max-h-32 overflow-y-auto rounded-control bg-raised px-3 py-2">
-          {people.map((person) => (
-            <li key={person} className="truncate text-caption text-primary">
-              {person}
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-4 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => onChoose(true)}
-            className="rounded-control bg-accent px-3 py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
-          >
-            {action === 'delete'
-              ? t('calendar.notifySendCancel', { defaultValue: 'Send a cancellation' })
-              : t('calendar.notifySend', { defaultValue: 'Send it' })}
-          </button>
-          <button
-            type="button"
-            onClick={() => onChoose(false)}
-            className="rounded-control border border-border bg-raised px-3 py-2.5 text-xs font-medium text-primary transition-colors hover:bg-hover cursor-pointer"
-          >
-            {t('calendar.notifySilent', { defaultValue: 'Save without telling anyone' })}
-          </button>
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
-          >
-            {t('calendar.cancel', { defaultValue: 'Cancel' })}
-          </button>
-        </div>
+            ? t('calendar.notifySendCancel', { defaultValue: 'Send a cancellation' })
+            : t('calendar.notifySend', { defaultValue: 'Send it' })}
+        </Button>
+        <Button variant="secondary" onClick={() => onChoose(false)}>
+          {t('calendar.notifySilent', { defaultValue: 'Save without telling anyone' })}
+        </Button>
       </div>
-    </div>
+    </Dialog>
   )
 }

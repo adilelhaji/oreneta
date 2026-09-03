@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { X, Check, Upload, Image as ImageIcon } from 'lucide-react'
+import { Check, Upload, Image as ImageIcon } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import type { ChatWallpaper } from '../../types'
 import { WALLPAPER_PRESETS, sanitizeChatWallpaper, wallpaperCss } from '../../lib/wallpapers'
 import { pickImageFile } from '../../lib/nativeFilePicker'
 import { showToast } from '../../states/ui'
-import { IconButton } from '../button/IconButton'
+import { Dialog } from './Dialog'
 
 function wallpaperKey(wallpaper: ChatWallpaper | null) {
   if (!wallpaper) return 'preset:plain'
@@ -37,8 +36,6 @@ export function WallpaperDialog({
   const wallpaper = sanitizeChatWallpaper(rawWallpaper)
   const selectedKey = wallpaperKey(wallpaper)
 
-  useEscapeKey(onClose)
-
   const uploadWallpaper = async () => {
     try {
       const file = await pickImageFile(t('wallpaper.chooseImage'))
@@ -55,121 +52,92 @@ export function WallpaperDialog({
   const previewInfo = wallpaperCss(wallpaper)
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4 animate-fade-in">
-      <div className="w-full max-w-4xl h-[620px] max-h-[90vh] rounded-dialog border border-border bg-chats text-primary shadow-2xl animate-slide-up flex flex-col overflow-hidden">
-        {/* Title Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-6 py-4 shrink-0">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="text-accent" size={16} />
-            <h3 className="text-sm font-bold leading-tight">{title}</h3>
+    <Dialog title={title} icon={ImageIcon} width="2xl" layer="raised" onClose={onClose} className="h-[620px]">
+      {/* Split body: the choices, and a live picture of the one chosen. */}
+      <div className="-m-1 flex min-h-0 flex-1 flex-col overflow-hidden rounded-panel border border-border md:flex-row">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+          <div className="grid grid-cols-2 gap-3 pb-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => void uploadWallpaper()}
+              disabled={busy}
+              className={`relative flex aspect-[16/10] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-control border border-dashed transition-all ${
+                selectedKey.startsWith('custom:')
+                  ? 'border-accent bg-accent/5 text-accent ring-2 ring-accent/20'
+                  : 'border-border text-secondary hover:border-accent/50 hover:bg-accent/2 hover:text-accent'
+              } disabled:opacity-50`}
+            >
+              {wallpaper?.kind === 'custom' && (
+                <span
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{
+                    backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.15), rgba(15, 23, 42, 0.15)), url("${wallpaper.url}")`,
+                  }}
+                />
+              )}
+              <span className="relative flex flex-col items-center gap-1 rounded-control-sm border border-border/30 bg-chats/90 px-3 py-2 shadow-xs">
+                <Upload size={15} />
+                <span className="text-2xs font-bold leading-none">
+                  {busy ? t('wallpaper.uploading') : t('wallpaper.uploadCustom')}
+                </span>
+              </span>
+              {selectedKey.startsWith('custom:') && <SelectedMark />}
+            </button>
+
+            {WALLPAPER_PRESETS.map((preset) => {
+              const selected = selectedKey === `preset:${preset.id}`
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  title={preset.name}
+                  aria-pressed={selected}
+                  onClick={() => void onSelect({ kind: 'preset', presetId: preset.id })}
+                  className={`relative aspect-[16/10] cursor-pointer overflow-hidden rounded-control border transition-all ${
+                    selected ? 'border-accent ring-2 ring-accent/20' : 'border-border hover:scale-[1.01] hover:border-secondary/40'
+                  }`}
+                >
+                  <span className={`absolute inset-0 ${preset.previewClass}`} />
+                  {selected && <SelectedMark />}
+                </button>
+              )
+            })}
           </div>
-          <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" onClick={onClose} />
         </div>
 
-        {/* Split Panel Body */}
-        <div className="flex flex-1 min-h-0 overflow-hidden flex-col md:flex-row">
-          {/* Left panel: Wallpapers grid */}
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pb-2">
-              {/* Custom Upload Card */}
-              <button
-                type="button"
-                onClick={() => void uploadWallpaper()}
-                disabled={busy}
-                className={`relative flex aspect-[16/10] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-control border border-dashed cursor-pointer transition-all ${
-                  selectedKey.startsWith('custom:')
-                    ? 'border-accent text-accent bg-accent/5 ring-2 ring-accent/20'
-                    : 'border-border text-secondary hover:text-accent hover:border-accent/50 hover:bg-accent/2'
-                } disabled:opacity-50`}
-              >
-                {wallpaper?.kind === 'custom' && (
-                  <span
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{
-                      backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.15), rgba(15, 23, 42, 0.15)), url("${wallpaper.url}")`,
-                    }}
-                  />
-                )}
-                <span className="relative flex flex-col items-center gap-1 rounded-control-sm bg-chats/90 px-3 py-2 border border-border/30 shadow-xs">
-                  <Upload size={15} />
-                  <span className="text-2xs font-bold leading-none">
-                    {busy ? t('wallpaper.uploading') : t('wallpaper.uploadCustom')}
-                  </span>
-                </span>
-                {selectedKey.startsWith('custom:') && (
-                  <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-xs">
-                    <Check size={11} />
-                  </span>
-                )}
-              </button>
-
-              {/* Preset Cards */}
-              {WALLPAPER_PRESETS.map((preset) => {
-                const selected = selectedKey === `preset:${preset.id}`
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    title={preset.name}
-                    onClick={() => void onSelect({ kind: 'preset', presetId: preset.id })}
-                    className={`relative aspect-[16/10] overflow-hidden rounded-control border cursor-pointer transition-all ${
-                      selected
-                        ? 'border-accent ring-2 ring-accent/20'
-                        : 'border-border hover:border-secondary/40 hover:scale-[1.01]'
-                    }`}
-                  >
-                    <span className={`absolute inset-0 ${preset.previewClass}`} />
-                    {selected && (
-                      <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-xs">
-                        <Check size={11} />
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Right panel: Live Mockup Chat Preview */}
-          <div className="w-full md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-border/70 bg-raised p-5 flex flex-col select-none">
-            {/* Chat screen mockup frame */}
-            <div className="flex-1 rounded-panel border border-border overflow-hidden flex flex-col bg-chat relative shadow-inner min-h-[280px]">
-              {/* Wallpaper background inside mockup */}
-              <div
-                className={`absolute inset-0 transition-all duration-300 ${previewInfo.className}`}
-                style={previewInfo.style}
-              />
-
-              {/* Overlay to dim mockup and ensure contrast */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-transparent pointer-events-none" />
-
-              {/* Chat bubbles container */}
-              <div className="relative z-10 flex-1 flex flex-col justify-end p-3.5 gap-3">
-                <div className="mx-auto select-none rounded-full bg-active border border-border/30 px-2.5 py-0.8 text-center text-2xs font-bold text-secondary/80">
-                  Today
+        <div className="flex w-full shrink-0 flex-col border-t border-border/70 bg-raised p-5 select-none md:w-[320px] md:border-t-0 md:border-l">
+          <div className="relative flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-panel border border-border bg-chat shadow-inner">
+            <div className={`absolute inset-0 transition-all duration-300 ${previewInfo.className}`} style={previewInfo.style} />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/5 to-transparent" />
+            <div className="relative z-10 flex flex-1 flex-col justify-end gap-3 p-3.5">
+              <div className="mx-auto rounded-full border border-border/30 bg-active px-2.5 py-0.5 text-center text-2xs font-bold text-secondary/80">
+                Today
+              </div>
+              <div className="flex max-w-[85%] items-end gap-1.5 self-start">
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/80 text-[0.53125rem] font-bold text-white shadow-xs">
+                  {previewName ? previewName.slice(0, 1) : 'U'}
                 </div>
-
-                {/* Left Bubble (Incoming) */}
-                <div className="flex items-end gap-1.5 max-w-[85%] self-start">
-                  <div className="h-5 w-5 rounded-full bg-accent/80 flex items-center justify-center text-[0.53125rem] font-bold text-white shadow-xs">
-                    {previewName ? previewName.slice(0, 1) : 'U'}
-                  </div>
-                  <div className="rounded-panel rounded-bl-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
-                    How does this chat wallpaper look on your screen?
-                  </div>
+                <div className="rounded-panel rounded-bl-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
+                  How does this chat wallpaper look on your screen?
                 </div>
-
-                {/* Right Bubble (Outgoing) */}
-                <div className="flex flex-col max-w-[80%] self-end">
-                  <div className="rounded-panel rounded-br-sm border border-accent/20 bg-accent text-white p-2.5 text-caption leading-normal shadow-xs">
-                    Looks fantastic! The text contrast and background pattern are perfectly balanced.
-                  </div>
+              </div>
+              <div className="flex max-w-[80%] flex-col self-end">
+                <div className="rounded-panel rounded-br-sm border border-accent/20 bg-accent p-2.5 text-caption leading-normal text-white shadow-xs">
+                  Looks fantastic! The text contrast and background pattern are perfectly balanced.
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Dialog>
+  )
+}
+
+function SelectedMark() {
+  return (
+    <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-xs">
+      <Check size={11} />
+    </span>
   )
 }

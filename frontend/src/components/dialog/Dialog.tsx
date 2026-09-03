@@ -6,13 +6,42 @@ import { useEscapeKey } from '../../lib/useEscapeKey'
 import { clsx } from '../../lib/utils'
 import { IconButton } from '../button/IconButton'
 
-type DialogWidth = 'sm' | 'md' | 'lg' | 'xl'
+type DialogWidth = 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 
 const WIDTHS: Record<DialogWidth, string> = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-lg',
   xl: 'max-w-3xl',
+  '2xl': 'max-w-4xl',
+}
+
+/**
+ * What the icon box says about the dialog. Accent for the ordinary case;
+ * danger for a question whose yes destroys something, so the colour is on the
+ * page before the reader has read a word.
+ */
+type DialogIconTone = 'accent' | 'danger'
+
+const ICON_TONES: Record<DialogIconTone, string> = {
+  accent: 'bg-accent/10 text-accent',
+  danger: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+}
+
+/**
+ * Where a dialog sits among other things that float.
+ *
+ * `base` is an ordinary dialog. `raised` is one asked from inside another
+ * floating surface — the calendar editor asking which occurrences a change
+ * reaches — and has to sit above it. `top` is for the prompts that must never
+ * be covered by anything: a certificate the app cannot verify, a confirm.
+ */
+type DialogLayer = 'base' | 'raised' | 'top'
+
+const LAYERS: Record<DialogLayer, string> = {
+  base: 'z-50',
+  raised: 'z-[70]',
+  top: 'z-[120]',
 }
 
 /**
@@ -29,7 +58,10 @@ export function Dialog({
   title,
   subtitle,
   icon: Icon,
+  iconTone = 'accent',
   width = 'md',
+  layer = 'base',
+  role = 'dialog',
   onClose,
   closeDisabled = false,
   children,
@@ -39,7 +71,11 @@ export function Dialog({
   title: string
   subtitle?: ReactNode
   icon?: LucideIcon
+  iconTone?: DialogIconTone
   width?: DialogWidth
+  layer?: DialogLayer
+  /** `alertdialog` for a question that interrupts — a confirm, a certificate. */
+  role?: 'dialog' | 'alertdialog'
   onClose: () => void
   /** While something is in flight the dialog stays; the button says so. */
   closeDisabled?: boolean
@@ -54,7 +90,10 @@ export function Dialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[3px] animate-fade-in select-none dark:bg-black/60"
+      className={clsx(
+        'fixed inset-0 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[3px] animate-fade-in select-none dark:bg-black/60',
+        LAYERS[layer],
+      )}
       onMouseDown={(event) => {
         // Only a press on the backdrop itself: a drag that starts inside the
         // card and ends outside must not close it mid-gesture.
@@ -62,7 +101,7 @@ export function Dialog({
       }}
     >
       <section
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         className={clsx(
@@ -74,7 +113,7 @@ export function Dialog({
         <header className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             {Icon && (
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent">
+              <div className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-panel', ICON_TONES[iconTone])}>
                 <Icon size={17} />
               </div>
             )}
