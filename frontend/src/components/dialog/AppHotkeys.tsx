@@ -23,6 +23,7 @@ import {
   syncMail,
   selectAdjacentThread,
   archiveThread,
+  markThreadJunk,
   deleteThread,
   toggleStarWithUndo,
   markUnreadWithUndo,
@@ -378,6 +379,11 @@ export function AppHotkeys() {
           if (!threadSearchVisible()) return
           event.preventDefault()
           thread$.mediaOpen.set(!thread$.mediaOpen.peek())
+          break
+        case 'thread.junk':
+          if (!selected()) return
+          event.preventDefault()
+          void markThreadJunk(selected(), true)
           break
         case 'reply.focus':
           if (!threadSearchVisible()) return

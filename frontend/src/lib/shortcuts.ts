@@ -36,6 +36,7 @@ export type ShortcutId =
   | 'thread.unread'
   | 'thread.delete'
   | 'thread.details'
+  | 'thread.junk'
   | 'reply.focus'
   | RailShortcutId
 
@@ -87,7 +88,49 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutId, Chord> = {
   'thread.unread': { key: 'u' },
   'thread.delete': { shift: true, key: '#' },
   'thread.details': { key: 'i' },
+  // Gmail's, and the one this table was missing now that junk exists.
+  'thread.junk': { shift: true, key: '!' },
   'reply.focus': { key: 'r' },
+}
+
+/**
+ * The letters other clients taught people.
+ *
+ * A scheme is a set of rebindings, not a second mechanism: it writes the same
+ * overrides the shortcuts dialog writes, so a reader can pick a scheme and
+ * then change one row of it without those two ideas fighting. Picking a scheme
+ * replaces the bindings it names and leaves every other one alone.
+ *
+ * Only bindings this app can actually honour are listed. A scheme that
+ * promised Gmail's `g` `i` — a two-key sequence this app has no machinery for
+ * — would be a scheme that quietly does not work.
+ */
+export type ShortcutScheme = 'oreneta' | 'gmail' | 'outlook'
+
+export const SHORTCUT_SCHEMES: Record<ShortcutScheme, ShortcutOverrides> = {
+  // The app's own, which is what the defaults already are.
+  oreneta: {},
+  gmail: {
+    'compose.new': { key: 'c' },
+    'search.global': { key: '/' },
+    'thread.archive': { key: 'e' },
+    'thread.star': { key: 's' },
+    'thread.unread': { key: 'u' },
+    'thread.delete': { shift: true, key: '#' },
+    'thread.junk': { shift: true, key: '!' },
+    'reply.focus': { key: 'r' },
+    'thread.next': { key: 'j' },
+    'thread.prev': { key: 'k' },
+  },
+  outlook: {
+    'compose.new': { mod: true, key: 'n' },
+    'mail.sync': { key: 'F9' },
+    'thread.archive': { key: 'e' },
+    'thread.delete': { key: 'Delete' },
+    'thread.junk': { mod: true, alt: true, key: 'j' },
+    'reply.focus': { mod: true, key: 'r' },
+    'thread.unread': { mod: true, key: 'q' },
+  },
 }
 
 export const SHORTCUT_IDS = Object.keys(DEFAULT_SHORTCUTS) as ShortcutId[]
@@ -180,6 +223,7 @@ export const SHORTCUT_LABELS: Record<ShortcutId, string> = {
   'settings.open': 'Open settings',
   'compose.new': 'Compose new message',
   'compose.replyFull': 'Reply in full editor',
+  'thread.junk': 'Mark as junk',
   'reply.focus': 'Reply (focus quick reply)',
   'mail.sync': 'Sync mailbox',
   'search.thread': 'Search current thread',
@@ -217,6 +261,7 @@ export const SHORTCUT_GROUPS: { title: string; ids: ShortcutId[] }[] = [
       'thread.unread',
       'thread.delete',
       'thread.details',
+      'thread.junk',
     ],
   },
   {

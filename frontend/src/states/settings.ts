@@ -24,9 +24,11 @@ import {
 import {
   sanitizeShortcutOverrides,
   setShortcutOverrides,
+  SHORTCUT_SCHEMES,
   type Chord,
   type ShortcutId,
   type ShortcutOverrides,
+  type ShortcutScheme,
 } from '../lib/shortcuts'
 import type { Account, ChatWallpaper } from '../types'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
@@ -702,6 +704,23 @@ export function visibleSideNavAccounts(accounts: Account[]): Account[] {
 }
 
 /** Rebind a shortcut. Binding it back to its default clears the override. */
+/**
+ * Adopts a scheme of shortcuts other clients taught people.
+ *
+ * Written as ordinary rebindings, on top of whatever the reader already had:
+ * a scheme replaces the keys it names and leaves the rest alone, so choosing
+ * one does not silently discard a binding someone set by hand for something
+ * the scheme says nothing about.
+ */
+export function applyShortcutScheme(scheme: ShortcutScheme) {
+  const next: ShortcutOverrides = {
+    ...settings$.shortcutOverrides.peek(),
+    ...SHORTCUT_SCHEMES[scheme],
+  }
+  settings$.shortcutOverrides.set(next)
+  setShortcutOverrides(next)
+}
+
 export function setShortcutBinding(id: ShortcutId, chord: Chord) {
   const next = { ...settings$.shortcutOverrides.peek(), [id]: chord }
   settings$.shortcutOverrides.set(sanitizeShortcutOverrides(next) ?? {})

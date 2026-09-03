@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Keyboard, RotateCcw } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { ui$ } from '../../states/ui'
+import { showToast, ui$ } from '../../states/ui'
 import {
   chordFromEvent,
   formatShortcut,
@@ -12,7 +12,13 @@ import {
   shortcutConflict,
   type ShortcutId,
 } from '../../lib/shortcuts'
-import { resetAllShortcutBindings, resetShortcutBinding, setShortcutBinding, settings$ } from '../../states/settings'
+import {
+  applyShortcutScheme,
+  resetAllShortcutBindings,
+  resetShortcutBinding,
+  setShortcutBinding,
+  settings$,
+} from '../../states/settings'
 import { Button } from '../button/Button'
 import { IconButton } from '../button/IconButton'
 import { Dialog } from './Dialog'
@@ -106,6 +112,27 @@ export function ShortcutsDialog() {
         ) : undefined
       }
     >
+      {/* The letters other clients taught people, offered as a starting point
+          rather than as a mode: choosing one writes ordinary rebindings, and
+          any row can still be changed by hand afterwards. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-control border border-border bg-raised px-3 py-2">
+        <span className="text-caption font-semibold text-secondary">{t('shortcuts.scheme')}</span>
+        {(['oreneta', 'gmail', 'outlook'] as const).map((scheme) => (
+          <Button
+            key={scheme}
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              applyShortcutScheme(scheme)
+              showToast(t('shortcuts.schemeApplied', { scheme: t(`shortcuts.scheme.${scheme}`) }))
+            }}
+          >
+            {t(`shortcuts.scheme.${scheme}`)}
+          </Button>
+        ))}
+        <p className="w-full text-2xs text-secondary">{t('shortcuts.schemeHint')}</p>
+      </div>
+
       {SHORTCUT_GROUPS.map((group) => (
         <section key={group.title}>
           <h3 className="mb-1.5 text-xs font-semibold text-secondary">{group.title}</h3>
