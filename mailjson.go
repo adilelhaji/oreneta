@@ -123,6 +123,11 @@ func copyPageMetadata(object, out map[string]any) {
 	if failures, ok := object["failures"].([]any); ok {
 		out["failures"] = failures
 	}
+	// How the core read the search box, carried through so the interface can
+	// show it back without parsing the query a second time.
+	if search, ok := object["search"].(map[string]any); ok {
+		out["search"] = search
+	}
 	if cursor, _ := object["next_cursor"].(string); cursor != "" {
 		out["next_cursor"] = cursor
 	}

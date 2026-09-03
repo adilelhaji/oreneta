@@ -28,8 +28,8 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
-    backup, calendar, changelog, exchange, imap, mail_model, parse, proxy, rss, rules, secrets,
-    smtp, store, thread_list, thread_read, unified,
+    backup, calendar, changelog, exchange, imap, mail_model, parse, proxy, rss, rules, search,
+    secrets, smtp, store, thread_list, thread_read, unified,
 };
 
 /// Shared, serialized writer so responses and events never interleave on stdout.
@@ -2826,6 +2826,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "folder_synced".to_string(),
                 Value::Bool(folder_synced_before),
             );
+            // How the search box was read, sent back with the answer rather
+            // than worked out again in the interface. A second parser is a
+            // second reading, and the one thing a reader must be able to trust
+            // is that what they are shown is what was searched for.
+            if !request.query.trim().is_empty() {
+                let parsed = search::parse(&request.query);
+                page.as_object_mut().unwrap().insert(
+                    "search".to_string(),
+                    json!({
+                        "text": parsed.text,
+                        "parts": search::describe(&parsed),
+                        "hasOperators": search::describe(&parsed)
+                            .iter()
+                            .any(|part| !part.starts_with("text:")),
+                    }),
+                );
+            }
             Ok(page)
         }
 

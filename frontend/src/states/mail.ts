@@ -19,6 +19,16 @@ import { isLocalSendId, discardPendingSend } from './pendingSends'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { bareAddr, splitAddressList } from '../lib/address'
 
+/** What the core made of a typed search, for showing back. */
+export type SearchUnderstood = {
+  /** The words with no operator on them. */
+  text: string
+  /** Each part as `field:value`, in the order they are applied. */
+  parts: string[]
+  /** Whether anything beyond free text was recognised. */
+  hasOperators: boolean
+}
+
 // Mail data cache — the frontend view of the sidecar's `folders` and `messages`
 // tables (threads are messages grouped by the sidecar). Ephemeral: repopulated
 // from the sidecar on demand, never persisted on this side.
@@ -31,6 +41,10 @@ export const mail$ = observable({
   foldersByAccount: {} as Record<string, Folder[]>,
   threads: [] as Message[],
   threadsCursor: '',
+  // How the core read the search box, as it answered. Kept rather than worked
+  // out again here: a second parser is a second reading, and what the reader
+  // is shown has to be what was actually searched for.
+  searchUnderstood: null as SearchUnderstood | null,
   threadAccountCursors: {} as Record<string, string>,
   threadsLoadingMore: false,
   // The view (`threadListViewKey`) whose threads are the ones in `threads`. An
@@ -846,6 +860,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         next_cursor?: string
         folder_unreads?: Record<string, number>
         failures?: Array<{ account_id: string; message: string }>
+        search?: SearchUnderstood
       }>('mail.threadList', {
         account_id: 'unified',
         folder_id: role,
@@ -868,6 +883,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       }
       mail$.threadAccountCursors.set({})
       mail$.threadsCursor.set(result.next_cursor ?? '')
+      mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load unified threads:', err)
@@ -876,7 +892,12 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     }
   } else {
     try {
-      const result = await invoke<{ threads: Message[]; next_cursor?: string; folder_unread?: number }>(
+      const result = await invoke<{
+        threads: Message[]
+        next_cursor?: string
+        folder_unread?: number
+        search?: SearchUnderstood
+      }>(
         'mail.threadList',
         {
           account_id: selectedAcc,
@@ -893,6 +914,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       allThreads = result.threads || []
       mail$.threadsCursor.set(result.next_cursor ?? '')
       mail$.threadAccountCursors.set({})
+      mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load threads:', err)

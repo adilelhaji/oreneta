@@ -57,6 +57,7 @@ import { FolderSwitcher } from '../menu/FolderSwitcher'
 import { ThreadActionsMenu } from './ThreadActionsMenu'
 import { ScheduledSendsBar } from './ScheduledSendsBar'
 import { QuickFilterBar } from './QuickFilterBar'
+import { SearchUnderstoodBar } from './SearchUnderstoodBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
@@ -315,6 +316,10 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   event.currentTarget.blur()
                 }}
                 placeholder={isRSSAccount ? t('threads.searchFeeds') : t('threads.searchMessages')}
+                // The operators are discoverable from the box that takes them,
+                // which is the only place someone is looking when they wonder
+                // whether this search can do more than words.
+                title={isRSSAccount ? undefined : t('search.operatorsHint')}
                 className={clsx(
                   'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-150',
                   // The right padding only has to clear the clear button while there is one.
@@ -437,6 +442,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       {/* Not in the starred view, which is starred-only by definition, and not
           while searching, where the query is the narrowing. */}
       {!isStarredView && !query.trim() && <QuickFilterBar hideSnoozed={isRSSAccount} />}
+      <SearchUnderstoodBar />
 
       <ScheduledSendsBar />
 
