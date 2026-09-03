@@ -544,6 +544,197 @@ fn a_label_can_be_searched_for_by_the_name_that_was_typed() {
 }
 
 #[test]
+fn a_message_is_judged_as_it_lands_and_can_say_why() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let to_me = vec![crate::imap::Recipient {
+        name: String::new(),
+        addr: "me@example.com".into(),
+    }];
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            // Addressed to me by a person: worth interrupting for.
+            MessageHeader {
+                uid: 1,
+                from_addr: "ann@example.com".into(),
+                to: to_me.clone(),
+                thread_key: "t-1".into(),
+                date: 300,
+                ..Default::default()
+            },
+            // A robot nobody knows, addressed to a list: not.
+            MessageHeader {
+                uid: 2,
+                from_addr: "no-reply@shop.example".into(),
+                thread_key: "t-2".into(),
+                date: 200,
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+
+    let priority = |uid: u32| -> Option<bool> {
+        conn.query_row(
+            "SELECT priority FROM messages WHERE account = 'acct' AND uid = ?1",
+            params![uid],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .unwrap()
+        .map(|value| value != 0)
+    };
+    assert_eq!(priority(1), Some(true));
+    assert_eq!(priority(2), Some(false));
+}
+
+#[test]
+fn writing_to_someone_makes_them_worth_hearing_from() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO folders(account, name, delimiter) VALUES('acct', 'Sent', '/')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE folders SET special_use = '\\Sent' WHERE account = 'acct' AND name = 'Sent'",
+        [],
+    )
+    .ok();
+
+    // Nothing known about them yet: a bare sender is not priority.
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "carol@example.com".into(),
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    assert!(!has_written_to(&conn, "acct", "carol@example.com"));
+
+    // Writing to them is what changes it, noted from the Sent folder.
+    note_correspondents(&conn, "acct", &["Carol@Example.com".into()]).unwrap();
+    assert!(has_written_to(&conn, "acct", "carol@example.com"));
+    // Case and spacing are not the point of an address.
+    assert!(has_written_to(&conn, "acct", "  CAROL@example.com "));
+
+    // And the judgement is redone rather than left stale.
+    assert_eq!(rejudge_priority(&conn, "acct", false).unwrap(), 1);
+    let priority: Option<i64> = conn
+        .query_row(
+            "SELECT priority FROM messages WHERE account = 'acct' AND uid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(priority, Some(1));
+}
+
+#[test]
+fn what_the_reader_says_about_a_sender_sticks_and_can_be_taken_back() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let to_me = vec![crate::imap::Recipient {
+        name: String::new(),
+        addr: "me@example.com".into(),
+    }];
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "ann@example.com".into(),
+            to: to_me,
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+
+    let priority = || -> Option<i64> {
+        conn.query_row(
+            "SELECT priority FROM messages WHERE account = 'acct' AND uid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(priority(), Some(1));
+
+    // Said in so many words, and it outranks what the app worked out.
+    set_sender_priority(&conn, "acct", "ann@example.com", Some(false)).unwrap();
+    rejudge_priority(&conn, "acct", false).unwrap();
+    assert_eq!(priority(), Some(0));
+
+    // Taking it back goes to whatever the signals say, not to the opposite of
+    // whichever way it was last pushed.
+    set_sender_priority(&conn, "acct", "ann@example.com", None).unwrap();
+    assert_eq!(sender_priority(&conn, "acct", "ann@example.com"), None);
+    rejudge_priority(&conn, "acct", false).unwrap();
+    assert_eq!(priority(), Some(1));
+}
+
+#[test]
+fn a_page_can_be_narrowed_to_what_is_worth_interrupting_for() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let to_me = vec![crate::imap::Recipient {
+        name: String::new(),
+        addr: "me@example.com".into(),
+    }];
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, from_addr: "ann@example.com".into(), to: to_me, date: 300, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, from_addr: "no-reply@shop.example".into(), date: 200, thread_key: "t-2".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(uids(RecentFilter::default()), vec![1, 2]);
+    assert_eq!(
+        uids(RecentFilter { priority_only: true, ..Default::default() }),
+        vec![1]
+    );
+}
+
+#[test]
 fn labels_are_kept_in_the_order_they_were_arranged() {
     let conn = test_conn();
     replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
@@ -2294,7 +2485,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 19);
+    assert_eq!(version, 20);
 
     for table in [
         "accounts",
@@ -2329,7 +2520,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 19);
+    assert_eq!(version, 20);
 }
 
 #[test]
@@ -2357,7 +2548,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 19);
+    assert_eq!(version, 20);
 
     let _ = std::fs::remove_dir_all(dir);
 }

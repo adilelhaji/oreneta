@@ -487,6 +487,7 @@
   "filters.attachments": "Adjuntos",
   "filters.keepAcrossFolders": "Mantener los filtros al cambiar de carpeta",
   "filters.label": "Filtro",
+  "filters.priority": "Prioritario",
   "filters.snoozed": "Pospuestos",
   "filters.starred": "Destacados",
   "filters.unread": "No leídos",

@@ -2749,6 +2749,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     starred_only,
                     label_id,
                     with_attachments,
+                    priority_only,
                 } => {
                     // Asking for what has an attachment is asking a question
                     // about every message, and some of them have never been
@@ -2758,6 +2759,19 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     // must not do.
                     if with_attachments {
                         fill_in_attachment_flags(engine, &account, &folder).await;
+                    }
+                    // Same idea, and cheaper: a mailbox cached before this
+                    // existed has messages nobody has judged, and treating
+                    // those as "not worth interrupting for" would hide mail
+                    // behind a filter for no stated reason. Unlike an
+                    // attachment, judging one needs nothing from a server —
+                    // every signal is already here — so the gap is simply
+                    // closed.
+                    if priority_only {
+                        let db = engine.db.lock().unwrap();
+                        if let Err(err) = store::rejudge_priority(&db, &account, true) {
+                            eprintln!("meron-core: judging {account}: {err:#}");
+                        }
                     }
                     store::get_recent_page(
                         &engine.db.lock().unwrap(),
@@ -2770,6 +2784,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             starred_only,
                             label_id,
                             with_attachments,
+                            priority_only,
                         },
                     )?
                 }

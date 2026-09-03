@@ -639,6 +639,7 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
             starred_only,
             label_id,
             with_attachments,
+            priority_only,
         } => {
             get_cached_mobile_mail_page(
                 data_dir,
@@ -646,7 +647,13 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
                 &folder_id,
                 limit,
                 request.before_cursor,
-                store::RecentFilter { unread_only, starred_only, label_id, with_attachments },
+                store::RecentFilter {
+                    unread_only,
+                    starred_only,
+                    label_id,
+                    with_attachments,
+                    priority_only,
+                },
             )?
         }
         thread_list::MailSource::Search => {

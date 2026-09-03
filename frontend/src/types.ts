@@ -167,6 +167,13 @@ export type Message = {
   has_attachments: boolean
   /** Ids of the local labels on this conversation, in the reader's order. */
   labels?: string[]
+  /**
+   * Whether this is worth interrupting for, as the core judged it.
+   *
+   * Absent means nobody has judged it — a message cached before this existed —
+   * which is not the same as judged unimportant.
+   */
+  priority?: boolean
   attachments?: Attachment[]
   /** Source feed URL; present on RSS feed threads only. */
   feed_url?: string

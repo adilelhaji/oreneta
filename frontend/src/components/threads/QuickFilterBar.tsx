@@ -1,4 +1,4 @@
-import { Clock, Mail, Paperclip, Pin, Star } from 'lucide-react'
+import { Clock, Mail, Paperclip, Pin, Sparkle, Star } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
@@ -8,6 +8,9 @@ import { SelectInput } from '../field/Field'
 import { settings$ } from '../../states/settings'
 
 const FACETS: { facet: FilterFacet; icon: typeof Star; labelKey: string }[] = [
+  // First, because it is the one someone reaches for when the inbox is more
+  // than they can read — which is when a filter bar earns its place.
+  { facet: 'priority', icon: Sparkle, labelKey: 'filters.priority' },
   { facet: 'unread', icon: Mail, labelKey: 'filters.unread' },
   { facet: 'starred', icon: Star, labelKey: 'filters.starred' },
   { facet: 'attachments', icon: Paperclip, labelKey: 'filters.attachments' },

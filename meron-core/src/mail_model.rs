@@ -186,6 +186,15 @@ fn thread_cards_json_keyed(
     )
     .unwrap_or_default();
 
+    // One query for the page, like the labels below: fifty rows should not be
+    // fifty questions about the same thing.
+    let card_priority = store::priority_for_threads(
+        conn,
+        account_id,
+        &cards.iter().map(|card| card.thread_key.clone()).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+
     let card_labels = store::labels_for_threads(
         conn,
         account_id,
@@ -230,6 +239,10 @@ fn thread_cards_json_keyed(
                 "starred": card.header.starred,
                 "has_draft": card.has_draft,
                 "has_attachments": with_attachments.contains(&card.thread_key),
+                // Absent rather than false when nobody has judged it: a
+                // message from before this existed is not a message judged
+                // unimportant, and the interface must be able to tell.
+                "priority": card_priority.get(&card.thread_key).copied(),
                 "labels": card_labels.get(&card.thread_key).cloned().unwrap_or_default(),
                 "recipient_overflow": card.header.recipient_overflow,
                 }),

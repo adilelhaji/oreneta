@@ -32,6 +32,9 @@ export function filterThreads(
   if (facets.includes('starred')) {
     out = out.filter((thread) => thread.starred || thread.has_starred_items || kept(thread))
   }
+  if (facets.includes('priority')) {
+    out = out.filter((thread) => thread.priority || kept(thread))
+  }
   if (facets.includes('attachments')) {
     out = out.filter((thread) => thread.has_attachments || kept(thread))
   }

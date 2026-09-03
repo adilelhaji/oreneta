@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Bộ lọc",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Đã gắn sao",
   "filters.unread": "Chưa đọc",

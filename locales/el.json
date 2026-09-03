@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Φίλτρο",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Με αστέρι",
   "filters.unread": "Μη αναγνωσμένα",

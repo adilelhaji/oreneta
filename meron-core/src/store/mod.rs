@@ -232,6 +232,22 @@ pub fn upsert_messages(
     // The Message-IDs this batch cached: the only ids whose arrival can hand a
     // canonical thread key down to rows already in the cache.
     let mut upserted_ids: HashSet<String> = HashSet::new();
+    // Read once for the batch rather than per message: both are small queries,
+    // but a fifty-message sync should not make a hundred of them.
+    let mine = crate::store::self_addrs(&tx, account);
+    // Anyone this account writes to is someone it corresponds with. Noted from
+    // the Sent folder, which is the only place that fact is recorded.
+    let is_sent = folder_role(&tx, account, folder)
+        .map(|role| role == "sent")
+        .unwrap_or(false);
+    if is_sent {
+        let written_to: Vec<String> = messages
+            .iter()
+            .flat_map(|m| m.to.iter().chain(m.cc.iter()))
+            .map(|recipient| recipient.addr.clone())
+            .collect();
+        note_correspondents(&tx, account, &written_to)?;
+    }
     for m in messages {
         // Store recipient lists as JSON. Skip empty lists so a later flag-only
         // resync (which carries no envelope) can't clobber recipients we already
@@ -259,8 +275,8 @@ pub fn upsert_messages(
             upserted_ids.insert(message_id);
         }
         tx.execute(
-            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments)
-             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments, priority)
+             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT(account, folder, msg_id) DO UPDATE SET
                subject    = excluded.subject,
                from_name  = excluded.from_name,
@@ -275,7 +291,12 @@ pub fn upsert_messages(
                recipients = COALESCE(excluded.recipients, messages.recipients),
                -- And the same again: a resync that carried no structure must
                -- not turn a known answer back into an unknown one.
-               has_attachments = COALESCE(excluded.has_attachments, messages.has_attachments)",
+               has_attachments = COALESCE(excluded.has_attachments, messages.has_attachments),
+               -- Re-judged on every write, unlike the two above: the signals
+               -- can change under a message (a reply sent to its sender, a
+               -- decision recorded) and a stale verdict is one nobody asked
+               -- for and nobody can see.
+               priority = excluded.priority",
             params![
                 account,
                 folder,
@@ -289,7 +310,14 @@ pub fn upsert_messages(
                 thread_key,
                 extra_json,
                 recipients_index_text(&m.to, &m.cc),
-                m.has_attachments
+                m.has_attachments,
+                // Judged as it lands, by the same rule that explains it later.
+                // One implementation, so the filter and the reason a reader is
+                // shown cannot disagree about the same message.
+                crate::priority::verdict(priority_signals(
+                    &tx, account, &m.from_addr, &m.to, &m.cc, &mine
+                ))
+                .priority as i64
             ],
         )?;
     }
@@ -408,6 +436,8 @@ pub struct RecentFilter {
     pub label_id: Option<String>,
     /// Only messages known to carry an attachment.
     pub with_attachments: bool,
+    /// Only what is worth interrupting for.
+    pub priority_only: bool,
 }
 
 impl RecentFilter {
@@ -438,6 +468,10 @@ pub fn get_recent_page(
            -- message without an attachment, and offering it here would make
            -- the filter mean nothing.
            AND (?9 = 0 OR has_attachments = 1)
+           -- Same reading as the attachment above: a message nobody has
+           -- judged is not a message judged unimportant. The backfill is what
+           -- keeps this from hiding anything, and it needs no server.
+           AND (?10 = 0 OR priority = 1)
            -- A label is on the conversation, so the row is matched by the key
            -- it shares with the rest of its thread, not by its own uid.
            AND (?8 IS NULL OR EXISTS (
@@ -462,7 +496,8 @@ pub fn get_recent_page(
             filter.unread_only as i64,
             filter.starred_only as i64,
             filter.label_id.as_deref(),
-            filter.with_attachments as i64
+            filter.with_attachments as i64,
+            filter.priority_only as i64
         ],
         |row| {
             let uid = row.get(0)?;
@@ -1522,6 +1557,181 @@ pub fn set_has_attachments(
     }
     tx.commit()?;
     Ok(())
+}
+
+/// The verdict on each of these conversations, where one has been reached.
+///
+/// A conversation counts as worth interrupting for if any message in it does:
+/// a thread whose latest reply is from someone you correspond with is a thread
+/// you want, whatever the first message in it was.
+///
+/// Absent from the map means nobody has judged any of its messages — which is
+/// not the same as judged unimportant, and the interface is told the
+/// difference.
+pub fn priority_for_threads(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashMap<String, bool>> {
+    let mut out: HashMap<String, bool> = HashMap::new();
+    if thread_keys.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT COALESCE(NULLIF(thread_key, ''), 'uid:' || uid), MAX(priority)
+           FROM messages
+          WHERE account = ?1 AND uid <> 0 AND priority IS NOT NULL
+          GROUP BY COALESCE(NULLIF(thread_key, ''), 'uid:' || uid)",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    for (key, priority) in rows.filter_map(Result::ok) {
+        if wanted.contains(&key) {
+            out.insert(key, priority != 0);
+        }
+    }
+    Ok(out)
+}
+
+/// Records that this account has written to these addresses.
+///
+/// Called with the recipients of anything the account sent. Cheap and
+/// idempotent, so it can be run over a Sent folder on every sync without
+/// keeping track of what was already noted.
+/// Opens no transaction of its own: it is called from inside the one that
+/// writes the messages these addresses came from, and the two belong together
+/// — either the Sent batch landed and its correspondents are known, or
+/// neither happened.
+pub fn note_correspondents(conn: &Connection, account: &str, addrs: &[String]) -> Result<()> {
+    if addrs.is_empty() {
+        return Ok(());
+    }
+    let mut stmt =
+        conn.prepare("INSERT OR IGNORE INTO correspondents(account, addr) VALUES(?1, ?2)")?;
+    for addr in addrs {
+        let addr = addr.trim().to_lowercase();
+        if !addr.is_empty() {
+            stmt.execute(params![account, addr])?;
+        }
+    }
+    Ok(())
+}
+
+/// Whether this account has written to an address.
+pub fn has_written_to(conn: &Connection, account: &str, addr: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM correspondents WHERE account = ?1 AND addr = ?2",
+        params![account, addr.trim().to_lowercase()],
+        |_| Ok(()),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .is_some()
+}
+
+/// What the reader decided about a sender, if anything.
+pub fn sender_priority(conn: &Connection, account: &str, addr: &str) -> Option<bool> {
+    conn.query_row(
+        "SELECT priority FROM sender_priority WHERE account = ?1 AND addr = ?2",
+        params![account, addr.trim().to_lowercase()],
+        |row| row.get::<_, i64>(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .map(|value| value != 0)
+}
+
+/// Records what the reader decided about a sender, or forgets it.
+pub fn set_sender_priority(
+    conn: &Connection,
+    account: &str,
+    addr: &str,
+    priority: Option<bool>,
+) -> Result<()> {
+    let addr = addr.trim().to_lowercase();
+    match priority {
+        Some(value) => conn.execute(
+            "INSERT OR REPLACE INTO sender_priority(account, addr, priority) VALUES(?1, ?2, ?3)",
+            params![account, addr, value as i64],
+        )?,
+        // Forgetting is its own answer: back to whatever the signals say,
+        // rather than stuck at whichever way it was last pushed.
+        None => conn.execute(
+            "DELETE FROM sender_priority WHERE account = ?1 AND addr = ?2",
+            params![account, addr],
+        )?,
+    };
+    Ok(())
+}
+
+/// The signals for one message, gathered from the store.
+///
+/// Everything here is local. Nothing is asked of a server and nothing about
+/// the reader's mail leaves the machine to answer it.
+pub fn priority_signals(
+    conn: &Connection,
+    account: &str,
+    from_addr: &str,
+    to: &[crate::imap::Recipient],
+    cc: &[crate::imap::Recipient],
+    mine: &HashSet<String>,
+) -> crate::priority::Signals {
+    let addressed = |list: &[crate::imap::Recipient]| {
+        list.iter()
+            .any(|recipient| mine.contains(&recipient.addr.trim().to_lowercase()))
+    };
+    crate::priority::Signals {
+        written_to_sender: has_written_to(conn, account, from_addr),
+        addressed_directly: addressed(to),
+        copied_in: addressed(cc),
+        automated_sender: crate::priority::looks_automated(from_addr),
+        sender_override: sender_priority(conn, account, from_addr),
+    }
+}
+
+/// Judges every message of an account that has not been judged yet.
+///
+/// The gap this closes is one no server can help with, so it is closed here:
+/// a mailbox cached before priority existed gets a verdict in one pass rather
+/// than being quietly treated as "not priority", which would hide mail behind
+/// a filter for no stated reason.
+pub fn rejudge_priority(conn: &Connection, account: &str, only_unjudged: bool) -> Result<usize> {
+    let mine = crate::store::self_addrs(conn, account);
+    let where_clause = if only_unjudged { "AND priority IS NULL" } else { "" };
+    let rows: Vec<(i64, String, Vec<crate::imap::Recipient>, Vec<crate::imap::Recipient>)> = {
+        let sql = format!(
+            "SELECT id, from_addr, json_extract(json, '$.to'), json_extract(json, '$.cc')
+               FROM messages WHERE account = ?1 AND uid <> 0 {where_clause}"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let mapped = stmt.query_map(params![account], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                parse_recipients_json(row.get::<_, Option<String>>(2)?),
+                parse_recipients_json(row.get::<_, Option<String>>(3)?),
+            ))
+        })?;
+        mapped.filter_map(Result::ok).collect()
+    };
+
+    let tx = conn.unchecked_transaction()?;
+    let mut judged = 0;
+    {
+        let mut stmt = tx.prepare("UPDATE messages SET priority = ?2 WHERE id = ?1")?;
+        for (id, from_addr, to, cc) in rows {
+            let signals = priority_signals(&tx, account, &from_addr, &to, &cc, &mine);
+            let verdict = crate::priority::verdict(signals);
+            stmt.execute(params![id, verdict.priority as i64])?;
+            judged += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(judged)
 }
 
 /// A label the reader has made.

@@ -150,3 +150,54 @@ func TestThreadsJSONUsesCoreAccountForUnifiedCards(t *testing.T) {
 		t.Fatalf("unified metadata was dropped: %#v", out)
 	}
 }
+
+// The three card fields the bridge used to drop on the floor. Each is read
+// from the core's card and each has to survive the crossing: a label the
+// interface never receives is a label that never appears on a row, however
+// carefully the core stored it.
+func TestThreadCardsCarryLabelsAttachmentsAndPriority(t *testing.T) {
+	out, _ := threadsJSON("acct", "INBOX", map[string]any{
+		"cards": []any{
+			map[string]any{
+				"account_id":     "acct",
+				"folder":         "INBOX",
+				"thread_key":     "t-1",
+				"subject":        "Weekly report",
+				"labels":         []any{"l-1", "l-2", "", 7},
+				"has_attachments": true,
+				"priority":       true,
+			},
+			map[string]any{
+				"account_id": "acct",
+				"folder":     "INBOX",
+				"thread_key": "t-2",
+				"subject":    "Nobody judged this one",
+			},
+		},
+	}).(map[string]any)
+
+	threads, _ := out["threads"].([]Message)
+	if len(threads) != 2 {
+		t.Fatalf("threads = %d, want 2", len(threads))
+	}
+
+	first := threads[0]
+	if len(first.Labels) != 2 || first.Labels[0] != "l-1" || first.Labels[1] != "l-2" {
+		t.Errorf("labels = %v, want the two readable ids", first.Labels)
+	}
+	if !first.HasAttachments {
+		t.Error("has_attachments = false, want true")
+	}
+	if first.Priority == nil || !*first.Priority {
+		t.Errorf("priority = %v, want true", first.Priority)
+	}
+
+	// And the difference that matters: nobody judged the second one, which is
+	// not the same as judging it unimportant.
+	if threads[1].Priority != nil {
+		t.Errorf("priority = %v, want absent", *threads[1].Priority)
+	}
+	if threads[1].Labels != nil {
+		t.Errorf("labels = %v, want none", threads[1].Labels)
+	}
+}

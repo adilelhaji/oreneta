@@ -487,6 +487,7 @@
   "filters.attachments": "Pièces jointes",
   "filters.keepAcrossFolders": "Conserver les filtres en changeant de dossier",
   "filters.label": "Filtrer",
+  "filters.priority": "Prioritaire",
   "filters.snoozed": "Reportés",
   "filters.starred": "Suivis",
   "filters.unread": "Non lus",

@@ -91,6 +91,14 @@ type Message struct {
 	Starred          bool   `json:"starred"`
 	HasDraft         bool   `json:"has_draft,omitempty"`
 	HasAttachments   bool   `json:"has_attachments"`
+	// Labels are ids of the reader's own local labels; the interface paints
+	// them from its copy of the label set.
+	Labels []string `json:"labels,omitempty"`
+	// Priority is a pointer because absent and false are different answers: a
+	// message nobody has judged is not a message judged unimportant, and a
+	// plain bool would tell the interface the second when the truth is the
+	// first.
+	Priority *bool `json:"priority,omitempty"`
 	Attachments      any    `json:"attachments,omitempty"`
 	OriginalThreadID string `json:"original_thread_id,omitempty"`
 	// RecipientOverflow is the count of additional recipients beyond the one shown

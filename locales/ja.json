@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "フィルター",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "スター付き",
   "filters.unread": "未読",

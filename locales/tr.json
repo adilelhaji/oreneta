@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Filtre",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Yıldızlı",
   "filters.unread": "Okunmamış",

@@ -120,6 +120,7 @@ impl ThreadListQuery {
                 .filter(|id| !id.is_empty())
                 .map(str::to_owned),
             with_attachments: names.contains(&"attachments"),
+            priority_only: names.contains(&"priority"),
         }
     }
 
@@ -149,6 +150,7 @@ pub enum MailSource {
         /// A label the reader has made, named as `label:<id>` in the filter.
         label_id: Option<String>,
         with_attachments: bool,
+        priority_only: bool,
     },
     /// Text search across the folder plus Sent, cursor-paginated.
     Search,
@@ -306,6 +308,7 @@ mod tests {
                 starred_only: false,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
         assert_eq!(
@@ -315,6 +318,7 @@ mod tests {
                 starred_only: false,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
         assert_eq!(query(json!({"filter": "snoozed"})).source(), MailSource::Snoozed);
@@ -341,6 +345,7 @@ mod tests {
                 starred_only: false,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
     }
@@ -358,6 +363,7 @@ mod tests {
                 starred_only: true,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
         // Order and spacing are the caller's business, not the meaning's.
@@ -368,6 +374,7 @@ mod tests {
                 starred_only: true,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
         // "All" alongside something else says nothing, and must not turn the
@@ -379,6 +386,7 @@ mod tests {
                 starred_only: false,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
         // Starred on its own stays the whole starred view the side navigation
@@ -398,6 +406,7 @@ mod tests {
                 starred_only: false,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
         // A name from a later version is ignored rather than narrowing to
@@ -409,6 +418,7 @@ mod tests {
                 starred_only: false,
                 label_id: None,
                 with_attachments: false,
+                priority_only: false,
             }
         );
     }

@@ -594,6 +594,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 19 {
         migrate_v19(&tx)?;
     }
+    if version < 20 {
+        migrate_v20(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -888,6 +891,39 @@ fn migrate_v18(conn: &Connection) -> Result<()> {
 fn migrate_v19(conn: &Connection) -> Result<()> {
     conn.execute_batch("ALTER TABLE messages ADD COLUMN has_attachments INTEGER;")?;
     conn.execute_batch("PRAGMA user_version = 19;")?;
+    Ok(())
+}
+
+/// What is worth interrupting someone for, and what they said about it.
+///
+/// `priority` is nullable like `has_attachments`, and for the same reason —
+/// a message from before this existed has never been judged. Unlike an
+/// attachment, though, judging one needs nothing from a server: every signal
+/// is already here, so the gap is closed by a pass over the store rather than
+/// by asking anyone.
+///
+/// `correspondents` is the addresses this account has written to. It is a fact
+/// worth keeping on its own — an address book will want it — and it is what
+/// makes "you have written to them" a lookup instead of a scan of every
+/// message in the mailbox, once per row.
+///
+/// `sender_priority` is what the reader said, which outranks all of it.
+fn migrate_v20(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE messages ADD COLUMN priority INTEGER;
+         CREATE TABLE IF NOT EXISTS correspondents (
+           account TEXT NOT NULL,
+           addr    TEXT NOT NULL,
+           PRIMARY KEY (account, addr)
+         );
+         CREATE TABLE IF NOT EXISTS sender_priority (
+           account  TEXT NOT NULL,
+           addr     TEXT NOT NULL,
+           priority INTEGER NOT NULL,
+           PRIMARY KEY (account, addr)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 20;")?;
     Ok(())
 }
 

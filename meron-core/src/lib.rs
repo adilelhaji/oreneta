@@ -16,6 +16,7 @@ pub mod imap;
 pub mod log;
 pub mod mail_model;
 pub mod parse;
+pub mod priority;
 pub mod protocol;
 pub mod proxy;
 pub mod rss;

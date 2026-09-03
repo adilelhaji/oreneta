@@ -487,6 +487,7 @@
   "filters.attachments": "Anexos",
   "filters.keepAcrossFolders": "Manter os filtros ao mudar de pasta",
   "filters.label": "Filtro",
+  "filters.priority": "Prioritário",
   "filters.snoozed": "Adiados",
   "filters.starred": "Com estrela",
   "filters.unread": "Não lidos",

@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "Filtrera",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "Stjärnmärkta",
   "filters.unread": "Olästa",

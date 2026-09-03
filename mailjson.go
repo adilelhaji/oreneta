@@ -101,6 +101,9 @@ func threadsJSON(accountID, folder string, raw any) any {
 			MessageCount:      uint32(jsonNumber(card["message_count"])),
 			Starred:           jsonBool(card["starred"]),
 			HasDraft:          jsonBool(card["has_draft"]),
+			HasAttachments:    jsonBool(card["has_attachments"]),
+			Labels:            jsonStringList(card["labels"]),
+			Priority:          jsonOptionalBool(card["priority"]),
 			OriginalThreadID:  originalThreadID,
 			RecipientOverflow: uint32(jsonNumber(card["recipient_overflow"])),
 		})
@@ -218,4 +221,35 @@ func withMovedThreadLocation(res any, ids ImapThreadIDs, folderField string) map
 		out["thread_id"] = formatParsedImapThreadIDInFolder(ids, folder)
 	}
 	return out
+}
+
+// jsonStringList reads a JSON array of strings, dropping anything that is not
+// one. An absent or malformed list is no list, not an error: a thread card
+// with unreadable labels should still be a thread card.
+func jsonStringList(value any) []string {
+	items, ok := value.([]any)
+	if !ok || len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if text, ok := item.(string); ok && text != "" {
+			out = append(out, text)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// jsonOptionalBool keeps the difference between "false" and "nobody said".
+// Flattening the two here is exactly the fabricated negative the core takes
+// care to avoid, and it would be undone in one line.
+func jsonOptionalBool(value any) *bool {
+	flag, ok := value.(bool)
+	if !ok {
+		return nil
+	}
+	return &flag
 }

@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "필터",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "별표 표시됨",
   "filters.unread": "읽지 않음",

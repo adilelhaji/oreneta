@@ -487,6 +487,7 @@
   "filters.attachments": "Attachments",
   "filters.keepAcrossFolders": "Keep filters when changing folder",
   "filters.label": "篩選",
+  "filters.priority": "Priority",
   "filters.snoozed": "Snoozed",
   "filters.starred": "已加星號",
   "filters.unread": "未讀",

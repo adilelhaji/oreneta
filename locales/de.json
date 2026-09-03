@@ -487,6 +487,7 @@
   "filters.attachments": "Anhänge",
   "filters.keepAcrossFolders": "Filter beim Ordnerwechsel beibehalten",
   "filters.label": "Filter",
+  "filters.priority": "Wichtig",
   "filters.snoozed": "Zurückgestellt",
   "filters.starred": "Markiert",
   "filters.unread": "Ungelesen",
