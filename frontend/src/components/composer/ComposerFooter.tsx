@@ -1,8 +1,10 @@
 import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
+import type { Template } from '../../states/templates'
 import { IconButton } from '../button/IconButton'
 import { SendLaterMenu } from './SendLaterMenu'
+import { TemplateMenu } from './TemplateMenu'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -17,6 +19,7 @@ export function ComposerFooter({
   onPickFiles,
   onPickInlineImages,
   onToggleRich,
+  onUseTemplate,
   onDiscard,
   onSubmit,
   onSchedule,
@@ -29,6 +32,8 @@ export function ComposerFooter({
   onPickFiles: () => void
   onPickInlineImages: () => void
   onToggleRich: () => void
+  /** Puts a kept snippet in at the cursor, or opens a whole-message template. */
+  onUseTemplate: (template: Template) => void
   onDiscard: () => void
   onSubmit: () => void
   /** Holds the message until `at` instead of sending it now. */
@@ -56,6 +61,7 @@ export function ComposerFooter({
             onClick={onPickInlineImages}
           />
         )}
+        <TemplateMenu onPick={onUseTemplate} />
         <button
           onClick={onToggleRich}
           className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${

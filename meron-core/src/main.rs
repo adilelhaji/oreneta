@@ -1519,6 +1519,40 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "judged": judged }))
         }
 
+        // Text the writer keeps because they write it often: a snippet
+        // dropped in at the cursor, or a whole message with its own subject.
+        "templates.list" => {
+            let stored = store::templates(&engine.db.lock().unwrap())?;
+            Ok(json!({ "templates": stored }))
+        }
+
+        // Replaces the whole set, arrangement included. Every template is
+        // checked before any of them is written: a save that stored four and
+        // then refused the fifth would leave the list in a state the writer
+        // never asked for and cannot see.
+        "templates.save" => {
+            let incoming = p
+                .get("templates")
+                .and_then(Value::as_array)
+                .context("missing param: templates")?;
+            let mut templates = Vec::with_capacity(incoming.len());
+            for value in incoming {
+                let template: meron_core::templates::Template =
+                    serde_json::from_value(value.clone()).context("invalid template")?;
+                if let Some(problem) = meron_core::templates::validate(&template) {
+                    let name = template.name.trim();
+                    if name.is_empty() {
+                        anyhow::bail!("{}", problem.describe());
+                    }
+                    anyhow::bail!("{name}: {}", problem.describe());
+                }
+                templates.push(template);
+            }
+            let now = chrono::Utc::now().timestamp();
+            store::replace_templates(&engine.db.lock().unwrap(), &templates, now)?;
+            Ok(json!({ "ok": true, "saved": templates.len() }))
+        }
+
         // Labels the reader has made. Local to this install by design: an
         // IMAP keyword is not carried by every server and an Exchange
         // category is a different thing again, so a label that appeared on

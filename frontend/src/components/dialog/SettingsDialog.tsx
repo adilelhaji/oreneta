@@ -83,6 +83,7 @@ import { supportedI18nLanguages, languageNativeNames, type SupportedI18nLanguage
 import { ThemeSettingsSection } from './ThemeSettingsSection'
 import { FontSettingsSection } from './FontSettingsSection'
 import { RulesSettingsSection } from './RulesSettingsSection'
+import { TemplatesSettingsSection } from './TemplatesSettingsSection'
 import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
@@ -932,6 +933,7 @@ function GeneralSection() {
       <LabelsSettingsSection />
 
       <RulesSettingsSection />
+      <TemplatesSettingsSection />
 
       <SettingsGroup title={t('settings.sections.sideNav')}>
         <ToggleRow

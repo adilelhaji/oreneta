@@ -2684,7 +2684,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 20);
+    assert_eq!(version, 21);
 
     for table in [
         "accounts",
@@ -2701,6 +2701,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "ews_item_ids",
         "calendars",
         "calendar_events",
+        "templates",
     ] {
         let exists = conn
             .query_row(
@@ -2719,7 +2720,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 20);
+    assert_eq!(version, 21);
 }
 
 #[test]
@@ -2747,7 +2748,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 20);
+    assert_eq!(version, 21);
 
     let _ = std::fs::remove_dir_all(dir);
 }

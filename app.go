@@ -331,6 +331,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.labelsSave(payload)
 	case "labels.assign":
 		return a.labelsAssign(payload)
+	case "templates.list":
+		return a.templatesList(payload)
+	case "templates.save":
+		return a.templatesSave(payload)
 	case "rules.list":
 		return a.rulesList(payload)
 	case "rules.save":

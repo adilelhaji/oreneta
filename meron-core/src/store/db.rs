@@ -597,6 +597,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 20 {
         migrate_v20(&tx)?;
     }
+    if version < 21 {
+        migrate_v21(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -924,6 +927,38 @@ fn migrate_v20(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 20;")?;
+    Ok(())
+}
+
+/// Text the writer keeps because they write it often.
+///
+/// Two shapes, told apart by `kind`, because they are used at two different
+/// moments. A `snippet` is a paragraph dropped in where the cursor is — the
+/// directions to the office, the standard disclaimer. A `message` is a whole
+/// mail with its own subject, opened rather than inserted.
+///
+/// One table rather than two: they differ in where the text lands, not in
+/// what they are, and a reader who wants to turn one into the other should
+/// not have to delete it and write it again.
+///
+/// `body_html` and `body_text` are both kept. The composer works in either
+/// mode and a template that could only be pasted into one of them would be
+/// half a feature; storing the rendered text next to the markup means neither
+/// mode has to derive the other at the moment of use.
+fn migrate_v21(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS templates (
+           id        TEXT PRIMARY KEY,
+           kind      TEXT NOT NULL,
+           name      TEXT NOT NULL,
+           subject   TEXT NOT NULL,
+           body_html TEXT NOT NULL,
+           body_text TEXT NOT NULL,
+           position  INTEGER NOT NULL,
+           updated   INTEGER NOT NULL
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 21;")?;
     Ok(())
 }
 

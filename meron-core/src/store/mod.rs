@@ -1873,6 +1873,56 @@ pub fn rejudge_priority(conn: &Connection, account: &str, only_unjudged: bool) -
     Ok(judged)
 }
 
+/// Every kept template, in the order they were arranged.
+pub fn templates(conn: &Connection) -> Result<Vec<crate::templates::Template>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, name, subject, body_html, body_text FROM templates ORDER BY position",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let kind: String = row.get(1)?;
+        Ok(crate::templates::Template {
+            id: row.get(0)?,
+            kind: crate::templates::Kind::parse(&kind),
+            name: row.get(2)?,
+            subject: row.get(3)?,
+            body_html: row.get(4)?,
+            body_text: row.get(5)?,
+        })
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Replaces the whole set of templates, in the order given.
+///
+/// Stated whole rather than one at a time, the same way labels are: the
+/// arrangement is part of what is being saved, and applying a reorder as a
+/// sequence of single writes would leave moments where the list was in an
+/// order nobody asked for.
+pub fn replace_templates(
+    conn: &Connection,
+    templates: &[crate::templates::Template],
+    now: i64,
+) -> Result<()> {
+    conn.execute("DELETE FROM templates", [])?;
+    let mut stmt = conn.prepare(
+        "INSERT INTO templates(id, kind, name, subject, body_html, body_text, position, updated)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+    )?;
+    for (position, template) in templates.iter().enumerate() {
+        stmt.execute(params![
+            template.id,
+            template.kind.as_str(),
+            template.name,
+            template.subject,
+            template.body_html,
+            template.body_text,
+            position as i64,
+            now,
+        ])?;
+    }
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {
