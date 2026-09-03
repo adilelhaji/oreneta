@@ -531,6 +531,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
             {calendar.read_only && <Lock size={11} className="shrink-0 text-secondary/70" />}
             <Switch
               checked={calendar.enabled}
+              label={calendar.name}
               onChange={() =>
                 void setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled)
               }

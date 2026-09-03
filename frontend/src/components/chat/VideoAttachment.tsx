@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink, Play } from 'lucide-react'
 import { clearMediaSession } from '../../lib/mediaSession'
+import { useTranslation } from '../../lib/i18n'
 import { openExternal } from '../../lib/native'
 
 interface VideoAttachmentProps {
@@ -27,6 +28,7 @@ export function VideoAttachment({
   videoClassName = 'w-full max-h-80 rounded-control-sm border border-border/20 bg-black',
   posterClassName = 'flex aspect-video w-full items-center justify-center rounded-control-sm border border-border/20 bg-black text-white/90 transition-colors hover:text-white cursor-pointer',
 }: VideoAttachmentProps) {
+  const { t } = useTranslation()
   const [active, setActive] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
@@ -59,7 +61,12 @@ export function VideoAttachment({
           className={videoClassName}
         />
       ) : (
-        <button type="button" onClick={() => setActive(true)} className={posterClassName}>
+        <button
+          type="button"
+          aria-label={t('chat.playVideo')}
+          onClick={() => setActive(true)}
+          className={posterClassName}
+        >
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50">
             <Play size={22} fill="currentColor" />
           </span>

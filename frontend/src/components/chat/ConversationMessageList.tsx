@@ -178,7 +178,7 @@ export function ConversationMessageList({
               onClick={loadEarlier}
               className="rounded-full bg-active border border-border/30 px-4 py-1 text-xs font-medium text-secondary hover:bg-active disabled:opacity-50 cursor-pointer"
             >
-              {messagesLoadingMore ? 'Loading…' : 'Load earlier messages'}
+              {messagesLoadingMore ? t('common.loading') : t('chat.loadEarlier')}
             </button>
           </div>
         )}

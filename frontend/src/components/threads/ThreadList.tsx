@@ -344,6 +344,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
               />
               {query && (
                 <button
+                  type="button"
+                  aria-label={t('common.clearSearch')}
                   onClick={() => ui$.query.set('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
                 >

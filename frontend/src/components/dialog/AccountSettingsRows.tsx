@@ -4,10 +4,24 @@ import { InfoTip } from '../tooltip/InfoTip'
 import { SelectInput, TextInput } from '../field/Field'
 
 // iOS/chat-style switch, matching the look used across the settings UI.
-export function Switch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+//
+// The name is required rather than optional: a switch is a control with no
+// text of its own, and one that reads as "switch, on" says nothing about what
+// is on. Asking the caller — who has the wording right there — is the only
+// place the answer exists.
+export function Switch({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  label: string
+  onChange: () => void
+}) {
   return (
     <button
       role="switch"
+      aria-label={label}
       aria-checked={checked}
       onClick={onChange}
       className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -72,7 +86,7 @@ export function ToggleRow({
   checked: boolean
   onChange: () => void
 }) {
-  return <SettingRow icon={icon} title={title} hint={hint} control={<Switch checked={checked} onChange={onChange} />} />
+  return <SettingRow icon={icon} title={title} hint={hint} control={<Switch checked={checked} label={title} onChange={onChange} />} />
 }
 
 export function SegmentedRow<T extends string>({

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, Rss } from 'lucide-react'
 import { folderIcon } from '../../lib/folderIcon'
+import { useTranslation } from '../../lib/i18n'
 import { kanbanColumnKey } from '../../states/kanban'
 import { Checkbox } from '../field/Checkbox'
 import { selectableFolderIds, type TreeNode } from '../../lib/folderTree'
@@ -23,6 +24,7 @@ export function FolderTreeRow({
   selected: Set<string>
   onToggle: (keys: string[], next: boolean) => void
 }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
   const checkboxRef = useRef<HTMLInputElement>(null)
   const hasChildren = node.children.length > 0
@@ -52,6 +54,8 @@ export function FolderTreeRow({
       >
         <button
           type="button"
+          aria-label={expanded ? t('kanban.actions.collapse') : t('kanban.actions.expand')}
+          aria-expanded={hasChildren ? expanded : undefined}
           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-secondary ${
             hasChildren ? 'cursor-pointer hover:text-primary' : 'invisible'
           }`}

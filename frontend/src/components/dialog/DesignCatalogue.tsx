@@ -74,7 +74,7 @@ export function DesignCatalogue() {
             <option value="a">Select</option>
             <option value="b">Another</option>
           </SelectInput>
-          <Switch checked={on} onChange={() => setOn(!on)} />
+          <Switch checked={on} label="Switch" onChange={() => setOn(!on)} />
         </Row>
       </Section>
 

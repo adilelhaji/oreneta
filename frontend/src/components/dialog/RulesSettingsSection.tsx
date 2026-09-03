@@ -136,6 +136,7 @@ export function RulesSettingsSection() {
               >
                 <Switch
                   checked={rule.enabled}
+                  label={rule.name}
                   onChange={() =>
                     void persist(
                       stored.map((item) =>
