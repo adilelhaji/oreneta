@@ -6,6 +6,7 @@ import { downloadAttachment } from '../../states/mail'
 import { formatFileSize } from './messageHelpers'
 import { Button } from '../button/Button'
 import { Dialog } from '../dialog/Dialog'
+import { PdfPreview } from './PdfPreview'
 import type { Attachment } from '../../types'
 
 /**
@@ -61,6 +62,8 @@ export function AttachmentPreviewDialog({ attachment, onClose }: { attachment: A
             className="mx-auto max-h-[70vh] w-auto max-w-full object-contain"
             onError={() => setFailed(true)}
           />
+        ) : kind === 'pdf' ? (
+          <PdfPreview src={`/media/${attachment.key}`} onFailed={() => setFailed(true)} />
         ) : kind === 'text' ? (
           text === null ? (
             <p className="p-6 text-center text-ui text-secondary">{t('attachments.previewLoading')}</p>

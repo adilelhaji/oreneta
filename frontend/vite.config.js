@@ -56,6 +56,47 @@ function meronMedia() {
   }
 }
 
+// pdf.js needs two folders of data at run time that are not code and so are
+// not bundled: metrics for the standard fonts a PDF is allowed to reference
+// without embedding, and the character maps a CJK document needs. Without them
+// a perfectly good invoice renders as blank boxes — a failure that looks like
+// a broken file rather than a missing asset.
+//
+// Copied out of the package rather than committed, so the version that ships
+// is always the version of pdf.js that is installed. Served from node_modules
+// in dev and copied into the build for production, where the AssetServer hands
+// them out like any other embedded asset.
+function pdfjsData() {
+  const source = path.resolve('node_modules/pdfjs-dist')
+  const folders = ['standard_fonts', 'cmaps']
+  return {
+    name: 'pdfjs-data',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || !req.url.startsWith('/pdfjs/')) return next()
+        const rel = decodeURIComponent(req.url.slice('/pdfjs/'.length).split('?')[0])
+        const filePath = path.resolve(source, rel)
+        if (!folders.some((folder) => filePath.startsWith(path.join(source, folder) + path.sep))) {
+          res.statusCode = 403
+          return res.end('forbidden')
+        }
+        fs.readFile(filePath, (err, data) => {
+          if (err) {
+            res.statusCode = 404
+            return res.end('not found')
+          }
+          res.end(data)
+        })
+      })
+    },
+    closeBundle() {
+      for (const folder of folders) {
+        fs.cpSync(path.join(source, folder), path.resolve('dist/pdfjs', folder), { recursive: true })
+      }
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), meronMedia()],
+  plugins: [react(), tailwindcss(), meronMedia(), pdfjsData()],
 })

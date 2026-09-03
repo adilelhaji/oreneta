@@ -30,10 +30,17 @@ describe('which attachments can be shown without leaving the app', () => {
     expect(previewKind(file({ filename: 'invite.ics', mime: 'application/octet-stream' }))).toBe('text')
   })
 
-  it('does not offer a PDF', () => {
-    // WebKitGTK carries no PDF viewer, and a preview that renders a blank
-    // frame tells the reader their file is empty when it is not.
-    expect(previewKind(file({ filename: 'report.pdf', mime: 'application/pdf' }))).toBeNull()
+  it('offers a PDF, which is drawn rather than handed to the platform', () => {
+    expect(previewKind(file({ filename: 'report.pdf', mime: 'application/pdf' }))).toBe('pdf')
+    // A server that called it octet-stream has not made it un-readable.
+    expect(previewKind(file({ filename: 'report.pdf', mime: 'application/octet-stream' }))).toBe('pdf')
+  })
+
+  it('does not cap a PDF the way it caps text', () => {
+    // Only the page being looked at is drawn, so a long document costs a page.
+    expect(
+      previewKind(file({ filename: 'big.pdf', mime: 'application/pdf', size: 80 * 1024 * 1024 })),
+    ).toBe('pdf')
   })
 
   it('does not offer what it cannot read', () => {

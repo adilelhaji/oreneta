@@ -2,11 +2,12 @@
 //
 // Deliberately a short list. Offering a preview that renders a blank frame is
 // worse than offering none: the reader concludes the file is empty or broken
-// when it is neither. WebKitGTK carries no PDF viewer, so PDFs are not offered
-// — they go straight to Save, which is what actually works.
+// when it is neither. WebKitGTK carries no PDF viewer of its own, so PDFs are
+// drawn by pdf.js — and only drawn: no links, no forms, nothing a document
+// from a stranger can ask the app to do.
 
 /** How an attachment can be shown, or null when it cannot be. */
-export type PreviewKind = 'image' | 'text' | null
+export type PreviewKind = 'image' | 'text' | 'pdf' | null
 
 /** Extensions that hold text whatever the server called their type. */
 const TEXT_EXTENSIONS = [
@@ -55,6 +56,11 @@ export function previewKind(attachment: {
   // source instead is a worse answer than being handed the file.
   if (mime.includes('svg') || extensionOf(attachment.filename) === '.svg') return null
   if (mime.startsWith('image/')) return 'image'
+
+  // Drawn page by page rather than handed to the platform. Size is not capped
+  // here the way text is: only the pages being looked at are ever rendered, so
+  // a long document costs a page, not a document.
+  if (mime === 'application/pdf' || extensionOf(attachment.filename) === '.pdf') return 'pdf'
 
   const looksTextual =
     mime.startsWith('text/') ||
