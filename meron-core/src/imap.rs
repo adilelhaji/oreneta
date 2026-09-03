@@ -604,6 +604,7 @@ pub async fn fetch_recent(session: &mut Session, folder: &str, limit: u32) -> Re
 }
 
 pub async fn search_uids(session: &mut Session, folder: &str, query: &str) -> Result<Vec<u32>> {
+    let parsed = crate::search::parse(query);
     session.select(folder).await.context("SELECT")?;
     let gmail = supports_gmail_ext(session).await;
     // SEARCH keys are US-ASCII unless the command names a charset (RFC 3501
@@ -611,14 +612,14 @@ pub async fn search_uids(session: &mut Session, folder: &str, query: &str) -> Re
     // announced as UTF-8 or the server is entitled to answer BAD.
     let needs_charset = !query.is_ascii();
     let mut result = session
-        .uid_search(search_criteria(gmail, query, needs_charset))
+        .uid_search(search_criteria(gmail, &parsed, needs_charset))
         .await;
     if result.is_err() && needs_charset {
         // Servers that reject CHARSET outright (or that advertise UTF8=ACCEPT
         // and take the raw octets) get one retry with the bare criteria before
         // we give up and leave the caller with the cached hits.
         result = session
-            .uid_search(search_criteria(gmail, query, false))
+            .uid_search(search_criteria(gmail, &parsed, false))
             .await;
     }
     let set: HashSet<u32> = result.context("UID SEARCH query")?;
@@ -627,24 +628,108 @@ pub async fn search_uids(session: &mut Session, folder: &str, query: &str) -> Re
     Ok(uids)
 }
 
-/// Build the SEARCH criteria for a text `query`.
+/// The SEARCH criteria for a parsed query.
 ///
-/// On Gmail, defer to its own search engine via X-GM-RAW: it understands the
-/// full Gmail query syntax (operators like `from:`, `has:attachment`,
-/// `older_than:`, relevance) instead of our crude substring OR. Elsewhere fall
-/// back to plain SUBJECT/FROM/TEXT matching.
-fn search_criteria(gmail: bool, query: &str, charset: bool) -> String {
-    let q = imap_quote(query);
-    let keys = if gmail {
-        format!("X-GM-RAW {q}")
+/// Named parts become real IMAP keys — `FROM`, `SUBJECT`, `SINCE` — instead of
+/// the whole typed string going out as one `TEXT` blob. That is the difference
+/// between the server narrowing a search and the server returning a mailbox
+/// for us to narrow.
+///
+/// Two things a server is not asked. A local label means nothing to it, and
+/// `has:attachment` has no IMAP key at all; both are checked here afterwards
+/// (see [`crate::search::Query::needs_local_check`]). Asking Gmail for
+/// `label:` would be worse than not asking: it would answer about *its* labels
+/// and hand back a confidently wrong set.
+fn search_criteria(gmail: bool, query: &crate::search::Query, charset: bool) -> String {
+    let mut keys: Vec<String> = Vec::new();
+
+    if gmail {
+        // Gmail's own engine understands this syntax and searches better than
+        // a substring OR does — but only over the parts that are its to
+        // answer, so the query is rebuilt rather than passed through.
+        let mut raw: Vec<String> = Vec::new();
+        for (name, terms) in [
+            ("from", &query.from),
+            ("to", &query.to),
+            ("subject", &query.subject),
+        ] {
+            for term in terms {
+                raw.push(format!("{name}:({term})"));
+            }
+        }
+        for flag in &query.flags {
+            raw.push(
+                match flag {
+                    crate::search::Flag::Unread => "is:unread",
+                    crate::search::Flag::Read => "is:read",
+                    crate::search::Flag::Starred => "is:starred",
+                    crate::search::Flag::HasAttachment => "has:attachment",
+                }
+                .to_string(),
+            );
+        }
+        if !query.text.is_empty() {
+            raw.push(query.text.clone());
+        }
+        // Nothing for Gmail to search means no X-GM-RAW at all. Passing it
+        // "ALL" would ask Gmail to find that word, which is a different and
+        // confidently wrong question; the fallback below asks properly.
+        if !raw.is_empty() {
+            keys.push(format!("X-GM-RAW {}", imap_quote(&raw.join(" "))));
+        }
     } else {
-        format!("OR OR SUBJECT {q} FROM {q} TEXT {q}")
-    };
-    if charset {
-        format!("CHARSET UTF-8 {keys}")
-    } else {
-        keys
+        for term in &query.from {
+            keys.push(format!("FROM {}", imap_quote(term)));
+        }
+        for term in &query.to {
+            keys.push(format!("TO {}", imap_quote(term)));
+        }
+        for term in &query.subject {
+            keys.push(format!("SUBJECT {}", imap_quote(term)));
+        }
+        for flag in &query.flags {
+            match flag {
+                crate::search::Flag::Unread => keys.push("UNSEEN".to_string()),
+                crate::search::Flag::Read => keys.push("SEEN".to_string()),
+                crate::search::Flag::Starred => keys.push("FLAGGED".to_string()),
+                // No IMAP key for this; narrowed here afterwards.
+                crate::search::Flag::HasAttachment => {}
+            }
+        }
+        if !query.text.is_empty() {
+            let q = imap_quote(&query.text);
+            keys.push(format!("OR OR SUBJECT {q} FROM {q} TEXT {q}"));
+        }
     }
+
+    for (key, at) in [("SINCE", query.after), ("BEFORE", query.before)] {
+        if let Some(at) = at {
+            keys.push(format!("{key} {}", imap_date(at)));
+        }
+    }
+
+    // A search the server can answer nothing about — only a label, say — must
+    // not become an empty criteria string, which is a syntax error. `ALL` is
+    // the honest ask: everything, narrowed here.
+    if keys.is_empty() {
+        keys.push("ALL".to_string());
+    }
+
+    let joined = keys.join(" ");
+    if charset {
+        format!("CHARSET UTF-8 {joined}")
+    } else {
+        joined
+    }
+}
+
+/// A day as IMAP writes it: `2-Jan-2026`.
+fn imap_date(at: i64) -> String {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let (year, month, day) = civil_from_days(at.div_euclid(86_400));
+    format!("{day}-{}-{year}", MONTHS[(month as usize - 1).min(11)])
 }
 
 /// Return every UID currently in the folder. Used to prune locally cached
@@ -2171,20 +2256,90 @@ mod tests {
 
     #[test]
     fn search_criteria_announces_utf8_only_when_asked() {
+        let q = crate::search::parse;
         assert_eq!(
-            search_criteria(false, "plan", false),
+            search_criteria(false, &q("plan"), false),
             "OR OR SUBJECT \"plan\" FROM \"plan\" TEXT \"plan\""
         );
-        assert_eq!(search_criteria(true, "plan", false), "X-GM-RAW \"plan\"");
+        assert_eq!(search_criteria(true, &q("plan"), false), "X-GM-RAW \"plan\"");
         // Non-ASCII queries need the charset; the retry drops it again.
         assert_eq!(
-            search_criteria(true, "会議", true),
+            search_criteria(true, &q("会議"), true),
             "CHARSET UTF-8 X-GM-RAW \"会議\""
         );
         assert_eq!(
-            search_criteria(false, "会議", true),
+            search_criteria(false, &q("会議"), true),
             "CHARSET UTF-8 OR OR SUBJECT \"会議\" FROM \"会議\" TEXT \"会議\""
         );
+    }
+
+    #[test]
+    fn a_named_part_becomes_a_real_search_key() {
+        let q = crate::search::parse;
+        // The difference between the server narrowing a search and the server
+        // handing back a mailbox for us to narrow.
+        assert_eq!(
+            search_criteria(false, &q("from:ann subject:invoice"), false),
+            "FROM \"ann\" SUBJECT \"invoice\""
+        );
+        assert_eq!(search_criteria(false, &q("is:unread"), false), "UNSEEN");
+        assert_eq!(search_criteria(false, &q("is:read"), false), "SEEN");
+        assert_eq!(search_criteria(false, &q("is:starred"), false), "FLAGGED");
+        // Free text keeps its old shape, beside the keys.
+        assert_eq!(
+            search_criteria(false, &q("from:ann plan"), false),
+            "FROM \"ann\" OR OR SUBJECT \"plan\" FROM \"plan\" TEXT \"plan\""
+        );
+    }
+
+    #[test]
+    fn dates_are_asked_for_as_imap_writes_them() {
+        let q = crate::search::parse;
+        assert_eq!(
+            search_criteria(false, &q("after:2026-01-02 before:2026-03-02"), false),
+            "SINCE 2-Jan-2026 BEFORE 2-Mar-2026"
+        );
+        // Exact on Gmail too, rather than trusting its own date syntax.
+        assert_eq!(
+            search_criteria(true, &q("after:2026-01-02"), false),
+            "SINCE 2-Jan-2026"
+        );
+    }
+
+    #[test]
+    fn gmail_is_asked_in_its_own_syntax_but_never_about_our_labels() {
+        let q = crate::search::parse;
+        assert_eq!(
+            search_criteria(true, &q("from:ann is:unread plan"), false),
+            "X-GM-RAW \"from:(ann) is:unread plan\""
+        );
+        // `label:` is ours and local. Asking Gmail would answer about *its*
+        // labels and hand back a confidently wrong set, so it is not asked —
+        // the criteria carry only what is left, and the store does the rest.
+        assert_eq!(
+            search_criteria(true, &q("label:Work from:ann"), false),
+            "X-GM-RAW \"from:(ann)\""
+        );
+        assert!(q("label:Work from:ann").needs_local_check(true));
+    }
+
+    #[test]
+    fn a_search_the_server_can_answer_nothing_about_still_asks_something_legal() {
+        let q = crate::search::parse;
+        // An empty criteria string is a syntax error. `ALL` is the honest ask:
+        // everything, narrowed here.
+        assert_eq!(search_criteria(false, &q("label:Work"), false), "ALL");
+        assert_eq!(search_criteria(true, &q("label:Work"), false), "ALL");
+        // IMAP has no key for an attachment, so a non-Gmail server is not
+        // asked about it and the answer is narrowed locally.
+        assert_eq!(search_criteria(false, &q("has:attachment"), false), "ALL");
+        assert!(q("has:attachment").needs_local_check(false));
+        // Gmail does have one, so there it is asked and nothing is left over.
+        assert_eq!(
+            search_criteria(true, &q("has:attachment"), false),
+            "X-GM-RAW \"has:attachment\""
+        );
+        assert!(!q("has:attachment").needs_local_check(true));
     }
 
     #[test]

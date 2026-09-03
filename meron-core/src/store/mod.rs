@@ -666,6 +666,191 @@ pub(super) fn recipients_index_text(
 ///
 /// `before_cursor` is the `(date, uid, folder)` of the last row of the previous
 /// page. The folder tie-breaker is required because UIDs are mailbox-scoped.
+/// One clause of a search, with the values it binds.
+///
+/// Built up rather than written out because a search has an open number of
+/// parts: two senders and a date is a different statement from a subject and a
+/// label, and spelling out every combination is how a query builder becomes a
+/// place bugs live.
+#[derive(Default)]
+struct Clauses {
+    sql: Vec<String>,
+    params: Vec<Box<dyn rusqlite::ToSql>>,
+}
+
+impl Clauses {
+    fn push(&mut self, sql: impl Into<String>) {
+        self.sql.push(sql.into());
+    }
+
+    fn bind(&mut self, value: impl rusqlite::ToSql + 'static) {
+        self.params.push(Box::new(value));
+    }
+
+    /// A term must appear somewhere in one of these columns.
+    ///
+    /// Several terms for one field are joined with OR: someone who names two
+    /// senders means either, and reading it as "both" would answer nothing.
+    fn any_term_in(&mut self, terms: &[String], columns: &[&str]) {
+        if terms.is_empty() {
+            return;
+        }
+        let mut alternatives = Vec::with_capacity(terms.len());
+        for term in terms {
+            let matches: Vec<String> = columns
+                .iter()
+                .map(|column| format!("lower(COALESCE({column}, '')) LIKE ? ESCAPE '\\'"))
+                .collect();
+            alternatives.push(format!("({})", matches.join(" OR ")));
+            for _ in columns {
+                self.bind(format!("%{}%", escape_like(term.to_lowercase())));
+            }
+        }
+        self.push(format!("({})", alternatives.join(" OR ")));
+    }
+}
+
+/// The parts of a search that are not free text, as SQL.
+///
+/// `m` is the alias the caller gave the messages table.
+fn structured_clauses(query: &crate::search::Query) -> Clauses {
+    use crate::search::Flag;
+    let mut clauses = Clauses::default();
+
+    // The sender is name and address together: someone searching for "amazon"
+    // does not know or care which half of it carries the word.
+    clauses.any_term_in(&query.from, &["m.from_name", "m.from_addr"]);
+    clauses.any_term_in(&query.to, &["m.recipients"]);
+    clauses.any_term_in(&query.subject, &["m.subject"]);
+
+    for flag in &query.flags {
+        match flag {
+            Flag::Unread => clauses.push("m.seen = 0"),
+            Flag::Read => clauses.push("m.seen = 1"),
+            Flag::Starred => clauses.push("m.starred = 1"),
+            // `= 1`, never `IS NOT 0`: a message nobody has looked at is not a
+            // message without an attachment, and offering it here would make
+            // the operator mean nothing.
+            Flag::HasAttachment => clauses.push("m.has_attachments = 1"),
+        }
+    }
+
+    if let Some(after) = query.after {
+        clauses.push("m.date >= ?");
+        clauses.bind(after);
+    }
+    if let Some(before) = query.before {
+        clauses.push("m.date < ?");
+        clauses.bind(before);
+    }
+
+    if let Some(label) = &query.label {
+        // By name, because a name is what was typed. The label is on the
+        // conversation, so the row matches by the key it shares with the rest
+        // of its thread.
+        clauses.push(
+            "EXISTS (SELECT 1 FROM thread_labels tl
+                       JOIN labels l ON l.id = tl.label_id
+                      WHERE tl.account = m.account
+                        AND lower(l.name) = ?
+                        AND tl.thread_key = COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid))",
+        );
+        clauses.bind(label.to_lowercase());
+    }
+
+    clauses
+}
+
+/// Everything in one folder matching a parsed search.
+///
+/// Free text still goes through the trigram index (or a scoped scan when it is
+/// too short for one); the named parts are ordinary predicates beside it. Both
+/// halves are the same statement, so a search with an operator pages exactly
+/// like a search without one — narrowing a page after the fact would hand back
+/// three rows and call it a page.
+pub fn search_messages_parsed(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    query: &crate::search::Query,
+    limit: u32,
+    before_cursor: Option<&crate::thread_list::SearchCursor>,
+) -> Result<Vec<MessageHeader>> {
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut clauses = structured_clauses(query);
+    let text = query.text.trim();
+    if !text.is_empty() {
+        if text.chars().count() >= 3 {
+            // Whole text as one quoted FTS phrase -> trigram substring match
+            // (doubling any `"` so user input can't change the query). Both
+            // indexes answer the same phrase: the body/subject/sender one and
+            // the recipients one.
+            clauses.push(
+                "m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?
+                          UNION
+                          SELECT rowid FROM messages_recipients_fts WHERE messages_recipients_fts MATCH ?)",
+            );
+            let phrase = format!("\"{}\"", text.replace('"', "\"\""));
+            clauses.bind(phrase.clone());
+            clauses.bind(phrase);
+        } else {
+            // The trigram index needs >= 3 codepoints; shorter queries (common
+            // for CJK, where words are often 2 characters) get the scoped scan.
+            clauses.any_term_in(
+                &[text.to_string()],
+                &["m.subject", "m.from_name", "m.from_addr", "m.recipients", "m.body"],
+            );
+        }
+    }
+
+    let mut sql = String::from(
+        "SELECT m.uid, m.subject, m.from_name, m.from_addr, m.date, m.seen, m.starred,
+                m.thread_key, json_extract(m.json, '$.to')
+         FROM messages m
+         WHERE m.account = ? AND m.folder = ? AND m.uid <> 0",
+    );
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> =
+        vec![Box::new(account.to_string()), Box::new(folder.to_string())];
+
+    for clause in &clauses.sql {
+        sql.push_str("\n           AND ");
+        sql.push_str(clause);
+    }
+    params.extend(clauses.params);
+
+    sql.push_str(
+        "\n           AND (? IS NULL
+                OR m.date < ?
+                OR (m.date = ? AND m.uid < ?)
+                OR (m.date = ? AND m.uid = ? AND m.folder < ?))
+         ORDER BY m.date DESC, m.uid DESC LIMIT ?",
+    );
+    let cursor_date = before_cursor.map(|cursor| cursor.date);
+    let cursor_uid = before_cursor.map(|cursor| cursor.uid as i64).unwrap_or(0);
+    let cursor_folder = before_cursor
+        .map(|cursor| cursor.folder.clone())
+        .unwrap_or_default();
+    for _ in 0..3 {
+        params.push(Box::new(cursor_date));
+    }
+    params.push(Box::new(cursor_uid));
+    params.push(Box::new(cursor_date));
+    params.push(Box::new(cursor_uid));
+    params.push(Box::new(cursor_folder));
+    params.push(Box::new(limit));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(
+        rusqlite::params_from_iter(params.iter().map(|param| param.as_ref())),
+        message_header_from_row,
+    )?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Everything in one folder matching a search as it was typed.
 pub fn search_messages(
     conn: &Connection,
     account: &str,
@@ -674,98 +859,14 @@ pub fn search_messages(
     limit: u32,
     before_cursor: Option<&crate::thread_list::SearchCursor>,
 ) -> Result<Vec<MessageHeader>> {
-    let q = query.trim();
-    if q.is_empty() {
-        return Ok(Vec::new());
-    }
-    // The trigram index needs >= 3 codepoints; serve shorter queries (common for
-    // CJK, where words are often 2 characters) with the scoped LIKE scan instead.
-    if q.chars().count() < 3 {
-        return search_messages_like(conn, account, folder, q, limit, before_cursor);
-    }
-    // Whole query as one quoted FTS phrase -> trigram substring match (doubling
-    // any `"` so user input can't change the query). Same substring semantics as
-    // the LIKE path, just index-backed. Both indexes answer the same phrase: the
-    // body/subject/sender one and the recipients one.
-    let match_query = format!("\"{}\"", q.replace('"', "\"\""));
-    let cursor_date = before_cursor.map(|cursor| cursor.date);
-    let cursor_uid = before_cursor.map(|cursor| cursor.uid as i64).unwrap_or(0);
-    let cursor_folder = before_cursor.map(|cursor| cursor.folder.as_str());
-    let mut stmt = conn.prepare(
-        "SELECT m.uid, m.subject, m.from_name, m.from_addr, m.date, m.seen, m.starred,
-                m.thread_key, json_extract(m.json, '$.to')
-         FROM messages m
-         WHERE m.id IN (
-                 SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?1
-                 UNION
-                 SELECT rowid FROM messages_recipients_fts WHERE messages_recipients_fts MATCH ?1
-               )
-           AND m.account = ?2 AND m.folder = ?3 AND m.uid <> 0
-           AND (?5 IS NULL
-                OR m.date < ?5
-                OR (m.date = ?5 AND m.uid < ?6)
-                OR (m.date = ?5 AND m.uid = ?6 AND m.folder < ?7))
-         ORDER BY m.date DESC, m.uid DESC LIMIT ?4",
-    )?;
-    let rows = stmt.query_map(
-        params![
-            match_query,
-            account,
-            folder,
-            limit,
-            cursor_date,
-            cursor_uid,
-            cursor_folder
-        ],
-        message_header_from_row,
-    )?;
-    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
-}
-
-/// Substring search via a scoped table scan. Used for queries too short for the
-/// trigram FTS index (< 3 codepoints).
-fn search_messages_like(
-    conn: &Connection,
-    account: &str,
-    folder: &str,
-    q: &str,
-    limit: u32,
-    before_cursor: Option<&crate::thread_list::SearchCursor>,
-) -> Result<Vec<MessageHeader>> {
-    let like = format!("%{}%", escape_like(q.to_lowercase()));
-    let cursor_date = before_cursor.map(|cursor| cursor.date);
-    let cursor_uid = before_cursor.map(|cursor| cursor.uid as i64).unwrap_or(0);
-    let cursor_folder = before_cursor.map(|cursor| cursor.folder.as_str());
-    let mut stmt = conn.prepare(
-        "SELECT uid, subject, from_name, from_addr, date, seen, starred, thread_key,
-                json_extract(json, '$.to') FROM messages
-         WHERE account = ?1 AND folder = ?2 AND uid <> 0
-           AND (
-             lower(COALESCE(subject, '')) LIKE ?3 ESCAPE '\\'
-             OR lower(COALESCE(from_name, '')) LIKE ?3 ESCAPE '\\'
-             OR lower(COALESCE(from_addr, '')) LIKE ?3 ESCAPE '\\'
-             OR lower(COALESCE(recipients, '')) LIKE ?3 ESCAPE '\\'
-             OR lower(COALESCE(body, '')) LIKE ?3 ESCAPE '\\'
-           )
-           AND (?5 IS NULL
-                OR date < ?5
-                OR (date = ?5 AND uid < ?6)
-                OR (date = ?5 AND uid = ?6 AND folder < ?7))
-         ORDER BY date DESC, uid DESC LIMIT ?4",
-    )?;
-    let rows = stmt.query_map(
-        params![
-            account,
-            folder,
-            like,
-            limit,
-            cursor_date,
-            cursor_uid,
-            cursor_folder
-        ],
-        message_header_from_row,
-    )?;
-    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    search_messages_parsed(
+        conn,
+        account,
+        folder,
+        &crate::search::parse(query),
+        limit,
+        before_cursor,
+    )
 }
 
 /// Search several folders (typically the open mailbox plus Sent) as one

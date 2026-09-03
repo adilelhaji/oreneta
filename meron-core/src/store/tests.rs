@@ -404,6 +404,145 @@ fn label(id: &str, name: &str) -> Label {
     }
 }
 
+/// A small mailbox to try searches against.
+fn searchable_conn() -> Connection {
+    let conn = test_conn();
+    let recipient = |addr: &str| crate::imap::Recipient {
+        name: String::new(),
+        addr: addr.to_string(),
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader {
+                uid: 1,
+                subject: "Weekly report".into(),
+                from_name: "Ann Example".into(),
+                from_addr: "ann@example.com".into(),
+                date: 1_767_312_000, // 2026-01-02
+                seen: false,
+                starred: true,
+                thread_key: "t-1".into(),
+                to: vec![recipient("team@example.com")],
+                has_attachments: Some(true),
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 2,
+                subject: "Lunch".into(),
+                from_name: "Bob Other".into(),
+                from_addr: "bob@example.com".into(),
+                date: 1_769_990_400, // 2026-02-02
+                seen: true,
+                thread_key: "t-2".into(),
+                to: vec![recipient("me@example.com")],
+                has_attachments: Some(false),
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 3,
+                subject: "Weekly report".into(),
+                from_name: "Carol".into(),
+                from_addr: "carol@example.com".into(),
+                date: 1_772_409_600, // 2026-03-02
+                seen: false,
+                thread_key: "t-3".into(),
+                to: vec![recipient("team@example.com")],
+                ..Default::default() // attachment unknown
+            },
+        ],
+    )
+    .unwrap();
+    conn
+}
+
+fn found(conn: &Connection, query: &str) -> Vec<u32> {
+    search_messages(conn, "acct", "INBOX", query, 50, None)
+        .unwrap()
+        .into_iter()
+        .map(|header| header.uid)
+        .collect()
+}
+
+#[test]
+fn an_operator_narrows_the_search_it_names() {
+    let conn = searchable_conn();
+    assert_eq!(found(&conn, "from:ann"), vec![1]);
+    // The sender is name and address together: a term in the display name
+    // finds it just as one in the address does.
+    assert_eq!(found(&conn, r#"from:"Ann Example""#), vec![1]);
+    assert_eq!(found(&conn, "from:Other"), vec![2]);
+    // And a term that is in every address finds every one of them, which is
+    // what a substring search over a shared domain has to mean.
+    assert_eq!(found(&conn, "from:example.com"), vec![3, 2, 1]);
+    assert_eq!(found(&conn, "to:team"), vec![3, 1]);
+    assert_eq!(found(&conn, "subject:weekly"), vec![3, 1]);
+    assert_eq!(found(&conn, "is:unread"), vec![3, 1]);
+    assert_eq!(found(&conn, "is:read"), vec![2]);
+    assert_eq!(found(&conn, "is:starred"), vec![1]);
+}
+
+#[test]
+fn operators_asked_for_together_narrow_one_query() {
+    let conn = searchable_conn();
+    // One statement, not a page narrowed afterwards.
+    assert_eq!(found(&conn, "subject:weekly is:unread from:carol"), vec![3]);
+    assert!(found(&conn, "from:ann is:read").is_empty());
+}
+
+#[test]
+fn two_terms_for_one_field_mean_either_of_them() {
+    let conn = searchable_conn();
+    // Nobody writing this means a message from both people at once.
+    assert_eq!(found(&conn, "from:ann from:bob"), vec![2, 1]);
+}
+
+#[test]
+fn a_search_can_be_only_operators() {
+    let conn = searchable_conn();
+    // No free text at all: the index is not consulted, the predicates are the
+    // whole question.
+    assert_eq!(found(&conn, "is:starred"), vec![1]);
+    assert!(found(&conn, "").is_empty());
+}
+
+#[test]
+fn free_text_still_searches_as_it_always_did_beside_an_operator() {
+    let conn = searchable_conn();
+    assert_eq!(found(&conn, "weekly"), vec![3, 1]);
+    assert_eq!(found(&conn, "weekly from:carol"), vec![3]);
+}
+
+#[test]
+fn dates_bound_the_search_at_the_day() {
+    let conn = searchable_conn();
+    assert_eq!(found(&conn, "after:2026-02-01"), vec![3, 2]);
+    assert_eq!(found(&conn, "before:2026-02-01"), vec![1]);
+    assert_eq!(found(&conn, "after:2026-01-15 before:2026-02-15"), vec![2]);
+}
+
+#[test]
+fn an_attachment_nobody_has_looked_for_is_not_an_answer() {
+    let conn = searchable_conn();
+    // uid 3's structure has never been fetched. Offering it here would make
+    // the operator mean nothing.
+    assert_eq!(found(&conn, "has:attachment"), vec![1]);
+}
+
+#[test]
+fn a_label_can_be_searched_for_by_the_name_that_was_typed() {
+    let conn = searchable_conn();
+    replace_labels(&conn, &[label("l-1", "Work")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-2", &["l-1".into()]).unwrap();
+
+    assert_eq!(found(&conn, "label:Work"), vec![2]);
+    // The name as typed, in whatever case.
+    assert_eq!(found(&conn, "label:work"), vec![2]);
+    assert!(found(&conn, "label:Nonexistent").is_empty());
+}
+
 #[test]
 fn labels_are_kept_in_the_order_they_were_arranged() {
     let conn = test_conn();

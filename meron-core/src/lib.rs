@@ -20,6 +20,7 @@ pub mod protocol;
 pub mod proxy;
 pub mod rss;
 pub mod rules;
+pub mod search;
 pub mod secrets;
 #[cfg(target_os = "linux")]
 mod secrets_portal;
