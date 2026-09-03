@@ -381,6 +381,14 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.writeChatWallpaperFile(payload)
 	case "composer.pruneMedia":
 		return a.pruneComposerMedia(payload)
+	case "mail.sweepPreview":
+		return a.mailSweepPreview(payload)
+	case "mail.sweep":
+		return a.mailSweep(payload)
+	case "mail.priorityReason":
+		return a.mailPriorityReason(payload)
+	case "mail.setSenderPriority":
+		return a.mailSetSenderPriority(payload)
 	case "mail.markJunk":
 		return a.mailMarkJunk(payload)
 	case "mail.archive":

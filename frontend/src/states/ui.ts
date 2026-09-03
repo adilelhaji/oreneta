@@ -179,6 +179,8 @@ export const ui$ = observable({
   // The component catalogue: every piece of the library in every state, on
   // one screen. Opens from the command palette only; nothing links to it.
   catalogueOpen: false,
+  // The sweep dialog, which needs to know whose mail and from where.
+  sweep: null as { accountId: string; folder: string; sender: string } | null,
   // The list of messages waiting to be sent later. A message put off must be
   // findable, or putting it off is losing it.
   scheduledSendsOpen: false,

@@ -45,6 +45,7 @@ import { formatDeferredWhen } from '../../lib/date'
 import type { Account, Message } from '../../types'
 import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { MessageContextMenu } from '../chat/MessageContextMenu'
+import { PriorityMenuSection } from './PriorityMenuSection'
 
 export type ThreadMenuState =
   | {
@@ -492,6 +493,12 @@ export function ThreadContextMenu({
           close()
           void markThreadJunk(threadId, !inJunk).then(() => after('archive', threadId))
         }}
+      />
+      <PriorityMenuSection
+        threadId={menu.threadId}
+        accountId={menu.accountId}
+        folderId={menu.folderId}
+        onAct={close}
       />
       {canMove && (
         <div

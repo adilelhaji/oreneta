@@ -34,6 +34,7 @@ import { FeedEditDialog } from './components/dialog/FeedEditDialog'
 import { ScheduledSendsDialog } from './components/dialog/ScheduledSendsDialog'
 import { RuleLogDialog } from './components/dialog/RuleLogDialog'
 import { DesignCatalogue } from './components/dialog/DesignCatalogue'
+import { SweepDialog } from './components/dialog/SweepDialog'
 
 export default function App() {
   const { t } = useTranslation()
@@ -54,6 +55,7 @@ export default function App() {
   const scheduledSendsOpen = useValue(ui$.scheduledSendsOpen)
   const ruleLogOpen = useValue(ui$.ruleLogOpen)
   const catalogueOpen = useValue(ui$.catalogueOpen)
+  const sweepTarget = useValue(ui$.sweep)
 
   useAppEffects()
 
@@ -129,6 +131,14 @@ export default function App() {
         {scheduledSendsOpen && <ScheduledSendsDialog />}
         {ruleLogOpen && <RuleLogDialog />}
         {catalogueOpen && <DesignCatalogue />}
+        {sweepTarget && (
+          <SweepDialog
+            accountId={sweepTarget.accountId}
+            folder={sweepTarget.folder}
+            sender={sweepTarget.sender}
+            onClose={() => ui$.sweep.set(null)}
+          />
+        )}
 
         <AppToast />
         <AppConfirm />

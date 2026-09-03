@@ -697,6 +697,109 @@ fn what_the_reader_says_about_a_sender_sticks_and_can_be_taken_back() {
 }
 
 #[test]
+fn a_sweep_says_what_it_would_move_and_keeps_the_newest() {
+    let conn = test_conn();
+    let from = |uid: u32, date: i64, addr: &str| MessageHeader {
+        uid,
+        date,
+        subject: format!("Offer {uid}"),
+        from_addr: addr.to_string(),
+        thread_key: format!("t-{uid}"),
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            from(1, 100, "shop@example.com"),
+            from(2, 200, "shop@example.com"),
+            from(3, 300, "shop@example.com"),
+            from(4, 400, "ann@example.com"),
+        ],
+    )
+    .unwrap();
+
+    let uids = |keep: u32| {
+        sweep_candidates(&conn, "acct", "INBOX", "shop@example.com", keep)
+            .unwrap()
+            .into_iter()
+            .map(|candidate| candidate.uid)
+            .collect::<Vec<_>>()
+    };
+
+    // The newest survives; the rest are what would go. Somebody else's mail is
+    // never in the answer, whatever the count.
+    assert_eq!(uids(1), vec![2, 1]);
+    assert_eq!(uids(2), vec![1]);
+    assert!(uids(3).is_empty());
+    assert!(uids(99).is_empty());
+
+    // Zero is a thing someone may mean, and it means all of them.
+    assert_eq!(uids(0), vec![3, 2, 1]);
+
+    // The address is matched whole and case-insensitively — a sweep that
+    // caught a substring would reach mail nobody named.
+    assert_eq!(
+        sweep_candidates(&conn, "acct", "INBOX", "  SHOP@Example.com ", 1)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(sweep_candidates(&conn, "acct", "INBOX", "shop", 0).unwrap().is_empty());
+
+    // And it says what each one is, so the list can be read before it is
+    // agreed to.
+    let shown = sweep_candidates(&conn, "acct", "INBOX", "shop@example.com", 1).unwrap();
+    assert_eq!(shown[0].subject, "Offer 2");
+    assert_eq!(shown[0].date, 200);
+}
+
+#[test]
+fn the_reason_shown_is_the_real_one() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "ann@example.com".into(),
+            to: vec![crate::imap::Recipient {
+                name: String::new(),
+                addr: "me@example.com".into(),
+            }],
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+
+    // Recipients are what make this message priority, so the signals have to
+    // carry them. Reading them from a query that does not — the thread-header
+    // one does not — produced "nothing known" for a message addressed to the
+    // reader by name, which is an explanation that is quietly false. A wrong
+    // reason is worse here than no reason at all.
+    let (sender, signals) = thread_priority_signals(&conn, "acct", "INBOX", "t-1")
+        .unwrap()
+        .expect("the conversation is there");
+    assert_eq!(sender, "ann@example.com");
+    assert!(signals.addressed_directly);
+
+    let verdict = crate::priority::verdict(signals);
+    assert!(verdict.priority);
+    assert_eq!(verdict.reasons, vec![crate::priority::Reason::AddressedDirectly]);
+
+    // A conversation nobody has is nothing, not a guess.
+    assert!(thread_priority_signals(&conn, "acct", "INBOX", "t-9").unwrap().is_none());
+}
+
+#[test]
 fn a_page_can_be_narrowed_to_what_is_worth_interrupting_for() {
     let conn = test_conn();
     conn.execute(

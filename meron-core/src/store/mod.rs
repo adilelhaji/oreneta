@@ -1693,6 +1693,92 @@ pub fn priority_signals(
     }
 }
 
+/// One message a sweep would move.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SweepCandidate {
+    pub uid: u32,
+    pub subject: String,
+    pub date: i64,
+}
+
+/// What a sweep would move, without moving any of it.
+///
+/// Outlook calls this Sweep: a sender whose mail is fine to keep arriving but
+/// whose older copies are not worth keeping. The one thing it must never be is
+/// a surprise, so this answers the question first and the caller shows it —
+/// the same shape the rules already use, and for the same reason.
+///
+/// `keep_newest` is how many of the sender's most recent messages survive.
+/// Zero sweeps all of them, which is a thing someone may mean and so is
+/// allowed, but it is the caller's job to make sure they meant it.
+pub fn sweep_candidates(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    from_addr: &str,
+    keep_newest: u32,
+) -> Result<Vec<SweepCandidate>> {
+    let mut stmt = conn.prepare(
+        "SELECT uid, COALESCE(subject, ''), date FROM messages
+          WHERE account = ?1 AND folder = ?2 AND uid <> 0
+            AND lower(COALESCE(from_addr, '')) = ?3
+          ORDER BY date DESC, uid DESC",
+    )?;
+    let rows = stmt.query_map(
+        params![account, folder, from_addr.trim().to_lowercase()],
+        |row| {
+            Ok(SweepCandidate {
+                uid: row.get(0)?,
+                subject: row.get(1)?,
+                date: row.get(2)?,
+            })
+        },
+    )?;
+    // Newest first from the query, so what survives is simply the front of it.
+    Ok(rows
+        .filter_map(Result::ok)
+        .skip(keep_newest as usize)
+        .collect())
+}
+
+/// The signals for the newest message of one conversation.
+///
+/// Its own query rather than a reader of `get_thread_headers`, which does not
+/// carry recipients — asking it would have produced an explanation that was
+/// quietly the wrong one, and a wrong explanation is worse here than none:
+/// the whole point of this feature is that the reason can be trusted.
+pub fn thread_priority_signals(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+) -> Result<Option<(String, crate::priority::Signals)>> {
+    let row: Option<(String, Vec<crate::imap::Recipient>, Vec<crate::imap::Recipient>)> = conn
+        .query_row(
+            "SELECT from_addr, json_extract(json, '$.to'), json_extract(json, '$.cc')
+               FROM messages
+              WHERE account = ?1 AND folder = ?2
+                AND COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) = ?3
+              ORDER BY date DESC, uid DESC LIMIT 1",
+            params![account, folder, thread_key],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                    parse_recipients_json(row.get::<_, Option<String>>(1)?),
+                    parse_recipients_json(row.get::<_, Option<String>>(2)?),
+                ))
+            },
+        )
+        .optional()?;
+
+    let Some((from_addr, to, cc)) = row else {
+        return Ok(None);
+    };
+    let mine = crate::store::self_addrs(conn, account);
+    let signals = priority_signals(conn, account, &from_addr, &to, &cc, &mine);
+    Ok(Some((from_addr, signals)))
+}
+
 /// Judges every message of an account that has not been judged yet.
 ///
 /// The gap this closes is one no server can help with, so it is closed here:

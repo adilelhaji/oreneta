@@ -28,8 +28,8 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
-    backup, calendar, changelog, exchange, imap, mail_model, parse, proxy, rss, rules, search,
-    secrets, smtp, store, thread_list, thread_read, unified,
+    backup, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
+    search, secrets, smtp, store, thread_list, thread_read, unified,
 };
 
 /// Shared, serialized writer so responses and events never interleave on stdout.
@@ -1443,6 +1443,80 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     }))
                     .collect::<Vec<_>>()
             }))
+        }
+
+        // What a sweep would move, moving nothing.
+        //
+        // Asked before it is done, always. A sweep is the one action here that
+        // reaches messages the reader is not looking at, and an action like
+        // that has to show its work first — the same rule the rules follow.
+        "mail.sweepPreview" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let from_addr = req_str(p, "from")?;
+            let keep = p.get("keep_newest").and_then(Value::as_u64).unwrap_or(1) as u32;
+            let candidates = {
+                let db = engine.db.lock().unwrap();
+                store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?
+            };
+            Ok(json!({
+                "from": from_addr,
+                "folder": folder,
+                "keepNewest": keep,
+                "messages": candidates
+                    .iter()
+                    .map(|candidate| json!({
+                        "uid": candidate.uid,
+                        "subject": candidate.subject,
+                        "date": candidate.date,
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Why a conversation is where it is, and what the reader has said about
+        // its sender.
+        //
+        // Asked for one conversation at a time rather than carried on every
+        // card: a reason is only wanted when someone wonders, and computing
+        // fifty of them to show none would be work nobody asked for.
+        "mail.priorityReason" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            // The newest message of the conversation: the one whose sender the
+            // reader is looking at, and whose arrival decided where the
+            // conversation sits.
+            let (sender, signals) = store::thread_priority_signals(
+                &db,
+                &parsed.account,
+                &parsed.folder,
+                &parsed.thread_key,
+            )?
+            .context("no such conversation")?;
+            let verdict = priority::verdict(signals);
+            Ok(json!({
+                "priority": verdict.priority,
+                "reasons": verdict.reasons,
+                "sender": sender,
+                "override": signals.sender_override,
+            }))
+        }
+
+        // Records what the reader decided about a sender, and re-judges the
+        // account so every conversation from them moves at once — a decision
+        // that only applied to the message it was made on would be a decision
+        // the reader has to keep making.
+        "mail.setSenderPriority" => {
+            let account = req_str(p, "account")?;
+            let addr = req_str(p, "addr")?;
+            let choice = p.get("priority").and_then(Value::as_bool);
+            let db = engine.db.lock().unwrap();
+            store::set_sender_priority(&db, &account, &addr, choice)?;
+            let judged = store::rejudge_priority(&db, &account, false)?;
+            Ok(json!({ "ok": true, "judged": judged }))
         }
 
         // Labels the reader has made. Local to this install by design: an
