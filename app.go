@@ -381,6 +381,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.writeChatWallpaperFile(payload)
 	case "composer.pruneMedia":
 		return a.pruneComposerMedia(payload)
+	case "mail.markJunk":
+		return a.mailMarkJunk(payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":

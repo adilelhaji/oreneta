@@ -3676,6 +3676,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
         }
 
+        // Where an account files its junk, and where mail comes back to.
+        //
+        // Read from the cached folder list rather than asked of the server:
+        // the roles were resolved when the folders were listed, and a junk
+        // folder that has not changed since does not need a round trip to
+        // find. Absent means the account has no such folder — which is a
+        // real answer, not a failure to look.
+        "folders.byRole" => {
+            let account = req_str(p, "account")?;
+            let role = req_str(p, "role")?;
+            let folder = {
+                let db = engine.db.lock().unwrap();
+                store::folder_for_role(&db, &account, &role)?
+            };
+            Ok(json!({ "folder": folder }))
+        }
+
         // Mark every message in a folder as read: set \Seen on the server for the
         // currently-unseen UIDs, then flip the whole folder seen in the store.
         "messages.markAllRead" => {

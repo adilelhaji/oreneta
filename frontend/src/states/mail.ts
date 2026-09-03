@@ -278,6 +278,21 @@ export function isTrashFolderId(accountId: string, folderId: string): boolean {
   return isTrashFolder(folder) || looksLikeTrashName(folderId)
 }
 
+/**
+ * Whether a folder is where this account keeps unwanted mail.
+ *
+ * Same shape as the trash test beside it: the folder's declared role first,
+ * and a name check only for the servers that declare none.
+ */
+export function isJunkFolderId(accountId: string, folderId: string): boolean {
+  const accountFolders = mail$.foldersByAccount[accountId].get() ?? []
+  const selectedFolders = mail$.folders.get() ?? []
+  const folder = [...accountFolders, ...selectedFolders].find(
+    (item) => item.account_id === accountId && item.id === folderId,
+  )
+  return folder?.role === 'junk' || looksLikeJunkName(folderId)
+}
+
 function looksLikeJunkName(value: string): boolean {
   return ['junk', 'spam', 'junk e-mail', 'junk email', 'bulk mail', '[gmail]/spam'].includes(value.trim().toLowerCase())
 }
@@ -1665,6 +1680,48 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
   } catch (error) {
     for (const rollback of rollbacks.reverse()) rollback()
     showToast(error instanceof Error ? error.message : t('mail.toast.deleteFailed'), 'error')
+  }
+}
+
+/**
+ * Files a conversation where the account keeps unwanted mail, or takes it back.
+ *
+ * A move, not a flag. On Gmail and Exchange the junk folder is what teaches
+ * the server's own filter, so this does what a reader means by "this is spam";
+ * on a plain IMAP server it files it and nothing more, which is all that
+ * server offers.
+ *
+ * Offered with an undo, like archiving, because the one thing a reader needs
+ * after mis-filing something is to put it back — and a message in the junk
+ * folder is a message they will not go looking for.
+ */
+export async function markThreadJunk(threadId: string, junk = true) {
+  if (!threadId) return
+  const sourceThread = findLocalThread(threadId)
+  const sourceFolder = sourceThread?.folder_id ?? ''
+  const { rollback } = removeThreadLocally(threadId)
+  try {
+    const res = await invoke<{ folder?: string; thread_id?: string } & MutationResult>('mail.markJunk', {
+      thread_id: threadId,
+      junk,
+    })
+    assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
+    applyMutationFolderUnreads(res)
+    const movedThreadId = res.thread_id ?? threadIdInFolder(threadId, sourceThread?.account_id, res.folder)
+    await refreshThreadLocation(sourceThread?.account_id, true)
+    if (sourceFolder) {
+      showUndoToast(
+        t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'),
+        () => void moveThreadToFolder(movedThreadId, sourceFolder, { undo: false }),
+      )
+    } else {
+      showToast(t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'))
+    }
+  } catch (error) {
+    // Back where it was: a conversation that did not move must not look as
+    // though it had, least of all into a folder nobody reads.
+    rollback()
+    showToast(error instanceof Error ? error.message : t('mail.toast.junkFailed'), 'error')
   }
 }
 

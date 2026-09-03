@@ -13,6 +13,7 @@ import {
   Star,
   Trash2,
   Clock,
+  Ban,
 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { ui$ } from '../../states/ui'
@@ -28,6 +29,8 @@ import {
   isDraftFolder,
   isTrashFolderId,
   mail$,
+  isJunkFolderId,
+  markThreadJunk,
   markThreadRead,
   markThreadUnread,
   moveThreadToFolder,
@@ -374,6 +377,7 @@ export function ThreadContextMenu({
     excluded: account.id === menu.accountId ? [menu.folderId] : [],
   }))
   const inTrash = isTrashFolderId(menu.accountId, menu.folderId)
+  const inJunk = isJunkFolderId(menu.accountId, menu.folderId)
   const inDrafts = isDraftFolder(menu.folderId, menu.accountId)
 
   return (
@@ -475,6 +479,18 @@ export function ThreadContextMenu({
           const threadId = menu.threadId
           close()
           void archiveThread(threadId).then(() => after('archive', threadId))
+        }}
+      />
+      {/* In the junk folder the useful gesture is the opposite one, so that is
+          the one offered. This branch is mail only — a feed returned above,
+          and a feed has no junk folder to file into. */}
+      <MenuItem
+        icon={<Ban size={13} className="text-secondary" />}
+        label={inJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')}
+        onClick={() => {
+          const threadId = menu.threadId
+          close()
+          void markThreadJunk(threadId, !inJunk).then(() => after('archive', threadId))
         }}
       />
       {canMove && (
