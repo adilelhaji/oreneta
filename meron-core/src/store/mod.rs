@@ -1136,6 +1136,46 @@ pub fn get_search_snapshot_page(
 pub struct Contact {
     pub name: String,
     pub addr: String,
+    /// True when this came out of an address book rather than out of mail.
+    ///
+    /// The two are different claims. "Ana Prat" from a book is somebody the
+    /// reader keeps; the same address seen in a header is somebody they have
+    /// corresponded with, which they may not recognise at all. The interface
+    /// is allowed to show them differently, so it is told which is which.
+    #[serde(default)]
+    pub known: bool,
+    /// Where they work, when a book said so.
+    #[serde(default)]
+    pub organisation: String,
+}
+
+/// Address-book matches for recipient autocomplete.
+///
+/// One row per address rather than per person: the writer is choosing where to
+/// send, and somebody with a work address and a home one is two choices. The
+/// name comes along so both read as that person.
+pub fn suggest_from_book(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Contact>> {
+    let needle = query.trim().to_lowercase();
+    let like = format!("%{}%", escape_like(needle.clone()));
+    let mut stmt = conn.prepare(
+        "SELECT p.name, e.addr, p.organisation
+           FROM person_emails e JOIN people p ON p.id = e.person_id
+          WHERE ?1 = ''
+             OR lower(p.name) LIKE ?2 ESCAPE '\\'
+             OR e.addr LIKE ?2 ESCAPE '\\'
+             OR lower(p.organisation) LIKE ?2 ESCAPE '\\'
+          ORDER BY p.name COLLATE NOCASE, e.position
+          LIMIT ?3",
+    )?;
+    let rows = stmt.query_map(params![needle, like, limit as i64], |row| {
+        Ok(Contact {
+            name: row.get(0)?,
+            addr: row.get(1)?,
+            known: true,
+            organisation: row.get(2)?,
+        })
+    })?;
+    Ok(rows.flatten().collect())
 }
 
 /// Suggest contacts for recipient autocomplete, drawn from both the senders and
@@ -1234,14 +1274,32 @@ pub fn suggest_contacts(
             .cmp(&a.count)
             .then_with(|| a.addr.to_lowercase().cmp(&b.addr.to_lowercase()))
     });
-    out.truncate(limit as usize);
-    Ok(out
-        .into_iter()
-        .map(|t| Contact {
-            name: t.name,
-            addr: t.addr,
-        })
-        .collect())
+    // People the reader keeps come first, and what is left of the limit is
+    // filled from mail they have seen. The two are different claims — one is
+    // somebody's address book, the other is an address that went past — and
+    // putting the book first means a colleague is not outranked by a
+    // no-reply that happens to have written more often.
+    let book = suggest_from_book(conn, query, limit)?;
+    let mut taken: std::collections::HashSet<String> =
+        book.iter().map(|c| c.addr.to_lowercase()).collect();
+
+    let mut merged = book;
+    for tally in out {
+        if merged.len() >= limit as usize {
+            break;
+        }
+        if !taken.insert(tally.addr.to_lowercase()) {
+            continue;
+        }
+        merged.push(Contact {
+            name: tally.name,
+            addr: tally.addr,
+            known: false,
+            organisation: String::new(),
+        });
+    }
+    merged.truncate(limit as usize);
+    Ok(merged)
 }
 
 pub fn get_starred(
@@ -1921,6 +1979,224 @@ pub fn replace_templates(
         ])?;
     }
     Ok(())
+}
+
+/// Where a book of people came from.
+///
+/// The three together, plus the book's own id for a person, say who a row is
+/// *there* — which is what lets a re-sync update in place instead of adding
+/// everybody again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BookOrigin {
+    /// "carddav", "google", "exchange", "local".
+    pub source: String,
+    /// The account it belongs to; empty for a book that is not an account's.
+    pub account: String,
+    /// Which book within that source, when the source has more than one.
+    pub book: String,
+}
+
+impl BookOrigin {
+    fn person_id(&self, uid: &str) -> String {
+        format!("{}:{}:{}:{}", self.source, self.account, self.book, uid)
+    }
+}
+
+/// A person as the store returns them, with where they came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredPerson {
+    pub id: String,
+    pub origin: BookOrigin,
+    pub person: crate::contacts::person::Person,
+    /// Media key of the cached picture, empty when there is none.
+    pub photo_key: String,
+}
+
+/// Replace everything in one book with what a sync just read.
+///
+/// Whole rather than incremental, and deliberately: a sync reads the book as
+/// it now is, and reconciling that against what was here by guessing which
+/// rows correspond would be a way to keep somebody the server deleted. What it
+/// costs is that a book briefly has no rows mid-write, which the transaction
+/// hides from every reader.
+///
+/// Only this book is touched. The same person in two books stays two rows —
+/// merging them by name would be a guess, and an address book that quietly
+/// fuses two people is worse than one that shows both.
+pub fn replace_book(
+    conn: &Connection,
+    origin: &BookOrigin,
+    people: &[(crate::contacts::person::Person, String)],
+    now: i64,
+) -> Result<usize> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "DELETE FROM person_emails WHERE person_id IN
+           (SELECT id FROM people WHERE source = ?1 AND account = ?2 AND book = ?3)",
+        params![origin.source, origin.account, origin.book],
+    )?;
+    tx.execute(
+        "DELETE FROM person_phones WHERE person_id IN
+           (SELECT id FROM people WHERE source = ?1 AND account = ?2 AND book = ?3)",
+        params![origin.source, origin.account, origin.book],
+    )?;
+    tx.execute(
+        "DELETE FROM people WHERE source = ?1 AND account = ?2 AND book = ?3",
+        params![origin.source, origin.account, origin.book],
+    )?;
+
+    let mut written = 0usize;
+    {
+        let mut person_stmt = tx.prepare(
+            "INSERT OR REPLACE INTO people
+               (id, source, account, book, uid, name, organisation, note, photo, updated)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        )?;
+        let mut email_stmt = tx.prepare(
+            "INSERT OR REPLACE INTO person_emails(person_id, addr, label, position)
+             VALUES(?1, ?2, ?3, ?4)",
+        )?;
+        let mut phone_stmt = tx.prepare(
+            "INSERT OR REPLACE INTO person_phones(person_id, number, label, position)
+             VALUES(?1, ?2, ?3, ?4)",
+        )?;
+
+        for (index, (person, photo_key)) in people.iter().enumerate() {
+            // A book that gives nobody a uid — some exports do — still has
+            // people in it. Their position stands in, which is stable for as
+            // long as the book is, and a re-sync replaces the lot anyway.
+            let uid = if person.uid.trim().is_empty() {
+                format!("#{index}")
+            } else {
+                person.uid.trim().to_string()
+            };
+            let id = origin.person_id(&uid);
+            person_stmt.execute(params![
+                id,
+                origin.source,
+                origin.account,
+                origin.book,
+                uid,
+                person.name,
+                person.organisation,
+                person.note,
+                photo_key,
+                now,
+            ])?;
+            for (position, email) in person.emails.iter().enumerate() {
+                email_stmt.execute(params![id, email.addr, email.label, position as i64])?;
+            }
+            for (position, phone) in person.phones.iter().enumerate() {
+                phone_stmt.execute(params![id, phone.number, phone.label, position as i64])?;
+            }
+            written += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(written)
+}
+
+/// Read the addresses and phones belonging to a set of people, in one pass each.
+fn attachments_for(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<(
+    std::collections::HashMap<String, Vec<crate::contacts::person::EmailAddress>>,
+    std::collections::HashMap<String, Vec<crate::contacts::person::PhoneNumber>>,
+)> {
+    use crate::contacts::person::{EmailAddress, PhoneNumber};
+    use std::collections::HashMap;
+
+    let mut emails: HashMap<String, Vec<EmailAddress>> = HashMap::new();
+    let mut phones: HashMap<String, Vec<PhoneNumber>> = HashMap::new();
+    if ids.is_empty() {
+        return Ok((emails, phones));
+    }
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let bound: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT person_id, addr, label FROM person_emails
+          WHERE person_id IN ({placeholders}) ORDER BY person_id, position"
+    ))?;
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            EmailAddress {
+                addr: row.get(1)?,
+                label: row.get(2)?,
+            },
+        ))
+    })?;
+    for (id, email) in rows.flatten() {
+        emails.entry(id).or_default().push(email);
+    }
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT person_id, number, label FROM person_phones
+          WHERE person_id IN ({placeholders}) ORDER BY person_id, position"
+    ))?;
+    let rows = stmt.query_map(bound.as_slice(), |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            PhoneNumber {
+                number: row.get(1)?,
+                label: row.get(2)?,
+            },
+        ))
+    })?;
+    for (id, phone) in rows.flatten() {
+        phones.entry(id).or_default().push(phone);
+    }
+
+    Ok((emails, phones))
+}
+
+/// People whose name, organisation or any address matches, by name.
+///
+/// An empty query is the whole book, which is what the Personas view opens on.
+pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<StoredPerson>> {
+    let needle = query.trim().to_lowercase();
+    let like = format!("%{}%", escape_like(needle.clone()));
+    let mut stmt = conn.prepare(
+        "SELECT id, source, account, book, uid, name, organisation, note, photo
+           FROM people
+          WHERE ?1 = ''
+             OR lower(name) LIKE ?2 ESCAPE '\\'
+             OR lower(organisation) LIKE ?2 ESCAPE '\\'
+             OR id IN (SELECT person_id FROM person_emails WHERE addr LIKE ?2 ESCAPE '\\')
+          ORDER BY name COLLATE NOCASE
+          LIMIT ?3",
+    )?;
+    let rows = stmt.query_map(params![needle, like, limit as i64], |row| {
+        Ok(StoredPerson {
+            id: row.get(0)?,
+            origin: BookOrigin {
+                source: row.get(1)?,
+                account: row.get(2)?,
+                book: row.get(3)?,
+            },
+            person: crate::contacts::person::Person {
+                uid: row.get(4)?,
+                name: row.get(5)?,
+                organisation: row.get(6)?,
+                note: row.get(7)?,
+                emails: Vec::new(),
+                phones: Vec::new(),
+                photo: None,
+            },
+            photo_key: row.get(8)?,
+        })
+    })?;
+    let mut people: Vec<StoredPerson> = rows.flatten().collect();
+
+    let ids: Vec<String> = people.iter().map(|person| person.id.clone()).collect();
+    let (emails, phones) = attachments_for(conn, &ids)?;
+    for person in &mut people {
+        person.person.emails = emails.get(&person.id).cloned().unwrap_or_default();
+        person.person.phones = phones.get(&person.id).cloned().unwrap_or_default();
+    }
+    Ok(people)
 }
 
 /// A label the reader has made.

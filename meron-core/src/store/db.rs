@@ -600,6 +600,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 21 {
         migrate_v21(&tx)?;
     }
+    if version < 22 {
+        migrate_v22(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -959,6 +962,60 @@ fn migrate_v21(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 21;")?;
+    Ok(())
+}
+
+/// People, as opposed to addresses.
+///
+/// What the composer had until now was a tally of addresses seen in mail. That
+/// is a useful thing and it stays, but it is not an address book: it cannot
+/// say that two addresses are one person, it has no name for someone who has
+/// never written, and it knows nothing the reader keeps elsewhere.
+///
+/// A person has many addresses, which is the whole difference and the reason
+/// this is two tables rather than a wider `correspondents`. Phone numbers come
+/// along because every source carries them and a Personas view without them
+/// would be conspicuously empty.
+///
+/// `source`, `account`, `book` and `uid` together say where a person came from
+/// and who they are *there*, so a re-sync updates rather than duplicates. The
+/// same human present in two address books stays two rows: merging them by
+/// name would be a guess, and an address book that quietly fuses two people is
+/// worse than one that shows both. Addresses are what the interface matches
+/// on, and an address is exact.
+fn migrate_v22(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS people (
+           id           TEXT PRIMARY KEY,
+           source       TEXT NOT NULL,
+           account      TEXT NOT NULL,
+           book         TEXT NOT NULL,
+           uid          TEXT NOT NULL,
+           name         TEXT NOT NULL,
+           organisation TEXT NOT NULL,
+           note         TEXT NOT NULL,
+           photo        TEXT NOT NULL,
+           updated      INTEGER NOT NULL
+         );
+         CREATE UNIQUE INDEX IF NOT EXISTS people_origin
+           ON people(source, account, book, uid);
+         CREATE TABLE IF NOT EXISTS person_emails (
+           person_id TEXT NOT NULL,
+           addr      TEXT NOT NULL,
+           label     TEXT NOT NULL,
+           position  INTEGER NOT NULL,
+           PRIMARY KEY (person_id, addr)
+         );
+         CREATE INDEX IF NOT EXISTS person_emails_addr ON person_emails(addr);
+         CREATE TABLE IF NOT EXISTS person_phones (
+           person_id TEXT NOT NULL,
+           number    TEXT NOT NULL,
+           label     TEXT NOT NULL,
+           position  INTEGER NOT NULL,
+           PRIMARY KEY (person_id, number)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 22;")?;
     Ok(())
 }
 

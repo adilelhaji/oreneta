@@ -1519,6 +1519,31 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "judged": judged }))
         }
 
+        // People, from whichever books have been brought in. An empty query
+        // is the whole book, which is what the Personas view opens on.
+        "people.list" => {
+            let query = req_str(p, "query").unwrap_or_default();
+            let limit = req_u32(p, "limit").unwrap_or(500);
+            let found = store::find_people(&engine.db.lock().unwrap(), &query, limit)?;
+            Ok(json!({
+                "people": found
+                    .iter()
+                    .map(|stored| json!({
+                        "id": stored.id,
+                        "source": stored.origin.source,
+                        "account": stored.origin.account,
+                        "book": stored.origin.book,
+                        "name": stored.person.name,
+                        "organisation": stored.person.organisation,
+                        "note": stored.person.note,
+                        "photo": stored.photo_key,
+                        "emails": stored.person.emails,
+                        "phones": stored.person.phones,
+                    }))
+                    .collect::<Vec<_>>()
+            }))
+        }
+
         // Text the writer keeps because they write it often: a snippet
         // dropped in at the cursor, or a whole message with its own subject.
         "templates.list" => {

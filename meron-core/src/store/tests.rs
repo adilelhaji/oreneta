@@ -2684,7 +2684,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 21);
+    assert_eq!(version, 22);
 
     for table in [
         "accounts",
@@ -2702,6 +2702,9 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "calendars",
         "calendar_events",
         "templates",
+        "people",
+        "person_emails",
+        "person_phones",
     ] {
         let exists = conn
             .query_row(
@@ -2720,7 +2723,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 21);
+    assert_eq!(version, 22);
 }
 
 #[test]
@@ -2748,7 +2751,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 21);
+    assert_eq!(version, 22);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -4216,4 +4219,246 @@ fn cached_unseen_since_covers_only_recent_unread_mail() {
         cached_unseen_uids_since(&conn, "acct", "INBOX", now - 60 * day).unwrap(),
         vec![1, 3, 4]
     );
+}
+
+
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
+
+fn book(source: &str, account: &str, name: &str) -> BookOrigin {
+    BookOrigin {
+        source: source.into(),
+        account: account.into(),
+        book: name.into(),
+    }
+}
+
+fn someone(uid: &str, name: &str, addresses: &[&str]) -> crate::contacts::person::Person {
+    crate::contacts::person::Person {
+        uid: uid.into(),
+        name: name.into(),
+        organisation: String::new(),
+        note: String::new(),
+        emails: addresses
+            .iter()
+            .map(|addr| crate::contacts::person::EmailAddress {
+                addr: addr.to_string(),
+                label: String::new(),
+            })
+            .collect(),
+        phones: Vec::new(),
+        photo: None,
+    }
+}
+
+#[test]
+fn a_book_is_stored_with_its_addresses_and_read_back_whole() {
+    let conn = test_conn();
+    let origin = book("carddav", "acct", "default");
+    replace_book(
+        &conn,
+        &origin,
+        &[(someone("u1", "Ana Prat", &["ana@work.com", "ana@home.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].person.name, "Ana Prat");
+    assert_eq!(found[0].person.emails.len(), 2);
+    // The order the book gave them is the order they come back in.
+    assert_eq!(found[0].person.emails[0].addr, "ana@work.com");
+}
+
+#[test]
+fn a_re_sync_updates_in_place_rather_than_adding_everybody_again() {
+    let conn = test_conn();
+    let origin = book("carddav", "acct", "default");
+    replace_book(&conn, &origin, &[(someone("u1", "Ana", &["ana@x.com"]), String::new())], 100).unwrap();
+    replace_book(&conn, &origin, &[(someone("u1", "Ana Prat", &["ana@x.com"]), String::new())], 200).unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].person.name, "Ana Prat");
+}
+
+#[test]
+fn somebody_the_server_deleted_goes_away() {
+    let conn = test_conn();
+    let origin = book("carddav", "acct", "default");
+    replace_book(
+        &conn,
+        &origin,
+        &[
+            (someone("u1", "Ana", &["ana@x.com"]), String::new()),
+            (someone("u2", "Marc", &["marc@x.com"]), String::new()),
+        ],
+        100,
+    )
+    .unwrap();
+    replace_book(&conn, &origin, &[(someone("u1", "Ana", &["ana@x.com"]), String::new())], 200).unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    // Their addresses go with them, rather than being left behind pointing at
+    // a person who is no longer there.
+    let orphans: i64 = conn
+        .query_row("SELECT COUNT(*) FROM person_emails", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(orphans, 1);
+}
+
+#[test]
+fn syncing_one_book_does_not_empty_another() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "work"),
+        &[(someone("u1", "Ana", &["ana@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    replace_book(
+        &conn,
+        &book("google", "acct", "default"),
+        &[(someone("g1", "Marc", &["marc@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    replace_book(&conn, &book("carddav", "acct", "work"), &[], 200).unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].person.name, "Marc");
+}
+
+#[test]
+fn the_same_person_in_two_books_stays_two_rows() {
+    let conn = test_conn();
+    for source in ["carddav", "google"] {
+        replace_book(
+            &conn,
+            &book(source, "acct", "default"),
+            &[(someone("u1", "Ana", &["ana@x.com"]), String::new())],
+            100,
+        )
+        .unwrap();
+    }
+    // Merging them would be a guess about two books that disagree; showing
+    // both is the truthful answer and the reader can see which is which.
+    assert_eq!(find_people(&conn, "", 50).unwrap().len(), 2);
+}
+
+#[test]
+fn people_are_found_by_name_by_organisation_and_by_address() {
+    let conn = test_conn();
+    let mut ana = someone("u1", "Ana Prat", &["ana@hospital.cat"]);
+    ana.organisation = "Hospital de Mataró".into();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(ana, String::new()), (someone("u2", "Marc", &["marc@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(find_people(&conn, "prat", 50).unwrap().len(), 1);
+    assert_eq!(find_people(&conn, "mataró", 50).unwrap().len(), 1);
+    assert_eq!(find_people(&conn, "hospital.cat", 50).unwrap().len(), 1);
+    assert_eq!(find_people(&conn, "nobody", 50).unwrap().len(), 0);
+}
+
+#[test]
+fn a_book_that_names_nobody_still_keeps_its_people_apart() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[
+            (someone("", "Ana", &["ana@x.com"]), String::new()),
+            (someone("", "Marc", &["marc@x.com"]), String::new()),
+        ],
+        100,
+    )
+    .unwrap();
+    assert_eq!(find_people(&conn, "", 50).unwrap().len(), 2);
+}
+
+#[test]
+fn a_person_the_reader_keeps_outranks_an_address_that_merely_went_past() {
+    let conn = test_conn();
+    // A no-reply that has written many times.
+    for uid in 1..=5u32 {
+        insert_message(
+            &conn,
+            uid,
+            "Newsletter",
+            "Shop",
+            "no-reply@shop.com",
+            None,
+        );
+    }
+    // And one person in the book, never seen in mail.
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana Prat", &["ana@hospital.cat"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    let suggestions = suggest_contacts(&conn, "acct", "", 8).unwrap();
+    assert_eq!(suggestions[0].addr, "ana@hospital.cat");
+    assert!(suggestions[0].known);
+    assert!(suggestions.iter().any(|c| c.addr == "no-reply@shop.com" && !c.known));
+}
+
+#[test]
+fn an_address_in_the_book_is_not_offered_twice() {
+    let conn = test_conn();
+    insert_message(&conn, 1, "Hi", "Ana", "ana@hospital.cat", None);
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana Prat", &["ana@hospital.cat"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    let suggestions = suggest_contacts(&conn, "acct", "", 8).unwrap();
+    assert_eq!(suggestions.len(), 1);
+    // And it is the book's version, with the name the reader gave them.
+    assert_eq!(suggestions[0].name, "Ana Prat");
+}
+
+#[test]
+fn somebody_with_two_addresses_is_two_things_to_choose_between() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana", &["ana@work.com", "ana@home.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    let suggestions = suggest_contacts(&conn, "acct", "ana", 8).unwrap();
+    assert_eq!(suggestions.len(), 2);
+    assert!(suggestions.iter().all(|c| c.name == "Ana"));
+}
+
+#[test]
+fn the_book_is_searched_by_name_even_when_no_mail_matches() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana Prat", &["aprat@hospital.cat"]), String::new())],
+        100,
+    )
+    .unwrap();
+    let suggestions = suggest_contacts(&conn, "acct", "prat", 8).unwrap();
+    assert_eq!(suggestions.len(), 1);
+    assert_eq!(suggestions[0].addr, "aprat@hospital.cat");
 }

@@ -203,6 +203,12 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
                 <span>
                   <span className="text-primary">{contact.name.trim()}</span>{' '}
                   <span className="text-secondary">{`<${contact.addr}>`}</span>
+                  {/* Only for somebody the reader keeps. An address seen in a
+                      header carries no such fact, and inventing one would put
+                      a stranger's employer on screen as if it were known. */}
+                  {contact.known && contact.organisation && (
+                    <span className="text-2xs text-secondary/75"> · {contact.organisation}</span>
+                  )}
                 </span>
               ) : (
                 <span className="text-primary">{contact.addr}</span>

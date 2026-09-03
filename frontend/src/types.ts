@@ -98,6 +98,32 @@ export type Folder = {
 export type Contact = {
   name: string
   addr: string
+  /**
+   * True when this came out of an address book rather than out of mail seen.
+   *
+   * Two different claims: somebody the reader keeps, versus an address that
+   * went past in a header and which they may not recognise at all.
+   */
+  known?: boolean
+  /** Where they work, when a book said so. */
+  organisation?: string
+}
+
+/** Somebody in an address book. */
+export type Person = {
+  id: string
+  /** "carddav", "google", "exchange", "local". */
+  source: string
+  /** The account whose book they are in; empty for a book that is nobody's. */
+  account: string
+  book: string
+  name: string
+  organisation: string
+  note: string
+  /** Media key of their picture, served at `/media/<key>`; empty when none. */
+  photo: string
+  emails: { addr: string; label: string }[]
+  phones: { number: string; label: string }[]
 }
 
 export type Attachment = {
