@@ -603,6 +603,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 22 {
         migrate_v22(&tx)?;
     }
+    if version < 23 {
+        migrate_v23(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1016,6 +1019,37 @@ fn migrate_v22(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 22;")?;
+    Ok(())
+}
+
+/// Where books of people are fetched from.
+///
+/// Shaped like `subscriptions`, because it is the same kind of thing: a URL
+/// the app goes back to, with a record of when it last did and what went
+/// wrong if anything did. A source may belong to a mail account or to nobody
+/// — a Nextcloud address book is often not where the mail is — so `account`
+/// may be empty.
+///
+/// The password is not here. It goes in the OS keyring under the source's id,
+/// the same place account passwords live, so that a copied database does not
+/// carry the credentials to somebody's contacts.
+fn migrate_v23(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS contact_sources (
+           id           TEXT PRIMARY KEY,
+           kind         TEXT NOT NULL,
+           account      TEXT NOT NULL DEFAULT '',
+           url          TEXT NOT NULL,
+           username     TEXT NOT NULL DEFAULT '',
+           name         TEXT NOT NULL DEFAULT '',
+           enabled      INTEGER NOT NULL DEFAULT 1,
+           ctag         TEXT NOT NULL DEFAULT '',
+           last_sync_at INTEGER NOT NULL DEFAULT 0,
+           last_error   TEXT NOT NULL DEFAULT '',
+           created_at   INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 23;")?;
     Ok(())
 }
 

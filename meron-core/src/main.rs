@@ -1240,6 +1240,50 @@ async fn idle_once(
     }
 }
 
+/// Read one CardDAV source into the address book, and record how it went.
+///
+/// Off the async runtime, because the DAV client is blocking HTTP. The
+/// outcome is written to the source either way: a sync that failed leaves its
+/// reason where the settings screen can show it, and a sync that succeeded
+/// clears whatever the last one said.
+async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<()> {
+    let source = store::contact_source(&engine.db.lock().unwrap(), id)?
+        .with_context(|| format!("no such contact source: {id}"))?;
+    let password = meron_core::secrets::load(id)
+        .map(|secrets| secrets.password)
+        .unwrap_or_default();
+    let transport = meron_core::carddav::http::UreqTransport {
+        username: source.username.clone(),
+        password,
+    };
+    let url = source.url.clone();
+    let fetched = tokio::task::spawn_blocking(move || {
+        meron_core::carddav::client::fetch_book(&transport, &url)
+    })
+    .await?;
+
+    let now = chrono::Utc::now().timestamp();
+    let db = engine.db.lock().unwrap();
+    match fetched {
+        Ok(people) => {
+            let origin = store::BookOrigin {
+                source: source.kind.clone(),
+                account: source.account.clone(),
+                book: source.id.clone(),
+            };
+            // Photos are not cached yet; the key stays empty until they are.
+            let rows: Vec<_> = people.into_iter().map(|person| (person, String::new())).collect();
+            store::replace_book(&db, &origin, &rows, now)?;
+            store::mark_contact_source_synced(&db, id, "", "", now)?;
+            Ok(())
+        }
+        Err(error) => {
+            store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
+            Err(error)
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Tag panics consistently on stderr, which the desktop bridge copies into
@@ -1517,6 +1561,86 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::set_sender_priority(&db, &account, &addr, choice)?;
             let judged = store::rejudge_priority(&db, &account, false)?;
             Ok(json!({ "ok": true, "judged": judged }))
+        }
+
+        // Address books on a CardDAV server, found from what somebody typed:
+        // an email address, a host, or a URL. Nothing is stored by this; it
+        // is the question asked before deciding which book to keep.
+        "carddav.discover" => {
+            let server = req_str(p, "server")?;
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: req_str(p, "username").unwrap_or_default(),
+                password: req_str(p, "password").unwrap_or_default(),
+            };
+            let books = tokio::task::spawn_blocking(move || {
+                meron_core::carddav::client::discover(&transport, &server)
+            })
+            .await??;
+            Ok(json!({
+                "books": books.iter().map(|book| json!({
+                    "url": book.url, "name": book.name,
+                })).collect::<Vec<_>>()
+            }))
+        }
+
+        // Keep one book: remember where it is, put the password in the
+        // keyring, and read it for the first time. If that first read fails
+        // the source is kept anyway with the error on it, so the reader sees
+        // what went wrong rather than an add button that did nothing.
+        "carddav.add" => {
+            let url = req_str(p, "url")?;
+            let name = req_str(p, "name").unwrap_or_default();
+            let username = req_str(p, "username").unwrap_or_default();
+            let password = req_str(p, "password").unwrap_or_default();
+            let account = req_str(p, "account").unwrap_or_default();
+            let id = format!("carddav-{}", uuid::Uuid::new_v4());
+            let source = store::ContactSource {
+                id: id.clone(),
+                kind: "carddav".into(),
+                account,
+                url,
+                username,
+                name,
+                enabled: true,
+                ctag: String::new(),
+                last_sync_at: 0,
+                last_error: String::new(),
+            };
+            meron_core::secrets::store(
+                &id,
+                &meron_core::secrets::Secrets {
+                    password,
+                    ..Default::default()
+                },
+            )?;
+            store::upsert_contact_source(
+                &engine.db.lock().unwrap(),
+                &source,
+                chrono::Utc::now().timestamp(),
+            )?;
+            let outcome = sync_contact_source(engine, &id).await;
+            Ok(json!({ "id": id, "synced": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+        }
+
+        "carddav.sync" => {
+            let id = req_str(p, "id")?;
+            let outcome = sync_contact_source(engine, &id).await;
+            Ok(json!({ "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+        }
+
+        "carddav.list" => {
+            let sources = store::contact_sources(&engine.db.lock().unwrap())?;
+            Ok(json!({ "sources": sources }))
+        }
+
+        // Removing a source takes its people with it: they were a copy of
+        // somebody else's book, and a copy with no origin can never be
+        // refreshed or told apart from a contact the reader typed.
+        "carddav.remove" => {
+            let id = req_str(p, "id")?;
+            store::delete_contact_source(&engine.db.lock().unwrap(), &id)?;
+            let _ = meron_core::secrets::delete(&id);
+            Ok(json!({ "ok": true }))
         }
 
         // People, from whichever books have been brought in. An empty query

@@ -2199,6 +2199,107 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
     Ok(people)
 }
 
+/// One place people are fetched from.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactSource {
+    pub id: String,
+    /// "carddav" for now; the others get their own word when they arrive.
+    pub kind: String,
+    pub account: String,
+    pub url: String,
+    pub username: String,
+    pub name: String,
+    pub enabled: bool,
+    #[serde(skip)]
+    pub ctag: String,
+    pub last_sync_at: i64,
+    pub last_error: String,
+}
+
+pub fn contact_sources(conn: &Connection) -> Result<Vec<ContactSource>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, account, url, username, name, enabled, ctag, last_sync_at, last_error
+           FROM contact_sources ORDER BY created_at, name",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(ContactSource {
+            id: row.get(0)?,
+            kind: row.get(1)?,
+            account: row.get(2)?,
+            url: row.get(3)?,
+            username: row.get(4)?,
+            name: row.get(5)?,
+            enabled: row.get::<_, i64>(6)? != 0,
+            ctag: row.get(7)?,
+            last_sync_at: row.get(8)?,
+            last_error: row.get(9)?,
+        })
+    })?;
+    Ok(rows.flatten().collect())
+}
+
+pub fn contact_source(conn: &Connection, id: &str) -> Result<Option<ContactSource>> {
+    Ok(contact_sources(conn)?.into_iter().find(|source| source.id == id))
+}
+
+/// Add or update a source. The password is not part of this: it lives in the
+/// keyring, and the caller stores it there.
+pub fn upsert_contact_source(conn: &Connection, source: &ContactSource, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO contact_sources(id, kind, account, url, username, name, enabled, created_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(id) DO UPDATE SET
+           kind = excluded.kind, account = excluded.account, url = excluded.url,
+           username = excluded.username, name = excluded.name, enabled = excluded.enabled",
+        params![
+            source.id,
+            source.kind,
+            source.account,
+            source.url,
+            source.username,
+            source.name,
+            source.enabled as i64,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+/// Record how a sync went. An empty error means it went well.
+pub fn mark_contact_source_synced(
+    conn: &Connection,
+    id: &str,
+    ctag: &str,
+    error: &str,
+    now: i64,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE contact_sources SET ctag = ?2, last_error = ?3, last_sync_at = ?4 WHERE id = ?1",
+        params![id, ctag, error, now],
+    )?;
+    Ok(())
+}
+
+/// Remove a source and every person that came from it.
+///
+/// The people go too: they were a copy of somebody else's book, and a copy
+/// with no origin is one that can never be refreshed or told apart from a
+/// contact the reader typed.
+pub fn delete_contact_source(conn: &Connection, id: &str) -> Result<()> {
+    let Some(source) = contact_source(conn, id)? else {
+        return Ok(());
+    };
+    let origin = BookOrigin {
+        source: source.kind.clone(),
+        account: source.account.clone(),
+        book: source.id.clone(),
+    };
+    replace_book(conn, &origin, &[], 0)?;
+    conn.execute("DELETE FROM contact_sources WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {

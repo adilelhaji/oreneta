@@ -2684,7 +2684,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
 
     for table in [
         "accounts",
@@ -2705,6 +2705,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "people",
         "person_emails",
         "person_phones",
+        "contact_sources",
     ] {
         let exists = conn
             .query_row(
@@ -2723,7 +2724,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
 }
 
 #[test]
@@ -2751,7 +2752,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 22);
+    assert_eq!(version, 23);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -4461,4 +4462,68 @@ fn the_book_is_searched_by_name_even_when_no_mail_matches() {
     let suggestions = suggest_contacts(&conn, "acct", "prat", 8).unwrap();
     assert_eq!(suggestions.len(), 1);
     assert_eq!(suggestions[0].addr, "aprat@hospital.cat");
+}
+
+#[test]
+fn removing_a_source_takes_its_people_with_it_and_nobody_else() {
+    let conn = test_conn();
+    let source = ContactSource {
+        id: "src-1".into(),
+        kind: "carddav".into(),
+        account: String::new(),
+        url: "https://dav.example.com/ana/contacts/".into(),
+        username: "ana".into(),
+        name: "Work".into(),
+        enabled: true,
+        ctag: String::new(),
+        last_sync_at: 0,
+        last_error: String::new(),
+    };
+    upsert_contact_source(&conn, &source, 100).unwrap();
+    replace_book(
+        &conn,
+        &book("carddav", "", "src-1"),
+        &[(someone("u1", "Ana", &["ana@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    // Somebody from another book, who must survive.
+    replace_book(
+        &conn,
+        &book("google", "acct", "default"),
+        &[(someone("g1", "Marc", &["marc@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    delete_contact_source(&conn, "src-1").unwrap();
+
+    assert!(contact_sources(&conn).unwrap().is_empty());
+    let left = find_people(&conn, "", 50).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].person.name, "Marc");
+}
+
+#[test]
+fn a_sync_outcome_is_recorded_and_a_good_one_clears_a_bad_one() {
+    let conn = test_conn();
+    let source = ContactSource {
+        id: "src-1".into(),
+        kind: "carddav".into(),
+        account: String::new(),
+        url: "https://dav.example.com/".into(),
+        username: String::new(),
+        name: String::new(),
+        enabled: true,
+        ctag: String::new(),
+        last_sync_at: 0,
+        last_error: String::new(),
+    };
+    upsert_contact_source(&conn, &source, 100).unwrap();
+    mark_contact_source_synced(&conn, "src-1", "", "refused", 200).unwrap();
+    assert_eq!(contact_source(&conn, "src-1").unwrap().unwrap().last_error, "refused");
+    mark_contact_source_synced(&conn, "src-1", "tok", "", 300).unwrap();
+    let after = contact_source(&conn, "src-1").unwrap().unwrap();
+    assert_eq!(after.last_error, "");
+    assert_eq!(after.last_sync_at, 300);
 }

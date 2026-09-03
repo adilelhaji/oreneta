@@ -331,6 +331,16 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.labelsSave(payload)
 	case "labels.assign":
 		return a.labelsAssign(payload)
+	case "carddav.discover":
+		return a.carddavDiscover(payload)
+	case "carddav.add":
+		return a.carddavAdd(payload)
+	case "carddav.sync":
+		return a.carddavSync(payload)
+	case "carddav.remove":
+		return a.carddavRemove(payload)
+	case "carddav.list":
+		return a.carddavList(payload)
 	case "people.list":
 		return a.peopleList(payload)
 	case "templates.list":
