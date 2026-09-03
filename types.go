@@ -186,8 +186,12 @@ type ThreadListRequest struct {
 	// Unified view only: the role each account answers from (its own Sent,
 	// Archive, …). Ignored for a single account, which names a real folder.
 	FolderRole   string `json:"folder_role"`
-	Query        string `json:"query"`
-	Filter       string `json:"filter"`
+	Query  string `json:"query"`
+	Filter string `json:"filter"`
+	// Sort is `date`, `sender` or `subject`, optionally suffixed `:asc`.
+	// Empty means newest first, which is what a mailbox means when nobody has
+	// said otherwise.
+	Sort         string `json:"sort"`
 	BeforeCursor string `json:"before_cursor"`
 	Refresh      bool   `json:"refresh"`
 }

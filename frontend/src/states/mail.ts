@@ -18,6 +18,7 @@ import { isUnifiedStarred, unifiedFolderRole, unifiedFolders } from '../lib/unif
 import { isLocalSendId, discardPendingSend } from './pendingSends'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { bareAddr, splitAddressList } from '../lib/address'
+import { settings$, sortParam } from './settings'
 
 /** What the core made of a typed search, for showing back. */
 export type SearchUnderstood = {
@@ -766,8 +767,17 @@ type ThreadSearchStage = 'auto' | 'cache' | 'live'
 // id nor a single-line search box carries one). Both the loader and the list
 // build the key from the same fields, so the list can tell "these rows are for
 // what I'm showing" from "these rows are the previous view's".
-export function threadListViewKey(account: string, folder: string, query: string, filter: string) {
-  return [account, folder, query, filter].join('\n')
+export function threadListViewKey(
+  account: string,
+  folder: string,
+  query: string,
+  filter: string,
+  sort = '',
+) {
+  // The ordering is part of the view. Without it here, changing the sort would
+  // leave the previous order's rows on screen looking settled, because the
+  // list would believe it was already showing the view it had loaded.
+  return [account, folder, query, filter, sort].join('\n')
 }
 
 export async function loadThreads(refresh = true, searchStage: ThreadSearchStage = 'auto') {
@@ -814,7 +824,8 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const selectedFol = ui$.selectedFolder.get()
   const q = ui$.query.get()
   const filter = filterKey(ui$.filters.get())
-  const viewKey = threadListViewKey(selectedAcc, selectedFol, q, filter)
+  const sort = sortParam(settings$.listSort.get())
+  const viewKey = threadListViewKey(selectedAcc, selectedFol, q, filter, sort)
 
   // A background refresh steps aside for a server-bound load already running for
   // the same view. Taking the version from it would throw away the fresher rows
@@ -831,7 +842,8 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     ui$.selectedAccount.get() !== selectedAcc ||
     ui$.selectedFolder.get() !== selectedFol ||
     ui$.query.get() !== q ||
-    filterKey(ui$.filters.get()) !== filter
+    filterKey(ui$.filters.get()) !== filter ||
+    sortParam(settings$.listSort.get()) !== sort
   const previousThreads = mail$.threads.get()
   const currentSelected = ui$.selectedThread.get()
   const previousThreadsCursor = mail$.threadsCursor.get()
@@ -882,6 +894,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         folder_role: role,
         query: q,
         filter,
+        sort,
         refresh,
       })
       if (superseded()) return
@@ -919,6 +932,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
           folder_id: selectedFol,
           query: q,
           filter,
+          sort,
           refresh,
         },
       )
@@ -1026,6 +1040,7 @@ export async function loadMoreThreads() {
   const selectedFol = ui$.selectedFolder.get()
   const q = ui$.query.get()
   const filter = filterKey(ui$.filters.get())
+  const sort = sortParam(settings$.listSort.get())
   const version = threadLoadVersion
   const stillCurrent = (cursor: string) =>
     threadLoadVersion === version &&

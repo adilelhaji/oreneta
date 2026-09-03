@@ -25,9 +25,24 @@ pub struct ThreadListQuery {
     pub folder: String,
     pub query: String,
     pub filter: String,
-    pub before_cursor: Option<(i64, u32)>,
+    pub before_cursor: Option<PageCursor>,
     pub search_before_cursor: Option<SearchCursor>,
     pub limit: u32,
+    /// How the reader asked for it, verbatim; read through [`Self::sort`].
+    pub sort: String,
+}
+
+/// Where a page of a list left off.
+///
+/// Carries both a date and a text key because a list can be ordered by either,
+/// and the row after the last one shown is found by comparing whichever the
+/// ordering used. A position that only knew the date would page correctly in
+/// one ordering and silently repeat or skip rows in the others.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PageCursor {
+    pub date: i64,
+    pub text: String,
+    pub uid: u32,
 }
 
 /// A globally ordered search position. UIDs are only unique within a folder, so
@@ -81,6 +96,11 @@ impl ThreadListQuery {
                 .and_then(|limit| u32::try_from(limit).ok())
                 .filter(|limit| *limit > 0)
                 .unwrap_or(DEFAULT_LIMIT),
+            sort: params
+                .get("sort")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
         }
     }
 
@@ -124,6 +144,11 @@ impl ThreadListQuery {
         }
     }
 
+    /// How the reader has asked the list to be ordered.
+    pub fn sort(&self) -> Sort {
+        Sort::parse(&self.sort)
+    }
+
     /// Whether this request should also kick off a server sync: only the first
     /// page of an unfiltered, unsearched view — the other sources are answered
     /// by their own live call or are cheap local reads.
@@ -156,11 +181,118 @@ pub enum MailSource {
     Search,
 }
 
+/// What a list is ordered by.
+///
+/// Sorting has to happen in the query, not over the page that came back:
+/// ordering fifty loaded rows by sender would put them in order among
+/// themselves and in no order at all with respect to the mailbox, which looks
+/// like sorting and is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortKey {
+    #[default]
+    Date,
+    Sender,
+    Subject,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortDir {
+    #[default]
+    Desc,
+    Asc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Sort {
+    pub key: SortKey,
+    pub dir: SortDir,
+}
+
+impl Sort {
+    /// Reads `date`, `sender` or `subject`, each optionally suffixed `:asc`.
+    /// Anything else is the default — newest first, which is what a mailbox
+    /// means when nobody has said otherwise.
+    pub fn parse(value: &str) -> Self {
+        let (key, dir) = value.split_once(':').unwrap_or((value, "desc"));
+        Sort {
+            key: match key.trim().to_ascii_lowercase().as_str() {
+                "sender" | "from" => SortKey::Sender,
+                "subject" => SortKey::Subject,
+                _ => SortKey::Date,
+            },
+            dir: if dir.trim().eq_ignore_ascii_case("asc") {
+                SortDir::Asc
+            } else {
+                SortDir::Desc
+            },
+        }
+    }
+
+    /// Whether this is the ordering the store has always used.
+    pub fn is_default(&self) -> bool {
+        *self == Sort::default()
+    }
+
+    /// The column the rows are ordered by, as SQL.
+    ///
+    /// The sender is the name when there is one and the address otherwise,
+    /// which is what the list shows and therefore what someone sorting by
+    /// sender is looking at.
+    pub fn column(&self) -> &'static str {
+        match self.key {
+            SortKey::Date => "date",
+            SortKey::Sender => "lower(COALESCE(NULLIF(from_name, ''), from_addr, ''))",
+            SortKey::Subject => "lower(COALESCE(subject, ''))",
+        }
+    }
+
+    pub fn sql_dir(&self) -> &'static str {
+        match self.dir {
+            SortDir::Asc => "ASC",
+            SortDir::Desc => "DESC",
+        }
+    }
+
+    /// The comparison a cursor uses to find the row after the last one shown.
+    pub fn cursor_op(&self) -> &'static str {
+        match self.dir {
+            SortDir::Asc => ">",
+            SortDir::Desc => "<",
+        }
+    }
+}
+
 /// `date:<date>:<uid>` keyset cursor, as minted by [`store::get_recent_page`].
-pub fn parse_mail_cursor(cursor: &str) -> Option<(i64, u32)> {
-    let rest = cursor.strip_prefix("date:")?;
-    let (date, uid) = rest.split_once(':')?;
-    Some((date.parse().ok()?, uid.parse().ok()?))
+pub fn parse_mail_cursor(cursor: &str) -> Option<PageCursor> {
+    // The original shape, still minted for the default ordering so a cursor in
+    // flight across an upgrade keeps working.
+    if let Some(rest) = cursor.strip_prefix("date:") {
+        let (date, uid) = rest.split_once(':')?;
+        return Some(PageCursor {
+            date: date.parse().ok()?,
+            text: String::new(),
+            uid: uid.parse().ok()?,
+        });
+    }
+    // `sortk:<base64 text>:<uid>` for the orderings whose key is text. The
+    // value is encoded because a subject can contain anything, colons
+    // included.
+    let rest = cursor.strip_prefix("sortk:")?;
+    let (encoded, uid) = rest.rsplit_once(':')?;
+    let text = String::from_utf8(URL_SAFE_NO_PAD.decode(encoded).ok()?).ok()?;
+    Some(PageCursor {
+        date: 0,
+        text,
+        uid: uid.parse().ok()?,
+    })
+}
+
+/// The position after the last row of a page, in the shape its ordering reads.
+pub fn format_page_cursor(sort: Sort, text_key: &str, date: i64, uid: u32) -> String {
+    match sort.key {
+        SortKey::Date => format!("date:{date}:{uid}"),
+        _ => format!("sortk:{}:{uid}", URL_SAFE_NO_PAD.encode(text_key.as_bytes())),
+    }
 }
 
 /// `search:<date>:<uid>:<scanned>:<base64-folder>` cursor for a merged page.
@@ -437,7 +569,10 @@ mod tests {
         );
         assert_eq!(full.folder, "INBOX", "folder names are canonicalized");
         assert_eq!(full.limit, 10);
-        assert_eq!(full.before_cursor, Some((200, 7)));
+        assert_eq!(
+            full.before_cursor,
+            Some(PageCursor { date: 200, text: String::new(), uid: 7 })
+        );
         assert!(full.search_before_cursor.is_none());
         assert!(
             !full.wants_background_sync(),

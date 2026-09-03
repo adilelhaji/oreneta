@@ -180,6 +180,7 @@ func (a *App) threadList(payload map[string]any) (any, error) {
 		"folder_role":   folderRole,
 		"query":         req.Query,
 		"filter":        req.Filter,
+		"sort":          req.Sort,
 		"before_cursor": req.BeforeCursor,
 		"limit":         50,
 		"refresh":       req.Refresh,

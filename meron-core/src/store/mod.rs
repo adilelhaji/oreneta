@@ -451,14 +451,45 @@ pub fn get_recent_page(
     account: &str,
     folder: &str,
     limit: u32,
-    before_cursor: Option<(i64, u32)>,
+    before_cursor: Option<crate::thread_list::PageCursor>,
     filter: RecentFilter,
 ) -> Result<(Vec<MessageHeader>, Option<String>)> {
+    get_recent_page_sorted(
+        conn,
+        account,
+        folder,
+        limit,
+        before_cursor,
+        filter,
+        crate::thread_list::Sort::default(),
+    )
+}
+
+/// A page of a folder in a chosen order.
+///
+/// The ordering is in the query and so is the position it resumes from, which
+/// is what makes sorting real: ordering the fifty rows that came back would
+/// put them in order among themselves and in no order at all with respect to
+/// the mailbox — it looks like sorting and is not.
+pub fn get_recent_page_sorted(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    limit: u32,
+    before_cursor: Option<crate::thread_list::PageCursor>,
+    filter: RecentFilter,
+    sort: crate::thread_list::Sort,
+) -> Result<(Vec<MessageHeader>, Option<String>)> {
     let probe = limit.saturating_add(1);
-    // Newest-first by send time. The cursor is the (date, uid) of the last row of
-    // the previous page; uid is the keyset tiebreaker because `date` is not unique
-    // (two messages can share a second), so it gives a stable, gap-free walk.
-    let mut stmt = conn.prepare(
+    // The ordering column and its direction are the query's, and so is the
+    // position it resumes from. `uid` is the keyset tiebreaker throughout,
+    // because no sort key is unique — two messages can share a second, a
+    // sender or a subject — and without it a page would repeat or skip rows at
+    // every boundary.
+    let key = sort.column();
+    let dir = sort.sql_dir();
+    let op = sort.cursor_op();
+    let sql = format!(
         "SELECT uid, subject, from_name, from_addr, date, seen, starred, thread_key,
                 json_extract(json, '$.to') FROM messages
          WHERE account = ?1 AND folder = ?2
@@ -479,25 +510,38 @@ pub fn get_recent_page(
                   WHERE tl.account = messages.account
                     AND tl.label_id = ?8
                     AND tl.thread_key = COALESCE(NULLIF(messages.thread_key, ''), 'uid:' || messages.uid)))
-           AND (?3 IS NULL
-                OR date < ?3
-                OR (date = ?3 AND uid < ?4))
-         ORDER BY date DESC, uid DESC LIMIT ?5",
-    )?;
-    let cursor_date = before_cursor.map(|(date, _)| date);
-    let cursor_uid = before_cursor.map(|(_, uid)| uid as i64).unwrap_or(0);
+           AND (?11 = 0
+                OR {key} {op} ?3
+                OR ({key} = ?3 AND uid {op} ?4))
+         ORDER BY {key} {dir}, uid {dir} LIMIT ?5"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    // Bound as one value whatever the key: SQLite compares an integer column
+    // against an integer binding and a text column against a text one, and the
+    // cursor carries whichever the ordering minted.
+    let cursor_key: Option<Box<dyn rusqlite::ToSql>> = before_cursor.as_ref().map(|cursor| {
+        match sort.key {
+            crate::thread_list::SortKey::Date => {
+                Box::new(cursor.date) as Box<dyn rusqlite::ToSql>
+            }
+            _ => Box::new(cursor.text.clone()) as Box<dyn rusqlite::ToSql>,
+        }
+    });
+    let cursor_uid = before_cursor.as_ref().map(|cursor| cursor.uid as i64).unwrap_or(0);
+    let has_cursor = before_cursor.is_some() as i64;
     let rows = stmt.query_map(
         params![
             account,
             folder,
-            cursor_date,
+            cursor_key.as_ref().map(|value| value.as_ref()),
             cursor_uid,
             probe as i64,
             filter.unread_only as i64,
             filter.starred_only as i64,
             filter.label_id.as_deref(),
             filter.with_attachments as i64,
-            filter.priority_only as i64
+            filter.priority_only as i64,
+            has_cursor
         ],
         |row| {
             let uid = row.get(0)?;
@@ -525,8 +569,17 @@ pub fn get_recent_page(
         out.truncate(limit as usize);
     }
     let next_cursor = if has_more {
-        out.last()
-            .map(|header| format!("date:{}:{}", header.date, header.uid))
+        out.last().map(|header| {
+            let text_key = match sort.key {
+                crate::thread_list::SortKey::Date => String::new(),
+                crate::thread_list::SortKey::Sender => {
+                    let name = header.from_name.trim();
+                    if name.is_empty() { header.from_addr.to_lowercase() } else { name.to_lowercase() }
+                }
+                crate::thread_list::SortKey::Subject => header.subject.to_lowercase(),
+            };
+            crate::thread_list::format_page_cursor(sort, &text_key, header.date, header.uid)
+        })
     } else {
         None
     };

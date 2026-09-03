@@ -25,7 +25,7 @@ import {
   threadListViewKey,
   moveThreadToFolder,
 } from './mail'
-import { settings$ } from './settings'
+import { settings$, sortParam } from './settings'
 import {
   filterKey,
   runToastUndo,
@@ -1650,7 +1650,13 @@ describe('ensureAccountFolders', () => {
 
 describe('thread list view identity', () => {
   const currentKey = () =>
-    threadListViewKey(ui$.selectedAccount.get(), ui$.selectedFolder.get(), ui$.query.get(), filterKey(ui$.filters.get()))
+    threadListViewKey(
+      ui$.selectedAccount.get(),
+      ui$.selectedFolder.get(),
+      ui$.query.get(),
+      filterKey(ui$.filters.get()),
+      sortParam(settings$.listSort.get()),
+    )
 
   beforeEach(() => {
     mail$.threads.set([])

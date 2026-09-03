@@ -819,7 +819,7 @@ fn get_cached_mobile_mail_page(
     account_id: &str,
     folder_id: &str,
     limit: u32,
-    before_cursor: Option<(i64, u32)>,
+    before_cursor: Option<crate::thread_list::PageCursor>,
     filter: store::RecentFilter,
 ) -> Result<(Vec<MessageHeader>, Option<String>), String> {
     let conn = open_mobile_db(data_dir)?;

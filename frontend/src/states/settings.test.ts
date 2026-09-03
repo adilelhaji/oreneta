@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { EMPTY_PROXY, hydrateSettings, isProxyUsable, sanitizeKanbanBoards, sanitizeProxy, settings$ } from './settings'
+import {
+  EMPTY_PROXY,
+  hydrateSettings,
+  isProxyUsable,
+  sanitizeKanbanBoards,
+  sanitizeListSort,
+  sanitizeProxy,
+  settings$,
+  sortParam,
+} from './settings'
 
 const baseBoard = {
   id: 'kb-1',
@@ -190,5 +199,45 @@ describe('saved searches', () => {
   it('trims what it stores', () => {
     hydrateSettings({ saved_searches: [{ id: 's1', name: '  Invoices  ', query: '  invoice  ' }] })
     expect(settings$.savedSearches.get()[0]).toEqual({ id: 's1', name: 'Invoices', query: 'invoice' })
+  })
+})
+
+describe('list view and ordering', () => {
+  afterEach(() => {
+    settings$.listView.set('cards')
+    settings$.listSort.set({ key: 'date', dir: 'desc' })
+  })
+
+  it('starts as the list has always looked, newest first', () => {
+    expect(settings$.listView.get()).toBe('cards')
+    expect(settings$.listSort.get()).toEqual({ key: 'date', dir: 'desc' })
+  })
+
+  it('writes an ordering the core can read', () => {
+    expect(sortParam({ key: 'date', dir: 'desc' })).toBe('date')
+    expect(sortParam({ key: 'sender', dir: 'asc' })).toBe('sender:asc')
+    expect(sortParam({ key: 'subject', dir: 'desc' })).toBe('subject')
+  })
+
+  it('hydrates a stored view and ordering', () => {
+    hydrateSettings({ list_view: 'table', list_sort: { key: 'sender', dir: 'asc' } })
+    expect(settings$.listView.get()).toBe('table')
+    expect(settings$.listSort.get()).toEqual({ key: 'sender', dir: 'asc' })
+  })
+
+  it('keeps the usual order rather than claiming one it cannot apply', () => {
+    // A column a later version can sort by would leave the list saying it is
+    // in an order it is not in, which is worse than being in the usual one.
+    expect(sanitizeListSort({ key: 'size', dir: 'asc' })).toBeNull()
+    expect(sanitizeListSort('sender')).toBeNull()
+    expect(sanitizeListSort(null)).toBeNull()
+    // An unreadable direction is the default direction, not a dropped sort.
+    expect(sanitizeListSort({ key: 'subject', dir: 'sideways' })).toEqual({ key: 'subject', dir: 'desc' })
+  })
+
+  it('ignores a view it cannot draw', () => {
+    settings$.listView.set('table')
+    hydrateSettings({ list_view: 'mosaic' })
+    expect(settings$.listView.get()).toBe('table')
   })
 })

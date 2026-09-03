@@ -65,6 +65,24 @@ export type SavedSearch = {
   query: string
 }
 
+/**
+ * How the thread list is drawn.
+ * 'cards': the two-line rows with an avatar, as the app has always looked.
+ * 'table': columns with sortable headers, for reading a mailbox as a list of
+ * facts rather than a conversation.
+ */
+export type ListView = 'cards' | 'table'
+
+/** What the list is ordered by, and which way. */
+export type SortKey = 'date' | 'sender' | 'subject'
+export type SortDir = 'asc' | 'desc'
+export type ListSort = { key: SortKey; dir: SortDir }
+
+/** As the core reads it: `date`, `sender:asc`, and so on. */
+export function sortParam(sort: ListSort): string {
+  return sort.dir === 'asc' ? `${sort.key}:asc` : sort.key
+}
+
 export type ListDensity = 'compact' | 'cosy' | 'relaxed'
 
 /**
@@ -156,6 +174,10 @@ export type Settings = {
    * for working the same question through several.
    */
   stickyFilters: boolean
+  /** Cards or a sortable table. */
+  listView: ListView
+  /** What the list is ordered by. */
+  listSort: ListSort
   /** How much room a thread-list row is given. */
   listDensity: ListDensity
   /** How wide a message body is allowed to run. */
@@ -228,6 +250,21 @@ export function sanitizeSavedSearches(value: unknown): SavedSearch[] | null {
 /** The windows a sent message can wait in, in seconds. Zero sends at once. */
 export const UNDO_SEND_CHOICES = [0, 5, 10, 20, 30] as const
 
+/**
+ * Reads back a stored ordering, keeping the default for anything unknown.
+ *
+ * A column this version cannot order by would leave the list claiming an order
+ * it is not in, which is worse than being in the usual one.
+ */
+export function sanitizeListSort(value: unknown): ListSort | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Partial<ListSort>
+  const key = candidate.key
+  const dir = candidate.dir
+  if (key !== 'date' && key !== 'sender' && key !== 'subject') return null
+  return { key, dir: dir === 'asc' ? 'asc' : 'desc' }
+}
+
 /** The room a thread-list row can be given, tightest first. */
 export const LIST_DENSITIES = ['compact', 'cosy', 'relaxed'] as const
 
@@ -260,6 +297,8 @@ const DB_KEY = {
   savedSearches: 'saved_searches',
   stickyFilters: 'sticky_filters',
   simplifyMessages: 'simplify_messages',
+  listView: 'list_view',
+  listSort: 'list_sort',
   listDensity: 'list_density',
   readingWidth: 'reading_width',
   markReadMode: 'mark_read_mode',
@@ -433,6 +472,9 @@ export const settings$ = observable<Settings>({
   savedSearches: [],
   stickyFilters: false,
   simplifyMessages: false,
+  listView: 'cards',
+  // Newest first, which is what a mailbox means when nobody has said otherwise.
+  listSort: { key: 'date', dir: 'desc' },
   listDensity: 'cosy',
   readingWidth: 'comfortable',
   // What the app has always done, so nobody's mailbox changes behaviour
@@ -740,6 +782,15 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     if (typeof prefs[DB_KEY.simplifyMessages] === 'boolean') {
       settings$.simplifyMessages.set(prefs[DB_KEY.simplifyMessages] as boolean)
     }
+
+    const listView = prefs[DB_KEY.listView]
+    if (listView === 'cards' || listView === 'table') {
+      settings$.listView.set(listView)
+    }
+
+    const storedSort = prefs[DB_KEY.listSort]
+    const sort = sanitizeListSort(storedSort)
+    if (sort) settings$.listSort.set(sort)
 
     const listDensity = prefs[DB_KEY.listDensity]
     if (LIST_DENSITIES.includes(listDensity as ListDensity)) {

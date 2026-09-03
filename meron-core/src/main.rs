@@ -2847,12 +2847,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             eprintln!("meron-core: judging {account}: {err:#}");
                         }
                     }
-                    store::get_recent_page(
+                    store::get_recent_page_sorted(
                         &engine.db.lock().unwrap(),
                         &account,
                         &folder,
                         limit,
-                        request.before_cursor,
+                        request.before_cursor.clone(),
                         store::RecentFilter {
                             unread_only,
                             starred_only,
@@ -2860,6 +2860,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             with_attachments,
                             priority_only,
                         },
+                        request.sort(),
                     )?
                 }
                 thread_list::MailSource::Search => {

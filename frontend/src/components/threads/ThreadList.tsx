@@ -23,6 +23,7 @@ import {
   type BulkSelectionItem,
 } from '../../states/ui'
 import { thread$ } from '../../states/thread'
+import { settings$ } from '../../states/settings'
 import {
   mail$,
   getFilteredThreads,
@@ -61,6 +62,7 @@ import { SearchUnderstoodBar } from './SearchUnderstoodBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
+import { ThreadTable } from './ThreadTable'
 import { BulkActionBar } from './BulkActionBar'
 
 type ThreadListProps = {
@@ -82,6 +84,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const system = useValue(ui$.system)
   const filteredThreads = useValue(getFilteredThreads)
   const filters = useValue(ui$.filters)
+  const listView = useValue(settings$.listView)
   const threadsCursor = useValue(mail$.threadsCursor)
   const threadsLoadingMore = useValue(mail$.threadsLoadingMore)
   // The rows on hand belong to the view they were loaded for. Until that is the
@@ -471,6 +474,22 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           ) : (
             <EmptyState title={emptyStateTitle} text={emptyStateText} />
           )
+        ) : listView === 'table' ? (
+          // The table is its own row renderer, so it takes the selection and
+          // the context menu the cards already answer to rather than growing
+          // its own copies of them.
+          <ThreadTable
+            threads={filteredThreads}
+            accounts={accounts}
+            selectedThread={selectedThread}
+            showAccount={selectedAccount === 'unified' || isStarredView}
+            onSelect={(thread) => {
+              clearBulkSelection()
+              ui$.selectedThread.set(thread.thread_id)
+              ui$.mobilePane.set('conversation')
+            }}
+            onContextMenu={(thread, event) => threadMenu.open(event, thread)}
+          />
         ) : (
           <>
             {filteredThreads.map((thread) => {

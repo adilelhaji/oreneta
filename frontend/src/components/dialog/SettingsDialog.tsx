@@ -46,6 +46,7 @@ import {
   Eye,
   Timer,
   WrapText,
+  Table,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
@@ -815,6 +816,7 @@ function GeneralSection() {
   const markReadMode = useValue(settings$.markReadMode)
   const markReadDelaySeconds = useValue(settings$.markReadDelaySeconds)
   const simplifyMessages = useValue(settings$.simplifyMessages)
+  const listView = useValue(settings$.listView)
 
   return (
     <div className="flex flex-col gap-4">
@@ -849,6 +851,17 @@ function GeneralSection() {
       </SettingsGroup>
 
       <SettingsGroup title={t('settings.sections.reading')}>
+        <SegmentedRow
+          icon={<Table size={15} />}
+          title={t('settings.reading.listView')}
+          hint={t('settings.reading.listViewHint')}
+          value={listView}
+          options={[
+            { value: 'cards' as const, label: t('settings.reading.listView.cards') },
+            { value: 'table' as const, label: t('settings.reading.listView.table') },
+          ]}
+          onChange={(value) => settings$.listView.set(value)}
+        />
         <SegmentedRow
           icon={<Rows3 size={15} />}
           title={t('settings.reading.density')}

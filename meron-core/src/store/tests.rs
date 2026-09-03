@@ -697,6 +697,102 @@ fn what_the_reader_says_about_a_sender_sticks_and_can_be_taken_back() {
 }
 
 #[test]
+fn a_list_can_be_ordered_by_something_other_than_the_date() {
+    use crate::thread_list::{Sort, SortDir, SortKey};
+    let conn = test_conn();
+    let msg = |uid: u32, date: i64, name: &str, addr: &str, subject: &str| MessageHeader {
+        uid,
+        date,
+        from_name: name.to_string(),
+        from_addr: addr.to_string(),
+        subject: subject.to_string(),
+        thread_key: format!("t-{uid}"),
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            msg(1, 300, "Carol", "carol@example.com", "Zebra"),
+            msg(2, 200, "ann", "ann@example.com", "apple"),
+            msg(3, 100, "", "bob@example.com", "Mango"),
+        ],
+    )
+    .unwrap();
+
+    let uids = |sort: Sort| {
+        get_recent_page_sorted(&conn, "acct", "INBOX", 50, None, RecentFilter::default(), sort)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+
+    // Newest first is still what a mailbox means by default.
+    assert_eq!(uids(Sort::default()), vec![1, 2, 3]);
+    assert_eq!(
+        uids(Sort { key: SortKey::Date, dir: SortDir::Asc }),
+        vec![3, 2, 1]
+    );
+
+    // By sender: the name when there is one, the address when there is not —
+    // which is what the list shows, and so what someone sorting by sender is
+    // looking at. Case is not part of a name's order.
+    assert_eq!(
+        uids(Sort { key: SortKey::Sender, dir: SortDir::Asc }),
+        vec![2, 3, 1]
+    );
+    assert_eq!(
+        uids(Sort { key: SortKey::Subject, dir: SortDir::Asc }),
+        vec![2, 3, 1]
+    );
+    assert_eq!(
+        uids(Sort { key: SortKey::Subject, dir: SortDir::Desc }),
+        vec![1, 3, 2]
+    );
+}
+
+#[test]
+fn a_sorted_list_pages_without_repeating_or_skipping_a_row() {
+    use crate::thread_list::{Sort, SortDir, SortKey};
+    let conn = test_conn();
+    let msg = |uid: u32, subject: &str| MessageHeader {
+        uid,
+        date: 100,
+        subject: subject.to_string(),
+        thread_key: format!("t-{uid}"),
+        ..Default::default()
+    };
+    // Every message shares a date, so only the ordering key and the uid
+    // tiebreaker keep the walk straight. This is the case that goes wrong when
+    // a cursor knows the wrong thing.
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[msg(1, "alpha"), msg(2, "bravo"), msg(3, "charlie"), msg(4, "delta"), msg(5, "echo")],
+    )
+    .unwrap();
+
+    let sort = Sort { key: SortKey::Subject, dir: SortDir::Asc };
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    for _ in 0..5 {
+        let (page, next) =
+            get_recent_page_sorted(&conn, "acct", "INBOX", 2, cursor, RecentFilter::default(), sort)
+                .unwrap();
+        seen.extend(page.into_iter().map(|header| header.uid));
+        match next {
+            Some(token) => cursor = crate::thread_list::parse_mail_cursor(&token),
+            None => break,
+        }
+    }
+    assert_eq!(seen, vec![1, 2, 3, 4, 5]);
+}
+
+#[test]
 fn a_sweep_says_what_it_would_move_and_keeps_the_newest() {
     let conn = test_conn();
     let from = |uid: u32, date: i64, addr: &str| MessageHeader {
@@ -1806,7 +1902,7 @@ fn get_recent_page_can_return_only_unread_messages() {
     assert!(unread.iter().all(|m| !m.seen));
 
     let (next_unread, next_cursor) =
-        get_recent_page(&conn, "acct", "INBOX", 2, Some((D, 3)), RecentFilter::unread()).unwrap();
+        get_recent_page(&conn, "acct", "INBOX", 2, Some(crate::thread_list::PageCursor { date: D, text: String::new(), uid: 3 }), RecentFilter::unread()).unwrap();
     assert_eq!(
         next_unread.iter().map(|m| m.uid).collect::<Vec<_>>(),
         vec![2]
