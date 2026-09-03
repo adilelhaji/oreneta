@@ -42,6 +42,9 @@ import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import { ConversationSubject } from './ConversationSubject'
+import { ReadingHeaderSummary } from './ReadingHeaderSummary'
+import { isConversation, summariseThread } from './readingHeader'
+import { accountIdentities, accounts$ } from '../../states/accounts'
 
 // The conversation header: back/close affordances, sender info, the desktop
 // in-thread search box and the overflow actions menu (view mode, star, archive,
@@ -71,6 +74,17 @@ export function ConversationHeader({
   const threadSearchOpen = useValue(thread$.searchOpen)
   const mediaOpen = useValue(thread$.mediaOpen)
   const normalizedThreadSearch = threadSearch.trim().toLowerCase()
+
+  // The conversation as a whole, for the line under the subject. Derived from
+  // the messages actually loaded plus the thread's own counts, so it stays
+  // honest about a long thread whose older half is still on the server.
+  const loadedMessages = useValue(mail$.messages)
+  const messagesCursor = useValue(mail$.messagesCursor)
+  const accounts = useValue(accounts$)
+  const ownAddresses = accounts
+    .filter((account) => account.id === activeThread.account_id)
+    .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
+  const summary = summariseThread(activeThread, loadedMessages, !!messagesCursor, ownAddresses)
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
@@ -152,6 +166,13 @@ export function ConversationHeader({
             <p className="truncate text-xs text-secondary mt-0.5 font-medium" title={activeThread.from_addr}>
               {activeThread.from_addr}
             </p>
+          ) : isConversation(summary) ? (
+            <ReadingHeaderSummary
+              summary={summary}
+              onSenderMenu={openSenderMenu}
+              detailsOpen={mediaOpen}
+              onOpenDetails={() => thread$.mediaOpen.set(!mediaOpen)}
+            />
           ) : (
             <button
               type="button"
