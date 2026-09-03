@@ -405,6 +405,8 @@
   "composer.placeholders.message": "撰写您的邮件...",
   "composer.placeholders.quickMessage": "写条消息...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.notAnAddress": "这看起来不像电子邮件地址。",
+  "composer.recipients.remove": "移除 {name}",
   "composer.status.addRecipientBeforeSending": "发送前请添加收件人",
   "composer.status.chooseAvailableAccount": "请选择可用的邮件帐户",
   "composer.status.couldNotDiscardDraft": "无法丢弃草稿",

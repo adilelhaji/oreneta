@@ -405,6 +405,8 @@
   "composer.placeholders.message": "Kirjuta oma sõnum...",
   "composer.placeholders.quickMessage": "Kirjuta sõnum...",
   "composer.placeholders.recipient": "saaja@example.com",
+  "composer.recipients.notAnAddress": "See ei näe välja nagu e-posti aadress.",
+  "composer.recipients.remove": "Eemalda {name}",
   "composer.status.addRecipientBeforeSending": "Lisa enne saatmist saaja",
   "composer.status.chooseAvailableAccount": "Vali saadaval olev meilikonto",
   "composer.status.couldNotDiscardDraft": "Mustandit ei saanud kustutada",

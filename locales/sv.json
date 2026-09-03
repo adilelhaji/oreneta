@@ -405,6 +405,8 @@
   "composer.placeholders.message": "Skriv ditt meddelande...",
   "composer.placeholders.quickMessage": "Skriv ett meddelande...",
   "composer.placeholders.recipient": "mottagare@example.com",
+  "composer.recipients.notAnAddress": "Det här ser inte ut som en e-postadress.",
+  "composer.recipients.remove": "Ta bort {name}",
   "composer.status.addRecipientBeforeSending": "Lägg till en mottagare innan du skickar",
   "composer.status.chooseAvailableAccount": "Välj ett tillgängligt e-postkonto",
   "composer.status.couldNotDiscardDraft": "Det gick inte att ta bort utkastet",

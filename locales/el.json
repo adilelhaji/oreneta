@@ -405,6 +405,8 @@
   "composer.placeholders.message": "Γράψτε το μήνυμά σας...",
   "composer.placeholders.quickMessage": "Γράψτε ένα μήνυμα...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.notAnAddress": "Αυτό δεν μοιάζει με διεύθυνση email.",
+  "composer.recipients.remove": "Αφαίρεση {name}",
   "composer.status.addRecipientBeforeSending": "Προσθέστε έναν παραλήπτη πριν από την αποστολή",
   "composer.status.chooseAvailableAccount": "Επιλέξτε έναν διαθέσιμο λογαριασμό email",
   "composer.status.couldNotDiscardDraft": "Δεν ήταν δυνατή η διαγραφή του προσχεδίου",

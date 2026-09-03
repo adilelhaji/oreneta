@@ -405,6 +405,8 @@
   "composer.placeholders.message": "Napisz swoją wiadomość...",
   "composer.placeholders.quickMessage": "Napisz wiadomość...",
   "composer.placeholders.recipient": "odbiorca@example.com",
+  "composer.recipients.notAnAddress": "To nie wygląda na adres e-mail.",
+  "composer.recipients.remove": "Usuń {name}",
   "composer.status.addRecipientBeforeSending": "Dodaj odbiorcę przed wysłaniem",
   "composer.status.chooseAvailableAccount": "Wybierz dostępne konto pocztowe",
   "composer.status.couldNotDiscardDraft": "Nie udało się odrzucić wersji roboczej",

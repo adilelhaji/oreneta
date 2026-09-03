@@ -405,6 +405,8 @@
   "composer.placeholders.message": "撰寫您的訊息...",
   "composer.placeholders.quickMessage": "撰寫訊息...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.notAnAddress": "這看起來不像電子郵件地址。",
+  "composer.recipients.remove": "移除 {name}",
   "composer.status.addRecipientBeforeSending": "傳送前請新增收件者",
   "composer.status.chooseAvailableAccount": "請選擇可用的郵件帳戶",
   "composer.status.couldNotDiscardDraft": "無法捨棄草稿",

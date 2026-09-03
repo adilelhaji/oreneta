@@ -405,6 +405,8 @@
   "composer.placeholders.message": "Escriba su mensaje...",
   "composer.placeholders.quickMessage": "Escriba un mensaje...",
   "composer.placeholders.recipient": "destinatario@example.com",
+  "composer.recipients.notAnAddress": "Esto no parece una dirección de correo.",
+  "composer.recipients.remove": "Quitar a {name}",
   "composer.status.addRecipientBeforeSending": "Añade un destinatario antes de enviar",
   "composer.status.chooseAvailableAccount": "Elige una cuenta de correo disponible",
   "composer.status.couldNotDiscardDraft": "No se pudo descartar el borrador",

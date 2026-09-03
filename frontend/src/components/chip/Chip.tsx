@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { clsx } from '../../lib/utils'
 
-type ChipTone = 'neutral' | 'accent' | 'colour'
+type ChipTone = 'neutral' | 'accent' | 'colour' | 'danger'
 type ChipSize = 'sm' | 'md'
 
 const SIZES: Record<ChipSize, string> = {
@@ -63,9 +63,11 @@ export function Chip({
         'inline-flex max-w-full shrink-0 items-center gap-1 rounded-full border font-semibold leading-none whitespace-nowrap',
         SIZES[size],
         !tinted &&
-          (tone === 'accent' || selected
-            ? 'border-accent/30 bg-accent/12 text-accent'
-            : 'border-border bg-raised text-secondary'),
+          (tone === 'danger'
+            ? 'border-rose-500/40 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+            : tone === 'accent' || selected
+              ? 'border-accent/30 bg-accent/12 text-accent'
+              : 'border-border bg-raised text-secondary'),
         onClick && 'cursor-pointer transition-colors hover:border-accent/40 hover:text-primary',
         className,
       )}

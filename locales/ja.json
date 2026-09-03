@@ -405,6 +405,8 @@
   "composer.placeholders.message": "メッセージを入力...",
   "composer.placeholders.quickMessage": "メッセージを入力...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.notAnAddress": "メールアドレスには見えません。",
+  "composer.recipients.remove": "{name} を削除",
   "composer.status.addRecipientBeforeSending": "送信前に宛先を追加してください",
   "composer.status.chooseAvailableAccount": "利用可能なメールアカウントを選択してください",
   "composer.status.couldNotDiscardDraft": "下書きを破棄できませんでした",

@@ -405,6 +405,8 @@
   "composer.placeholders.message": "Viết tin nhắn của bạn...",
   "composer.placeholders.quickMessage": "Viết một tin nhắn...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.notAnAddress": "Đây có vẻ không phải là một địa chỉ email.",
+  "composer.recipients.remove": "Xoá {name}",
   "composer.status.addRecipientBeforeSending": "Thêm người nhận trước khi gửi",
   "composer.status.chooseAvailableAccount": "Chọn một tài khoản thư khả dụng",
   "composer.status.couldNotDiscardDraft": "Không thể xóa bản nháp",
