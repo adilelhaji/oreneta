@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, DragEvent, PointerEventHandler } from 'react'
 import { Search, X, Plus, SquarePen, MoreHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
@@ -24,6 +24,7 @@ import {
 } from '../../states/ui'
 import { thread$ } from '../../states/thread'
 import { settings$ } from '../../states/settings'
+import { groupByDate } from '../../lib/dateGroups'
 import {
   mail$,
   getFilteredThreads,
@@ -85,6 +86,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const filteredThreads = useValue(getFilteredThreads)
   const filters = useValue(ui$.filters)
   const listView = useValue(settings$.listView)
+  const listSort = useValue(settings$.listSort)
   const threadsCursor = useValue(mail$.threadsCursor)
   const threadsLoadingMore = useValue(mail$.threadsLoadingMore)
   // The rows on hand belong to the view they were loaded for. Until that is the
@@ -98,6 +100,17 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // lists ordinary threads, so it shares this list's selection, context menu and
   // bulk selection; only the cross-account chrome below differs.
   const isStarredView = isUnifiedStarred(selectedAccount, selectedFolder)
+  // Headings only where they mean something. Under any other ordering they
+  // would repeat down the page saying nothing, and a search is its own kind of
+  // list — the reader asked for relevance, not for a calendar.
+  const groupByDates = listSort.key === 'date' && !query.trim() && !isStarredView
+  const dateGroups = useMemo(
+    () =>
+      groupByDates
+        ? groupByDate(filteredThreads, (thread) => thread.date)
+        : [{ group: 'today' as const, items: filteredThreads }],
+    [groupByDates, filteredThreads],
+  )
   // Quick-settings (view + theme) anchor for the narrow-window header button.
   // The side navigation that normally hosts these controls is hidden at this width.
   const [quickMenu, setQuickMenu] = useState<{ x: number; y: number } | null>(null)
@@ -492,8 +505,18 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           />
         ) : (
           <>
-            {filteredThreads.map((thread) => {
-              const bulkItem = bulkItemFor(thread)
+            {dateGroups.map((group) => (
+              <div key={group.group} className="contents">
+                {/* Only when the list is actually in date order. Under any
+                    other ordering these headings would repeat down the page
+                    and mean nothing. */}
+                {groupByDates && (
+                  <div className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary backdrop-blur-sm">
+                    {t(`dateGroup.${group.group}`)}
+                  </div>
+                )}
+                {group.items.map((thread) => {
+                  const bulkItem = bulkItemFor(thread)
               return (
                 <ThreadListItem
                   key={thread.id}
@@ -554,9 +577,11 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                     }
                     threadMenu.open(event, thread)
                   }}
-                />
-              )
-            })}
+                    />
+                  )
+                })}
+              </div>
+            ))}
             {canLoadMore && (
               <button
                 className="mx-3 my-3 flex h-9 shrink-0 items-center justify-center rounded-control-sm border border-border text-xs font-semibold text-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer transition-colors"
