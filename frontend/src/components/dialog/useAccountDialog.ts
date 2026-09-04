@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { invoke } from '../../lib/bridge'
+import { syncGoogleContacts } from '../../states/contactSources'
+import { t as translate } from '../../lib/i18n'
 import { boot } from '../../boot'
-import { ui$, type SetupMode } from '../../states/ui'
+import { confirmAction, showToast, ui$, type SetupMode } from '../../states/ui'
 import { accounts$ } from '../../states/accounts'
 import { openMailAccount } from '../../states/kanban'
 import { nextRssAccountDisplayName } from '../../states/feeds'
@@ -22,6 +24,35 @@ type AddAccountResult = { account?: { id?: string } }
 // All of the account-setup dialog's state and backend flows: provider OAuth
 // (begin + poll), IMAP/SMTP autodiscovery, and the final save. Returned to the
 // dialog and its mode-specific form sections, which stay presentational.
+/**
+ * Offer, once, to bring a new Google account's contacts in.
+ *
+ * At the moment somebody connects an account is when they are thinking about
+ * it, and it is the only moment they will not have to be told the feature
+ * exists. Asked rather than done: reading somebody's contacts is not implied
+ * by connecting their mail, and an app that helped itself to them would be
+ * the wrong kind of helpful.
+ *
+ * Declining does nothing and is not asked again — the same offer waits in
+ * settings for as long as they want it.
+ */
+async function offerGoogleContacts(accountId: string, email: string) {
+  const yes = await confirmAction({
+    title: translate('contacts.offerTitle'),
+    message: translate('contacts.offerMessage', { email }),
+    confirmLabel: translate('contacts.offerConfirm'),
+    cancelLabel: translate('contacts.offerLater'),
+  })
+  if (!yes) return
+  try {
+    const problem = await syncGoogleContacts(accountId, email)
+    if (problem) showToast(problem, 'error')
+    else showToast(translate('contacts.added', { name: email }))
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : translate('contacts.addFailed'), 'error')
+  }
+}
+
 export function useAccountDialog() {
   const mode = useValue(ui$.setupMode)
   const system = useValue(ui$.system)
@@ -215,6 +246,7 @@ export function useAccountDialog() {
           refresh_token: res.profile!.refresh_token,
           expires_in: res.profile!.expires_in,
         })
+        const wasReconnect = !!ui$.reconnectAccountId.peek()
         const added = await invoke<AddAccountResult>(addCommand, {
           email: res.profile.email,
           display_name: res.profile.display_name,
@@ -229,6 +261,9 @@ export function useAccountDialog() {
         ui$.setupOpen.set(false)
         await boot()
         selectCreatedAccount(before, added.account?.id)
+        if (provider === 'gmail' && !wasReconnect && added.account?.id) {
+          void offerGoogleContacts(added.account.id, res.profile.email)
+        }
       }
     } catch (err) {
       console.error('Failed to poll profile', err)
