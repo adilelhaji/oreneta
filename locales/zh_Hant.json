@@ -408,6 +408,7 @@
   "composer.placeholders.message": "撰寫您的訊息...",
   "composer.placeholders.quickMessage": "撰寫訊息...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "目錄",
   "composer.recipients.notAnAddress": "這看起來不像電子郵件地址。",
   "composer.recipients.remove": "移除 {name}",
   "composer.status.addRecipientBeforeSending": "傳送前請新增收件者",

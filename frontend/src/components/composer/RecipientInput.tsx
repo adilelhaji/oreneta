@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, KeyboardEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
-import { formatContact, suggestContacts } from '../../lib/contacts'
+import { formatContact, searchDirectory, suggestContacts } from '../../lib/contacts'
+import { useValue } from '@legendapp/state/react'
+import { accounts$ } from '../../states/accounts'
 import {
   commitPending,
   editAt,
@@ -48,6 +50,11 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
   const inputRef = useRef<HTMLInputElement>(null)
 
   const { committed, pending } = fieldParts(value)
+  const accounts = useValue(accounts$)
+  const account = accounts.find((candidate) => candidate.id === accountId)
+  // Only an Exchange account has a directory to ask; asking anything else
+  // would be a round trip per keystroke for an answer known to be empty.
+  const hasDirectory = !!account && (account.provider === 'exchange' || !!account.ews_url)
 
   // Suggestions follow the token under the cursor, debounced, and only while
   // the field has focus — a dropdown over a field nobody is in is in the way.
@@ -55,8 +62,17 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
     if (!focusedRef.current) return
     let cancelled = false
     const timer = setTimeout(async () => {
-      const results = await suggestContacts(accountId, pending.trim())
+      const query = pending.trim()
+      // Local first, so the list appears at once; the directory's answer, when
+      // there is one, is merged in below it without repeating an address the
+      // book already had.
+      const [local, remote] = await Promise.all([
+        suggestContacts(accountId, query),
+        hasDirectory ? searchDirectory(accountId, query) : Promise.resolve([]),
+      ])
       if (cancelled) return
+      const taken = new Set(local.map((contact) => contact.addr.toLowerCase()))
+      const results = [...local, ...remote.filter((contact) => !taken.has(contact.addr.toLowerCase()))]
       setSuggestions(results)
       setActive(0)
       setOpen(results.length > 0)
@@ -65,7 +81,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
       cancelled = true
       clearTimeout(timer)
     }
-  }, [pending, accountId])
+  }, [pending, accountId, hasDirectory])
 
   const close = () => {
     setOpen(false)
@@ -208,6 +224,11 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
                       a stranger's employer on screen as if it were known. */}
                   {contact.known && contact.organisation && (
                     <span className="text-2xs text-secondary/75"> · {contact.organisation}</span>
+                  )}
+                  {/* Said, because it is a different claim: not somebody the
+                      reader keeps, but somebody the organisation lists. */}
+                  {contact.directory && (
+                    <span className="text-2xs text-secondary/75"> · {t('composer.recipients.fromDirectory')}</span>
                   )}
                 </span>
               ) : (

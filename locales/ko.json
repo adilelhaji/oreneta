@@ -408,6 +408,7 @@
   "composer.placeholders.message": "메시지를 작성하세요...",
   "composer.placeholders.quickMessage": "메시지 작성...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "디렉터리",
   "composer.recipients.notAnAddress": "이메일 주소로 보이지 않습니다.",
   "composer.recipients.remove": "{name} 제거",
   "composer.status.addRecipientBeforeSending": "보내기 전에 받는 사람을 추가하세요",

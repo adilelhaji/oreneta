@@ -408,6 +408,7 @@
   "composer.placeholders.message": "Mesajınızı yazın...",
   "composer.placeholders.quickMessage": "Bir mesaj yazın...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "Dizin",
   "composer.recipients.notAnAddress": "Bu bir e-posta adresine benzemiyor.",
   "composer.recipients.remove": "{name} kişisini kaldır",
   "composer.status.addRecipientBeforeSending": "Göndermeden önce bir alıcı ekleyin",

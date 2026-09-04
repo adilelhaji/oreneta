@@ -408,6 +408,7 @@
   "composer.placeholders.message": "Viết tin nhắn của bạn...",
   "composer.placeholders.quickMessage": "Viết một tin nhắn...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "Danh bạ tổ chức",
   "composer.recipients.notAnAddress": "Đây có vẻ không phải là một địa chỉ email.",
   "composer.recipients.remove": "Xoá {name}",
   "composer.status.addRecipientBeforeSending": "Thêm người nhận trước khi gửi",

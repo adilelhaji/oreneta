@@ -107,6 +107,8 @@ export type Contact = {
   known?: boolean
   /** Where they work, when a book said so. */
   organisation?: string
+  /** True when this came from the organisation's directory, asked just now. */
+  directory?: boolean
 }
 
 /** Somebody in an address book. */

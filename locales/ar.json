@@ -408,6 +408,7 @@
   "composer.placeholders.message": "اكتب رسالتك...",
   "composer.placeholders.quickMessage": "اكتب رسالة...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "الدليل",
   "composer.recipients.notAnAddress": "هذا لا يبدو كعنوان بريد إلكتروني.",
   "composer.recipients.remove": "إزالة {name}",
   "composer.status.addRecipientBeforeSending": "أضف مستلمًا قبل الإرسال",

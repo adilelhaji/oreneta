@@ -1646,6 +1646,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "id": id, "synced": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
         }
 
+        // The organisation's directory, asked by name as the reader types.
+        // Not copied: an address list runs to tens of thousands of entries and
+        // changes under the reader's feet. An account without a directory —
+        // anything that is not Exchange — answers with nobody, not an error.
+        "directory.search" => {
+            let account = req_str(p, "account")?;
+            let query = req_str(p, "query").unwrap_or_default();
+            let found = calendar::route::resolve_names(engine, &account, query.trim()).await?;
+            Ok(json!({ "people": meron_core::contacts::exchange::people_from_participants(found) }))
+        }
+
         // A Google account's contacts, read with the token the account already
         // holds. One source per account, so asking twice re-reads rather than
         // doubling everybody.

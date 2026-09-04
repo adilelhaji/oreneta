@@ -408,6 +408,7 @@
   "composer.placeholders.message": "Rakstiet savu ziņojumu...",
   "composer.placeholders.quickMessage": "Rakstiet ziņojumu...",
   "composer.placeholders.recipient": "saņēmējs@example.com",
+  "composer.recipients.fromDirectory": "Katalogs",
   "composer.recipients.notAnAddress": "Šī neizskatās pēc e-pasta adreses.",
   "composer.recipients.remove": "Noņemt {name}",
   "composer.status.addRecipientBeforeSending": "Pirms sūtīšanas pievienojiet saņēmēju",

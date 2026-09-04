@@ -408,6 +408,7 @@
   "composer.placeholders.message": "Γράψτε το μήνυμά σας...",
   "composer.placeholders.quickMessage": "Γράψτε ένα μήνυμα...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "Κατάλογος",
   "composer.recipients.notAnAddress": "Αυτό δεν μοιάζει με διεύθυνση email.",
   "composer.recipients.remove": "Αφαίρεση {name}",
   "composer.status.addRecipientBeforeSending": "Προσθέστε έναν παραλήπτη πριν από την αποστολή",

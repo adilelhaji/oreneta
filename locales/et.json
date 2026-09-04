@@ -408,6 +408,7 @@
   "composer.placeholders.message": "Kirjuta oma sõnum...",
   "composer.placeholders.quickMessage": "Kirjuta sõnum...",
   "composer.placeholders.recipient": "saaja@example.com",
+  "composer.recipients.fromDirectory": "Kataloog",
   "composer.recipients.notAnAddress": "See ei näe välja nagu e-posti aadress.",
   "composer.recipients.remove": "Eemalda {name}",
   "composer.status.addRecipientBeforeSending": "Lisa enne saatmist saaja",

@@ -408,6 +408,7 @@
   "composer.placeholders.message": "Escreva sua mensagem...",
   "composer.placeholders.quickMessage": "Escreva uma mensagem...",
   "composer.placeholders.recipient": "destinatario@exemplo.com",
+  "composer.recipients.fromDirectory": "Diretório",
   "composer.recipients.notAnAddress": "Isto não parece um endereço de e-mail.",
   "composer.recipients.remove": "Remover {name}",
   "composer.status.addRecipientBeforeSending": "Adicione um destinatário antes de enviar",

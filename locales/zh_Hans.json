@@ -408,6 +408,7 @@
   "composer.placeholders.message": "撰写您的邮件...",
   "composer.placeholders.quickMessage": "写条消息...",
   "composer.placeholders.recipient": "recipient@example.com",
+  "composer.recipients.fromDirectory": "目录",
   "composer.recipients.notAnAddress": "这看起来不像电子邮件地址。",
   "composer.recipients.remove": "移除 {name}",
   "composer.status.addRecipientBeforeSending": "发送前请添加收件人",
