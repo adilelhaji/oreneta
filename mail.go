@@ -559,6 +559,9 @@ func sendParams(req SendMailRequest) map[string]any {
 		"from":        req.From,
 		"message_id":  req.MessageID,
 		"attachments": req.Attachments,
+		"sign":        req.Sign,
+		"encrypt":     req.Encrypt,
+		"passphrase":  req.Passphrase,
 	}
 }
 

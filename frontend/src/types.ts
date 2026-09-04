@@ -262,6 +262,10 @@ export type ComposeDraft = {
     folderId: string
   }
   attachments: ComposerAttachment[]
+  /** Sign with the sender's own OpenPGP key before sending. */
+  pgpSign: boolean
+  /** Encrypt to every recipient's OpenPGP key before sending. */
+  pgpEncrypt: boolean
 }
 
 /** An open reader tab for a single message (alongside the default conversation view).

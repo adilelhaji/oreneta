@@ -222,6 +222,14 @@ type SendMailRequest struct {
 	DraftID     string            `json:"draft_id"`
 	MessageID   string            `json:"message_id"`
 	Attachments []AttachmentInput `json:"attachments"`
+	// Sign and Encrypt ask for OpenPGP protection. A request that cannot be
+	// met fails the send: a message meant to be encrypted that went in the
+	// clear is worse than one that did not go.
+	Sign    bool `json:"sign,omitempty"`
+	Encrypt bool `json:"encrypt,omitempty"`
+	// Passphrase unlocks the sender's own key for this one message. Not
+	// stored anywhere on this side, and not written to a draft.
+	Passphrase string `json:"passphrase,omitempty"`
 }
 
 type ExchangedProfile struct {

@@ -212,6 +212,9 @@ pub(crate) fn send_mobile_message(data_dir: &str, params: &Value) -> Result<Valu
         &references,
         &reply_to,
         &message_id,
+        // The mobile path does not offer OpenPGP yet; keys and passphrases
+        // are a desktop story so far.
+        None,
     ))?;
     let sent_bytes = raw.len();
     if let Err(err) =

@@ -13,7 +13,16 @@ import { useDismissOnOutside } from '../menu/useDismissOnOutside'
  * decision, choosing when is another, and folding them together makes it easy
  * to make the first while meaning the second.
  */
-export function SendLaterMenu({ disabled, onSchedule }: { disabled: boolean; onSchedule: (at: number) => void }) {
+export function SendLaterMenu({
+  disabled,
+  title,
+  onSchedule,
+}: {
+  disabled: boolean
+  /** Overrides the default label — used to say *why* it is disabled. */
+  title?: string
+  onSchedule: (at: number) => void
+}) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -29,8 +38,8 @@ export function SendLaterMenu({ disabled, onSchedule }: { disabled: boolean; onS
         type="button"
         disabled={disabled}
         onClick={() => setOpen((was) => !was)}
-        title={t('sendLater.action')}
-        aria-label={t('sendLater.action')}
+        title={title ?? t('sendLater.action')}
+        aria-label={title ?? t('sendLater.action')}
         className={`flex h-9 w-9 items-center justify-center rounded-control transition-colors ${
           disabled
             ? 'cursor-not-allowed text-secondary/50'

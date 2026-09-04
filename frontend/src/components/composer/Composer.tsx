@@ -33,6 +33,8 @@ export function Composer({ tabId }: { tabId: string }) {
     handleKeyDown,
     setLink,
     submit,
+    pgpPassphrase,
+    setPgpPassphrase,
   } = useComposer(tabId)
 
   if (!draft) return null
@@ -144,6 +146,12 @@ export function Composer({ tabId }: { tabId: string }) {
         onPickInlineImages={() => void pickInlineImages()}
         onToggleRich={toggleRich}
         onUseTemplate={(template) => void useTemplate(template)}
+        pgpSign={draft.pgpSign}
+        pgpEncrypt={draft.pgpEncrypt}
+        pgpPassphrase={pgpPassphrase}
+        onPgpSignChange={(value) => update({ pgpSign: value })}
+        onPgpEncryptChange={(value) => update({ pgpEncrypt: value })}
+        onPgpPassphraseChange={setPgpPassphrase}
         onDiscard={() => void closeMessageTab(tabId)}
         onSubmit={() => void submit()}
         onSchedule={(at) => void submit(at)}

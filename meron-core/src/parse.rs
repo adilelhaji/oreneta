@@ -148,6 +148,24 @@ pub fn decode_words(raw: &str) -> String {
 }
 
 /// Split a `From`-style value ("Display Name <addr@host>") into name and address.
+/// Every address in a header field, lower-cased.
+///
+/// Groups are flattened and display names dropped: what a caller asking this
+/// wants is the set of mailboxes a message is going to, which is what decides
+/// whether a key is held for each of them.
+pub fn split_address_list(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Ok(list) = addrparse(raw) {
+        for entry in list.iter() {
+            push_addr(entry, &mut out);
+        }
+    }
+    out.into_iter()
+        .map(|addr| addr.trim().to_lowercase())
+        .filter(|addr| !addr.is_empty())
+        .collect()
+}
+
 pub fn split_address(raw: &str) -> (String, String) {
     if let Ok(list) = addrparse(raw)
         && let Some(mailparse::MailAddr::Single(info)) = list.first()

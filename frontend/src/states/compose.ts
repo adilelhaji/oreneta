@@ -833,6 +833,8 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
     signature: tracking,
     sourceDraft: seed?.sourceDraft,
     attachments: seed?.attachments ?? [],
+    pgpSign: false,
+    pgpEncrypt: false,
   }
   const id = `compose-${Date.now()}-${composeSeq++}`
   compose$.tabs.push({
@@ -1243,6 +1245,15 @@ export type ComposedMessage = {
   inReplyTo?: string
   references?: string
   attachments: ComposerAttachment[]
+  /**
+   * OpenPGP protection for an immediate send. Deliberately absent from a
+   * scheduled one: a scheduled message sits in the store as plain fields
+   * until its hour comes, and a passphrase has no business waiting there in
+   * the clear. The composer disables scheduling instead of sending a
+   * protected message unprotected later — silently dropping the protection
+   * would be a worse answer than refusing to schedule it.
+   */
+  protection?: { sign: boolean; encrypt: boolean; passphrase?: string }
 }
 
 export async function sendComposed(args: ComposedMessage) {
@@ -1276,6 +1287,13 @@ export function composedPayload(args: ComposedMessage) {
       data: a.data,
       inline_id: a.inlineId ?? '',
     })),
+    ...(args.protection
+      ? {
+          sign: args.protection.sign,
+          encrypt: args.protection.encrypt,
+          passphrase: args.protection.passphrase,
+        }
+      : {}),
   }
 }
 

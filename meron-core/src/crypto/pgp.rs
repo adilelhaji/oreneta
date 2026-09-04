@@ -567,3 +567,197 @@ fn find_inline_block(part: &mailparse::ParsedMail) -> Option<String> {
     }
     part.subparts.iter().find_map(find_inline_block)
 }
+
+// ---------------------------------------------------------------------------
+// Signing and encrypting what is sent
+// ---------------------------------------------------------------------------
+
+use sequoia_openpgp::serialize::stream::{Armorer, Encryptor, LiteralWriter, Message, Recipient, Signer};
+
+/// What to do to a message before it goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Protect {
+    pub sign: bool,
+    pub encrypt: bool,
+}
+
+/// Why a message could not be protected as asked.
+///
+/// Every one of these stops the send. A message that was meant to be encrypted
+/// and went in the clear is the worst outcome this code can produce — worse
+/// than not sending — so nothing here falls back to sending it unprotected.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "reason")]
+pub enum ProtectFailure {
+    /// The sender has no secret key to sign with.
+    NoSigningKey,
+    /// The signing key is locked and no passphrase was given, or it was wrong.
+    NeedsPassphrase,
+    /// No certificate is held for one or more recipients, named.
+    NoRecipientKey { missing: Vec<String> },
+    /// Something else went wrong; the message did not go.
+    Failed { message: String },
+}
+
+/// Sign a built message, encrypt it, or both.
+///
+/// The order is the one that means something: sign first, then encrypt the
+/// signed thing. A signature outside the encryption can be stripped and
+/// replaced by anyone who can re-send the ciphertext, so the one that survives
+/// is the one inside.
+pub fn protect_message(
+    raw: &[u8],
+    what: Protect,
+    signing_key: Option<&Cert>,
+    passphrase: Option<&str>,
+    recipients: &[Cert],
+    recipient_addresses: &[String],
+) -> std::result::Result<Vec<u8>, ProtectFailure> {
+    let split = super::mime::split_for_signing(raw).ok_or(ProtectFailure::Failed {
+        message: "the message has no header block".into(),
+    })?;
+
+    if what.encrypt {
+        let missing = missing_recipients(recipients, recipient_addresses);
+        if !missing.is_empty() {
+            return Err(ProtectFailure::NoRecipientKey { missing });
+        }
+    }
+
+    // Signed and encrypted: one OpenPGP message that is both, so the signature
+    // is inside where it cannot be swapped.
+    if what.encrypt {
+        let ciphertext = encrypt_bytes(
+            &split.entity,
+            recipients,
+            what.sign.then_some(()).and(signing_key),
+            passphrase,
+        )?;
+        return Ok(super::mime::build_encrypted(&split.message_headers, &ciphertext));
+    }
+
+    if what.sign {
+        let key = signing_key.ok_or(ProtectFailure::NoSigningKey)?;
+        let signature = sign_bytes(&split.entity, key, passphrase)?;
+        return Ok(super::mime::build_signed(
+            &split.message_headers,
+            &split.entity,
+            &signature,
+            "sha512",
+        ));
+    }
+
+    Ok(raw.to_vec())
+}
+
+/// Recipients the reader holds no certificate for, by address.
+fn missing_recipients(certs: &[Cert], addresses: &[String]) -> Vec<String> {
+    addresses
+        .iter()
+        .filter(|wanted| {
+            let wanted = wanted.trim().to_lowercase();
+            !wanted.is_empty()
+                && !certs
+                    .iter()
+                    .any(|cert| describe(cert).addresses.iter().any(|addr| *addr == wanted))
+        })
+        .map(|addr| addr.trim().to_lowercase())
+        .collect()
+}
+
+/// The signing keypair out of a certificate, unlocked if it needs to be.
+fn signing_keypair(
+    cert: &Cert,
+    passphrase: Option<&str>,
+) -> std::result::Result<sequoia_openpgp::crypto::KeyPair, ProtectFailure> {
+    let policy = StandardPolicy::new();
+    let candidate = cert
+        .keys()
+        .secret()
+        .with_policy(&policy, None)
+        .for_signing()
+        .next()
+        .ok_or(ProtectFailure::NoSigningKey)?;
+
+    let mut key = candidate.key().clone();
+    if !key.has_unencrypted_secret() {
+        let password = passphrase.ok_or(ProtectFailure::NeedsPassphrase)?;
+        key = key
+            .decrypt_secret(&Password::from(password))
+            .map_err(|_| ProtectFailure::NeedsPassphrase)?;
+    }
+    key.into_keypair().map_err(|error| ProtectFailure::Failed {
+        message: error.to_string(),
+    })
+}
+
+/// A detached signature over exactly these bytes.
+fn sign_bytes(
+    data: &[u8],
+    cert: &Cert,
+    passphrase: Option<&str>,
+) -> std::result::Result<Vec<u8>, ProtectFailure> {
+    use std::io::Write as _;
+    let keypair = signing_keypair(cert, passphrase)?;
+    let mut sink = Vec::new();
+    let build = || -> Result<()> {
+        let message = Message::new(&mut sink);
+        let message = Armorer::new(message).build()?;
+        let mut signer = Signer::new(message, keypair)?.detached().build()?;
+        signer.write_all(data)?;
+        signer.finalize()?;
+        Ok(())
+    };
+    build().map_err(|error| ProtectFailure::Failed {
+        message: error.to_string(),
+    })?;
+    Ok(sink)
+}
+
+/// Encrypt bytes to the given certificates, signing inside when asked.
+fn encrypt_bytes(
+    data: &[u8],
+    recipients: &[Cert],
+    signing_key: Option<&Cert>,
+    passphrase: Option<&str>,
+) -> std::result::Result<Vec<u8>, ProtectFailure> {
+    use std::io::Write as _;
+    let policy = StandardPolicy::new();
+    let keypair = match signing_key {
+        Some(cert) => Some(signing_keypair(cert, passphrase)?),
+        None => None,
+    };
+
+    let mut sink = Vec::new();
+    let build = || -> Result<()> {
+        let targets: Vec<Recipient> = recipients
+            .iter()
+            .flat_map(|cert| {
+                cert.keys()
+                    .with_policy(&policy, None)
+                    .supported()
+                    .for_transport_encryption()
+                    .map(Recipient::from)
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        if targets.is_empty() {
+            return Err(anyhow!("no usable encryption key among the recipients"));
+        }
+        let message = Message::new(&mut sink);
+        let message = Armorer::new(message).build()?;
+        let message = Encryptor::for_recipients(message, targets).build()?;
+        let message = match keypair {
+            Some(keypair) => Signer::new(message, keypair)?.build()?,
+            None => message,
+        };
+        let mut writer = LiteralWriter::new(message).build()?;
+        writer.write_all(data)?;
+        writer.finalize()?;
+        Ok(())
+    };
+    build().map_err(|error| ProtectFailure::Failed {
+        message: error.to_string(),
+    })?;
+    Ok(sink)
+}

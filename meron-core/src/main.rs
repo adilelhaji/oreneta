@@ -5000,6 +5000,68 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
         let message_id = req_str(p, "message_id").unwrap_or_default();
         let attachments = opt_attachments(p)?;
         let requested_from = req_str(p, "from").unwrap_or_default();
+
+        // OpenPGP, when the sender asked for it. Assembled here, before
+        // anything is sent, so a request this account cannot satisfy fails
+        // loudly instead of the message quietly going out in the clear.
+        let protection = {
+            let sign = p.get("sign").and_then(Value::as_bool).unwrap_or(false);
+            let encrypt = p.get("encrypt").and_then(Value::as_bool).unwrap_or(false);
+            if !sign && !encrypt {
+                None
+            } else {
+                let (signing_key, recipients) = {
+                    let db = engine.db.lock().unwrap();
+                    // The sender's own key, chosen by the address they are
+                    // sending from: somebody with two keys should sign as
+                    // whoever they are being right now.
+                    let signing_key = if sign {
+                        let wanted = requested_from.trim().to_lowercase();
+                        store::pgp_secret_keys(&db)?
+                            .into_iter()
+                            .find(|key| {
+                                wanted.is_empty()
+                                    || key.addresses.iter().any(|addr| *addr == wanted)
+                            })
+                            .and_then(|key| {
+                                meron_core::secrets::load(&format!(
+                                    "pgp-secret-{}",
+                                    key.fingerprint
+                                ))
+                                .ok()
+                                .map(|secrets| secrets.password)
+                            })
+                            .map(|armoured| {
+                                meron_core::crypto::pgp::certs_from_armoured(&[armoured])
+                            })
+                            .and_then(|certs| certs.into_iter().next())
+                    } else {
+                        None
+                    };
+                    let recipients = if encrypt {
+                        let armoured: Vec<String> = store::pgp_certs(&db)?
+                            .into_iter()
+                            .map(|cert| cert.armoured)
+                            .collect();
+                        meron_core::crypto::pgp::certs_from_armoured(&armoured)
+                    } else {
+                        Vec::new()
+                    };
+                    (signing_key, recipients)
+                };
+                let addresses: Vec<String> = [to.as_str(), cc.as_str(), bcc.as_str()]
+                    .iter()
+                    .flat_map(|field| meron_core::parse::split_address_list(field))
+                    .collect();
+                Some(smtp::Protection {
+                    what: meron_core::crypto::pgp::Protect { sign, encrypt },
+                    signing_key,
+                    passphrase: req_str(p, "passphrase").ok(),
+                    recipients,
+                    recipient_addresses: addresses,
+                })
+            }
+        };
         let creds = engine.ensure_valid_creds(&account).await?;
         let (from_addr, sender_name) =
             resolve_send_from(engine, &account, &creds, &requested_from)?;
@@ -5042,6 +5104,10 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             }
             return Ok(json!({ "ok": true }));
         }
+        // What the sender asked for, with the keys it needs. Built before the
+        // Exchange branch above would have returned, so a request to protect a
+        // message on an account that cannot do it fails loudly rather than
+        // sending it in the clear.
         let raw = smtp::send(
             &creds,
             &from_addr,
@@ -5057,6 +5123,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             &references,
             &reply_to,
             &message_id,
+            protection.as_ref(),
         )
         .await?;
         // Finalize the Sent view. For Gmail/Outlook defaults this only

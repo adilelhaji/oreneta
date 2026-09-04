@@ -5,6 +5,7 @@ import type { Template } from '../../states/templates'
 import { IconButton } from '../button/IconButton'
 import { SendLaterMenu } from './SendLaterMenu'
 import { TemplateMenu } from './TemplateMenu'
+import { PgpComposeControls } from './PgpComposeControls'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -20,6 +21,12 @@ export function ComposerFooter({
   onPickInlineImages,
   onToggleRich,
   onUseTemplate,
+  pgpSign,
+  pgpEncrypt,
+  pgpPassphrase,
+  onPgpSignChange,
+  onPgpEncryptChange,
+  onPgpPassphraseChange,
   onDiscard,
   onSubmit,
   onSchedule,
@@ -34,6 +41,12 @@ export function ComposerFooter({
   onToggleRich: () => void
   /** Puts a kept snippet in at the cursor, or opens a whole-message template. */
   onUseTemplate: (template: Template) => void
+  pgpSign: boolean
+  pgpEncrypt: boolean
+  pgpPassphrase: string
+  onPgpSignChange: (value: boolean) => void
+  onPgpEncryptChange: (value: boolean) => void
+  onPgpPassphraseChange: (value: string) => void
   onDiscard: () => void
   onSubmit: () => void
   /** Holds the message until `at` instead of sending it now. */
@@ -62,6 +75,14 @@ export function ComposerFooter({
           />
         )}
         <TemplateMenu onPick={onUseTemplate} />
+        <PgpComposeControls
+          sign={pgpSign}
+          encrypt={pgpEncrypt}
+          passphrase={pgpPassphrase}
+          onSignChange={onPgpSignChange}
+          onEncryptChange={onPgpEncryptChange}
+          onPassphraseChange={onPgpPassphraseChange}
+        />
         <button
           onClick={onToggleRich}
           className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
@@ -101,7 +122,11 @@ export function ComposerFooter({
         >
           {t('buttons.discard')}
         </button>
-        <SendLaterMenu disabled={!canSend} onSchedule={onSchedule} />
+        <SendLaterMenu
+          disabled={!canSend || pgpSign || pgpEncrypt}
+          title={pgpSign || pgpEncrypt ? t('crypto.cannotSchedule') : undefined}
+          onSchedule={onSchedule}
+        />
         <button
           onClick={onSubmit}
           disabled={!canSend}

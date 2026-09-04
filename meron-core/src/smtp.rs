@@ -204,6 +204,48 @@ fn split_name_addr(entry: &str) -> (String, String) {
     (String::new(), trimmed.to_string())
 }
 
+/// What the sender asked to have done to a message before it goes.
+///
+/// Carries the keys rather than looking them up, so this module stays about
+/// sending and the crypto module stays about cryptography.
+pub struct Protection {
+    pub what: crate::crypto::pgp::Protect,
+    pub signing_key: Option<sequoia_openpgp::Cert>,
+    pub passphrase: Option<String>,
+    pub recipients: Vec<sequoia_openpgp::Cert>,
+    /// Every address the message is going to, for checking a key is held for
+    /// each of them before anything is encrypted.
+    pub recipient_addresses: Vec<String>,
+}
+
+impl Protection {
+    fn apply(&self, raw: &[u8]) -> Result<Vec<u8>> {
+        crate::crypto::pgp::protect_message(
+            raw,
+            self.what,
+            self.signing_key.as_ref(),
+            self.passphrase.as_deref(),
+            &self.recipients,
+            &self.recipient_addresses,
+        )
+        .map_err(|failure| match failure {
+            crate::crypto::pgp::ProtectFailure::NoSigningKey => {
+                anyhow::anyhow!("no OpenPGP key to sign with — import yours in settings")
+            }
+            crate::crypto::pgp::ProtectFailure::NeedsPassphrase => {
+                anyhow::anyhow!("your OpenPGP key needs its passphrase")
+            }
+            crate::crypto::pgp::ProtectFailure::NoRecipientKey { missing } => anyhow::anyhow!(
+                "no OpenPGP key here for {} — the message was not sent",
+                missing.join(", ")
+            ),
+            crate::crypto::pgp::ProtectFailure::Failed { message } => {
+                anyhow::anyhow!("the message could not be protected: {message}")
+            }
+        })
+    }
+}
+
 pub fn build_message(
     sender_name: &str,
     from: &str,
@@ -312,6 +354,11 @@ pub async fn send(
     references: &str,
     reply_to: &str,
     message_id: &str,
+    // How to protect the message before it goes, when the sender asked for it.
+    // Applied to the built bytes rather than woven through the builder: what
+    // OpenPGP protects is a finished MIME entity, and a half-built one is not
+    // the thing a recipient will verify.
+    protect: Option<&Protection>,
 ) -> Result<Vec<u8>> {
     // Caller passes the chosen send-as address (primary or a verified alias),
     // already validated against the account; fall back to the IMAP login.
@@ -360,6 +407,14 @@ pub async fn send(
         reply_to,
         &message_id,
     )?;
+
+    // Protection goes on before anything touches the network. A failure here
+    // stops the send: a message meant to be encrypted that went in the clear
+    // is a worse outcome than one that did not go at all.
+    let raw = match protect {
+        Some(protection) => protection.apply(&raw)?,
+        None => raw,
+    };
 
     // Fall back to the IMAP host if SMTP settings were not provided.
     let host = if creds.smtp_host.is_empty() {

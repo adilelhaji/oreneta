@@ -431,3 +431,238 @@ fn an_ordinary_message_is_not_something_to_decrypt() {
         DecryptionFailure::Malformed
     );
 }
+
+// ---------------------------------------------------------------------------
+// Protecting what is sent
+// ---------------------------------------------------------------------------
+
+const OUTGOING: &[u8] = b"From: Ana <ana@example.com>\r\n\
+To: Marc <marc@example.com>\r\n\
+Subject: Figures\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+The figures are 12 and 34.\r\n";
+
+fn sign_only() -> Protect {
+    Protect { sign: true, encrypt: false }
+}
+
+fn encrypt_only() -> Protect {
+    Protect { sign: false, encrypt: true }
+}
+
+#[test]
+fn a_signed_message_verifies_at_the_other_end() {
+    // The real test of signing is that the receiving code accepts it.
+    let ana = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let sent = protect_message(OUTGOING, sign_only(), Some(&ana), None, &[], &[]).unwrap();
+    let checked = verify_message(&sent, &[ana]).expect("signed");
+    assert!(matches!(checked.verdict, SignatureVerdict::Good { .. }));
+    assert_eq!(checked.matches_sender, Some(true));
+}
+
+#[test]
+fn an_encrypted_message_opens_at_the_other_end() {
+    let marc = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    let sent = protect_message(
+        OUTGOING,
+        encrypt_only(),
+        None,
+        None,
+        &[marc.clone()],
+        &["marc@example.com".into()],
+    )
+    .unwrap();
+    let opened = decrypt_message(&sent, &[marc], None).unwrap();
+    assert!(opened.body.contains("The figures are 12 and 34."));
+}
+
+#[test]
+fn signing_and_encrypting_puts_the_signature_inside_where_it_cannot_be_swapped() {
+    // A signature outside the encryption can be stripped and replaced by
+    // anyone able to re-send the ciphertext. The one that survives is inside.
+    let ana = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let marc = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    let sent = protect_message(
+        OUTGOING,
+        Protect { sign: true, encrypt: true },
+        Some(&ana),
+        None,
+        &[marc.clone()],
+        &["marc@example.com".into()],
+    )
+    .unwrap();
+
+    // From the outside it is only encrypted; nothing claims a signature.
+    let parsed = mailparse::parse_mail(&sent).unwrap();
+    assert_eq!(
+        super::detect::protection_of(&parsed),
+        super::detect::Protection::PgpEncrypted
+    );
+    // And opening it finds the signature that was inside.
+    let opened = decrypt_message(&sent, &[marc, ana.clone()], None).unwrap();
+    assert!(matches!(opened.signature, Some(SignatureVerdict::Good { .. })));
+}
+
+#[test]
+fn the_subject_and_the_recipients_still_travel_in_the_clear() {
+    // That is what this format does, and pretending otherwise would be worse
+    // than the limitation: the message could not be delivered at all.
+    let marc = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    let sent = protect_message(
+        OUTGOING,
+        encrypt_only(),
+        None,
+        None,
+        &[marc],
+        &["marc@example.com".into()],
+    )
+    .unwrap();
+    let text = String::from_utf8_lossy(&sent);
+    assert!(text.contains("Subject: Figures"));
+    assert!(text.contains("To: Marc"));
+    assert!(!text.contains("The figures are 12 and 34."));
+}
+
+#[test]
+fn a_recipient_with_no_key_stops_the_send_and_names_them() {
+    // Falling back to sending in the clear is the worst thing this code could
+    // do — worse than not sending — so it does not.
+    let marc = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    let failure = protect_message(
+        OUTGOING,
+        encrypt_only(),
+        None,
+        None,
+        &[marc],
+        &["marc@example.com".into(), "stranger@example.com".into()],
+    )
+    .unwrap_err();
+    assert_eq!(
+        failure,
+        ProtectFailure::NoRecipientKey {
+            missing: vec!["stranger@example.com".into()]
+        }
+    );
+}
+
+#[test]
+fn signing_with_no_key_stops_the_send() {
+    assert_eq!(
+        protect_message(OUTGOING, sign_only(), None, None, &[], &[]).unwrap_err(),
+        ProtectFailure::NoSigningKey
+    );
+}
+
+#[test]
+fn a_locked_signing_key_asks_for_its_passphrase_rather_than_sending_unsigned() {
+    let ana = make_encryption_cert("Ana Prat <ana@example.com>", Some("hunter2"));
+    assert_eq!(
+        protect_message(OUTGOING, sign_only(), Some(&ana), None, &[], &[]).unwrap_err(),
+        ProtectFailure::NeedsPassphrase
+    );
+    assert_eq!(
+        protect_message(OUTGOING, sign_only(), Some(&ana), Some("wrong"), &[], &[]).unwrap_err(),
+        ProtectFailure::NeedsPassphrase
+    );
+    // And with the right one it goes.
+    assert!(protect_message(OUTGOING, sign_only(), Some(&ana), Some("hunter2"), &[], &[]).is_ok());
+}
+
+#[test]
+fn asking_for_nothing_leaves_the_message_exactly_as_it_was() {
+    let sent = protect_message(
+        OUTGOING,
+        Protect { sign: false, encrypt: false },
+        None,
+        None,
+        &[],
+        &[],
+    )
+    .unwrap();
+    assert_eq!(sent, OUTGOING);
+}
+
+#[test]
+fn an_address_is_matched_however_it_was_capitalised() {
+    let marc = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    assert!(protect_message(
+        OUTGOING,
+        encrypt_only(),
+        None,
+        None,
+        &[marc],
+        &["Marc@Example.COM".into()],
+    )
+    .is_ok());
+}
+
+// ---------------------------------------------------------------------------
+// A real interoperability gap, found by crossing GnuPG-generated keys through
+// this module rather than only Sequoia's own.
+// ---------------------------------------------------------------------------
+
+/// A passphrase-protected Ed25519/Curve25519 key pair, as GnuPG 2.4.8 exports
+/// it — GnuPG's default algorithm choice since 2.3, and so the shape a great
+/// many real keys are in. Passphrase: "hunter2".
+const GNUPG_PROTECTED_ED25519: &str = "-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+lIYEapp/SBYJKwYBBAHaRw8BAQdAxa2nV8v+dXra5iuvSqJ92f18aK44yQIIW6F+
+KnkFZkj+BwMC61ykXDqYYAv/dawDNCsRSUWMDS03L8LccfsphBDtvWzoz2CQuFUq
+pMFw3u7QFwkqfSVIpjjI9YV2rYcAzdT11l2JHCuehq1YY+W5WLhr+7QcTWFyYyBS
+b2NhIDxtYXJjQGV4YW1wbGUuY29tPoiQBBMWCgA4FiEEei3HzGRAWUksu5QFh5tp
+kTHEoPoFAmqaf0gCGwMFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AACgkQh5tpkTHE
+oPq+nQEArsDMF/yoClHcMWCUQ2qRnIAnLL7MxNZxN0HAtwwlP3MA/A6C7zkXybZH
+jgKb1f+baHTFCBNhhiwh2M0CDmb+1dQDnIsEapp/ahIKKwYBBAGXVQEFAQEHQKs+
+58gSk2pTB7C/uNMHyRl/nu0ciC93GyiBsK3GQRI9AwEIB/4HAwLxi4N3Iti8Hf/h
+i//Jf2Z+NRwuyMTHxi0mKmenEb51Jj01Lm0VsyKMTYp46r15TGJh0NcWbQtTxRX0
+fLLN9GGXZABDhKh6lx1BdGy45YrtiHgEGBYKACAWIQR6LcfMZEBZSSy7lAWHm2mR
+McSg+gUCapp/agIbDAAKCRCHm2mRMcSg+rEYAP9YWKQOaR6lTnJHAgaFNWxDifx7
+ySEZ3R656+6p/XRyVAEA+MPTpPO9fRY/XLr7UMFs6Uz1rT4qT88Oalv1peytmA4=
+=cgh4
+-----END PGP PRIVATE KEY BLOCK-----";
+
+/// A known, cited limitation, not a silent one.
+///
+/// This module's own OpenPGP messages round-trip perfectly with a
+/// passphrase-protected key — the tests above prove it. But every one of
+/// those keys was generated by Sequoia itself, and generating and reading a
+/// key with the same library proves the library agrees with itself, not that
+/// it reads what other people's software writes.
+///
+/// A real GnuPG-exported key, crossed through this module by hand while this
+/// feature was being verified, found what that check could not: a
+/// passphrase-protected Ed25519 or Curve25519 secret key exported by GnuPG
+/// 2.4 — the algorithm suite GnuPG has defaulted to since 2.3, and so the
+/// shape a great many real keys are in — cannot be unlocked here. It fails
+/// with "Malformed MPI" while parsing the protected material, in
+/// `sequoia-openpgp` 2.4.1's `crypto-rust` backend specifically. An RSA key
+/// with the same passphrase protection unlocks correctly, and an *unprotected*
+/// Curve25519 key from GnuPG decrypts a real message correctly — so the gap is
+/// narrow: protected secret material for these two algorithms, from GnuPG,
+/// through this backend.
+///
+/// Nothing in this codebase can fix a parsing bug inside a dependency. What
+/// this test does instead is make the gap impossible to lose track of: it
+/// fails loudly the day this starts working, which is the signal to delete it
+/// and to tell every reader who protected a modern GnuPG key with a
+/// passphrase that decryption now actually works for them.
+#[test]
+fn known_limitation_gnupg_protected_curve25519_secrets_do_not_unlock_here() {
+    let (cert, info) = read_secret_key(GNUPG_PROTECTED_ED25519).expect("the key itself parses");
+    assert!(info.protected);
+
+    let policy = StandardPolicy::new();
+    let mut failed = 0;
+    for ka in cert.keys().secret().with_policy(&policy, None) {
+        let mut key = ka.key().clone();
+        let outcome = key.decrypt_secret(&sequoia_openpgp::crypto::Password::from("hunter2"));
+        if outcome.is_err() {
+            failed += 1;
+        }
+    }
+    // If this ever reaches 0, the gap has closed: delete this test, and tell
+    // whoever asks that a passphrase-protected modern GnuPG key now decrypts.
+    assert_eq!(failed, 2, "expected both the primary and the subkey to still fail to unlock");
+}

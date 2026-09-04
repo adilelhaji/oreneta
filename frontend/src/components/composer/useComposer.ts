@@ -52,6 +52,8 @@ export function useComposer(tabId: string) {
   const session = sessionRef.current
 
   const [sending, setSending] = useState(false)
+  // Never persisted, never sent to a draft: unlocks one key for one send.
+  const [pgpPassphrase, setPgpPassphrase] = useState('')
   const [error, setError] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -605,13 +607,20 @@ export function useComposer(tabId: string) {
         attachments,
       }
       if (scheduleAt) {
+        // Protection is never scheduled: see ComposedMessage.protection.
         await scheduleComposed(message, scheduleAt)
         await discardRemoteDraft(current)
         showToast(t('sendLater.toast.scheduled', { when: formatDeferredWhen(scheduleAt) }))
         finishClosingMessageTab(tabId)
         return
       }
-      await sendComposed(message)
+      await sendComposed({
+        ...message,
+        protection:
+          current.pgpSign || current.pgpEncrypt
+            ? { sign: current.pgpSign, encrypt: current.pgpEncrypt, passphrase: pgpPassphrase || undefined }
+            : undefined,
+      })
       // When this tab is a reply to the open conversation, drop the sent message
       // into the thread immediately so it shows without waiting for the next sync.
       if (tab?.threadId) {
@@ -654,6 +663,8 @@ export function useComposer(tabId: string) {
     canSend,
     update,
     toggleRich,
+    pgpPassphrase,
+    setPgpPassphrase,
     addFiles,
     pickAttachmentFiles,
     pickInlineImages,
