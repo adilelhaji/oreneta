@@ -13,6 +13,7 @@ import { SideNav } from './components/sidenav/SideNav'
 import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
+import { PeopleView } from './components/people/PeopleView'
 import { MessagePane } from './components/chat/MessagePane'
 import { AboutDialog } from './components/dialog/AboutDialog'
 import { ChangelogDialog } from './components/dialog/ChangelogDialog'
@@ -48,6 +49,7 @@ export default function App() {
   const kanbanPaneThreadId = useValue(kanban$.paneThreadId)
   const kanbanPaneWidth = useValue(settings$.kanbanPaneWidth)
   const calendarOpen = useValue(ui$.calendarOpen)
+  const peopleOpen = useValue(ui$.peopleOpen)
   const setupOpen = useValue(ui$.setupOpen)
   const settingsOpen = useValue(ui$.settingsOpen)
   const addFeedAccount = useValue(ui$.addFeedAccount)
@@ -81,7 +83,11 @@ export default function App() {
         <ErrorBoundary label="side navigation">
           <SideNav />
         </ErrorBoundary>
-        {calendarOpen ? (
+        {peopleOpen ? (
+          <ErrorBoundary label="people">
+            <PeopleView />
+          </ErrorBoundary>
+        ) : calendarOpen ? (
           <ErrorBoundary label="calendar">
             <CalendarView />
           </ErrorBoundary>
@@ -94,7 +100,7 @@ export default function App() {
           )}
         </ErrorBoundary>
         )}
-        {calendarOpen ? null : !activeBoardId ? (
+        {calendarOpen || peopleOpen ? null : !activeBoardId ? (
           <ErrorBoundary label="conversation">
             <MessagePane />
           </ErrorBoundary>

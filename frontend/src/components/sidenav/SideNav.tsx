@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { DragEvent } from 'react'
-import { Mail, MoreHorizontal, EyeOff, CalendarDays } from 'lucide-react'
+import { Mail, MoreHorizontal, EyeOff, CalendarDays, BookUser } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -27,6 +27,7 @@ export function SideNav() {
   const accounts = useValue(accounts$)
   const boards = useValue(settings$.kanbanBoards)
   const calendarOpen = useValue(ui$.calendarOpen)
+  const peopleOpen = useValue(ui$.peopleOpen)
   const hiddenSideNavAccounts = useValue(settings$.hiddenSideNavAccounts)
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
@@ -128,6 +129,7 @@ export function SideNav() {
   // pane, so staying would show mail's selection with the calendar drawn.
   const selectAccount = (id: string, folderId = 'inbox') => {
     ui$.calendarOpen.set(false)
+    ui$.peopleOpen.set(false)
     openMailAccount(id, folderId)
   }
 
@@ -186,10 +188,39 @@ export function SideNav() {
                   ? 'bg-accent text-white shadow-lg shadow-accent/25'
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
               }`}
-              onClick={() => ui$.calendarOpen.set(!calendarOpen)}
+              onClick={() => {
+                ui$.peopleOpen.set(false)
+                ui$.calendarOpen.set(!calendarOpen)
+              }}
               title={t('calendar.title', { defaultValue: 'Calendar' })}
             >
               <CalendarDays size={19} />
+            </button>
+          </div>
+        )}
+
+        {/* People. Beside the calendar for the same reason: it spans every
+            account rather than belonging to one. */}
+        {hasAccounts && (
+          <div className="relative w-full flex justify-center group">
+            <div
+              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+                peopleOpen ? 'h-7' : 'h-0 group-hover:h-3'
+              }`}
+            />
+            <button
+              className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
+                peopleOpen
+                  ? 'bg-accent text-white shadow-lg shadow-accent/25'
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
+              }`}
+              onClick={() => {
+                ui$.calendarOpen.set(false)
+                ui$.peopleOpen.set(!peopleOpen)
+              }}
+              title={t('people.title')}
+            >
+              <BookUser size={19} />
             </button>
           </div>
         )}
@@ -213,6 +244,7 @@ export function SideNav() {
                     active={board.id === activeBoardId}
                     onSelect={() => {
                       ui$.calendarOpen.set(false)
+                      ui$.peopleOpen.set(false)
                       selectKanbanBoard(board.id)
                     }}
                     onContextMenu={(e) => {

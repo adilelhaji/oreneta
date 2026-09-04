@@ -155,6 +155,9 @@ export const ui$ = observable({
   // selection rather than inside it: a board is a view of mail, a calendar is
   // not mail at all.
   calendarOpen: false,
+  // Whether the address book is showing instead of mail. Like the calendar,
+  // and exclusive with it: they take the same pane.
+  peopleOpen: false,
   selectedAccount: '',
   selectedFolder: 'inbox',
   selectedThread: '',
