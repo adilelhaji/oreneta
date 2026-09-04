@@ -99,6 +99,10 @@ type Message struct {
 	// plain bool would tell the interface the second when the truth is the
 	// first.
 	Priority *bool `json:"priority,omitempty"`
+	// Protection is what the message's own structure declares: "pgpEncrypted",
+	// "pgpSigned", "smimeEnveloped" and so on, empty when none. A claim, not a
+	// verdict: whether a signature is good is answered separately.
+	Protection       string `json:"protection,omitempty"`
 	Attachments      any    `json:"attachments,omitempty"`
 	OriginalThreadID string `json:"original_thread_id,omitempty"`
 	// RecipientOverflow is the count of additional recipients beyond the one shown

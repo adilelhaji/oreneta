@@ -196,6 +196,14 @@ export type Message = {
   /** Ids of the local labels on this conversation, in the reader's order. */
   labels?: string[]
   /**
+   * What the message's own structure declares was done to it: "pgpEncrypted",
+   * "pgpSigned", "smimeEnveloped" and so on; absent when nothing was.
+   *
+   * A claim, not a verdict. Whether a signature is good needs keys and is a
+   * separate answer, so the interface must not present this as one.
+   */
+  protection?: string
+  /**
    * Whether this is worth interrupting for, as the core judged it.
    *
    * Absent means nobody has judged it — a message cached before this existed —

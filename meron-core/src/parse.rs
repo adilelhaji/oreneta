@@ -113,6 +113,15 @@ pub struct Message {
     pub body_is_rendered: bool,
     pub preview: String,
     pub attachments: Vec<Attachment>,
+    /// What protection the message's structure declares: "pgpEncrypted",
+    /// "pgpSigned", "smimeEnveloped" and so on, absent when none.
+    ///
+    /// A claim, not a verdict. It says what arrived, which is what lets the
+    /// reader be told "this is encrypted" instead of being shown a blank
+    /// message and an attachment they cannot open. Whether a signature is any
+    /// good needs keys and is answered elsewhere.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub protection: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -173,6 +182,7 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
         .iter()
         .any(|name| headers.get_first_value(name).is_some());
     let sources = body_sources(&mail);
+    let protection = crate::crypto::detect::protection_of(&mail);
 
     let mut attachments = Vec::new();
     let mut cid_keys: Vec<(String, String)> = Vec::new();
@@ -219,6 +229,10 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
         body_is_rendered,
         preview,
         attachments,
+        protection: match protection {
+            crate::crypto::detect::Protection::None => String::new(),
+            other => other.as_str().to_string(),
+        },
     }
 }
 

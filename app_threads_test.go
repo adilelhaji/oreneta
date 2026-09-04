@@ -201,3 +201,35 @@ func TestThreadCardsCarryLabelsAttachmentsAndPriority(t *testing.T) {
 		t.Errorf("labels = %v, want none", threads[1].Labels)
 	}
 }
+
+// A message that arrived encrypted or signed must say so all the way to the
+// reader. The core decides it from the MIME structure; the bridge only has to
+// not drop it — which is exactly the kind of thing that gets dropped.
+func TestReadMessageCarriesItsProtection(t *testing.T) {
+	for _, want := range []string{"pgpEncrypted", "pgpSigned", "smimeEnveloped"} {
+		out, _ := messageJSON("acct", "acct#INBOX#t.abc", "INBOX", map[string]any{
+			"message": map[string]any{
+				"subject":    "Quarterly figures",
+				"from_addr":  "ana@example.com",
+				"protection": want,
+			},
+		}).(map[string]any)
+		messages, _ := out["messages"].([]Message)
+		if len(messages) != 1 {
+			t.Fatalf("messages = %d, want 1", len(messages))
+		}
+		if messages[0].Protection != want {
+			t.Errorf("protection = %q, want %q", messages[0].Protection, want)
+		}
+	}
+
+	// And an ordinary message claims nothing, rather than claiming "none" as
+	// though somebody had checked.
+	out, _ := messageJSON("acct", "acct#INBOX#t.abc", "INBOX", map[string]any{
+		"message": map[string]any{"subject": "Lunch?"},
+	}).(map[string]any)
+	messages, _ := out["messages"].([]Message)
+	if messages[0].Protection != "" {
+		t.Errorf("protection = %q, want empty", messages[0].Protection)
+	}
+}

@@ -6,6 +6,7 @@ import { revealRemote, thread$ } from '../../states/thread'
 import type { Message } from '../../types'
 import { fileIconFor, formatFileSize, mediaSrc } from './messageHelpers'
 import { MessageBubbleBody } from './MessageBubbleBody'
+import { ProtectionNotice } from './ProtectionNotice'
 import { VideoAttachment } from './VideoAttachment'
 import type { MessageView } from './useMessageView'
 import { previewKind } from '../../lib/attachmentPreview'
@@ -109,6 +110,10 @@ export function MessageContent({
           {t('chat.showImages', { count: hiddenRemoteCount })}
         </button>
       )}
+
+      {/* Said before the body rather than after it: whether a message can be
+          trusted changes how its words should be read. */}
+      <ProtectionNotice protection={message.protection} />
 
       <MessageBubbleBody
         message={message}

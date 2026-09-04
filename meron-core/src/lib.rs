@@ -11,6 +11,7 @@ pub mod calendar;
 pub mod carddav;
 pub mod changelog;
 pub mod contacts;
+pub mod crypto;
 pub mod engine;
 pub mod exchange;
 pub mod ffi;

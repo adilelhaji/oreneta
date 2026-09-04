@@ -160,6 +160,7 @@ func messageJSON(accountID, threadID, folder string, raw any) any {
 		Body:           jsonString(msg["body"]),
 		BodyHTML:       jsonString(msg["body_html"]),
 		Date:           jsonNumber(msg["date"]),
+		Protection:     jsonString(msg["protection"]),
 		HasAttachments: len(attachmentList) > 0,
 		Attachments:    attachmentList,
 	}}}

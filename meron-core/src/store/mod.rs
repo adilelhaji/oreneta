@@ -4016,6 +4016,10 @@ pub fn get_cached_message(
         body_is_rendered: extra["body_is_rendered"].as_bool().unwrap_or(false),
         preview: String::new(),
         attachments,
+        // Cached before this existed reads as no protection, which for the
+        // overwhelming majority of mail is also the truth. A message that was
+        // encrypted is re-parsed on read, so it corrects itself.
+        protection: extra["protection"].as_str().unwrap_or_default().to_string(),
     }))
 }
 
@@ -4038,6 +4042,7 @@ pub fn save_cached_message(
         "delivered": message.delivered,
         "body_html": message.body_html,
         "body_is_rendered": message.body_is_rendered,
+        "protection": message.protection,
         "attachments": attachments_json,
     })
     .to_string();
