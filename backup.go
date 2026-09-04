@@ -13,7 +13,7 @@ import (
 // backups don't silently overwrite each other, and `.json` because the file is
 // plain JSON whose envelope stays readable even when the payload is encrypted.
 func backupFilename(now time.Time) string {
-	return fmt.Sprintf("meron-backup-%s.json", now.Format("2006-01-02"))
+	return fmt.Sprintf("oreneta-backup-%s.json", now.Format("2006-01-02"))
 }
 
 // exportBackup asks the sidecar to serialize accounts, prefs, feeds and

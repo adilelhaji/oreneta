@@ -155,7 +155,7 @@ func TestNotifyIconWritesEmbeddedIconOnce(t *testing.T) {
 	if path == "" {
 		t.Fatal("notifyIcon returned empty path")
 	}
-	if filepath.Base(path) != "meron-notify.png" {
+	if filepath.Base(path) != "oreneta-notify.png" {
 		t.Fatalf("notifyIcon path = %q", path)
 	}
 	data, err := os.ReadFile(path)

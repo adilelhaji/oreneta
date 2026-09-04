@@ -6,11 +6,11 @@ extern void goNotificationClicked(char *account, char *threadID);
 // the modern API requires a code-signed bundle with notification entitlements
 // and async authorization. NSUserNotification still works for a bundled Wails app
 // and reports clicks via the center delegate, which is what we need here.
-@interface MeronNotificationDelegate : NSObject <NSUserNotificationCenterDelegate>
+@interface OrenetaNotificationDelegate : NSObject <NSUserNotificationCenterDelegate>
 @end
 
-@implementation MeronNotificationDelegate
-// Show the banner even when Meron is the frontmost app.
+@implementation OrenetaNotificationDelegate
+// Show the banner even when Oreneta is the frontmost app.
 - (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center
      shouldPresentNotification:(NSUserNotification *)notification {
     return YES;
@@ -39,14 +39,14 @@ extern void goNotificationClicked(char *account, char *threadID);
 }
 @end
 
-static MeronNotificationDelegate *meronNotifyDelegate = nil;
+static OrenetaNotificationDelegate *orenetaNotifyDelegate = nil;
 
 void setupNotificationDelegate() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (meronNotifyDelegate == nil) {
-            meronNotifyDelegate = [[MeronNotificationDelegate alloc] init];
+        if (orenetaNotifyDelegate == nil) {
+            orenetaNotifyDelegate = [[OrenetaNotificationDelegate alloc] init];
         }
-        [NSUserNotificationCenter defaultUserNotificationCenter].delegate = meronNotifyDelegate;
+        [NSUserNotificationCenter defaultUserNotificationCenter].delegate = orenetaNotifyDelegate;
     });
 }
 

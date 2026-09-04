@@ -95,7 +95,7 @@ func (a *App) Startup(ctx context.Context) {
 	if err := a.sidecar.Start(ctx); err != nil {
 		a.setCoreError(fmt.Sprintf("core failed to start: %v (path: %s)", err, coreBinaryPath()))
 		a.logf("core failed to start: %v", err)
-		fmt.Fprintf(os.Stderr, "meron: core failed to start: %v (path: %s)\n", err, coreBinaryPath())
+		fmt.Fprintf(os.Stderr, "oreneta: core failed to start: %v (path: %s)\n", err, coreBinaryPath())
 	} else {
 		a.logf("core started")
 	}

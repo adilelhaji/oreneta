@@ -10,7 +10,7 @@ import (
 
 func TestBackupFilenameIsDated(t *testing.T) {
 	got := backupFilename(time.Date(2026, 8, 10, 15, 4, 5, 0, time.UTC))
-	if want := "meron-backup-2026-08-10.json"; got != want {
+	if want := "oreneta-backup-2026-08-10.json"; got != want {
 		t.Fatalf("backupFilename() = %q, want %q", got, want)
 	}
 }
@@ -53,7 +53,7 @@ func TestWritePrivateFileTightensAnExistingFilesMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix file modes are not meaningful on Windows")
 	}
-	path := filepath.Join(t.TempDir(), "meron-backup.json")
+	path := filepath.Join(t.TempDir(), "oreneta-backup.json")
 	if err := os.WriteFile(path, []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}

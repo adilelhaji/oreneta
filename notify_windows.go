@@ -10,7 +10,7 @@ import (
 	"github.com/gen2brain/beeep"
 )
 
-// Stable activation GUID for Meron's toast COM activator. Must not change across
+// Stable activation GUID for Oreneta's toast COM activator. Must not change across
 // releases or previously-registered activations break.
 const toastActivatorGUID = "{6f3b1c2a-9d4e-4f8b-bf2a-2e7c5a1d9e30}"
 
@@ -19,14 +19,14 @@ const toastActivatorGUID = "{6f3b1c2a-9d4e-4f8b-bf2a-2e7c5a1d9e30}"
 // newline, so it round-trips cleanly.
 const notifyArgSeparator = "\n"
 
-// setupNotificationListener registers Meron's app metadata + activation GUID in
+// setupNotificationListener registers Oreneta's app metadata + activation GUID in
 // the registry and wires the in-process callback Windows invokes when the user
 // clicks a toast. The app is long-running, so the COM server is live at click
 // time and no out-of-process relaunch is needed.
 func (a *App) setupNotificationListener() {
 	exe, _ := os.Executable()
 	if err := toast.SetAppData(toast.AppData{
-		AppID:         "Meron",
+		AppID:         "Oreneta",
 		GUID:          toastActivatorGUID,
 		ActivationExe: exe,
 		IconPath:      notifyIcon(),
@@ -46,7 +46,7 @@ func (a *App) closeNotificationListener() {}
 // thread to open. Falls back to beeep (no click) if the toast fails.
 func (a *App) deliverNotification(n notification) {
 	t := toast.Notification{
-		AppID:               "Meron",
+		AppID:               "Oreneta",
 		Title:               n.title,
 		Body:                n.body,
 		Icon:                notifyIcon(),

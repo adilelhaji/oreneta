@@ -83,7 +83,7 @@ func (a *App) setupResumeListener() {
 			return ret
 		})
 
-		className, _ := windows.UTF16PtrFromString("MeronPowerWindow")
+		className, _ := windows.UTF16PtrFromString("OrenetaPowerWindow")
 		wc := wndClassEx{
 			lpfnWndProc:   wndProc,
 			hInstance:     0,

@@ -19,22 +19,22 @@ jobs:
           - os: ubuntu-22.04
             platform: linux/amd64
             target: x86_64-unknown-linux-gnu
-            artifact: meron-linux-amd64
+            artifact: oreneta-linux-amd64
             tags: 'embed_sidecar webkit2_41'
           - os: windows-latest
             platform: windows/amd64
             target: x86_64-pc-windows-msvc
-            artifact: meron-windows-amd64
+            artifact: oreneta-windows-amd64
             tags: 'embed_sidecar'
           - os: macos-15-intel
             platform: darwin/amd64
             target: x86_64-apple-darwin
-            artifact: meron-darwin-amd64
+            artifact: oreneta-darwin-amd64
             tags: 'embed_sidecar'
           - os: macos-15
             platform: darwin/arm64
             target: aarch64-apple-darwin
-            artifact: meron-darwin-arm64
+            artifact: oreneta-darwin-arm64
             tags: 'embed_sidecar'
 
     runs-on: ${{ matrix.os }}
@@ -165,7 +165,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           set -euo pipefail
-          APP_PATH="build/bin/meron.app"
+          APP_PATH="build/bin/oreneta.app"
           DMG_ROOT="$RUNNER_TEMP/dmg-root"
           DMG_PATH="dist/${{ matrix.artifact }}.dmg"
           mkdir -p dist
@@ -181,9 +181,9 @@ jobs:
             echo "::warning::macOS signing secrets not set — producing an unsigned DMG"
           fi
 
-          ditto "$APP_PATH" "$DMG_ROOT/Meron.app"
+          ditto "$APP_PATH" "$DMG_ROOT/Oreneta.app"
           ln -s /Applications "$DMG_ROOT/Applications"
-          hdiutil create -volname "Meron" -srcfolder "$DMG_ROOT" -ov -format UDZO "$DMG_PATH"
+          hdiutil create -volname "Oreneta" -srcfolder "$DMG_ROOT" -ov -format UDZO "$DMG_PATH"
 
           if [ -n "${KEYCHAIN_PATH:-}" ] && [ -n "${TEAM_ID:-}" ]; then
             SIGNING_IDENTITY="Developer ID Application: Nonbili Inc. ($TEAM_ID)"
@@ -205,7 +205,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          tar -C build/bin -czf "dist/${{ matrix.artifact }}.tar.gz" meron
+          tar -C build/bin -czf "dist/${{ matrix.artifact }}.tar.gz" oreneta
 
       - name: resize appicon for Linux
         if: startsWith(matrix.os, 'ubuntu')
@@ -234,12 +234,12 @@ jobs:
           chmod +x linuxdeploy linuxdeploy-plugin-appimage
 
           rm -rf AppDir && mkdir -p AppDir/usr/bin
-          cp build/bin/meron AppDir/usr/bin/meron
+          cp build/bin/oreneta AppDir/usr/bin/oreneta
           ./linuxdeploy --appdir AppDir \
-            --executable AppDir/usr/bin/meron \
-            --desktop-file build/linux/meron.desktop \
+            --executable AppDir/usr/bin/oreneta \
+            --desktop-file build/linux/oreneta.desktop \
             --icon-file build/appicon_512.png \
-            --icon-filename meron
+            --icon-filename oreneta
 
           # Ship no libraries: the app uses the host's GTK and WebKit.
           #
@@ -279,9 +279,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p snap/local
-          cp build/bin/meron snap/local/meron
-          cp build/linux/meron.desktop snap/local/meron.desktop
-          cp build/appicon_512.png snap/local/meron.png
+          cp build/bin/oreneta snap/local/oreneta
+          cp build/linux/oreneta.desktop snap/local/oreneta.desktop
+          cp build/appicon_512.png snap/local/oreneta.png
 
       - name: package linux snap
         if: startsWith(matrix.os, 'ubuntu')
@@ -304,7 +304,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          7z a "dist/${{ matrix.artifact }}-portable.zip" ./build/bin/meron.exe
+          7z a "dist/${{ matrix.artifact }}-portable.zip" ./build/bin/oreneta.exe
 
       - name: stage windows installer
         if: startsWith(matrix.os, 'windows')
@@ -334,7 +334,7 @@ jobs:
           $assets = Join-Path $stage 'Assets'
           Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $assets | Out-Null
-          Copy-Item build/bin/meron.exe (Join-Path $stage 'meron.exe')
+          Copy-Item build/bin/oreneta.exe (Join-Path $stage 'oreneta.exe')
 
           # Generate the tile/logo assets from the 1024px app icon.
           choco install imagemagick.app --no-progress -y | Out-Null
@@ -444,7 +444,7 @@ jobs:
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
-          snap: dist/meron-linux-amd64.snap
+          snap: dist/oreneta-linux-amd64.snap
           release: stable
 
       - name: release

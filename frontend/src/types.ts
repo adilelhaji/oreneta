@@ -179,7 +179,7 @@ export type Message = {
   /** Send time as Unix epoch seconds (0 when unknown). Format via lib/date helpers. */
   date: number
   /** Sent by this account, classified by the core (own address or Sent-folder
-   * provenance) — true even for aliases not configured in meron. Absent on
+   * provenance) — true even for aliases not configured in Oreneta. Absent on
    * rows shaped before the flag existed; the UI then falls back to matching
    * the From address against the account's identities. */
   outgoing?: boolean

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a release Meron binary with the Rust core engine sidecar baked in.
+# Build a release Oreneta binary with the Rust core engine sidecar baked in.
 #
 # Plain `wails build` resolves the sidecar via a working-directory-relative
 # path, so the resulting binary only works when launched from the repo root.
@@ -20,4 +20,4 @@ cp meron-core/target/release/meron-core build/sidecar/meron-core
 echo "==> Building Wails app with embedded sidecar"
 wails build -tags embed_sidecar "$@"
 
-echo "==> Done: build/bin/meron"
+echo "==> Done: build/bin/oreneta"

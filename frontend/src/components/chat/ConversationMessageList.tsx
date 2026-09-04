@@ -198,7 +198,7 @@ export function ConversationMessageList({
                   onContextMenu={(event) => {
                     if (hasSelectedText()) return
                     event.preventDefault()
-                    let linkUrl = (event.nativeEvent as any)?.meronLinkUrl || (event as any)?.meronLinkUrl
+                    let linkUrl = (event.nativeEvent as any)?.orenetaLinkUrl || (event as any)?.orenetaLinkUrl
                     if (!linkUrl) {
                       const target = event.target as Element | null
                       const anchor =

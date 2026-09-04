@@ -107,7 +107,7 @@ func (a *App) logExport() (any, error) {
 	}
 	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
 		Title:                "Export log",
-		DefaultFilename:      "meron-log.txt",
+		DefaultFilename:      "oreneta-log.txt",
 		CanCreateDirectories: true,
 		Filters: []wailsRuntime.FileFilter{
 			{DisplayName: "Text files (*.txt)", Pattern: "*.txt"},

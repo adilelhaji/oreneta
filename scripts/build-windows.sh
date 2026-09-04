@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-build a Windows Meron from Linux, for testing the Windows startup path
+# Cross-build a Windows Oreneta from Linux, for testing the Windows startup path
 # without waiting on CI.
 #
 # The sidecar targets x86_64-pc-windows-gnu, not the MSVC target CI ships: the
@@ -32,4 +32,4 @@ cp "meron-core/target/$TARGET/release/meron-core.exe" build/sidecar/meron-core
 echo "==> Building Wails app for windows/amd64"
 CGO_ENABLED=0 wails build -clean -platform windows/amd64 -tags embed_sidecar
 
-echo "==> Done: build/bin/meron.exe"
+echo "==> Done: build/bin/oreneta.exe"

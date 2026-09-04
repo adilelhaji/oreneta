@@ -19,11 +19,11 @@ const testManifest = `{
   "pubDate": "2026-07-25T00:00:00Z",
   "platforms": {
     "linux-amd64": {
-      "appimage": {"url": "https://example.test/meron.AppImage", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 42},
-      "tarball": {"url": "https://example.test/meron.tar.gz", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "size": 43}
+      "appimage": {"url": "https://example.test/oreneta.AppImage", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size": 42},
+      "tarball": {"url": "https://example.test/oreneta.tar.gz", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "size": 43}
     },
     "darwin-arm64": {
-      "dmg": {"url": "https://example.test/meron.dmg", "sha256": "2222222222222222222222222222222222222222222222222222222222222222", "size": 44}
+      "dmg": {"url": "https://example.test/oreneta.dmg", "sha256": "2222222222222222222222222222222222222222222222222222222222222222", "size": 44}
     }
   }
 }`
@@ -49,7 +49,7 @@ func TestFetchUpdateManifest(t *testing.T) {
 	if !ok {
 		t.Fatal("no linux-amd64 appimage asset")
 	}
-	if asset.URL != "https://example.test/meron.AppImage" || asset.Size != 42 {
+	if asset.URL != "https://example.test/oreneta.AppImage" || asset.Size != 42 {
 		t.Fatalf("unexpected asset: %+v", asset)
 	}
 
@@ -108,7 +108,7 @@ func TestAssetForRejectsIncompleteEntries(t *testing.T) {
 }
 
 func TestDownloadToVerifiesPayload(t *testing.T) {
-	payload := []byte("meron update payload")
+	payload := []byte("oreneta update payload")
 	sum := sha256.Sum256(payload)
 	digest := hex.EncodeToString(sum[:])
 
@@ -121,12 +121,12 @@ func TestDownloadToVerifiesPayload(t *testing.T) {
 	u := newUpdater(&App{})
 
 	t.Run("good payload lands in the cache dir", func(t *testing.T) {
-		path, err := u.downloadTo(updateAsset{URL: server.URL + "/meron.AppImage", SHA256: digest, Size: int64(len(payload))})
+		path, err := u.downloadTo(updateAsset{URL: server.URL + "/oreneta.AppImage", SHA256: digest, Size: int64(len(payload))})
 		if err != nil {
 			t.Fatalf("downloadTo: %v", err)
 		}
-		if filepath.Base(path) != "meron.AppImage" {
-			t.Errorf("file name = %q, want meron.AppImage", filepath.Base(path))
+		if filepath.Base(path) != "oreneta.AppImage" {
+			t.Errorf("file name = %q, want oreneta.AppImage", filepath.Base(path))
 		}
 		got, err := os.ReadFile(path)
 		if err != nil {
@@ -139,7 +139,7 @@ func TestDownloadToVerifiesPayload(t *testing.T) {
 
 	t.Run("checksum mismatch is rejected and cleaned up", func(t *testing.T) {
 		_, err := u.downloadTo(updateAsset{
-			URL:    server.URL + "/meron.AppImage",
+			URL:    server.URL + "/oreneta.AppImage",
 			SHA256: strings.Repeat("f", 64),
 			Size:   int64(len(payload)),
 		})
@@ -154,7 +154,7 @@ func TestDownloadToVerifiesPayload(t *testing.T) {
 
 	t.Run("size mismatch is rejected and cleaned up", func(t *testing.T) {
 		_, err := u.downloadTo(updateAsset{
-			URL:    server.URL + "/meron.AppImage",
+			URL:    server.URL + "/oreneta.AppImage",
 			SHA256: digest,
 			Size:   int64(len(payload)) + 5,
 		})
@@ -181,9 +181,9 @@ func assertUpdateCacheEmpty(t *testing.T) {
 
 func TestUpdateFileName(t *testing.T) {
 	cases := map[string]string{
-		"https://example.test/v0.1.13/meron-linux-amd64.AppImage": "meron-linux-amd64.AppImage",
-		"https://example.test/meron.dmg?token=abc":                "meron.dmg",
-		"https://example.test/":                                   "meron-update",
+		"https://example.test/v0.1.13/oreneta-linux-amd64.AppImage": "oreneta-linux-amd64.AppImage",
+		"https://example.test/oreneta.dmg?token=abc":                "oreneta.dmg",
+		"https://example.test/":                                     "oreneta-update",
 		// A path-traversal attempt in the manifest must not escape the cache dir.
 		"https://example.test/../../etc/passwd": "passwd",
 	}
@@ -204,14 +204,14 @@ func TestUpdaterCheckThenDownload(t *testing.T) {
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	mux.HandleFunc("/meron.AppImage", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/oreneta.AppImage", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(payload)
 	})
 	mux.HandleFunc("/latest.json", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{
 		  "version": "99.0.0",
 		  "platforms": {"` + runtime.GOOS + `-` + runtime.GOARCH + `": {"appimage": {
-		    "url": "` + server.URL + `/meron.AppImage",
+		    "url": "` + server.URL + `/oreneta.AppImage",
 		    "sha256": "` + hex.EncodeToString(sum[:]) + `",
 		    "size": ` + strconv.Itoa(len(payload)) + `}}}
 		}`))
@@ -223,7 +223,7 @@ func TestUpdaterCheckThenDownload(t *testing.T) {
 	app := &App{}
 	// Pretend we're running from an AppImage regardless of the test host.
 	app.updateChannelOnce.Do(func() {
-		app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: filepath.Join(t.TempDir(), "Meron.AppImage")}
+		app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: filepath.Join(t.TempDir(), "Oreneta.AppImage")}
 	})
 	u := app.ensureUpdater()
 
@@ -292,7 +292,7 @@ func TestUpdaterCheckWhenCurrent(t *testing.T) {
 
 	app := &App{}
 	app.updateChannelOnce.Do(func() {
-		app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: "/tmp/Meron.AppImage"}
+		app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: "/tmp/Oreneta.AppImage"}
 	})
 	u := app.ensureUpdater()
 

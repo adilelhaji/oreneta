@@ -81,16 +81,16 @@ type Message struct {
 	Date       int64  `json:"date"`
 	// Outgoing is classified by the core (own address or Sent-folder
 	// provenance), so alias-sent mail renders as sent-by-me even when the
-	// alias isn't configured in meron.
+	// alias isn't configured in Oreneta.
 	Outgoing    bool   `json:"outgoing,omitempty"`
 	Unread      bool   `json:"unread"`
 	UnreadCount uint32 `json:"unread_count,omitempty"`
 	// MessageCount is every message in the thread, read or not; 0 when the
 	// core did not group (raw message rows, RSS items).
-	MessageCount     uint32 `json:"message_count,omitempty"`
-	Starred          bool   `json:"starred"`
-	HasDraft         bool   `json:"has_draft,omitempty"`
-	HasAttachments   bool   `json:"has_attachments"`
+	MessageCount   uint32 `json:"message_count,omitempty"`
+	Starred        bool   `json:"starred"`
+	HasDraft       bool   `json:"has_draft,omitempty"`
+	HasAttachments bool   `json:"has_attachments"`
 	// Labels are ids of the reader's own local labels; the interface paints
 	// them from its copy of the label set.
 	Labels []string `json:"labels,omitempty"`
@@ -189,9 +189,9 @@ type ThreadListRequest struct {
 	FolderID  string `json:"folder_id"`
 	// Unified view only: the role each account answers from (its own Sent,
 	// Archive, …). Ignored for a single account, which names a real folder.
-	FolderRole   string `json:"folder_role"`
-	Query  string `json:"query"`
-	Filter string `json:"filter"`
+	FolderRole string `json:"folder_role"`
+	Query      string `json:"query"`
+	Filter     string `json:"filter"`
 	// Sort is `date`, `sender` or `subject`, optionally suffixed `:asc`.
 	// Empty means newest first, which is what a mailbox means when nobody has
 	// said otherwise.

@@ -7,11 +7,11 @@ import fs from 'node:fs'
 
 // Where the Go bridge / Rust sidecar write cached attachment + feed images in
 // Wails dev. Must match app.go's mediaDir(): MERON_MEDIA_DIR, else
-// $XDG_CACHE_HOME (or ~/.cache) + meron-dev/attachments.
+// $XDG_CACHE_HOME (or ~/.cache) + oreneta-dev/attachments.
 function mediaRoot() {
   if (process.env.MERON_MEDIA_DIR) return process.env.MERON_MEDIA_DIR
   const base = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache')
-  return path.join(base, 'meron-dev', 'attachments')
+  return path.join(base, 'oreneta-dev', 'attachments')
 }
 
 const MEDIA_MIME = {
@@ -30,10 +30,10 @@ const MEDIA_MIME = {
 // those files here from the same on-disk root instead.
 // Production builds embed the frontend and fall through to the Go handler, so
 // this plugin only hooks the dev server (configureServer).
-function meronMedia() {
+function orenetaMedia() {
   const root = path.resolve(mediaRoot())
   return {
-    name: 'meron-media',
+    name: 'oreneta-media',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!req.url || !req.url.startsWith('/media/')) return next()
@@ -98,5 +98,5 @@ function pdfjsData() {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), meronMedia(), pdfjsData()],
+  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData()],
 })

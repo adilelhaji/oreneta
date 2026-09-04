@@ -93,7 +93,7 @@ func (a *App) exportOpml(payload map[string]any) (any, error) {
 
 	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
 		Title:                "Export feeds",
-		DefaultFilename:      "meron-feeds.opml",
+		DefaultFilename:      "oreneta-feeds.opml",
 		CanCreateDirectories: true,
 		Filters: []wailsRuntime.FileFilter{
 			{DisplayName: "OPML files (*.opml)", Pattern: "*.opml"},

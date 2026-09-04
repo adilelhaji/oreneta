@@ -155,8 +155,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       activeScrollListenerRef.current = null
     }
 
-    if (!doc.documentElement.dataset.meronFrameLinkWired) {
-      doc.documentElement.dataset.meronFrameLinkWired = '1'
+    if (!doc.documentElement.dataset.orenetaFrameLinkWired) {
+      doc.documentElement.dataset.orenetaFrameLinkWired = '1'
       const handleClick = (event: MouseEvent) => {
         if (event.button === 2) return
         if (onFrameClickRef.current?.(event, doc)) return
@@ -169,8 +169,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       doc.addEventListener('auxclick', handleClick, true)
     }
 
-    if (!doc.documentElement.dataset.meronFrameLinkHoverWired) {
-      doc.documentElement.dataset.meronFrameLinkHoverWired = '1'
+    if (!doc.documentElement.dataset.orenetaFrameLinkHoverWired) {
+      doc.documentElement.dataset.orenetaFrameLinkHoverWired = '1'
       const handleLinkEnter = (event: MouseEvent | FocusEvent) => {
         const target = event.target as Element | null
         const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null
@@ -190,8 +190,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       doc.addEventListener('focusout', handleLinkLeave, true)
     }
 
-    if (!doc.documentElement.dataset.meronFrameContextWired) {
-      doc.documentElement.dataset.meronFrameContextWired = '1'
+    if (!doc.documentElement.dataset.orenetaFrameContextWired) {
+      doc.documentElement.dataset.orenetaFrameContextWired = '1'
       doc.addEventListener('contextmenu', (event) => {
         if (!forwardContextMenuRef.current) return
         if (hasFrameSelection(doc)) return
@@ -226,14 +226,14 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
           clientY: rect.top + event.clientY,
         })
         if (linkUrl) {
-          ;(customEvent as any).meronLinkUrl = linkUrl
+          ;(customEvent as any).orenetaLinkUrl = linkUrl
         }
         frame.dispatchEvent(customEvent)
       })
     }
 
-    if (!doc.documentElement.dataset.meronFrameKeyWired) {
-      doc.documentElement.dataset.meronFrameKeyWired = '1'
+    if (!doc.documentElement.dataset.orenetaFrameKeyWired) {
+      doc.documentElement.dataset.orenetaFrameKeyWired = '1'
       doc.addEventListener('keydown', (event) => {
         // Forward the chords the app can act on: ⌘/Ctrl (or Alt) shortcuts such
         // as ⌘/Ctrl+F, which the parent's keydown listener never sees while
@@ -247,7 +247,7 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
         // message (they move the caret); ⌘/Ctrl chords still belong to the app.
         if (isBareArrow && isEditableFrameTarget(event.target)) return
 
-        const forwarded = new CustomEvent('meron.frameKeyDown', {
+        const forwarded = new CustomEvent('oreneta.frameKeyDown', {
           cancelable: true,
           detail: chord,
         })
@@ -263,8 +263,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       activeScrollListenerRef.current = { win, listener }
     }
 
-    if (!doc.documentElement.dataset.meronFrameMediaUnloadWired) {
-      doc.documentElement.dataset.meronFrameMediaUnloadWired = '1'
+    if (!doc.documentElement.dataset.orenetaFrameMediaUnloadWired) {
+      doc.documentElement.dataset.orenetaFrameMediaUnloadWired = '1'
       win.addEventListener('unload', () => {
         stopFrameMedia(doc)
       })

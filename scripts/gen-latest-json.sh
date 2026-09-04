@@ -2,7 +2,7 @@
 # Build the update manifest (latest.json) from the release artifacts.
 #
 # The desktop updater reads this file from
-# https://github.com/nonbili/meron/releases/latest/download/latest.json and
+# https://github.com/adilelhaji/oreneta/releases/latest/download/latest.json and
 # matches on "<goos>-<goarch>" plus the install channel it detected. Only the
 # self-updatable channels are listed: .snap and .appx are store-managed, so
 # leaving them out is what makes those builds report "managed by your package
@@ -19,12 +19,12 @@ dist="${3:?dist dir required}"
 # `artifact` names in .github/workflows/release.yml and the channel constants in
 # update_channel.go.
 entries=(
-  "meron-darwin-arm64.dmg darwin-arm64 dmg"
-  "meron-darwin-amd64.dmg darwin-amd64 dmg"
-  "meron-linux-amd64.AppImage linux-amd64 appimage"
-  "meron-linux-amd64.tar.gz linux-amd64 tarball"
-  "meron-windows-amd64.exe windows-amd64 nsis"
-  "meron-windows-amd64-portable.zip windows-amd64 portable"
+  "oreneta-darwin-arm64.dmg darwin-arm64 dmg"
+  "oreneta-darwin-amd64.dmg darwin-amd64 dmg"
+  "oreneta-linux-amd64.AppImage linux-amd64 appimage"
+  "oreneta-linux-amd64.tar.gz linux-amd64 tarball"
+  "oreneta-windows-amd64.exe windows-amd64 nsis"
+  "oreneta-windows-amd64-portable.zip windows-amd64 portable"
 )
 
 args=()

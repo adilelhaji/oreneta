@@ -255,7 +255,7 @@ func resolveMailServerPath() string {
 		if path, err := extractEmbeddedSidecar(); err == nil {
 			return path
 		} else {
-			fmt.Fprintf(os.Stderr, "meron: failed to extract embedded sidecar: %v\n", err)
+			fmt.Fprintf(os.Stderr, "oreneta: failed to extract embedded sidecar: %v\n", err)
 		}
 	}
 	return filepath.Join("meron-core", "target", "debug", sidecarBinaryName)

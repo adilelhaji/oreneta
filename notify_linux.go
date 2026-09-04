@@ -158,7 +158,7 @@ func (a *App) closeNotificationListener() {
 // the sandbox gives the app a real app id. Outside it, the portal hands the
 // notification to the desktop's own service keyed by an app id it guesses from
 // the process — GNOME Shell then rejects ids it cannot resolve to an installed
-// .desktop ("The app by ID \"meron\" could not be found") and drops it. The
+// .desktop ("The app by ID \"oreneta\" could not be found") and drops it. The
 // portal call still returns success, so that failure is invisible to us and no
 // fallback can key off it. Unsandboxed builds therefore talk to the
 // freedesktop notification service directly, as every other native app does.
@@ -171,7 +171,7 @@ func (a *App) deliverNotification(n notification) {
 		if conn == nil {
 			return
 		}
-		id := "meron-" + uuid.NewString()
+		id := "oreneta-" + uuid.NewString()
 		call := conn.Object(portalDesktopName, portalDesktopPath).Call(
 			portalNotificationAdd,
 			0,
@@ -212,7 +212,7 @@ func (a *App) notifyFreedesktop(conn *dbus.Conn, n notification) bool {
 	call := conn.Object(fdoNotificationName, fdoNotificationPath).Call(
 		fdoNotificationNotify,
 		0,
-		"Meron",
+		"Oreneta",
 		uint32(0), // 0 replaces nothing; each arrival gets its own notification.
 		notifyIcon(),
 		n.title,
@@ -245,15 +245,15 @@ func (a *App) notifyFreedesktop(conn *dbus.Conn, n notification) bool {
 }
 
 // linuxDesktopEntry is the basename of this build's installed .desktop file.
-// Snap installs its own under <snap>_<app>; everything else ships meron.desktop.
+// Snap installs its own under <snap>_<app>; everything else ships oreneta.desktop.
 func linuxDesktopEntry() string {
 	if id := os.Getenv("FLATPAK_ID"); id != "" {
 		return id
 	}
 	if name := os.Getenv("SNAP_NAME"); name != "" {
-		return name + "_meron"
+		return name + "_oreneta"
 	}
-	return "meron"
+	return "oreneta"
 }
 
 // takeFdoNotificationTarget resolves an ActionInvoked signal to the thread it

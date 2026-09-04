@@ -192,8 +192,8 @@ describe('messageHelpers recipient summary', () => {
   it('summarizes To and Cc the way an outgoing bubble header shows them', () => {
     // The reply: named recipients, To plus Cc, in order.
     expect(
-      formatRecipientSummary('"nonbili/meron" <reply+abc@reply.github.com>', '"Comment" <comment@noreply.github.com>'),
-    ).toBe('nonbili/meron, Comment')
+      formatRecipientSummary('"adilelhaji/oreneta" <reply+abc@reply.github.com>', '"Comment" <comment@noreply.github.com>'),
+    ).toBe('adilelhaji/oreneta, Comment')
     // The forward: empty display name falls back to the address local part.
     expect(formatRecipientSummary('"" <ping.eminel@gmail.com>', undefined)).toBe('ping.eminel')
     expect(formatRecipientSummary('ada@example.com, "Ada" <ada@example.com>')).toBe('ada')

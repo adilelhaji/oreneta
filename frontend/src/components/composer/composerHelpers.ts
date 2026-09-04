@@ -15,7 +15,7 @@ export function textToHtml(text: string): string {
     .join('')
 }
 
-export const createInlineId = () => `meron-image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@meron`
+export const createInlineId = () => `oreneta-image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@oreneta`
 
 // The composer renders rich formatting (blockquotes, code, links) purely through
 // Oreneta's stylesheet. Receiving clients don't have that CSS, so we bake the

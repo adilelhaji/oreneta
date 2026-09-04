@@ -427,12 +427,12 @@ export function AppHotkeys() {
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('focusin', clearThreadListDeleteScope)
     window.addEventListener('pointerdown', clearThreadListDeleteScope)
-    window.addEventListener('meron.frameKeyDown', onFrameKeyDown)
+    window.addEventListener('oreneta.frameKeyDown', onFrameKeyDown)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('focusin', clearThreadListDeleteScope)
       window.removeEventListener('pointerdown', clearThreadListDeleteScope)
-      window.removeEventListener('meron.frameKeyDown', onFrameKeyDown)
+      window.removeEventListener('oreneta.frameKeyDown', onFrameKeyDown)
     }
   }, [])
 

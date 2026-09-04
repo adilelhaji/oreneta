@@ -103,16 +103,16 @@ export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT
       :is(td, th).line_content pre code { min-width: 0; }
       /* Escape hatch for content that still can't shrink (fixed-width layout
          tables): scroll it rather than clip it. */
-      .meron-table-scroll {
+      .oreneta-table-scroll {
         max-width: 100%;
         overflow-x: auto;
       }
       a { color: #4f46e5; }
-      .meron-code-block {
+      .oreneta-code-block {
         position: relative;
         max-width: 100%;
       }
-      .meron-copy-code {
+      .oreneta-copy-code {
         position: absolute;
         top: 6px;
         right: 6px;
@@ -131,26 +131,26 @@ export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
         transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
       }
-      .meron-code-block:hover .meron-copy-code,
-      .meron-copy-code:focus-visible {
+      .oreneta-code-block:hover .oreneta-copy-code,
+      .oreneta-copy-code:focus-visible {
         opacity: 1;
       }
-      .meron-copy-code:hover {
+      .oreneta-copy-code:hover {
         background: #ffffff;
         color: #0f172a;
       }
-      .meron-copy-code svg {
+      .oreneta-copy-code svg {
         width: 15px;
         height: 15px;
       }
       /* In-thread search hits, applied to the live document by BubbleHtmlFrame. */
-      mark.meron-search-hit {
+      mark.oreneta-search-hit {
         border-radius: 3px;
         padding: 0 1px;
         background: rgba(253, 224, 71, 0.55);
         color: inherit;
       }
-      mark.meron-search-hit.meron-search-hit-active {
+      mark.oreneta-search-hit.oreneta-search-hit-active {
         background: #fcd34d;
         color: #000000;
       }

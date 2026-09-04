@@ -6,24 +6,24 @@ extern void goSystemResumed(void);
 // Observes NSWorkspaceDidWakeNotification, which NSWorkspace's own notification
 // center posts when the Mac wakes from sleep. On wake we tell Go so the sidecar
 // reconnects its IDLE watchers.
-@interface MeronResumeObserver : NSObject
+@interface OrenetaResumeObserver : NSObject
 @end
 
-@implementation MeronResumeObserver
+@implementation OrenetaResumeObserver
 - (void)didWake:(NSNotification *)note {
     goSystemResumed();
 }
 @end
 
-static MeronResumeObserver *meronResumeObserver = nil;
+static OrenetaResumeObserver *orenetaResumeObserver = nil;
 
 void setupResumeObserver() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (meronResumeObserver == nil) {
-            meronResumeObserver = [[MeronResumeObserver alloc] init];
+        if (orenetaResumeObserver == nil) {
+            orenetaResumeObserver = [[OrenetaResumeObserver alloc] init];
         }
         [[[NSWorkspace sharedWorkspace] notificationCenter]
-            addObserver:meronResumeObserver
+            addObserver:orenetaResumeObserver
                selector:@selector(didWake:)
                    name:NSWorkspaceDidWakeNotification
                  object:nil];
@@ -32,9 +32,9 @@ void setupResumeObserver() {
 
 void teardownResumeObserver() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (meronResumeObserver != nil) {
+        if (orenetaResumeObserver != nil) {
             [[[NSWorkspace sharedWorkspace] notificationCenter]
-                removeObserver:meronResumeObserver];
+                removeObserver:orenetaResumeObserver];
         }
     });
 }

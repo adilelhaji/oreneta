@@ -151,18 +151,18 @@ func TestFdoNotificationTargetIgnoresSignalsFromReusedID(t *testing.T) {
 func TestLinuxDesktopEntry(t *testing.T) {
 	t.Setenv("FLATPAK_ID", "")
 	t.Setenv("SNAP_NAME", "")
-	if got := linuxDesktopEntry(); got != "meron" {
-		t.Errorf("linuxDesktopEntry() = %q, want %q", got, "meron")
+	if got := linuxDesktopEntry(); got != "oreneta" {
+		t.Errorf("linuxDesktopEntry() = %q, want %q", got, "oreneta")
 	}
 
-	t.Setenv("SNAP_NAME", "meron")
-	if got := linuxDesktopEntry(); got != "meron_meron" {
-		t.Errorf("snap linuxDesktopEntry() = %q, want %q", got, "meron_meron")
+	t.Setenv("SNAP_NAME", "oreneta")
+	if got := linuxDesktopEntry(); got != "oreneta_oreneta" {
+		t.Errorf("snap linuxDesktopEntry() = %q, want %q", got, "oreneta_oreneta")
 	}
 
-	t.Setenv("FLATPAK_ID", "jp.nonbili.meron")
-	if got := linuxDesktopEntry(); got != "jp.nonbili.meron" {
-		t.Errorf("flatpak linuxDesktopEntry() = %q, want %q", got, "jp.nonbili.meron")
+	t.Setenv("FLATPAK_ID", "io.github.adilelhaji.oreneta")
+	if got := linuxDesktopEntry(); got != "io.github.adilelhaji.oreneta" {
+		t.Errorf("flatpak linuxDesktopEntry() = %q, want %q", got, "io.github.adilelhaji.oreneta")
 	}
 }
 

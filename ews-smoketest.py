@@ -142,7 +142,7 @@ def main():
                    EWS_DAYS=str(args.days))
         return subprocess.call([probe], env=env)
 
-    profile = tempfile.mkdtemp(prefix="meron-ews-smoketest-")
+    profile = tempfile.mkdtemp(prefix="oreneta-ews-smoketest-")
     core = Sidecar(profile)
     failures = 0
     try:
@@ -248,7 +248,7 @@ def main():
                 # touches a real work calendar.
                 start = ((now // 3600) + 24) * 3600
                 draft = {
-                    "id": "", "calendar_id": target["id"], "subject": "Meron smoke test — ignore",
+                    "id": "", "calendar_id": target["id"], "subject": "Oreneta smoke test — ignore",
                     "location": "—", "start": start, "end": start + 1800,
                     "all_day": False, "is_recurring": False, "is_cancelled": False,
                     "free_busy": "", "my_response": "", "attendees": [],
@@ -260,7 +260,7 @@ def main():
                 else:
                     event = made["event"]
                     print(f"        created id={event['id'][:24]}…")
-                    event["subject"] = "Meron smoke test — edited"
+                    event["subject"] = "Oreneta smoke test — edited"
                     event["end"] = start + 3600
                     if check("calendar.update", core.call(
                             "calendar.update", {"account": account, "event": event})) is None:

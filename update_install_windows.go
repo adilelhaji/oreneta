@@ -46,14 +46,14 @@ const (
 	createNewProcessGroup = 0x00000200
 )
 
-// replacePortableExe swaps the loose meron.exe from the portable zip.
+// replacePortableExe swaps the loose oreneta.exe from the portable zip.
 func replacePortableExe(archive, exe string) error {
 	parent := filepath.Dir(exe)
 	if err := ensureWritableDir(parent); err != nil {
 		return fmt.Errorf("update: %s is not writable — install the update manually: %w", parent, err)
 	}
 
-	staging := filepath.Join(parent, fmt.Sprintf(".meron-update-%d.exe", os.Getpid()))
+	staging := filepath.Join(parent, fmt.Sprintf(".oreneta-update-%d.exe", os.Getpid()))
 	_ = os.Remove(staging)
 	if err := extractExeFromZip(archive, filepath.Base(exe), staging); err != nil {
 		_ = os.Remove(staging)

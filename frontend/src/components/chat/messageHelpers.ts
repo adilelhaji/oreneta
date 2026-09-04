@@ -315,7 +315,7 @@ export function messageSearchText(message: Message): string {
   return [message.subject, message.from_name, message.from_addr, message.body].join('\n').toLowerCase()
 }
 
-/** Gmail-style recipient summary for a bubble header ("to nonbili/meron, Comment").
+/** Gmail-style recipient summary for a bubble header ("to adilelhaji/oreneta, Comment").
  * Display name when the address carries one, otherwise the local part. To and Cc
  * are merged and de-duplicated: an outgoing reply and an outgoing forward can
  * carry the same subject and the same text, so who received it is what tells

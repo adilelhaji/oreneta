@@ -53,7 +53,7 @@ async function allocateMessageIdentity(accountId: string, draft: boolean): Promi
   return result.message_id
 }
 
-const newInlineImageId = () => `meron-image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@meron`
+const newInlineImageId = () => `oreneta-image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@oreneta`
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -107,7 +107,7 @@ function forwardedHtmlBody(message: Message): string {
     .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
     .join('')
   const body = message.body_html || textToHtml(message.body ?? '')
-  return `<p><br></p><div class="meron-forwarded-message"><p>---------- Forwarded message ---------</p>${header}<br>${body}</div>`
+  return `<p><br></p><div class="oreneta-forwarded-message"><p>---------- Forwarded message ---------</p>${header}<br>${body}</div>`
 }
 
 function prepareConversationAttachments(attachments: ComposerAttachment[]) {

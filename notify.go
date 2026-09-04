@@ -24,8 +24,8 @@ type nativeLabels struct {
 var (
 	nativeLabelsMu sync.RWMutex
 	currentLabels  = nativeLabels{
-		trayShow: "Show Meron", trayHide: "Hide to Tray",
-		trayHideTooltip: "Hide Meron to the system tray", trayQuit: "Quit Meron",
+		trayShow: "Show Oreneta", trayHide: "Hide to Tray",
+		trayHideTooltip: "Hide Oreneta to the system tray", trayQuit: "Quit Oreneta",
 		newMessage:      "New message",
 		newMessageCount: "{count, plural, one {1 new message} other {{count} new messages}}",
 		noSubject:       "(no subject)", unknownSender: "unknown sender",
@@ -126,7 +126,7 @@ func notifyIcon() string {
 		if len(appIconPNG) == 0 {
 			return
 		}
-		path := filepath.Join(os.TempDir(), "meron-notify.png")
+		path := filepath.Join(os.TempDir(), "oreneta-notify.png")
 		if err := os.WriteFile(path, appIconPNG, 0o644); err != nil {
 			return
 		}
