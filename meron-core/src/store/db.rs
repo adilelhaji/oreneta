@@ -609,6 +609,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 24 {
         migrate_v24(&tx)?;
     }
+    if version < 25 {
+        migrate_v25(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1081,6 +1084,32 @@ fn migrate_v24(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 24;")?;
+    Ok(())
+}
+
+/// The reader's own OpenPGP keys — the facts about them, and not the keys.
+///
+/// The key material is not here. It goes in the OS keyring under
+/// `pgp-secret-<fingerprint>`, the same place account passwords live, because
+/// a secret key in a database is a secret key in every backup of that
+/// database and in every copy anybody makes of it.
+///
+/// What is here is what the interface needs to show a list and what the
+/// decryptor needs to pick a key: which key, for which addresses, and whether
+/// it is protected by a passphrase. That last one is a fact worth storing
+/// rather than discovering: a reader whose exported key turned out to be
+/// unprotected should be told, not quietly accommodated.
+fn migrate_v25(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS pgp_secret_keys (
+           fingerprint TEXT PRIMARY KEY,
+           addresses   TEXT NOT NULL DEFAULT '',
+           user_ids    TEXT NOT NULL DEFAULT '',
+           protected   INTEGER NOT NULL DEFAULT 1,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 25;")?;
     Ok(())
 }
 

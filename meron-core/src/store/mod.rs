@@ -2372,6 +2372,65 @@ pub fn delete_pgp_cert(conn: &Connection, fingerprint: &str) -> Result<()> {
     Ok(())
 }
 
+/// One of the reader's own OpenPGP keys, as the store records it.
+///
+/// The key material is not here; it is in the OS keyring. What is here is
+/// what the interface needs to list them and what the decryptor needs to pick
+/// one.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredSecretKey {
+    pub fingerprint: String,
+    pub user_ids: Vec<String>,
+    pub addresses: Vec<String>,
+    pub protected: bool,
+    pub added_at: i64,
+}
+
+pub fn pgp_secret_keys(conn: &Connection) -> Result<Vec<StoredSecretKey>> {
+    let mut stmt = conn.prepare(
+        "SELECT fingerprint, user_ids, addresses, protected, added_at
+           FROM pgp_secret_keys ORDER BY added_at, fingerprint",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(StoredSecretKey {
+            fingerprint: row.get(0)?,
+            user_ids: split_lines(&row.get::<_, String>(1)?),
+            addresses: split_lines(&row.get::<_, String>(2)?),
+            protected: row.get::<_, i64>(3)? != 0,
+            added_at: row.get(4)?,
+        })
+    })?;
+    Ok(rows.flatten().collect())
+}
+
+pub fn upsert_pgp_secret_key(conn: &Connection, key: &StoredSecretKey, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO pgp_secret_keys(fingerprint, user_ids, addresses, protected, added_at)
+         VALUES(?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(fingerprint) DO UPDATE SET
+           user_ids = excluded.user_ids,
+           addresses = excluded.addresses,
+           protected = excluded.protected",
+        params![
+            key.fingerprint,
+            key.user_ids.join("\n"),
+            key.addresses.join("\n"),
+            key.protected as i64,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn delete_pgp_secret_key(conn: &Connection, fingerprint: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM pgp_secret_keys WHERE fingerprint = ?1",
+        params![fingerprint],
+    )?;
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {

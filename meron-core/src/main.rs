@@ -1780,6 +1780,103 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
         }
 
+        // The reader's own keys. The key material goes to the OS keyring
+        // under `pgp-secret-<fingerprint>`, never to the database: a secret
+        // key in a database is a secret key in every backup of it.
+        "pgp.secretKeys" => {
+            let keys = store::pgp_secret_keys(&engine.db.lock().unwrap())?;
+            Ok(json!({ "keys": keys }))
+        }
+
+        "pgp.importSecret" => {
+            let armoured = req_str(p, "armoured")?;
+            let (_, info) = meron_core::crypto::pgp::read_secret_key(&armoured)?;
+            meron_core::secrets::store(
+                &format!("pgp-secret-{}", info.fingerprint),
+                &meron_core::secrets::Secrets {
+                    // The generic secret slot; the id says what it holds.
+                    password: armoured,
+                    ..Default::default()
+                },
+            )?;
+            store::upsert_pgp_secret_key(
+                &engine.db.lock().unwrap(),
+                &store::StoredSecretKey {
+                    fingerprint: info.fingerprint.clone(),
+                    user_ids: info.user_ids,
+                    addresses: info.addresses,
+                    protected: info.protected,
+                    added_at: 0,
+                },
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": info.fingerprint, "protected": info.protected }))
+        }
+
+        "pgp.removeSecret" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_pgp_secret_key(&engine.db.lock().unwrap(), &fingerprint)?;
+            let _ = meron_core::secrets::delete(&format!("pgp-secret-{fingerprint}"));
+            Ok(json!({ "ok": true }))
+        }
+
+        // Open one encrypted message, when a reader asks for it.
+        //
+        // The passphrase arrives with the request and is not kept: it is used
+        // for this one message and dropped. A reader who does not want to type
+        // it again should have a key that is not passphrase-protected, which
+        // is their decision to make and not this app's to make quietly for
+        // them by holding on to it.
+        "pgp.decrypt" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+            let passphrase = req_str(p, "passphrase").ok();
+
+            let fingerprints: Vec<String> = store::pgp_secret_keys(&engine.db.lock().unwrap())?
+                .into_iter()
+                .map(|key| key.fingerprint)
+                .collect();
+            let armoured: Vec<String> = fingerprints
+                .iter()
+                .filter_map(|fingerprint| {
+                    meron_core::secrets::load(&format!("pgp-secret-{fingerprint}"))
+                        .ok()
+                        .map(|secrets| secrets.password)
+                        .filter(|text| !text.is_empty())
+                })
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            let keys = meron_core::crypto::pgp::certs_from_armoured(&armoured);
+            match meron_core::crypto::pgp::decrypt_message(
+                &raw.raw,
+                &keys,
+                passphrase.as_deref(),
+            ) {
+                Ok(opened) => Ok(json!({
+                    "ok": true,
+                    "body": opened.body,
+                    "bodyHtml": opened.body_html,
+                    "signature": opened.signature,
+                })),
+                Err(failure) => Ok(json!({ "ok": false, "failure": failure })),
+            }
+        }
+
         // People, from whichever books have been brought in. An empty query
         // is the whole book, which is what the Personas view opens on.
         "people.list" => {

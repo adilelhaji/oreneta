@@ -20,6 +20,12 @@ fn armour(cert: &Cert) -> String {
     String::from_utf8(cert.armored().to_vec().unwrap()).unwrap()
 }
 
+/// The same, but keeping the secret parts.
+fn armour_secret(cert: &Cert) -> String {
+    use sequoia_openpgp::serialize::SerializeInto;
+    String::from_utf8(cert.as_tsk().armored().to_vec().unwrap()).unwrap()
+}
+
 /// A detached signature over `data`, made by `cert`.
 fn sign_detached(cert: &Cert, data: &[u8]) -> Vec<u8> {
     let policy = StandardPolicy::new();
@@ -232,4 +238,196 @@ fn a_signed_message_with_no_key_to_check_it_asks_nothing_about_the_sender() {
     // No verified signer means the question "is it the right person" has no
     // answer, and an answer is not invented.
     assert_eq!(result.matches_sender, None);
+}
+
+// ---------------------------------------------------------------------------
+// Decryption
+// ---------------------------------------------------------------------------
+
+use sequoia_openpgp::serialize::stream::{Encryptor, LiteralWriter, Recipient};
+
+/// A certificate that can receive encrypted mail, optionally passphrase-protected.
+fn make_encryption_cert(uid: &str, passphrase: Option<&str>) -> Cert {
+    let mut builder = CertBuilder::new()
+        .add_userid(uid)
+        .add_signing_subkey()
+        .add_transport_encryption_subkey();
+    if let Some(passphrase) = passphrase {
+        builder = builder.set_password(Some(passphrase.into()));
+    }
+    builder.generate().unwrap().0
+}
+
+/// An OpenPGP message encrypted to `cert`.
+fn encrypt_to(cert: &Cert, plaintext: &[u8]) -> Vec<u8> {
+    let policy = StandardPolicy::new();
+    let recipients: Vec<Recipient> = cert
+        .keys()
+        .with_policy(&policy, None)
+        .supported()
+        .for_transport_encryption()
+        .map(Recipient::from)
+        .collect();
+
+    let mut sink = Vec::new();
+    {
+        let message = Message::new(&mut sink);
+        let message = Armorer::new(message).build().unwrap();
+        let message = Encryptor::for_recipients(message, recipients).build().unwrap();
+        let mut writer = LiteralWriter::new(message).build().unwrap();
+        writer.write_all(plaintext).unwrap();
+        writer.finalize().unwrap();
+    }
+    sink
+}
+
+#[test]
+fn an_unprotected_secret_key_is_read_and_reported_as_unprotected() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let (_, info) = read_secret_key(&armour_secret(&cert)).unwrap();
+    assert_eq!(info.addresses, vec!["ana@example.com"]);
+    assert!(!info.protected);
+}
+
+#[test]
+fn a_passphrase_protected_key_is_reported_as_protected() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", Some("hunter2"));
+    let (_, info) = read_secret_key(&armour_secret(&cert)).unwrap();
+    assert!(info.protected);
+}
+
+#[test]
+fn importing_a_public_certificate_where_a_secret_key_was_meant_is_refused() {
+    // Otherwise the reader believes they can decrypt and finds out from a
+    // message that will not open.
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let error = read_secret_key(&armour(&cert)).unwrap_err().to_string();
+    assert!(error.contains("public certificate"), "{error}");
+}
+
+#[test]
+fn a_message_encrypted_to_our_key_opens() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let ciphertext = encrypt_to(&cert, b"The figures are 12 and 34.");
+    let opened = decrypt(&ciphertext, &[cert], None).unwrap();
+    assert_eq!(opened.content, b"The figures are 12 and 34.");
+    assert_eq!(opened.signature, None);
+}
+
+#[test]
+fn a_protected_key_opens_with_its_passphrase() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", Some("hunter2"));
+    let ciphertext = encrypt_to(&cert, b"Secret");
+    assert_eq!(decrypt(&ciphertext, &[cert], Some("hunter2")).unwrap().content, b"Secret");
+}
+
+#[test]
+fn a_wrong_passphrase_says_so_rather_than_saying_the_message_is_not_ours() {
+    // The two send the reader in opposite directions: one to type again, the
+    // other to go hunting for a key they already have.
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", Some("hunter2"));
+    let ciphertext = encrypt_to(&cert, b"Secret");
+    assert_eq!(
+        decrypt(&ciphertext, &[cert.clone()], Some("wrong")).unwrap_err(),
+        DecryptionFailure::NeedsPassphrase
+    );
+    // And no passphrase at all is the same situation, not a different one.
+    assert_eq!(
+        decrypt(&ciphertext, &[cert], None).unwrap_err(),
+        DecryptionFailure::NeedsPassphrase
+    );
+}
+
+#[test]
+fn a_message_for_somebody_else_says_there_is_no_key_for_it() {
+    let theirs = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    let ours = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let ciphertext = encrypt_to(&theirs, b"Not for Ana");
+    assert_eq!(decrypt(&ciphertext, &[ours], None).unwrap_err(), DecryptionFailure::NoKey);
+}
+
+#[test]
+fn with_no_keys_at_all_there_is_no_key_for_it() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let ciphertext = encrypt_to(&cert, b"Secret");
+    assert_eq!(decrypt(&ciphertext, &[], None).unwrap_err(), DecryptionFailure::NoKey);
+}
+
+#[test]
+fn rubbish_where_an_encrypted_message_should_be_is_not_reported_as_a_missing_key() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let failure = decrypt(b"not an encrypted message", &[cert], None).unwrap_err();
+    assert_eq!(failure, DecryptionFailure::Malformed);
+}
+
+/// A complete RFC 3156 encrypted message.
+fn encrypted_message(cert: &Cert, inner_part: &str) -> Vec<u8> {
+    let ciphertext = encrypt_to(cert, inner_part.as_bytes());
+    let mut out = Vec::new();
+    out.extend_from_slice(
+        b"From: ana@example.com\r\nSubject: Figures\r\nContent-Type: multipart/encrypted; \
+          protocol=\"application/pgp-encrypted\"; boundary=bnd\r\n\r\n--bnd\r\n\
+          Content-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--bnd\r\n\
+          Content-Type: application/octet-stream\r\n\r\n",
+    );
+    out.extend_from_slice(&ciphertext);
+    out.extend_from_slice(b"\r\n--bnd--\r\n");
+    out
+}
+
+#[test]
+fn an_encrypted_message_opens_and_its_inner_part_is_read() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let raw = encrypted_message(
+        &cert,
+        "Content-Type: text/plain; charset=utf-8\r\n\r\nThe figures are 12 and 34.\r\n",
+    );
+    let opened = decrypt_message(&raw, &[cert], None).unwrap();
+    assert!(opened.body.contains("The figures are 12 and 34."));
+    assert_eq!(opened.body_html, None);
+}
+
+#[test]
+fn the_html_inside_an_encrypted_message_comes_through_as_html() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let raw = encrypted_message(
+        &cert,
+        "Content-Type: text/html; charset=utf-8\r\n\r\n<p>The <b>figures</b>.</p>\r\n",
+    );
+    let opened = decrypt_message(&raw, &[cert], None).unwrap();
+    assert!(opened.body_html.unwrap().contains("<b>figures</b>"));
+}
+
+#[test]
+fn an_armoured_block_in_a_plain_body_opens_too() {
+    // Mail was armoured this way before there was a MIME type for it, and
+    // plenty of it still is.
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let ciphertext = String::from_utf8(encrypt_to(&cert, b"Inline and secret.")).unwrap();
+    let raw = format!(
+        "From: ana@example.com\r\nContent-Type: text/plain\r\n\r\nHere it is:\r\n\r\n{ciphertext}\r\n\r\nRegards,\r\nAna\r\n"
+    );
+    let opened = decrypt_message(raw.as_bytes(), &[cert], None).unwrap();
+    assert!(opened.body.contains("Inline and secret."));
+}
+
+#[test]
+fn an_encrypted_message_we_have_no_key_for_says_so_rather_than_looking_broken() {
+    let theirs = make_encryption_cert("Marc Roca <marc@example.com>", None);
+    let raw = encrypted_message(&theirs, "Content-Type: text/plain\r\n\r\nNot for Ana\r\n");
+    let ours = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    assert_eq!(
+        decrypt_message(&raw, &[ours], None).unwrap_err(),
+        DecryptionFailure::NoKey
+    );
+}
+
+#[test]
+fn an_ordinary_message_is_not_something_to_decrypt() {
+    let cert = make_encryption_cert("Ana Prat <ana@example.com>", None);
+    let raw = b"From: ana@example.com\r\nContent-Type: text/plain\r\n\r\nLunch?\r\n";
+    assert_eq!(
+        decrypt_message(raw, &[cert], None).unwrap_err(),
+        DecryptionFailure::Malformed
+    );
 }

@@ -48,3 +48,45 @@ func (a *App) pgpVerify(payload map[string]any) (any, error) {
 	}
 	return a.sidecar.Call("pgp.verify", payload)
 }
+
+func (a *App) pgpSecretKeys(map[string]any) (any, error) {
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return map[string]any{"keys": []any{}}, nil
+	}
+	return a.sidecar.Call("pgp.secretKeys", map[string]any{})
+}
+
+func (a *App) pgpImportSecret(payload map[string]any) (any, error) {
+	armoured, _ := payload["armoured"].(string)
+	if armoured == "" {
+		return nil, errors.New("no key given")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("pgp.importSecret", map[string]any{"armoured": armoured})
+}
+
+func (a *App) pgpRemoveSecret(payload map[string]any) (any, error) {
+	fingerprint, _ := payload["fingerprint"].(string)
+	if fingerprint == "" {
+		return nil, errors.New("no fingerprint given")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("pgp.removeSecret", map[string]any{"fingerprint": fingerprint})
+}
+
+// pgpDecrypt opens one encrypted message. The passphrase travels with the
+// request and is not kept anywhere on this side.
+func (a *App) pgpDecrypt(payload map[string]any) (any, error) {
+	account, _ := payload["account"].(string)
+	if account == "" {
+		return nil, errors.New("no account given")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("pgp.decrypt", payload)
+}

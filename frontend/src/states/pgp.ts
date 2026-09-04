@@ -62,3 +62,57 @@ export async function removeCert(fingerprint: string) {
 export function verifyMessage(account: string, folder: string, uid: number) {
   return invoke<SignatureResult>('pgp.verify', { account, folder, uid })
 }
+
+/** One of the reader's own keys. */
+export type PgpSecretKey = {
+  fingerprint: string
+  userIds: string[]
+  addresses: string[]
+  /** Whether opening a message with it needs a passphrase. */
+  protected: boolean
+  addedAt: number
+}
+
+/** Why a message could not be opened. */
+export type DecryptionFailure = 'noKey' | 'needsPassphrase' | 'malformed'
+
+export type DecryptResult =
+  | { ok: true; body: string; bodyHtml?: string | null; signature?: SignatureResult | null }
+  | { ok: false; failure: { reason: DecryptionFailure } }
+
+export const secretKeys$ = observable({
+  keys: [] as PgpSecretKey[],
+  loaded: false,
+})
+
+export async function loadSecretKeys() {
+  try {
+    const res = await invoke<{ keys?: PgpSecretKey[] }>('pgp.secretKeys', {})
+    secretKeys$.keys.set(res?.keys ?? [])
+    secretKeys$.loaded.set(true)
+  } catch {
+    // Unreadable is not empty.
+  }
+}
+
+export async function importSecretKey(armoured: string): Promise<{ fingerprint: string; protected: boolean }> {
+  const res = await invoke<{ fingerprint: string; protected: boolean }>('pgp.importSecret', { armoured })
+  await loadSecretKeys()
+  return res
+}
+
+export async function removeSecretKey(fingerprint: string) {
+  await invoke('pgp.removeSecret', { fingerprint })
+  await loadSecretKeys()
+}
+
+/**
+ * Open one encrypted message.
+ *
+ * The passphrase goes with the request and is not kept: it opens this message
+ * and is dropped. Holding on to it would be deciding on the reader's behalf
+ * that their key may as well not have one.
+ */
+export function decryptMessage(account: string, folder: string, uid: number, passphrase?: string) {
+  return invoke<DecryptResult>('pgp.decrypt', { account, folder, uid, passphrase })
+}

@@ -32,13 +32,20 @@ describe('what a message says was done to it', () => {
     expect(render(<ProtectionNotice message={message('none')} />).container.textContent).toBe('')
   })
 
-  it('explains why an encrypted body is not on screen', () => {
+  it('says an encrypted body is encrypted and offers to open it', () => {
     for (const kind of ['pgpEncrypted', 'pgpInline', 'smimeEnveloped']) {
       const view = render(<ProtectionNotice message={message(kind)} />)
       expect(view.container.textContent).toContain('Encrypted message')
-      expect(view.container.textContent).toContain('cannot decrypt it yet')
+      expect(view.container.textContent).toContain('Open it with your key')
       cleanup()
     }
+  })
+
+  it('does not offer to open one it has nowhere to fetch from', () => {
+    // No account or folder means no message to go and get, and a button that
+    // cannot work is worse than no button.
+    const view = render(<ProtectionNotice message={message('pgpEncrypted')} />)
+    expect(view.queryByText('Open it')).toBeNull()
   })
 
   it('calls an unchecked signature a claim rather than a fact', () => {

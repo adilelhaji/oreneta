@@ -15,7 +15,7 @@
 use std::io::Cursor;
 
 use anyhow::{anyhow, Context, Result};
-use sequoia_openpgp::cert::prelude::*;
+
 use sequoia_openpgp::parse::stream::*;
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::policy::StandardPolicy;
@@ -244,4 +244,326 @@ fn find_signed_part<'a>(
         return Some(part);
     }
     part.subparts.iter().find_map(find_signed_part)
+}
+
+// ---------------------------------------------------------------------------
+// Decryption
+// ---------------------------------------------------------------------------
+
+use sequoia_openpgp::crypto::Password;
+
+/// What the reader's own key is, as far as the app needs to know.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretKeyInfo {
+    pub fingerprint: String,
+    pub user_ids: Vec<String>,
+    pub addresses: Vec<String>,
+    /// Whether the key material is protected by a passphrase.
+    ///
+    /// Stored rather than rediscovered, and shown, because a reader whose
+    /// exported key turned out to be unprotected should be told rather than
+    /// quietly accommodated.
+    pub protected: bool,
+}
+
+/// Read an armoured secret key.
+///
+/// Refuses a certificate that carries no secret part: importing a public key
+/// where a secret one was meant would leave the reader believing they can
+/// decrypt, and finding out from a message that will not open.
+pub fn read_secret_key(armoured: &str) -> Result<(Cert, SecretKeyInfo)> {
+    let cert = Cert::from_reader(Cursor::new(armoured.as_bytes()))
+        .context("that does not look like an OpenPGP key")?;
+    if !cert.is_tsk() {
+        return Err(anyhow!(
+            "that is a public certificate, not a secret key — it can check signatures but not decrypt"
+        ));
+    }
+    let info = describe(&cert);
+    // Protected if any secret key in it is encrypted. A key where some parts
+    // are protected and some are not is protected: the reader will be asked.
+    let protected = cert
+        .keys()
+        .secret()
+        .any(|key| !key.key().has_unencrypted_secret());
+    Ok((
+        cert,
+        SecretKeyInfo {
+            fingerprint: info.fingerprint,
+            user_ids: info.user_ids,
+            addresses: info.addresses,
+            protected,
+        },
+    ))
+}
+
+/// Why a message could not be decrypted, in words the reader can act on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "reason")]
+pub enum DecryptionFailure {
+    /// None of the reader's keys can open it. It was encrypted to somebody
+    /// else, or to a key of theirs they have not imported.
+    NoKey,
+    /// A key that could open it is here, and the passphrase was wrong or absent.
+    NeedsPassphrase,
+    /// It was not readable as an encrypted message at all.
+    Malformed,
+}
+
+struct DecryptHelper<'a> {
+    keys: &'a [Cert],
+    password: Option<Password>,
+    policy: &'a StandardPolicy<'a>,
+    /// Set when a key that could have opened it was found, so a failure can
+    /// tell "wrong passphrase" from "not for you".
+    saw_own_key: bool,
+    /// Set when the thing turned out to be an encrypted message at all.
+    ///
+    /// This is what tells "no key for this" from "that was not encrypted
+    /// mail" — a fact about the input rather than a guess from the wording of
+    /// an error, which changes between library versions.
+    saw_ciphertext: bool,
+    signature: Option<SignatureVerdict>,
+}
+
+impl VerificationHelper for &mut DecryptHelper<'_> {
+    fn get_certs(&mut self, _ids: &[sequoia_openpgp::KeyHandle]) -> Result<Vec<Cert>> {
+        Ok(self.keys.to_vec())
+    }
+
+    fn check(&mut self, structure: MessageStructure) -> Result<()> {
+        for layer in structure.into_iter() {
+            if let MessageLayer::SignatureGroup { results } = layer {
+                for result in results {
+                    match result {
+                        Ok(good) => {
+                            let info = describe(good.ka.cert());
+                            self.signature = Some(SignatureVerdict::Good {
+                                fingerprint: info.fingerprint,
+                                addresses: info.addresses,
+                            });
+                            return Ok(());
+                        }
+                        Err(VerificationError::MissingKey { .. })
+                        | Err(VerificationError::UnboundKey { .. }) => {
+                            self.signature.get_or_insert(SignatureVerdict::NoKey);
+                        }
+                        Err(_) => {
+                            self.signature = Some(SignatureVerdict::Bad);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl DecryptionHelper for &mut DecryptHelper<'_> {
+    fn decrypt(
+        &mut self,
+        pkesks: &[sequoia_openpgp::packet::PKESK],
+        skesks: &[sequoia_openpgp::packet::SKESK],
+        sym_algo: Option<sequoia_openpgp::types::SymmetricAlgorithm>,
+        decrypt: &mut dyn FnMut(
+            Option<sequoia_openpgp::types::SymmetricAlgorithm>,
+            &sequoia_openpgp::crypto::SessionKey,
+        ) -> bool,
+    ) -> Result<Option<Cert>> {
+        self.saw_ciphertext = !pkesks.is_empty() || !skesks.is_empty();
+        for pkesk in pkesks {
+            for cert in self.keys {
+                for ka in cert
+                    .keys()
+                    .secret()
+                    .with_policy(self.policy, None)
+                    .for_transport_encryption()
+                    .for_storage_encryption()
+                {
+                    if Some(&ka.key().keyid()) != pkesk.recipient().map(|id| id.into()).as_ref()
+                        && pkesk.recipient().is_some()
+                    {
+                        continue;
+                    }
+                    // A key of the reader's that this message was encrypted to.
+                    // Noted before trying, so a wrong passphrase is told apart
+                    // from a message that was never for them.
+                    self.saw_own_key = true;
+                    let mut key = ka.key().clone();
+                    if !key.has_unencrypted_secret() {
+                        let Some(password) = &self.password else {
+                            continue;
+                        };
+                        key = match key.decrypt_secret(password) {
+                            Ok(key) => key,
+                            Err(_) => continue,
+                        };
+                    }
+                    let Ok(mut pair) = key.into_keypair() else {
+                        continue;
+                    };
+                    if pkesk
+                        .decrypt(&mut pair, sym_algo)
+                        .map(|(algo, session_key)| decrypt(algo, &session_key))
+                        .unwrap_or(false)
+                    {
+                        return Ok(Some(cert.clone()));
+                    }
+                }
+            }
+        }
+        Err(anyhow!("no key could open this message"))
+    }
+}
+
+/// What decrypting a message produced.
+#[derive(Debug, Clone)]
+pub struct Decrypted {
+    /// The plaintext, which for RFC 3156 is a whole MIME part.
+    pub content: Vec<u8>,
+    /// The signature inside the encrypted part, when there was one. Mail is
+    /// commonly signed *and* encrypted, and the signature inside is the one
+    /// that means anything — an attacker can strip an outer one.
+    pub signature: Option<SignatureVerdict>,
+}
+
+/// Decrypt an OpenPGP message with the reader's keys.
+pub fn decrypt(
+    ciphertext: &[u8],
+    keys: &[Cert],
+    passphrase: Option<&str>,
+) -> std::result::Result<Decrypted, DecryptionFailure> {
+    let policy = StandardPolicy::new();
+    let mut helper = DecryptHelper {
+        keys,
+        password: passphrase.map(Password::from),
+        policy: &policy,
+        saw_own_key: false,
+        saw_ciphertext: false,
+        signature: None,
+    };
+
+    let mut content = Vec::new();
+    let outcome = DecryptorBuilder::from_bytes(ciphertext)
+        .and_then(|builder| builder.with_policy(&policy, None, &mut helper))
+        .and_then(|mut decryptor| {
+            std::io::copy(&mut decryptor, &mut content)?;
+            Ok(())
+        });
+
+    match outcome {
+        Ok(()) => Ok(Decrypted {
+            content,
+            signature: helper.signature,
+        }),
+        // A key of ours was there and still nothing opened: the passphrase is
+        // wrong or missing.
+        Err(_) if helper.saw_own_key => Err(DecryptionFailure::NeedsPassphrase),
+        // It was an encrypted message; just not one for any key here.
+        Err(_) if helper.saw_ciphertext => Err(DecryptionFailure::NoKey),
+        // It never got as far as being an encrypted message. Said as such, so
+        // the reader is not sent hunting for a key they were never missing.
+        Err(_) => Err(DecryptionFailure::Malformed),
+    }
+}
+
+/// An encrypted message, opened.
+#[derive(Debug, Clone)]
+pub struct OpenedMessage {
+    /// The plain-text body, ready to read.
+    pub body: String,
+    /// Its HTML, when the message inside had any.
+    pub body_html: Option<String>,
+    /// The signature that was *inside* the encryption, when there was one.
+    ///
+    /// The inner one is the one that means anything: an outer signature can be
+    /// stripped and replaced by anyone who can re-send the ciphertext, while
+    /// one inside was made by whoever could also read the plaintext.
+    pub signature: Option<SignatureVerdict>,
+}
+
+/// Open one encrypted mail message and read the MIME part inside it.
+///
+/// Handles both shapes real mail uses: the RFC 3156 `multipart/encrypted`, and
+/// an armoured block sitting in a plain-text body.
+pub fn decrypt_message(
+    raw: &[u8],
+    keys: &[Cert],
+    passphrase: Option<&str>,
+) -> std::result::Result<OpenedMessage, DecryptionFailure> {
+    let mail = mailparse::parse_mail(raw).map_err(|_| DecryptionFailure::Malformed)?;
+    let (ciphertext, shape) = find_ciphertext(&mail).ok_or(DecryptionFailure::Malformed)?;
+    let opened = decrypt(&ciphertext, keys, passphrase)?;
+
+    // The two shapes produce different things and must not be read the same
+    // way. RFC 3156 encrypts a whole MIME part, headers and all. An inline
+    // block encrypts text — and parsing text as MIME reads the first lines as
+    // headers and leaves the body empty, which is how a decrypted message
+    // comes out blank.
+    match shape {
+        Shape::Mime => {
+            let inner = crate::parse::parse_message(&opened.content, None);
+            Ok(OpenedMessage {
+                body: inner.body,
+                body_html: inner.body_html,
+                signature: opened.signature,
+            })
+        }
+        Shape::Text => Ok(OpenedMessage {
+            body: String::from_utf8_lossy(&opened.content).to_string(),
+            body_html: None,
+            signature: opened.signature,
+        }),
+    }
+}
+
+/// What the plaintext will be once it is out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shape {
+    /// A whole MIME part, as RFC 3156 encrypts.
+    Mime,
+    /// Text, as an armoured block in a body encrypts.
+    Text,
+}
+
+/// The bytes to decrypt, wherever in the message they are, and what they will
+/// turn out to be.
+fn find_ciphertext(part: &mailparse::ParsedMail) -> Option<(Vec<u8>, Shape)> {
+    match super::detect::protection_of(part) {
+        super::detect::Protection::PgpEncrypted => {
+            let encrypted = find_encrypted_part(part)?;
+            let bytes = super::detect::pgp_encrypted_parts(encrypted)?.get_body_raw().ok()?;
+            Some((bytes, Shape::Mime))
+        }
+        super::detect::Protection::PgpInline => {
+            let body = find_inline_block(part)?;
+            Some((body.into_bytes(), Shape::Text))
+        }
+        _ => None,
+    }
+}
+
+fn find_encrypted_part<'a>(
+    part: &'a mailparse::ParsedMail<'a>,
+) -> Option<&'a mailparse::ParsedMail<'a>> {
+    if part.ctype.mimetype.eq_ignore_ascii_case("multipart/encrypted") {
+        return Some(part);
+    }
+    part.subparts.iter().find_map(find_encrypted_part)
+}
+
+/// The armoured block out of a plain-text body, without the words around it.
+fn find_inline_block(part: &mailparse::ParsedMail) -> Option<String> {
+    if part.subparts.is_empty() {
+        let body = part.get_body().ok()?;
+        if let Some(start) = body.find("-----BEGIN PGP MESSAGE-----") {
+            let end = body[start..].find("-----END PGP MESSAGE-----")?;
+            let stop = start + end + "-----END PGP MESSAGE-----".len();
+            return Some(body[start..stop].to_string());
+        }
+        return None;
+    }
+    part.subparts.iter().find_map(find_inline_block)
 }
