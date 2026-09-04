@@ -445,6 +445,7 @@
   "contacts.lastSynced": "最終読み込み: {when}",
   "contacts.neverSynced": "まだ読み込んでいません",
   "contacts.passwordPlaceholder": "パスワード",
+  "contacts.readGoogle": "Google の連絡先を読み込む",
   "contacts.remove": "削除",
   "contacts.removeMessage": "「{name}」の連絡先がこのアプリから消えます。サーバー上は何も変わりません。",
   "contacts.removeTitle": "このアドレス帳を削除しますか？",

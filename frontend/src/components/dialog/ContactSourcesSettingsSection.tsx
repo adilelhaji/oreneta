@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BookUser, RefreshCw, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
+import { accounts$ } from '../../states/accounts'
 import { confirmAction, showToast } from '../../states/ui'
 import {
   addBook,
@@ -9,6 +10,7 @@ import {
   discoverBooks,
   loadContactSources,
   removeSource,
+  syncGoogleContacts,
   syncSource,
   type DiscoveredBook,
 } from '../../states/contactSources'
@@ -31,6 +33,13 @@ export function ContactSourcesSettingsSection() {
   const { t } = useTranslation()
   const sources = useValue(contactSources$.sources)
   const loaded = useValue(contactSources$.loaded)
+  const accounts = useValue(accounts$)
+  // Google accounts whose contacts have not been brought in yet. Once one has,
+  // it appears in the list above with the others and is re-read from there.
+  const googleWithout = accounts.filter(
+    (account) =>
+      account.auth_type === 'gmail_oauth' && !sources.some((source) => source.id === `google-${account.id}`),
+  )
 
   const [server, setServer] = useState('')
   const [username, setUsername] = useState('')
@@ -143,6 +152,32 @@ export function ContactSourcesSettingsSection() {
             ))}
           </ul>
         )}
+
+        {googleWithout.map((account) => (
+          <div
+            key={account.id}
+            className="flex items-center justify-between gap-2 rounded-control border border-border bg-panel px-3 py-2"
+          >
+            <span className="min-w-0 truncate text-ui text-primary">{account.email}</span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true)
+                void syncGoogleContacts(account.id, account.email)
+                  .then((problem) => {
+                    if (problem) showToast(problem, 'error')
+                    else showToast(t('contacts.added', { name: account.email }))
+                  })
+                  .catch((error) => showToast(error instanceof Error ? error.message : t('contacts.addFailed'), 'error'))
+                  .finally(() => setBusy(false))
+              }}
+              className="shrink-0 rounded-control px-3 py-1.5 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer disabled:opacity-50"
+            >
+              {t('contacts.readGoogle')}
+            </button>
+          </div>
+        ))}
 
         {books === null ? (
           <form

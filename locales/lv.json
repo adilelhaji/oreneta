@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Pēdējo reizi lasīts {when}",
   "contacts.neverSynced": "Vēl nav lasīta",
   "contacts.passwordPlaceholder": "Parole",
+  "contacts.readGoogle": "Lasīt Google kontaktus",
   "contacts.remove": "Noņemt",
   "contacts.removeMessage": "Cilvēki no “{name}” pazudīs no šīs lietotnes. Serverī nekas nemainās.",
   "contacts.removeTitle": "Noņemt šo adrešu grāmatu?",

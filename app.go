@@ -339,6 +339,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.carddavSync(payload)
 	case "carddav.remove":
 		return a.carddavRemove(payload)
+	case "google.contacts.sync":
+		return a.carddavCall("google.contacts.sync", payload, "account")
 	case "carddav.list":
 		return a.carddavList(payload)
 	case "people.list":

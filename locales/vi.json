@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Đọc lần cuối {when}",
   "contacts.neverSynced": "Chưa đọc",
   "contacts.passwordPlaceholder": "Mật khẩu",
+  "contacts.readGoogle": "Đọc danh bạ Google",
   "contacts.remove": "Gỡ bỏ",
   "contacts.removeMessage": "Mọi người từ “{name}” sẽ biến mất khỏi ứng dụng này. Không có gì thay đổi trên máy chủ.",
   "contacts.removeTitle": "Gỡ bỏ sổ địa chỉ này?",

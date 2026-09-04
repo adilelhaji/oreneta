@@ -445,6 +445,7 @@
   "contacts.lastSynced": "آخر قراءة: {when}",
   "contacts.neverSynced": "لم تُقرأ بعد",
   "contacts.passwordPlaceholder": "كلمة المرور",
+  "contacts.readGoogle": "قراءة جهات اتصال Google",
   "contacts.remove": "إزالة",
   "contacts.removeMessage": "سيختفي الأشخاص من «{name}» من هذا التطبيق. لا يتغير شيء على الخادم.",
   "contacts.removeTitle": "إزالة دفتر العناوين؟",

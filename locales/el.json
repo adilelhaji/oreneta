@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Τελευταία ανάγνωση: {when}",
   "contacts.neverSynced": "Δεν έχει διαβαστεί ακόμη",
   "contacts.passwordPlaceholder": "Κωδικός",
+  "contacts.readGoogle": "Ανάγνωση επαφών Google",
   "contacts.remove": "Αφαίρεση",
   "contacts.removeMessage": "Τα άτομα από το «{name}» θα εξαφανιστούν από αυτήν την εφαρμογή. Στον διακομιστή δεν αλλάζει τίποτα.",
   "contacts.removeTitle": "Αφαίρεση βιβλίου διευθύνσεων;",

@@ -445,6 +445,7 @@
   "contacts.lastSynced": "上次讀取：{when}",
   "contacts.neverSynced": "尚未讀取",
   "contacts.passwordPlaceholder": "密碼",
+  "contacts.readGoogle": "讀取 Google 聯絡人",
   "contacts.remove": "移除",
   "contacts.removeMessage": "「{name}」中的聯絡人將從此應用程式消失。伺服器上不會有任何改變。",
   "contacts.removeTitle": "移除此通訊錄？",

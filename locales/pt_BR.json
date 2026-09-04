@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Última leitura: {when}",
   "contacts.neverSynced": "Ainda não lido",
   "contacts.passwordPlaceholder": "Senha",
+  "contacts.readGoogle": "Ler os contatos do Google",
   "contacts.remove": "Remover",
   "contacts.removeMessage": "As pessoas de “{name}” desaparecerão deste app. No servidor nada muda.",
   "contacts.removeTitle": "Remover este catálogo?",

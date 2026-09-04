@@ -1249,18 +1249,42 @@ async fn idle_once(
 async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<()> {
     let source = store::contact_source(&engine.db.lock().unwrap(), id)?
         .with_context(|| format!("no such contact source: {id}"))?;
-    let password = meron_core::secrets::load(id)
-        .map(|secrets| secrets.password)
-        .unwrap_or_default();
-    let transport = meron_core::carddav::http::UreqTransport {
-        username: source.username.clone(),
-        password,
+
+    let fetched = match source.kind.as_str() {
+        "carddav" => {
+            let password = meron_core::secrets::load(id)
+                .map(|secrets| secrets.password)
+                .unwrap_or_default();
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: source.username.clone(),
+                password,
+            };
+            let url = source.url.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::carddav::client::fetch_book(&transport, &url)
+            })
+            .await?
+        }
+        // The mail account's own token, refreshed if it had expired. The one
+        // new thing asked of it is the contacts scope; a token from before
+        // that existed is refused by Google and the refusal names the fix.
+        "google" => match engine.ensure_valid_creds(&source.account).await {
+            Ok(creds) if creds.auth_type == "gmail_oauth" => {
+                let token = creds.access_token.clone().unwrap_or_default();
+                if token.is_empty() {
+                    Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
+                } else {
+                    tokio::task::spawn_blocking(move || {
+                        meron_core::contacts::google::fetch_connections(&token)
+                    })
+                    .await?
+                }
+            }
+            Ok(_) => Err(anyhow::anyhow!("not a Google account: {}", source.account)),
+            Err(error) => Err(error),
+        },
+        other => Err(anyhow::anyhow!("unknown contact source kind: {other}")),
     };
-    let url = source.url.clone();
-    let fetched = tokio::task::spawn_blocking(move || {
-        meron_core::carddav::client::fetch_book(&transport, &url)
-    })
-    .await?;
 
     let now = chrono::Utc::now().timestamp();
     let db = engine.db.lock().unwrap();
@@ -1620,6 +1644,35 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             )?;
             let outcome = sync_contact_source(engine, &id).await;
             Ok(json!({ "id": id, "synced": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+        }
+
+        // A Google account's contacts, read with the token the account already
+        // holds. One source per account, so asking twice re-reads rather than
+        // doubling everybody.
+        "google.contacts.sync" => {
+            let account = req_str(p, "account")?;
+            let id = format!("google-{account}");
+            let existing = store::contact_source(&engine.db.lock().unwrap(), &id)?;
+            if existing.is_none() {
+                store::upsert_contact_source(
+                    &engine.db.lock().unwrap(),
+                    &store::ContactSource {
+                        id: id.clone(),
+                        kind: "google".into(),
+                        account: account.clone(),
+                        url: String::new(),
+                        username: String::new(),
+                        name: req_str(p, "name").unwrap_or_default(),
+                        enabled: true,
+                        ctag: String::new(),
+                        last_sync_at: 0,
+                        last_error: String::new(),
+                    },
+                    chrono::Utc::now().timestamp(),
+                )?;
+            }
+            let outcome = sync_contact_source(engine, &id).await;
+            Ok(json!({ "id": id, "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
         }
 
         "carddav.sync" => {

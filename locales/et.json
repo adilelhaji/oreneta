@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Viimati loetud {when}",
   "contacts.neverSynced": "Pole veel loetud",
   "contacts.passwordPlaceholder": "Parool",
+  "contacts.readGoogle": "Loe Google’i kontakte",
   "contacts.remove": "Eemalda",
   "contacts.removeMessage": "Inimesed raamatust „{name}“ kaovad sellest rakendusest. Serveris ei muutu midagi.",
   "contacts.removeTitle": "Eemaldada see aadressiraamat?",

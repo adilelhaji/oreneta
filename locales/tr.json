@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Son okuma: {when}",
   "contacts.neverSynced": "Henüz okunmadı",
   "contacts.passwordPlaceholder": "Parola",
+  "contacts.readGoogle": "Google kişilerini oku",
   "contacts.remove": "Kaldır",
   "contacts.removeMessage": "“{name}” içindeki kişiler bu uygulamadan kaybolur. Sunucuda hiçbir şey değişmez.",
   "contacts.removeTitle": "Bu adres defteri kaldırılsın mı?",

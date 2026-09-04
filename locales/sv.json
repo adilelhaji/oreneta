@@ -445,6 +445,7 @@
   "contacts.lastSynced": "Senast läst {when}",
   "contacts.neverSynced": "Inte läst ännu",
   "contacts.passwordPlaceholder": "Lösenord",
+  "contacts.readGoogle": "Läs Google-kontakter",
   "contacts.remove": "Ta bort",
   "contacts.removeMessage": "Personerna från ”{name}” försvinner från den här appen. Ingenting ändras på servern.",
   "contacts.removeTitle": "Ta bort den här adressboken?",

@@ -8,7 +8,7 @@ import { invoke } from '../lib/bridge'
 
 export type ContactSource = {
   id: string
-  kind: 'carddav'
+  kind: 'carddav' | 'google'
   account: string
   url: string
   username: string
@@ -69,4 +69,20 @@ export async function syncSource(id: string): Promise<string | null> {
 export async function removeSource(id: string) {
   await invoke('carddav.remove', { id })
   await loadContactSources()
+}
+
+/**
+ * Read a Google account's contacts with the token it already holds.
+ *
+ * One source per account: asking again re-reads rather than doubling
+ * everybody. Returns why it failed, or null — and a token from before the
+ * contacts permission existed fails with a sentence that says to reconnect.
+ */
+export async function syncGoogleContacts(accountId: string, name: string): Promise<string | null> {
+  const res = await invoke<{ ok: boolean; error: string | null }>('google.contacts.sync', {
+    account: accountId,
+    name,
+  })
+  await loadContactSources()
+  return res.ok ? null : (res.error ?? 'sync failed')
 }
