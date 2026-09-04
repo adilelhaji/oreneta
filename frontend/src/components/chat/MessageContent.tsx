@@ -113,7 +113,7 @@ export function MessageContent({
 
       {/* Said before the body rather than after it: whether a message can be
           trusted changes how its words should be read. */}
-      <ProtectionNotice protection={message.protection} />
+      <ProtectionNotice message={message} />
 
       <MessageBubbleBody
         message={message}

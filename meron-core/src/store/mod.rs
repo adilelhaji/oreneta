@@ -2300,6 +2300,78 @@ pub fn delete_contact_source(conn: &Connection, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// An OpenPGP certificate the reader has imported, as it was imported.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredCert {
+    pub fingerprint: String,
+    pub user_ids: Vec<String>,
+    pub addresses: Vec<String>,
+    pub added_at: i64,
+    /// The armoured text. Skipped on the wire: the interface shows facts about
+    /// a certificate, and shipping the key material to it serves nothing.
+    #[serde(skip)]
+    pub armoured: String,
+}
+
+fn split_lines(value: &str) -> Vec<String> {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn pgp_certs(conn: &Connection) -> Result<Vec<StoredCert>> {
+    let mut stmt = conn.prepare(
+        "SELECT fingerprint, user_ids, addresses, armoured, added_at
+           FROM pgp_certs ORDER BY added_at, fingerprint",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(StoredCert {
+            fingerprint: row.get(0)?,
+            user_ids: split_lines(&row.get::<_, String>(1)?),
+            addresses: split_lines(&row.get::<_, String>(2)?),
+            armoured: row.get(3)?,
+            added_at: row.get(4)?,
+        })
+    })?;
+    Ok(rows.flatten().collect())
+}
+
+/// Keep a certificate, replacing any earlier copy of the same one.
+///
+/// Same fingerprint means same certificate, so a re-import is an update: a
+/// key that has gained a user ID or a new subkey should replace what is held
+/// rather than sit beside it as a second entry for one person.
+pub fn upsert_pgp_cert(conn: &Connection, cert: &StoredCert, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO pgp_certs(fingerprint, user_ids, addresses, armoured, added_at)
+         VALUES(?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(fingerprint) DO UPDATE SET
+           user_ids = excluded.user_ids,
+           addresses = excluded.addresses,
+           armoured = excluded.armoured",
+        params![
+            cert.fingerprint,
+            cert.user_ids.join("\n"),
+            cert.addresses.join("\n"),
+            cert.armoured,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn delete_pgp_cert(conn: &Connection, fingerprint: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM pgp_certs WHERE fingerprint = ?1",
+        params![fingerprint],
+    )?;
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {

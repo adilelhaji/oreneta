@@ -85,6 +85,7 @@ import { FontSettingsSection } from './FontSettingsSection'
 import { RulesSettingsSection } from './RulesSettingsSection'
 import { TemplatesSettingsSection } from './TemplatesSettingsSection'
 import { ContactSourcesSettingsSection } from './ContactSourcesSettingsSection'
+import { PgpSettingsSection } from './PgpSettingsSection'
 import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
@@ -936,6 +937,7 @@ function GeneralSection() {
       <RulesSettingsSection />
       <TemplatesSettingsSection />
       <ContactSourcesSettingsSection />
+      <PgpSettingsSection />
 
       <SettingsGroup title={t('settings.sections.sideNav')}>
         <ToggleRow

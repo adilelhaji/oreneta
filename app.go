@@ -331,6 +331,14 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.labelsSave(payload)
 	case "labels.assign":
 		return a.labelsAssign(payload)
+	case "pgp.certs":
+		return a.pgpCerts(payload)
+	case "pgp.import":
+		return a.pgpImport(payload)
+	case "pgp.remove":
+		return a.pgpRemove(payload)
+	case "pgp.verify":
+		return a.pgpVerify(payload)
 	case "carddav.discover":
 		return a.carddavDiscover(payload)
 	case "carddav.add":

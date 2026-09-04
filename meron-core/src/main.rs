@@ -1707,6 +1707,79 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true }))
         }
 
+        // OpenPGP certificates the reader has imported. Public certificates
+        // only: what verifying a signature needs. A secret key wants a
+        // passphrase and must not sit in a database somebody could copy, so it
+        // gets its own handling when decryption arrives.
+        "pgp.certs" => {
+            let certs = store::pgp_certs(&engine.db.lock().unwrap())?;
+            Ok(json!({ "certs": certs }))
+        }
+
+        "pgp.import" => {
+            let armoured = req_str(p, "armoured")?;
+            let (_, info) = meron_core::crypto::pgp::read_cert(&armoured)?;
+            let stored = store::StoredCert {
+                fingerprint: info.fingerprint.clone(),
+                user_ids: info.user_ids,
+                addresses: info.addresses,
+                armoured,
+                added_at: 0,
+            };
+            store::upsert_pgp_cert(
+                &engine.db.lock().unwrap(),
+                &stored,
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": info.fingerprint }))
+        }
+
+        "pgp.remove" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_pgp_cert(&engine.db.lock().unwrap(), &fingerprint)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Check one message's signature, when a reader is looking at it.
+        //
+        // On demand rather than on sync: verification needs the message as it
+        // stood on the wire, which means fetching it, and doing that for every
+        // message in a mailbox to answer a question nobody asked would be a
+        // download per message.
+        "pgp.verify" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+
+            let armoured: Vec<String> = store::pgp_certs(&engine.db.lock().unwrap())?
+                .into_iter()
+                .map(|cert| cert.armoured)
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            let certs = meron_core::crypto::pgp::certs_from_armoured(&armoured);
+            match meron_core::crypto::pgp::verify_message(&raw.raw, &certs) {
+                Some(signature) => Ok(serde_json::to_value(signature)?),
+                // Nothing to check. Said as such rather than as a failure: a
+                // message with no signature is not a message whose signature
+                // is bad.
+                None => Ok(json!({ "verdict": "none" })),
+            }
+        }
+
         // People, from whichever books have been brought in. An empty query
         // is the whole book, which is what the Personas view opens on.
         "people.list" => {

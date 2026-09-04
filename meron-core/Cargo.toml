@@ -31,6 +31,10 @@ rusqlite = { version = "0.39.0", features = ["bundled-sqlcipher-vendored-openssl
 async-smtp = { version = "0.10.2", default-features = false, features = ["runtime-tokio"] }
 mail-builder = "0.4.4"
 base64 = "0.22.1"
+# OpenPGP. The pure-Rust crypto backend rather than the default Nettle one:
+# this crate is cross-compiled to windows-msvc, macOS and Android, and a C
+# library per target is a build system nobody wants to maintain.
+sequoia-openpgp = { version = "2", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
 ureq = { version = "3.3.0", features = ["socks-proxy"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 # Forked for the calendar item properties the published crate does not model

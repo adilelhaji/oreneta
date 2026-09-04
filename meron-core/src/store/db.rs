@@ -606,6 +606,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 23 {
         migrate_v23(&tx)?;
     }
+    if version < 24 {
+        migrate_v24(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1050,6 +1053,34 @@ fn migrate_v23(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 23;")?;
+    Ok(())
+}
+
+/// OpenPGP certificates the reader holds.
+///
+/// Public certificates only for now, which is what verifying a signature
+/// needs. A secret key is a different thing with different handling — it wants
+/// a passphrase and it must not sit in a database somebody could copy — and it
+/// gets its own place when decryption arrives.
+///
+/// The armoured text is kept rather than a parsed form: it is what was
+/// imported, it is what can be exported again, and a parser change must not
+/// silently reinterpret what the reader chose to trust.
+///
+/// `addresses` is the addresses of the certificate's user IDs, lower-cased and
+/// newline-separated, so "is this the key for that sender" is a lookup instead
+/// of a parse of every certificate on every message.
+fn migrate_v24(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS pgp_certs (
+           fingerprint TEXT PRIMARY KEY,
+           addresses   TEXT NOT NULL DEFAULT '',
+           user_ids    TEXT NOT NULL DEFAULT '',
+           armoured    TEXT NOT NULL,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 24;")?;
     Ok(())
 }
 
