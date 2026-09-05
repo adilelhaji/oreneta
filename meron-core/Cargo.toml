@@ -57,6 +57,21 @@ ammonia = "4.1.2"
 sha2 = { version = "0.11.0", features = ["oid"] }
 sha1 = { version = "0.11.0", features = ["oid"] }
 pkcs8 = "0.11.0"
+# The reader's own S/MIME identity — a PKCS#12 (.p12/.pfx) file with a
+# password, the shape every mail client and CA hands out a personal
+# certificate as. Same RustCrypto family as cms/x509-cert; earlier pre-release
+# than either (0.2.0-pre.0), which for a file holding the reader's own private
+# key is a real cost weighed and accepted rather than defaulted into — see the
+# module doc for the reasoning already applied to cms itself.
+pkcs12 = { version = "0.2.0-pre.0", features = ["kdf"] }
+aes = "0.9.0-rc.1"
+cbc = "0.2.0-rc.1"
+des = "0.9.0-rc.1"
+rc2 = "0.9.0"
+# Modern PKCS#12 exports (OpenSSL 3.x default) protect each bag with PBES2 +
+# PBKDF2 rather than the legacy RFC 7292 Appendix B KDF above; needed to read
+# those files' certificate and key bags.
+pbkdf2 = { version = "0.13.0", default-features = false, features = ["hmac"] }
 # S/MIME: CMS (RFC 5652) parsing/verification and the X.509 certificates it
 # carries. Pure Rust, like Sequoia's crypto-rust backend for OpenPGP — the
 # same reason applies: this crate cross-compiles to windows-msvc, macOS and
@@ -64,7 +79,7 @@ pkcs8 = "0.11.0"
 # here wants to maintain. `cms` is pre-1.0 (RustCrypto/formats, the same org
 # behind `der`/`x509-cert`/`rsa`/`pkcs8`, not an unknown crate); the API may
 # still move, which is an accepted cost against re-adding a C toolchain.
-cms = "0.3.0-pre.2"
+cms = "=0.3.0-pre.1"
 x509-cert = { version = "0.3.0", features = ["std"] }
 rsa = "0.10.0-rc.1"
 der = "0.8.1"
