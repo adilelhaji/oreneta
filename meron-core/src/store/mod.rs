@@ -2431,6 +2431,56 @@ pub fn delete_pgp_secret_key(conn: &Connection, fingerprint: &str) -> Result<()>
     Ok(())
 }
 
+/// One S/MIME certificate the reader has imported, as it was imported.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredSmimeCert {
+    pub fingerprint: String,
+    pub subject: String,
+    pub addresses: Vec<String>,
+    pub added_at: i64,
+    /// The DER bytes. Skipped on the wire, like OpenPGP's armoured text: the
+    /// interface shows facts about a certificate, not the certificate itself.
+    #[serde(skip)]
+    pub der: Vec<u8>,
+}
+
+pub fn smime_certs(conn: &Connection) -> Result<Vec<StoredSmimeCert>> {
+    let mut stmt = conn.prepare(
+        "SELECT fingerprint, subject, addresses, der, added_at
+           FROM smime_certs ORDER BY added_at, fingerprint",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(StoredSmimeCert {
+            fingerprint: row.get(0)?,
+            subject: row.get(1)?,
+            addresses: split_lines(&row.get::<_, String>(2)?),
+            der: row.get(3)?,
+            added_at: row.get(4)?,
+        })
+    })?;
+    Ok(rows.flatten().collect())
+}
+
+/// Keep a certificate, replacing any earlier copy with the same fingerprint.
+pub fn upsert_smime_cert(conn: &Connection, cert: &StoredSmimeCert, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO smime_certs(fingerprint, subject, addresses, der, added_at)
+         VALUES(?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(fingerprint) DO UPDATE SET
+           subject = excluded.subject,
+           addresses = excluded.addresses,
+           der = excluded.der",
+        params![cert.fingerprint, cert.subject, cert.addresses.join("\n"), cert.der, now],
+    )?;
+    Ok(())
+}
+
+pub fn delete_smime_cert(conn: &Connection, fingerprint: &str) -> Result<()> {
+    conn.execute("DELETE FROM smime_certs WHERE fingerprint = ?1", params![fingerprint])?;
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {

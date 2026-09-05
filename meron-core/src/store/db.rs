@@ -612,6 +612,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 25 {
         migrate_v25(&tx)?;
     }
+    if version < 26 {
+        migrate_v26(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1110,6 +1113,28 @@ fn migrate_v25(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 25;")?;
+    Ok(())
+}
+
+/// S/MIME certificates the reader has imported — the trust store OpenPGP's
+/// `pgp_certs` already has an equivalent of, for the same reason: this app
+/// does not build a chain to a root CA, it holds the specific certificates
+/// the reader has chosen to vouch for. See `crypto::smime` for why.
+///
+/// The DER encoding is the identity here (an S/MIME certificate has no
+/// concept of "armoured text" the way a PGP key does), so `der` is what is
+/// kept and re-parsed, not a text form.
+fn migrate_v26(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS smime_certs (
+           fingerprint TEXT PRIMARY KEY,
+           subject     TEXT NOT NULL DEFAULT '',
+           addresses   TEXT NOT NULL DEFAULT '',
+           der         BLOB NOT NULL,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 26;")?;
     Ok(())
 }
 

@@ -3,9 +3,12 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import { ProtectionNotice } from './ProtectionNotice'
 import type { Message } from '../../types'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  delete (window as any).go
+})
 
-function message(protection?: string): Message {
+function message(protection?: string, over: Partial<Message> = {}): Message {
   return {
     id: 'acct#INBOX#42',
     account_id: '',
@@ -22,7 +25,20 @@ function message(protection?: string): Message {
     starred: false,
     has_attachments: false,
     protection,
+    ...over,
   } as Message
+}
+
+/** A message with somewhere to actually fetch the verdict from. */
+function checkable(protection: string): Message {
+  return message(protection, { account_id: 'acct', folder_id: 'INBOX' })
+}
+
+/** Stub the bridge call the notice's verify dispatch makes. */
+function stubVerify(command: 'pgp.verify' | 'smime.verify', result: unknown) {
+  ;(window as any).go = {
+    main: { App: { Invoke: async (called: string) => (called === command ? result : {}) } },
+  }
 }
 
 describe('what a message says was done to it', () => {
@@ -49,11 +65,14 @@ describe('what a message says was done to it', () => {
   })
 
   it('calls an unchecked signature a claim rather than a fact', () => {
-    // Before any verdict arrives — and for S/MIME, which cannot be checked
-    // yet at all — the honest word is "claims".
-    const view = render(<ProtectionNotice message={message('smimeSigned')} />)
-    expect(view.container.textContent).toContain('claims a signature')
-    expect(view.container.textContent).not.toContain('Verified')
+    // Before any verdict arrives, the honest word is "claims" — true for
+    // every signed shape, PGP or S/MIME, detached or opaque.
+    for (const kind of ['pgpSigned', 'smimeSigned', 'smimeOpaqueSigned']) {
+      const view = render(<ProtectionNotice message={message(kind)} />)
+      expect(view.container.textContent).toContain('claims a signature')
+      expect(view.container.textContent).not.toContain('Verified')
+      cleanup()
+    }
   })
 
   it('does not go asking about a message with no account behind it', async () => {
@@ -62,5 +81,43 @@ describe('what a message says was done to it', () => {
     const view = render(<ProtectionNotice message={message('pgpSigned')} />)
     await waitFor(() => expect(view.container.textContent).toContain('claims a signature'))
     expect(view.container.textContent).toContain('has not checked it yet')
+  })
+
+  it('asks the S/MIME verifier for an S/MIME message, not the OpenPGP one', async () => {
+    stubVerify('smime.verify', { verdict: 'good', fingerprint: 'AB', addresses: ['ana@example.com'] })
+    const view = render(<ProtectionNotice message={checkable('smimeSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('Signed by'))
+  })
+
+  it('reads Outlook-style opaque signing through the same verifier as detached', async () => {
+    stubVerify('smime.verify', { verdict: 'good', fingerprint: 'AB', addresses: ['ana@example.com'] })
+    const view = render(<ProtectionNotice message={checkable('smimeOpaqueSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('Signed by'))
+  })
+
+  it('names the fifth verdict as its own thing, not good and not no-key', async () => {
+    // The whole reason S/MIME needed a fifth verdict: the cryptography is
+    // real, and nobody vouched for the certificate that made it.
+    stubVerify('smime.verify', { verdict: 'validUntrusted', fingerprint: 'AB', addresses: ['ana@hospital.cat'] })
+    const view = render(<ProtectionNotice message={checkable('smimeOpaqueSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('not one you have confirmed'))
+    expect(view.container.textContent).not.toContain('Verified')
+  })
+
+  it('treats a wrong signer as an alarm whether or not the certificate is trusted', async () => {
+    stubVerify('smime.verify', {
+      verdict: 'validUntrusted',
+      fingerprint: 'AB',
+      addresses: ['marc@example.com'],
+      matchesSender: false,
+    })
+    const view = render(<ProtectionNotice message={checkable('smimeOpaqueSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('Valid signature, but from somebody else'))
+  })
+
+  it('reports a bad S/MIME signature as tampered, not as unknown', async () => {
+    stubVerify('smime.verify', { verdict: 'bad' })
+    const view = render(<ProtectionNotice message={checkable('smimeSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('Signature does not check out'))
   })
 })

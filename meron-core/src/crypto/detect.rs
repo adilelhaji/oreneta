@@ -9,6 +9,7 @@
 //! Structure only. Nothing here says a signature is *good*: that needs keys
 //! and is decided elsewhere. What this answers is what kind of thing arrived.
 
+use der::Decode;
 use mailparse::ParsedMail;
 
 /// What protection a message carries, as its structure declares it.
@@ -23,11 +24,17 @@ pub enum Protection {
     /// An OpenPGP block sitting in the text itself, the way mail was armoured
     /// before there was a MIME type for it. Still common, still readable.
     PgpInline,
-    /// S/MIME: `application/pkcs7-mime`, which carries encrypted content and,
-    /// in one of its forms, a signature wrapped around plain content.
+    /// S/MIME: `application/pkcs7-mime; smime-type=enveloped-data` (or
+    /// `authEnveloped-data`). Encrypted; needs decrypting, not verifying.
     SmimeEnveloped,
-    /// S/MIME: `multipart/signed` with a PKCS#7 signature part.
+    /// S/MIME: `multipart/signed` with a PKCS#7 signature part — the content
+    /// sits in the clear beside a detached signature over it.
     SmimeSigned,
+    /// S/MIME: `application/pkcs7-mime; smime-type=signed-data` — "opaque"
+    /// signing. The message *is* the CMS structure; the content is inside it,
+    /// not beside it. Outlook signs this way by default, so this shape is not
+    /// the rare one. Needs verifying, not decrypting: nothing here is secret.
+    SmimeOpaqueSigned,
 }
 
 impl Protection {
@@ -39,6 +46,10 @@ impl Protection {
         )
     }
 
+    /// Whether it needs verifying rather than decrypting — the two S/MIME
+    /// shapes that carry a plaintext, one beside the signature and one wrapped
+    /// with it, plus everything OpenPGP already put under `claims_signature`.
+
     /// Whether the message claims to be signed.
     ///
     /// A claim, not a verdict. Whether the signature is any good is a
@@ -46,7 +57,10 @@ impl Protection {
     pub fn claims_signature(self) -> bool {
         matches!(
             self,
-            Protection::PgpSigned | Protection::SmimeSigned | Protection::PgpInline
+            Protection::PgpSigned
+                | Protection::SmimeSigned
+                | Protection::SmimeOpaqueSigned
+                | Protection::PgpInline
         )
     }
 
@@ -59,18 +73,50 @@ impl Protection {
             Protection::PgpInline => "pgpInline",
             Protection::SmimeEnveloped => "smimeEnveloped",
             Protection::SmimeSigned => "smimeSigned",
+            Protection::SmimeOpaqueSigned => "smimeOpaqueSigned",
         }
     }
 }
 
 /// The `protocol` parameter of a multipart, lower-cased.
 fn protocol_of(part: &ParsedMail) -> String {
+    param_of(part, "protocol")
+}
+
+/// The `smime-type` parameter of a part, lower-cased. Absent on plenty of real
+/// mail — RFC 8551 says it SHOULD be present, not that it always is.
+fn smime_type_of(part: &ParsedMail) -> String {
+    param_of(part, "smime-type")
+}
+
+fn param_of(part: &ParsedMail, name: &str) -> String {
     part.ctype
         .params
         .iter()
-        .find(|(key, _)| key.eq_ignore_ascii_case("protocol"))
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
         .map(|(_, value)| value.trim().trim_matches('"').to_ascii_lowercase())
         .unwrap_or_default()
+}
+
+/// The CMS `ContentType` OID inside a `pkcs7-mime` part's body, for the rare
+/// message that omits `smime-type`. Cheap on purpose: this reads only the
+/// outer `SEQUENCE`'s content-type field, not the (possibly large) payload
+/// inside it, so a message this does not even apply to costs almost nothing.
+///
+/// `"1.2.840.113549.1.7.2"` is signed-data, `"...1.7.3"` is enveloped-data,
+/// `"...1.7.23"` is authenticated-enveloped-data. Anything else, or a body
+/// this cannot even parse as CMS, comes back empty rather than guessed at.
+fn cms_content_type_oid(part: &ParsedMail) -> String {
+    let Ok(body) = part.get_body_raw() else {
+        return String::new();
+    };
+    // The body is base64 inside the message; mailparse already decoded the
+    // transfer encoding via get_body_raw for a base64 part, but a part with no
+    // declared encoding hands back raw bytes verbatim, which parses the same.
+    let Ok(content_info) = cms::content_info::ContentInfo::from_der(&body) else {
+        return String::new();
+    };
+    content_info.content_type.to_string()
 }
 
 /// Whether a part's own type is one of the given, ignoring case.
@@ -115,7 +161,19 @@ pub fn protection_of(part: &ParsedMail) -> Protection {
         }
     }
     if is_type(part, &["application/pkcs7-mime", "application/x-pkcs7-mime"]) {
-        return Protection::SmimeEnveloped;
+        match smime_type_of(part).as_str() {
+            "signed-data" => return Protection::SmimeOpaqueSigned,
+            "enveloped-data" | "authenveloped-data" => return Protection::SmimeEnveloped,
+            // No hint in the MIME parameters; ask the CMS structure itself
+            // rather than assume the more common shape.
+            _ => match cms_content_type_oid(part).as_str() {
+                "1.2.840.113549.1.7.2" => return Protection::SmimeOpaqueSigned,
+                "1.2.840.113549.1.7.3" | "1.2.840.113549.1.9.16.1.23" => {
+                    return Protection::SmimeEnveloped
+                }
+                _ => {}
+            },
+        }
     }
 
     // A body armoured in the text itself, with no MIME to announce it.

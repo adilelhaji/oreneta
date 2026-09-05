@@ -1877,6 +1877,76 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
         }
 
+        // S/MIME certificates the reader has imported. The same trust model
+        // as OpenPGP's: held, or not — no chain to a root CA. See
+        // `crypto::smime` for why, and `pgp.certs` for the parallel.
+        "smime.certs" => {
+            let certs = store::smime_certs(&engine.db.lock().unwrap())?;
+            Ok(json!({ "certs": certs }))
+        }
+
+        "smime.import" => {
+            let armoured = req_str(p, "der")?;
+            let der = {
+                use base64::Engine as _;
+                base64::engine::general_purpose::STANDARD.decode(armoured.trim())
+            }
+            .context("that is not base64")?;
+            let (_, info) = meron_core::crypto::smime::read_cert(&der)?;
+            let stored = store::StoredSmimeCert {
+                fingerprint: info.fingerprint.clone(),
+                subject: info.subject,
+                addresses: info.addresses,
+                der,
+                added_at: 0,
+            };
+            store::upsert_smime_cert(
+                &engine.db.lock().unwrap(),
+                &stored,
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": info.fingerprint }))
+        }
+
+        "smime.remove" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_smime_cert(&engine.db.lock().unwrap(), &fingerprint)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Check one message's S/MIME signature, on demand — same reasoning
+        // as `pgp.verify`: it needs the message as it stood on the wire.
+        "smime.verify" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+
+            let held_der: Vec<Vec<u8>> = store::smime_certs(&engine.db.lock().unwrap())?
+                .into_iter()
+                .map(|cert| cert.der)
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            let held = meron_core::crypto::smime::certs_from_der(&held_der);
+            match meron_core::crypto::smime::verify_message(&raw.raw, &held) {
+                Some(signature) => Ok(serde_json::to_value(signature)?),
+                None => Ok(json!({ "verdict": "none" })),
+            }
+        }
+
         // People, from whichever books have been brought in. An empty query
         // is the whole book, which is what the Personas view opens on.
         "people.list" => {

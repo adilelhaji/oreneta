@@ -54,7 +54,20 @@ feed-rs = "2.3.1"
 quick-xml = "0.37.5"
 scraper = "0.27.0"
 ammonia = "4.1.2"
-sha2 = "0.11.0"
+sha2 = { version = "0.11.0", features = ["oid"] }
+sha1 = { version = "0.11.0", features = ["oid"] }
+pkcs8 = "0.11.0"
+# S/MIME: CMS (RFC 5652) parsing/verification and the X.509 certificates it
+# carries. Pure Rust, like Sequoia's crypto-rust backend for OpenPGP — the
+# same reason applies: this crate cross-compiles to windows-msvc, macOS and
+# Android, and a C library (OpenSSL) per target is not a build system anyone
+# here wants to maintain. `cms` is pre-1.0 (RustCrypto/formats, the same org
+# behind `der`/`x509-cert`/`rsa`/`pkcs8`, not an unknown crate); the API may
+# still move, which is an accepted cost against re-adding a C toolchain.
+cms = "0.3.0-pre.2"
+x509-cert = { version = "0.3.0", features = ["std"] }
+rsa = "0.10.0-rc.1"
+der = "0.8.1"
 chrono = "0.4.44"
 url = "2.5.8"
 uuid = { version = "1.23.1", features = ["v4"] }

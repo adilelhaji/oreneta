@@ -345,6 +345,14 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.pgpRemoveSecret(payload)
 	case "pgp.decrypt":
 		return a.pgpDecrypt(payload)
+	case "smime.certs":
+		return a.smimeCerts(payload)
+	case "smime.import":
+		return a.smimeImport(payload)
+	case "smime.remove":
+		return a.smimeRemove(payload)
+	case "smime.verify":
+		return a.smimeVerify(payload)
 	case "pgp.verify":
 		return a.pgpVerify(payload)
 	case "carddav.discover":

@@ -37,3 +37,18 @@ export async function pickImageFiles(title = 'Choose images'): Promise<File[]> {
   if (!('files' in res)) return []
   return Promise.all(res.files.map(pickedToFile))
 }
+
+/**
+ * Pick one file and return its bytes as bare base64 — no `data:` prefix, no
+ * intermediate `File`. For a caller that wants the bytes themselves (a
+ * certificate to import) rather than something to attach, decoding into a
+ * `File` and then reading it back out would be a round trip for nothing: the
+ * native picker already hands back base64.
+ */
+export async function pickFileAsBase64(title: string): Promise<{ name: string; base64: string } | null> {
+  const res = await invoke<{ files: PickedFile[] } | { cancelled: true }>('system.pickFiles', { title })
+  if (!('files' in res) || res.files.length === 0) return null
+  const picked = res.files[0]
+  const comma = picked.data.indexOf(',')
+  return { name: picked.name, base64: comma >= 0 ? picked.data.slice(comma + 1) : picked.data }
+}

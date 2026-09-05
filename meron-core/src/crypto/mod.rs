@@ -3,6 +3,7 @@
 pub mod detect;
 pub mod mime;
 pub mod pgp;
+pub mod smime;
 
 #[cfg(test)]
 mod detect_tests;
@@ -10,3 +11,5 @@ mod detect_tests;
 mod mime_tests;
 #[cfg(test)]
 mod pgp_tests;
+#[cfg(test)]
+mod smime_tests;

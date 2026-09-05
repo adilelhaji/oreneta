@@ -63,12 +63,51 @@ fn a_multipart_signed_without_a_protocol_is_read_from_its_parts() {
     assert_eq!(protection(&bare), Protection::PgpSigned);
 }
 
+const SMIME_OPAQUE_SIGNED_BODY: &str = "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\r
+/ttJuoeqzAzL/25A\r\n";
+
 #[test]
-fn recognises_smime_in_both_of_its_shapes() {
+fn recognises_smime_enveloped_data() {
     let enveloped = "Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name=smime.p7m\r\n\r\nMIIB\r\n";
     assert_eq!(protection(enveloped), Protection::SmimeEnveloped);
     assert!(protection(enveloped).is_encrypted());
+    assert!(!protection(enveloped).claims_signature());
+}
 
+#[test]
+fn recognises_smime_detached_signed_data() {
     let signed = "Content-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; boundary=b\r
 \r
 --b\r
@@ -82,7 +121,52 @@ MIIB\r
 --b--\r
 ";
     assert_eq!(protection(signed), Protection::SmimeSigned);
+    assert!(!protection(signed).is_encrypted());
     assert!(protection(signed).claims_signature());
+}
+
+/// Outlook's default: the message *is* the CMS structure, content included.
+/// Nothing is encrypted here — there is a plaintext, just inside the
+/// structure rather than beside it — so this must read as claiming a
+/// signature and nothing more, not as something to decrypt.
+#[test]
+fn recognises_smime_opaque_signed_data_by_its_mime_parameter() {
+    let opaque = format!(
+        "Content-Type: application/pkcs7-mime; smime-type=signed-data; name=smime.p7m\r\nContent-Transfer-Encoding: base64\r\n\r\n{SMIME_OPAQUE_SIGNED_BODY}"
+    );
+    assert_eq!(protection(&opaque), Protection::SmimeOpaqueSigned);
+    assert!(!protection(&opaque).is_encrypted());
+    assert!(protection(&opaque).claims_signature());
+}
+
+/// The same real message, but as it plenty of real mail actually arrives:
+/// with no `smime-type` parameter at all. Told apart from enveloped-data by
+/// peeking at the CMS structure's own ContentType OID rather than guessed at.
+#[test]
+fn recognises_smime_opaque_signed_data_with_no_mime_hint_at_all() {
+    let opaque = format!(
+        "Content-Type: application/pkcs7-mime; name=smime.p7m\r\nContent-Transfer-Encoding: base64\r\n\r\n{SMIME_OPAQUE_SIGNED_BODY}"
+    );
+    assert_eq!(protection(&opaque), Protection::SmimeOpaqueSigned);
+}
+
+/// The Microsoft `x-` spelling of the MIME type carries the OID-fallback path
+/// too, not just the parameter-present one.
+#[test]
+fn the_oid_fallback_also_recognises_the_microsoft_spelling() {
+    let opaque = format!(
+        "Content-Type: application/x-pkcs7-mime; name=smime.p7m\r\nContent-Transfer-Encoding: base64\r\n\r\n{SMIME_OPAQUE_SIGNED_BODY}"
+    );
+    assert_eq!(protection(&opaque), Protection::SmimeOpaqueSigned);
+}
+
+/// A `pkcs7-mime` part whose body is not CMS at all — a stray attachment
+/// that happened to be typed that way — must not be forced into either
+/// shape. Neither parameter nor OID gives an answer, so there is none.
+#[test]
+fn a_pkcs7_mime_part_with_an_unreadable_body_claims_no_protection() {
+    let junk = "Content-Type: application/pkcs7-mime; name=smime.p7m\r\n\r\nnot base64 CMS at all\r\n";
+    assert_eq!(protection(junk), Protection::None);
 }
 
 #[test]
@@ -177,6 +261,7 @@ fn every_protection_has_a_word_and_they_are_all_different() {
         Protection::PgpInline,
         Protection::SmimeEnveloped,
         Protection::SmimeSigned,
+        Protection::SmimeOpaqueSigned,
     ];
     let words: Vec<&str> = all.iter().map(|p| p.as_str()).collect();
     let mut unique = words.clone();

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { KeyRound, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
-import { decryptMessage, verifyMessage, type DecryptResult, type SignatureResult } from '../../states/pgp'
+import { decryptMessage, verifyMessage, type DecryptResult } from '../../states/pgp'
+import { verifySmimeMessage } from '../../states/smime'
+import type { SignatureResult } from '../../states/signatureVerdict'
 import type { Message } from '../../types'
 import { Notice } from '../notice/Notice'
 
@@ -32,18 +34,28 @@ export function ProtectionNotice({ message }: { message: Message }) {
   const [busy, setBusy] = useState(false)
 
   const claimsSignature =
-    protection === 'pgpSigned' || protection === 'smimeSigned' || protection === 'pgpInline'
-  // S/MIME is not checked yet, so asking would be a round trip for an answer
-  // that cannot come. Its claim stands as a claim until it can be checked.
-  const canCheck = protection === 'pgpSigned'
+    protection === 'pgpSigned' ||
+    protection === 'pgpInline' ||
+    protection === 'smimeSigned' ||
+    protection === 'smimeOpaqueSigned'
+  // Both PGP shapes go through the OpenPGP verifier; both S/MIME shapes
+  // (detached and Outlook's opaque default) go through the same S/MIME one —
+  // the shape only changes which bytes get fetched, not which cryptography
+  // checks them.
+  const verify =
+    protection === 'pgpSigned'
+      ? verifyMessage
+      : protection === 'smimeSigned' || protection === 'smimeOpaqueSigned'
+        ? verifySmimeMessage
+        : null
 
   useEffect(() => {
     setResult(null)
-    if (!canCheck || !message.account_id || !message.folder_id) return
+    if (!verify || !message.account_id || !message.folder_id) return
     const uid = Number(message.id.split('#').pop())
     if (!Number.isFinite(uid) || uid <= 0) return
     let live = true
-    void verifyMessage(message.account_id, message.folder_id, uid)
+    void verify(message.account_id, message.folder_id, uid)
       .then((answer) => {
         if (live) setResult(answer)
       })
@@ -53,7 +65,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
     return () => {
       live = false
     }
-  }, [message.id, message.account_id, message.folder_id, canCheck])
+  }, [message.id, message.account_id, message.folder_id, verify])
 
   if (!protection || protection === 'none') return null
 
@@ -150,9 +162,13 @@ export function ProtectionNotice({ message }: { message: Message }) {
 
   if (!claimsSignature) return null
 
-  // Good, but signed by somebody other than the sender: worth more alarm than
-  // an unchecked signature, not less.
-  if (result?.verdict === 'good' && result.matchesSender === false) {
+  // Checked out, but signed by somebody other than the sender: worth more
+  // alarm than an unchecked signature, not less — true whether or not the
+  // certificate that did it is one already trusted.
+  if (
+    (result?.verdict === 'good' || result?.verdict === 'validUntrusted') &&
+    result.matchesSender === false
+  ) {
     return (
       <Notice tone="danger" className="mb-2" title={t('crypto.wrongSignerTitle')}>
         <span className="flex items-start gap-1.5">
@@ -169,6 +185,21 @@ export function ProtectionNotice({ message }: { message: Message }) {
         <span className="flex items-start gap-1.5">
           <ShieldCheck size={13} className="mt-0.5 shrink-0" />
           <span>{t('crypto.verifiedText', { signer: result.addresses[0] ?? '' })}</span>
+        </span>
+      </Notice>
+    )
+  }
+
+  // S/MIME only: the signature is cryptographically real, made with the
+  // certificate the message itself carries — and that certificate is not one
+  // this reader has chosen to trust. Neither "good" (nobody vouched for it)
+  // nor "no key" (something here was genuinely checked) fits.
+  if (result?.verdict === 'validUntrusted') {
+    return (
+      <Notice tone="warning" className="mb-2" title={t('crypto.validUntrustedTitle')}>
+        <span className="flex items-start gap-1.5">
+          <ShieldQuestion size={13} className="mt-0.5 shrink-0" />
+          <span>{t('crypto.validUntrustedText', { signer: result.addresses[0] ?? '' })}</span>
         </span>
       </Notice>
     )

@@ -7,29 +7,15 @@
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 
+export type { SignatureResult } from './signatureVerdict'
+import type { SignatureResult } from './signatureVerdict'
+
 export type PgpCert = {
   fingerprint: string
   userIds: string[]
   addresses: string[]
   addedAt: number
 }
-
-/**
- * What checking a message's signature concluded.
- *
- * Four answers, and they are genuinely different. `good` checked out against a
- * certificate held here. `bad` means a held certificate was used and it did
- * not check out. `noKey` means there is nothing here to check it with — a
- * statement about this app, not about the message. `malformed` means it was
- * not a signature this can read. Collapsing `noKey` into either of the first
- * two is the mistake that makes the feature worse than not having it.
- */
-export type SignatureResult =
-  | { verdict: 'none' }
-  | { verdict: 'good'; fingerprint: string; addresses: string[]; matchesSender?: boolean }
-  | { verdict: 'bad'; matchesSender?: boolean }
-  | { verdict: 'noKey'; matchesSender?: boolean }
-  | { verdict: 'malformed'; matchesSender?: boolean }
 
 export const pgp$ = observable({
   certs: [] as PgpCert[],

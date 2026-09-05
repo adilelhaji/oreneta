@@ -656,7 +656,7 @@ fn known_limitation_gnupg_protected_curve25519_secrets_do_not_unlock_here() {
     let policy = StandardPolicy::new();
     let mut failed = 0;
     for ka in cert.keys().secret().with_policy(&policy, None) {
-        let mut key = ka.key().clone();
+        let key = ka.key().clone();
         let outcome = key.decrypt_secret(&sequoia_openpgp::crypto::Password::from("hunter2"));
         if outcome.is_err() {
             failed += 1;
