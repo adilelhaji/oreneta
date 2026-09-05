@@ -1,5 +1,6 @@
 //! Mail that was signed or encrypted.
 
+mod block_cipher;
 pub mod detect;
 pub mod mime;
 pub mod pgp;

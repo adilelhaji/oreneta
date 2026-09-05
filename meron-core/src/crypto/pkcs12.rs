@@ -23,7 +23,7 @@
 
 use aes::cipher::array::Array;
 use aes::cipher::block_padding::Pkcs7;
-use aes::cipher::{BlockModeDecrypt, InnerIvInit, KeyInit, KeyIvInit};
+use aes::cipher::{BlockModeDecrypt, InnerIvInit, KeyInit};
 use cms::content_info::ContentInfo as CmsContentInfo;
 use cms::encrypted_data::EncryptedData;
 use der::asn1::{AnyRef, OctetString};
@@ -279,13 +279,7 @@ fn decrypt_legacy_tdes(alg: &AlgorithmIdentifierOwned, password: &str, ciphertex
         .map_err(malformed("deriving the 3DES key"))?;
     let iv = derive_key_utf8::<Sha1>(password, salt, Pkcs12KeyType::Iv, params.iterations, 8)
         .map_err(malformed("deriving the 3DES IV"))?;
-    let decryptor = cbc::Decryptor::<des::TdesEde3>::new_from_slices(&key, &iv)
-        .map_err(|_| OpenFailure::Malformed("bad 3DES key/IV length".into()))?;
-    let mut buf = ciphertext.to_vec();
-    decryptor
-        .decrypt_padded::<Pkcs7>(&mut buf)
-        .map(<[u8]>::to_vec)
-        .map_err(|_| OpenFailure::WrongPassword)
+    super::block_cipher::tdes_cbc_decrypt(&key, &iv, ciphertext).map_err(|_| OpenFailure::WrongPassword)
 }
 
 fn decrypt_legacy_rc2(
@@ -356,21 +350,5 @@ fn decrypt_pbes2(alg: &AlgorithmIdentifierOwned, password: &str, ciphertext: &[u
         .map_err(|error: der::Error| OpenFailure::Malformed(format!("bad AES-CBC IV: {error}")))?;
     let iv = iv_octets.as_bytes();
 
-    let mut buf = ciphertext.to_vec();
-    let plain = match key_len {
-        16 => cbc::Decryptor::<aes::Aes128>::new_from_slices(&key, iv)
-            .map_err(|_| OpenFailure::Malformed("bad AES-128 key/IV length".into()))?
-            .decrypt_padded::<Pkcs7>(&mut buf)
-            .map(<[u8]>::to_vec),
-        24 => cbc::Decryptor::<aes::Aes192>::new_from_slices(&key, iv)
-            .map_err(|_| OpenFailure::Malformed("bad AES-192 key/IV length".into()))?
-            .decrypt_padded::<Pkcs7>(&mut buf)
-            .map(<[u8]>::to_vec),
-        32 => cbc::Decryptor::<aes::Aes256>::new_from_slices(&key, iv)
-            .map_err(|_| OpenFailure::Malformed("bad AES-256 key/IV length".into()))?
-            .decrypt_padded::<Pkcs7>(&mut buf)
-            .map(<[u8]>::to_vec),
-        _ => unreachable!("key_len was matched to exactly these three values above"),
-    };
-    plain.map_err(|_| OpenFailure::WrongPassword)
+    super::block_cipher::aes_cbc_decrypt(&key, iv, ciphertext).map_err(|_| OpenFailure::WrongPassword)
 }

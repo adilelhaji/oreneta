@@ -31,7 +31,7 @@ use cms::signed_data::{SignedData, SignerIdentifier, SignerInfo};
 use der::asn1::OctetString;
 use der::{Decode, Encode};
 use rsa::pkcs1v15::Pkcs1v15Sign;
-use rsa::RsaPublicKey;
+use rsa::{Pkcs1v15Encrypt, RsaPublicKey};
 use serde::Serialize;
 use sha2::Digest as _;
 use x509_cert::ext::pkix::SubjectAltName;
@@ -544,4 +544,139 @@ fn find_opaque_signed_part<'a>(part: &'a mailparse::ParsedMail<'a>) -> Option<&'
 /// unreadable stored certificate must not silence every other check.
 pub fn certs_from_der(stored: &[Vec<u8>]) -> Vec<Certificate> {
     stored.iter().filter_map(|der| Certificate::from_der(der).ok()).collect()
+}
+
+/// Why an encrypted message could not be opened.
+///
+/// Two, not OpenPGP's three: there is no passphrase step here distinct from
+/// having the key at all — [`super::pkcs12::Identity`] arrives already
+/// unlocked (the PKCS#12 password was spent importing it, not re-asked per
+/// message), so nothing between "no key" and "malformed" needs a name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "reason")]
+pub enum DecryptionFailure {
+    /// Not encrypted to the identity this reader holds.
+    NoKey,
+    /// Not readable as CMS `EnvelopedData`, or protected with something this
+    /// does not implement yet (RSAES-OAEP key transport, a content cipher
+    /// other than AES-CBC/3DES-CBC).
+    Malformed,
+}
+
+/// `1.2.840.113549.1.7.3`: `id-envelopedData`.
+const OID_ENVELOPED_DATA: &str = "1.2.840.113549.1.7.3";
+/// `1.2.840.113549.3.7`: `des-EDE3-CBC`, the classic (non-AES) content
+/// cipher some enveloped mail still uses.
+const OID_DES_EDE3_CBC: &str = "1.2.840.113549.3.7";
+/// AES-CBC content-encryption OIDs.
+const OID_AES128_CBC: &str = "2.16.840.1.101.3.4.1.2";
+const OID_AES192_CBC: &str = "2.16.840.1.101.3.4.1.22";
+const OID_AES256_CBC: &str = "2.16.840.1.101.3.4.1.42";
+
+/// Whether a `RecipientIdentifier` names this certificate — the same
+/// question [`identifies`] answers for a signer, asked of a recipient
+/// instead. The two CMS `CHOICE` types happen to have the same shape, but
+/// are distinct Rust types, so this is not simply a call to the other.
+fn identifies_recipient(rid: &cms::enveloped_data::RecipientIdentifier, cert: &Certificate) -> bool {
+    use cms::enveloped_data::RecipientIdentifier;
+    match rid {
+        RecipientIdentifier::IssuerAndSerialNumber(isn) => {
+            isn.serial_number == *cert.tbs_certificate().serial_number()
+                && isn.issuer == *cert.tbs_certificate().issuer()
+        }
+        RecipientIdentifier::SubjectKeyIdentifier(ski) => {
+            matches!(
+                cert.tbs_certificate().get_extension::<x509_cert::ext::pkix::SubjectKeyIdentifier>(),
+                Ok(Some((_, cert_ski))) if cert_ski == *ski
+            )
+        }
+    }
+}
+
+/// Decrypt CMS `EnvelopedData` addressed to `identity`'s certificate.
+///
+/// Only RSAES-PKCS1-v1.5 key transport is unwrapped — the shape every real
+/// S/MIME sender this was tested against actually uses — and only
+/// AES-CBC/3DES-CBC content ciphers; RSAES-OAEP or anything else is reported
+/// as [`DecryptionFailure::Malformed`] rather than guessed at.
+pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> Result<Vec<u8>, DecryptionFailure> {
+    let content_info = ContentInfo::from_der(cms_der).map_err(|_| DecryptionFailure::Malformed)?;
+    if content_info.content_type.to_string() != OID_ENVELOPED_DATA {
+        return Err(DecryptionFailure::Malformed);
+    }
+    let enveloped: cms::enveloped_data::EnvelopedData =
+        content_info.content.decode_as().map_err(|_| DecryptionFailure::Malformed)?;
+
+    let mut content_key = None;
+    for recipient in enveloped.recip_infos.0.iter() {
+        let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient else { continue };
+        if !identifies_recipient(&ktri.rid, &identity.certificate) {
+            continue;
+        }
+        if ktri.key_enc_alg.oid.to_string() != OID_RSA_ENCRYPTION {
+            continue;
+        }
+        if let Ok(key) = identity.private_key.decrypt(Pkcs1v15Encrypt, ktri.enc_key.as_bytes()) {
+            content_key = Some(key);
+            break;
+        }
+    }
+    let content_key = content_key.ok_or(DecryptionFailure::NoKey)?;
+
+    let enc_info = &enveloped.encrypted_content;
+    let ciphertext = enc_info
+        .encrypted_content
+        .as_ref()
+        .ok_or(DecryptionFailure::Malformed)?
+        .as_bytes();
+    let iv: OctetString = enc_info
+        .content_enc_alg
+        .parameters
+        .clone()
+        .ok_or(DecryptionFailure::Malformed)?
+        .decode_as()
+        .map_err(|_: der::Error| DecryptionFailure::Malformed)?;
+
+    match enc_info.content_enc_alg.oid.to_string().as_str() {
+        OID_AES128_CBC | OID_AES192_CBC | OID_AES256_CBC => {
+            super::block_cipher::aes_cbc_decrypt(&content_key, iv.as_bytes(), ciphertext)
+                .map_err(|_| DecryptionFailure::Malformed)
+        }
+        OID_DES_EDE3_CBC => super::block_cipher::tdes_cbc_decrypt(&content_key, iv.as_bytes(), ciphertext)
+            .map_err(|_| DecryptionFailure::Malformed),
+        _ => Err(DecryptionFailure::Malformed),
+    }
+}
+
+/// An encrypted S/MIME message, opened. No signature field: unlike OpenPGP,
+/// where sign-then-encrypt is one packet sequence decrypted in a single
+/// pass, CMS sign-then-encrypt nests a whole second `SignedData` structure
+/// inside the plaintext — reading that is a second, independent
+/// verification the caller runs on the opened body, not something this
+/// decrypt step produces for free. Handled at the point where the frontend
+/// re-examines the opened body, not silently dropped.
+#[derive(Debug, Clone)]
+pub struct OpenedMessage {
+    pub body: String,
+    pub body_html: Option<String>,
+}
+
+/// Open one enveloped S/MIME message and read the MIME part inside it.
+pub fn decrypt_message(raw: &[u8], identity: &super::pkcs12::Identity) -> Result<OpenedMessage, DecryptionFailure> {
+    let mail = mailparse::parse_mail(raw).map_err(|_| DecryptionFailure::Malformed)?;
+    let part = find_enveloped_part(&mail).ok_or(DecryptionFailure::Malformed)?;
+    let cms_der = part.get_body_raw().map_err(|_| DecryptionFailure::Malformed)?;
+    let plaintext = decrypt_enveloped(&cms_der, identity)?;
+    let inner = crate::parse::parse_message(&plaintext, None);
+    Ok(OpenedMessage { body: inner.body, body_html: inner.body_html })
+}
+
+fn find_enveloped_part<'a>(part: &'a mailparse::ParsedMail<'a>) -> Option<&'a mailparse::ParsedMail<'a>> {
+    let mime = part.ctype.mimetype.to_ascii_lowercase();
+    if (mime == "application/pkcs7-mime" || mime == "application/x-pkcs7-mime")
+        && super::detect::protection_of(part) == super::detect::Protection::SmimeEnveloped
+    {
+        return Some(part);
+    }
+    part.subparts.iter().find_map(find_enveloped_part)
 }

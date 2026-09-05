@@ -159,3 +159,50 @@ fn asking_whether_an_unchecked_signer_matches_is_a_question_with_no_answer() {
         assert_eq!(signer_matches_sender(&verdict, "ana@example.com"), None);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Decrypting CMS EnvelopedData
+// ---------------------------------------------------------------------------
+
+const ENVELOPED: &[u8] = include_bytes!("testdata/enveloped.eml");
+const ANA_MODERN_P12: &[u8] = include_bytes!("testdata/pkcs12/ana_modern.p12");
+const ANA_LEGACY_P12: &[u8] = include_bytes!("testdata/pkcs12/ana_legacy.p12");
+const MARC_MODERN_P12: &[u8] = include_bytes!("testdata/pkcs12/marc_modern.p12");
+
+fn ana_identity() -> super::pkcs12::Identity {
+    super::pkcs12::read_pkcs12(ANA_MODERN_P12, "hunter2").unwrap()
+}
+
+#[test]
+fn a_message_encrypted_to_the_readers_own_certificate_opens() {
+    // Independently confirmed with `openssl smime -decrypt`: the plaintext
+    // really is this, not just whatever this code's own round trip agrees
+    // with itself on.
+    let opened = decrypt_message(ENVELOPED, &ana_identity()).expect("should decrypt");
+    assert!(opened.body.contains("The quarterly figures are attached."));
+}
+
+#[test]
+fn the_legacy_and_modern_identity_files_decrypt_the_same_message() {
+    let legacy = super::pkcs12::read_pkcs12(ANA_LEGACY_P12, "hunter2").unwrap();
+    let opened = decrypt_message(ENVELOPED, &legacy).expect("should decrypt");
+    assert!(opened.body.contains("The quarterly figures are attached."));
+}
+
+#[test]
+fn a_message_encrypted_to_somebody_else_does_not_open_with_the_wrong_identity() {
+    let marc = super::pkcs12::read_pkcs12(MARC_MODERN_P12, "hunter2").unwrap();
+    assert!(matches!(decrypt_message(ENVELOPED, &marc), Err(DecryptionFailure::NoKey)));
+}
+
+#[test]
+fn a_signed_not_encrypted_message_is_not_something_to_decrypt() {
+    let raw = include_bytes!("testdata/signed_detached.eml");
+    assert!(matches!(decrypt_message(raw, &ana_identity()), Err(DecryptionFailure::Malformed)));
+}
+
+#[test]
+fn junk_is_reported_as_malformed_not_as_no_key() {
+    let raw = b"From: ana@example.com\r\nContent-Type: text/plain\r\n\r\nLunch?\r\n";
+    assert!(matches!(decrypt_message(raw, &ana_identity()), Err(DecryptionFailure::Malformed)));
+}
