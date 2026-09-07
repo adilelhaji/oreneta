@@ -5,7 +5,7 @@ import type { Template } from '../../states/templates'
 import { IconButton } from '../button/IconButton'
 import { SendLaterMenu } from './SendLaterMenu'
 import { TemplateMenu } from './TemplateMenu'
-import { PgpComposeControls } from './PgpComposeControls'
+import { ProtectionComposeControls } from './ProtectionComposeControls'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -75,7 +75,7 @@ export function ComposerFooter({
           />
         )}
         <TemplateMenu onPick={onUseTemplate} />
-        <PgpComposeControls
+        <ProtectionComposeControls
           sign={pgpSign}
           encrypt={pgpEncrypt}
           passphrase={pgpPassphrase}

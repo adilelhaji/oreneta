@@ -1,19 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import { PgpComposeControls } from './PgpComposeControls'
+import { ProtectionComposeControls } from './ProtectionComposeControls'
 import { pgp$, secretKeys$ } from '../../states/pgp'
+import { smime$, smimeIdentities$ } from '../../states/smime'
 
 beforeEach(() => {
   pgp$.certs.set([])
   pgp$.loaded.set(true)
   secretKeys$.keys.set([])
   secretKeys$.loaded.set(true)
+  smime$.certs.set([])
+  smime$.loaded.set(true)
+  smimeIdentities$.identities.set([])
+  smimeIdentities$.loaded.set(true)
 })
 afterEach(cleanup)
 
-function controls(over: Partial<Parameters<typeof PgpComposeControls>[0]> = {}) {
+function controls(over: Partial<Parameters<typeof ProtectionComposeControls>[0]> = {}) {
   return render(
-    <PgpComposeControls
+    <ProtectionComposeControls
       sign={false}
       encrypt={false}
       passphrase=""
@@ -42,6 +47,20 @@ describe('sign and encrypt, offered where sending happens', () => {
 
   it('lets encrypting be turned on once a certificate exists', () => {
     pgp$.certs.set([{ fingerprint: 'ABCD', userIds: ['Marc'], addresses: ['marc@x.com'], addedAt: 0 }])
+    const view = controls()
+    expect(view.getByTitle('Encrypt this message').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('lets signing be turned on with only an S/MIME identity, no OpenPGP key', () => {
+    smimeIdentities$.identities.set([
+      { fingerprint: 'AB', subject: 'Ana Prat', addresses: ['ana@x.com'], addedAt: 0 },
+    ])
+    const view = controls()
+    expect(view.getByTitle('Sign this message with your key').hasAttribute('disabled')).toBe(false)
+  })
+
+  it('lets encrypting be turned on with only an S/MIME certificate, no OpenPGP one', () => {
+    smime$.certs.set([{ fingerprint: 'AB', subject: 'Marc', addresses: ['marc@x.com'], addedAt: 0 }])
     const view = controls()
     expect(view.getByTitle('Encrypt this message').hasAttribute('disabled')).toBe(false)
   })

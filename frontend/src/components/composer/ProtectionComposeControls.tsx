@@ -3,6 +3,7 @@ import { KeyRound, ShieldCheck } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { loadCerts, loadSecretKeys, pgp$, secretKeys$ } from '../../states/pgp'
+import { loadSmimeCerts, loadSmimeIdentities, smime$, smimeIdentities$ } from '../../states/smime'
 
 /**
  * Sign and encrypt, offered where sending happens.
@@ -13,8 +14,15 @@ import { loadCerts, loadSecretKeys, pgp$, secretKeys$ } from '../../states/pgp'
  * message that claims to be signed by an unlocked key nobody can check is a
  * worse mistake than a plain message, so the toggles disable themselves when
  * there is nothing to sign or encrypt with, rather than failing at send time.
+ *
+ * One pair of toggles for both protocols, not a protocol picker: which of
+ * OpenPGP or S/MIME actually protects the message is decided automatically,
+ * server-side, the moment sending happens (S/MIME when it alone can cover
+ * the sender and every recipient, OpenPGP otherwise — see perform_send in
+ * meron-core). So a toggle here is enabled the moment *either* protocol
+ * could do the job, not only when OpenPGP specifically can.
  */
-export function PgpComposeControls({
+export function ProtectionComposeControls({
   sign,
   encrypt,
   passphrase,
@@ -34,15 +42,22 @@ export function PgpComposeControls({
   const secretLoaded = useValue(secretKeys$.loaded)
   const certs = useValue(pgp$.certs)
   const certsLoaded = useValue(pgp$.loaded)
+  const smimeIdentities = useValue(smimeIdentities$.identities)
+  const smimeIdentitiesLoaded = useValue(smimeIdentities$.loaded)
+  const smimeCerts = useValue(smime$.certs)
+  const smimeCertsLoaded = useValue(smime$.loaded)
 
   useEffect(() => {
     if (!secretLoaded) void loadSecretKeys()
     if (!certsLoaded) void loadCerts()
-  }, [secretLoaded, certsLoaded])
+    if (!smimeIdentitiesLoaded) void loadSmimeIdentities()
+    if (!smimeCertsLoaded) void loadSmimeCerts()
+  }, [secretLoaded, certsLoaded, smimeIdentitiesLoaded, smimeCertsLoaded])
 
-  const canSign = secretKeys.length > 0
-  const canEncrypt = certs.length > 0
-  // A key held but not yet unlocked for this send.
+  const canSign = secretKeys.length > 0 || smimeIdentities.length > 0
+  const canEncrypt = certs.length > 0 || smimeCerts.length > 0
+  // A key held but not yet unlocked for this send. S/MIME identities never
+  // need this: their private key is unlocked once, at import, not per send.
   const signingKeyLocked = sign && secretKeys.some((key) => key.protected) && !passphrase
 
   return (
