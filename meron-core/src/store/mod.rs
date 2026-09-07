@@ -275,8 +275,8 @@ pub fn upsert_messages(
             upserted_ids.insert(message_id);
         }
         tx.execute(
-            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments, priority)
-             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments, priority, spam)
+             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
              ON CONFLICT(account, folder, msg_id) DO UPDATE SET
                subject    = excluded.subject,
                from_name  = excluded.from_name,
@@ -296,7 +296,8 @@ pub fn upsert_messages(
                -- can change under a message (a reply sent to its sender, a
                -- decision recorded) and a stale verdict is one nobody asked
                -- for and nobody can see.
-               priority = excluded.priority",
+               priority = excluded.priority,
+               spam     = excluded.spam",
             params![
                 account,
                 folder,
@@ -317,7 +318,8 @@ pub fn upsert_messages(
                 crate::priority::verdict(priority_signals(
                     &tx, account, &m.from_addr, &m.to, &m.cc, &mine
                 ))
-                .priority as i64
+                .priority as i64,
+                crate::spam::verdict(&spam_signals(&tx, account, &m.from_addr, &m.subject)).spam as i64
             ],
         )?;
     }
@@ -1706,6 +1708,37 @@ pub fn priority_for_threads(
     Ok(out)
 }
 
+/// The learned spam verdict on each of these conversations, same shape and
+/// same "any message in it" rule as [`priority_for_threads`] — a thread whose
+/// latest reply looks like spam is a thread worth flagging, whatever the rest
+/// of it was.
+pub fn spam_for_threads(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashMap<String, bool>> {
+    let mut out: HashMap<String, bool> = HashMap::new();
+    if thread_keys.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT COALESCE(NULLIF(thread_key, ''), 'uid:' || uid), MAX(spam)
+           FROM messages
+          WHERE account = ?1 AND uid <> 0 AND spam IS NOT NULL
+          GROUP BY COALESCE(NULLIF(thread_key, ''), 'uid:' || uid)",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    for (key, spam) in rows.filter_map(Result::ok) {
+        if wanted.contains(&key) {
+            out.insert(key, spam != 0);
+        }
+    }
+    Ok(out)
+}
+
 /// Records that this account has written to these addresses.
 ///
 /// Called with the recipients of anything the account sent. Cheap and
@@ -1924,6 +1957,188 @@ pub fn rejudge_priority(conn: &Connection, account: &str, only_unjudged: bool) -
             let signals = priority_signals(&tx, account, &from_addr, &to, &cc, &mine);
             let verdict = crate::priority::verdict(signals);
             stmt.execute(params![id, verdict.priority as i64])?;
+            judged += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(judged)
+}
+
+// ---- Spam (learned) --------------------------------------------------------
+
+/// How many times the reader has confirmed spam from this exact address,
+/// versus said mail from them was not spam.
+pub fn sender_spam_counts(conn: &Connection, account: &str, addr: &str) -> (u32, u32) {
+    conn.query_row(
+        "SELECT spam_count, ham_count FROM sender_spam WHERE account = ?1 AND addr = ?2",
+        params![account, addr.trim().to_lowercase()],
+        |row| Ok((row.get::<_, i64>(0)? as u32, row.get::<_, i64>(1)? as u32)),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .unwrap_or((0, 0))
+}
+
+/// Records one judgement about a sender: spam confirmed, or said not spam.
+pub fn note_sender_spam(conn: &Connection, account: &str, addr: &str, is_spam: bool) -> Result<()> {
+    let addr = addr.trim().to_lowercase();
+    if addr.is_empty() {
+        return Ok(());
+    }
+    let (spam_delta, ham_delta): (i64, i64) = if is_spam { (1, 0) } else { (0, 1) };
+    conn.execute(
+        "INSERT INTO sender_spam(account, addr, spam_count, ham_count) VALUES(?1, ?2, ?3, ?4)
+         ON CONFLICT(account, addr) DO UPDATE SET
+           spam_count = sender_spam.spam_count + excluded.spam_count,
+           ham_count  = sender_spam.ham_count + excluded.ham_count",
+        params![account, addr, spam_delta, ham_delta],
+    )?;
+    Ok(())
+}
+
+/// The subject words of this text that already clear the bar to be a reason,
+/// from what the reader has taught this account so far.
+///
+/// The subject is short, so this is a handful of point lookups keyed on the
+/// table's primary key, not a scan.
+pub fn spam_trigger_words(conn: &Connection, account: &str, subject: &str) -> Vec<String> {
+    crate::spam::tokenize(subject)
+        .into_iter()
+        .filter(|word| {
+            let counts: Option<(i64, i64)> = conn
+                .query_row(
+                    "SELECT spam_count, ham_count FROM spam_triggers WHERE account = ?1 AND word = ?2",
+                    params![account, word],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()
+                .ok()
+                .flatten();
+            counts.is_some_and(|(spam_count, ham_count)| {
+                crate::spam::is_trigger(spam_count as u32, ham_count as u32)
+            })
+        })
+        .collect()
+}
+
+/// Records the subject words of one judged message, one count each toward
+/// spam or toward not-spam — never toward both, and never more than once
+/// each even if a word repeats in the same subject (see `spam::tokenize`).
+pub fn note_spam_trigger_words(conn: &Connection, account: &str, subject: &str, is_spam: bool) -> Result<()> {
+    let (spam_delta, ham_delta): (i64, i64) = if is_spam { (1, 0) } else { (0, 1) };
+    for word in crate::spam::tokenize(subject) {
+        conn.execute(
+            "INSERT INTO spam_triggers(account, word, spam_count, ham_count) VALUES(?1, ?2, ?3, ?4)
+             ON CONFLICT(account, word) DO UPDATE SET
+               spam_count = spam_triggers.spam_count + excluded.spam_count,
+               ham_count  = spam_triggers.ham_count + excluded.ham_count",
+            params![account, word, spam_delta, ham_delta],
+        )?;
+    }
+    Ok(())
+}
+
+/// The signals for one message, gathered from what the reader has taught
+/// this account so far. Everything here is local, same as `priority_signals`.
+pub fn spam_signals(conn: &Connection, account: &str, from_addr: &str, subject: &str) -> crate::spam::Signals {
+    let (sender_spam_count, sender_ham_count) = sender_spam_counts(conn, account, from_addr);
+    crate::spam::Signals {
+        sender_spam_count,
+        sender_ham_count,
+        trigger_words: spam_trigger_words(conn, account, subject),
+    }
+}
+
+/// The sender and subject of the newest message of one conversation — what a
+/// spam judgement made about the conversation is really made about.
+///
+/// Its own query for the same reason `thread_priority_signals` has one: the
+/// cached-row projections used elsewhere don't carry what this needs, and an
+/// explanation built from the wrong row would be a wrong explanation, which
+/// is worse here than none.
+fn newest_message_sender_and_subject(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+) -> Result<Option<(String, String)>> {
+    conn.query_row(
+        "SELECT from_addr, COALESCE(subject, '')
+           FROM messages
+          WHERE account = ?1 AND folder = ?2
+            AND COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) = ?3
+          ORDER BY date DESC, uid DESC LIMIT 1",
+        params![account, folder, thread_key],
+        |row| Ok((row.get::<_, Option<String>>(0)?.unwrap_or_default(), row.get(1)?)),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+/// The spam signals for the newest message of one conversation.
+pub fn thread_spam_signals(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+) -> Result<Option<(String, crate::spam::Signals)>> {
+    let Some((from_addr, subject)) = newest_message_sender_and_subject(conn, account, folder, thread_key)? else {
+        return Ok(None);
+    };
+    let signals = spam_signals(conn, account, &from_addr, &subject);
+    Ok(Some((from_addr, signals)))
+}
+
+/// Records the reader's judgement of one conversation's newest message —
+/// spam confirmed, or said not spam — against its sender and subject words,
+/// then re-judges the account so already-cached messages reflect it at once.
+pub fn record_spam_judgment(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+    is_spam: bool,
+) -> Result<Option<String>> {
+    let Some((from_addr, subject)) = newest_message_sender_and_subject(conn, account, folder, thread_key)? else {
+        return Ok(None);
+    };
+    note_sender_spam(conn, account, &from_addr, is_spam)?;
+    note_spam_trigger_words(conn, account, &subject, is_spam)?;
+    rejudge_spam(conn, account, false)?;
+    Ok(Some(from_addr))
+}
+
+/// Judges every message of an account that has not been judged yet — the
+/// same gap `rejudge_priority` closes, and for the same reason: a mailbox
+/// cached before this existed gets a verdict in one pass rather than being
+/// quietly treated as "not spam", which is a claim nobody checked.
+pub fn rejudge_spam(conn: &Connection, account: &str, only_unjudged: bool) -> Result<usize> {
+    let where_clause = if only_unjudged { "AND spam IS NULL" } else { "" };
+    let rows: Vec<(i64, String, String)> = {
+        let sql = format!(
+            "SELECT id, from_addr, COALESCE(subject, '') FROM messages
+              WHERE account = ?1 AND uid <> 0 {where_clause}"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let mapped = stmt.query_map(params![account], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                row.get(2)?,
+            ))
+        })?;
+        mapped.filter_map(Result::ok).collect()
+    };
+
+    let tx = conn.unchecked_transaction()?;
+    let mut judged = 0;
+    {
+        let mut stmt = tx.prepare("UPDATE messages SET spam = ?2 WHERE id = ?1")?;
+        for (id, from_addr, subject) in rows {
+            let signals = spam_signals(&tx, account, &from_addr, &subject);
+            let verdict = crate::spam::verdict(&signals);
+            stmt.execute(params![id, verdict.spam as i64])?;
             judged += 1;
         }
     }

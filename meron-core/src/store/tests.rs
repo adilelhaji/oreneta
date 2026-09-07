@@ -697,6 +697,158 @@ fn what_the_reader_says_about_a_sender_sticks_and_can_be_taken_back() {
 }
 
 #[test]
+fn a_sender_confirmed_spam_more_than_once_flags_their_next_message() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "spammer@example.com".into(),
+            subject: "Amazing offer".into(),
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+
+    let spam = || -> Option<i64> {
+        conn.query_row(
+            "SELECT spam FROM messages WHERE account = 'acct' AND uid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    // Nothing taught yet: not flagged.
+    assert_eq!(spam(), Some(0));
+
+    // One correction alone must not brand the sender.
+    assert_eq!(
+        record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap(),
+        Some("spammer@example.com".to_string())
+    );
+    assert_eq!(spam(), Some(0));
+
+    // A second one gives it a clear lead, and the account is re-judged at once.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
+    assert_eq!(spam(), Some(1));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 0));
+
+    // Saying "not spam" afterward lifts it again — a correction taken back,
+    // not stuck at whichever way it was last pushed.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", false).unwrap();
+    assert_eq!(spam(), Some(0));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 1));
+}
+
+#[test]
+fn subject_words_seen_repeatedly_in_confirmed_spam_flag_a_later_message() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader {
+                uid: 1,
+                from_addr: "one@example.com".into(),
+                subject: "Free prize offer".into(),
+                thread_key: "t-1".into(),
+                date: 1,
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 2,
+                from_addr: "two@example.com".into(),
+                subject: "Win a prize today".into(),
+                thread_key: "t-2".into(),
+                date: 2,
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 3,
+                from_addr: "four@example.com".into(),
+                subject: "Your prize package".into(),
+                thread_key: "t-4".into(),
+                date: 3,
+                ..Default::default()
+            },
+            // A different, never-corrected sender whose subject happens to
+            // reuse the same word — never taught anything about this sender
+            // specifically.
+            MessageHeader {
+                uid: 4,
+                from_addr: "three@example.com".into(),
+                subject: "Prize committee meeting notes".into(),
+                thread_key: "t-3".into(),
+                date: 4,
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+
+    // Three different senders, each confirmed spam once: below the sender
+    // threshold on its own for any of them, but "prize" now has three spam
+    // confirmations against zero ham — enough to be a trigger on its own.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "t-2", true).unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "t-4", true).unwrap();
+
+    let spam = |uid: u32| -> Option<i64> {
+        conn.query_row(
+            "SELECT spam FROM messages WHERE account = 'acct' AND uid = ?1",
+            params![uid],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    // None of the three taught senders crosses the sender threshold alone,
+    // but "prize" does — and uid 4's subject reuses the same word, so a
+    // message from an unrelated, never-corrected sender gets flagged by its
+    // words alone. That is content-based learning working as intended, not
+    // a false positive to paper over: the reader can still say "not spam".
+    assert_eq!(spam(4), Some(1));
+
+    let reasons = crate::spam::verdict(&spam_signals(
+        &conn,
+        "acct",
+        "three@example.com",
+        "Prize committee meeting notes",
+    ))
+    .reasons;
+    assert_eq!(reasons, vec![crate::spam::Reason::TriggerWords]);
+}
+
+#[test]
+fn thread_spam_signals_is_none_for_a_conversation_that_does_not_exist() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    assert!(thread_spam_signals(&conn, "acct", "INBOX", "t-missing")
+        .unwrap()
+        .is_none());
+    assert!(record_spam_judgment(&conn, "acct", "INBOX", "t-missing", true)
+        .unwrap()
+        .is_none());
+}
+
+#[test]
 fn a_list_can_be_ordered_by_something_other_than_the_date() {
     use crate::thread_list::{Sort, SortDir, SortKey};
     let conn = test_conn();
@@ -2684,7 +2836,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 
     for table in [
         "accounts",
@@ -2729,7 +2881,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 }
 
 #[test]
@@ -2757,7 +2909,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 
     let _ = std::fs::remove_dir_all(dir);
 }

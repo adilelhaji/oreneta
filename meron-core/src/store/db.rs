@@ -621,6 +621,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 28 {
         migrate_v28(&tx)?;
     }
+    if version < 29 {
+        migrate_v29(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1186,6 +1189,45 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 28;")?;
+    Ok(())
+}
+
+/// What the reader has taught this app about spam, and room for the verdict
+/// it now gives new arrivals from it — never acted on by itself; see `spam.rs`.
+///
+/// `spam` on `messages` is nullable like `priority`, for the identical
+/// reason: a message cached before this existed has never been judged, and
+/// answering "not spam" for it would be inventing a fact nobody checked.
+///
+/// `sender_spam` counts, per sender, how many times the reader confirmed
+/// spam from them versus said "not spam" — soft counters rather than a
+/// single override like `sender_priority`, because this is meant to
+/// accumulate evidence rather than flip on the first correction.
+///
+/// `spam_triggers` counts the same, per word of a judged message's subject
+/// (never its body — not every message has its body fetched yet, and a
+/// signal that only sometimes exists is not one this feature can be honest
+/// about). A word only becomes a reason once it has recurred enough times,
+/// clearly more in spam-confirmed messages than in ham-confirmed ones.
+fn migrate_v29(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE messages ADD COLUMN spam INTEGER;
+         CREATE TABLE IF NOT EXISTS sender_spam (
+           account    TEXT NOT NULL,
+           addr       TEXT NOT NULL,
+           spam_count INTEGER NOT NULL DEFAULT 0,
+           ham_count  INTEGER NOT NULL DEFAULT 0,
+           PRIMARY KEY (account, addr)
+         );
+         CREATE TABLE IF NOT EXISTS spam_triggers (
+           account    TEXT NOT NULL,
+           word       TEXT NOT NULL,
+           spam_count INTEGER NOT NULL DEFAULT 0,
+           ham_count  INTEGER NOT NULL DEFAULT 0,
+           PRIMARY KEY (account, word)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 29;")?;
     Ok(())
 }
 

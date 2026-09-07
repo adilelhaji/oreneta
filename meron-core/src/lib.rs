@@ -30,6 +30,7 @@ pub mod secrets;
 #[cfg(target_os = "linux")]
 mod secrets_portal;
 pub mod smtp;
+pub mod spam;
 pub mod store;
 pub mod templates;
 pub mod thread_list;
