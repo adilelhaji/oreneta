@@ -89,6 +89,12 @@ uuid = { version = "1.23.1", features = ["v4"] }
 hickory-resolver = { version = "0.26.1", features = ["system-config"] }
 ring = "0.17"
 x509-parser = "0.18.1"
+# S/MIME signing/encrypting on send needs real randomness — the RSA
+# key-transport padding and the AES content-encryption key/IV — that
+# `rsa`'s own `encrypt`/`sign` calls require the caller to supply. Version
+# pinned to the 0.10 line specifically because that is the one whose
+# `rand_core` matches what `rsa` 0.10.0-rc already depends on.
+rand = "0.10"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 oo7 = { version = "0.6.0", default-features = false, features = ["tokio", "native_crypto"] }

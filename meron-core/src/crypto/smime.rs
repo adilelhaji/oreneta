@@ -25,18 +25,22 @@
 //! here, not four; see [`SignatureVerdict`].
 
 use anyhow::{anyhow, Context, Result};
-use cms::cert::CertificateChoices;
+use cms::cert::{CertificateChoices, IssuerAndSerialNumber};
 use cms::content_info::ContentInfo;
-use cms::signed_data::{SignedData, SignerIdentifier, SignerInfo};
-use der::asn1::OctetString;
-use der::{Decode, Encode};
+use cms::signed_data::{
+    CertificateSet, EncapsulatedContentInfo, SignedData, SignerIdentifier, SignerInfo, SignerInfos,
+};
+use der::asn1::{ObjectIdentifier, OctetString, SetOfVec};
+use der::{Any, Decode, Encode};
 use rsa::pkcs1v15::Pkcs1v15Sign;
 use rsa::{Pkcs1v15Encrypt, RsaPublicKey};
 use serde::Serialize;
-use sha2::Digest as _;
+use sha2::{Digest as _, Sha256};
+use x509_cert::attr::{Attribute, Attributes};
 use x509_cert::ext::pkix::SubjectAltName;
 use x509_cert::ext::pkix::name::GeneralName;
 use x509_cert::name::Name;
+use x509_cert::spki::AlgorithmIdentifierOwned;
 use x509_cert::Certificate;
 
 /// What the app knows about an imported certificate.
@@ -679,4 +683,255 @@ fn find_enveloped_part<'a>(part: &'a mailparse::ParsedMail<'a>) -> Option<&'a ma
         return Some(part);
     }
     part.subparts.iter().find_map(find_enveloped_part)
+}
+
+// ---------------------------------------------------------------------------
+// Signing and encrypting outgoing mail
+// ---------------------------------------------------------------------------
+
+/// Why a message could not be protected as asked. Same shape as OpenPGP's
+/// [`super::pgp::ProtectFailure`] — every one of these stops the send rather
+/// than falling back to sending it unprotected.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "reason")]
+pub enum ProtectFailure {
+    /// No certificate is held for one or more recipients, named.
+    NoRecipientKey { missing: Vec<String> },
+    /// Something else went wrong; the message did not go.
+    Failed { message: String },
+}
+
+fn protect_failed(error: impl std::fmt::Display) -> ProtectFailure {
+    ProtectFailure::Failed { message: error.to_string() }
+}
+
+/// `1.2.840.113549.1.7.1`: `id-data` — the content type both a detached
+/// signature's `EncapsulatedContentInfo` and an enveloped message's
+/// `EncryptedContentInfo` name, since what is actually inside is a plain
+/// MIME entity, not a CMS type of its own.
+const OID_DATA: &str = "1.2.840.113549.1.7.1";
+/// `1.2.840.113549.1.9.3`: the `contentType` signed attribute.
+const OID_CONTENT_TYPE: &str = "1.2.840.113549.1.9.3";
+
+/// Recipients the reader holds no certificate for, by address — the same
+/// question [`super::pgp`]'s `missing_recipients` asks, of S/MIME
+/// certificates instead of OpenPGP ones.
+fn missing_recipients(certs: &[Certificate], addresses: &[String]) -> Vec<String> {
+    addresses
+        .iter()
+        .filter(|wanted| {
+            let wanted = wanted.trim().to_lowercase();
+            !wanted.is_empty() && !certs.iter().any(|cert| describe(cert).addresses.iter().any(|addr| *addr == wanted))
+        })
+        .map(|addr| addr.trim().to_lowercase())
+        .collect()
+}
+
+fn algorithm(oid: &str, parameters: Option<Any>) -> Result<AlgorithmIdentifierOwned, ProtectFailure> {
+    Ok(AlgorithmIdentifierOwned {
+        oid: ObjectIdentifier::new(oid).map_err(protect_failed)?,
+        parameters,
+    })
+}
+
+fn attribute(oid: &str, value: Any) -> Result<Attribute, ProtectFailure> {
+    Ok(Attribute {
+        oid: ObjectIdentifier::new(oid).map_err(protect_failed)?,
+        values: SetOfVec::try_from(vec![value]).map_err(protect_failed)?,
+    })
+}
+
+/// Build a detached CMS `SignedData` over `content`, signed with `identity`.
+///
+/// SHA-256 throughout — the digest algorithm, and (per RFC 5652 §5.4) what is
+/// actually signed is the DER (`SET OF`) encoding of the `contentType` and
+/// `messageDigest` signed attributes, not the content directly. This is
+/// exactly the shape [`verify_signer_info`] already reads on the way in, and
+/// including `messageDigest` rather than signing content directly is what
+/// lets a verifier bind the signature to the content without re-deriving
+/// what "the content" even means from MIME boundaries.
+fn sign_detached(content: &[u8], identity: &super::pkcs12::Identity) -> Result<Vec<u8>, ProtectFailure> {
+    let digest = Sha256::digest(content);
+
+    let content_type_value = Any::encode_from(&ObjectIdentifier::new(OID_DATA).map_err(protect_failed)?)
+        .map_err(protect_failed)?;
+    let message_digest_value =
+        Any::encode_from(&OctetString::new(digest.to_vec()).map_err(protect_failed)?).map_err(protect_failed)?;
+    let signed_attrs: Attributes = SetOfVec::try_from(vec![
+        attribute(OID_CONTENT_TYPE, content_type_value)?,
+        attribute(OID_MESSAGE_DIGEST, message_digest_value)?,
+    ])
+    .map_err(protect_failed)?;
+
+    // What is signed is the SET OF encoding, not the [0] IMPLICIT one
+    // SignerInfo itself uses to carry it — see the module doc above.
+    let signed_attrs_der = signed_attrs.to_der().map_err(protect_failed)?;
+    let attrs_digest = Sha256::digest(&signed_attrs_der);
+
+    let mut rng = rand::rng();
+    let signature = identity
+        .private_key
+        .sign_with_rng(&mut rng, Pkcs1v15Sign::new::<Sha256>(), &attrs_digest)
+        .map_err(protect_failed)?;
+
+    let tbs = identity.certificate.tbs_certificate();
+    let sid = SignerIdentifier::IssuerAndSerialNumber(IssuerAndSerialNumber {
+        issuer: tbs.issuer().clone(),
+        serial_number: tbs.serial_number().clone(),
+    });
+    let sha256_alg = algorithm(hash_alg_oid(), None)?;
+    let rsa_alg = algorithm(OID_RSA_ENCRYPTION, Some(Any::encode_from(&()).map_err(protect_failed)?))?;
+
+    let signer_info = SignerInfo {
+        version: cms::content_info::CmsVersion::V1,
+        sid,
+        digest_alg: sha256_alg.clone(),
+        signed_attrs: Some(signed_attrs),
+        signature_algorithm: rsa_alg,
+        signature: OctetString::new(signature).map_err(protect_failed)?,
+        unsigned_attrs: None,
+    };
+
+    let mut certs = CertificateSet(Default::default());
+    certs
+        .0
+        .insert(CertificateChoices::Certificate(identity.certificate.clone()))
+        .map_err(protect_failed)?;
+    let digest_algorithms = SetOfVec::try_from(vec![sha256_alg]).map_err(protect_failed)?;
+
+    let signed_data = SignedData {
+        version: cms::content_info::CmsVersion::V1,
+        digest_algorithms,
+        encap_content_info: EncapsulatedContentInfo {
+            econtent_type: ObjectIdentifier::new(OID_DATA).map_err(protect_failed)?,
+            econtent: None,
+        },
+        certificates: Some(certs),
+        crls: None,
+        signer_infos: SignerInfos(SetOfVec::try_from(vec![signer_info]).map_err(protect_failed)?),
+    };
+
+    let content_info = ContentInfo {
+        content_type: ObjectIdentifier::new(OID_SIGNED_DATA).map_err(protect_failed)?,
+        content: Any::encode_from(&signed_data).map_err(protect_failed)?,
+    };
+    content_info.to_der().map_err(protect_failed)
+}
+
+/// `2.16.840.1.101.3.4.2.1`: SHA-256 — named again here, for the digest
+/// algorithm this writes with, distinct from the OID literals used when
+/// reading (this module intentionally keeps its OID constants local and
+/// readable at their use site rather than sharing one giant table).
+fn hash_alg_oid() -> &'static str {
+    "2.16.840.1.101.3.4.2.1"
+}
+
+/// Build CMS `EnvelopedData`, encrypted to every one of `recipients`.
+///
+/// AES-256-CBC content encryption with a freshly generated key, wrapped to
+/// each recipient with RSAES-PKCS1-v1.5 key transport — the same two
+/// algorithms [`decrypt_enveloped`] reads, so anything this writes, this
+/// also reads back.
+fn encrypt_enveloped(content: &[u8], recipients: &[Certificate]) -> Result<Vec<u8>, ProtectFailure> {
+    let (key, iv, ciphertext) = super::block_cipher::aes256_cbc_encrypt_random(content);
+
+    let mut rng = rand::rng();
+    let mut recipient_infos = Vec::new();
+    for cert in recipients {
+        let public_key = rsa_public_key_of(cert).map_err(protect_failed)?;
+        let wrapped = public_key.encrypt(&mut rng, Pkcs1v15Encrypt, &key).map_err(protect_failed)?;
+        let tbs = cert.tbs_certificate();
+        let rid = cms::enveloped_data::RecipientIdentifier::IssuerAndSerialNumber(IssuerAndSerialNumber {
+            issuer: tbs.issuer().clone(),
+            serial_number: tbs.serial_number().clone(),
+        });
+        recipient_infos.push(cms::enveloped_data::RecipientInfo::Ktri(cms::enveloped_data::KeyTransRecipientInfo {
+            version: cms::content_info::CmsVersion::V0,
+            rid,
+            key_enc_alg: algorithm(OID_RSA_ENCRYPTION, Some(Any::encode_from(&()).map_err(protect_failed)?))?,
+            enc_key: OctetString::new(wrapped).map_err(protect_failed)?,
+        }));
+    }
+    let recip_infos = cms::enveloped_data::RecipientInfos(SetOfVec::try_from(recipient_infos).map_err(protect_failed)?);
+
+    let aes256_cbc_alg = algorithm(
+        OID_AES256_CBC,
+        Some(Any::encode_from(&OctetString::new(iv).map_err(protect_failed)?).map_err(protect_failed)?),
+    )?;
+    let encrypted_content = cms::enveloped_data::EncryptedContentInfo {
+        content_type: ObjectIdentifier::new(OID_DATA).map_err(protect_failed)?,
+        content_enc_alg: aes256_cbc_alg,
+        encrypted_content: Some(OctetString::new(ciphertext).map_err(protect_failed)?),
+    };
+
+    let enveloped = cms::enveloped_data::EnvelopedData {
+        version: cms::content_info::CmsVersion::V0,
+        originator_info: None,
+        recip_infos,
+        encrypted_content,
+        unprotected_attrs: None,
+    };
+
+    let content_info = ContentInfo {
+        content_type: ObjectIdentifier::new(OID_ENVELOPED_DATA).map_err(protect_failed)?,
+        content: Any::encode_from(&enveloped).map_err(protect_failed)?,
+    };
+    content_info.to_der().map_err(protect_failed)
+}
+
+/// What to do to an outgoing message: sign it, encrypt it, or both. Same
+/// shape as [`super::pgp::Protect`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Protect {
+    pub sign: bool,
+    pub encrypt: bool,
+}
+
+/// Sign a built message, encrypt it, or both.
+///
+/// The order is the one that means something: sign first, then encrypt the
+/// signed thing, so the signature survives inside where it cannot be
+/// stripped by anyone who can merely re-send the ciphertext — the same
+/// reasoning [`super::pgp::protect_message`] documents for OpenPGP.
+pub fn protect_message(
+    raw: &[u8],
+    what: Protect,
+    identity: Option<&super::pkcs12::Identity>,
+    recipients: &[Certificate],
+    recipient_addresses: &[String],
+) -> Result<Vec<u8>, ProtectFailure> {
+    let split = super::mime::split_for_signing(raw)
+        .ok_or_else(|| protect_failed("the message has no header block"))?;
+
+    if what.encrypt {
+        let missing = missing_recipients(recipients, recipient_addresses);
+        if !missing.is_empty() {
+            return Err(ProtectFailure::NoRecipientKey { missing });
+        }
+    }
+
+    // Signed and encrypted: the signed MIME entity becomes the content of
+    // the envelope, so the signature survives inside where it cannot be
+    // stripped by anyone who can merely re-send the ciphertext.
+    if what.encrypt {
+        let to_encrypt = if what.sign {
+            let identity = identity.ok_or_else(|| protect_failed("no S/MIME identity to sign with"))?;
+            let signature = sign_detached(&split.entity, identity)?;
+            // No message headers here: this is the *content* of the outer
+            // envelope, not a standalone message.
+            super::mime::build_smime_signed("", &split.entity, &signature)
+        } else {
+            split.entity.clone()
+        };
+        let cms_der = encrypt_enveloped(&to_encrypt, recipients)?;
+        return Ok(super::mime::build_smime_enveloped(&split.message_headers, &cms_der));
+    }
+
+    if what.sign {
+        let identity = identity.ok_or_else(|| protect_failed("no S/MIME identity to sign with"))?;
+        let signature = sign_detached(&split.entity, identity)?;
+        return Ok(super::mime::build_smime_signed(&split.message_headers, &split.entity, &signature));
+    }
+
+    Ok(raw.to_vec())
 }

@@ -206,3 +206,74 @@ fn junk_is_reported_as_malformed_not_as_no_key() {
     let raw = b"From: ana@example.com\r\nContent-Type: text/plain\r\n\r\nLunch?\r\n";
     assert!(matches!(decrypt_message(raw, &ana_identity()), Err(DecryptionFailure::Malformed)));
 }
+
+// ---------------------------------------------------------------------------
+// Signing and encrypting outgoing mail
+// ---------------------------------------------------------------------------
+
+const BUILT_MESSAGE: &[u8] =
+    b"From: Ana Prat <ana@example.com>\r\nTo: someone@example.com\r\nSubject: Wire the funds\r\n\
+      Content-Type: text/plain; charset=utf-8\r\n\r\nPlease wire the funds today.";
+
+#[test]
+fn a_signed_outgoing_message_verifies_with_this_codebases_own_reader() {
+    let signed = protect_message(BUILT_MESSAGE, Protect { sign: true, encrypt: false }, Some(&ana_identity()), &[], &[])
+        .expect("should sign");
+    let result = verify_message(&signed, &[ana()]).expect("a signed message has something to check");
+    assert_eq!(result.verdict, SignatureVerdict::Good { fingerprint: describe(&ana()).fingerprint, addresses: describe(&ana()).addresses });
+    assert_eq!(result.matches_sender, Some(true));
+}
+
+#[test]
+fn an_encrypted_outgoing_message_decrypts_with_this_codebases_own_reader() {
+    let encrypted =
+        protect_message(BUILT_MESSAGE, Protect { sign: false, encrypt: true }, None, &[ana()], &["ana@example.com".into()])
+            .expect("should encrypt");
+    let opened = decrypt_message(&encrypted, &ana_identity()).expect("should decrypt");
+    assert!(opened.body.contains("Please wire the funds today."));
+}
+
+#[test]
+fn a_signed_and_encrypted_message_carries_a_real_signature_inside_the_encryption() {
+    let protected = protect_message(
+        BUILT_MESSAGE,
+        Protect { sign: true, encrypt: true },
+        Some(&ana_identity()),
+        &[ana()],
+        &["ana@example.com".into()],
+    )
+    .expect("should sign and encrypt");
+
+    // Opening it only decrypts — the inner signature is a second, separate
+    // check the caller runs on what came out, per OpenedMessage's own doc.
+    let opened = decrypt_message(&protected, &ana_identity()).expect("should decrypt");
+    assert!(opened.body.contains("Please wire the funds today."));
+
+    // The decrypted content is itself a whole `multipart/signed` MIME
+    // entity — verify_message reads that shape directly from the plaintext
+    // CMS produced, without going through the outer envelope again.
+    let mail = mailparse::parse_mail(&protected).unwrap();
+    fn find_enveloped<'a>(part: &'a mailparse::ParsedMail<'a>) -> &'a mailparse::ParsedMail<'a> {
+        if part.ctype.mimetype.eq_ignore_ascii_case("application/pkcs7-mime") {
+            return part;
+        }
+        part.subparts.iter().map(find_enveloped).next().expect("an enveloped part exists")
+    }
+    let cms_der = find_enveloped(&mail).get_body_raw().unwrap();
+    let plaintext = decrypt_enveloped(&cms_der, &ana_identity()).expect("should decrypt");
+
+    let result = verify_message(&plaintext, &[ana()]).expect("the inner content is a signed MIME entity");
+    assert!(matches!(result.verdict, SignatureVerdict::Good { .. }));
+}
+
+#[test]
+fn encrypting_to_a_recipient_with_no_held_certificate_is_refused() {
+    let result = protect_message(
+        BUILT_MESSAGE,
+        Protect { sign: false, encrypt: true },
+        None,
+        &[],
+        &["nobody@example.com".into()],
+    );
+    assert!(matches!(result, Err(ProtectFailure::NoRecipientKey { .. })));
+}

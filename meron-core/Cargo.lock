@@ -2624,6 +2624,7 @@ dependencies = [
  "pkcs12",
  "pkcs8 0.11.0",
  "quick-xml 0.37.5",
+ "rand 0.10.1",
  "rc2",
  "ring",
  "rsa 0.10.0-rc.18",

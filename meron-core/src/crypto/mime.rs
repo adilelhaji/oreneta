@@ -149,3 +149,67 @@ pub fn build_encrypted(headers: &str, ciphertext: &[u8]) -> Vec<u8> {
 fn boundary(kind: &str) -> String {
     format!("--=_oreneta_{kind}_{}", uuid::Uuid::new_v4().simple())
 }
+
+/// Wrap a signed entity and its detached CMS signature into an RFC 8551
+/// `multipart/signed` message.
+///
+/// `headers` is the message-level header block (`From`, `To`, `Subject`...).
+/// Pass an empty string when this is building the *content* of an outer
+/// `EnvelopedData` for sign-then-encrypt rather than a standalone message —
+/// the result is then a complete MIME entity with its own `MIME-Version`,
+/// exactly what an enveloped message's content needs to be.
+pub fn build_smime_signed(headers: &str, entity: &[u8], signature: &[u8]) -> Vec<u8> {
+    let boundary = boundary("smime_signed");
+    let mut out = Vec::new();
+    out.extend_from_slice(headers.as_bytes());
+    out.extend_from_slice(b"MIME-Version: 1.0\r\n");
+    out.extend_from_slice(
+        format!(
+            "Content-Type: multipart/signed; micalg=\"sha-256\"; \
+             protocol=\"application/pkcs7-signature\"; boundary=\"{boundary}\"\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    out.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    out.extend_from_slice(entity);
+    out.extend_from_slice(format!("\r\n--{boundary}\r\n").as_bytes());
+    out.extend_from_slice(
+        b"Content-Type: application/pkcs7-signature; name=\"smime.p7s\"\r\n\
+          Content-Transfer-Encoding: base64\r\n\
+          Content-Disposition: attachment; filename=\"smime.p7s\"\r\n\r\n",
+    );
+    out.extend_from_slice(base64_wrapped(signature).as_bytes());
+    out.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    out
+}
+
+/// Wrap CMS `EnvelopedData` into an RFC 8551 `application/pkcs7-mime`
+/// (`smime-type=enveloped-data`) message — a single part, not a multipart
+/// structure, since the ciphertext is the entire body.
+pub fn build_smime_enveloped(headers: &str, cms_der: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(headers.as_bytes());
+    out.extend_from_slice(b"MIME-Version: 1.0\r\n");
+    out.extend_from_slice(
+        b"Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name=\"smime.p7m\"\r\n\
+          Content-Transfer-Encoding: base64\r\n\
+          Content-Disposition: attachment; filename=\"smime.p7m\"\r\n\r\n",
+    );
+    out.extend_from_slice(base64_wrapped(cms_der).as_bytes());
+    out.extend_from_slice(b"\r\n");
+    out
+}
+
+/// Base64, wrapped at 76 columns with CRLF — the line length RFC 2045
+/// requires, so a strict MIME parser on the receiving end does not choke on
+/// one unbroken line.
+fn base64_wrapped(data: &[u8]) -> String {
+    use base64::Engine as _;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+    encoded
+        .as_bytes()
+        .chunks(76)
+        .map(|chunk| std::str::from_utf8(chunk).unwrap())
+        .collect::<Vec<_>>()
+        .join("\r\n")
+}
