@@ -2146,6 +2146,157 @@ pub fn rejudge_spam(conn: &Connection, account: &str, only_unjudged: bool) -> Re
     Ok(judged)
 }
 
+// ---- Tasks (local, message-tied to-dos) ------------------------------------
+
+/// One task as the Tasks view shows it: its own fields plus enough of the
+/// conversation it hangs off to render without a second round trip.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskCard {
+    pub id: i64,
+    pub account: String,
+    pub folder: String,
+    pub thread_key: String,
+    pub note: String,
+    pub due_at: Option<i64>,
+    pub completed_at: Option<i64>,
+    pub created_at: i64,
+    pub subject: String,
+    pub from_name: String,
+    pub from_addr: String,
+}
+
+/// Creates a task on this conversation, or edits the one already open on it.
+///
+/// The partial unique index (`account, thread_key` where `completed_at IS
+/// NULL`) is what makes this idempotent rather than a bare `INSERT` that
+/// would need its own existence check first — a second "convert to task" on
+/// the same thread edits in place instead of quietly duplicating it.
+pub fn save_task(
+    conn: &Connection,
+    account: &str,
+    thread_key: &str,
+    folder: &str,
+    due_at: Option<i64>,
+    note: &str,
+    now: i64,
+) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(account, thread_key) WHERE completed_at IS NULL DO UPDATE SET
+           note = excluded.note,
+           due_at = excluded.due_at",
+        params![account, thread_key, folder, note, due_at, now],
+    )?;
+    conn.query_row(
+        "SELECT id FROM tasks WHERE account = ?1 AND thread_key = ?2 AND completed_at IS NULL",
+        params![account, thread_key],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+/// Marks a task done, or takes that back.
+///
+/// Un-completing can collide with a task opened on the same thread since:
+/// the partial unique index rejects it rather than silently ending up with
+/// two open tasks on one conversation, and that constraint error is the
+/// honest answer here, not a case to paper over.
+pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64) -> Result<()> {
+    let completed_at: Option<i64> = completed.then_some(now);
+    conn.execute(
+        "UPDATE tasks SET completed_at = ?2 WHERE id = ?1",
+        params![id, completed_at],
+    )?;
+    Ok(())
+}
+
+/// Removes a task outright — "never mind, this was not one."
+pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+/// Every task, across every account and folder.
+///
+/// Open ones first, soonest due date first (no due date sorts after any
+/// that have one); completed ones after, most recently finished first — so
+/// completing a task moves it out of the way without erasing the record of
+/// it. A task whose message is no longer cached still appears, with blank
+/// subject/sender rather than vanishing: the reader made the task, and a
+/// gap in the local cache is not a reason to lose it.
+pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<TaskCard>> {
+    let where_clause = if include_completed { "" } else { "WHERE t.completed_at IS NULL" };
+    let sql = format!(
+        "SELECT t.id, t.account, t.folder, t.thread_key, t.note, t.due_at, t.completed_at, t.created_at,
+                COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, '')
+           FROM tasks t
+           LEFT JOIN messages m
+             ON m.account = t.account AND m.folder = t.folder
+            AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = t.thread_key
+            AND m.date = (SELECT MAX(m2.date) FROM messages m2
+                            WHERE m2.account = m.account AND m2.folder = m.folder
+                              AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = t.thread_key)
+          {where_clause}
+          ORDER BY (t.completed_at IS NOT NULL), t.due_at IS NULL, t.due_at ASC, t.completed_at DESC, t.created_at DESC"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], |row| {
+        Ok(TaskCard {
+            id: row.get(0)?,
+            account: row.get(1)?,
+            folder: row.get(2)?,
+            thread_key: row.get(3)?,
+            note: row.get(4)?,
+            due_at: row.get(5)?,
+            completed_at: row.get(6)?,
+            created_at: row.get(7)?,
+            subject: row.get(8)?,
+            from_name: row.get(9)?,
+            from_addr: row.get(10)?,
+        })
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// The open task's id and due date, if any, on each of these conversations —
+/// same one-query-per-page shape as `priority_for_threads`/`spam_for_threads`,
+/// for the row chip and for "already a task" in the convert-to-task menu.
+///
+/// Scoped to the account only, not the folder a card happens to be rendered
+/// in: the task's own `folder` column is just where to find the conversation
+/// again, same as `snoozed_threads`'. A thread a server files under several
+/// folders must show the same "already a task" state in every one of them —
+/// scoping by folder here would hide it everywhere but the one it was made in.
+pub fn open_tasks_for_threads(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashMap<String, (i64, Option<i64>)>> {
+    let mut out: HashMap<String, (i64, Option<i64>)> = HashMap::new();
+    if thread_keys.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT thread_key, id, due_at FROM tasks
+          WHERE account = ?1 AND completed_at IS NULL",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, Option<i64>>(2)?,
+        ))
+    })?;
+    for (key, id, due_at) in rows.filter_map(Result::ok) {
+        if wanted.contains(&key) {
+            out.insert(key, (id, due_at));
+        }
+    }
+    Ok(out)
+}
+
 /// Every kept template, in the order they were arranged.
 pub fn templates(conn: &Connection) -> Result<Vec<crate::templates::Template>> {
     let mut stmt = conn.prepare(

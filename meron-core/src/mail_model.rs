@@ -209,6 +209,13 @@ fn thread_cards_json_keyed(
     )
     .unwrap_or_default();
 
+    let card_tasks = store::open_tasks_for_threads(
+        conn,
+        account_id,
+        &cards.iter().map(|card| card.thread_key.clone()).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+
     cards
         .into_iter()
         .map(|card| {
@@ -254,6 +261,7 @@ fn thread_cards_json_keyed(
                 // the stakes are higher: a message never judged must not
                 // read as "checked and clean".
                 "spam": card_spam.get(&card.thread_key).copied(),
+                "task": card_tasks.get(&card.thread_key).map(|(id, due_at)| json!({ "id": id, "due_at": due_at })),
                 "labels": card_labels.get(&card.thread_key).cloned().unwrap_or_default(),
                 "recipient_overflow": card.header.recipient_overflow,
                 }),

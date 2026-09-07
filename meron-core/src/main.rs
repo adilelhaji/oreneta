@@ -1641,6 +1641,76 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "sender": sender }))
         }
 
+        // Every local to-do, across every account and folder — message-tied
+        // only, so each one carries the conversation it hangs off.
+        "tasks.list" => {
+            let include_completed = p
+                .get("include_completed")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let db = engine.db.lock().unwrap();
+            let tasks = store::list_tasks(&db, include_completed)?;
+            Ok(json!({
+                "tasks": tasks
+                    .iter()
+                    .map(|task| json!({
+                        "id": task.id,
+                        "thread_id": mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key),
+                        "account_id": task.account,
+                        "note": task.note,
+                        "due_at": task.due_at,
+                        "completed_at": task.completed_at,
+                        "created_at": task.created_at,
+                        "subject": task.subject,
+                        "from_name": task.from_name,
+                        "from_addr": task.from_addr,
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Creates a task on a conversation, or edits the one already open on
+        // it (a second "convert to task" on the same thread is a save, not a
+        // duplicate — see `store::save_task`).
+        "tasks.save" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let due_at = p.get("due_at").and_then(Value::as_i64);
+            let note = p
+                .get("note")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let id = store::save_task(
+                &db,
+                &parsed.account,
+                &parsed.thread_key,
+                &parsed.folder,
+                due_at,
+                &note,
+                now_seconds(),
+            )?;
+            Ok(json!({ "ok": true, "id": id }))
+        }
+
+        "tasks.setCompleted" => {
+            let id = req_i64(p, "id")?;
+            let completed = req_bool(p, "completed")?;
+            let db = engine.db.lock().unwrap();
+            store::set_task_completed(&db, id, completed, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // "Never mind, this was not one" — removes the task outright.
+        "tasks.delete" => {
+            let id = req_i64(p, "id")?;
+            let db = engine.db.lock().unwrap();
+            store::delete_task(&db, id)?;
+            Ok(json!({ "ok": true }))
+        }
+
         // Address books on a CardDAV server, found from what somebody typed:
         // an email address, a host, or a URL. Nothing is stored by this; it
         // is the question asked before deciding which book to keep.
