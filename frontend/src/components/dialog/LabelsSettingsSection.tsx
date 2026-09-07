@@ -1,13 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Link2, Plus, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { confirmAction, showToast } from '../../states/ui'
-import { LABEL_COLOURS, labels$, loadLabels, newLabel, saveLabels, type Label } from '../../states/labels'
-import { TextInput } from '../field/Field'
+import { accounts$ } from '../../states/accounts'
+import {
+  LABEL_COLOURS,
+  labels$,
+  linkLabel,
+  loadLabels,
+  newLabel,
+  saveLabels,
+  unlinkLabel,
+  type Label,
+} from '../../states/labels'
+import { Chip } from '../chip/Chip'
+import { IconButton } from '../button/IconButton'
+import { SelectInput, TextInput } from '../field/Field'
 import { SettingsGroup, Switch } from './AccountSettingsRows'
 import { Notice } from '../notice/Notice'
+import type { Account } from '../../types'
+
+/** Mail accounts a label could plausibly be linked on — not the feed
+ * accounts a label has no remote concept to link to. */
+function linkableAccounts(accounts: Account[]) {
+  return accounts.filter((account) => account.provider !== 'rss' && account.auth_type !== 'rss')
+}
 
 /**
  * Making, naming and colouring labels.
@@ -19,7 +38,16 @@ import { Notice } from '../notice/Notice'
 export function LabelsSettingsSection() {
   const { t } = useTranslation()
   const stored = useValue(labels$.labels)
+  const accounts = linkableAccounts(useValue(accounts$))
   const [draft, setDraft] = useState<Label[] | null>(null)
+  // Which label's link panel is open, and the not-yet-submitted new-link form
+  // for it. One at a time: linking is occasional, not something several rows
+  // need open together.
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [newLink, setNewLink] = useState<{ accountId: string; remoteName: string }>({
+    accountId: '',
+    remoteName: '',
+  })
 
   useEffect(() => {
     void loadLabels()
@@ -52,68 +80,154 @@ export function LabelsSettingsSection() {
           <p className="py-2 text-ui text-secondary">{t('labels.noneYet')}</p>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {labels.map((label, index) => (
-              <li key={label.id} className="flex items-center gap-2">
-                <div className="flex shrink-0 items-center gap-1">
-                  {LABEL_COLOURS.map((colour) => (
-                    <button
-                      key={colour}
-                      type="button"
-                      aria-label={colour}
-                      title={colour}
-                      onClick={() =>
-                        void persist(labels.map((item, i) => (i === index ? { ...item, colour } : item)))
+            {labels.map((label, index) => {
+              const linkedAccountIds = new Set(Object.keys(label.links))
+              const availableForNewLink = accounts.filter((account) => !linkedAccountIds.has(account.id))
+              const isExpanded = expanded === label.id
+              return (
+                <li key={label.id} className="flex flex-col gap-2 rounded-control-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1">
+                      {LABEL_COLOURS.map((colour) => (
+                        <button
+                          key={colour}
+                          type="button"
+                          aria-label={colour}
+                          title={colour}
+                          onClick={() =>
+                            void persist(labels.map((item, i) => (i === index ? { ...item, colour } : item)))
+                          }
+                          style={{ backgroundColor: colour }}
+                          className={clsx(
+                            'h-4 w-4 rounded-full transition-transform cursor-pointer',
+                            label.colour === colour
+                              ? 'ring-2 ring-offset-2 ring-offset-panel ring-primary/40 scale-110'
+                              : 'opacity-45 hover:opacity-100',
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <TextInput
+                      value={label.name}
+                      placeholder={t('labels.namePlaceholder')}
+                      aria-label={t('labels.name')}
+                      onChange={(event) =>
+                        setDraft(
+                          labels.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)),
+                        )
                       }
-                      style={{ backgroundColor: colour }}
-                      className={clsx(
-                        'h-4 w-4 rounded-full transition-transform cursor-pointer',
-                        label.colour === colour
-                          ? 'ring-2 ring-offset-2 ring-offset-panel ring-primary/40 scale-110'
-                          : 'opacity-45 hover:opacity-100',
-                      )}
+                      onBlur={() => void persist(labels)}
+                      className="min-w-0 flex-1"
                     />
-                  ))}
-                </div>
-                <TextInput
-                  value={label.name}
-                  placeholder={t('labels.namePlaceholder')}
-                  aria-label={t('labels.name')}
-                  onChange={(event) =>
-                    setDraft(labels.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)))
-                  }
-                  onBlur={() => void persist(labels)}
-                  className="min-w-0 flex-1"
-                />
-                <div className="flex shrink-0 items-center gap-1.5" title={t('labels.showInBar')}>
-                  <span className="text-2xs font-medium text-secondary">{t('labels.showInBarShort')}</span>
-                  <Switch
-                    checked={label.inBar}
-                    label={t('labels.showInBar')}
-                    onChange={() =>
-                      void persist(labels.map((item, i) => (i === index ? { ...item, inBar: !item.inBar } : item)))
-                    }
-                  />
-                </div>
-                <button
-                  type="button"
-                  title={t('labels.delete')}
-                  aria-label={t('labels.delete')}
-                  onClick={() => {
-                    void confirmAction({
-                      title: t('labels.delete'),
-                      message: t('labels.deleteConfirm', { name: label.name || t('labels.unnamed') }),
-                      confirmLabel: t('labels.delete'),
-                      tone: 'danger',
-                    }).then((confirmed) => {
-                      if (confirmed) void persist(labels.filter((_, i) => i !== index))
-                    })
-                  }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </li>
-            ))}
+                    <div className="flex shrink-0 items-center gap-1.5" title={t('labels.showInBar')}>
+                      <span className="text-2xs font-medium text-secondary">{t('labels.showInBarShort')}</span>
+                      <Switch
+                        checked={label.inBar}
+                        label={t('labels.showInBar')}
+                        onChange={() =>
+                          void persist(labels.map((item, i) => (i === index ? { ...item, inBar: !item.inBar } : item)))
+                        }
+                      />
+                    </div>
+                    {/* Shown whenever there's an account to link to, or an
+                        existing link to unlink — a label linked while an
+                        account existed must not lose its "remove this link"
+                        control just because that account is gone now. */}
+                    {(accounts.length > 0 || linkedAccountIds.size > 0) && (
+                      <IconButton
+                        icon={Link2}
+                        size="sm"
+                        variant="ghost"
+                        active={isExpanded || linkedAccountIds.size > 0}
+                        label={t('labels.links')}
+                        onClick={() => {
+                          setNewLink({ accountId: '', remoteName: '' })
+                          setExpanded(isExpanded ? null : label.id)
+                        }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      title={t('labels.delete')}
+                      aria-label={t('labels.delete')}
+                      onClick={() => {
+                        void confirmAction({
+                          title: t('labels.delete'),
+                          message: t('labels.deleteConfirm', { name: label.name || t('labels.unnamed') }),
+                          confirmLabel: t('labels.delete'),
+                          tone: 'danger',
+                        }).then((confirmed) => {
+                          if (confirmed) void persist(labels.filter((_, i) => i !== index))
+                        })
+                      }}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="ml-6 flex flex-col gap-2 rounded-control-sm border border-border bg-raised p-2.5">
+                      {Object.entries(label.links).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(label.links).map(([accountId, remoteName]) => {
+                            const account = accounts.find((item) => item.id === accountId)
+                            return (
+                              <Chip
+                                key={accountId}
+                                size="sm"
+                                title={`${account?.display_name ?? account?.email ?? accountId}: ${remoteName}`}
+                                onRemove={() => void unlinkLabel(label.id, accountId)}
+                                removeLabel={t('labels.unlink')}
+                              >
+                                {(account?.display_name || account?.email || accountId) + ': ' + remoteName}
+                              </Chip>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {availableForNewLink.length > 0 ? (
+                        <div className="flex items-center gap-1.5">
+                          <SelectInput
+                            value={newLink.accountId}
+                            onChange={(event) => setNewLink((state) => ({ ...state, accountId: event.target.value }))}
+                            aria-label={t('labels.linkAccount')}
+                            className="max-w-[10rem]"
+                          >
+                            <option value="">{t('labels.linkAccount')}</option>
+                            {availableForNewLink.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.display_name || account.email}
+                              </option>
+                            ))}
+                          </SelectInput>
+                          <TextInput
+                            value={newLink.remoteName}
+                            placeholder={t('labels.linkNamePlaceholder')}
+                            aria-label={t('labels.linkNamePlaceholder')}
+                            onChange={(event) => setNewLink((state) => ({ ...state, remoteName: event.target.value }))}
+                            className="min-w-0 flex-1"
+                          />
+                          <button
+                            type="button"
+                            disabled={!newLink.accountId || !newLink.remoteName.trim()}
+                            onClick={() => {
+                              void linkLabel(label.id, newLink.accountId, newLink.remoteName)
+                              setNewLink({ accountId: '', remoteName: '' })
+                            }}
+                            className="shrink-0 rounded-control-sm bg-accent px-2.5 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                          >
+                            {t('labels.link')}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-caption text-secondary">{t('labels.everyAccountLinked')}</p>
+                      )}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
 

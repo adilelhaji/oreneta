@@ -624,6 +624,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 29 {
         migrate_v29(&tx)?;
     }
+    if version < 30 {
+        migrate_v30(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1198,6 +1201,24 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
 fn migrate_v29(conn: &Connection) -> Result<()> {
     conn.execute_batch("ALTER TABLE labels ADD COLUMN in_bar INTEGER NOT NULL DEFAULT 0;")?;
     conn.execute_batch("PRAGMA user_version = 29;")?;
+    Ok(())
+}
+
+/// A label's optional link to a remote concept — a Gmail label, an Exchange
+/// category, an IMAP keyword — per account, matched by name. See
+/// docs/adr/0002-remote-label-linking.md for the model this implements:
+/// unlinked by default, and a link here is the schema only, not any
+/// protocol's actual read/write of the remote side.
+fn migrate_v30(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS label_links (
+           label_id    TEXT NOT NULL,
+           account_id  TEXT NOT NULL,
+           remote_name TEXT NOT NULL,
+           PRIMARY KEY (label_id, account_id)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 30;")?;
     Ok(())
 }
 
