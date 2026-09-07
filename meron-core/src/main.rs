@@ -1657,6 +1657,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "id": task.id,
                         "thread_id": mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key),
                         "account_id": task.account,
+                        "folder_id": task.folder,
                         "note": task.note,
                         "due_at": task.due_at,
                         "completed_at": task.completed_at,
@@ -1693,6 +1694,20 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 now_seconds(),
             )?;
             Ok(json!({ "ok": true, "id": id }))
+        }
+
+        // One task's own due date and note — the embedded card field only
+        // ever carries `id`/`due_at`, so the editor asks for the rest before
+        // opening on an existing task, rather than starting from a blank
+        // note that would overwrite the real one on save.
+        "tasks.get" => {
+            let id = req_i64(p, "id")?;
+            let db = engine.db.lock().unwrap();
+            let task = store::get_task(&db, id)?;
+            Ok(match task {
+                Some((due_at, note)) => json!({ "due_at": due_at, "note": note }),
+                None => Value::Null,
+            })
         }
 
         "tasks.setCompleted" => {

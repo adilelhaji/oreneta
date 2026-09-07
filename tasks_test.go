@@ -22,6 +22,27 @@ func TestTasksListOmitsIncludeCompletedWhenAbsent(t *testing.T) {
 	assertCall(t, writer.calls[0], "tasks.list", map[string]any{})
 }
 
+func TestTasksGetPassesIdThrough(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t,
+		sidecarResponsePlan{Result: map[string]any{"due_at": float64(1234), "note": "Old note"}},
+	)
+	out, err := app.tasksGet(map[string]any{"id": float64(7)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCall(t, writer.calls[0], "tasks.get", map[string]any{"id": float64(7)})
+	if got := out.(map[string]any)["note"]; got != "Old note" {
+		t.Fatalf("note = %v, want %q", got, "Old note")
+	}
+}
+
+func TestTasksGetRejectsAMissingId(t *testing.T) {
+	app, _ := newMailHandlerTestApp(t)
+	if _, err := app.tasksGet(map[string]any{}); err == nil {
+		t.Fatal("want an error for a missing id")
+	}
+}
+
 func TestTasksSavePassesDueAtAndNoteThrough(t *testing.T) {
 	threadID := formatImapThreadID("acc", "INBOX", "k1#Todo")
 	app, writer := newMailHandlerTestApp(t,

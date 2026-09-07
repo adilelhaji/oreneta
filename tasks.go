@@ -18,6 +18,19 @@ func (a *App) tasksList(payload map[string]any) (any, error) {
 	return a.sidecar.Call("tasks.list", params)
 }
 
+// tasksGet reports one task's own due date and note, for the editor to open
+// on an existing task without starting from a blank note.
+func (a *App) tasksGet(payload map[string]any) (any, error) {
+	id, ok := payload["id"].(float64)
+	if !ok {
+		return nil, errors.New("invalid task id")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("tasks.get", map[string]any{"id": int64(id)})
+}
+
 // tasksSave creates a task on a conversation, or edits the one already open
 // on it.
 func (a *App) tasksSave(payload map[string]any) (any, error) {

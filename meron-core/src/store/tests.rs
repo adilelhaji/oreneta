@@ -906,6 +906,14 @@ fn deleting_a_task_removes_it_and_frees_the_thread_for_a_new_open_task() {
 }
 
 #[test]
+fn get_task_reports_its_own_fields_and_none_for_an_unknown_id() {
+    let conn = test_conn();
+    let id = save_task(&conn, "acct", "t-1", "INBOX", Some(123), "The real note", 10).unwrap();
+    assert_eq!(get_task(&conn, id).unwrap(), Some((Some(123), "The real note".to_string())));
+    assert_eq!(get_task(&conn, id + 999).unwrap(), None);
+}
+
+#[test]
 fn tasks_list_open_first_soonest_due_date_then_completed_most_recent_first() {
     let conn = test_conn();
     let soon = save_task(&conn, "acct", "t-soon", "INBOX", Some(100), "", 1).unwrap();

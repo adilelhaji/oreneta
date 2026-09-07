@@ -2211,6 +2211,20 @@ pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64)
     Ok(())
 }
 
+/// One task's own fields, for the editor to open on — the embedded card
+/// field only ever carries `id`/`due_at`, never the note, so opening the
+/// editor on an existing task asks for the rest rather than starting from a
+/// blank note that would overwrite the real one on save.
+pub fn get_task(conn: &Connection, id: i64) -> Result<Option<(Option<i64>, String)>> {
+    conn.query_row(
+        "SELECT due_at, note FROM tasks WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
 /// Removes a task outright — "never mind, this was not one."
 pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
