@@ -2481,6 +2481,58 @@ pub fn delete_smime_cert(conn: &Connection, fingerprint: &str) -> Result<()> {
     Ok(())
 }
 
+/// The reader's own S/MIME identity, as the store records it. The private
+/// key is not here; it is in the OS keyring under
+/// `smime-identity-<fingerprint>`, the same split `StoredSecretKey` uses for
+/// OpenPGP. The certificate is public, so — unlike the key — keeping it in
+/// SQLite is the same exposure `smime_certs` already accepts for everyone
+/// else's certificates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredSmimeIdentity {
+    pub fingerprint: String,
+    pub subject: String,
+    pub addresses: Vec<String>,
+    pub added_at: i64,
+    #[serde(skip)]
+    pub der: Vec<u8>,
+}
+
+pub fn smime_identities(conn: &Connection) -> Result<Vec<StoredSmimeIdentity>> {
+    let mut stmt = conn.prepare(
+        "SELECT fingerprint, subject, addresses, der, added_at
+           FROM smime_identities ORDER BY added_at, fingerprint",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(StoredSmimeIdentity {
+            fingerprint: row.get(0)?,
+            subject: row.get(1)?,
+            addresses: split_lines(&row.get::<_, String>(2)?),
+            der: row.get(3)?,
+            added_at: row.get(4)?,
+        })
+    })?;
+    Ok(rows.flatten().collect())
+}
+
+pub fn upsert_smime_identity(conn: &Connection, identity: &StoredSmimeIdentity, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO smime_identities(fingerprint, subject, addresses, der, added_at)
+         VALUES(?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(fingerprint) DO UPDATE SET
+           subject = excluded.subject,
+           addresses = excluded.addresses,
+           der = excluded.der",
+        params![identity.fingerprint, identity.subject, identity.addresses.join("\n"), identity.der, now],
+    )?;
+    Ok(())
+}
+
+pub fn delete_smime_identity(conn: &Connection, fingerprint: &str) -> Result<()> {
+    conn.execute("DELETE FROM smime_identities WHERE fingerprint = ?1", params![fingerprint])?;
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {

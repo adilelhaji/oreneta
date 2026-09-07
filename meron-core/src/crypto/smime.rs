@@ -716,7 +716,7 @@ const OID_CONTENT_TYPE: &str = "1.2.840.113549.1.9.3";
 /// Recipients the reader holds no certificate for, by address — the same
 /// question [`super::pgp`]'s `missing_recipients` asks, of S/MIME
 /// certificates instead of OpenPGP ones.
-fn missing_recipients(certs: &[Certificate], addresses: &[String]) -> Vec<String> {
+pub fn missing_recipients(certs: &[Certificate], addresses: &[String]) -> Vec<String> {
     addresses
         .iter()
         .filter(|wanted| {

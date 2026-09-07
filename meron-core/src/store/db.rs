@@ -615,6 +615,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 26 {
         migrate_v26(&tx)?;
     }
+    if version < 27 {
+        migrate_v27(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1135,6 +1138,28 @@ fn migrate_v26(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 26;")?;
+    Ok(())
+}
+
+/// The reader's own S/MIME identity or identities — a certificate plus the
+/// private key it needs to sign and to decrypt. Same split as OpenPGP's
+/// secret keys: the private key is not here, it goes in the OS keyring under
+/// `smime-identity-<fingerprint>`. What is here is the certificate itself
+/// (public, so keeping it in SQLite is not the exposure a private key would
+/// be — it is what `smime_certs` already stores for other people's
+/// certificates) plus the facts the interface needs to list identities and
+/// the sender needs to pick the right one for a given From address.
+fn migrate_v27(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS smime_identities (
+           fingerprint TEXT PRIMARY KEY,
+           subject     TEXT NOT NULL DEFAULT '',
+           addresses   TEXT NOT NULL DEFAULT '',
+           der         BLOB NOT NULL,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 27;")?;
     Ok(())
 }
 

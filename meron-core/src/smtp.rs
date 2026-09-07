@@ -204,45 +204,75 @@ fn split_name_addr(entry: &str) -> (String, String) {
     (String::new(), trimmed.to_string())
 }
 
-/// What the sender asked to have done to a message before it goes.
+/// What the sender asked to have done to a message before it goes, and with
+/// which protocol.
 ///
 /// Carries the keys rather than looking them up, so this module stays about
-/// sending and the crypto module stays about cryptography.
-pub struct Protection {
-    pub what: crate::crypto::pgp::Protect,
-    pub signing_key: Option<sequoia_openpgp::Cert>,
-    pub passphrase: Option<String>,
-    pub recipients: Vec<sequoia_openpgp::Cert>,
-    /// Every address the message is going to, for checking a key is held for
-    /// each of them before anything is encrypted.
-    pub recipient_addresses: Vec<String>,
+/// sending and the crypto module stays about cryptography. Two variants, not
+/// a single struct with optional fields either way: which protocol protects
+/// a message is decided once, by the caller (`perform_send`, automatically —
+/// S/MIME when it can cover the sender and every recipient, OpenPGP
+/// otherwise), and everything downstream of that decision uses exactly one
+/// protocol's keys, never a mix.
+pub enum Protection {
+    Pgp {
+        what: crate::crypto::pgp::Protect,
+        signing_key: Option<sequoia_openpgp::Cert>,
+        passphrase: Option<String>,
+        recipients: Vec<sequoia_openpgp::Cert>,
+        /// Every address the message is going to, for checking a key is held
+        /// for each of them before anything is encrypted.
+        recipient_addresses: Vec<String>,
+    },
+    Smime {
+        what: crate::crypto::smime::Protect,
+        identity: Option<crate::crypto::pkcs12::Identity>,
+        recipients: Vec<x509_cert::Certificate>,
+        recipient_addresses: Vec<String>,
+    },
 }
 
 impl Protection {
     fn apply(&self, raw: &[u8]) -> Result<Vec<u8>> {
-        crate::crypto::pgp::protect_message(
-            raw,
-            self.what,
-            self.signing_key.as_ref(),
-            self.passphrase.as_deref(),
-            &self.recipients,
-            &self.recipient_addresses,
-        )
-        .map_err(|failure| match failure {
-            crate::crypto::pgp::ProtectFailure::NoSigningKey => {
-                anyhow::anyhow!("no OpenPGP key to sign with — import yours in settings")
+        match self {
+            Protection::Pgp { what, signing_key, passphrase, recipients, recipient_addresses } => {
+                crate::crypto::pgp::protect_message(
+                    raw,
+                    *what,
+                    signing_key.as_ref(),
+                    passphrase.as_deref(),
+                    recipients,
+                    recipient_addresses,
+                )
+                .map_err(|failure| match failure {
+                    crate::crypto::pgp::ProtectFailure::NoSigningKey => {
+                        anyhow::anyhow!("no OpenPGP key to sign with — import yours in settings")
+                    }
+                    crate::crypto::pgp::ProtectFailure::NeedsPassphrase => {
+                        anyhow::anyhow!("your OpenPGP key needs its passphrase")
+                    }
+                    crate::crypto::pgp::ProtectFailure::NoRecipientKey { missing } => anyhow::anyhow!(
+                        "no key here for {} — the message was not sent",
+                        missing.join(", ")
+                    ),
+                    crate::crypto::pgp::ProtectFailure::Failed { message } => {
+                        anyhow::anyhow!("the message could not be protected: {message}")
+                    }
+                })
             }
-            crate::crypto::pgp::ProtectFailure::NeedsPassphrase => {
-                anyhow::anyhow!("your OpenPGP key needs its passphrase")
+            Protection::Smime { what, identity, recipients, recipient_addresses } => {
+                crate::crypto::smime::protect_message(raw, *what, identity.as_ref(), recipients, recipient_addresses)
+                    .map_err(|failure| match failure {
+                        crate::crypto::smime::ProtectFailure::NoRecipientKey { missing } => anyhow::anyhow!(
+                            "no key here for {} — the message was not sent",
+                            missing.join(", ")
+                        ),
+                        crate::crypto::smime::ProtectFailure::Failed { message } => {
+                            anyhow::anyhow!("the message could not be protected: {message}")
+                        }
+                    })
             }
-            crate::crypto::pgp::ProtectFailure::NoRecipientKey { missing } => anyhow::anyhow!(
-                "no OpenPGP key here for {} — the message was not sent",
-                missing.join(", ")
-            ),
-            crate::crypto::pgp::ProtectFailure::Failed { message } => {
-                anyhow::anyhow!("the message could not be protected: {message}")
-            }
-        })
+        }
     }
 }
 

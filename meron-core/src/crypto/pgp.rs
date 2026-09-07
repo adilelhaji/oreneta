@@ -651,7 +651,7 @@ pub fn protect_message(
 }
 
 /// Recipients the reader holds no certificate for, by address.
-fn missing_recipients(certs: &[Cert], addresses: &[String]) -> Vec<String> {
+pub fn missing_recipients(certs: &[Cert], addresses: &[String]) -> Vec<String> {
     addresses
         .iter()
         .filter(|wanted| {

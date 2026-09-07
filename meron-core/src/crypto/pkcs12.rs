@@ -27,7 +27,7 @@ use aes::cipher::{BlockModeDecrypt, InnerIvInit, KeyInit};
 use cms::content_info::ContentInfo as CmsContentInfo;
 use cms::encrypted_data::EncryptedData;
 use der::asn1::{AnyRef, OctetString};
-use der::Decode;
+use der::{Decode, Encode};
 use pbkdf2::hmac::{Hmac, Mac};
 use pkcs12::kdf::{derive_key_utf8, Pkcs12KeyType};
 use pkcs12::pbe_params::{EncryptedPrivateKeyInfo, Pbes2Params, Pbkdf2Params, Pkcs12PbeParams};
@@ -351,4 +351,36 @@ fn decrypt_pbes2(alg: &AlgorithmIdentifierOwned, password: &str, ciphertext: &[u
     let iv = iv_octets.as_bytes();
 
     super::block_cipher::aes_cbc_decrypt(&key, iv, ciphertext).map_err(|_| OpenFailure::WrongPassword)
+}
+
+/// Serialize the private key as PKCS#8 DER, for storing outside the original
+/// PKCS#12 file — once imported, the OS keyring is the private key's long
+/// term home, not the `.p12`/`.pfx` file the reader picked (which they may
+/// move or delete).
+pub fn private_key_to_pkcs8_der(private_key: &RsaPrivateKey) -> Result<Vec<u8>, OpenFailure> {
+    use pkcs8::EncodePrivateKey;
+    private_key
+        .to_pkcs8_der()
+        .map(|doc| doc.as_bytes().to_vec())
+        .map_err(|error| OpenFailure::Malformed(format!("could not re-encode the private key: {error}")))
+}
+
+/// Re-encode the certificate half of an [`Identity`] as DER, for storing
+/// alongside the private key.
+pub fn certificate_to_der(identity: &Identity) -> Result<Vec<u8>, OpenFailure> {
+    identity
+        .certificate
+        .to_der()
+        .map_err(|error| OpenFailure::Malformed(format!("could not re-encode the certificate: {error}")))
+}
+
+/// Reconstruct an [`Identity`] from its stored parts: the certificate (kept
+/// in SQLite, since it is public — the same as any other held certificate)
+/// and the private key (kept in the OS keyring, as PKCS#8 DER).
+pub fn identity_from_parts(cert_der: &[u8], key_pkcs8_der: &[u8]) -> Result<Identity, OpenFailure> {
+    let certificate = Certificate::from_der(cert_der).map_err(malformed("stored certificate is not valid"))?;
+    let private_key = RsaPrivateKey::from_pkcs8_der(key_pkcs8_der)
+        .map_err(|_| OpenFailure::Malformed("stored private key is not valid PKCS#8".into()))?;
+    let info = describe(&certificate);
+    Ok(Identity { certificate, private_key, info })
 }

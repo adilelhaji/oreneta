@@ -1947,6 +1947,113 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
         }
 
+        // The reader's own S/MIME identity or identities — the parallel to
+        // `pgp.secretKeys`/`pgp.importSecret`/`pgp.removeSecret`. The
+        // certificate is public and lives in SQLite; the private key goes to
+        // the OS keyring, under the same naming scheme OpenPGP secret keys
+        // use, just with its own prefix.
+        "smime.identities" => {
+            let identities = store::smime_identities(&engine.db.lock().unwrap())?;
+            Ok(json!({ "identities": identities }))
+        }
+
+        "smime.importIdentity" => {
+            let p12_b64 = req_str(p, "p12")?;
+            let password = req_str(p, "password")?;
+            let p12 = {
+                use base64::Engine as _;
+                base64::engine::general_purpose::STANDARD.decode(p12_b64.trim())
+            }
+            .context("that is not base64")?;
+            let identity = meron_core::crypto::pkcs12::read_pkcs12(&p12, &password)
+                .map_err(|failure| anyhow::anyhow!("{failure}"))?;
+            let key_der = meron_core::crypto::pkcs12::private_key_to_pkcs8_der(&identity.private_key)
+                .map_err(|failure| anyhow::anyhow!("{failure}"))?;
+            let cert_der = meron_core::crypto::pkcs12::certificate_to_der(&identity)
+                .map_err(|failure| anyhow::anyhow!("{failure}"))?;
+
+            meron_core::secrets::store(
+                &format!("smime-identity-{}", identity.info.fingerprint),
+                &meron_core::secrets::Secrets {
+                    password: {
+                        use base64::Engine as _;
+                        base64::engine::general_purpose::STANDARD.encode(&key_der)
+                    },
+                    ..Default::default()
+                },
+            )?;
+            store::upsert_smime_identity(
+                &engine.db.lock().unwrap(),
+                &store::StoredSmimeIdentity {
+                    fingerprint: identity.info.fingerprint.clone(),
+                    subject: identity.info.subject,
+                    addresses: identity.info.addresses,
+                    der: cert_der,
+                    added_at: 0,
+                },
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": identity.info.fingerprint }))
+        }
+
+        "smime.removeIdentity" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_smime_identity(&engine.db.lock().unwrap(), &fingerprint)?;
+            let _ = meron_core::secrets::delete(&format!("smime-identity-{fingerprint}"));
+            Ok(json!({ "ok": true }))
+        }
+
+        // Open one S/MIME-encrypted message — the parallel to `pgp.decrypt`.
+        // No passphrase parameter: unlike an OpenPGP secret key, the private
+        // key here was unlocked once, at import, and lives ready-to-use in
+        // the OS keyring from then on.
+        "smime.decrypt" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+
+            let stored_identities = store::smime_identities(&engine.db.lock().unwrap())?;
+            let identities: Vec<meron_core::crypto::pkcs12::Identity> = stored_identities
+                .iter()
+                .filter_map(|stored| {
+                    let secrets =
+                        meron_core::secrets::load(&format!("smime-identity-{}", stored.fingerprint)).ok()?;
+                    let key_der = {
+                        use base64::Engine as _;
+                        base64::engine::general_purpose::STANDARD.decode(secrets.password.trim()).ok()?
+                    };
+                    meron_core::crypto::pkcs12::identity_from_parts(&stored.der, &key_der).ok()
+                })
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            // Try every held identity; a message names its recipient inside
+            // the CMS structure, not in a header this app parses beforehand.
+            let mut last_failure = meron_core::crypto::smime::DecryptionFailure::NoKey;
+            for identity in &identities {
+                match meron_core::crypto::smime::decrypt_message(&raw.raw, identity) {
+                    Ok(opened) => {
+                        return Ok(json!({ "ok": true, "body": opened.body, "bodyHtml": opened.body_html }))
+                    }
+                    Err(failure) => last_failure = failure,
+                }
+            }
+            Ok(json!({ "ok": false, "failure": last_failure }))
+        }
+
         // People, from whichever books have been brought in. An empty query
         // is the whole book, which is what the Personas view opens on.
         "people.list" => {
@@ -5071,22 +5178,64 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
         let attachments = opt_attachments(p)?;
         let requested_from = req_str(p, "from").unwrap_or_default();
 
-        // OpenPGP, when the sender asked for it. Assembled here, before
-        // anything is sent, so a request this account cannot satisfy fails
+        // Sign and/or encrypt, when the sender asked for it — with whichever
+        // protocol can actually do the whole job. Assembled here, before
+        // anything is sent, so a request neither protocol can satisfy fails
         // loudly instead of the message quietly going out in the clear.
+        //
+        // The choice between OpenPGP and S/MIME is not put to the sender:
+        // one "sign"/"encrypt" pair covers both, and this picks S/MIME
+        // whenever it alone can cover the sender (if signing) and every
+        // recipient (if encrypting), falling back to OpenPGP otherwise. A
+        // message is never protected with a mix of the two.
         let protection = {
             let sign = p.get("sign").and_then(Value::as_bool).unwrap_or(false);
             let encrypt = p.get("encrypt").and_then(Value::as_bool).unwrap_or(false);
             if !sign && !encrypt {
                 None
             } else {
-                let (signing_key, recipients) = {
+                let addresses: Vec<String> = [to.as_str(), cc.as_str(), bcc.as_str()]
+                    .iter()
+                    .flat_map(|field| meron_core::parse::split_address_list(field))
+                    .collect();
+                let wanted = requested_from.trim().to_lowercase();
+
+                let (smime_identity, smime_recipients, pgp_signing_key, pgp_recipients) = {
                     let db = engine.db.lock().unwrap();
+
+                    let smime_identity = if sign {
+                        store::smime_identities(&db)?
+                            .into_iter()
+                            .find(|id| wanted.is_empty() || id.addresses.iter().any(|a| *a == wanted))
+                            .and_then(|stored| {
+                                let secrets = meron_core::secrets::load(&format!(
+                                    "smime-identity-{}",
+                                    stored.fingerprint
+                                ))
+                                .ok()?;
+                                let key_der = {
+                                    use base64::Engine as _;
+                                    base64::engine::general_purpose::STANDARD
+                                        .decode(secrets.password.trim())
+                                        .ok()?
+                                };
+                                meron_core::crypto::pkcs12::identity_from_parts(&stored.der, &key_der).ok()
+                            })
+                    } else {
+                        None
+                    };
+                    let smime_recipients = if encrypt {
+                        let der: Vec<Vec<u8>> =
+                            store::smime_certs(&db)?.into_iter().map(|cert| cert.der).collect();
+                        meron_core::crypto::smime::certs_from_der(&der)
+                    } else {
+                        Vec::new()
+                    };
+
                     // The sender's own key, chosen by the address they are
                     // sending from: somebody with two keys should sign as
                     // whoever they are being right now.
-                    let signing_key = if sign {
-                        let wanted = requested_from.trim().to_lowercase();
+                    let pgp_signing_key = if sign {
                         store::pgp_secret_keys(&db)?
                             .into_iter()
                             .find(|key| {
@@ -5108,7 +5257,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                     } else {
                         None
                     };
-                    let recipients = if encrypt {
+                    let pgp_recipients = if encrypt {
                         let armoured: Vec<String> = store::pgp_certs(&db)?
                             .into_iter()
                             .map(|cert| cert.armoured)
@@ -5117,19 +5266,29 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                     } else {
                         Vec::new()
                     };
-                    (signing_key, recipients)
+
+                    (smime_identity, smime_recipients, pgp_signing_key, pgp_recipients)
                 };
-                let addresses: Vec<String> = [to.as_str(), cc.as_str(), bcc.as_str()]
-                    .iter()
-                    .flat_map(|field| meron_core::parse::split_address_list(field))
-                    .collect();
-                Some(smtp::Protection {
-                    what: meron_core::crypto::pgp::Protect { sign, encrypt },
-                    signing_key,
-                    passphrase: req_str(p, "passphrase").ok(),
-                    recipients,
-                    recipient_addresses: addresses,
-                })
+
+                let smime_missing = meron_core::crypto::smime::missing_recipients(&smime_recipients, &addresses);
+                let smime_ok = (!sign || smime_identity.is_some()) && (!encrypt || smime_missing.is_empty());
+
+                if smime_ok {
+                    Some(smtp::Protection::Smime {
+                        what: meron_core::crypto::smime::Protect { sign, encrypt },
+                        identity: smime_identity,
+                        recipients: smime_recipients,
+                        recipient_addresses: addresses,
+                    })
+                } else {
+                    Some(smtp::Protection::Pgp {
+                        what: meron_core::crypto::pgp::Protect { sign, encrypt },
+                        signing_key: pgp_signing_key,
+                        passphrase: req_str(p, "passphrase").ok(),
+                        recipients: pgp_recipients,
+                        recipient_addresses: addresses,
+                    })
+                }
             }
         };
         let creds = engine.ensure_valid_creds(&account).await?;

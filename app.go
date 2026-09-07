@@ -353,6 +353,14 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.smimeRemove(payload)
 	case "smime.verify":
 		return a.smimeVerify(payload)
+	case "smime.identities":
+		return a.smimeIdentities(payload)
+	case "smime.importIdentity":
+		return a.smimeImportIdentity(payload)
+	case "smime.removeIdentity":
+		return a.smimeRemoveIdentity(payload)
+	case "smime.decrypt":
+		return a.smimeDecrypt(payload)
 	case "pgp.verify":
 		return a.pgpVerify(payload)
 	case "carddav.discover":
