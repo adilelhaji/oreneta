@@ -453,6 +453,14 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailSpamReason(payload)
 	case "mail.recordSpamJudgment":
 		return a.mailRecordSpamJudgment(payload)
+	case "tasks.list":
+		return a.tasksList(payload)
+	case "tasks.save":
+		return a.tasksSave(payload)
+	case "tasks.setCompleted":
+		return a.tasksSetCompleted(payload)
+	case "tasks.delete":
+		return a.tasksDelete(payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":
