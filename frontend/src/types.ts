@@ -214,6 +214,14 @@ export type Message = {
    * which is not the same as judged unimportant.
    */
   priority?: boolean
+  /**
+   * Whether the learned spam filter flags this, as the core judged it.
+   *
+   * Absent means nobody has judged it — the identical rule as `priority`,
+   * and the same reason: unjudged must never read as "checked and clean".
+   * Never acted on by itself; see `components/chat/SpamNotice.tsx`.
+   */
+  spam?: boolean
   attachments?: Attachment[]
   /** Source feed URL; present on RSS feed threads only. */
   feed_url?: string

@@ -7,6 +7,7 @@ import type { Message } from '../../types'
 import { fileIconFor, formatFileSize, mediaSrc } from './messageHelpers'
 import { MessageBubbleBody } from './MessageBubbleBody'
 import { ProtectionNotice } from './ProtectionNotice'
+import { SpamNotice } from './SpamNotice'
 import { VideoAttachment } from './VideoAttachment'
 import type { MessageView } from './useMessageView'
 import { previewKind } from '../../lib/attachmentPreview'
@@ -114,6 +115,7 @@ export function MessageContent({
       {/* Said before the body rather than after it: whether a message can be
           trusted changes how its words should be read. */}
       <ProtectionNotice message={message} />
+      <SpamNotice message={message} />
 
       <MessageBubbleBody
         message={message}
