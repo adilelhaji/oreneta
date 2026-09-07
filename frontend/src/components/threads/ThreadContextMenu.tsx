@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Copy,
   FolderInput,
+  ListTodo,
   Mail,
   MailOpen,
   MessageSquare,
@@ -73,6 +74,7 @@ export type ThreadMenuState =
       folderId: string
       unread: boolean
       starred: boolean
+      task?: Message['task']
       ownerKey?: string
     }
 
@@ -151,6 +153,7 @@ export function useThreadContextMenu(accounts: Account[]): ThreadContextMenuCont
         folderId: thread.folder_id,
         unread: thread.unread,
         starred: thread.starred,
+        task: thread.task,
         ownerKey,
       })
     },
@@ -492,6 +495,20 @@ export function ThreadContextMenu({
           const threadId = menu.threadId
           close()
           void markThreadJunk(threadId, !inJunk).then(() => after('archive', threadId))
+        }}
+      />
+      <MenuItem
+        icon={<ListTodo size={13} className="text-secondary" />}
+        label={menu.task ? t('tasks.editAction') : t('tasks.addAction')}
+        onClick={() => {
+          const editorState = {
+            threadId: menu.threadId,
+            id: menu.task?.id ?? 0,
+            dueAt: menu.task?.due_at ?? null,
+            note: '',
+          }
+          close()
+          ui$.taskEditor.set(editorState)
         }}
       />
       <PriorityMenuSection

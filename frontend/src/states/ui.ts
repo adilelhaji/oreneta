@@ -158,6 +158,14 @@ export const ui$ = observable({
   // Whether the address book is showing instead of mail. Like the calendar,
   // and exclusive with it: they take the same pane.
   peopleOpen: false,
+  // Whether the task list is showing instead of mail. Same pane, same
+  // exclusivity, for the same reason: a task is about a message, but the
+  // list of them is not mail itself.
+  tasksOpen: false,
+  // The task the "convert to task" dialog is open on, if any — the thread it
+  // was opened from, and the existing task's fields when editing one already
+  // open on that thread (absent when creating a new one).
+  taskEditor: null as { threadId: string; id: number; dueAt: number | null; note: string } | null,
   selectedAccount: '',
   selectedFolder: 'inbox',
   selectedThread: '',

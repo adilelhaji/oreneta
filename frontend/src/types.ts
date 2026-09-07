@@ -222,6 +222,9 @@ export type Message = {
    * Never acted on by itself; see `components/chat/SpamNotice.tsx`.
    */
   spam?: boolean
+  /** The open task on this conversation, if any — never a completed one; the
+   * Tasks view is where those are found. */
+  task?: { id: number; due_at: number | null } | null
   attachments?: Attachment[]
   /** Source feed URL; present on RSS feed threads only. */
   feed_url?: string
