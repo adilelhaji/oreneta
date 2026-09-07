@@ -90,6 +90,7 @@ import { SmimeSettingsSection } from './SmimeSettingsSection'
 import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
+import { OofSettingsCard } from './OofSettingsCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
 import { useAccountAvatar } from './useAccountAvatar'
 import { AccountAliasesCard } from './AccountAliasesCard'
@@ -1497,6 +1498,7 @@ function AccountPanel({ account }: { account: Account }) {
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}
       {!isRSS && <AccountSignatureCard account={account} />}
+      {!isRSS && <OofSettingsCard account={account} />}
       {isRSS && <OpmlGroup account={account.id} />}
 
       <button
