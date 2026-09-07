@@ -2955,6 +2955,8 @@ fn seed_mobile_account(data_dir: &std::path::Path, email: &str) {
         cert_pin: None,
         smtp_cert_pin: None,
         ews_url: String::new(),
+        delegate_account_id: String::new(),
+        target_mailbox: String::new(),
     };
     let meta = AccountMeta {
         engine: "mail".to_string(),

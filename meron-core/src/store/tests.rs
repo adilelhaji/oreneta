@@ -2684,7 +2684,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 
     for table in [
         "accounts",
@@ -2729,7 +2729,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 }
 
 #[test]
@@ -2757,7 +2757,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3863,6 +3863,8 @@ fn proxy_test_creds(proxy: crate::proxy::ProxyChoice) -> crate::imap::Creds {
         cert_pin: None,
         smtp_cert_pin: None,
         ews_url: String::new(),
+        delegate_account_id: String::new(),
+        target_mailbox: String::new(),
     }
 }
 

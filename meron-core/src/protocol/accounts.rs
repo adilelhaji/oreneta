@@ -825,6 +825,9 @@ pub(crate) fn add_mobile_password_account(data_dir: &str, params: &Value) -> Res
         smtp_cert_pin: pin_param(params, "smtp_cert_pin"),
         // Mobile account setup is IMAP-only; Exchange is a desktop path.
         ews_url: String::new(),
+        // Shared mailboxes are added from desktop Settings, not here.
+        delegate_account_id: String::new(),
+        target_mailbox: String::new(),
     };
     let meta = AccountMeta {
         engine: "mail".to_string(),

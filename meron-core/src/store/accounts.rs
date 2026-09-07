@@ -282,6 +282,7 @@ fn creds_to_config(creds: &Creds) -> String {
         "cert_pin": creds.cert_pin,
         "smtp_cert_pin": creds.smtp_cert_pin,
         "ews_url": creds.ews_url,
+        "delegate_account_id": creds.delegate_account_id,
     })
     .to_string()
 }
@@ -323,6 +324,9 @@ fn config_to_creds(json: &str) -> Creds {
         cert_pin: config_cert_pin(&v, "cert_pin"),
         smtp_cert_pin: config_cert_pin(&v, "smtp_cert_pin"),
         ews_url: v["ews_url"].as_str().unwrap_or("").to_string(),
+        delegate_account_id: v["delegate_account_id"].as_str().unwrap_or("").to_string(),
+        // Resolved by `Engine`'s delegate-resolution pass, never stored.
+        target_mailbox: String::new(),
     }
 }
 
@@ -994,6 +998,19 @@ pub fn account_engine(conn: &Connection, id: &str) -> Result<Option<String>> {
     Ok(conn
         .query_row(
             "SELECT engine FROM accounts WHERE id = ?1",
+            params![id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?)
+}
+
+/// An account's own stored address, if it exists. A shared mailbox's
+/// delegate-resolution pass uses this to say which mailbox its borrowed
+/// connection should actually address — see `imap::Creds::target_mailbox`.
+pub fn account_email(conn: &Connection, id: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT email FROM accounts WHERE id = ?1",
             params![id],
             |row| row.get::<_, String>(0),
         )

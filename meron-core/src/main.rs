@@ -2081,6 +2081,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     url: creds.ews_url.clone(),
                     username: creds.user.clone(),
                     password: creds.password.clone(),
+                    target_mailbox: creds.target_mailbox.clone(),
                 };
                 let settings = tokio::task::spawn_blocking(move || {
                     exchange::EwsClient::new(config).get_oof_settings(&own_address)
@@ -2110,6 +2111,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     url: creds.ews_url.clone(),
                     username: creds.user.clone(),
                     password: creds.password.clone(),
+                    target_mailbox: creds.target_mailbox.clone(),
                 };
                 tokio::task::spawn_blocking(move || {
                     exchange::EwsClient::new(config).set_oof_settings(&own_address, &settings)
@@ -2811,6 +2813,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 // Present only for Exchange accounts, and what routes them to
                 // the EWS backend; see `backend::connect`.
                 ews_url: ews_url.clone(),
+                // A shared mailbox is added through `account.addSharedMailbox`,
+                // never through this general add/reconnect path.
+                delegate_account_id: String::new(),
+                target_mailbox: String::new(),
             };
             // A reconnect resends the setup form, which has no field for the
             // account's proxy or the certificates it accepted. Carry those over
@@ -2850,6 +2856,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         url: creds.ews_url.clone(),
                         username: creds.user.clone(),
                         password: creds.password.clone(),
+                        target_mailbox: creds.target_mailbox.clone(),
                     };
                     tokio::time::timeout(Duration::from_secs(20), exchange::validate(config))
                         .await
