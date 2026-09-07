@@ -8,6 +8,7 @@ use async_smtp::error::Error as SmtpError;
 use async_smtp::{EmailAddress, Envelope, SendableEmail, SmtpClient, SmtpTransport};
 use base64::Engine as _;
 use mail_builder::MessageBuilder;
+use mail_builder::headers::content_type::ContentType;
 use std::time::Duration;
 use tokio::io::BufReader;
 
@@ -362,7 +363,17 @@ pub fn build_message(
         if !att.inline_id.trim().is_empty() {
             builder = builder.inline(&att.mime, att.inline_id.trim(), bytes);
         } else {
-            builder = builder.attachment(&att.mime, &att.filename, bytes);
+            // The filename also goes on Content-Type's own "name" attribute,
+            // not just Content-Disposition's "filename" — the older
+            // convention some mail readers still look at instead. It also
+            // means an attachment's Content-Type is never emitted with zero
+            // parameters: a real IMAP server (confirmed against `maddy`,
+            // the integration-test server) reports a bare, parameter-less
+            // Content-Type in BODYSTRUCTURE as `()` rather than the `NIL`
+            // RFC 3501 actually requires there, which every strict parser —
+            // including the one this app's own IMAP client uses — rejects.
+            let content_type = ContentType::new(att.mime.clone()).attribute("name", att.filename.clone());
+            builder = builder.attachment(content_type, &att.filename, bytes);
         }
     }
 
@@ -801,6 +812,49 @@ mod tests {
         )
         .expect_err("must fail instead of sending without the attachment");
         assert!(err.to_string().contains("broken.bin"), "{err:#}");
+    }
+
+    #[test]
+    fn an_attachments_content_type_always_carries_a_parameter() {
+        // A bare, parameter-less Content-Type (nothing beyond the mime type
+        // itself) is technically valid to send, but a real IMAP server
+        // (confirmed against `maddy`, the integration-test server) reports
+        // it back in BODYSTRUCTURE as `()` rather than the `NIL` RFC 3501
+        // actually requires there — which every strict parser, including
+        // this app's own IMAP client, rejects. Giving every attachment a
+        // "name" parameter (mirroring its Content-Disposition filename, and
+        // matching what most real-world mail clients already do) means this
+        // app never emits the shape that breaks it, whatever the caller's
+        // own mime type string looks like.
+        use base64::Engine as _;
+        let atts = vec![super::AttachmentInput {
+            filename: "itest-note.txt".into(),
+            mime: "text/plain".into(),
+            data: base64::engine::general_purpose::STANDARD.encode(b"hello"),
+            inline_id: String::new(),
+        }];
+        let raw = build_message(
+            "Alice",
+            "alice@x.com",
+            "bob@y.com",
+            "",
+            "",
+            false,
+            "Subject",
+            "body",
+            "",
+            &atts,
+            "",
+            "",
+            "",
+            "",
+        )
+        .expect("build_message");
+        let text = String::from_utf8_lossy(&raw);
+        assert!(
+            text.contains("name=\"itest-note.txt\""),
+            "attachment Content-Type missing its name parameter:\n{text}"
+        );
     }
 
     #[test]
