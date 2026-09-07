@@ -621,9 +621,6 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 28 {
         migrate_v28(&tx)?;
     }
-    if version < 29 {
-        migrate_v29(&tx)?;
-    }
 
     tx.commit()?;
     Ok(())
@@ -1189,25 +1186,6 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 28;")?;
-    Ok(())
-}
-
-/// A shared mailbox is an ordinary account row with no connection of its
-/// own: `delegate_account_id` names the real Exchange account whose
-/// credentials open it (Exchange resolves "full access" permission
-/// server-side once a request names the shared mailbox's own address —
-/// see `exchange::EwsConfig::target_mailbox`). Empty for every account that
-/// connects for itself, which is every account before this feature and
-/// every non-Exchange account after it.
-///
-/// Reusing the `accounts` table rather than a parallel one means a shared
-/// mailbox gets its own `folders` rows, its own sync state, its own place
-/// in the sidebar — everything already scoped by `account` id — for free.
-fn migrate_v29(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "ALTER TABLE accounts ADD COLUMN delegate_account_id TEXT NOT NULL DEFAULT '';",
-    )?;
-    conn.execute_batch("PRAGMA user_version = 29;")?;
     Ok(())
 }
 

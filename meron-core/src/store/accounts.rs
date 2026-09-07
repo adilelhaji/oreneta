@@ -749,6 +749,24 @@ pub fn delete_secret(conn: &Connection, account_id: &str) -> Result<()> {
 
 /// Remove an account and all of its cached state (mail folders/messages and rss
 /// subscriptions/items) from the DB.
+/// The shared mailboxes (see `imap::Creds::delegate_account_id`) that
+/// borrow `parent_id`'s credentials. Used when `parent_id` is removed: a
+/// shared mailbox left delegating to a gone account has no path back to
+/// working — nothing to reconnect — so it is removed alongside it rather
+/// than left stuck needing reconnect forever.
+///
+/// `delegate_account_id` lives in the `config` JSON, the same as every
+/// other connection detail (`ews_url`, `auth_type`, ...) — no schema
+/// column of its own, so this reads it with `json_extract` rather than a
+/// plain `WHERE` on a column.
+pub fn shared_mailboxes_of(conn: &Connection, parent_id: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM accounts WHERE json_extract(config, '$.delegate_account_id') = ?1",
+    )?;
+    let rows = stmt.query_map(params![parent_id], |row| row.get::<_, String>(0))?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 pub fn delete_account(conn: &Connection, id: &str) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;

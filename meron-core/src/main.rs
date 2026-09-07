@@ -4652,6 +4652,16 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // next loop and exits.
         "account.remove" => {
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
+            // A shared mailbox delegating to this account has no path back
+            // to working once it is gone — nothing left to reconnect — so
+            // it goes with it rather than sitting stuck forever.
+            let dependents = store::shared_mailboxes_of(&engine.db.lock().unwrap(), &id).unwrap_or_default();
+            for dependent in &dependents {
+                engine.accounts.lock().await.remove(dependent);
+                engine.clear_pool(dependent);
+                let db = engine.db.lock().unwrap();
+                store::delete_account(&db, dependent)?;
+            }
             engine.accounts.lock().await.remove(&id);
             // Drop any warm sessions: their creds are gone and must not be reused.
             engine.clear_pool(&id);
@@ -4662,6 +4672,96 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             parse::remove_account_media(&parse::media_root(), &id);
             let _ = secrets::delete(&id);
             Ok(json!({ "ok": true }))
+        }
+
+        // Add a shared mailbox: an Exchange account the reader has been
+        // granted full-access permission on, reached through an existing
+        // Exchange account's own credentials rather than its own. Stored as
+        // an ordinary account row with delegate_account_id set — see
+        // `imap::Creds::delegate_account_id` and `Engine::resolve_shared_mailbox`
+        // for how that becomes a real, connectable account.
+        "account.addSharedMailbox" => {
+            let parent_id = req_str(p, "parent_account")?;
+            let address = req_str(p, "address")?.trim().to_lowercase();
+            if address.is_empty() {
+                return Err(anyhow::anyhow!("no shared mailbox address given"));
+            }
+            let display_name = req_str(p, "display_name")
+                .ok()
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| address.clone());
+
+            let parent_creds = engine
+                .ensure_valid_creds(&parent_id)
+                .await
+                .context("the account granting access needs to be reconnected first")?;
+            if !parent_creds.is_ews() {
+                return Err(anyhow::anyhow!(
+                    "only an Exchange account can add a shared mailbox"
+                ));
+            }
+
+            let id = address.clone();
+            {
+                let db = engine.db.lock().unwrap();
+                // The id is the address, the same as any other account — if
+                // one already exists here and is not already this exact
+                // shared mailbox, adding would silently overwrite a real
+                // account's credentials or someone else's delegation.
+                if let Some(existing) = store::load_account(&db, &id)? {
+                    if existing.delegate_account_id != parent_id {
+                        return Err(anyhow::anyhow!(
+                            "an account already exists for {address}"
+                        ));
+                    }
+                }
+            }
+
+            let creds = imap::Creds {
+                host: String::new(),
+                port: 993,
+                user: String::new(),
+                password: String::new(),
+                tls: true,
+                starttls: false,
+                smtp_host: String::new(),
+                smtp_port: 587,
+                smtp_tls: true,
+                smtp_starttls: false,
+                auth_type: "password".to_string(),
+                access_token: None,
+                refresh_token: None,
+                token_expires_at: 0,
+                oauth_client_id: String::new(),
+                oauth_client_secret: String::new(),
+                oauth_token_url: String::new(),
+                oauth_scope: String::new(),
+                proxy: proxy::ProxyChoice::default(),
+                cert_pin: None,
+                smtp_cert_pin: None,
+                ews_url: String::new(),
+                delegate_account_id: parent_id.clone(),
+                target_mailbox: address.clone(),
+            };
+            {
+                let db = engine.db.lock().unwrap();
+                store::upsert_account(
+                    &db,
+                    &id,
+                    &store::AccountMeta {
+                        engine: "mail".to_string(),
+                        provider: "exchange".to_string(),
+                        email: address,
+                        display_name,
+                        avatar_url: String::new(),
+                        sender_name: String::new(),
+                    },
+                    &creds,
+                )?;
+            }
+            // Usable immediately, without waiting for the sidecar to restart.
+            engine.resolve_shared_mailbox(&id, &parent_id).await;
+            Ok(json!({ "id": id }))
         }
 
         // Set the per-account "load remote images" preference.

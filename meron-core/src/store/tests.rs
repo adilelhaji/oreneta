@@ -2684,7 +2684,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 29);
+    assert_eq!(version, 28);
 
     for table in [
         "accounts",
@@ -2729,7 +2729,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 29);
+    assert_eq!(version, 28);
 }
 
 #[test]
@@ -2757,7 +2757,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 29);
+    assert_eq!(version, 28);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -2845,6 +2845,33 @@ fn delete_account_removes_account_scoped_state_only() {
             .unwrap();
         assert_eq!(other_count, 1, "{table} removed another account's row");
     }
+}
+
+#[test]
+fn shared_mailboxes_of_finds_only_accounts_delegating_to_that_one() {
+    let conn = test_conn();
+    let meta = |email: &str| AccountMeta {
+        engine: "mail".to_string(),
+        provider: "exchange".to_string(),
+        email: email.to_string(),
+        display_name: email.to_string(),
+        avatar_url: String::new(),
+        sender_name: String::new(),
+    };
+    upsert_account(&conn, "parent", &meta("ana@corp.example.com"), &proxy_test_creds(crate::proxy::ProxyChoice::default())).unwrap();
+    upsert_account(&conn, "other-parent", &meta("marc@corp.example.com"), &proxy_test_creds(crate::proxy::ProxyChoice::default())).unwrap();
+
+    let mut shared = proxy_test_creds(crate::proxy::ProxyChoice::default());
+    shared.delegate_account_id = "parent".to_string();
+    upsert_account(&conn, "support", &meta("support@corp.example.com"), &shared).unwrap();
+
+    let mut other_shared = shared.clone();
+    other_shared.delegate_account_id = "other-parent".to_string();
+    upsert_account(&conn, "sales", &meta("sales@corp.example.com"), &other_shared).unwrap();
+
+    assert_eq!(shared_mailboxes_of(&conn, "parent").unwrap(), vec!["support".to_string()]);
+    assert_eq!(shared_mailboxes_of(&conn, "other-parent").unwrap(), vec!["sales".to_string()]);
+    assert!(shared_mailboxes_of(&conn, "support").unwrap().is_empty());
 }
 
 #[test]

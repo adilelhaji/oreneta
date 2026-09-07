@@ -300,6 +300,27 @@ impl Engine {
         store::account_muted(&self.db.lock().unwrap(), account).unwrap_or(false)
     }
 
+    /// Resolve a freshly-added shared mailbox into the live credential map
+    /// right away, so it is usable immediately rather than waiting for the
+    /// next lazy-hydrate or restart. `true` when it resolved; `false` means
+    /// its delegate is not itself resolvable (needs reconnecting first) —
+    /// the caller has already required the delegate to be valid before
+    /// getting this far, so this should not normally happen.
+    pub async fn resolve_shared_mailbox(&self, id: &str, delegate_account_id: &str) -> bool {
+        let mut accounts = self.accounts.lock().await;
+        let resolved = {
+            let conn = self.db.lock().unwrap();
+            resolve_delegate(&conn, self.host.as_ref(), &mut accounts, id, delegate_account_id)
+        };
+        match resolved {
+            Some(creds) => {
+                accounts.insert(id.to_string(), creds);
+                true
+            }
+            None => false,
+        }
+    }
+
     pub async fn ensure_valid_creds(&self, account: &str) -> anyhow::Result<imap::Creds> {
         let mut accounts = self.accounts.lock().await;
         // Lazily hydrate accounts added out-of-band (the mobile host adds/edits
