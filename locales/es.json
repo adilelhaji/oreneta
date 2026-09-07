@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Nombre de la etiqueta",
   "labels.noneYet": "Aún no hay etiquetas.",
   "labels.saveFailed": "No se pudieron guardar las etiquetas",
+  "labels.showInBar": "Mostrar en la barra de filtros rápidos",
+  "labels.showInBarShort": "En la barra",
   "labels.title": "Etiquetas",
   "labels.unnamed": "esta etiqueta",
   "layout.resizeConversation": "Redimensionar conversación",

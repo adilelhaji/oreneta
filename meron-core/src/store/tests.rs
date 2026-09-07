@@ -401,6 +401,7 @@ fn label(id: &str, name: &str) -> Label {
         id: id.to_string(),
         name: name.to_string(),
         colour: "#2056dd".to_string(),
+        in_bar: false,
     }
 }
 
@@ -945,6 +946,18 @@ fn labels_are_kept_in_the_order_they_were_arranged() {
     // Saving replaces the whole set rather than adding to it.
     replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
     assert_eq!(labels(&conn).unwrap().len(), 1);
+}
+
+#[test]
+fn whether_a_label_shows_in_the_quick_filter_bar_round_trips() {
+    let conn = test_conn();
+    let mut starred = label("l-1", "Starred");
+    starred.in_bar = true;
+    replace_labels(&conn, &[starred, label("l-2", "Home")]).unwrap();
+
+    let stored = labels(&conn).unwrap();
+    assert!(stored[0].in_bar);
+    assert!(!stored[1].in_bar, "off unless set — a fresh label default");
 }
 
 #[test]
@@ -2684,7 +2697,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 
     for table in [
         "accounts",
@@ -2729,7 +2742,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 }
 
 #[test]
@@ -2757,7 +2770,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 29);
 
     let _ = std::fs::remove_dir_all(dir);
 }

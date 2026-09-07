@@ -6,7 +6,7 @@ import { clsx } from '../../lib/utils'
 import { confirmAction, showToast } from '../../states/ui'
 import { LABEL_COLOURS, labels$, loadLabels, newLabel, saveLabels, type Label } from '../../states/labels'
 import { TextInput } from '../field/Field'
-import { SettingsGroup } from './AccountSettingsRows'
+import { SettingsGroup, Switch } from './AccountSettingsRows'
 import { Notice } from '../notice/Notice'
 
 /**
@@ -84,6 +84,16 @@ export function LabelsSettingsSection() {
                   onBlur={() => void persist(labels)}
                   className="min-w-0 flex-1"
                 />
+                <div className="flex shrink-0 items-center gap-1.5" title={t('labels.showInBar')}>
+                  <span className="text-2xs font-medium text-secondary">{t('labels.showInBarShort')}</span>
+                  <Switch
+                    checked={label.inBar}
+                    label={t('labels.showInBar')}
+                    onChange={() =>
+                      void persist(labels.map((item, i) => (i === index ? { ...item, inBar: !item.inBar } : item)))
+                    }
+                  />
+                </div>
                 <button
                   type="button"
                   title={t('labels.delete')}

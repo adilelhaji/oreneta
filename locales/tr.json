@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Label name",
   "labels.noneYet": "No labels yet.",
   "labels.saveFailed": "The labels could not be saved",
+  "labels.showInBar": "Hızlı filtre çubuğunda göster",
+  "labels.showInBarShort": "Çubukta",
   "labels.title": "Labels",
   "labels.unnamed": "this label",
   "layout.resizeConversation": "Konuşma boyutunu ayarla",

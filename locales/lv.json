@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Label name",
   "labels.noneYet": "No labels yet.",
   "labels.saveFailed": "The labels could not be saved",
+  "labels.showInBar": "Rādīt ātrās filtrēšanas joslā",
+  "labels.showInBarShort": "Joslā",
   "labels.title": "Labels",
   "labels.unnamed": "this label",
   "layout.resizeConversation": "Mainīt sarunas izmēru",
