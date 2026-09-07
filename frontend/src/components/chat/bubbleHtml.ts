@@ -103,16 +103,16 @@ export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT
       :is(td, th).line_content pre code { min-width: 0; }
       /* Escape hatch for content that still can't shrink (fixed-width layout
          tables): scroll it rather than clip it. */
-      .meron-table-scroll {
+      .oreneta-table-scroll {
         max-width: 100%;
         overflow-x: auto;
       }
       a { color: #4f46e5; }
-      .meron-code-block {
+      .oreneta-code-block {
         position: relative;
         max-width: 100%;
       }
-      .meron-copy-code {
+      .oreneta-copy-code {
         position: absolute;
         top: 6px;
         right: 6px;
@@ -131,31 +131,73 @@ export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
         transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
       }
-      .meron-code-block:hover .meron-copy-code,
-      .meron-copy-code:focus-visible {
+      .oreneta-code-block:hover .oreneta-copy-code,
+      .oreneta-copy-code:focus-visible {
         opacity: 1;
       }
-      .meron-copy-code:hover {
+      .oreneta-copy-code:hover {
         background: #ffffff;
         color: #0f172a;
       }
-      .meron-copy-code svg {
+      .oreneta-copy-code svg {
         width: 15px;
         height: 15px;
       }
       /* In-thread search hits, applied to the live document by BubbleHtmlFrame. */
-      mark.meron-search-hit {
+      mark.oreneta-search-hit {
         border-radius: 3px;
         padding: 0 1px;
         background: rgba(253, 224, 71, 0.55);
         color: inherit;
       }
-      mark.meron-search-hit.meron-search-hit-active {
+      mark.oreneta-search-hit.oreneta-search-hit-active {
         background: #fcd34d;
         color: #000000;
       }
     `
     doc.head.appendChild(style)
+
+    // Making the message read like the rest of the app, when asked.
+    //
+    // Appended after the base sheet and inside the head, so a sender's own
+    // `<style>` — which the parser leaves in the body — still comes later in
+    // the document. `!important` is what settles that, and it is used here
+    // deliberately: overriding the sender is the whole point of the mode.
+    //
+    // Colours are left alone. A sender who wrote in a colour usually meant
+    // something by it, and a rule that repainted everything would turn a
+    // highlighted warning into ordinary prose.
+    if (font.simplify) {
+      const simplified = doc.createElement('style')
+      simplified.textContent = `
+        /* The sender's font and size give way to the reader's. Mail written
+           at 11px in a face nobody has is mail nobody reads. */
+        body, body * {
+          font-family: inherit !important;
+          font-size: inherit !important;
+          line-height: 1.5 !important;
+        }
+        /* Except code, which is monospaced because it has to be. */
+        pre, pre *, code, kbd, samp {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+          font-size: ${BUBBLE_CODE_BASE_PX}px !important;
+        }
+        /* Layout tables and fixed-width wrappers: a message laid out for a
+           600px column reflows to the pane it is actually in. */
+        table, tr, td, th, div, section, article, center {
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          height: auto !important;
+        }
+        table { table-layout: auto !important; }
+        /* Padding measured for that 600px column leaves a narrow pane with
+           almost no room for the words. */
+        td, th { padding: 4px 6px !important; }
+        img { max-width: 100% !important; height: auto !important; }
+      `
+      doc.head.appendChild(simplified)
+    }
 
     // A self-sizing frame needs its document boxes to follow the message.
     // Newsletter resets commonly force both boxes to height:100%, which pins

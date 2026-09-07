@@ -81,16 +81,28 @@ type Message struct {
 	Date       int64  `json:"date"`
 	// Outgoing is classified by the core (own address or Sent-folder
 	// provenance), so alias-sent mail renders as sent-by-me even when the
-	// alias isn't configured in meron.
+	// alias isn't configured in Oreneta.
 	Outgoing    bool   `json:"outgoing,omitempty"`
 	Unread      bool   `json:"unread"`
 	UnreadCount uint32 `json:"unread_count,omitempty"`
 	// MessageCount is every message in the thread, read or not; 0 when the
 	// core did not group (raw message rows, RSS items).
-	MessageCount     uint32 `json:"message_count,omitempty"`
-	Starred          bool   `json:"starred"`
-	HasDraft         bool   `json:"has_draft,omitempty"`
-	HasAttachments   bool   `json:"has_attachments"`
+	MessageCount   uint32 `json:"message_count,omitempty"`
+	Starred        bool   `json:"starred"`
+	HasDraft       bool   `json:"has_draft,omitempty"`
+	HasAttachments bool   `json:"has_attachments"`
+	// Labels are ids of the reader's own local labels; the interface paints
+	// them from its copy of the label set.
+	Labels []string `json:"labels,omitempty"`
+	// Priority is a pointer because absent and false are different answers: a
+	// message nobody has judged is not a message judged unimportant, and a
+	// plain bool would tell the interface the second when the truth is the
+	// first.
+	Priority *bool `json:"priority,omitempty"`
+	// Protection is what the message's own structure declares: "pgpEncrypted",
+	// "pgpSigned", "smimeEnveloped" and so on, empty when none. A claim, not a
+	// verdict: whether a signature is good is answered separately.
+	Protection       string `json:"protection,omitempty"`
 	Attachments      any    `json:"attachments,omitempty"`
 	OriginalThreadID string `json:"original_thread_id,omitempty"`
 	// RecipientOverflow is the count of additional recipients beyond the one shown
@@ -177,9 +189,13 @@ type ThreadListRequest struct {
 	FolderID  string `json:"folder_id"`
 	// Unified view only: the role each account answers from (its own Sent,
 	// Archive, …). Ignored for a single account, which names a real folder.
-	FolderRole   string `json:"folder_role"`
-	Query        string `json:"query"`
-	Filter       string `json:"filter"`
+	FolderRole string `json:"folder_role"`
+	Query      string `json:"query"`
+	Filter     string `json:"filter"`
+	// Sort is `date`, `sender` or `subject`, optionally suffixed `:asc`.
+	// Empty means newest first, which is what a mailbox means when nobody has
+	// said otherwise.
+	Sort         string `json:"sort"`
 	BeforeCursor string `json:"before_cursor"`
 	Refresh      bool   `json:"refresh"`
 }
@@ -206,6 +222,14 @@ type SendMailRequest struct {
 	DraftID     string            `json:"draft_id"`
 	MessageID   string            `json:"message_id"`
 	Attachments []AttachmentInput `json:"attachments"`
+	// Sign and Encrypt ask for OpenPGP protection. A request that cannot be
+	// met fails the send: a message meant to be encrypted that went in the
+	// clear is worse than one that did not go.
+	Sign    bool `json:"sign,omitempty"`
+	Encrypt bool `json:"encrypt,omitempty"`
+	// Passphrase unlocks the sender's own key for this one message. Not
+	// stored anywhere on this side, and not written to a draft.
+	Passphrase string `json:"passphrase,omitempty"`
 }
 
 type ExchangedProfile struct {

@@ -1,7 +1,11 @@
 import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
+import type { Template } from '../../states/templates'
 import { IconButton } from '../button/IconButton'
+import { SendLaterMenu } from './SendLaterMenu'
+import { TemplateMenu } from './TemplateMenu'
+import { ProtectionComposeControls } from './ProtectionComposeControls'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -16,8 +20,16 @@ export function ComposerFooter({
   onPickFiles,
   onPickInlineImages,
   onToggleRich,
+  onUseTemplate,
+  pgpSign,
+  pgpEncrypt,
+  pgpPassphrase,
+  onPgpSignChange,
+  onPgpEncryptChange,
+  onPgpPassphraseChange,
   onDiscard,
   onSubmit,
+  onSchedule,
 }: {
   rich: boolean
   sending: boolean
@@ -27,8 +39,18 @@ export function ComposerFooter({
   onPickFiles: () => void
   onPickInlineImages: () => void
   onToggleRich: () => void
+  /** Puts a kept snippet in at the cursor, or opens a whole-message template. */
+  onUseTemplate: (template: Template) => void
+  pgpSign: boolean
+  pgpEncrypt: boolean
+  pgpPassphrase: string
+  onPgpSignChange: (value: boolean) => void
+  onPgpEncryptChange: (value: boolean) => void
+  onPgpPassphraseChange: (value: string) => void
   onDiscard: () => void
   onSubmit: () => void
+  /** Holds the message until `at` instead of sending it now. */
+  onSchedule: (at: number) => void
 }) {
   const { t } = useTranslation()
   const draftAutosaveFailed = t('composer.status.draftAutosaveFailed')
@@ -52,9 +74,18 @@ export function ComposerFooter({
             onClick={onPickInlineImages}
           />
         )}
+        <TemplateMenu onPick={onUseTemplate} />
+        <ProtectionComposeControls
+          sign={pgpSign}
+          encrypt={pgpEncrypt}
+          passphrase={pgpPassphrase}
+          onSignChange={onPgpSignChange}
+          onEncryptChange={onPgpEncryptChange}
+          onPassphraseChange={onPgpPassphraseChange}
+        />
         <button
           onClick={onToggleRich}
-          className={`flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-[0.6875rem] font-semibold transition-colors cursor-pointer ${
+          className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${
             rich ? 'bg-accent/10 text-accent' : 'text-secondary hover:bg-hover'
           }`}
           title={rich ? t('composer.actions.switchToPlainText') : t('composer.actions.switchToRichText')}
@@ -65,20 +96,20 @@ export function ComposerFooter({
       </div>
       <div className="flex items-center gap-3">
         {saveStatus === 'saving' && (
-          <span className="flex items-center gap-1.5 text-[0.6875rem] text-secondary">
+          <span className="flex items-center gap-1.5 text-caption text-secondary">
             <RefreshCw size={11} className="animate-spin" />
             <span>{t('composer.status.savingDraft')}</span>
           </span>
         )}
         {saveStatus === 'saved' && (
-          <span className="flex items-center gap-1.5 text-[0.6875rem] text-emerald-500 font-medium">
+          <span className="flex items-center gap-1.5 text-caption text-emerald-500 font-medium">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>{t('composer.status.savedToServer')}</span>
           </span>
         )}
         {saveStatus === 'error' && (
           <span
-            className="max-w-[360px] truncate text-[0.6875rem] text-rose-500 font-medium"
+            className="max-w-[360px] truncate text-caption text-rose-500 font-medium"
             title={saveError || draftAutosaveFailed}
           >
             {saveError || draftAutosaveFailed}
@@ -87,15 +118,20 @@ export function ComposerFooter({
         <button
           onClick={onDiscard}
           disabled={sending}
-          className="rounded-xl px-4 py-2 text-xs font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+          className="rounded-control px-4 py-2 text-xs font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
         >
           {t('buttons.discard')}
         </button>
+        <SendLaterMenu
+          disabled={!canSend || pgpSign || pgpEncrypt}
+          title={pgpSign || pgpEncrypt ? t('crypto.cannotSchedule') : undefined}
+          onSchedule={onSchedule}
+        />
         <button
           onClick={onSubmit}
           disabled={!canSend}
           title={t('composer.actions.sendWithShortcut', { shortcut: sendShortcutLabel('mod_enter') })}
-          className={`flex items-center justify-center gap-1.5 rounded-xl px-5 py-2 text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-1.5 rounded-control px-5 py-2 text-xs font-bold transition-all ${
             !canSend
               ? 'cursor-not-allowed bg-hover text-secondary/70 shadow-none'
               : 'bg-accent text-white shadow-md shadow-accent/15 hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-98 cursor-pointer'

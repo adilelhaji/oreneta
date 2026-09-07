@@ -11,7 +11,7 @@ import (
 )
 
 // scheduleRelaunch spawns a detached shell that waits for this process to exit
-// before running argv. The wait matters: Meron holds a single-instance lock, so
+// before running argv. The wait matters: Oreneta holds a single-instance lock, so
 // a new copy started while the old one is still alive would just be forwarded to
 // it instead of replacing it.
 func scheduleRelaunch(argv ...string) error {

@@ -95,7 +95,7 @@ func (a *App) Startup(ctx context.Context) {
 	if err := a.sidecar.Start(ctx); err != nil {
 		a.setCoreError(fmt.Sprintf("core failed to start: %v (path: %s)", err, coreBinaryPath()))
 		a.logf("core failed to start: %v", err)
-		fmt.Fprintf(os.Stderr, "meron: core failed to start: %v (path: %s)\n", err, coreBinaryPath())
+		fmt.Fprintf(os.Stderr, "oreneta: core failed to start: %v (path: %s)\n", err, coreBinaryPath())
 	} else {
 		a.logf("core started")
 	}
@@ -325,6 +325,86 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailUnsnooze(payload)
 	case "mail.snoozed":
 		return a.mailSnoozed(payload)
+	case "labels.list":
+		return a.labelsList(payload)
+	case "labels.save":
+		return a.labelsSave(payload)
+	case "labels.assign":
+		return a.labelsAssign(payload)
+	case "pgp.certs":
+		return a.pgpCerts(payload)
+	case "pgp.import":
+		return a.pgpImport(payload)
+	case "pgp.remove":
+		return a.pgpRemove(payload)
+	case "pgp.secretKeys":
+		return a.pgpSecretKeys(payload)
+	case "pgp.importSecret":
+		return a.pgpImportSecret(payload)
+	case "pgp.removeSecret":
+		return a.pgpRemoveSecret(payload)
+	case "pgp.decrypt":
+		return a.pgpDecrypt(payload)
+	case "smime.certs":
+		return a.smimeCerts(payload)
+	case "smime.import":
+		return a.smimeImport(payload)
+	case "smime.remove":
+		return a.smimeRemove(payload)
+	case "smime.verify":
+		return a.smimeVerify(payload)
+	case "smime.identities":
+		return a.smimeIdentities(payload)
+	case "smime.importIdentity":
+		return a.smimeImportIdentity(payload)
+	case "smime.removeIdentity":
+		return a.smimeRemoveIdentity(payload)
+	case "smime.decrypt":
+		return a.smimeDecrypt(payload)
+	case "oof.get":
+		return a.oofGet(payload)
+	case "oof.set":
+		return a.oofSet(payload)
+	case "pgp.verify":
+		return a.pgpVerify(payload)
+	case "carddav.discover":
+		return a.carddavDiscover(payload)
+	case "carddav.add":
+		return a.carddavAdd(payload)
+	case "carddav.sync":
+		return a.carddavSync(payload)
+	case "carddav.remove":
+		return a.carddavRemove(payload)
+	case "directory.search":
+		return a.carddavCall("directory.search", payload, "account")
+	case "google.contacts.sync":
+		return a.carddavCall("google.contacts.sync", payload, "account")
+	case "carddav.list":
+		return a.carddavList(payload)
+	case "people.list":
+		return a.peopleList(payload)
+	case "templates.list":
+		return a.templatesList(payload)
+	case "templates.save":
+		return a.templatesSave(payload)
+	case "rules.list":
+		return a.rulesList(payload)
+	case "rules.save":
+		return a.rulesSave(payload)
+	case "rules.preview":
+		return a.rulesPreview(payload)
+	case "rules.log":
+		return a.rulesLog(payload)
+	case "rules.clearLog":
+		return a.rulesClearLog(payload)
+	case "mail.scheduleSend":
+		return a.mailScheduleSend(payload)
+	case "mail.scheduledSends":
+		return a.mailScheduledSends(payload)
+	case "mail.cancelScheduledSend":
+		return a.mailCancelScheduledSend(payload)
+	case "mail.sendScheduledNow":
+		return a.mailSendScheduledNow(payload)
 	case "mail.markStarred":
 		return a.markStarred(payload)
 	case "mail.markAllRead":
@@ -357,6 +437,16 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.writeChatWallpaperFile(payload)
 	case "composer.pruneMedia":
 		return a.pruneComposerMedia(payload)
+	case "mail.sweepPreview":
+		return a.mailSweepPreview(payload)
+	case "mail.sweep":
+		return a.mailSweep(payload)
+	case "mail.priorityReason":
+		return a.mailPriorityReason(payload)
+	case "mail.setSenderPriority":
+		return a.mailSetSenderPriority(payload)
+	case "mail.markJunk":
+		return a.mailMarkJunk(payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":

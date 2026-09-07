@@ -43,7 +43,7 @@ export function AgendaList({
       )}
       {days.map(({ day, events }) => (
         <section key={day} className="mb-6">
-          <h2 className="sticky top-0 z-10 -mx-5 bg-app/95 px-5 pb-2 pt-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-secondary backdrop-blur">
+          <h2 className="sticky top-0 z-10 -mx-5 bg-app/95 px-5 pb-2 pt-1 text-caption font-semibold uppercase tracking-wide text-secondary backdrop-blur">
             {formatDayHeading(day, t)}
           </h2>
           <ul className="flex flex-col gap-1.5">
@@ -82,12 +82,12 @@ function EventRow({
         mouse.preventDefault()
         onContextMenu(mouse.clientX, mouse.clientY)
       }}
-      className={`flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-raised px-3 py-2.5 transition-colors hover:bg-hover ${
+      className={`flex cursor-pointer items-start gap-3 rounded-control border border-border bg-raised px-3 py-2.5 transition-colors hover:bg-hover ${
         event.is_cancelled ? 'opacity-55' : ''
       }`}
     >
       <span className="mt-1 h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      <div className="w-20 shrink-0 pt-0.5 text-[0.6875rem] font-medium tabular-nums text-secondary">
+      <div className="w-20 shrink-0 pt-0.5 text-caption font-medium tabular-nums text-secondary">
         {continues ? (
           // A day in the middle of something longer: it holds no start and no
           // end, so what it holds is the whole day.
@@ -113,7 +113,7 @@ function EventRow({
       </div>
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-[0.8125rem] font-medium text-primary ${
+          className={`truncate text-ui font-medium text-primary ${
             event.is_cancelled ? 'line-through' : ''
           }`}
         >
@@ -124,7 +124,7 @@ function EventRow({
             </span>
           )}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.6875rem] text-secondary">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-secondary">
           {event.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <MapPin size={10} className="shrink-0" />

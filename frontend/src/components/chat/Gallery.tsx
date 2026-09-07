@@ -291,7 +291,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             }}
           />
           <div
-            className="fixed z-[61] min-w-[160px] rounded-xl border border-border bg-header p-1 shadow-xl"
+            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-xl"
             style={{ top: menu.y, left: menu.x }}
             onClick={(event) => event.stopPropagation()}
           >

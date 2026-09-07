@@ -27,7 +27,7 @@ function ToolbarButton({
     <button
       onClick={onClick}
       title={title}
-      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors cursor-pointer ${
+      className={`flex h-7 w-7 items-center justify-center rounded-control-sm transition-colors cursor-pointer ${
         active ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
       }`}
     >
@@ -103,7 +103,7 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
         <Link2 size={15} />
       </ToolbarButton>
       <span
-        className="ml-auto hidden items-center gap-1 pr-1 text-[0.625rem] font-medium text-secondary/70 select-none min-[900px]:flex"
+        className="ml-auto hidden items-center gap-1 pr-1 text-2xs font-medium text-secondary/70 select-none min-[900px]:flex"
         title={t('composer.toolbar.markdownHint')}
       >
         {t('composer.toolbar.markdown')}:

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, DragEvent, PointerEventHandler } from 'react'
-import { Search, X, Plus, SquarePen, MoreHorizontal, Loader2 } from 'lucide-react'
+import { Search, X, Plus, SquarePen, MoreHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { openAddFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
@@ -14,6 +14,7 @@ import {
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import {
   clearBulkSelection,
+  filterKey,
   isWailsDesktopRuntime,
   selectedBulkItems,
   setBulkSelection,
@@ -22,6 +23,8 @@ import {
   type BulkSelectionItem,
 } from '../../states/ui'
 import { thread$ } from '../../states/thread'
+import { settings$ } from '../../states/settings'
+import { groupByDate } from '../../lib/dateGroups'
 import {
   mail$,
   getFilteredThreads,
@@ -36,18 +39,31 @@ import {
   deleteFolder,
   loadThreads,
   threadListViewKey,
+  archiveThread,
+  deleteThread,
+  markThreadRead,
+  markThreadUnread,
+  snoozeChoices,
+  snoozeThread,
 } from '../../states/mail'
+import type { Message } from '../../types'
 import { clsx } from '../../lib/utils'
 import { isRssAccount } from '../../lib/threadActions'
 import { folderLabel } from '../../lib/kanbanData'
 import { isUnifiedStarred } from '../../lib/unifiedFolders'
 import { EmptyState } from '../empty-state/EmptyState'
+import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
 import { QuickSettingsMenu } from '../sidenav/QuickSettingsMenu'
 import { FolderSwitcher } from '../menu/FolderSwitcher'
 import { ThreadActionsMenu } from './ThreadActionsMenu'
+import { ScheduledSendsBar } from './ScheduledSendsBar'
+import { QuickFilterBar } from './QuickFilterBar'
+import { SearchUnderstoodBar } from './SearchUnderstoodBar'
+import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
-import { ThreadListItem } from './ThreadListItem'
+import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
+import { ThreadTable } from './ThreadTable'
 import { BulkActionBar } from './BulkActionBar'
 
 type ThreadListProps = {
@@ -68,7 +84,9 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const folders = useValue(mail$.folders)
   const system = useValue(ui$.system)
   const filteredThreads = useValue(getFilteredThreads)
-  const filterMode = useValue(ui$.filterMode)
+  const filters = useValue(ui$.filters)
+  const listView = useValue(settings$.listView)
+  const listSort = useValue(settings$.listSort)
   const threadsCursor = useValue(mail$.threadsCursor)
   const threadsLoadingMore = useValue(mail$.threadsLoadingMore)
   // The rows on hand belong to the view they were loaded for. Until that is the
@@ -76,12 +94,23 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // true from the first paint of a navigation, which is a frame or more before
   // the effect that starts the load.
   const threadsLoadedKey = useValue(mail$.threadsLoadedKey)
-  const threadsLoading = threadsLoadedKey !== threadListViewKey(selectedAccount, selectedFolder, query, filterMode)
+  const threadsLoading = threadsLoadedKey !== threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters))
   const threadMenu = useThreadContextMenu(accounts)
   // Starred is a folder of the unified view whose rows span every account. It
   // lists ordinary threads, so it shares this list's selection, context menu and
   // bulk selection; only the cross-account chrome below differs.
   const isStarredView = isUnifiedStarred(selectedAccount, selectedFolder)
+  // Headings only where they mean something. Under any other ordering they
+  // would repeat down the page saying nothing, and a search is its own kind of
+  // list — the reader asked for relevance, not for a calendar.
+  const groupByDates = listSort.key === 'date' && !query.trim() && !isStarredView
+  const dateGroups = useMemo(
+    () =>
+      groupByDates
+        ? groupByDate(filteredThreads, (thread) => thread.date)
+        : [{ group: 'today' as const, items: filteredThreads }],
+    [groupByDates, filteredThreads],
+  )
   // Quick-settings (view + theme) anchor for the narrow-window header button.
   // The side navigation that normally hosts these controls is hidden at this width.
   const [quickMenu, setQuickMenu] = useState<{ x: number; y: number } | null>(null)
@@ -143,7 +172,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // A search pages on the cursor the core mints for it, whatever the filter chip
   // says — a query is answered by a search, not by a filtered listing. Without a
   // cursor (feeds, starred) there is nothing more to load.
-  const canLoadMore = !!threadsCursor && (!!query.trim() || filterMode === 'all')
+  const canLoadMore = !!threadsCursor && (!!query.trim() || filters.length === 0)
   const feedRowsDraggable = !isStarredView && isRSSAccount
   // The folder switcher needs a folder list to offer. That is an account's real
   // folders, or — in the unified view — the synthetic per-role list, where each
@@ -155,7 +184,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // wording holds while a search or filter is hiding the threads that are there.
   const inboxFolder = folders.find((folder) => folder.role === 'inbox' || folder.id === 'inbox')
   const inInbox = selectedFolder === (inboxFolder?.id ?? 'inbox')
-  const narrowed = !!query.trim() || filterMode !== 'all'
+  const narrowed = !!query.trim() || filters.length > 0
   const emptyStateTitle = narrowed
     ? t('empty.noMatchingMail')
     : isRSSAccount
@@ -199,6 +228,31 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       starred: thread.starred,
       draft: isDraftFolder(thread.folder_id, thread.account_id),
       trash: folders.some((folder) => folder.id === thread.folder_id && folder.role === 'trash'),
+    }
+  }
+
+  // Triage from the row. Each of these already exists as a menu item; this is
+  // the same work without the two clicks and the reading in between.
+  const runQuickAction = (action: QuickRowAction, thread: Message) => {
+    const threadId = thread.thread_id
+    switch (action) {
+      case 'archive':
+        void archiveThread(threadId)
+        return
+      case 'trash':
+        void deleteThread(threadId)
+        return
+      case 'read':
+        void (thread.unread ? markThreadRead(threadId) : markThreadUnread(threadId))
+        return
+      case 'snooze': {
+        // One time, named on the button, rather than a menu opening from a
+        // button that already had to be hovered for. The full set of times
+        // stays on the right-click menu.
+        const tomorrow = snoozeChoices().find((choice) => choice.key === 'tomorrow')
+        if (tomorrow) void snoozeThread(threadId, tomorrow.at)
+        return
+      }
     }
   }
 
@@ -278,14 +332,20 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   event.currentTarget.blur()
                 }}
                 placeholder={isRSSAccount ? t('threads.searchFeeds') : t('threads.searchMessages')}
+                // The operators are discoverable from the box that takes them,
+                // which is the only place someone is looking when they wonder
+                // whether this search can do more than words.
+                title={isRSSAccount ? undefined : t('search.operatorsHint')}
                 className={clsx(
-                  'w-full rounded-xl bg-hover py-2 pl-8 text-[0.8125rem] text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-150',
+                  'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-150',
                   // The right padding only has to clear the clear button while there is one.
                   query ? 'pr-8' : 'pr-3',
                 )}
               />
               {query && (
                 <button
+                  type="button"
+                  aria-label={t('common.clearSearch')}
                   onClick={() => ui$.query.set('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
                 >
@@ -293,6 +353,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 </button>
               )}
             </div>
+
+            <SavedSearchMenu query={query} />
 
             {!searchExpanded && (
               <>
@@ -317,12 +379,14 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                     onClick={() => openComposeTab()}
                   />
                 )}
-                {/* Filter + mark-all-read overflow menu (shared with kanban columns).
-                Hidden in the starred view, where the list is starred-only by definition. */}
+                {/* Mark-all-read and the folder actions. The narrowings moved
+                out to the bar below, where they can be seen and combined; the
+                menu keeps what is done rarely. */}
                 {!isStarredView && (
                   <ThreadActionsMenu
-                    filterMode={filterMode}
-                    onFilterChange={(mode) => ui$.filterMode.set(mode)}
+                    hideFilters
+                    filterMode="all"
+                    onFilterChange={() => {}}
                     hasUnread={hasUnread}
                     onMarkAllRead={() => markAllRead()}
                     onEmptyFolder={
@@ -393,6 +457,13 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
         />
       )}
 
+      {/* Not in the starred view, which is starred-only by definition, and not
+          while searching, where the query is the narrowing. */}
+      {!isStarredView && !query.trim() && <QuickFilterBar hideSnoozed={isRSSAccount} />}
+      <SearchUnderstoodBar />
+
+      <ScheduledSendsBar />
+
       {/* Thread List Items */}
       <div
         className="flex-1 overflow-y-auto flex flex-col"
@@ -412,18 +483,42 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           // the wrong answer twice. Spin until the load lands, same as the
           // conversation pane does while a thread is being fetched.
           threadsLoading ? (
-            <div className="flex h-full items-center justify-center" role="status" aria-label={t('common.loading')}>
-              <Loader2 size={28} className="animate-spin text-secondary/70" />
-            </div>
+            <LoadingState title={t('empty.loadingThreads')} />
           ) : isStarredView ? (
             <EmptyState title={t('empty.noStarredItems')} text={t('empty.noStarredItemsText')} />
           ) : (
             <EmptyState title={emptyStateTitle} text={emptyStateText} />
           )
+        ) : listView === 'table' ? (
+          // The table is its own row renderer, so it takes the selection and
+          // the context menu the cards already answer to rather than growing
+          // its own copies of them.
+          <ThreadTable
+            threads={filteredThreads}
+            accounts={accounts}
+            selectedThread={selectedThread}
+            showAccount={selectedAccount === 'unified' || isStarredView}
+            onSelect={(thread) => {
+              clearBulkSelection()
+              ui$.selectedThread.set(thread.thread_id)
+              ui$.mobilePane.set('conversation')
+            }}
+            onContextMenu={(thread, event) => threadMenu.open(event, thread)}
+          />
         ) : (
           <>
-            {filteredThreads.map((thread) => {
-              const bulkItem = bulkItemFor(thread)
+            {dateGroups.map((group) => (
+              <div key={group.group} className="contents">
+                {/* Only when the list is actually in date order. Under any
+                    other ordering these headings would repeat down the page
+                    and mean nothing. */}
+                {groupByDates && (
+                  <div className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary backdrop-blur-sm">
+                    {t(`dateGroup.${group.group}`)}
+                  </div>
+                )}
+                {group.items.map((thread) => {
+                  const bulkItem = bulkItemFor(thread)
               return (
                 <ThreadListItem
                   key={thread.id}
@@ -437,6 +532,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   onDragStart={(event) => startFeedDrag(event, thread)}
                   bulkSelectable={desktopBulk && bulkInThisList}
                   bulkSelected={!!bulkSelection[bulkItem.key]}
+                  onQuickAction={(action) => runQuickAction(action, thread)}
+                  onToggleSelect={desktopBulk ? () => toggleBulkSelection(bulkItem) : undefined}
                   onSelect={(event) => {
                     if (desktopBulk && (event.metaKey || event.ctrlKey)) {
                       toggleBulkSelection(bulkItem)
@@ -482,12 +579,14 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                     }
                     threadMenu.open(event, thread)
                   }}
-                />
-              )
-            })}
+                    />
+                  )
+                })}
+              </div>
+            ))}
             {canLoadMore && (
               <button
-                className="mx-3 my-3 flex h-9 shrink-0 items-center justify-center rounded-lg border border-border text-xs font-semibold text-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer transition-colors"
+                className="mx-3 my-3 flex h-9 shrink-0 items-center justify-center rounded-control-sm border border-border text-xs font-semibold text-secondary hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer transition-colors"
                 disabled={threadsLoadingMore}
                 onClick={() => void loadMoreThreads()}
               >

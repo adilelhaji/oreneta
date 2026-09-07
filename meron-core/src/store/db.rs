@@ -582,6 +582,45 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 15 {
         migrate_v15(&tx)?;
     }
+    if version < 16 {
+        migrate_v16(&tx)?;
+    }
+    if version < 17 {
+        migrate_v17(&tx)?;
+    }
+    if version < 18 {
+        migrate_v18(&tx)?;
+    }
+    if version < 19 {
+        migrate_v19(&tx)?;
+    }
+    if version < 20 {
+        migrate_v20(&tx)?;
+    }
+    if version < 21 {
+        migrate_v21(&tx)?;
+    }
+    if version < 22 {
+        migrate_v22(&tx)?;
+    }
+    if version < 23 {
+        migrate_v23(&tx)?;
+    }
+    if version < 24 {
+        migrate_v24(&tx)?;
+    }
+    if version < 25 {
+        migrate_v25(&tx)?;
+    }
+    if version < 26 {
+        migrate_v26(&tx)?;
+    }
+    if version < 27 {
+        migrate_v27(&tx)?;
+    }
+    if version < 28 {
+        migrate_v28(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -783,6 +822,370 @@ fn migrate_v15(conn: &Connection) -> Result<()> {
          CREATE INDEX IF NOT EXISTS scheduled_sends_due ON scheduled_sends(due_at);",
     )?;
     conn.execute_batch("PRAGMA user_version = 15;")?;
+    Ok(())
+}
+
+/// What became of a scheduled send that could not go.
+///
+/// A message due at eight and refused at eight must not disappear quietly nor
+/// hammer the server for the rest of the day: the count is what lets the watch
+/// give up, the instant is what spaces the tries out, and the reason is what
+/// lets the reader be told why.
+fn migrate_v16(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE scheduled_sends ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE scheduled_sends ADD COLUMN last_error TEXT NOT NULL DEFAULT '';
+         ALTER TABLE scheduled_sends ADD COLUMN last_attempt INTEGER NOT NULL DEFAULT 0;",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 16;")?;
+    Ok(())
+}
+
+/// Rules the reader writes, and a record of what they did.
+///
+/// The log is not an extra: a rule files mail away on its own, and a reader
+/// who cannot find out what moved their mail has been given a mailbox that
+/// changes by itself. `position` is what makes the order of rules a property
+/// of the rules and not of however SQLite felt like returning them.
+fn migrate_v17(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS rules (
+           id         TEXT PRIMARY KEY,
+           account    TEXT NOT NULL,
+           position   INTEGER NOT NULL,
+           enabled    INTEGER NOT NULL,
+           definition TEXT NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS rule_log (
+           id         INTEGER PRIMARY KEY AUTOINCREMENT,
+           at         INTEGER NOT NULL,
+           account    TEXT NOT NULL,
+           rule_id    TEXT NOT NULL,
+           rule_name  TEXT NOT NULL,
+           folder     TEXT NOT NULL,
+           uid        INTEGER NOT NULL,
+           subject    TEXT NOT NULL,
+           from_addr  TEXT NOT NULL,
+           action     TEXT NOT NULL,
+           outcome    TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS rule_log_at ON rule_log(at);",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 17;")?;
+    Ok(())
+}
+
+/// Labels the reader puts on conversations, kept here and nowhere else.
+///
+/// Local on purpose: IMAP keywords are not carried by every server, Exchange
+/// categories are a different thing again, and a label that appears on one
+/// device and silently not on another is worse than one that never claimed to
+/// travel. What it costs is honesty about its own scope.
+///
+/// A label is put on a conversation, not on a message, and without the folder:
+/// a thread filed in Archive is the same thread that was in the inbox, and a
+/// label that fell off when it moved would be a label nobody could trust.
+fn migrate_v18(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS labels (
+           id       TEXT PRIMARY KEY,
+           name     TEXT NOT NULL,
+           colour   TEXT NOT NULL,
+           position INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS thread_labels (
+           account    TEXT NOT NULL,
+           thread_key TEXT NOT NULL,
+           label_id   TEXT NOT NULL,
+           PRIMARY KEY (account, thread_key, label_id)
+         );
+         CREATE INDEX IF NOT EXISTS thread_labels_label ON thread_labels(label_id);",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 18;")?;
+    Ok(())
+}
+
+/// Whether a message carries an attachment, as the server's BODYSTRUCTURE says.
+///
+/// Nullable on purpose, and that is the whole point of the column. A message
+/// synced before this existed has never been asked, and answering "no" for it
+/// would be a filter quietly hiding mail that does carry a file — the one
+/// failure this feature must not have. Unknown stays unknown until something
+/// looks.
+fn migrate_v19(conn: &Connection) -> Result<()> {
+    conn.execute_batch("ALTER TABLE messages ADD COLUMN has_attachments INTEGER;")?;
+    conn.execute_batch("PRAGMA user_version = 19;")?;
+    Ok(())
+}
+
+/// What is worth interrupting someone for, and what they said about it.
+///
+/// `priority` is nullable like `has_attachments`, and for the same reason —
+/// a message from before this existed has never been judged. Unlike an
+/// attachment, though, judging one needs nothing from a server: every signal
+/// is already here, so the gap is closed by a pass over the store rather than
+/// by asking anyone.
+///
+/// `correspondents` is the addresses this account has written to. It is a fact
+/// worth keeping on its own — an address book will want it — and it is what
+/// makes "you have written to them" a lookup instead of a scan of every
+/// message in the mailbox, once per row.
+///
+/// `sender_priority` is what the reader said, which outranks all of it.
+fn migrate_v20(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "ALTER TABLE messages ADD COLUMN priority INTEGER;
+         CREATE TABLE IF NOT EXISTS correspondents (
+           account TEXT NOT NULL,
+           addr    TEXT NOT NULL,
+           PRIMARY KEY (account, addr)
+         );
+         CREATE TABLE IF NOT EXISTS sender_priority (
+           account  TEXT NOT NULL,
+           addr     TEXT NOT NULL,
+           priority INTEGER NOT NULL,
+           PRIMARY KEY (account, addr)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 20;")?;
+    Ok(())
+}
+
+/// Text the writer keeps because they write it often.
+///
+/// Two shapes, told apart by `kind`, because they are used at two different
+/// moments. A `snippet` is a paragraph dropped in where the cursor is — the
+/// directions to the office, the standard disclaimer. A `message` is a whole
+/// mail with its own subject, opened rather than inserted.
+///
+/// One table rather than two: they differ in where the text lands, not in
+/// what they are, and a reader who wants to turn one into the other should
+/// not have to delete it and write it again.
+///
+/// `body_html` and `body_text` are both kept. The composer works in either
+/// mode and a template that could only be pasted into one of them would be
+/// half a feature; storing the rendered text next to the markup means neither
+/// mode has to derive the other at the moment of use.
+fn migrate_v21(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS templates (
+           id        TEXT PRIMARY KEY,
+           kind      TEXT NOT NULL,
+           name      TEXT NOT NULL,
+           subject   TEXT NOT NULL,
+           body_html TEXT NOT NULL,
+           body_text TEXT NOT NULL,
+           position  INTEGER NOT NULL,
+           updated   INTEGER NOT NULL
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 21;")?;
+    Ok(())
+}
+
+/// People, as opposed to addresses.
+///
+/// What the composer had until now was a tally of addresses seen in mail. That
+/// is a useful thing and it stays, but it is not an address book: it cannot
+/// say that two addresses are one person, it has no name for someone who has
+/// never written, and it knows nothing the reader keeps elsewhere.
+///
+/// A person has many addresses, which is the whole difference and the reason
+/// this is two tables rather than a wider `correspondents`. Phone numbers come
+/// along because every source carries them and a Personas view without them
+/// would be conspicuously empty.
+///
+/// `source`, `account`, `book` and `uid` together say where a person came from
+/// and who they are *there*, so a re-sync updates rather than duplicates. The
+/// same human present in two address books stays two rows: merging them by
+/// name would be a guess, and an address book that quietly fuses two people is
+/// worse than one that shows both. Addresses are what the interface matches
+/// on, and an address is exact.
+fn migrate_v22(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS people (
+           id           TEXT PRIMARY KEY,
+           source       TEXT NOT NULL,
+           account      TEXT NOT NULL,
+           book         TEXT NOT NULL,
+           uid          TEXT NOT NULL,
+           name         TEXT NOT NULL,
+           organisation TEXT NOT NULL,
+           note         TEXT NOT NULL,
+           photo        TEXT NOT NULL,
+           updated      INTEGER NOT NULL
+         );
+         CREATE UNIQUE INDEX IF NOT EXISTS people_origin
+           ON people(source, account, book, uid);
+         CREATE TABLE IF NOT EXISTS person_emails (
+           person_id TEXT NOT NULL,
+           addr      TEXT NOT NULL,
+           label     TEXT NOT NULL,
+           position  INTEGER NOT NULL,
+           PRIMARY KEY (person_id, addr)
+         );
+         CREATE INDEX IF NOT EXISTS person_emails_addr ON person_emails(addr);
+         CREATE TABLE IF NOT EXISTS person_phones (
+           person_id TEXT NOT NULL,
+           number    TEXT NOT NULL,
+           label     TEXT NOT NULL,
+           position  INTEGER NOT NULL,
+           PRIMARY KEY (person_id, number)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 22;")?;
+    Ok(())
+}
+
+/// Where books of people are fetched from.
+///
+/// Shaped like `subscriptions`, because it is the same kind of thing: a URL
+/// the app goes back to, with a record of when it last did and what went
+/// wrong if anything did. A source may belong to a mail account or to nobody
+/// — a Nextcloud address book is often not where the mail is — so `account`
+/// may be empty.
+///
+/// The password is not here. It goes in the OS keyring under the source's id,
+/// the same place account passwords live, so that a copied database does not
+/// carry the credentials to somebody's contacts.
+fn migrate_v23(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS contact_sources (
+           id           TEXT PRIMARY KEY,
+           kind         TEXT NOT NULL,
+           account      TEXT NOT NULL DEFAULT '',
+           url          TEXT NOT NULL,
+           username     TEXT NOT NULL DEFAULT '',
+           name         TEXT NOT NULL DEFAULT '',
+           enabled      INTEGER NOT NULL DEFAULT 1,
+           ctag         TEXT NOT NULL DEFAULT '',
+           last_sync_at INTEGER NOT NULL DEFAULT 0,
+           last_error   TEXT NOT NULL DEFAULT '',
+           created_at   INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 23;")?;
+    Ok(())
+}
+
+/// OpenPGP certificates the reader holds.
+///
+/// Public certificates only for now, which is what verifying a signature
+/// needs. A secret key is a different thing with different handling — it wants
+/// a passphrase and it must not sit in a database somebody could copy — and it
+/// gets its own place when decryption arrives.
+///
+/// The armoured text is kept rather than a parsed form: it is what was
+/// imported, it is what can be exported again, and a parser change must not
+/// silently reinterpret what the reader chose to trust.
+///
+/// `addresses` is the addresses of the certificate's user IDs, lower-cased and
+/// newline-separated, so "is this the key for that sender" is a lookup instead
+/// of a parse of every certificate on every message.
+fn migrate_v24(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS pgp_certs (
+           fingerprint TEXT PRIMARY KEY,
+           addresses   TEXT NOT NULL DEFAULT '',
+           user_ids    TEXT NOT NULL DEFAULT '',
+           armoured    TEXT NOT NULL,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 24;")?;
+    Ok(())
+}
+
+/// The reader's own OpenPGP keys — the facts about them, and not the keys.
+///
+/// The key material is not here. It goes in the OS keyring under
+/// `pgp-secret-<fingerprint>`, the same place account passwords live, because
+/// a secret key in a database is a secret key in every backup of that
+/// database and in every copy anybody makes of it.
+///
+/// What is here is what the interface needs to show a list and what the
+/// decryptor needs to pick a key: which key, for which addresses, and whether
+/// it is protected by a passphrase. That last one is a fact worth storing
+/// rather than discovering: a reader whose exported key turned out to be
+/// unprotected should be told, not quietly accommodated.
+fn migrate_v25(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS pgp_secret_keys (
+           fingerprint TEXT PRIMARY KEY,
+           addresses   TEXT NOT NULL DEFAULT '',
+           user_ids    TEXT NOT NULL DEFAULT '',
+           protected   INTEGER NOT NULL DEFAULT 1,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 25;")?;
+    Ok(())
+}
+
+/// S/MIME certificates the reader has imported — the trust store OpenPGP's
+/// `pgp_certs` already has an equivalent of, for the same reason: this app
+/// does not build a chain to a root CA, it holds the specific certificates
+/// the reader has chosen to vouch for. See `crypto::smime` for why.
+///
+/// The DER encoding is the identity here (an S/MIME certificate has no
+/// concept of "armoured text" the way a PGP key does), so `der` is what is
+/// kept and re-parsed, not a text form.
+fn migrate_v26(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS smime_certs (
+           fingerprint TEXT PRIMARY KEY,
+           subject     TEXT NOT NULL DEFAULT '',
+           addresses   TEXT NOT NULL DEFAULT '',
+           der         BLOB NOT NULL,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 26;")?;
+    Ok(())
+}
+
+/// The reader's own S/MIME identity or identities — a certificate plus the
+/// private key it needs to sign and to decrypt. Same split as OpenPGP's
+/// secret keys: the private key is not here, it goes in the OS keyring under
+/// `smime-identity-<fingerprint>`. What is here is the certificate itself
+/// (public, so keeping it in SQLite is not the exposure a private key would
+/// be — it is what `smime_certs` already stores for other people's
+/// certificates) plus the facts the interface needs to list identities and
+/// the sender needs to pick the right one for a given From address.
+fn migrate_v27(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS smime_identities (
+           fingerprint TEXT PRIMARY KEY,
+           subject     TEXT NOT NULL DEFAULT '',
+           addresses   TEXT NOT NULL DEFAULT '',
+           der         BLOB NOT NULL,
+           added_at    INTEGER NOT NULL DEFAULT 0
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 27;")?;
+    Ok(())
+}
+
+/// Senders already auto-replied to during the current out-of-office
+/// activation, for accounts using the client-side auto-responder (plain
+/// IMAP/SMTP — Exchange accounts configure the server's own Automatic
+/// Replies instead and never touch this table). One row per sender per
+/// account is the whole point: without it, every new message from the same
+/// person while OOF is on would get its own reply. Cleared whenever the
+/// reader saves out-of-office settings (`oof.set`), so turning it off and
+/// on — or just editing the message — starts a fresh round of replies
+/// rather than silently withholding one because of a stale row from an
+/// earlier vacation.
+fn migrate_v28(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS oof_replied (
+           account     TEXT NOT NULL,
+           sender_addr TEXT NOT NULL,
+           replied_at  INTEGER NOT NULL DEFAULT 0,
+           PRIMARY KEY (account, sender_addr)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 28;")?;
     Ok(())
 }
 

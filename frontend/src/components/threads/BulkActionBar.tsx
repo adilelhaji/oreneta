@@ -204,7 +204,7 @@ export function BulkActionBar({
           y={menu.y}
           overlay
           onClose={() => setMenu(null)}
-          className="fixed z-50 min-w-[190px] rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+          className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
@@ -277,7 +277,7 @@ export function BulkActionBar({
               <FloatingContextMenu
                 x={moveFlyoutPosition.x}
                 y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
               >
                 {!hasMoveTarget && (
                   <div className="px-3 py-2 text-xs font-semibold text-secondary">{t('folders.noneAvailable')}</div>
@@ -319,11 +319,11 @@ export function BulkActionBar({
               <FloatingContextMenu
                 x={copyFlyoutPosition.x}
                 y={copyFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
               >
                 {copyAccountGroups.map(({ account, folders }) => (
                   <div key={account.id}>
-                    <div className="px-3 pb-1 pt-2 text-[0.6875rem] font-semibold text-secondary">
+                    <div className="px-3 pb-1 pt-2 text-caption font-semibold text-secondary">
                       {account.display_name || account.email || account.id}
                     </div>
                     {folders.length === 0 && (

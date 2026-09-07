@@ -176,6 +176,32 @@ fn thread_cards_json_keyed(
         counts.extend(store::card_message_counts(conn, account_id, folder, &keys)?);
     }
 
+    // Labels come from one query for the whole page rather than one per row: a
+    // list of fifty conversations should not be fifty round trips to answer a
+    // question about all of them.
+    let with_attachments = store::threads_with_attachments(
+        conn,
+        account_id,
+        &cards.iter().map(|card| card.thread_key.clone()).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+
+    // One query for the page, like the labels below: fifty rows should not be
+    // fifty questions about the same thing.
+    let card_priority = store::priority_for_threads(
+        conn,
+        account_id,
+        &cards.iter().map(|card| card.thread_key.clone()).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+
+    let card_labels = store::labels_for_threads(
+        conn,
+        account_id,
+        &cards.iter().map(|card| card.thread_key.clone()).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+
     cards
         .into_iter()
         .map(|card| {
@@ -212,7 +238,12 @@ fn thread_cards_json_keyed(
                 "message_count": message_count,
                 "starred": card.header.starred,
                 "has_draft": card.has_draft,
-                "has_attachments": false,
+                "has_attachments": with_attachments.contains(&card.thread_key),
+                // Absent rather than false when nobody has judged it: a
+                // message from before this existed is not a message judged
+                // unimportant, and the interface must be able to tell.
+                "priority": card_priority.get(&card.thread_key).copied(),
+                "labels": card_labels.get(&card.thread_key).cloned().unwrap_or_default(),
                 "recipient_overflow": card.header.recipient_overflow,
                 }),
             ))

@@ -212,6 +212,9 @@ pub(crate) fn send_mobile_message(data_dir: &str, params: &Value) -> Result<Valu
         &references,
         &reply_to,
         &message_id,
+        // The mobile path does not offer OpenPGP yet; keys and passphrases
+        // are a desktop story so far.
+        None,
     ))?;
     let sent_bytes = raw.len();
     if let Err(err) =
@@ -634,14 +637,28 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
         // with nothing rather than pretending the view is empty of its own
         // accord.
         thread_list::MailSource::Snoozed => (Vec::new(), None),
-        thread_list::MailSource::Recent { unread_only } => get_cached_mobile_mail_page(
-            data_dir,
-            &account_id,
-            &folder_id,
-            limit,
-            request.before_cursor,
+        thread_list::MailSource::Recent {
             unread_only,
-        )?,
+            starred_only,
+            label_id,
+            with_attachments,
+            priority_only,
+        } => {
+            get_cached_mobile_mail_page(
+                data_dir,
+                &account_id,
+                &folder_id,
+                limit,
+                request.before_cursor,
+                store::RecentFilter {
+                    unread_only,
+                    starred_only,
+                    label_id,
+                    with_attachments,
+                    priority_only,
+                },
+            )?
+        }
         thread_list::MailSource::Search => {
             // One folder list for both halves: the live search and the offline
             // fallback must cover the same mailboxes, or losing the network
@@ -805,19 +822,12 @@ fn get_cached_mobile_mail_page(
     account_id: &str,
     folder_id: &str,
     limit: u32,
-    before_cursor: Option<(i64, u32)>,
-    unread_only: bool,
+    before_cursor: Option<crate::thread_list::PageCursor>,
+    filter: store::RecentFilter,
 ) -> Result<(Vec<MessageHeader>, Option<String>), String> {
     let conn = open_mobile_db(data_dir)?;
-    store::get_recent_page(
-        &conn,
-        account_id,
-        folder_id,
-        limit,
-        before_cursor,
-        unread_only,
-    )
-    .map_err(|err| err.to_string())
+    store::get_recent_page(&conn, account_id, folder_id, limit, before_cursor, filter)
+        .map_err(|err| err.to_string())
 }
 
 fn get_cached_mobile_starred(

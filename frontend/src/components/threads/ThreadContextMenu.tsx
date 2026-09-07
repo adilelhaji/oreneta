@@ -13,6 +13,7 @@ import {
   Star,
   Trash2,
   Clock,
+  Ban,
 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { ui$ } from '../../states/ui'
@@ -28,6 +29,8 @@ import {
   isDraftFolder,
   isTrashFolderId,
   mail$,
+  isJunkFolderId,
+  markThreadJunk,
   markThreadRead,
   markThreadUnread,
   moveThreadToFolder,
@@ -38,9 +41,11 @@ import {
 } from '../../states/mail'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
+import { formatDeferredWhen } from '../../lib/date'
 import type { Account, Message } from '../../types'
 import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { MessageContextMenu } from '../chat/MessageContextMenu'
+import { PriorityMenuSection } from './PriorityMenuSection'
 
 export type ThreadMenuState =
   | {
@@ -152,20 +157,6 @@ export function useThreadContextMenu(accounts: Account[]): ThreadContextMenuCont
   }
 }
 
-/// The hour a choice lands on, so "tomorrow" is not left to the imagination.
-function formatSnoozeWhen(at: number): string {
-  const date = new Date(at * 1000)
-  const today = new Date()
-  const sameDay = date.toDateString() === today.toDateString()
-  return sameDay
-    ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleString(undefined, {
-        weekday: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-}
-
 export function ThreadContextMenu({
   controller,
   onAfterAction,
@@ -190,7 +181,7 @@ export function ThreadContextMenu({
 }) {
   // Read here rather than threaded through every caller: which view is open
   // decides whether setting aside or bringing back is the useful offer.
-  const filterMode = useValue(ui$.filterMode)
+  const filters = useValue(ui$.filters)
   const { t } = useTranslation()
   const { menu, close } = controller
   const foldersByAccount = useValue(mail$.foldersByAccount)
@@ -299,7 +290,7 @@ export function ThreadContextMenu({
       <FloatingContextMenu
         x={menu.x}
         y={menu.y}
-        className="fixed z-50 min-w-[160px] rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+        className="fixed z-50 min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
         dataAttribute="data-thread-context-menu"
         onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
@@ -352,7 +343,7 @@ export function ThreadContextMenu({
               <FloatingContextMenu
                 x={moveFlyoutPosition.x}
                 y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
                 dataAttribute="data-thread-context-menu"
               >
                 {targetAccounts.map((account) => (
@@ -387,13 +378,14 @@ export function ThreadContextMenu({
     excluded: account.id === menu.accountId ? [menu.folderId] : [],
   }))
   const inTrash = isTrashFolderId(menu.accountId, menu.folderId)
+  const inJunk = isJunkFolderId(menu.accountId, menu.folderId)
   const inDrafts = isDraftFolder(menu.folderId, menu.accountId)
 
   return (
     <FloatingContextMenu
       x={menu.x}
       y={menu.y}
-      className="fixed z-50 min-w-[190px] rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+      className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
       dataAttribute="data-thread-context-menu"
       onClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
@@ -453,7 +445,7 @@ export function ThreadContextMenu({
           for what is finished. */}
       {/* Already set aside: the useful action is bringing it back, not
           putting it away again. */}
-      {filterMode === 'snoozed' ? (
+      {filters.includes('snoozed') ? (
         <MenuItem
           icon={<Clock size={13} className="text-secondary" />}
           label={t('threads.snooze.bringBack', { defaultValue: 'Bring back now' })}
@@ -470,7 +462,7 @@ export function ThreadContextMenu({
           icon={<Clock size={13} className="text-secondary" />}
           label={t(`threads.snooze.${choice.key}`, {
             defaultValue: choice.key,
-            when: formatSnoozeWhen(choice.at),
+            when: formatDeferredWhen(choice.at),
           })}
           onClick={() => {
             const threadId = menu.threadId
@@ -489,6 +481,24 @@ export function ThreadContextMenu({
           close()
           void archiveThread(threadId).then(() => after('archive', threadId))
         }}
+      />
+      {/* In the junk folder the useful gesture is the opposite one, so that is
+          the one offered. This branch is mail only — a feed returned above,
+          and a feed has no junk folder to file into. */}
+      <MenuItem
+        icon={<Ban size={13} className="text-secondary" />}
+        label={inJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')}
+        onClick={() => {
+          const threadId = menu.threadId
+          close()
+          void markThreadJunk(threadId, !inJunk).then(() => after('archive', threadId))
+        }}
+      />
+      <PriorityMenuSection
+        threadId={menu.threadId}
+        accountId={menu.accountId}
+        folderId={menu.folderId}
+        onAct={close}
       />
       {canMove && (
         <div
@@ -509,7 +519,7 @@ export function ThreadContextMenu({
             <FloatingContextMenu
               x={moveFlyoutPosition.x}
               y={moveFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
               dataAttribute="data-thread-context-menu"
             >
               <FolderMenuTree
@@ -556,12 +566,12 @@ export function ThreadContextMenu({
             <FloatingContextMenu
               x={copyFlyoutPosition.x}
               y={copyFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
               dataAttribute="data-thread-context-menu"
             >
               {copyAccountGroups.map(({ account, folders, excluded }) => (
                 <div key={account.id}>
-                  <div className="px-3 pb-1 pt-2 text-[0.6875rem] font-semibold text-secondary">
+                  <div className="px-3 pb-1 pt-2 text-caption font-semibold text-secondary">
                     {account.display_name || account.email || account.id}
                   </div>
                   {folders.length === 0 && (

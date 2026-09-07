@@ -1,0 +1,8 @@
+# S/MIME test fixtures are real `openssl smime` output, verified byte for
+# byte before being committed (see meron-core/src/crypto/smime_tests.rs). The
+# signatures inside them are over exact bytes, CRLF included where CRLF is
+# what OpenSSL wrote — so nothing here may go through Git's line-ending
+# normalization, on any platform, regardless of a checkout's core.autocrlf.
+# `binary` is `-text -diff`: no conversion, and a byte diff of base64 CMS
+# content would not be readable anyway.
+/meron-core/src/crypto/testdata/** binary

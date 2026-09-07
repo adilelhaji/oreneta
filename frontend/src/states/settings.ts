@@ -24,9 +24,11 @@ import {
 import {
   sanitizeShortcutOverrides,
   setShortcutOverrides,
+  SHORTCUT_SCHEMES,
   type Chord,
   type ShortcutId,
   type ShortcutOverrides,
+  type ShortcutScheme,
 } from '../lib/shortcuts'
 import type { Account, ChatWallpaper } from '../types'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
@@ -45,6 +47,63 @@ export type SendShortcut = 'enter' | 'mod_enter'
  * except the newest and the unread ones (the classic mail-client reading view).
  */
 export type ConversationLayout = 'chat' | 'traditional'
+
+/**
+ * How much room a row in the thread list is given.
+ * 'compact': one line, for seeing as much of a mailbox at once as possible.
+ * 'cosy': sender and subject on two lines, the default.
+ * 'relaxed': the preview on a line of its own, two lines of it.
+ */
+/**
+ * A search worth keeping.
+ *
+ * Just a name and the text that was typed: a saved search that also pinned an
+ * account and a folder would go stale the moment either was renamed, and
+ * would surprise the reader by jumping them somewhere else.
+ */
+export type SavedSearch = {
+  id: string
+  name: string
+  query: string
+}
+
+/**
+ * How the thread list is drawn.
+ * 'cards': the two-line rows with an avatar, as the app has always looked.
+ * 'table': columns with sortable headers, for reading a mailbox as a list of
+ * facts rather than a conversation.
+ */
+export type ListView = 'cards' | 'table'
+
+/** What the list is ordered by, and which way. */
+export type SortKey = 'date' | 'sender' | 'subject'
+export type SortDir = 'asc' | 'desc'
+export type ListSort = { key: SortKey; dir: SortDir }
+
+/** As the core reads it: `date`, `sender:asc`, and so on. */
+export function sortParam(sort: ListSort): string {
+  return sort.dir === 'asc' ? `${sort.key}:asc` : sort.key
+}
+
+export type ListDensity = 'compact' | 'cosy' | 'relaxed'
+
+/**
+ * How wide a message body is allowed to run.
+ * 'comfortable' and 'wide' cap the measure; 'full' lets it fill the pane.
+ *
+ * Long lines are hard to read — the eye loses the start of the next one — and
+ * a maximised window otherwise gives a plain-text message lines hundreds of
+ * characters across.
+ */
+export type ReadingWidth = 'comfortable' | 'wide' | 'full'
+
+/**
+ * When a message the reader is looking at counts as read.
+ * 'immediately': as soon as it has been on screen, which is what Oreneta has
+ * always done. 'delayed': only after {@link MARK_READ_DELAY_SECONDS} of it
+ * staying there. 'manual': never on its own.
+ */
+export type MarkReadMode = 'immediately' | 'delayed' | 'manual'
 export type KanbanBoardColumn = {
   accountId: string
   folderId: string
@@ -102,6 +161,33 @@ export type Settings = {
   sendShortcut: SendShortcut
   /** Chat bubbles or the traditional stacked reading view (desktop only). */
   conversationLayout: ConversationLayout
+  /** Searches the reader has kept, in the order they were saved. */
+  savedSearches: SavedSearch[]
+  /**
+   * Whether a message's own typography and widths give way to the app's.
+   *
+   * Off by default: a newsletter or an invoice is laid out on purpose.
+   */
+  simplifyMessages: boolean
+  /**
+   * Whether a narrowing survives changing folder.
+   *
+   * Off by default, which is what someone triaging one mailbox wants; on is
+   * for working the same question through several.
+   */
+  stickyFilters: boolean
+  /** Cards or a sortable table. */
+  listView: ListView
+  /** What the list is ordered by. */
+  listSort: ListSort
+  /** How much room a thread-list row is given. */
+  listDensity: ListDensity
+  /** How wide a message body is allowed to run. */
+  readingWidth: ReadingWidth
+  /** When a message on screen counts as read. */
+  markReadMode: MarkReadMode
+  /** Seconds a message must stay on screen before 'delayed' marks it read. */
+  markReadDelaySeconds: number
   /**
    * Seconds a sent message waits before it actually goes, so it can be taken
    * back. Zero sends at once.
@@ -141,8 +227,57 @@ export type Settings = {
   proxy: ProxySettings
 }
 
+/**
+ * Reads back stored saved searches, dropping anything that is not one.
+ *
+ * A row with no query would sit in the list doing nothing when clicked, which
+ * is worse than not being there. Returns null when the stored value is not a
+ * list at all, so the caller can leave the defaults alone.
+ */
+export function sanitizeSavedSearches(value: unknown): SavedSearch[] | null {
+  if (!Array.isArray(value)) return null
+  const clean: SavedSearch[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const candidate = entry as Partial<SavedSearch>
+    const name = typeof candidate.name === 'string' ? candidate.name.trim() : ''
+    const query = typeof candidate.query === 'string' ? candidate.query.trim() : ''
+    const id = typeof candidate.id === 'string' ? candidate.id : ''
+    if (!name || !query || !id) continue
+    clean.push({ id, name, query })
+  }
+  return clean
+}
+
 /** The windows a sent message can wait in, in seconds. Zero sends at once. */
 export const UNDO_SEND_CHOICES = [0, 5, 10, 20, 30] as const
+
+/**
+ * Reads back a stored ordering, keeping the default for anything unknown.
+ *
+ * A column this version cannot order by would leave the list claiming an order
+ * it is not in, which is worse than being in the usual one.
+ */
+export function sanitizeListSort(value: unknown): ListSort | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Partial<ListSort>
+  const key = candidate.key
+  const dir = candidate.dir
+  if (key !== 'date' && key !== 'sender' && key !== 'subject') return null
+  return { key, dir: dir === 'asc' ? 'asc' : 'desc' }
+}
+
+/** The room a thread-list row can be given, tightest first. */
+export const LIST_DENSITIES = ['compact', 'cosy', 'relaxed'] as const
+
+/** The measures a message body can be held to, narrowest first. */
+export const READING_WIDTHS = ['comfortable', 'wide', 'full'] as const
+
+/** When a message on screen can count as read. */
+export const MARK_READ_MODES = ['immediately', 'delayed', 'manual'] as const
+
+/** The delays 'delayed' can wait, in seconds. */
+export const MARK_READ_DELAY_CHOICES = [1, 2, 3, 5, 10] as const
 
 export const KANBAN_COLUMN_DEFAULT_WIDTH = 360
 export const KANBAN_COLUMN_MIN_WIDTH = 240
@@ -161,6 +296,15 @@ const DB_KEY = {
   showUnreadAccountBadge: 'show_unread_account_badge',
   sendShortcut: 'send_shortcut',
   conversationLayout: 'conversation_layout',
+  savedSearches: 'saved_searches',
+  stickyFilters: 'sticky_filters',
+  simplifyMessages: 'simplify_messages',
+  listView: 'list_view',
+  listSort: 'list_sort',
+  listDensity: 'list_density',
+  readingWidth: 'reading_width',
+  markReadMode: 'mark_read_mode',
+  markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   spellCheck: 'spell_check',
   signature: 'signature',
@@ -327,6 +471,18 @@ export const settings$ = observable<Settings>({
   showUnreadAccountBadge: false,
   sendShortcut: 'mod_enter',
   conversationLayout: 'chat',
+  savedSearches: [],
+  stickyFilters: false,
+  simplifyMessages: false,
+  listView: 'cards',
+  // Newest first, which is what a mailbox means when nobody has said otherwise.
+  listSort: { key: 'date', dir: 'desc' },
+  listDensity: 'cosy',
+  readingWidth: 'comfortable',
+  // What the app has always done, so nobody's mailbox changes behaviour
+  // because a setting appeared.
+  markReadMode: 'immediately',
+  markReadDelaySeconds: 3,
   // A few seconds by default: long enough to catch the reply sent to the wrong
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
@@ -548,6 +704,23 @@ export function visibleSideNavAccounts(accounts: Account[]): Account[] {
 }
 
 /** Rebind a shortcut. Binding it back to its default clears the override. */
+/**
+ * Adopts a scheme of shortcuts other clients taught people.
+ *
+ * Written as ordinary rebindings, on top of whatever the reader already had:
+ * a scheme replaces the keys it names and leaves the rest alone, so choosing
+ * one does not silently discard a binding someone set by hand for something
+ * the scheme says nothing about.
+ */
+export function applyShortcutScheme(scheme: ShortcutScheme) {
+  const next: ShortcutOverrides = {
+    ...settings$.shortcutOverrides.peek(),
+    ...SHORTCUT_SCHEMES[scheme],
+  }
+  settings$.shortcutOverrides.set(next)
+  setShortcutOverrides(next)
+}
+
 export function setShortcutBinding(id: ShortcutId, chord: Chord) {
   const next = { ...settings$.shortcutOverrides.peek(), [id]: chord }
   settings$.shortcutOverrides.set(sanitizeShortcutOverrides(next) ?? {})
@@ -616,6 +789,48 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     const conversationLayout = prefs[DB_KEY.conversationLayout]
     if (conversationLayout === 'chat' || conversationLayout === 'traditional') {
       settings$.conversationLayout.set(conversationLayout)
+    }
+
+    const saved = sanitizeSavedSearches(prefs[DB_KEY.savedSearches])
+    if (saved) settings$.savedSearches.set(saved)
+
+    if (typeof prefs[DB_KEY.stickyFilters] === 'boolean') {
+      settings$.stickyFilters.set(prefs[DB_KEY.stickyFilters] as boolean)
+    }
+
+    if (typeof prefs[DB_KEY.simplifyMessages] === 'boolean') {
+      settings$.simplifyMessages.set(prefs[DB_KEY.simplifyMessages] as boolean)
+    }
+
+    const listView = prefs[DB_KEY.listView]
+    if (listView === 'cards' || listView === 'table') {
+      settings$.listView.set(listView)
+    }
+
+    const storedSort = prefs[DB_KEY.listSort]
+    const sort = sanitizeListSort(storedSort)
+    if (sort) settings$.listSort.set(sort)
+
+    const listDensity = prefs[DB_KEY.listDensity]
+    if (LIST_DENSITIES.includes(listDensity as ListDensity)) {
+      settings$.listDensity.set(listDensity as ListDensity)
+    }
+
+    const readingWidth = prefs[DB_KEY.readingWidth]
+    if (READING_WIDTHS.includes(readingWidth as ReadingWidth)) {
+      settings$.readingWidth.set(readingWidth as ReadingWidth)
+    }
+
+    const markReadMode = prefs[DB_KEY.markReadMode]
+    if (MARK_READ_MODES.includes(markReadMode as MarkReadMode)) {
+      settings$.markReadMode.set(markReadMode as MarkReadMode)
+    }
+
+    // Only a delay this app offers: a stored value from a future version, or a
+    // hand-edited one, must not leave a message unread for an hour.
+    const markReadDelay = Number(prefs[DB_KEY.markReadDelaySeconds])
+    if (MARK_READ_DELAY_CHOICES.includes(markReadDelay as (typeof MARK_READ_DELAY_CHOICES)[number])) {
+      settings$.markReadDelaySeconds.set(markReadDelay)
     }
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {

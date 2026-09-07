@@ -51,7 +51,7 @@ describe('removeFeed', () => {
     ui$.selectedFolder.set('rss')
     ui$.selectedThread.set('rss-account#rss#feed-1')
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     ui$.editFeed.set({ threadId: 'rss-account#rss#feed-1', name: 'Example Feed' })
     ui$.toast.set('')
     ;(window as any).go = {

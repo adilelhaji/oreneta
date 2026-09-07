@@ -40,7 +40,7 @@ export function CalendarList() {
     <aside className="hidden w-56 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-raised/40 px-3 py-4 md:flex">
       {groups.map(({ account, calendars }) => (
         <div key={account.id}>
-          <p className="mb-1.5 truncate px-1 text-[0.625rem] font-semibold uppercase tracking-wide text-secondary/70">
+          <p className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
             {account.email}
           </p>
           <ul className="flex flex-col">
@@ -49,7 +49,7 @@ export function CalendarList() {
               const open = picking === key(calendar)
               return (
                 <li key={key(calendar)} className="relative">
-                  <div className="flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-hover">
+                  <div className="flex items-center gap-2 rounded-control-sm px-1 py-1.5 transition-colors hover:bg-hover">
                     {/* The tick doubles as the colour: one square answers both
                         "is it shown" and "which one is it" at a glance. */}
                     <button
@@ -89,7 +89,7 @@ export function CalendarList() {
                   {open && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setPicking(null)} />
-                      <div className="absolute left-6 top-8 z-50 flex gap-1.5 rounded-xl border border-border bg-app p-2 shadow-xl">
+                      <div className="absolute left-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-xl">
                         {CALENDAR_COLORS.map((swatch) => (
                           <button
                             key={swatch}

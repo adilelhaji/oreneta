@@ -121,7 +121,7 @@ export function MessageBubbleBody({
               >
                 <Copy size={13} />
               </button>
-              <pre className="m-0 max-w-full overflow-x-auto rounded-lg border border-border/60 bg-black/5 px-3 py-2.5 pr-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
+              <pre className="m-0 max-w-full overflow-x-auto rounded-control-sm border border-border/60 bg-black/5 px-3 py-2.5 pr-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
                 <code className="block min-w-max whitespace-pre">{block.content}</code>
               </pre>
             </div>

@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { EMPTY_PROXY, hydrateSettings, isProxyUsable, sanitizeKanbanBoards, sanitizeProxy, settings$ } from './settings'
+import {
+  EMPTY_PROXY,
+  hydrateSettings,
+  isProxyUsable,
+  sanitizeKanbanBoards,
+  sanitizeListSort,
+  sanitizeProxy,
+  settings$,
+  sortParam,
+} from './settings'
 
 const baseBoard = {
   id: 'kb-1',
@@ -103,5 +112,132 @@ describe('proxy setting', () => {
     expect(isProxyUsable({ mode: 'http', host: '', port: 8080, username: '', password: '' })).toBe(false)
     expect(isProxyUsable({ mode: 'http', host: 'h', port: 0, username: '', password: '' })).toBe(false)
     expect(isProxyUsable({ mode: 'http', host: 'h', port: 8080, username: '', password: '' })).toBe(true)
+  })
+})
+
+describe('reading settings', () => {
+  afterEach(() => {
+    settings$.listDensity.set('cosy')
+    settings$.readingWidth.set('comfortable')
+    settings$.markReadMode.set('immediately')
+    settings$.markReadDelaySeconds.set(3)
+  })
+
+  it('leaves a mailbox reading as it always has until asked otherwise', () => {
+    expect(settings$.listDensity.get()).toBe('cosy')
+    expect(settings$.readingWidth.get()).toBe('comfortable')
+    // Marking on sight is what Oreneta has always done: nobody's mailbox
+    // changes behaviour because a setting appeared.
+    expect(settings$.markReadMode.get()).toBe('immediately')
+  })
+
+  it('hydrates persisted reading preferences', () => {
+    hydrateSettings({
+      list_density: 'compact',
+      reading_width: 'full',
+      mark_read_mode: 'delayed',
+      mark_read_delay_seconds: 10,
+    })
+
+    expect(settings$.listDensity.get()).toBe('compact')
+    expect(settings$.readingWidth.get()).toBe('full')
+    expect(settings$.markReadMode.get()).toBe('delayed')
+    expect(settings$.markReadDelaySeconds.get()).toBe(10)
+  })
+
+  it('ignores stored values this version does not offer', () => {
+    // A value written by a later version, or edited by hand. A density nobody
+    // can render, or a delay of an hour, would leave the list unreadable or a
+    // message unread for reasons the reader never chose.
+    hydrateSettings({
+      list_density: 'spacious',
+      reading_width: 'infinite',
+      mark_read_mode: 'never',
+      mark_read_delay_seconds: 3600,
+    })
+
+    expect(settings$.listDensity.get()).toBe('cosy')
+    expect(settings$.readingWidth.get()).toBe('comfortable')
+    expect(settings$.markReadMode.get()).toBe('immediately')
+    expect(settings$.markReadDelaySeconds.get()).toBe(3)
+  })
+})
+
+describe('saved searches', () => {
+  afterEach(() => {
+    settings$.savedSearches.set([])
+  })
+
+  it('keeps a name and the text that was typed', () => {
+    hydrateSettings({ saved_searches: [{ id: 's1', name: 'Invoices', query: 'from:billing' }] })
+    expect(settings$.savedSearches.get()).toEqual([{ id: 's1', name: 'Invoices', query: 'from:billing' }])
+  })
+
+  it('drops a stored row that would do nothing when clicked', () => {
+    hydrateSettings({
+      saved_searches: [
+        { id: 's1', name: 'Good', query: 'invoice' },
+        { id: 's2', name: 'No query', query: '   ' },
+        { id: 's3', name: '  ', query: 'nameless' },
+        { id: '', name: 'No id', query: 'orphan' },
+        'not an object',
+        null,
+      ],
+    })
+
+    // A row with nothing to search for sits in the list doing nothing, which
+    // is worse than not being there at all.
+    expect(settings$.savedSearches.get().map((search) => search.id)).toEqual(['s1'])
+  })
+
+  it('leaves the list alone when the stored value is not a list', () => {
+    settings$.savedSearches.set([{ id: 's1', name: 'Kept', query: 'invoice' }])
+    hydrateSettings({ saved_searches: 'nonsense' })
+    expect(settings$.savedSearches.get()).toHaveLength(1)
+  })
+
+  it('trims what it stores', () => {
+    hydrateSettings({ saved_searches: [{ id: 's1', name: '  Invoices  ', query: '  invoice  ' }] })
+    expect(settings$.savedSearches.get()[0]).toEqual({ id: 's1', name: 'Invoices', query: 'invoice' })
+  })
+})
+
+describe('list view and ordering', () => {
+  afterEach(() => {
+    settings$.listView.set('cards')
+    settings$.listSort.set({ key: 'date', dir: 'desc' })
+  })
+
+  it('starts as the list has always looked, newest first', () => {
+    expect(settings$.listView.get()).toBe('cards')
+    expect(settings$.listSort.get()).toEqual({ key: 'date', dir: 'desc' })
+  })
+
+  it('writes an ordering the core can read', () => {
+    expect(sortParam({ key: 'date', dir: 'desc' })).toBe('date')
+    expect(sortParam({ key: 'sender', dir: 'asc' })).toBe('sender:asc')
+    expect(sortParam({ key: 'subject', dir: 'desc' })).toBe('subject')
+  })
+
+  it('hydrates a stored view and ordering', () => {
+    hydrateSettings({ list_view: 'table', list_sort: { key: 'sender', dir: 'asc' } })
+    expect(settings$.listView.get()).toBe('table')
+    expect(settings$.listSort.get()).toEqual({ key: 'sender', dir: 'asc' })
+  })
+
+  it('keeps the usual order rather than claiming one it cannot apply', () => {
+    // A column a later version can sort by would leave the list saying it is
+    // in an order it is not in, which is worse than being in the usual one.
+    expect(sanitizeListSort({ key: 'size', dir: 'asc' })).toBeNull()
+    expect(sanitizeListSort('sender')).toBeNull()
+    expect(sanitizeListSort(null)).toBeNull()
+    // An unreadable direction is the default direction, not a dropped sort.
+    expect(sanitizeListSort({ key: 'subject', dir: 'sideways' })).toEqual({ key: 'subject', dir: 'desc' })
+  })
+
+  it('ignores a view it cannot draw', () => {
+    settings$.listView.set('table')
+    hydrateSettings({ list_view: 'mosaic' })
+    expect(settings$.listView.get()).toBe('table')
   })
 })

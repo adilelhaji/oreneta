@@ -18,7 +18,7 @@ export function AccountProviderGrid({
   if (isSetup) {
     return (
       <div
-        className="grid grid-cols-4 gap-1 rounded-2xl border border-border/80 bg-raised p-1 shadow-inner max-[640px]:grid-cols-1"
+        className="grid grid-cols-4 gap-1 rounded-panel border border-border/80 bg-raised p-1 shadow-inner max-[640px]:grid-cols-1"
         role="tablist"
         aria-label={t('accounts.setup.chooseProvider')}
       >
@@ -31,14 +31,14 @@ export function AccountProviderGrid({
               role="tab"
               aria-selected={active}
               onClick={() => setMode(p.mode)}
-              className={`group flex min-w-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-center transition-all cursor-pointer max-[640px]:justify-start max-[640px]:text-left ${
+              className={`group flex min-w-0 items-center justify-center gap-2 rounded-control px-3 py-2.5 text-center transition-all cursor-pointer max-[640px]:justify-start max-[640px]:text-left ${
                 active
                   ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
                   : 'text-secondary hover:bg-chats/60 hover:text-primary'
               }`}
             >
               <span className="shrink-0">{p.icon(iconSize)}</span>
-              <span className="min-w-0 text-[0.8125rem] font-semibold leading-tight">{p.label}</span>
+              <span className="min-w-0 text-ui font-semibold leading-tight">{p.label}</span>
             </button>
           )
         })}
@@ -55,18 +55,18 @@ export function AccountProviderGrid({
             key={p.id}
             type="button"
             onClick={() => setMode(p.mode)}
-            className={`group relative flex items-center text-left transition-all cursor-pointer gap-2.5 rounded-2xl p-2.5 border ${
+            className={`group relative flex items-center text-left transition-all cursor-pointer gap-2.5 rounded-panel p-2.5 border ${
               active
                 ? 'border-accent bg-accent/5 shadow-sm ring-1 ring-accent/30'
                 : 'border-border/60 hover:border-border hover:bg-hover'
             }`}
           >
-            <span className="flex shrink-0 items-center justify-center rounded-xl border border-border/50 bg-raised h-9 w-9">
+            <span className="flex shrink-0 items-center justify-center rounded-control border border-border/50 bg-raised h-9 w-9">
               {p.icon(iconSize)}
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="font-bold leading-tight text-primary text-[0.75rem]">{p.label}</span>
-              <span className="truncate font-medium text-secondary text-[0.625rem]">
+              <span className="font-bold leading-tight text-primary text-xs">{p.label}</span>
+              <span className="truncate font-medium text-secondary text-2xs">
                 {t(p.descriptionKey, { defaultValue: p.defaultDescription })}
               </span>
             </span>

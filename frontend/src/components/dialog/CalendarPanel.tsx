@@ -54,7 +54,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             type="button"
             disabled={!renamed}
             onClick={() => void run(renameCalendar(calendar.accountId, calendar.id, name.trim()))}
-            className="mb-0.5 shrink-0 rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            className="mb-0.5 shrink-0 rounded-control bg-accent px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
             {t('calendar.rename', { defaultValue: 'Rename' })}
           </button>
@@ -99,14 +99,14 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
       <SettingsGroup title={t('calendar.dangerZone', { defaultValue: 'Remove' })}>
         <div className="px-4 py-3.5">
           {calendar.is_default ? (
-            <p className="text-[0.6875rem] text-secondary">
+            <p className="text-caption text-secondary">
               {t('calendar.cannotDeleteDefault', {
                 defaultValue:
                   "The account's main calendar cannot be removed — the server does not allow it.",
               })}
             </p>
           ) : onlyOne ? (
-            <p className="text-[0.6875rem] text-secondary">
+            <p className="text-caption text-secondary">
               {t('calendar.cannotDeleteLast', {
                 defaultValue: 'An account keeps at least one calendar.',
               })}
@@ -115,7 +115,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             <div className="flex flex-col gap-2.5">
               {/* Said plainly: this is the destructive operation on this
                   screen, and its cost is the events, not the calendar. */}
-              <p className="text-[0.6875rem] text-primary">
+              <p className="text-caption text-primary">
                 {t('calendar.deleteWarning', {
                   defaultValue:
                     'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
@@ -126,7 +126,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
                 <button
                   type="button"
                   onClick={() => void run(deleteCalendar(calendar.accountId, calendar.id))}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-control bg-rose-500 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
                 >
                   <Trash2 size={13} />
                   {t('calendar.deleteConfirm', { defaultValue: 'Remove it' })}
@@ -134,7 +134,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
                 <button
                   type="button"
                   onClick={() => setConfirming(false)}
-                  className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+                  className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
                 >
                   {t('calendar.cancel', { defaultValue: 'Cancel' })}
                 </button>
@@ -144,7 +144,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
             >
               <Trash2 size={13} />
               {t('calendar.deleteCalendar', { defaultValue: 'Remove calendar' })}
@@ -153,7 +153,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
         </div>
       </SettingsGroup>
 
-      {error && <p className="px-1 text-[0.6875rem] text-rose-500">{error}</p>}
+      {error && <p className="px-1 text-caption text-rose-500">{error}</p>}
     </div>
   )
 }

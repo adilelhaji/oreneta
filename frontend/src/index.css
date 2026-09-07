@@ -31,6 +31,40 @@
   --shadow-bubble-in: var(--me-bubble-shadow-in);
   --shadow-bubble-out: var(--me-bubble-shadow-out);
 
+  /* ---- Design tokens ------------------------------------------------------
+     The steps every screen is built from. A size or a radius that is not one
+     of these is a size the eye reads as slightly off without knowing why, and
+     nineteen of them had crept in before these existed. Tailwind's own
+     xs/sm/base stay as they are; these fill the gaps the interface actually
+     uses, named for what they are for. */
+
+  /* Type scale. Six steps, 10 to 16 px, plus the headings above. */
+  --text-2xs: 0.625rem;          /* 10px — micro: badges, kickers */
+  --text-2xs--line-height: 1.4;
+  --text-caption: 0.6875rem;     /* 11px — captions, hints, chip labels */
+  --text-caption--line-height: 1.45;
+  --text-ui: 0.8125rem;          /* 13px — menu items, rows, controls */
+  --text-ui--line-height: 1.5;
+  --text-title: 0.9375rem;       /* 15px — dialog and section titles */
+  --text-title--line-height: 1.35;
+
+  /* Radii, by what the shape is. Values match what the interface already
+     looked like, so nothing moves; the names are what stop them drifting. */
+  --radius-control-sm: 0.5rem;   /* small buttons, inputs, menu items */
+  --radius-control: 0.75rem;     /* buttons, inputs, chips, icon buttons */
+  --radius-panel: 1rem;          /* cards, popovers, message bubbles */
+  --radius-dialog: 1.5rem;       /* dialogs */
+
+  /* Elevation. Two levels: something raised off its surface, and something
+     floating over the whole page. */
+  --shadow-raised: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px -4px rgba(15, 23, 42, 0.1);
+  --shadow-overlay: 0 8px 28px -6px rgba(15, 23, 42, 0.22), 0 2px 8px -2px rgba(15, 23, 42, 0.1);
+
+  /* Motion. Fast for state changes under the pointer, base for things that
+     appear. Both collapse to nothing under prefers-reduced-motion below. */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+
   /* Inter has no CJK glyphs, so CJK codepoints fall through to --font-cjk. That
      var is switched per active locale via :lang() below — naming the regional
      CJK face is what selects the correct Han glyph shapes, since the same
@@ -150,6 +184,22 @@ textarea {
   font-family: inherit;
   font-feature-settings: inherit;
   outline: none;
+}
+
+/* One focus ring for everything that can take keyboard focus. `outline: none`
+   above removes the browser's ring for pointer focus; this puts a single,
+   consistent one back for keyboard focus only, so a person tabbing through
+   the app can always see where they are and a person clicking never sees a
+   ring they did not ask for. */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--me-accent) 75%, transparent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-offset: 0;
 }
 
 /* Enable the native right-click menu (cut/copy/paste) on text fields. Wails
@@ -769,6 +819,20 @@ textarea,
 
 .animate-slide-in-right {
   animation: slideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Someone who has asked their system for less motion gets less motion
+   everywhere, not only where a component remembered to check. Durations
+   collapse rather than animations being removed, so end states still land. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Tiptap rich-text body — restore formatting stripped by Tailwind preflight. */

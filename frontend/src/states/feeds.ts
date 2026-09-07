@@ -8,7 +8,7 @@ import { loadThreads, loadFolders } from './mail'
 
 // RSS/feed management. RSS accounts hold feeds; each feed surfaces as a thread.
 // These drive the add-feed / edit-feed dialogs and OPML import/export.
-export const RSS_FEED_DRAG_TYPE = 'application/x-meron-rss-feed'
+export const RSS_FEED_DRAG_TYPE = 'application/x-oreneta-rss-feed'
 
 // Default name for a new RSS account, so adding one is a single click: "RSS",
 // then "RSS1", "RSS2"… for the first name not already taken by a feed account.

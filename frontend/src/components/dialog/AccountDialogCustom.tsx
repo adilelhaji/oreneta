@@ -50,7 +50,7 @@ export function AccountDialogCustom({
       />
       {(discovering || discoverNote) && (
         <p
-          className={`flex items-center gap-1.5 px-1 -mt-2 text-[0.6875rem] font-medium ${discovering ? 'text-secondary' : discoverNote.startsWith("Couldn't") ? 'text-amber-600 dark:text-amber-400' : 'text-accent'}`}
+          className={`flex items-center gap-1.5 px-1 -mt-2 text-caption font-medium ${discovering ? 'text-secondary' : discoverNote.startsWith("Couldn't") ? 'text-amber-600 dark:text-amber-400' : 'text-accent'}`}
         >
           {discovering && <RefreshCw size={11} className="animate-spin" />}
           {discovering ? t('accounts.discovery.lookingUp') : discoverNote}
@@ -64,7 +64,7 @@ export function AccountDialogCustom({
         labelClassName={fieldLabelClass}
       />
       <label className="flex flex-col gap-1.5 w-full">
-        <span className={`pl-0.5 ${fieldLabelClass ?? 'text-[0.6875rem] font-semibold text-secondary'}`}>
+        <span className={`pl-0.5 ${fieldLabelClass ?? 'text-caption font-semibold text-secondary'}`}>
           {editing ? t('accounts.fields.passwordUnchanged') : t('accounts.fields.password')}
         </span>
         <span className="relative flex items-center">
@@ -78,13 +78,13 @@ export function AccountDialogCustom({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-xl border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
           />
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={
               showPassword
                 ? t('accounts.actions.hidePassword', { defaultValue: 'Hide password' })
@@ -98,7 +98,7 @@ export function AccountDialogCustom({
 
       {appPasswordHint && (
         <div
-          className={`${isSetup ? 'rounded-2xl p-4 text-sm gap-3' : 'rounded-xl p-3 text-[0.6875rem] gap-2'} flex items-start bg-accent/[0.06] border border-accent/15 leading-relaxed text-secondary -mt-1`}
+          className={`${isSetup ? 'rounded-panel p-4 text-sm gap-3' : 'rounded-control p-3 text-caption gap-2'} flex items-start bg-accent/[0.06] border border-accent/15 leading-relaxed text-secondary -mt-1`}
         >
           <Info size={isSetup ? 16 : 14} className="shrink-0 mt-0.5 text-accent" />
           <p className="flex-1 font-medium">{t('accounts.appPasswordHint', { provider: appPasswordHint.provider })}</p>
@@ -108,7 +108,7 @@ export function AccountDialogCustom({
       <button
         type="button"
         onClick={() => setAdvancedOpen((v) => !v)}
-        className="flex items-center gap-1 self-start px-1 text-[0.6875rem] font-semibold text-secondary hover:text-primary transition-colors cursor-pointer"
+        className="flex items-center gap-1 self-start px-1 text-caption font-semibold text-secondary hover:text-primary transition-colors cursor-pointer"
       >
         <ChevronRight size={12} className={`transition-transform ${advancedOpen ? 'rotate-90' : ''}`} />
         {t('accounts.advancedServerSettings')}
@@ -215,14 +215,14 @@ function SecurityField({
 }) {
   return (
     <label className="flex flex-col gap-1.5 w-full">
-      <span className={`pl-0.5 ${labelClassName ?? 'text-[0.6875rem] font-semibold text-secondary'}`}>{label}</span>
+      <span className={`pl-0.5 ${labelClassName ?? 'text-caption font-semibold text-secondary'}`}>{label}</span>
       <span className="relative flex items-center">
         <select
           value={value}
           onChange={(event) => onChange(event.target.value as MailSecurity)}
           className={`${
             inputClassName ??
-            'w-full text-xs py-2 px-3.5 rounded-xl border border-border bg-raised text-primary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
+            'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
           } appearance-none pr-10 cursor-pointer`}
         >
           <option value="tls">TLS</option>

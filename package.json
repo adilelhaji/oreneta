@@ -17,5 +17,8 @@
     "test:frontend": "cd frontend && bun run typecheck && bun test",
     "test:integration": "cargo build --manifest-path meron-core/Cargo.toml && go test -tags integration -v -timeout 10m ."
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "intl-messageformat": "^11.2.8"
+  }
 }

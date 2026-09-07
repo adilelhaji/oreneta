@@ -11,13 +11,13 @@
     the values here are only placeholders for local tooling.
   -->
   <Identity
-    Name="NonbiliInc.Meron"
+    Name="NonbiliInc.Oreneta"
     Publisher="CN=E9477937-876C-417D-81DD-D63DDBACDEC2"
     Version="1.0.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>Meron</DisplayName>
+    <DisplayName>Oreneta</DisplayName>
     <PublisherDisplayName>Nonbili</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>Modern mail and feed client</Description>
@@ -32,9 +32,9 @@
   </Resources>
 
   <Applications>
-    <Application Id="Meron" Executable="meron.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Oreneta" Executable="oreneta.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="Meron"
+        DisplayName="Oreneta"
         Description="Modern mail and feed client"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"

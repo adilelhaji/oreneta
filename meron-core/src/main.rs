@@ -28,8 +28,8 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
-    backup, calendar, changelog, exchange, imap, mail_model, parse, proxy, rss, secrets, smtp, store,
-    thread_list, thread_read, unified,
+    backup, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
+    search, secrets, smtp, store, thread_list, thread_read, unified,
 };
 
 /// Shared, serialized writer so responses and events never interleave on stdout.
@@ -606,6 +606,74 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                 )
                 .await;
             }
+
+            // And the other half of the same promise: messages written to go
+            // later. The row is only dropped once the message has actually
+            // gone, so a crash between sending and forgetting costs a repeat
+            // rather than a message that silently never left.
+            let due = {
+                let db = engine.db.lock().unwrap();
+                store::due_scheduled_sends(&db, now).unwrap_or_default()
+            };
+            // A message whose account the core has not opened yet is not a
+            // message that failed: at launch nothing is connected, and letting
+            // those minutes count as refusals would use up a message's tries
+            // before anything had actually been tried.
+            let known: std::collections::HashSet<String> =
+                engine.accounts.lock().await.keys().cloned().collect();
+            for row in due {
+                if !known.contains(&row.account) {
+                    continue;
+                }
+                let message: Value = match serde_json::from_str(&row.payload) {
+                    Ok(message) => message,
+                    Err(err) => {
+                        // Unreadable: trying again cannot help, so it is
+                        // failed outright rather than retried, and left where
+                        // its writer will see it.
+                        let reason = format!("this message can no longer be read: {err}");
+                        {
+                            let db = engine.db.lock().unwrap();
+                            let _ = store::give_up_on_send(&db, &row.id, &reason, now);
+                        }
+                        emit(&out, "mail.scheduledSendFailed", failed_send_json(&row, &reason))
+                            .await;
+                        continue;
+                    }
+                };
+                match perform_send(&engine, &message).await {
+                    Ok(_) => {
+                        {
+                            let db = engine.db.lock().unwrap();
+                            let _ = store::cancel_scheduled_send(&db, &row.id);
+                        }
+                        emit(
+                            &out,
+                            "mail.scheduledSent",
+                            json!({
+                                "id": row.id,
+                                "account": row.account,
+                                "subject": row.subject,
+                            }),
+                        )
+                        .await;
+                    }
+                    Err(err) => {
+                        let reason = format!("{err:#}");
+                        let attempts = {
+                            let db = engine.db.lock().unwrap();
+                            store::record_send_failure(&db, &row.id, &reason, now).unwrap_or_default()
+                        };
+                        // Told once, when there is nothing left to wait for.
+                        // A message that will be tried again in a minute is
+                        // not yet news.
+                        if attempts >= store::MAX_SEND_ATTEMPTS {
+                            emit(&out, "mail.scheduledSendFailed", failed_send_json(&row, &reason))
+                                .await;
+                        }
+                    }
+                }
+            }
         }
     });
 }
@@ -1066,7 +1134,29 @@ async fn sync_and_notify(
         None
     };
 
-    if let Some(headers) = new_inbox {
+    // Rules run before anything is announced. Mail a rule files away is mail
+    // the reader has already said they do not want interrupting them, and a
+    // notification for a message that is no longer in the inbox sends them
+    // looking for something that is not there.
+    let handled = if let Some(headers) = new_inbox.as_deref() {
+        apply_rules_to_arrivals(engine, out, account, folder, headers).await
+    } else {
+        std::collections::HashSet::new()
+    };
+    // Independent of what rules did with an arrival: an out-of-office reply
+    // answers the person who wrote in, which still makes sense even for a
+    // message a rule went on to file away.
+    if let Some(headers) = new_inbox.as_deref() {
+        apply_oof_to_arrivals(engine, account, headers).await;
+    }
+    let new_inbox = new_inbox.map(|headers| {
+        headers
+            .into_iter()
+            .filter(|header| !handled.contains(&header.uid))
+            .collect::<Vec<_>>()
+    });
+
+    if let Some(headers) = new_inbox.filter(|headers| !headers.is_empty()) {
         // Building the detail fetches the arrivals' own bodies (the notification
         // shows a snippet of each); warm the rest of the backlog behind it so the
         // first open of anything else is instant too.
@@ -1152,6 +1242,74 @@ async fn idle_once(
 
         if let async_imap::extensions::idle::IdleResponse::NewData(_) = response.context("IDLE")? {
             sync_and_notify(engine, out, account, folder).await?;
+        }
+    }
+}
+
+/// Read one CardDAV source into the address book, and record how it went.
+///
+/// Off the async runtime, because the DAV client is blocking HTTP. The
+/// outcome is written to the source either way: a sync that failed leaves its
+/// reason where the settings screen can show it, and a sync that succeeded
+/// clears whatever the last one said.
+async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<()> {
+    let source = store::contact_source(&engine.db.lock().unwrap(), id)?
+        .with_context(|| format!("no such contact source: {id}"))?;
+
+    let fetched = match source.kind.as_str() {
+        "carddav" => {
+            let password = meron_core::secrets::load(id)
+                .map(|secrets| secrets.password)
+                .unwrap_or_default();
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: source.username.clone(),
+                password,
+            };
+            let url = source.url.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::carddav::client::fetch_book(&transport, &url)
+            })
+            .await?
+        }
+        // The mail account's own token, refreshed if it had expired. The one
+        // new thing asked of it is the contacts scope; a token from before
+        // that existed is refused by Google and the refusal names the fix.
+        "google" => match engine.ensure_valid_creds(&source.account).await {
+            Ok(creds) if creds.auth_type == "gmail_oauth" => {
+                let token = creds.access_token.clone().unwrap_or_default();
+                if token.is_empty() {
+                    Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
+                } else {
+                    tokio::task::spawn_blocking(move || {
+                        meron_core::contacts::google::fetch_connections(&token)
+                    })
+                    .await?
+                }
+            }
+            Ok(_) => Err(anyhow::anyhow!("not a Google account: {}", source.account)),
+            Err(error) => Err(error),
+        },
+        other => Err(anyhow::anyhow!("unknown contact source kind: {other}")),
+    };
+
+    let now = chrono::Utc::now().timestamp();
+    let db = engine.db.lock().unwrap();
+    match fetched {
+        Ok(people) => {
+            let origin = store::BookOrigin {
+                source: source.kind.clone(),
+                account: source.account.clone(),
+                book: source.id.clone(),
+            };
+            // Photos are not cached yet; the key stays empty until they are.
+            let rows: Vec<_> = people.into_iter().map(|person| (person, String::new())).collect();
+            store::replace_book(&db, &origin, &rows, now)?;
+            store::mark_contact_source_synced(&db, id, "", "", now)?;
+            Ok(())
+        }
+        Err(error) => {
+            store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
+            Err(error)
         }
     }
 }
@@ -1359,6 +1517,935 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     }))
                     .collect::<Vec<_>>()
             }))
+        }
+
+        // What a sweep would move, moving nothing.
+        //
+        // Asked before it is done, always. A sweep is the one action here that
+        // reaches messages the reader is not looking at, and an action like
+        // that has to show its work first — the same rule the rules follow.
+        "mail.sweepPreview" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let from_addr = req_str(p, "from")?;
+            let keep = p.get("keep_newest").and_then(Value::as_u64).unwrap_or(1) as u32;
+            let candidates = {
+                let db = engine.db.lock().unwrap();
+                store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?
+            };
+            Ok(json!({
+                "from": from_addr,
+                "folder": folder,
+                "keepNewest": keep,
+                "messages": candidates
+                    .iter()
+                    .map(|candidate| json!({
+                        "uid": candidate.uid,
+                        "subject": candidate.subject,
+                        "date": candidate.date,
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Why a conversation is where it is, and what the reader has said about
+        // its sender.
+        //
+        // Asked for one conversation at a time rather than carried on every
+        // card: a reason is only wanted when someone wonders, and computing
+        // fifty of them to show none would be work nobody asked for.
+        "mail.priorityReason" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            // The newest message of the conversation: the one whose sender the
+            // reader is looking at, and whose arrival decided where the
+            // conversation sits.
+            let (sender, signals) = store::thread_priority_signals(
+                &db,
+                &parsed.account,
+                &parsed.folder,
+                &parsed.thread_key,
+            )?
+            .context("no such conversation")?;
+            let verdict = priority::verdict(signals);
+            Ok(json!({
+                "priority": verdict.priority,
+                "reasons": verdict.reasons,
+                "sender": sender,
+                "override": signals.sender_override,
+            }))
+        }
+
+        // Records what the reader decided about a sender, and re-judges the
+        // account so every conversation from them moves at once — a decision
+        // that only applied to the message it was made on would be a decision
+        // the reader has to keep making.
+        "mail.setSenderPriority" => {
+            let account = req_str(p, "account")?;
+            let addr = req_str(p, "addr")?;
+            let choice = p.get("priority").and_then(Value::as_bool);
+            let db = engine.db.lock().unwrap();
+            store::set_sender_priority(&db, &account, &addr, choice)?;
+            let judged = store::rejudge_priority(&db, &account, false)?;
+            Ok(json!({ "ok": true, "judged": judged }))
+        }
+
+        // Address books on a CardDAV server, found from what somebody typed:
+        // an email address, a host, or a URL. Nothing is stored by this; it
+        // is the question asked before deciding which book to keep.
+        "carddav.discover" => {
+            let server = req_str(p, "server")?;
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: req_str(p, "username").unwrap_or_default(),
+                password: req_str(p, "password").unwrap_or_default(),
+            };
+            let books = tokio::task::spawn_blocking(move || {
+                meron_core::carddav::client::discover(&transport, &server)
+            })
+            .await??;
+            Ok(json!({
+                "books": books.iter().map(|book| json!({
+                    "url": book.url, "name": book.name,
+                })).collect::<Vec<_>>()
+            }))
+        }
+
+        // Keep one book: remember where it is, put the password in the
+        // keyring, and read it for the first time. If that first read fails
+        // the source is kept anyway with the error on it, so the reader sees
+        // what went wrong rather than an add button that did nothing.
+        "carddav.add" => {
+            let url = req_str(p, "url")?;
+            let name = req_str(p, "name").unwrap_or_default();
+            let username = req_str(p, "username").unwrap_or_default();
+            let password = req_str(p, "password").unwrap_or_default();
+            let account = req_str(p, "account").unwrap_or_default();
+            let id = format!("carddav-{}", uuid::Uuid::new_v4());
+            let source = store::ContactSource {
+                id: id.clone(),
+                kind: "carddav".into(),
+                account,
+                url,
+                username,
+                name,
+                enabled: true,
+                ctag: String::new(),
+                last_sync_at: 0,
+                last_error: String::new(),
+            };
+            meron_core::secrets::store(
+                &id,
+                &meron_core::secrets::Secrets {
+                    password,
+                    ..Default::default()
+                },
+            )?;
+            store::upsert_contact_source(
+                &engine.db.lock().unwrap(),
+                &source,
+                chrono::Utc::now().timestamp(),
+            )?;
+            let outcome = sync_contact_source(engine, &id).await;
+            Ok(json!({ "id": id, "synced": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+        }
+
+        // The organisation's directory, asked by name as the reader types.
+        // Not copied: an address list runs to tens of thousands of entries and
+        // changes under the reader's feet. An account without a directory —
+        // anything that is not Exchange — answers with nobody, not an error.
+        "directory.search" => {
+            let account = req_str(p, "account")?;
+            let query = req_str(p, "query").unwrap_or_default();
+            let found = calendar::route::resolve_names(engine, &account, query.trim()).await?;
+            Ok(json!({ "people": meron_core::contacts::exchange::people_from_participants(found) }))
+        }
+
+        // A Google account's contacts, read with the token the account already
+        // holds. One source per account, so asking twice re-reads rather than
+        // doubling everybody.
+        "google.contacts.sync" => {
+            let account = req_str(p, "account")?;
+            let id = format!("google-{account}");
+            let existing = store::contact_source(&engine.db.lock().unwrap(), &id)?;
+            if existing.is_none() {
+                store::upsert_contact_source(
+                    &engine.db.lock().unwrap(),
+                    &store::ContactSource {
+                        id: id.clone(),
+                        kind: "google".into(),
+                        account: account.clone(),
+                        url: String::new(),
+                        username: String::new(),
+                        name: req_str(p, "name").unwrap_or_default(),
+                        enabled: true,
+                        ctag: String::new(),
+                        last_sync_at: 0,
+                        last_error: String::new(),
+                    },
+                    chrono::Utc::now().timestamp(),
+                )?;
+            }
+            let outcome = sync_contact_source(engine, &id).await;
+            Ok(json!({ "id": id, "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+        }
+
+        "carddav.sync" => {
+            let id = req_str(p, "id")?;
+            let outcome = sync_contact_source(engine, &id).await;
+            Ok(json!({ "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+        }
+
+        "carddav.list" => {
+            let sources = store::contact_sources(&engine.db.lock().unwrap())?;
+            Ok(json!({ "sources": sources }))
+        }
+
+        // Removing a source takes its people with it: they were a copy of
+        // somebody else's book, and a copy with no origin can never be
+        // refreshed or told apart from a contact the reader typed.
+        "carddav.remove" => {
+            let id = req_str(p, "id")?;
+            store::delete_contact_source(&engine.db.lock().unwrap(), &id)?;
+            let _ = meron_core::secrets::delete(&id);
+            Ok(json!({ "ok": true }))
+        }
+
+        // OpenPGP certificates the reader has imported. Public certificates
+        // only: what verifying a signature needs. A secret key wants a
+        // passphrase and must not sit in a database somebody could copy, so it
+        // gets its own handling when decryption arrives.
+        "pgp.certs" => {
+            let certs = store::pgp_certs(&engine.db.lock().unwrap())?;
+            Ok(json!({ "certs": certs }))
+        }
+
+        "pgp.import" => {
+            let armoured = req_str(p, "armoured")?;
+            let (_, info) = meron_core::crypto::pgp::read_cert(&armoured)?;
+            let stored = store::StoredCert {
+                fingerprint: info.fingerprint.clone(),
+                user_ids: info.user_ids,
+                addresses: info.addresses,
+                armoured,
+                added_at: 0,
+            };
+            store::upsert_pgp_cert(
+                &engine.db.lock().unwrap(),
+                &stored,
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": info.fingerprint }))
+        }
+
+        "pgp.remove" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_pgp_cert(&engine.db.lock().unwrap(), &fingerprint)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Check one message's signature, when a reader is looking at it.
+        //
+        // On demand rather than on sync: verification needs the message as it
+        // stood on the wire, which means fetching it, and doing that for every
+        // message in a mailbox to answer a question nobody asked would be a
+        // download per message.
+        "pgp.verify" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+
+            let armoured: Vec<String> = store::pgp_certs(&engine.db.lock().unwrap())?
+                .into_iter()
+                .map(|cert| cert.armoured)
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            let certs = meron_core::crypto::pgp::certs_from_armoured(&armoured);
+            match meron_core::crypto::pgp::verify_message(&raw.raw, &certs) {
+                Some(signature) => Ok(serde_json::to_value(signature)?),
+                // Nothing to check. Said as such rather than as a failure: a
+                // message with no signature is not a message whose signature
+                // is bad.
+                None => Ok(json!({ "verdict": "none" })),
+            }
+        }
+
+        // The reader's own keys. The key material goes to the OS keyring
+        // under `pgp-secret-<fingerprint>`, never to the database: a secret
+        // key in a database is a secret key in every backup of it.
+        "pgp.secretKeys" => {
+            let keys = store::pgp_secret_keys(&engine.db.lock().unwrap())?;
+            Ok(json!({ "keys": keys }))
+        }
+
+        "pgp.importSecret" => {
+            let armoured = req_str(p, "armoured")?;
+            let (_, info) = meron_core::crypto::pgp::read_secret_key(&armoured)?;
+            meron_core::secrets::store(
+                &format!("pgp-secret-{}", info.fingerprint),
+                &meron_core::secrets::Secrets {
+                    // The generic secret slot; the id says what it holds.
+                    password: armoured,
+                    ..Default::default()
+                },
+            )?;
+            store::upsert_pgp_secret_key(
+                &engine.db.lock().unwrap(),
+                &store::StoredSecretKey {
+                    fingerprint: info.fingerprint.clone(),
+                    user_ids: info.user_ids,
+                    addresses: info.addresses,
+                    protected: info.protected,
+                    added_at: 0,
+                },
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": info.fingerprint, "protected": info.protected }))
+        }
+
+        "pgp.removeSecret" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_pgp_secret_key(&engine.db.lock().unwrap(), &fingerprint)?;
+            let _ = meron_core::secrets::delete(&format!("pgp-secret-{fingerprint}"));
+            Ok(json!({ "ok": true }))
+        }
+
+        // Open one encrypted message, when a reader asks for it.
+        //
+        // The passphrase arrives with the request and is not kept: it is used
+        // for this one message and dropped. A reader who does not want to type
+        // it again should have a key that is not passphrase-protected, which
+        // is their decision to make and not this app's to make quietly for
+        // them by holding on to it.
+        "pgp.decrypt" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+            let passphrase = req_str(p, "passphrase").ok();
+
+            let fingerprints: Vec<String> = store::pgp_secret_keys(&engine.db.lock().unwrap())?
+                .into_iter()
+                .map(|key| key.fingerprint)
+                .collect();
+            let armoured: Vec<String> = fingerprints
+                .iter()
+                .filter_map(|fingerprint| {
+                    meron_core::secrets::load(&format!("pgp-secret-{fingerprint}"))
+                        .ok()
+                        .map(|secrets| secrets.password)
+                        .filter(|text| !text.is_empty())
+                })
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            let keys = meron_core::crypto::pgp::certs_from_armoured(&armoured);
+            match meron_core::crypto::pgp::decrypt_message(
+                &raw.raw,
+                &keys,
+                passphrase.as_deref(),
+            ) {
+                Ok(opened) => Ok(json!({
+                    "ok": true,
+                    "body": opened.body,
+                    "bodyHtml": opened.body_html,
+                    "signature": opened.signature,
+                })),
+                Err(failure) => Ok(json!({ "ok": false, "failure": failure })),
+            }
+        }
+
+        // S/MIME certificates the reader has imported. The same trust model
+        // as OpenPGP's: held, or not — no chain to a root CA. See
+        // `crypto::smime` for why, and `pgp.certs` for the parallel.
+        "smime.certs" => {
+            let certs = store::smime_certs(&engine.db.lock().unwrap())?;
+            Ok(json!({ "certs": certs }))
+        }
+
+        "smime.import" => {
+            let armoured = req_str(p, "der")?;
+            let der = {
+                use base64::Engine as _;
+                base64::engine::general_purpose::STANDARD.decode(armoured.trim())
+            }
+            .context("that is not base64")?;
+            let (_, info) = meron_core::crypto::smime::read_cert(&der)?;
+            let stored = store::StoredSmimeCert {
+                fingerprint: info.fingerprint.clone(),
+                subject: info.subject,
+                addresses: info.addresses,
+                der,
+                added_at: 0,
+            };
+            store::upsert_smime_cert(
+                &engine.db.lock().unwrap(),
+                &stored,
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": info.fingerprint }))
+        }
+
+        "smime.remove" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_smime_cert(&engine.db.lock().unwrap(), &fingerprint)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Check one message's S/MIME signature, on demand — same reasoning
+        // as `pgp.verify`: it needs the message as it stood on the wire.
+        "smime.verify" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+
+            let held_der: Vec<Vec<u8>> = store::smime_certs(&engine.db.lock().unwrap())?
+                .into_iter()
+                .map(|cert| cert.der)
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            let held = meron_core::crypto::smime::certs_from_der(&held_der);
+            match meron_core::crypto::smime::verify_message(&raw.raw, &held) {
+                Some(signature) => Ok(serde_json::to_value(signature)?),
+                None => Ok(json!({ "verdict": "none" })),
+            }
+        }
+
+        // The reader's own S/MIME identity or identities — the parallel to
+        // `pgp.secretKeys`/`pgp.importSecret`/`pgp.removeSecret`. The
+        // certificate is public and lives in SQLite; the private key goes to
+        // the OS keyring, under the same naming scheme OpenPGP secret keys
+        // use, just with its own prefix.
+        "smime.identities" => {
+            let identities = store::smime_identities(&engine.db.lock().unwrap())?;
+            Ok(json!({ "identities": identities }))
+        }
+
+        "smime.importIdentity" => {
+            let p12_b64 = req_str(p, "p12")?;
+            let password = req_str(p, "password")?;
+            let p12 = {
+                use base64::Engine as _;
+                base64::engine::general_purpose::STANDARD.decode(p12_b64.trim())
+            }
+            .context("that is not base64")?;
+            let identity = meron_core::crypto::pkcs12::read_pkcs12(&p12, &password)
+                .map_err(|failure| anyhow::anyhow!("{failure}"))?;
+            let key_der = meron_core::crypto::pkcs12::private_key_to_pkcs8_der(&identity.private_key)
+                .map_err(|failure| anyhow::anyhow!("{failure}"))?;
+            let cert_der = meron_core::crypto::pkcs12::certificate_to_der(&identity)
+                .map_err(|failure| anyhow::anyhow!("{failure}"))?;
+
+            meron_core::secrets::store(
+                &format!("smime-identity-{}", identity.info.fingerprint),
+                &meron_core::secrets::Secrets {
+                    password: {
+                        use base64::Engine as _;
+                        base64::engine::general_purpose::STANDARD.encode(&key_der)
+                    },
+                    ..Default::default()
+                },
+            )?;
+            store::upsert_smime_identity(
+                &engine.db.lock().unwrap(),
+                &store::StoredSmimeIdentity {
+                    fingerprint: identity.info.fingerprint.clone(),
+                    subject: identity.info.subject,
+                    addresses: identity.info.addresses,
+                    der: cert_der,
+                    added_at: 0,
+                },
+                chrono::Utc::now().timestamp(),
+            )?;
+            Ok(json!({ "fingerprint": identity.info.fingerprint }))
+        }
+
+        "smime.removeIdentity" => {
+            let fingerprint = req_str(p, "fingerprint")?;
+            store::delete_smime_identity(&engine.db.lock().unwrap(), &fingerprint)?;
+            let _ = meron_core::secrets::delete(&format!("smime-identity-{fingerprint}"));
+            Ok(json!({ "ok": true }))
+        }
+
+        // Open one S/MIME-encrypted message — the parallel to `pgp.decrypt`.
+        // No passphrase parameter: unlike an OpenPGP secret key, the private
+        // key here was unlocked once, at import, and lives ready-to-use in
+        // the OS keyring from then on.
+        "smime.decrypt" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let uid = req_u32(p, "uid")?;
+
+            let stored_identities = store::smime_identities(&engine.db.lock().unwrap())?;
+            let identities: Vec<meron_core::crypto::pkcs12::Identity> = stored_identities
+                .iter()
+                .filter_map(|stored| {
+                    let secrets =
+                        meron_core::secrets::load(&format!("smime-identity-{}", stored.fingerprint)).ok()?;
+                    let key_der = {
+                        use base64::Engine as _;
+                        base64::engine::general_purpose::STANDARD.decode(secrets.password.trim()).ok()?
+                    };
+                    meron_core::crypto::pkcs12::identity_from_parts(&stored.der, &key_der).ok()
+                })
+                .collect();
+
+            let raw_messages = engine
+                .with_read_session(&account, |session| {
+                    let folder = folder.clone();
+                    Box::pin(async move {
+                        session.fetch_raw_messages_for_copy(&folder, &[uid]).await
+                    })
+                })
+                .await?;
+            let raw = raw_messages
+                .into_iter()
+                .next()
+                .with_context(|| format!("message {uid} not found in {folder}"))?;
+
+            // Try every held identity; a message names its recipient inside
+            // the CMS structure, not in a header this app parses beforehand.
+            let mut last_failure = meron_core::crypto::smime::DecryptionFailure::NoKey;
+            for identity in &identities {
+                match meron_core::crypto::smime::decrypt_message(&raw.raw, identity) {
+                    Ok(opened) => {
+                        return Ok(json!({ "ok": true, "body": opened.body, "bodyHtml": opened.body_html }))
+                    }
+                    Err(failure) => last_failure = failure,
+                }
+            }
+            Ok(json!({ "ok": false, "failure": last_failure }))
+        }
+
+        // Out-of-office / Automatic Replies. Which shape the settings take —
+        // and where they live — depends entirely on the account's protocol,
+        // decided here from the account's own credentials rather than
+        // trusted from the caller: an Exchange account's settings live on
+        // the server (real, reliable even when Oreneta is closed); a plain
+        // IMAP/SMTP account has no server-side equivalent, so its settings
+        // are this app's own preference and its auto-replies only go out
+        // while Oreneta is running. See `crate::oof` and
+        // `store::accounts::OofPrefs` for why.
+        "oof.get" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if creds.is_ews() {
+                let (own_address, _) = {
+                    let db = engine.db.lock().unwrap();
+                    store::resolve_send_from(&db, &account, &creds.user, "")?
+                };
+                let config = exchange::EwsConfig {
+                    url: creds.ews_url.clone(),
+                    username: creds.user.clone(),
+                    password: creds.password.clone(),
+                };
+                let settings = tokio::task::spawn_blocking(move || {
+                    exchange::EwsClient::new(config).get_oof_settings(&own_address)
+                })
+                .await??;
+                return Ok(json!({ "kind": "ews", "settings": settings }));
+            }
+            let prefs = store::oof_prefs(&engine.db.lock().unwrap(), &account)?;
+            Ok(json!({ "kind": "imap", "settings": prefs }))
+        }
+
+        "oof.set" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            let settings_json = p
+                .get("settings")
+                .cloned()
+                .context("missing out-of-office settings")?;
+            if creds.is_ews() {
+                let settings: exchange::EwsOofSettings =
+                    serde_json::from_value(settings_json).context("invalid out-of-office settings")?;
+                let (own_address, _) = {
+                    let db = engine.db.lock().unwrap();
+                    store::resolve_send_from(&db, &account, &creds.user, "")?
+                };
+                let config = exchange::EwsConfig {
+                    url: creds.ews_url.clone(),
+                    username: creds.user.clone(),
+                    password: creds.password.clone(),
+                };
+                tokio::task::spawn_blocking(move || {
+                    exchange::EwsClient::new(config).set_oof_settings(&own_address, &settings)
+                })
+                .await??;
+                return Ok(json!({ "ok": true }));
+            }
+            let prefs: store::OofPrefs =
+                serde_json::from_value(settings_json).context("invalid out-of-office settings")?;
+            {
+                let db = engine.db.lock().unwrap();
+                store::set_account_pref_json(&db, &account, "oof", Some(serde_json::to_value(&prefs)?))?;
+                // A fresh save starts every sender's reply count back at
+                // zero — see the table's own doc for why this must not be
+                // skipped even when only, say, the reply body changed.
+                store::clear_oof_replies(&db, &account)?;
+            }
+            Ok(json!({ "ok": true }))
+        }
+
+        // People, from whichever books have been brought in. An empty query
+        // is the whole book, which is what the Personas view opens on.
+        "people.list" => {
+            let query = req_str(p, "query").unwrap_or_default();
+            let limit = req_u32(p, "limit").unwrap_or(500);
+            let found = store::find_people(&engine.db.lock().unwrap(), &query, limit)?;
+            Ok(json!({
+                "people": found
+                    .iter()
+                    .map(|stored| json!({
+                        "id": stored.id,
+                        "source": stored.origin.source,
+                        "account": stored.origin.account,
+                        "book": stored.origin.book,
+                        "name": stored.person.name,
+                        "organisation": stored.person.organisation,
+                        "note": stored.person.note,
+                        "photo": stored.photo_key,
+                        "emails": stored.person.emails,
+                        "phones": stored.person.phones,
+                    }))
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        // Text the writer keeps because they write it often: a snippet
+        // dropped in at the cursor, or a whole message with its own subject.
+        "templates.list" => {
+            let stored = store::templates(&engine.db.lock().unwrap())?;
+            Ok(json!({ "templates": stored }))
+        }
+
+        // Replaces the whole set, arrangement included. Every template is
+        // checked before any of them is written: a save that stored four and
+        // then refused the fifth would leave the list in a state the writer
+        // never asked for and cannot see.
+        "templates.save" => {
+            let incoming = p
+                .get("templates")
+                .and_then(Value::as_array)
+                .context("missing param: templates")?;
+            let mut templates = Vec::with_capacity(incoming.len());
+            for value in incoming {
+                let template: meron_core::templates::Template =
+                    serde_json::from_value(value.clone()).context("invalid template")?;
+                if let Some(problem) = meron_core::templates::validate(&template) {
+                    let name = template.name.trim();
+                    if name.is_empty() {
+                        anyhow::bail!("{}", problem.describe());
+                    }
+                    anyhow::bail!("{name}: {}", problem.describe());
+                }
+                templates.push(template);
+            }
+            let now = chrono::Utc::now().timestamp();
+            store::replace_templates(&engine.db.lock().unwrap(), &templates, now)?;
+            Ok(json!({ "ok": true, "saved": templates.len() }))
+        }
+
+        // Labels the reader has made. Local to this install by design: an
+        // IMAP keyword is not carried by every server and an Exchange
+        // category is a different thing again, so a label that appeared on
+        // one device and silently not on another would be worse than one that
+        // never claimed to travel.
+        "labels.list" => {
+            let stored = store::labels(&engine.db.lock().unwrap())?;
+            Ok(json!({
+                "labels": stored
+                    .iter()
+                    .map(|label| json!({ "id": label.id, "name": label.name, "colour": label.colour }))
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        // Replaces the whole set. A label that is gone takes its conversations
+        // with it, so nothing carries a label nobody can see or remove.
+        "labels.save" => {
+            let incoming = p
+                .get("labels")
+                .and_then(Value::as_array)
+                .context("missing param: labels")?;
+            let mut labels = Vec::with_capacity(incoming.len());
+            for value in incoming {
+                let name = req_str(value, "name")?;
+                if name.trim().is_empty() {
+                    anyhow::bail!("a label needs a name");
+                }
+                labels.push(store::Label {
+                    id: req_str(value, "id")?,
+                    name: name.trim().to_string(),
+                    colour: req_str(value, "colour").unwrap_or_else(|_| "#2056dd".to_string()),
+                });
+            }
+            store::replace_labels(&engine.db.lock().unwrap(), &labels)?;
+            Ok(json!({ "ok": true, "saved": labels.len() }))
+        }
+
+        // The labels on one conversation, stated whole: "these are its labels"
+        // is one statement, and applying it one at a time would leave moments
+        // where it carried a combination nobody asked for.
+        "labels.assign" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let label_ids: Vec<String> = p
+                .get("label_ids")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let db = engine.db.lock().unwrap();
+            store::set_thread_labels(&db, &parsed.account, &parsed.thread_key, &label_ids)?;
+            Ok(json!({ "labels": store::thread_labels(&db, &parsed.account, &parsed.thread_key)? }))
+        }
+
+        // The rules as they stand, in the order they run.
+        "rules.list" => {
+            let stored = {
+                let db = engine.db.lock().unwrap();
+                store::rules(&db)?
+            };
+            Ok(json!({
+                "rules": stored
+                    .iter()
+                    .filter_map(|definition| serde_json::from_str::<Value>(definition).ok())
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        // Replaces the whole list. All at once because the order is part of
+        // the meaning — rules run top to bottom and one can stop the rest —
+        // so saving them one at a time would leave moments where the list
+        // means something nobody asked for.
+        "rules.save" => {
+            let incoming = p
+                .get("rules")
+                .and_then(Value::as_array)
+                .context("missing param: rules")?;
+            let mut rows = Vec::with_capacity(incoming.len());
+            for value in incoming {
+                let rule: rules::Rule = serde_json::from_value(value.clone())
+                    .context("this rule cannot be read")?;
+                // Refused here rather than tolerated and worked around later:
+                // this files people's mail, and a rule nobody can predict is
+                // not a rule worth keeping.
+                rules::validate(&rule).map_err(|err| anyhow::anyhow!("{}: {err}", rule.name))?;
+                rows.push((
+                    rule.id.clone(),
+                    rule.account.clone(),
+                    rule.enabled,
+                    serde_json::to_string(&rule)?,
+                ));
+            }
+            store::replace_rules(&engine.db.lock().unwrap(), &rows)?;
+            Ok(json!({ "ok": true, "saved": rows.len() }))
+        }
+
+        // What the rules would do to mail already in a folder, without doing
+        // any of it. The same `plan` the real run uses, so this cannot drift
+        // into showing something other than what would happen.
+        "rules.preview" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let limit = p.get("limit").and_then(Value::as_i64).unwrap_or(200).clamp(1, 1000);
+            // Rules as sent when given, so an unsaved draft can be tried
+            // before it is trusted with a mailbox; the stored ones otherwise.
+            let candidates: Vec<rules::Rule> = match p.get("rules").and_then(Value::as_array) {
+                Some(values) => values
+                    .iter()
+                    .map(|value| serde_json::from_value::<rules::Rule>(value.clone()))
+                    .collect::<Result<Vec<_>, _>>()
+                    .context("this rule cannot be read")?,
+                None => stored_rules(engine),
+            };
+
+            let headers = {
+                let db = engine.db.lock().unwrap();
+                store::recent_headers(&db, &account, &folder, limit)?
+            };
+            let mut hits = Vec::new();
+            for header in &headers {
+                let planned = rules::plan(&candidates, &account, &rule_subject(header));
+                if planned.is_empty() {
+                    continue;
+                }
+                hits.push(json!({
+                    "uid": header.uid,
+                    "subject": header.subject,
+                    "from": header.from_addr,
+                    "date": header.date,
+                    "actions": planned
+                        .iter()
+                        .map(|step| json!({
+                            "ruleId": step.rule_id,
+                            "ruleName": step.rule_name,
+                            "action": action_label(&step.action),
+                        }))
+                        .collect::<Vec<_>>(),
+                }));
+            }
+            Ok(json!({ "examined": headers.len(), "matches": hits }))
+        }
+
+        // What the rules have actually done. A mailbox that changes by itself
+        // needs somewhere the reader can find out why.
+        "rules.log" => {
+            let limit = p.get("limit").and_then(Value::as_i64).unwrap_or(200);
+            let entries = {
+                let db = engine.db.lock().unwrap();
+                store::rule_log(&db, limit)?
+            };
+            Ok(json!({
+                "entries": entries
+                    .iter()
+                    .map(|entry| json!({
+                        "at": entry.at,
+                        "account": entry.account,
+                        "ruleId": entry.rule_id,
+                        "ruleName": entry.rule_name,
+                        "folder": entry.folder,
+                        "uid": entry.uid,
+                        "subject": entry.subject,
+                        "from": entry.from_addr,
+                        "action": entry.action,
+                        "outcome": entry.outcome,
+                    }))
+                    .collect::<Vec<_>>()
+            }))
+        }
+
+        "rules.clearLog" => {
+            store::clear_rule_log(&engine.db.lock().unwrap())?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Files a message to go at a chosen hour. The whole send is kept, so
+        // what leaves then is what was written now — and it is kept in the
+        // store rather than in a timer, because a message due at eight must
+        // go whether or not the app was open at eight.
+        "mail.scheduleSend" => {
+            let id = req_str(p, "id")?;
+            let account = req_str(p, "account")?;
+            let due_at = p
+                .get("due_at")
+                .and_then(Value::as_i64)
+                .context("missing param: due_at")?;
+            if due_at <= now_seconds() {
+                anyhow::bail!("a message cannot be scheduled for a moment already past");
+            }
+            let message = p.get("message").cloned().context("missing param: message")?;
+            if req_str(&message, "to").unwrap_or_default().trim().is_empty() {
+                anyhow::bail!("a scheduled message needs a recipient");
+            }
+            let subject = req_str(&message, "subject").unwrap_or_default();
+            store::schedule_send(
+                &engine.db.lock().unwrap(),
+                &id,
+                &account,
+                due_at,
+                &subject,
+                &serde_json::to_string(&message)?,
+            )?;
+            Ok(json!({ "ok": true, "id": id, "due_at": due_at }))
+        }
+
+        // What is still waiting to go, so a message put off is a message the
+        // reader can still find, change their mind about, or be told failed.
+        "mail.scheduledSends" => {
+            let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
+            let rows = store::scheduled_sends(&engine.db.lock().unwrap(), account.as_deref())?;
+            Ok(json!({ "messages": rows.iter().map(scheduled_send_json).collect::<Vec<_>>() }))
+        }
+
+        // Calls a scheduled send off and hands the message back, so its words
+        // return to the composer instead of being taken away.
+        "mail.cancelScheduledSend" => {
+            let id = req_str(p, "id")?;
+            let cancelled = store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
+            match cancelled {
+                Some(row) => Ok(json!({
+                    "ok": true,
+                    "message": serde_json::from_str::<Value>(&row.payload).unwrap_or(Value::Null),
+                })),
+                None => Ok(json!({ "ok": true, "message": Value::Null })),
+            }
+        }
+
+        // Lets a scheduled message go now, rather than at its hour. Also the
+        // way back for one that gave up trying: the row is only dropped once
+        // the message has actually gone.
+        "mail.sendScheduledNow" => {
+            let id = req_str(p, "id")?;
+            let row = {
+                let db = engine.db.lock().unwrap();
+                store::scheduled_send(&db, &id)?
+            };
+            let row = row.context("no such scheduled message")?;
+            let message: Value = serde_json::from_str(&row.payload)
+                .context("this scheduled message can no longer be read")?;
+            match perform_send(engine, &message).await {
+                Ok(_) => {
+                    store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
+                    Ok(json!({ "ok": true }))
+                }
+                Err(err) => {
+                    let reason = format!("{err:#}");
+                    store::record_send_failure(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
+                    Err(err)
+                }
+            }
         }
 
         // Serialize accounts, prefs, feeds and settings to a backup document
@@ -2401,14 +3488,51 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     store::get_snoozed_headers(&engine.db.lock().unwrap(), &account)?,
                     None,
                 ),
-                thread_list::MailSource::Recent { unread_only } => store::get_recent_page(
-                    &engine.db.lock().unwrap(),
-                    &account,
-                    &folder,
-                    limit,
-                    request.before_cursor,
+                thread_list::MailSource::Recent {
                     unread_only,
-                )?,
+                    starred_only,
+                    label_id,
+                    with_attachments,
+                    priority_only,
+                } => {
+                    // Asking for what has an attachment is asking a question
+                    // about every message, and some of them have never been
+                    // looked at. Look now, rather than answering for them:
+                    // treating "nobody asked" as "no" would hide mail that
+                    // does carry a file, which is the one thing this filter
+                    // must not do.
+                    if with_attachments {
+                        fill_in_attachment_flags(engine, &account, &folder).await;
+                    }
+                    // Same idea, and cheaper: a mailbox cached before this
+                    // existed has messages nobody has judged, and treating
+                    // those as "not worth interrupting for" would hide mail
+                    // behind a filter for no stated reason. Unlike an
+                    // attachment, judging one needs nothing from a server —
+                    // every signal is already here — so the gap is simply
+                    // closed.
+                    if priority_only {
+                        let db = engine.db.lock().unwrap();
+                        if let Err(err) = store::rejudge_priority(&db, &account, true) {
+                            eprintln!("meron-core: judging {account}: {err:#}");
+                        }
+                    }
+                    store::get_recent_page_sorted(
+                        &engine.db.lock().unwrap(),
+                        &account,
+                        &folder,
+                        limit,
+                        request.before_cursor.clone(),
+                        store::RecentFilter {
+                            unread_only,
+                            starred_only,
+                            label_id,
+                            with_attachments,
+                            priority_only,
+                        },
+                        request.sort(),
+                    )?
+                }
                 thread_list::MailSource::Search => {
                     // Chat-view search spans the selected folder plus Sent, so a
                     // lookup surfaces both received and self-sent mail (and old
@@ -2462,6 +3586,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "folder_synced".to_string(),
                 Value::Bool(folder_synced_before),
             );
+            // How the search box was read, sent back with the answer rather
+            // than worked out again in the interface. A second parser is a
+            // second reading, and the one thing a reader must be able to trust
+            // is that what they are shown is what was searched for.
+            if !request.query.trim().is_empty() {
+                let parsed = search::parse(&request.query);
+                page.as_object_mut().unwrap().insert(
+                    "search".to_string(),
+                    json!({
+                        "text": parsed.text,
+                        "parts": search::describe(&parsed),
+                        "hasOperators": search::describe(&parsed)
+                            .iter()
+                            .any(|part| !part.starts_with("text:")),
+                    }),
+                );
+            }
             Ok(page)
         }
 
@@ -2515,90 +3656,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "queued": true }))
         }
 
-        "send" => {
-            let account = req_str(p, "account")?;
-            let to = req_str(p, "to")?;
-            let cc = req_str(p, "cc").unwrap_or_default();
-            let bcc = req_str(p, "bcc").unwrap_or_default();
-            let subject = req_str(p, "subject").unwrap_or_default();
-            let body = req_str(p, "body").unwrap_or_default();
-            let html = req_str(p, "html").unwrap_or_default();
-            let in_reply_to = req_str(p, "in_reply_to").unwrap_or_default();
-            let references = req_str(p, "references").unwrap_or_default();
-            let reply_to = req_str(p, "reply_to").unwrap_or_default();
-            // Client-generated Message-ID so the optimistic bubble and a quick
-            // follow-up reply share the id the Sent copy will carry.
-            let message_id = req_str(p, "message_id").unwrap_or_default();
-            let attachments = opt_attachments(p)?;
-            let requested_from = req_str(p, "from").unwrap_or_default();
-            let creds = engine.ensure_valid_creds(&account).await?;
-            let (from_addr, sender_name) =
-                resolve_send_from(engine, &account, &creds, &requested_from)?;
-            if creds.is_ews() {
-                // Exchange submits the MIME itself and files the Sent copy in
-                // the same call, so there is no separate append.
-                //
-                // The Bcc header is written into the message here, unlike the
-                // SMTP path: SMTP carries blind recipients in the envelope,
-                // while Exchange has only the MIME to read them from. It
-                // strips the header before delivering, so recipients still do
-                // not see the list.
-                let raw = smtp::build_message(
-                    &sender_name,
-                    &from_addr,
-                    &to,
-                    &cc,
-                    &bcc,
-                    true,
-                    &subject,
-                    &body,
-                    &html,
-                    &attachments,
-                    &in_reply_to,
-                    &references,
-                    &reply_to,
-                    &message_id,
-                )?;
-                engine
-                    .with_write_session(&account, |session| {
-                        let raw = raw.clone();
-                        Box::pin(async move { session.send_mime(raw).await })
-                    })
-                    .await?;
-                // The server files its own copy, so this only refreshes the
-                // local Sent view — the upload is suppressed for Exchange in
-                // `should_append_sent_copy`.
-                if let Err(err) = append_to_sent(engine, &account, &raw).await {
-                    eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
-                }
-                return Ok(json!({ "ok": true }));
-            }
-            let raw = smtp::send(
-                &creds,
-                &from_addr,
-                &sender_name,
-                &to,
-                &cc,
-                &bcc,
-                &subject,
-                &body,
-                &html,
-                &attachments,
-                &in_reply_to,
-                &references,
-                &reply_to,
-                &message_id,
-            )
-            .await?;
-            // Finalize the Sent view. For Gmail/Outlook defaults this only
-            // refreshes the provider-created copy; other accounts get Meron's
-            // best-effort APPEND plus refresh. The mail already left via SMTP,
-            // so Sent-folder issues should not surface as "send failed".
-            if let Err(err) = append_to_sent(engine, &account, &raw).await {
-                eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
-            }
-            Ok(json!({ "ok": true }))
-        }
+        "send" => perform_send(engine, p).await,
 
         "save_draft" => {
             let account = req_str(p, "account")?;
@@ -3378,6 +4436,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
         }
 
+        // Where an account files its junk, and where mail comes back to.
+        //
+        // Read from the cached folder list rather than asked of the server:
+        // the roles were resolved when the folders were listed, and a junk
+        // folder that has not changed since does not need a round trip to
+        // find. Absent means the account has no such folder — which is a
+        // real answer, not a failure to look.
+        "folders.byRole" => {
+            let account = req_str(p, "account")?;
+            let role = req_str(p, "role")?;
+            let folder = {
+                let db = engine.db.lock().unwrap();
+                store::folder_for_role(&db, &account, &role)?
+            };
+            Ok(json!({ "folder": folder }))
+        }
+
         // Mark every message in a folder as read: set \Seen on the server for the
         // currently-unseen UIDs, then flip the whole folder seen in the store.
         "messages.markAllRead" => {
@@ -3922,6 +4997,537 @@ fn opt_attachments(params: &Value) -> anyhow::Result<Vec<smtp::AttachmentInput>>
         Some(Value::Null) | None => Ok(Vec::new()),
         Some(_) => Err(anyhow::anyhow!("attachments must be an array")),
     }
+}
+
+/// How many unlooked-at messages one filter click is willing to ask about.
+///
+/// Bounded so turning the filter on in a mailbox of fifty thousand is one
+/// reasonable FETCH rather than an enormous one. Whatever is left stays
+/// unknown and is filled in by later syncs.
+const ATTACHMENT_BACKFILL_LIMIT: i64 = 500;
+
+/// Asks the server about the messages of a folder nobody has looked at yet.
+///
+/// Failure is quiet on purpose. This makes an answer more complete; it is not
+/// the answer. A folder that cannot be reached still lists what is already
+/// known, which is better than refusing to list anything.
+async fn fill_in_attachment_flags(engine: &Arc<Engine>, account: &str, folder: &str) {
+    let unknown = {
+        let db = engine.db.lock().unwrap();
+        store::uids_without_structure(&db, account, folder, ATTACHMENT_BACKFILL_LIMIT)
+            .unwrap_or_default()
+    };
+    if unknown.is_empty() {
+        return;
+    }
+    let folder_owned = folder.to_string();
+    let answers = engine
+        .with_read_session(account, move |session| {
+            let folder = folder_owned.clone();
+            let uids = unknown.clone();
+            Box::pin(async move { session.attachment_flags(&folder, &uids).await })
+        })
+        .await;
+    match answers {
+        Ok(answers) => {
+            let db = engine.db.lock().unwrap();
+            let _ = store::set_has_attachments(&db, account, folder, &answers);
+        }
+        Err(err) => {
+            eprintln!("meron-core: attachment structures for {account}/{folder}: {err:#}");
+        }
+    }
+}
+
+/// The rules as they are stored, in the order they run.
+///
+/// A rule that no longer parses is skipped rather than sinking the rest: one
+/// bad row must not stop every other rule from filing mail.
+fn stored_rules(engine: &Arc<Engine>) -> Vec<rules::Rule> {
+    let definitions = {
+        let db = engine.db.lock().unwrap();
+        store::rules(&db).unwrap_or_default()
+    };
+    definitions
+        .iter()
+        .filter_map(|definition| match serde_json::from_str::<rules::Rule>(definition) {
+            Ok(rule) => Some(rule),
+            Err(err) => {
+                eprintln!("meron-core: unreadable rule skipped: {err}");
+                None
+            }
+        })
+        .collect()
+}
+
+/// What a message offers the rules to match on.
+fn rule_subject(header: &imap::MessageHeader) -> rules::Subject<'_> {
+    rules::Subject {
+        from_name: &header.from_name,
+        from_addr: &header.from_addr,
+        to: header.to.iter().map(|r| format!("{} {}", r.name, r.addr)).collect(),
+        cc: header.cc.iter().map(|r| format!("{} {}", r.name, r.addr)).collect(),
+        subject: &header.subject,
+    }
+}
+
+/// How an action reads in the record.
+fn action_label(action: &rules::Action) -> String {
+    match action {
+        rules::Action::MoveTo { folder } => format!("moveTo:{folder}"),
+        rules::Action::MarkRead => "markRead".to_string(),
+        rules::Action::Star => "star".to_string(),
+        rules::Action::AddLabel { label_id } => format!("label:{label_id}"),
+        rules::Action::Stop => "stop".to_string(),
+    }
+}
+
+/// Carries out one planned action, through the same request a person's own
+/// gesture would make.
+///
+/// Deliberately not a second implementation of moving and flagging: a rule
+/// that files mail must do exactly what filing mail by hand does, including
+/// every cache and folder-count update that comes with it.
+async fn run_rule_action(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    folder: &str,
+    uid: u32,
+    action: &rules::Action,
+) -> anyhow::Result<()> {
+    let (method, params) = match action {
+        rules::Action::MoveTo { folder: target } => (
+            "messages.move",
+            json!({
+                "account": account,
+                "folder": folder,
+                "target_folder": target,
+                "uids": [uid],
+            }),
+        ),
+        rules::Action::MarkRead => (
+            "messages.markRead",
+            json!({ "account": account, "folder": folder, "uids": [uid], "seen": true }),
+        ),
+        rules::Action::Star => (
+            "messages.markStarred",
+            json!({ "account": account, "folder": folder, "uids": [uid], "starred": true }),
+        ),
+        // Labels live only here, so this one is a store write rather than a
+        // request. Added to whatever the conversation already carries: a rule
+        // must not strip what someone put on by hand.
+        rules::Action::AddLabel { label_id } => {
+            let thread_key = {
+                let db = engine.db.lock().unwrap();
+                store::thread_key_for_uid(&db, account, folder, uid)?
+            };
+            let db = engine.db.lock().unwrap();
+            store::add_thread_label(&db, account, &thread_key, label_id)?;
+            return Ok(());
+        }
+        // Never reaches here: `plan` returns before emitting a Stop.
+        rules::Action::Stop => return Ok(()),
+    };
+    let request = Request {
+        id: 0,
+        method: method.to_string(),
+        params,
+    };
+    dispatch(engine, &request, out).await.map(|_| ())
+}
+
+/// Applies the rules to mail that has just arrived.
+///
+/// Every action is recorded, whether it worked or not. A rule failing in
+/// silence is worse than a rule that never ran: the reader believes their mail
+/// was filed and it is in the inbox, or believes it is in the inbox and it is
+/// not.
+///
+/// Returns the arrivals the rules dealt with — filed away or marked read — so
+/// the caller does not announce mail that is no longer waiting to be read.
+async fn apply_rules_to_arrivals(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    folder: &str,
+    arrivals: &[imap::MessageHeader],
+) -> std::collections::HashSet<u32> {
+    let mut handled = std::collections::HashSet::new();
+    let rules = stored_rules(engine);
+    if rules.is_empty() || arrivals.is_empty() {
+        return handled;
+    }
+
+    for header in arrivals {
+        for step in rules::plan(&rules, account, &rule_subject(header)) {
+            let moved = matches!(step.action, rules::Action::MoveTo { .. });
+            let done = run_rule_action(engine, out, account, folder, header.uid, &step.action).await;
+            let outcome = match &done {
+                Ok(()) => "done".to_string(),
+                Err(err) => format!("failed: {err:#}"),
+            };
+            if done.is_ok() {
+                handled.insert(header.uid);
+            }
+            {
+                let db = engine.db.lock().unwrap();
+                let _ = store::log_rule_action(
+                    &db,
+                    &store::RuleLogEntry {
+                        at: now_seconds(),
+                        account: account.to_string(),
+                        rule_id: step.rule_id.clone(),
+                        rule_name: step.rule_name.clone(),
+                        folder: folder.to_string(),
+                        uid: header.uid,
+                        subject: header.subject.clone(),
+                        from_addr: header.from_addr.clone(),
+                        action: action_label(&step.action),
+                        outcome,
+                    },
+                );
+            }
+            // A message that has been filed elsewhere is no longer where the
+            // next action would look for it, so the rest of its plan is
+            // abandoned rather than run against a UID that has left.
+            if moved && done.is_ok() {
+                break;
+            }
+        }
+    }
+    handled
+}
+
+/// Reply automatically to genuinely new inbox mail, for an account with the
+/// client-side out-of-office auto-responder on. Exchange accounts never
+/// reach this: they configure the server's own Automatic Replies instead
+/// (`oof.get`/`oof.set` calling the EWS operations directly), which sends
+/// the reply itself regardless of whether Oreneta is even running — the
+/// whole reason that path exists alongside this one. See `crate::oof` for
+/// what makes a message worth replying to at all.
+async fn apply_oof_to_arrivals(engine: &Arc<Engine>, account: &str, headers: &[imap::MessageHeader]) {
+    if headers.is_empty() {
+        return;
+    }
+    let Ok(creds) = engine.ensure_valid_creds(account).await else {
+        return;
+    };
+    if creds.is_ews() {
+        return;
+    }
+    let oof = {
+        let db = engine.db.lock().unwrap();
+        store::oof_prefs(&db, account).unwrap_or_default()
+    };
+    if !oof.active_at(now_seconds()) {
+        return;
+    }
+    let (own_address, sender_name) = {
+        let db = engine.db.lock().unwrap();
+        match store::resolve_send_from(&db, account, &creds.user, "") {
+            Ok(pair) => pair,
+            Err(_) => return,
+        }
+    };
+    let subject = if oof.subject.trim().is_empty() {
+        "Automatic reply".to_string()
+    } else {
+        oof.subject.clone()
+    };
+
+    for header in headers {
+        let from_addr = header.from_addr.trim().to_lowercase();
+        if from_addr.is_empty() {
+            continue;
+        }
+        let already_replied = {
+            let db = engine.db.lock().unwrap();
+            store::oof_already_replied(&db, account, &from_addr).unwrap_or(true)
+        };
+        if already_replied {
+            continue;
+        }
+
+        let uid = header.uid;
+        let raw = engine
+            .with_read_session(account, |session| {
+                Box::pin(async move { session.fetch_raw_messages_for_copy("INBOX", &[uid]).await })
+            })
+            .await
+            .ok()
+            .and_then(|mut messages| messages.pop());
+        let Some(raw) = raw else { continue };
+        let Ok(mail) = mailparse::parse_mail(&raw.raw) else {
+            continue;
+        };
+        if !meron_core::oof::should_reply(&mail, &header.from_addr, &own_address) {
+            continue;
+        }
+
+        match smtp::send_oof_reply(
+            &creds,
+            &own_address,
+            &sender_name,
+            &header.from_addr,
+            &subject,
+            &oof.body,
+            &header.message_id,
+        )
+        .await
+        {
+            Ok(_) => {
+                let db = engine.db.lock().unwrap();
+                let _ = store::record_oof_reply(&db, account, &from_addr, now_seconds());
+            }
+            Err(err) => {
+                eprintln!("meron-core: out-of-office reply to {account} failed: {err:#}");
+            }
+        }
+    }
+}
+
+/// A scheduled message that will not be tried again, and why.
+fn failed_send_json(row: &store::ScheduledSend, reason: &str) -> Value {
+    json!({
+        "id": row.id,
+        "account": row.account,
+        "subject": row.subject,
+        "error": reason,
+    })
+}
+
+/// One scheduled message as the interface reads it.
+///
+/// The payload is left out: it is the message itself, sometimes with megabytes
+/// of attachment, and a list of what is waiting has no use for it.
+fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
+    json!({
+        "id": row.id,
+        "account": row.account,
+        "dueAt": row.due_at,
+        "subject": row.subject,
+        "to": serde_json::from_str::<Value>(&row.payload)
+            .ok()
+            .and_then(|message| message.get("to").and_then(Value::as_str).map(str::to_owned))
+            .unwrap_or_default(),
+        "attempts": row.attempts,
+        "lastError": row.last_error,
+        // Whether the watch has stopped trying, so the interface can say so
+        // rather than leave a failed message looking merely late.
+        "gaveUp": row.attempts >= store::MAX_SEND_ATTEMPTS,
+    })
+}
+
+/// Sends one message, from the parameters the composer wrote.
+///
+/// Its own function because two callers need it and they must not drift: the
+/// `send` request, and the watch that lets go of a message scheduled for
+/// later. A message posted at eight has to be the same message in every
+/// respect as the one that would have gone at six.
+async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> {
+        let account = req_str(p, "account")?;
+        let to = req_str(p, "to")?;
+        let cc = req_str(p, "cc").unwrap_or_default();
+        let bcc = req_str(p, "bcc").unwrap_or_default();
+        let subject = req_str(p, "subject").unwrap_or_default();
+        let body = req_str(p, "body").unwrap_or_default();
+        let html = req_str(p, "html").unwrap_or_default();
+        let in_reply_to = req_str(p, "in_reply_to").unwrap_or_default();
+        let references = req_str(p, "references").unwrap_or_default();
+        let reply_to = req_str(p, "reply_to").unwrap_or_default();
+        // Client-generated Message-ID so the optimistic bubble and a quick
+        // follow-up reply share the id the Sent copy will carry.
+        let message_id = req_str(p, "message_id").unwrap_or_default();
+        let attachments = opt_attachments(p)?;
+        let requested_from = req_str(p, "from").unwrap_or_default();
+
+        // Sign and/or encrypt, when the sender asked for it — with whichever
+        // protocol can actually do the whole job. Assembled here, before
+        // anything is sent, so a request neither protocol can satisfy fails
+        // loudly instead of the message quietly going out in the clear.
+        //
+        // The choice between OpenPGP and S/MIME is not put to the sender:
+        // one "sign"/"encrypt" pair covers both, and this picks S/MIME
+        // whenever it alone can cover the sender (if signing) and every
+        // recipient (if encrypting), falling back to OpenPGP otherwise. A
+        // message is never protected with a mix of the two.
+        let protection = {
+            let sign = p.get("sign").and_then(Value::as_bool).unwrap_or(false);
+            let encrypt = p.get("encrypt").and_then(Value::as_bool).unwrap_or(false);
+            if !sign && !encrypt {
+                None
+            } else {
+                let addresses: Vec<String> = [to.as_str(), cc.as_str(), bcc.as_str()]
+                    .iter()
+                    .flat_map(|field| meron_core::parse::split_address_list(field))
+                    .collect();
+                let wanted = requested_from.trim().to_lowercase();
+
+                let (smime_identity, smime_recipients, pgp_signing_key, pgp_recipients) = {
+                    let db = engine.db.lock().unwrap();
+
+                    let smime_identity = if sign {
+                        store::smime_identities(&db)?
+                            .into_iter()
+                            .find(|id| wanted.is_empty() || id.addresses.iter().any(|a| *a == wanted))
+                            .and_then(|stored| {
+                                let secrets = meron_core::secrets::load(&format!(
+                                    "smime-identity-{}",
+                                    stored.fingerprint
+                                ))
+                                .ok()?;
+                                let key_der = {
+                                    use base64::Engine as _;
+                                    base64::engine::general_purpose::STANDARD
+                                        .decode(secrets.password.trim())
+                                        .ok()?
+                                };
+                                meron_core::crypto::pkcs12::identity_from_parts(&stored.der, &key_der).ok()
+                            })
+                    } else {
+                        None
+                    };
+                    let smime_recipients = if encrypt {
+                        let der: Vec<Vec<u8>> =
+                            store::smime_certs(&db)?.into_iter().map(|cert| cert.der).collect();
+                        meron_core::crypto::smime::certs_from_der(&der)
+                    } else {
+                        Vec::new()
+                    };
+
+                    // The sender's own key, chosen by the address they are
+                    // sending from: somebody with two keys should sign as
+                    // whoever they are being right now.
+                    let pgp_signing_key = if sign {
+                        store::pgp_secret_keys(&db)?
+                            .into_iter()
+                            .find(|key| {
+                                wanted.is_empty()
+                                    || key.addresses.iter().any(|addr| *addr == wanted)
+                            })
+                            .and_then(|key| {
+                                meron_core::secrets::load(&format!(
+                                    "pgp-secret-{}",
+                                    key.fingerprint
+                                ))
+                                .ok()
+                                .map(|secrets| secrets.password)
+                            })
+                            .map(|armoured| {
+                                meron_core::crypto::pgp::certs_from_armoured(&[armoured])
+                            })
+                            .and_then(|certs| certs.into_iter().next())
+                    } else {
+                        None
+                    };
+                    let pgp_recipients = if encrypt {
+                        let armoured: Vec<String> = store::pgp_certs(&db)?
+                            .into_iter()
+                            .map(|cert| cert.armoured)
+                            .collect();
+                        meron_core::crypto::pgp::certs_from_armoured(&armoured)
+                    } else {
+                        Vec::new()
+                    };
+
+                    (smime_identity, smime_recipients, pgp_signing_key, pgp_recipients)
+                };
+
+                let smime_missing = meron_core::crypto::smime::missing_recipients(&smime_recipients, &addresses);
+                let smime_ok = (!sign || smime_identity.is_some()) && (!encrypt || smime_missing.is_empty());
+
+                if smime_ok {
+                    Some(smtp::Protection::Smime {
+                        what: meron_core::crypto::smime::Protect { sign, encrypt },
+                        identity: smime_identity,
+                        recipients: smime_recipients,
+                        recipient_addresses: addresses,
+                    })
+                } else {
+                    Some(smtp::Protection::Pgp {
+                        what: meron_core::crypto::pgp::Protect { sign, encrypt },
+                        signing_key: pgp_signing_key,
+                        passphrase: req_str(p, "passphrase").ok(),
+                        recipients: pgp_recipients,
+                        recipient_addresses: addresses,
+                    })
+                }
+            }
+        };
+        let creds = engine.ensure_valid_creds(&account).await?;
+        let (from_addr, sender_name) =
+            resolve_send_from(engine, &account, &creds, &requested_from)?;
+        if creds.is_ews() {
+            // Exchange submits the MIME itself and files the Sent copy in
+            // the same call, so there is no separate append.
+            //
+            // The Bcc header is written into the message here, unlike the
+            // SMTP path: SMTP carries blind recipients in the envelope,
+            // while Exchange has only the MIME to read them from. It
+            // strips the header before delivering, so recipients still do
+            // not see the list.
+            let raw = smtp::build_message(
+                &sender_name,
+                &from_addr,
+                &to,
+                &cc,
+                &bcc,
+                true,
+                &subject,
+                &body,
+                &html,
+                &attachments,
+                &in_reply_to,
+                &references,
+                &reply_to,
+                &message_id,
+            )?;
+            engine
+                .with_write_session(&account, |session| {
+                    let raw = raw.clone();
+                    Box::pin(async move { session.send_mime(raw).await })
+                })
+                .await?;
+            // The server files its own copy, so this only refreshes the
+            // local Sent view — the upload is suppressed for Exchange in
+            // `should_append_sent_copy`.
+            if let Err(err) = append_to_sent(engine, &account, &raw).await {
+                eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
+            }
+            return Ok(json!({ "ok": true }));
+        }
+        // What the sender asked for, with the keys it needs. Built before the
+        // Exchange branch above would have returned, so a request to protect a
+        // message on an account that cannot do it fails loudly rather than
+        // sending it in the clear.
+        let raw = smtp::send(
+            &creds,
+            &from_addr,
+            &sender_name,
+            &to,
+            &cc,
+            &bcc,
+            &subject,
+            &body,
+            &html,
+            &attachments,
+            &in_reply_to,
+            &references,
+            &reply_to,
+            &message_id,
+            protection.as_ref(),
+        )
+        .await?;
+        // Finalize the Sent view. For Gmail/Outlook defaults this only
+        // refreshes the provider-created copy; other accounts get Meron's
+        // best-effort APPEND plus refresh. The mail already left via SMTP,
+        // so Sent-folder issues should not surface as "send failed".
+        if let Err(err) = append_to_sent(engine, &account, &raw).await {
+            eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
+        }
+        Ok(json!({ "ok": true }))
+    
 }
 
 fn req_str(params: &Value, key: &str) -> anyhow::Result<String> {

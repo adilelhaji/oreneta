@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
 import {
@@ -18,6 +19,9 @@ import { formatFullTimestamp, formatMessageStamp } from './messageHelpers'
 import { AddressRow } from './AddressList'
 import { MessageContent } from './MessageContent'
 import { useMessageView } from './useMessageView'
+import { MessageActions } from './MessageActions'
+import { settings$ } from '../../states/settings'
+import { bubbleMaxWidth } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
 
 interface MessageBubbleProps {
@@ -30,6 +34,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLinkHover }: MessageBubbleProps) {
   const { t } = useTranslation()
+  const readingWidth = useValue(settings$.readingWidth)
   const [metaOpen, setMetaOpen] = useState(false)
   const view = useMessageView(message)
   const {
@@ -61,47 +66,35 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
   return (
     <div className={`flex w-full animate-slide-up ${outgoing ? 'justify-end' : 'justify-start'}`}>
       <div
+        style={{ maxWidth: bubbleMaxWidth(readingWidth, '70%') }}
         className={`group/message-bubble relative ${useHtmlBody ? 'w-[70%]' : 'max-w-[70%]'} min-w-[100px] p-3.5 border transition-shadow duration-200 ${
           isDraft
-            ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-2xl rounded-tr-sm shadow-none'
+            ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-panel rounded-tr-sm shadow-none'
             : outgoing
-              ? 'bg-bubble-out text-bubble-out-text border-border/35 rounded-2xl rounded-tr-sm shadow-bubble-out'
-              : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-2xl rounded-tl-sm shadow-bubble-in'
+              ? 'bg-bubble-out text-bubble-out-text border-border/35 rounded-panel rounded-tr-sm shadow-bubble-out'
+              : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-panel rounded-tl-sm shadow-bubble-in'
         }`}
       >
-        <div className="absolute right-2 -top-3.5 z-20 flex items-center gap-1 rounded-full border border-border/40 bg-header/95 p-0.5 text-secondary opacity-0 shadow-sm transition-opacity group-hover/message-bubble:opacity-100 focus-within:opacity-100">
-          <button
-            type="button"
-            title={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            aria-label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            onClick={openMessageOrDraftTab}
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-hover hover:text-primary cursor-pointer transition-colors"
-          >
-            <ExternalLink size={13} />
-          </button>
-          <button
-            type="button"
-            title={t('common.more')}
-            aria-label={t('chat.moreMessageActions')}
-            onClick={openActionsMenu}
-            className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-hover hover:text-primary cursor-pointer transition-colors"
-          >
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
+        <MessageActions
+          message={message}
+          isDraft={isDraft}
+          isRSS={isRSS}
+          onOpen={openMessageOrDraftTab}
+          onMore={openActionsMenu}
+        />
 
         {/* Header: sender + optional meta toggle on the left, timestamp on the right */}
         <div className="relative flex items-center justify-between gap-2 mb-1.5">
           <div className="relative flex items-center gap-1 min-w-0">
             {!outgoing ? (
-              <span className="text-[0.78125rem] font-bold text-accent select-none truncate tracking-wide">
+              <span className="text-ui font-bold text-accent select-none truncate tracking-wide">
                 {message.from_name || message.from_addr}
               </span>
             ) : (
               recipientSummary && (
                 <span
                   title={[toRaw, ccRaw].filter(Boolean).join(', ')}
-                  className="text-[0.6875rem] font-normal text-secondary/70 select-none truncate"
+                  className="text-caption font-normal text-secondary/70 select-none truncate"
                 >
                   {t('chat.toRecipients', { recipients: recipientSummary })}
                 </span>
@@ -120,9 +113,9 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1 text-[0.65625rem] text-secondary/80 select-none shrink-0">
+          <div className="flex items-center gap-1 text-caption text-secondary/80 select-none shrink-0">
             {isDraft && (
-              <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-[0.59375rem] font-bold uppercase tracking-wide text-accent">
+              <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent">
                 {t('chat.draft')}
               </span>
             )}
@@ -141,7 +134,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                   className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
                 >
                   <Undo2 size={12} />
-                  <span className="text-[0.625rem] font-semibold">
+                  <span className="text-2xs font-semibold">
                     {t('chat.undoSend', { defaultValue: 'Undo' })}
                   </span>
                 </button>
@@ -155,7 +148,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                   className="flex items-center gap-0.5 text-red-500 hover:text-red-600 cursor-pointer"
                 >
                   <AlertCircle size={12} />
-                  <span className="text-[0.625rem] font-semibold">{t('chat.retry')}</span>
+                  <span className="text-2xs font-semibold">{t('chat.retry')}</span>
                 </button>
               ) : (
                 <Check size={12} className="text-accent opacity-90" />
@@ -172,7 +165,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
               <div
-                className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-lg border border-border bg-chats p-3 shadow-xl text-secondary select-text ${
+                className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-control-sm border border-border bg-chats p-3 shadow-xl text-secondary select-text ${
                   outgoing ? (useHtmlBody ? 'right-0 max-w-full' : 'right-0') : 'left-0'
                 }`}
               >

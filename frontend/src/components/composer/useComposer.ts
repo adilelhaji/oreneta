@@ -19,6 +19,8 @@ import { htmlToText } from '../../lib/html'
 import { invoke } from '../../lib/bridge'
 import { contextualErrorMessage } from '../../lib/errors'
 import { discardSavedDraftCopy } from '../../states/mail'
+import { scheduleComposed } from '../../states/scheduledSends'
+import { formatDeferredWhen } from '../../lib/date'
 import { pickFiles, pickImageFiles } from '../../lib/nativeFilePicker'
 import { getComposeSession, registerComposeSession } from '../../states/composeSessions'
 import { accounts$, isSendableAccount } from '../../states/accounts'
@@ -50,6 +52,8 @@ export function useComposer(tabId: string) {
   const session = sessionRef.current
 
   const [sending, setSending] = useState(false)
+  // Never persisted, never sent to a draft: unlocks one key for one send.
+  const [pgpPassphrase, setPgpPassphrase] = useState('')
   const [error, setError] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -126,14 +130,14 @@ export function useComposer(tabId: string) {
       ResizableImage.configure({
         allowBase64: true,
         HTMLAttributes: {
-          class: 'my-2 max-w-full rounded-lg',
+          class: 'my-2 max-w-full rounded-control-sm',
         },
       }),
     ],
     content: initialHtml,
     editorProps: {
       attributes: {
-        class: 'tiptap-body focus:outline-none min-h-[240px] text-[0.875rem] leading-relaxed',
+        class: 'tiptap-body focus:outline-none min-h-[240px] text-sm leading-relaxed',
         spellcheck: String(spellCheck),
       },
       handlePaste: (_view, event) => {
@@ -520,7 +524,14 @@ export function useComposer(tabId: string) {
 
   const canSend = !sending && !!draft?.accountId && !!draft?.to.trim()
 
-  const submit = async () => {
+  /**
+   * Sends the message, or files it to go at `scheduleAt`.
+   *
+   * One path for both: everything before the message leaves — the checks, the
+   * confirmation, the inline images, the draft to discard — is the same work,
+   * and a second copy of it would be a second set of things to forget.
+   */
+  const submit = async (scheduleAt?: number) => {
     if (!canSend || !draft) return
     setSending(true)
     setError('')
@@ -581,7 +592,7 @@ export function useComposer(tabId: string) {
         content = inlineRichStyles(prepared.html)
         attachments = prepared.attachments
       }
-      await sendComposed({
+      const message = {
         accountId: current.accountId,
         from: current.fromEmail,
         to: current.to.trim(),
@@ -594,6 +605,21 @@ export function useComposer(tabId: string) {
         inReplyTo: current.inReplyTo,
         references: current.references,
         attachments,
+      }
+      if (scheduleAt) {
+        // Protection is never scheduled: see ComposedMessage.protection.
+        await scheduleComposed(message, scheduleAt)
+        await discardRemoteDraft(current)
+        showToast(t('sendLater.toast.scheduled', { when: formatDeferredWhen(scheduleAt) }))
+        finishClosingMessageTab(tabId)
+        return
+      }
+      await sendComposed({
+        ...message,
+        protection:
+          current.pgpSign || current.pgpEncrypt
+            ? { sign: current.pgpSign, encrypt: current.pgpEncrypt, passphrase: pgpPassphrase || undefined }
+            : undefined,
       })
       // When this tab is a reply to the open conversation, drop the sent message
       // into the thread immediately so it shows without waiting for the next sync.
@@ -637,6 +663,8 @@ export function useComposer(tabId: string) {
     canSend,
     update,
     toggleRich,
+    pgpPassphrase,
+    setPgpPassphrase,
     addFiles,
     pickAttachmentFiles,
     pickInlineImages,

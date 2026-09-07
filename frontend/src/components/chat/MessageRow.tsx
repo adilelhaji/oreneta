@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
 import { AlertCircle, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Paperclip, Star , Undo2} from 'lucide-react'
@@ -10,6 +11,9 @@ import { AddressRow } from './AddressList'
 import { MessageContent } from './MessageContent'
 import { formatFullTimestamp, formatMessageStamp, normalizeBodyText } from './messageHelpers'
 import { useMessageView } from './useMessageView'
+import { MessageActions } from './MessageActions'
+import { settings$ } from '../../states/settings'
+import { readingMeasure } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
 
 const COLLAPSED_PREVIEW_CHARS = 200
@@ -41,6 +45,7 @@ export function MessageRow({
   onLinkHover?: (url: string | null) => void
 }) {
   const { t } = useTranslation()
+  const readingWidth = useValue(settings$.readingWidth)
   const [metaOpen, setMetaOpen] = useState(false)
   const view = useMessageView(message)
   const {
@@ -89,7 +94,7 @@ export function MessageRow({
           className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
         >
           <Undo2 size={12} />
-          <span className="text-[0.625rem] font-semibold">
+          <span className="text-2xs font-semibold">
             {t('chat.undoSend', { defaultValue: 'Undo' })}
           </span>
         </button>
@@ -106,13 +111,13 @@ export function MessageRow({
           className="flex items-center gap-0.5 text-red-500 hover:text-red-600 cursor-pointer"
         >
           <AlertCircle size={12} />
-          <span className="text-[0.625rem] font-semibold">{t('chat.retry')}</span>
+          <span className="text-2xs font-semibold">{t('chat.retry')}</span>
         </button>
       ) : null
     ) : null
 
   const draftBadge = isDraft ? (
-    <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-[0.59375rem] font-bold uppercase tracking-wide text-accent">
+    <span className="rounded-full border border-accent/35 bg-accent/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent">
       {t('chat.draft')}
     </span>
   ) : null
@@ -130,16 +135,19 @@ export function MessageRow({
           }
         }}
         title={t('chat.expandMessage')}
-        className="group/message-row flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
+        // Held to the same measure as an expanded message, so a collapsed row
+        // does not sit wider than the one it opens into.
+        style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
+        className="group/message-row mx-auto flex w-full cursor-pointer items-center gap-2.5 rounded-control border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
       >
         <Avatar name={view.avatarName} email={view.avatarEmail} src={view.avatarSrc} size={26} className="shrink-0" />
         <span
-          className={`shrink-0 max-w-[30%] truncate text-[0.8125rem] text-primary ${message.unread ? 'font-bold' : 'font-semibold'}`}
+          className={`shrink-0 max-w-[30%] truncate text-ui text-primary ${message.unread ? 'font-bold' : 'font-semibold'}`}
         >
           {outgoing && recipientSummary ? t('chat.toRecipients', { recipients: recipientSummary }) : senderName}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[0.78125rem] text-secondary/80">{collapsedPreview(message)}</span>
-        <div className="flex shrink-0 items-center gap-1.5 text-[0.65625rem] text-secondary/80">
+        <span className="min-w-0 flex-1 truncate text-ui text-secondary/80">{collapsedPreview(message)}</span>
+        <div className="flex shrink-0 items-center gap-1.5 text-caption text-secondary/80">
           {draftBadge}
           {message.has_attachments && <Paperclip size={12} />}
           {message.starred && <Star size={12} className="fill-amber-500 text-amber-500" />}
@@ -150,7 +158,10 @@ export function MessageRow({
   }
 
   return (
-    <div className="group/message-row w-full rounded-xl border border-border/40 bg-chats px-4 py-3 shadow-sm">
+    <div
+      style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
+      className="group/message-row mx-auto w-full rounded-control border border-border/40 bg-chats px-4 py-3 shadow-sm"
+    >
       <div className="relative flex items-start gap-2.5">
         <Avatar
           name={view.avatarName}
@@ -173,15 +184,15 @@ export function MessageRow({
             title={t('chat.collapseMessage')}
             className="flex cursor-pointer items-baseline gap-1.5"
           >
-            <span className="truncate text-[0.84375rem] font-semibold text-primary">{senderName}</span>
-            <span className="truncate text-[0.71875rem] text-secondary/80">{message.from_addr}</span>
+            <span className="truncate text-sm font-semibold text-primary">{senderName}</span>
+            <span className="truncate text-xs text-secondary/80">{message.from_addr}</span>
           </div>
           {/* The details toggle trails the recipients, the way the chat bubble
               puts it right after the header line it expands. */}
           <div className="flex min-w-0 items-center gap-1">
             {allRecipientSummary && (
               <span
-                className="truncate text-[0.71875rem] text-secondary/80"
+                className="truncate text-xs text-secondary/80"
                 title={[toRaw, ccRaw].filter(Boolean).join(', ')}
               >
                 {t('chat.toRecipients', { recipients: allRecipientSummary })}
@@ -201,34 +212,24 @@ export function MessageRow({
             )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 text-[0.65625rem] text-secondary/80">
+        <div className="flex shrink-0 items-center gap-1.5 text-caption text-secondary/80">
           {draftBadge}
           {message.starred && <Star size={12} className="fill-amber-500 text-amber-500" />}
           <span title={fullStamp}>{stamp}</span>
           {statusIcon}
-          <button
-            type="button"
-            title={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            aria-label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
-            onClick={openMessageOrDraftTab}
-            className="flex h-5 w-5 items-center justify-center rounded text-secondary hover:bg-black/[0.05] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer transition-colors"
-          >
-            <ExternalLink size={12} />
-          </button>
-          <button
-            type="button"
-            title={t('common.more')}
-            aria-label={t('chat.moreMessageActions')}
-            onClick={openActionsMenu}
-            className="flex h-5 w-5 items-center justify-center rounded text-secondary hover:bg-black/[0.05] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer transition-colors"
-          >
-            <MoreHorizontal size={13} />
-          </button>
+          <MessageActions
+            message={message}
+            isDraft={isDraft}
+            isRSS={view.isRSS}
+            onOpen={openMessageOrDraftTab}
+            onMore={openActionsMenu}
+            variant="inline"
+          />
         </div>
         {metaOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
-            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-lg border border-border bg-chats p-3 text-secondary shadow-xl select-text">
+            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-control-sm border border-border bg-chats p-3 text-secondary shadow-xl select-text">
               <AddressRow label={t('composer.fields.from')} rawList={fromRaw} />
               {toRaw && <AddressRow label={t('composer.fields.to')} rawList={toRaw} />}
               {ccRaw && <AddressRow label={t('composer.fields.cc')} rawList={ccRaw} />}

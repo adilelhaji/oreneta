@@ -29,21 +29,21 @@ export function QuickReplyComposer() {
 
   return (
     <footer className="p-3.5 bg-header border-t border-border z-10 flex flex-col items-center justify-center">
-      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-2xl border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent focus-within:bg-chats transition-all duration-150">
+      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent focus-within:bg-chats transition-all duration-150">
         <QuickReplyFrom />
         <QuickReplyAttachments attachments={composerAttachments} />
 
         <div className="flex items-end gap-2 w-full">
           <button
             onClick={() => void pickAttachmentFiles()}
-            className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl text-secondary hover:bg-active transition-colors cursor-pointer"
+            className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-control text-secondary hover:bg-active transition-colors cursor-pointer"
             title={t('composer.actions.attachFiles')}
           >
             <Paperclip size={16} />
           </button>
           <button
             onClick={openReplyInFullEditor}
-            className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-xl text-secondary hover:bg-active transition-colors cursor-pointer"
+            className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-control text-secondary hover:bg-active transition-colors cursor-pointer"
             title={t('composer.actions.openFullEditor')}
           >
             <Maximize2 size={15} />
@@ -56,7 +56,7 @@ export function QuickReplyComposer() {
             placeholder={t('composer.placeholders.quickMessage')}
             rows={1}
             spellCheck={spellCheck}
-            className="flex-1 py-[7px] px-1 max-h-[254px] min-h-8.5 bg-transparent text-[0.9375rem] text-primary resize-none placeholder-secondary border-none outline-none leading-5"
+            className="flex-1 py-[7px] px-1 max-h-[254px] min-h-8.5 bg-transparent text-title text-primary resize-none placeholder-secondary border-none outline-none leading-5"
             onKeyDown={handleComposerKeyDown}
             onPaste={handleComposerPaste}
           />

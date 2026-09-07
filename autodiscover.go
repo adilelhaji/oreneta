@@ -155,7 +155,7 @@ func fetchAutoconfig(rawURL, email string) *DiscoveredConfig {
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "Meron-Mail-Autoconfig")
+	req.Header.Set("User-Agent", "Oreneta-Mail-Autoconfig")
 	res, err := client.Do(req)
 	if err != nil {
 		return nil

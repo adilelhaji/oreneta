@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build, sign and package Meron for the Mac App Store.
+# Build, sign and package Oreneta for the Mac App Store.
 #
-# The result is dist/Meron-mas.pkg, ready for scripts/upload-mac-app-store.ts.
+# The result is dist/Oreneta-mas.pkg, ready for scripts/upload-mac-app-store.ts.
 #
 # How this differs from scripts/build.sh (the Developer ID / DMG build):
 #
@@ -38,11 +38,15 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APP_NAME="Meron"
+APP_NAME="Oreneta"
 BUNDLE_ID="jp.nonbili.meron"
-# Wails names the bundle after outputfilename ("meron"); the shipped app is
-# "Meron.app", the same rename the DMG job does with ditto.
-BUILT_APP="build/bin/meron.app"
+# Wails names the bundle after outputfilename ("oreneta"); the shipped app is
+# staged as "Oreneta.app" below, the same rename the DMG job does with ditto.
+# BUNDLE_ID stays jp.nonbili.meron: it is the App ID registered with Apple for
+# the provisioning profile this script validates against, and changing it here
+# would not change that registration — see the README for the Google OAuth
+# equivalent of this same constraint.
+BUILT_APP="build/bin/oreneta.app"
 STAGE_DIR="dist/mas"
 APP_PATH="${STAGE_DIR}/${APP_NAME}.app"
 PKG_PATH="dist/${APP_NAME}-mas.pkg"
@@ -90,7 +94,7 @@ done
 
 # Decode the profile up front so a profile for another app or distribution
 # certificate fails locally instead of producing a late App Store upload error.
-profile_plist="$(/usr/bin/mktemp -t meron-mas-profile)"
+profile_plist="$(/usr/bin/mktemp -t oreneta-mas-profile)"
 trap 'rm -f "$profile_plist"' EXIT
 security cms -D -i "$MAS_PROVISION_PROFILE" > "$profile_plist" 2>/dev/null \
   || die "could not decode provisioning profile: $MAS_PROVISION_PROFILE"
@@ -133,7 +137,7 @@ case "${default_build_number:-}" in
 esac
 BUILD_NUMBER="${MAS_BUILD_NUMBER:-$default_build_number}"
 
-echo "==> Meron $VERSION (build $BUILD_NUMBER) for the Mac App Store"
+echo "==> Oreneta $VERSION (build $BUILD_NUMBER) for the Mac App Store"
 echo "    app signing:       $APP_IDENTITY"
 echo "    installer signing: $INSTALLER_IDENTITY"
 
@@ -240,7 +244,7 @@ sign_awake codesign --force --timestamp \
 # but is not eligible for TestFlight (ITMS-90886), so add it here from the
 # profile already validated above. It stays out of the checked-in plist
 # because it embeds the team ID, which is configurable.
-app_entitlements="$(/usr/bin/mktemp -t meron-mas-entitlements)"
+app_entitlements="$(/usr/bin/mktemp -t oreneta-mas-entitlements)"
 trap 'rm -f "$profile_plist" "$app_entitlements"' EXIT
 cp build/darwin/EntitlementsMAS.plist "$app_entitlements"
 plist_put() {

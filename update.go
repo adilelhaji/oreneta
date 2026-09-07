@@ -446,13 +446,13 @@ func updateCacheDir() string {
 func updateFileName(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return "meron-update"
+		return "oreneta-update"
 	}
 	// path.Base, not filepath.Base: URL paths use "/" on every OS. Taking the
 	// base also keeps a "../" in a hostile manifest from escaping the cache dir.
 	name := path.Base(strings.ReplaceAll(parsed.Path, "\\", "/"))
 	if name == "" || name == "." || name == "/" || name == ".." {
-		return "meron-update"
+		return "oreneta-update"
 	}
 	return name
 }
@@ -480,7 +480,7 @@ func cleanupUpdateCache() {
 // /opt or /Applications gives a clear error up front instead of a half-applied
 // update.
 func ensureWritableDir(dir string) error {
-	probe, err := os.CreateTemp(dir, ".meron-write-probe-")
+	probe, err := os.CreateTemp(dir, ".oreneta-write-probe-")
 	if err != nil {
 		return err
 	}

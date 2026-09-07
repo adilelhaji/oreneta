@@ -1,4 +1,4 @@
-# Contributing to Meron
+# Contributing to Oreneta
 
 ## Prerequisites
 
@@ -45,7 +45,7 @@ rejects, and leaves updates to the store. The header comment in
 
 ```sh
 bun scripts/upload-mac-app-store.ts  # builds, then uploads
-./scripts/build-mas.sh               # build only -> dist/Meron-mas.pkg
+./scripts/build-mas.sh               # build only -> dist/Oreneta-mas.pkg
 ```
 
 Building universal needs both Rust targets, so run it inside `nix-shell`
@@ -54,7 +54,7 @@ support.
 
 ### Linux packaging
 
-Package-managed builds should launch Meron with
+Package-managed builds should launch Oreneta with
 `MERON_DISABLE_SELF_UPDATE=1`. This disables release polling and self-update
 controls so updates remain owned by the package manager.
 

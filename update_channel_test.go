@@ -24,42 +24,42 @@ func TestDetectChannelFrom(t *testing.T) {
 		{
 			name:        "snap wins over the linux path heuristics",
 			goos:        "linux",
-			exe:         "/snap/meron/12/bin/meron",
-			env:         map[string]string{"SNAP": "/snap/meron/12"},
+			exe:         "/snap/oreneta/12/bin/oreneta",
+			env:         map[string]string{"SNAP": "/snap/oreneta/12"},
 			wantKind:    channelSnap,
 			wantManaged: true,
 		},
 		{
 			name:        "flatpak",
 			goos:        "linux",
-			exe:         "/app/bin/meron",
-			env:         map[string]string{"FLATPAK_ID": "jp.nonbili.meron"},
+			exe:         "/app/bin/oreneta",
+			env:         map[string]string{"FLATPAK_ID": "jp.nonbili.oreneta"},
 			wantKind:    channelFlatpak,
 			wantManaged: true,
 		},
 		{
 			name:       "appimage targets the image, not the mount",
 			goos:       "linux",
-			exe:        "/tmp/.mount_meronXY/usr/bin/meron",
-			env:        map[string]string{"APPIMAGE": "/home/u/Apps/Meron.AppImage"},
+			exe:        "/tmp/.mount_orenetaXY/usr/bin/oreneta",
+			env:        map[string]string{"APPIMAGE": "/home/u/Apps/Oreneta.AppImage"},
 			wantKind:   channelAppImage,
-			wantTarget: "/home/u/Apps/Meron.AppImage",
+			wantTarget: "/home/u/Apps/Oreneta.AppImage",
 		},
 		{
 			name:       "plain linux binary",
 			goos:       "linux",
-			exe:        "/opt/meron/meron",
+			exe:        "/opt/oreneta/oreneta",
 			wantKind:   channelTarball,
-			wantTarget: "/opt/meron/meron",
+			wantTarget: "/opt/oreneta/oreneta",
 		},
 		{
 			name:        "package-maintainer opt-out",
 			goos:        "linux",
-			exe:         "/usr/bin/meron",
+			exe:         "/usr/bin/oreneta",
 			env:         map[string]string{"MERON_DISABLE_SELF_UPDATE": "1"},
 			wantKind:    channelTarball,
 			wantManaged: true,
-			wantTarget:  "/usr/bin/meron",
+			wantTarget:  "/usr/bin/oreneta",
 		},
 		{
 			name:        "appx runs from the store directory",
@@ -71,27 +71,27 @@ func TestDetectChannelFrom(t *testing.T) {
 		{
 			name:       "portable zip has no uninstaller beside it",
 			goos:       "windows",
-			exe:        `C:\Users\u\Downloads\meron\meron.exe`,
+			exe:        `C:\Users\u\Downloads\oreneta\oreneta.exe`,
 			wantKind:   channelPortable,
-			wantTarget: `C:\Users\u\Downloads\meron\meron.exe`,
+			wantTarget: `C:\Users\u\Downloads\oreneta\oreneta.exe`,
 		},
 		{
 			name:       "macOS app bundle",
 			goos:       "darwin",
-			exe:        "/Applications/Meron.app/Contents/MacOS/meron",
+			exe:        "/Applications/Oreneta.app/Contents/MacOS/oreneta",
 			wantKind:   channelDMG,
-			wantTarget: "/Applications/Meron.app",
+			wantTarget: "/Applications/Oreneta.app",
 		},
 		{
 			name:     "macOS binary outside a bundle",
 			goos:     "darwin",
-			exe:      "/Users/u/go/bin/meron",
+			exe:      "/Users/u/go/bin/oreneta",
 			wantKind: channelUnknown,
 		},
 		{
 			name:     "unsupported OS",
 			goos:     "freebsd",
-			exe:      "/usr/local/bin/meron",
+			exe:      "/usr/local/bin/oreneta",
 			wantKind: channelUnknown,
 		},
 	}
@@ -114,7 +114,7 @@ func TestDetectChannelFrom(t *testing.T) {
 
 func TestSelfUpdateOptOutValues(t *testing.T) {
 	for _, value := range []string{"1", "true", "TRUE", " yes ", "on"} {
-		channel := detectChannelFrom("linux", "/usr/bin/meron", envMap(map[string]string{
+		channel := detectChannelFrom("linux", "/usr/bin/oreneta", envMap(map[string]string{
 			"MERON_DISABLE_SELF_UPDATE": value,
 		}))
 		if !channel.Managed || channel.SelfUpdatable() {
@@ -122,7 +122,7 @@ func TestSelfUpdateOptOutValues(t *testing.T) {
 		}
 	}
 	for _, value := range []string{"", "0", "false", "no", "off", "garbage"} {
-		channel := detectChannelFrom("linux", "/usr/bin/meron", envMap(map[string]string{
+		channel := detectChannelFrom("linux", "/usr/bin/oreneta", envMap(map[string]string{
 			"MERON_DISABLE_SELF_UPDATE": value,
 		}))
 		if channel.Managed || !channel.SelfUpdatable() {
@@ -135,7 +135,7 @@ func TestSelfUpdateOptOutValues(t *testing.T) {
 // Wails NSIS template drops beside the exe, so this case needs a real file.
 func TestDetectChannelFromNSIS(t *testing.T) {
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "meron.exe")
+	exe := filepath.Join(dir, "oreneta.exe")
 	if err := os.WriteFile(exe, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestDetectChannelFromNSIS(t *testing.T) {
 // store writes into the bundle, so this case needs a real file too.
 func TestDetectChannelFromMAS(t *testing.T) {
 	dir := t.TempDir()
-	bundle := filepath.Join(dir, "Meron.app")
-	exe := filepath.Join(bundle, "Contents", "MacOS", "meron")
+	bundle := filepath.Join(dir, "Oreneta.app")
+	exe := filepath.Join(bundle, "Contents", "MacOS", "oreneta")
 	receipt := filepath.Join(bundle, "Contents", "_MASReceipt", "receipt")
 	for _, path := range []string{exe, receipt} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

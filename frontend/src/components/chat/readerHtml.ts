@@ -1,7 +1,7 @@
 import { type MessageFrameFont } from '../../lib/fonts'
 
-const READER_STYLE_ID = 'meron-reader-style'
-const READER_FONT_STYLE_ID = 'meron-reader-font'
+const READER_STYLE_ID = 'oreneta-reader-style'
+const READER_FONT_STYLE_ID = 'oreneta-reader-font'
 
 export const DEFAULT_READER_FONT: MessageFrameFont = {
   family: null,
@@ -107,11 +107,11 @@ const READER_CSS = `
     padding: 0.12em 0.32em;
     font: 0.92em ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   }
-  .meron-code-block {
+  .oreneta-code-block {
     position: relative;
     max-width: 100%;
   }
-  .meron-copy-code {
+  .oreneta-copy-code {
     position: absolute;
     top: 8px;
     right: 8px;
@@ -130,15 +130,15 @@ const READER_CSS = `
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
     transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
   }
-  .meron-code-block:hover .meron-copy-code,
-  .meron-copy-code:focus-visible {
+  .oreneta-code-block:hover .oreneta-copy-code,
+  .oreneta-copy-code:focus-visible {
     opacity: 1;
   }
-  .meron-copy-code:hover {
+  .oreneta-copy-code:hover {
     background: #ffffff;
     color: #0f172a;
   }
-  .meron-copy-code svg {
+  .oreneta-copy-code svg {
     width: 15px;
     height: 15px;
   }
@@ -257,17 +257,17 @@ export function applyReaderLayout(doc: Document, font: MessageFrameFont = DEFAUL
   }
 
   for (const pre of doc.querySelectorAll<HTMLPreElement>('pre')) {
-    if (pre.closest('.meron-code-block')) continue
+    if (pre.closest('.oreneta-code-block')) continue
     if (pre.closest('td.line_content, th.line_content')) continue
 
     const wrapper = doc.createElement('div')
-    wrapper.className = 'meron-code-block'
+    wrapper.className = 'oreneta-code-block'
     pre.parentNode?.insertBefore(wrapper, pre)
     wrapper.appendChild(pre)
 
     const button = doc.createElement('button')
     button.type = 'button'
-    button.className = 'meron-copy-code'
+    button.className = 'oreneta-copy-code'
     button.title = 'Copy code'
     button.setAttribute('aria-label', 'Copy code')
     button.innerHTML = `

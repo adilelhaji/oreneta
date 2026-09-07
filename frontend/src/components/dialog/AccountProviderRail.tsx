@@ -15,18 +15,18 @@ export function AccountProviderRail({ mode, setMode }: { mode: SetupMode; setMod
           <button
             key={p.id}
             onClick={() => setMode(p.mode)}
-            className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors cursor-pointer ${
+            className={`flex items-center gap-2.5 rounded-control px-2.5 py-2 text-left transition-colors cursor-pointer ${
               active ? 'bg-accent/10' : 'hover:bg-hover'
             }`}
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-raised">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm border border-border/50 bg-raised">
               {p.icon(16)}
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className={`truncate text-[0.75rem] font-bold ${active ? 'text-accent' : 'text-primary'}`}>
+              <span className={`truncate text-xs font-bold ${active ? 'text-accent' : 'text-primary'}`}>
                 {p.label}
               </span>
-              <span className="truncate text-[0.59375rem] font-medium text-secondary">
+              <span className="truncate text-2xs font-medium text-secondary">
                 {t(p.descriptionKey, { defaultValue: p.defaultDescription })}
               </span>
             </span>

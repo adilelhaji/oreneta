@@ -22,3 +22,22 @@ export function formatThreadDate(epochSeconds: number): string {
       : { month: 'short', day: 'numeric', year: 'numeric' }
   return date.toLocaleDateString([], options)
 }
+
+/**
+ * The hour a deferred action lands on, so "tomorrow" is not left to the
+ * imagination.
+ *
+ * Today's is given as a time alone; any other day carries its weekday, because
+ * "08:00" without a day is a promise the reader cannot check.
+ */
+export function formatDeferredWhen(at: number, now = new Date()): string {
+  const date = new Date(at * 1000)
+  const sameDay = date.toDateString() === now.toDateString()
+  return sameDay
+    ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleString(undefined, {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+}

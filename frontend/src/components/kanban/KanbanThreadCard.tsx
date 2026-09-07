@@ -80,7 +80,7 @@ export function KanbanThreadCard({
         active={starredColumn ? active : undefined}
         rootRef={active ? selectedItemRef : undefined}
         showAccountBadge={column.accountId === 'unified'}
-        className="rounded-lg border border-border bg-chats shadow-sm overflow-hidden"
+        className="rounded-control-sm border border-border bg-chats shadow-sm overflow-hidden"
         bulkSelectable={bulkSelectable}
         bulkSelected={bulkSelected}
         onSelect={(event) => {
@@ -150,7 +150,7 @@ export function KanbanDragPreview({ thread, column }: { thread: Message; column:
         selectedAccount={column.accountId}
         selectedThread=""
         showAccountBadge={column.accountId === 'unified'}
-        className="rounded-lg border border-border bg-chats shadow-lg overflow-hidden"
+        className="rounded-control-sm border border-border bg-chats shadow-lg overflow-hidden"
         onSelect={() => undefined}
       />
     </div>

@@ -9,10 +9,114 @@ import { persistedField } from '../lib/sessionPref'
 // here and restored at boot (see the bottom of this file). Server data lives in
 // the domain state modules; user preferences live in states/settings.
 
-export type FilterMode = 'all' | 'unread' | 'starred' | 'snoozed'
+/**
+ * A way of narrowing the list.
+ *
+ * `snoozed` is not a refinement but a different question — it reads what has
+ * been set aside rather than narrowing what is in front of you — so it never
+ * combines with the others.
+ */
+/**
+ * A single narrowing, for the places that can only hold one.
+ *
+ * A kanban column is one of them: it is a few characters wide, and a set of
+ * facets there would be a set nobody could read back. The thread list holds a
+ * {@link FilterFacet} set instead.
+ */
+export type FilterMode = 'all' | FilterFacet
 
 export const isFilterMode = (value: unknown): value is FilterMode =>
-  value === 'all' || value === 'unread' || value === 'starred' || value === 'snoozed'
+  value === 'all' || isFilterFacet(value)
+
+/** The one narrowing a single-valued surface holds, as a set. */
+export const facetsOf = (mode: FilterMode): FilterFacet[] => (mode === 'all' ? [] : [mode])
+
+export type FilterFacet =
+  | 'unread'
+  | 'starred'
+  | 'snoozed'
+  | 'attachments'
+  | 'priority'
+  | `label:${string}`
+
+export const FILTER_FACETS: FilterFacet[] = [
+  'priority',
+  'unread',
+  'starred',
+  'attachments',
+  'snoozed',
+]
+
+const isFilterFacet = (value: unknown): value is FilterFacet =>
+  value === 'unread' ||
+  value === 'starred' ||
+  value === 'snoozed' ||
+  value === 'attachments' ||
+  value === 'priority' ||
+  // A label facet names the label it means. The id is not checked here: a
+  // label the reader has since deleted is dropped by whoever knows the label
+  // set, not by a string test.
+  (typeof value === 'string' && value.startsWith('label:') && value.length > 'label:'.length)
+
+/**
+ * The set as the core reads it: sorted and comma-joined, `all` when empty.
+ *
+ * Sorted so that asking for the same two facets in either order is the same
+ * view, and therefore the same cache key rather than two.
+ */
+export function filterKey(filters: FilterFacet[]): string {
+  if (filters.length === 0) return 'all'
+  return [...filters].sort().join(',')
+}
+
+export const hasFilter = (filters: FilterFacet[], facet: FilterFacet) => filters.includes(facet)
+
+/**
+ * Turns one facet on or off.
+ *
+ * Choosing what has been set aside puts the others down, and choosing any of
+ * the others puts it down: they are answers to different questions, and a list
+ * that claimed to be both would be neither.
+ */
+export function nextFilters(filters: FilterFacet[], facet: FilterFacet): FilterFacet[] {
+  if (filters.includes(facet)) return filters.filter((item) => item !== facet)
+  if (facet === 'snoozed') return ['snoozed']
+  const kept = filters.filter((item) => item !== 'snoozed')
+  // One label at a time. Asking for two would mean a conversation carrying
+  // both, which is almost never what someone picking a second one meant, and
+  // the answer to the other reading — either of them — is the one they can
+  // already get by picking one and then the other.
+  if (facet.startsWith('label:')) {
+    return [...kept.filter((item) => !item.startsWith('label:')), facet]
+  }
+  return [...kept, facet]
+}
+
+/** The label a filter set is narrowed to, if any. */
+export function activeLabelId(filters: FilterFacet[]): string {
+  return filters.find((facet) => facet.startsWith('label:'))?.slice('label:'.length) ?? ''
+}
+
+/**
+ * Reads back a stored filter set, dropping names this version does not know.
+ *
+ * Accepts the single string earlier versions stored (`"unread"`, `"all"`) as
+ * well as the list this one writes, so nobody's last view is lost to an
+ * upgrade.
+ */
+export function parseFilters(raw: unknown): FilterFacet[] | undefined {
+  if (Array.isArray(raw)) {
+    const facets = raw.filter(isFilterFacet)
+    return facets.length === raw.length ? facets : facets.length > 0 ? facets : undefined
+  }
+  if (typeof raw !== 'string') return undefined
+  if (raw === 'all' || raw === '') return []
+  const facets = raw.split(',').map((name) => name.trim()).filter(isFilterFacet)
+  // A stored value made entirely of names this version does not know is not a
+  // filter it can honour, so the caller keeps its default rather than showing
+  // an empty list nobody asked for.
+  return facets.length > 0 ? facets : undefined
+}
 export type SetupMode = 'gmail' | 'outlook' | 'custom' | 'ews' | 'rss'
 export type MobilePane = 'threads' | 'conversation'
 export type ToastTone = 'success' | 'error'
@@ -51,13 +155,17 @@ export const ui$ = observable({
   // selection rather than inside it: a board is a view of mail, a calendar is
   // not mail at all.
   calendarOpen: false,
+  // Whether the address book is showing instead of mail. Like the calendar,
+  // and exclusive with it: they take the same pane.
+  peopleOpen: false,
   selectedAccount: '',
   selectedFolder: 'inbox',
   selectedThread: '',
   bulkSelection: {} as Record<string, BulkSelectionItem>,
   bulkAnchorKey: '',
   query: '',
-  filterMode: 'all' as FilterMode,
+  // Narrowings currently applied, in no particular order.
+  filters: [] as FilterFacet[],
   // Modals / panels.
   setupOpen: false,
   setupMode: 'gmail' as SetupMode,
@@ -68,6 +176,17 @@ export const ui$ = observable({
   // Account id whose per-account settings panel is open ("" = closed).
   accountSettingsId: '',
   addFeedAccount: '',
+  // The record of what the local rules did. A mailbox that changes by itself
+  // needs somewhere the reader can find out why.
+  ruleLogOpen: false,
+  // The component catalogue: every piece of the library in every state, on
+  // one screen. Opens from the command palette only; nothing links to it.
+  catalogueOpen: false,
+  // The sweep dialog, which needs to know whose mail and from where.
+  sweep: null as { accountId: string; folder: string; sender: string } | null,
+  // The list of messages waiting to be sent later. A message put off must be
+  // findable, or putting it off is losing it.
+  scheduledSendsOpen: false,
   editFeed: null as EditFeed | null,
   // Command palette (⌘/Ctrl+K). Ephemeral: open flag, search query, and the
   // highlighted row index.
@@ -231,9 +350,7 @@ export function focusQuickReply() {
 // helper. Account + folder are coupled (a folder only restores under a valid
 // account) and depend on the loaded accounts list, so they share one bespoke
 // restore below rather than per-field seeding.
-const filterSession = persistedField(ui$.filterMode, 'session_filter_mode', (raw) =>
-  isFilterMode(raw) ? raw : undefined,
-)
+const filterSession = persistedField(ui$.filters, 'session_filter_mode', parseFilters)
 
 let restoringNav = false
 function persistNav(key: string, value: string) {
@@ -264,7 +381,7 @@ ui$.selectedFolder.onChange(({ value }) => {
 ui$.selectedAccount.onChange(() => clearBulkSelection())
 ui$.selectedFolder.onChange(() => clearBulkSelection())
 ui$.query.onChange(() => clearBulkSelection())
-ui$.filterMode.onChange(() => clearBulkSelection())
+ui$.filters.onChange(() => clearBulkSelection())
 
 /** Prefs keys this module owns; boot requests them in its single prefsGet. */
 export const UI_SESSION_KEYS = ['session_account', 'session_folder', filterSession.key]

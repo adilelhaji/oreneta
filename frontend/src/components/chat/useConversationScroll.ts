@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { markMessagesRead } from '../../states/mail'
 import { thread$ } from '../../states/thread'
+import { settings$ } from '../../states/settings'
+import { dwellUpdate } from './markReadDwell'
 import type { Message } from '../../types'
 import {
   ANCHOR_GAP_PX,
@@ -159,9 +161,41 @@ export function useConversationScroll(
     [activeThreadId],
   )
 
+  const markReadMode = useValue(settings$.markReadMode)
+  const markReadDelaySeconds = useValue(settings$.markReadDelaySeconds)
+  // When each unread message first came into view, for the delayed mode. A
+  // message that scrolls away before its time is forgotten and starts over:
+  // "displayed for three seconds" has to mean three seconds of actually being
+  // looked at, not three seconds of having once been passed.
+  const visibleSinceRef = useRef(new Map<string, number>())
+  const dwellTimerRef = useRef(0)
+
+  /**
+   * Of the messages on screen, those that have been there long enough — and a
+   * re-check armed for the ones that have not.
+   */
+  const dwelledLongEnough = useCallback(
+    (onScreen: string[]) => {
+      const { ready, recheckIn } = dwellUpdate({
+        onScreen,
+        since: visibleSinceRef.current,
+        now: Date.now(),
+        delayMs: markReadDelaySeconds * 1000,
+      })
+      window.clearTimeout(dwellTimerRef.current)
+      if (recheckIn !== null) {
+        dwellTimerRef.current = window.setTimeout(() => maybeMarkReadRef.current(), recheckIn)
+      }
+      return ready
+    },
+    [markReadDelaySeconds],
+  )
+
   const maybeMarkRead = useCallback(() => {
     const container = scrollRef.current
     if (!container || !activeThreadId) return
+    // Nothing counts as read on its own: the reader said so.
+    if (markReadMode === 'manual') return
     const hasUnread = messages.some((message) => message.thread_id === activeThreadId && message.unread)
     if (!hasUnread) return
 
@@ -180,10 +214,12 @@ export function useConversationScroll(
       if (!element || !isVisible(element)) heldUnreadIdsRef.current.delete(id)
     }
 
-    const visibleMessageIds = Array.from(container.querySelectorAll<HTMLElement>('[data-unread="true"]'))
+    const onScreen = Array.from(container.querySelectorAll<HTMLElement>('[data-unread="true"]'))
       .filter(isRead)
       .map((element) => element.dataset.messageId)
       .filter((id): id is string => !!id && !markingMessageIdsRef.current.has(id) && !heldUnreadIdsRef.current.has(id))
+
+    const visibleMessageIds = markReadMode === 'delayed' ? dwelledLongEnough(onScreen) : onScreen
 
     if (visibleMessageIds.length === 0) return
     for (const id of visibleMessageIds) {
@@ -195,7 +231,21 @@ export function useConversationScroll(
       }
       console.error('Failed to mark visible messages read:', error)
     })
-  }, [activeThreadId, messages])
+  }, [activeThreadId, messages, markReadMode, dwelledLongEnough])
+
+  // The dwell timer fires after maybeMarkRead was created, and calling it
+  // through a ref keeps the two from depending on each other.
+  const maybeMarkReadRef = useRef(maybeMarkRead)
+  maybeMarkReadRef.current = maybeMarkRead
+
+  useEffect(() => () => window.clearTimeout(dwellTimerRef.current), [])
+
+  // A different conversation is a fresh reading: nothing carries its dwell
+  // over from the thread before it.
+  useEffect(() => {
+    visibleSinceRef.current.clear()
+    window.clearTimeout(dwellTimerRef.current)
+  }, [activeThreadId])
 
   const handleConversationScroll = useCallback(() => {
     const container = scrollRef.current

@@ -88,7 +88,7 @@ export function KanbanColumnMinimized({
       ref={wrapper.setNodeRef}
       style={{ width: KANBAN_COLUMN_MINIMIZED_WIDTH, ...wrapper.style }}
       className={clsx(
-        'relative flex h-full shrink-0 flex-col items-center gap-3 rounded-lg border p-2 transition-colors',
+        'relative flex h-full shrink-0 flex-col items-center gap-3 rounded-control-sm border p-2 transition-colors',
         columnSearchHighlightClass(searchActive, overWallpaper),
         columnDropTargetClass(wrapper.isOver, !!wrapper.dropRejection),
         wrapper.dragHandle ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-pointer',
@@ -142,7 +142,7 @@ export function KanbanColumnMinimized({
         </span>
       </div>
       {columnUnreadCount > 0 && (
-        <div className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[0.625rem] font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+        <div className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
           {columnUnreadCount}
         </div>
       )}

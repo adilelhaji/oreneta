@@ -50,13 +50,13 @@ export function PendingAttachmentList({
               event.preventDefault()
               void openAttachment(att, onPreviewImage)
             }}
-            className="flex items-center gap-1.5 rounded-xl border border-border/40 bg-chats px-2.5 py-1.5 shadow-xs max-w-[200px] text-left transition-colors hover:bg-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control border border-border/40 bg-chats px-2.5 py-1.5 shadow-xs max-w-[200px] text-left transition-colors hover:bg-hover cursor-pointer"
             title={att.filename}
           >
             <AttIcon size={13} className="shrink-0 text-accent" />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[0.6875rem] font-bold text-primary">{att.filename}</span>
-              <span className="text-[0.5625rem] text-secondary">{formatFileSize(att.size)}</span>
+              <span className="truncate text-caption font-bold text-primary">{att.filename}</span>
+              <span className="text-2xs text-secondary">{formatFileSize(att.size)}</span>
             </div>
             <button
               type="button"

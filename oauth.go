@@ -330,7 +330,7 @@ func (a *App) serveOAuthRedirect(listener net.Listener) {
 		profile, err := exchangeOAuthCode(provider, code, verifier, redirectURI)
 		if err != nil {
 			a.logf("oauth exchange failed (provider=%s): %v", provider, err)
-			fmt.Fprintf(os.Stderr, "meron: OAuth exchange failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "oreneta: OAuth exchange failed: %v\n", err)
 			return
 		}
 		profile.AuthCode = code

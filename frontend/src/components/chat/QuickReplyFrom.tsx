@@ -35,7 +35,7 @@ export function QuickReplyFrom() {
           setMenu({ x: rect.left, y: rect.top - menuHeight - MENU_GAP_PX })
         }}
         title={t('composer.actions.chooseSendAddress')}
-        className="flex max-w-full items-center gap-1 self-start rounded-lg px-1.5 py-0.5 text-[0.6875rem] text-secondary hover:bg-active hover:text-primary transition-colors cursor-pointer"
+        className="flex max-w-full items-center gap-1 self-start rounded-control-sm px-1.5 py-0.5 text-caption text-secondary hover:bg-active hover:text-primary transition-colors cursor-pointer"
       >
         <span className="font-semibold">{t('composer.fields.from')}</span>
         <span className="truncate">{label}</span>
@@ -48,7 +48,7 @@ export function QuickReplyFrom() {
           y={menu.y}
           overlay
           onClose={() => setMenu(null)}
-          className="fixed z-50 min-w-[220px] max-w-[min(420px,90vw)] rounded-xl border border-border bg-chats p-1 shadow-xl animate-fade-in"
+          className="fixed z-50 min-w-[220px] max-w-[min(420px,90vw)] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >

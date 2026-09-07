@@ -113,6 +113,15 @@ pub struct Message {
     pub body_is_rendered: bool,
     pub preview: String,
     pub attachments: Vec<Attachment>,
+    /// What protection the message's structure declares: "pgpEncrypted",
+    /// "pgpSigned", "smimeEnveloped" and so on, absent when none.
+    ///
+    /// A claim, not a verdict. It says what arrived, which is what lets the
+    /// reader be told "this is encrypted" instead of being shown a blank
+    /// message and an attachment they cannot open. Whether a signature is any
+    /// good needs keys and is answered elsewhere.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub protection: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -139,6 +148,24 @@ pub fn decode_words(raw: &str) -> String {
 }
 
 /// Split a `From`-style value ("Display Name <addr@host>") into name and address.
+/// Every address in a header field, lower-cased.
+///
+/// Groups are flattened and display names dropped: what a caller asking this
+/// wants is the set of mailboxes a message is going to, which is what decides
+/// whether a key is held for each of them.
+pub fn split_address_list(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Ok(list) = addrparse(raw) {
+        for entry in list.iter() {
+            push_addr(entry, &mut out);
+        }
+    }
+    out.into_iter()
+        .map(|addr| addr.trim().to_lowercase())
+        .filter(|addr| !addr.is_empty())
+        .collect()
+}
+
 pub fn split_address(raw: &str) -> (String, String) {
     if let Ok(list) = addrparse(raw)
         && let Some(mailparse::MailAddr::Single(info)) = list.first()
@@ -173,6 +200,7 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
         .iter()
         .any(|name| headers.get_first_value(name).is_some());
     let sources = body_sources(&mail);
+    let protection = crate::crypto::detect::protection_of(&mail);
 
     let mut attachments = Vec::new();
     let mut cid_keys: Vec<(String, String)> = Vec::new();
@@ -219,6 +247,10 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
         body_is_rendered,
         preview,
         attachments,
+        protection: match protection {
+            crate::crypto::detect::Protection::None => String::new(),
+            other => other.as_str().to_string(),
+        },
     }
 }
 

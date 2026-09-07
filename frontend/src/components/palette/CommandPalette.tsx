@@ -73,7 +73,7 @@ export function CommandPalette() {
       }}
     >
       <div
-        className="w-full max-w-[560px] overflow-hidden rounded-xl border border-border bg-chats shadow-2xl animate-fade-in"
+        className="w-full max-w-[560px] overflow-hidden rounded-control border border-border bg-chats shadow-2xl animate-fade-in"
         role="dialog"
         aria-modal="true"
         aria-label={t('palette.label')}
@@ -104,7 +104,7 @@ export function CommandPalette() {
                   key={command.id}
                   onMouseEnter={() => ui$.paletteIndex.set(i)}
                   onClick={() => command.run()}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[0.8125rem] transition-colors cursor-pointer ${
+                  className={`flex w-full items-center gap-3 rounded-control-sm px-3 py-2 text-left text-ui transition-colors cursor-pointer ${
                     selected ? 'bg-accent/10 text-primary' : 'text-primary hover:bg-hover'
                   }`}
                 >
@@ -112,7 +112,7 @@ export function CommandPalette() {
                   <span className="flex-1 truncate">{command.label}</span>
                   {command.active && <Check size={14} className="shrink-0 text-accent" />}
                   {command.shortcut && (
-                    <kbd className="shrink-0 rounded border border-border bg-app px-1.5 py-0.5 text-[0.625rem] font-medium text-secondary">
+                    <kbd className="shrink-0 rounded border border-border bg-app px-1.5 py-0.5 text-2xs font-medium text-secondary">
                       {formatShortcut(command.shortcut).join(isMac ? '' : '+')}
                     </kbd>
                   )}
@@ -122,7 +122,7 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-[0.625rem] text-secondary">
+        <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-2xs text-secondary">
           <Hint keys="Enter" label={t('palette.hints.run')} />
           <Hint keys="↑↓" label={t('palette.hints.navigate')} />
           <Hint keys="Esc" label={t('palette.hints.close')} />

@@ -15,14 +15,14 @@ const (
 	channelAppImage = "appimage" // single-file Linux AppImage
 	channelTarball  = "tarball"  // raw Linux binary from the .tar.gz
 	channelNSIS     = "nsis"     // Windows install from the NSIS installer
-	channelPortable = "portable" // Windows loose meron.exe from the portable zip
+	channelPortable = "portable" // Windows loose oreneta.exe from the portable zip
 	channelSnap     = "snap"
 	channelFlatpak  = "flatpak"
 	channelAppx     = "appx"
 	channelUnknown  = "unknown"
 )
 
-// updateChannel describes how this copy of Meron was installed.
+// updateChannel describes how this copy of Oreneta was installed.
 type updateChannel struct {
 	// Kind is one of the channel* constants above.
 	Kind string
@@ -48,7 +48,7 @@ func detectChannel() updateChannel {
 		return updateChannel{Kind: channelUnknown}
 	}
 	// Resolve symlinks the same way installDesktopEntry does, so a
-	// /usr/local/bin/meron -> /opt/meron/meron shim points at the real file.
+	// /usr/local/bin/oreneta -> /opt/oreneta/oreneta shim points at the real file.
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
@@ -85,7 +85,7 @@ func detectChannelFrom(goos, exe string, getenv func(string) string) (channel up
 			return updateChannel{Kind: channelAppx, Managed: true}
 		}
 		// The Wails NSIS template drops an uninstaller beside the exe; the
-		// portable zip contains nothing but meron.exe.
+		// portable zip contains nothing but oreneta.exe.
 		if fileExists(filepath.Join(filepath.Dir(exe), "uninstall.exe")) {
 			return updateChannel{Kind: channelNSIS, Target: exe}
 		}
@@ -127,7 +127,7 @@ func envFlagEnabled(value string) bool {
 }
 
 // appBundleRoot walks up from a macOS executable at
-// <root>/Meron.app/Contents/MacOS/meron and returns the <root>/Meron.app dir.
+// <root>/Oreneta.app/Contents/MacOS/oreneta and returns the <root>/Oreneta.app dir.
 // Empty if the executable is not inside a .app bundle (e.g. `go run`).
 func appBundleRoot(exe string) string {
 	dir := filepath.Dir(exe) // .../Contents/MacOS

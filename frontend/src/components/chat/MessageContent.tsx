@@ -1,12 +1,17 @@
-import { Download, Image } from 'lucide-react'
+import { useState } from 'react'
+import { Download, Eye, Image } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { downloadAttachment } from '../../states/mail'
 import { revealRemote, thread$ } from '../../states/thread'
 import type { Message } from '../../types'
 import { fileIconFor, formatFileSize, mediaSrc } from './messageHelpers'
 import { MessageBubbleBody } from './MessageBubbleBody'
+import { ProtectionNotice } from './ProtectionNotice'
 import { VideoAttachment } from './VideoAttachment'
 import type { MessageView } from './useMessageView'
+import { previewKind } from '../../lib/attachmentPreview'
+import { AttachmentPreviewDialog } from './AttachmentPreviewDialog'
+import type { Attachment } from '../../types'
 
 // Everything below a message's header: image attachments, videos, the
 // hidden-remote-images affordance, the body and the file attachment list.
@@ -29,6 +34,9 @@ export function MessageContent({
   const { t } = useTranslation()
   const { attachmentImages, bubbleAttachmentImages, videos, hiddenRemoteCount, files } = view
   const onOpenImage = (idx: number) => thread$.galleryIndex.set(idx)
+  // Owned here rather than passed down from the bubble: the preview belongs to
+  // the attachment that opened it, and nothing above needs to know about it.
+  const [previewing, setPreviewing] = useState<Attachment | null>(null)
 
   return (
     <>
@@ -54,7 +62,7 @@ export function MessageContent({
           }
 
           return (
-            <div className={`mb-2 grid gap-1.5 rounded-lg overflow-hidden border border-border/20 ${gridClass}`}>
+            <div className={`mb-2 grid gap-1.5 rounded-control-sm overflow-hidden border border-border/20 ${gridClass}`}>
               {bubbleAttachmentImages.map((image, idx) => (
                 <button
                   key={idx}
@@ -96,12 +104,16 @@ export function MessageContent({
       {hiddenRemoteCount > 0 && (
         <button
           onClick={() => revealRemote(message.id)}
-          className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/50 bg-black/[0.02] dark:bg-white/[0.02] py-2 text-[0.6875rem] font-semibold text-secondary hover:text-accent hover:border-accent/40 cursor-pointer transition-colors"
+          className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-control-sm border border-dashed border-border/50 bg-black/[0.02] dark:bg-white/[0.02] py-2 text-caption font-semibold text-secondary hover:text-accent hover:border-accent/40 cursor-pointer transition-colors"
         >
           <Image size={13} />
           {t('chat.showImages', { count: hiddenRemoteCount })}
         </button>
       )}
+
+      {/* Said before the body rather than after it: whether a message can be
+          trusted changes how its words should be read. */}
+      <ProtectionNotice message={message} />
 
       <MessageBubbleBody
         message={message}
@@ -121,26 +133,44 @@ export function MessageContent({
             key={idx}
             type="button"
             disabled={!downloadable}
-            onClick={() => downloadAttachment(file)}
-            title={downloadable ? t('chat.saveFile', { filename: file.filename }) : file.filename}
-            className={`group mt-2.5 flex w-full items-center gap-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] p-2 text-xs font-semibold border border-border/20 text-left ${
+            onClick={() => (previewKind(file) ? setPreviewing(file) : downloadAttachment(file))}
+            title={
+              !downloadable
+                ? file.filename
+                : previewKind(file)
+                  ? t('attachments.preview', { filename: file.filename })
+                  : t('chat.saveFile', { filename: file.filename })
+            }
+            className={`group mt-2.5 flex w-full items-center gap-2 rounded-control bg-black/[0.03] dark:bg-white/[0.03] p-2 text-xs font-semibold border border-border/20 text-left ${
               downloadable ? 'hover:bg-black/[0.06] dark:hover:bg-white/[0.06] cursor-pointer' : 'cursor-default'
             }`}
           >
             <FileIcon size={15} className="text-accent shrink-0" />
             <span className="truncate">{file.filename}</span>
-            <span className="text-[0.59375rem] text-secondary ml-auto shrink-0 font-normal">
+            <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">
               {formatFileSize(file.size)}
             </span>
-            {downloadable && (
-              <Download
-                size={13}
-                className="text-secondary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              />
-            )}
+            {downloadable &&
+              // The icon says which of the two clicking does, so nobody is
+              // surprised by a save dialog they did not ask for.
+              (previewKind(file) ? (
+                <Eye
+                  size={13}
+                  className="text-secondary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                />
+              ) : (
+                <Download
+                  size={13}
+                  className="text-secondary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                />
+              ))}
           </button>
         )
       })}
+
+      {previewing && (
+        <AttachmentPreviewDialog attachment={previewing} onClose={() => setPreviewing(null)} />
+      )}
     </>
   )
 }

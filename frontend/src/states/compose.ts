@@ -53,7 +53,7 @@ async function allocateMessageIdentity(accountId: string, draft: boolean): Promi
   return result.message_id
 }
 
-const newInlineImageId = () => `meron-image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@meron`
+const newInlineImageId = () => `oreneta-image-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@oreneta`
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -107,7 +107,7 @@ function forwardedHtmlBody(message: Message): string {
     .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
     .join('')
   const body = message.body_html || textToHtml(message.body ?? '')
-  return `<p><br></p><div class="meron-forwarded-message"><p>---------- Forwarded message ---------</p>${header}<br>${body}</div>`
+  return `<p><br></p><div class="oreneta-forwarded-message"><p>---------- Forwarded message ---------</p>${header}<br>${body}</div>`
 }
 
 function prepareConversationAttachments(attachments: ComposerAttachment[]) {
@@ -588,20 +588,31 @@ function normalizeQuickReplyDraftId(value: string): string {
   return value.trim().replace(/^<|>$/g, '').toLowerCase()
 }
 
-mail$.messages.onChange(({ value }) => {
-  for (const [tempId, guard] of quickReplySendHydrationGuards) {
-    // A guard whose send is still in flight outlives its bubble: on success the
-    // pending payload is dropped *before* the post-send draft discard resolves,
-    // and a refresh landing in that window can already have swapped the bubble
-    // for the canonical Sent copy. Dropping the guard there would let the
-    // still-persisted server draft hydrate the just-cleared composer — the very
-    // race the guard exists to close.
-    if (guard.inFlight) continue
-    if (!value.some((message) => message.id === tempId) && !getPendingSend(tempId)) {
-      quickReplySendHydrationGuards.delete(tempId)
+// Registered after this module finishes evaluating, not during it.
+//
+// `mail` and `compose` are in an import cycle (mail → kanban → compose →
+// mail), so whichever is reached first sees the other only half built. Reading
+// `mail$` at module scope therefore worked or threw depending on which file
+// the bundler happened to evaluate first — the app booted by luck, and any new
+// module that imported `mail` before `compose` broke it. A microtask runs once
+// every module in the cycle has finished, and nothing can change the message
+// list in between.
+queueMicrotask(() => {
+  mail$.messages.onChange(({ value }) => {
+    for (const [tempId, guard] of quickReplySendHydrationGuards) {
+      // A guard whose send is still in flight outlives its bubble: on success
+      // the pending payload is dropped *before* the post-send draft discard
+      // resolves, and a refresh landing in that window can already have
+      // swapped the bubble for the canonical Sent copy. Dropping the guard
+      // there would let the still-persisted server draft hydrate the
+      // just-cleared composer — the very race the guard exists to close.
+      if (guard.inFlight) continue
+      if (!value.some((message) => message.id === tempId) && !getPendingSend(tempId)) {
+        quickReplySendHydrationGuards.delete(tempId)
+      }
     }
-  }
-  hydrateQuickReplyFromTailDraft(value)
+    hydrateQuickReplyFromTailDraft(value)
+  })
 })
 
 // The app signature is read out of the prefs table after the first render, and
@@ -822,6 +833,8 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
     signature: tracking,
     sourceDraft: seed?.sourceDraft,
     attachments: seed?.attachments ?? [],
+    pgpSign: false,
+    pgpEncrypt: false,
   }
   const id = `compose-${Date.now()}-${composeSeq++}`
   compose$.tabs.push({
@@ -1219,7 +1232,7 @@ export function setTabViewMode(id: string, mode: 'html' | 'plain') {
 // Send a composed message via the same mail.send path used by replies. When
 // `rich`, the HTML is sent with a derived plaintext fallback. Throws on failure
 // so the caller can surface the error inline.
-export async function sendComposed(args: {
+export type ComposedMessage = {
   accountId: string
   from?: string
   to: string
@@ -1232,10 +1245,31 @@ export async function sendComposed(args: {
   inReplyTo?: string
   references?: string
   attachments: ComposerAttachment[]
-}) {
+  /**
+   * OpenPGP protection for an immediate send. Deliberately absent from a
+   * scheduled one: a scheduled message sits in the store as plain fields
+   * until its hour comes, and a passphrase has no business waiting there in
+   * the clear. The composer disables scheduling instead of sending a
+   * protected message unprotected later — silently dropping the protection
+   * would be a worse answer than refusing to schedule it.
+   */
+  protection?: { sign: boolean; encrypt: boolean; passphrase?: string }
+}
+
+export async function sendComposed(args: ComposedMessage) {
+  await invoke('mail.send', composedPayload(args))
+}
+
+/// The bridge payload for a composed message.
+///
+/// Shared by sending now and sending later, so a message held until eight is
+/// the same message in every respect as the one that would have gone at six —
+/// two builders would sooner or later disagree about one field, and the reader
+/// would never know which.
+export function composedPayload(args: ComposedMessage) {
   const html = args.rich ? args.content : ''
   const body = args.rich ? htmlToText(args.content) : args.content
-  await invoke('mail.send', {
+  return {
     account_id: args.accountId,
     from: args.from ?? '',
     to: args.to,
@@ -1253,7 +1287,14 @@ export async function sendComposed(args: {
       data: a.data,
       inline_id: a.inlineId ?? '',
     })),
-  })
+    ...(args.protection
+      ? {
+          sign: args.protection.sign,
+          encrypt: args.protection.encrypt,
+          passphrase: args.protection.passphrase,
+        }
+      : {}),
+  }
 }
 
 // Surface a just-sent compose-tab message in the open conversation so the user

@@ -53,7 +53,7 @@ export function ThemeSwatch({
           onSelect()
         }
       }}
-      className={`group relative overflow-hidden rounded-xl border cursor-pointer transition-all ${
+      className={`group relative overflow-hidden rounded-control border cursor-pointer transition-all ${
         selected ? 'border-accent ring-2 ring-accent/25' : 'border-border hover:border-secondary/40'
       }`}
     >
@@ -82,7 +82,7 @@ export function ThemeSwatch({
         className={`flex items-center justify-between gap-1 border-t border-border/70 bg-chats ${large ? 'px-2.5 py-2' : 'px-2 py-1.5'}`}
       >
         <span
-          className={`truncate font-bold ${large ? 'text-[0.6875rem]' : 'text-[0.625rem]'} ${selected ? 'text-accent' : 'text-primary'}`}
+          className={`truncate font-bold ${large ? 'text-caption' : 'text-2xs'} ${selected ? 'text-accent' : 'text-primary'}`}
         >
           {theme.name}
         </span>

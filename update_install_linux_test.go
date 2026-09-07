@@ -37,11 +37,11 @@ func writeTarGz(t *testing.T, path string, entries map[string]string) {
 
 func TestReplaceTargetAppImage(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "Meron.AppImage")
+	target := filepath.Join(dir, "Oreneta.AppImage")
 	if err := os.WriteFile(target, []byte("old image"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	payload := filepath.Join(t.TempDir(), "meron-linux-amd64.AppImage")
+	payload := filepath.Join(t.TempDir(), "oreneta-linux-amd64.AppImage")
 	if err := os.WriteFile(payload, []byte("new image"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -65,17 +65,17 @@ func TestReplaceTargetAppImage(t *testing.T) {
 	if info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("target mode = %v, want the executable bit set", info.Mode().Perm())
 	}
-	assertNoLeftovers(t, dir, "Meron.AppImage")
+	assertNoLeftovers(t, dir, "Oreneta.AppImage")
 }
 
 func TestReplaceTargetTarball(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "meron")
+	target := filepath.Join(dir, "oreneta")
 	if err := os.WriteFile(target, []byte("old binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	payload := filepath.Join(t.TempDir(), "meron-linux-amd64.tar.gz")
-	writeTarGz(t, payload, map[string]string{"meron": "new binary"})
+	payload := filepath.Join(t.TempDir(), "oreneta-linux-amd64.tar.gz")
+	writeTarGz(t, payload, map[string]string{"oreneta": "new binary"})
 
 	if err := replaceTarget(updateChannel{Kind: channelTarball, Target: target}, payload); err != nil {
 		t.Fatalf("replaceTarget: %v", err)
@@ -87,18 +87,18 @@ func TestReplaceTargetTarball(t *testing.T) {
 	if string(got) != "new binary" {
 		t.Fatalf("target contents = %q, want %q", got, "new binary")
 	}
-	assertNoLeftovers(t, dir, "meron")
+	assertNoLeftovers(t, dir, "oreneta")
 }
 
 // A tarball without the binary must leave the installed copy untouched rather
 // than replacing it with nothing.
 func TestReplaceTargetTarballMissingBinary(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "meron")
+	target := filepath.Join(dir, "oreneta")
 	if err := os.WriteFile(target, []byte("old binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	payload := filepath.Join(t.TempDir(), "meron-linux-amd64.tar.gz")
+	payload := filepath.Join(t.TempDir(), "oreneta-linux-amd64.tar.gz")
 	writeTarGz(t, payload, map[string]string{"README": "nope"})
 
 	err := replaceTarget(updateChannel{Kind: channelTarball, Target: target}, payload)
@@ -112,7 +112,7 @@ func TestReplaceTargetTarballMissingBinary(t *testing.T) {
 	if string(got) != "old binary" {
 		t.Fatalf("target was modified: %q", got)
 	}
-	assertNoLeftovers(t, dir, "meron")
+	assertNoLeftovers(t, dir, "oreneta")
 }
 
 func TestReplaceTargetRejectsManagedChannel(t *testing.T) {
@@ -127,7 +127,7 @@ func TestReplaceTargetUnwritableDir(t *testing.T) {
 		t.Skip("root can write to a read-only directory")
 	}
 	dir := t.TempDir()
-	target := filepath.Join(dir, "meron")
+	target := filepath.Join(dir, "oreneta")
 	if err := os.WriteFile(target, []byte("old binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestReplaceTargetUnwritableDir(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 
-	payload := filepath.Join(t.TempDir(), "meron-linux-amd64.AppImage")
+	payload := filepath.Join(t.TempDir(), "oreneta-linux-amd64.AppImage")
 	if err := os.WriteFile(payload, []byte("new image"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestReplaceTargetUnwritableDir(t *testing.T) {
 }
 
 // Every failure path has to clean up its staging file, or the install dir fills
-// with .meron-update-* debris.
+// with .oreneta-update-* debris.
 func assertNoLeftovers(t *testing.T, dir string, expected ...string) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)

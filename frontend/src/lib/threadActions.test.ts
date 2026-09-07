@@ -13,28 +13,28 @@ const threads = [
 
 describe('filterThreads', () => {
   it("returns all threads for mode 'all'", () => {
-    expect(filterThreads(threads, 'all')).toEqual(threads)
+    expect(filterThreads(threads, [])).toEqual(threads)
   })
 
   it("keeps only unread threads for mode 'unread'", () => {
-    expect(filterThreads(threads, 'unread').map((t) => t.thread_id)).toEqual(['a'])
+    expect(filterThreads(threads, ['unread']).map((t) => t.thread_id)).toEqual(['a'])
   })
 
   it("keeps only starred threads for mode 'starred'", () => {
-    expect(filterThreads(threads, 'starred').map((t) => t.thread_id)).toEqual(['b'])
+    expect(filterThreads(threads, ['starred']).map((t) => t.thread_id)).toEqual(['b'])
   })
 
   it('keeps RSS feeds containing starred items without marking the feed starred', () => {
     const feed = thread({ thread_id: 'feed', starred: false, has_starred_items: true })
-    expect(filterThreads([...threads, feed], 'starred').map((t) => t.thread_id)).toEqual(['b', 'feed'])
+    expect(filterThreads([...threads, feed], ['starred']).map((t) => t.thread_id)).toEqual(['b', 'feed'])
   })
 
   it('keeps the open thread visible via keepId even when it no longer matches', () => {
-    expect(filterThreads(threads, 'unread', 'c').map((t) => t.thread_id)).toEqual(['a', 'c'])
+    expect(filterThreads(threads, ['unread'], 'c').map((t) => t.thread_id)).toEqual(['a', 'c'])
   })
 
   it('keeps threads listed in keepIds', () => {
-    expect(filterThreads(threads, 'starred', undefined, { c: true }).map((t) => t.thread_id)).toEqual(['b', 'c'])
+    expect(filterThreads(threads, ['starred'], undefined, { c: true }).map((t) => t.thread_id)).toEqual(['b', 'c'])
   })
 })
 

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Oreneta
 Comment=Modern mail and feed client
-Exec=/app/bin/meron %u
+Exec=/app/bin/oreneta %u
 Type=Application
 Categories=Network;Email;Feed;
 Icon=io.github.adilelhaji.oreneta

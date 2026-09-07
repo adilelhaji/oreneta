@@ -10,6 +10,7 @@ import { accounts$ } from '../../states/accounts'
 import { deletableFolder, deleteFolder, emptiableFolder, emptyFolder, isDraftFolder, mail$ } from '../../states/mail'
 import {
   clearBulkSelection,
+  facetsOf,
   isWailsDesktopRuntime,
   setBulkSelection,
   toggleBulkSelection,
@@ -115,7 +116,7 @@ function KanbanColumnContent({
   // e.g. selecting an unread card marks it read (tracked in readThreads) — not
   // merely because it's the open thread. So switching to Unread/Starred yields a
   // clean filtered list instead of pinning the currently-open conversation.
-  const threads = filterThreads(rawThreads, filterMode, undefined, readThreads)
+  const threads = filterThreads(rawThreads, facetsOf(filterMode), undefined, readThreads)
   const unreadCount = kanbanColumnUnreadCount(column, allUnreadCounts[key], rawThreads)
   const hasUnread = unreadCount > 0
   const loading = allLoading[key] ?? false
@@ -229,7 +230,7 @@ function KanbanColumnContent({
       offset={4}
       onClose={() => setHeaderMenu(null)}
       overlay
-      className="fixed z-50 min-w-[176px] rounded-xl border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
+      className="fixed z-50 min-w-[176px] rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
       onContextMenu={(event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -285,14 +286,14 @@ function KanbanColumnContent({
       style={{ width, ...wrapper.style }}
       title={wrapper.dropRejection}
       className={clsx(
-        'relative flex h-full shrink-0 flex-col rounded-lg border transition-colors',
+        'relative flex h-full shrink-0 flex-col rounded-control-sm border transition-colors',
         columnSearchHighlightClass(searchActive, overWallpaper),
         columnDropTargetClass(wrapper.isOver, !!wrapper.dropRejection),
       )}
     >
       {wrapper.isOver && wrapper.dropRejection && (
         <div className="pointer-events-none absolute inset-x-3 top-1/2 z-20 -translate-y-1/2">
-          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-[0.6875rem] font-medium leading-relaxed text-red-600 shadow-sm dark:border-red-900/50 dark:bg-red-950/90 dark:text-red-400">
+          <p className="rounded-control border border-red-200 bg-red-50 p-3 text-center text-caption font-medium leading-relaxed text-red-600 shadow-sm dark:border-red-900/50 dark:bg-red-950/90 dark:text-red-400">
             {wrapper.dropRejection}
           </p>
         </div>
@@ -360,7 +361,7 @@ function KanbanColumnContent({
               <Loader2 size={13} className="shrink-0 animate-spin text-accent" />
             )}
             {unreadCount > 0 && (
-              <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-[0.625rem] font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+              <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
                 {unreadCount}
               </span>
             )}

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react'
+import { Bookmark, Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { folderIcon } from '../../lib/folderIcon'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { ensureAccountFolders, mail$ } from '../../states/mail'
+import { settings$ } from '../../states/settings'
+import { ui$ } from '../../states/ui'
 import { UNIFIED_ACCOUNT, unifiedFolderLabel, unifiedFolders } from '../../lib/unifiedFolders'
 import { FloatingContextMenu } from './FloatingContextMenu'
-import { menuItemBase } from './menuStyles'
+import { menuItemBase, menuItemClass } from './menuStyles'
 import { buildFolderTree, type TreeNode } from '../../lib/folderTree'
 
 const FILTER_THRESHOLD = 8
@@ -128,6 +130,7 @@ export function FolderSwitcher({
   )
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
+  const savedSearches = useValue(settings$.savedSearches)
 
   useEffect(() => {
     if (!menu || isUnified) return
@@ -191,7 +194,7 @@ export function FolderSwitcher({
           offset={2}
           onClose={close}
           overlay
-          className="fixed z-50 flex max-h-[min(420px,calc(100vh-1rem))] w-60 flex-col rounded-xl border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
+          className="fixed z-50 flex max-h-[min(420px,calc(100vh-1rem))] w-60 flex-col rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
           onContextMenu={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -206,10 +209,39 @@ export function FolderSwitcher({
                 if (event.key === 'Escape') close()
               }}
               placeholder={t('folders.searchPlaceholder')}
-              className="mb-1 h-8 w-full shrink-0 rounded-lg bg-hover px-2 text-[0.8125rem] text-primary outline-none placeholder-secondary focus:ring-1 focus:ring-accent/40"
+              className="mb-1 h-8 w-full shrink-0 rounded-control-sm bg-hover px-2 text-ui text-primary outline-none placeholder-secondary focus:ring-1 focus:ring-accent/40"
             />
           )}
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* Saved searches, where someone goes looking for a place to go.
+                Evolution calls these search folders and puts them beside the
+                real ones; this app navigates by this menu rather than a
+                permanent tree, so this is that same shelf. They are listed
+                first because a search is chosen on purpose, while a folder is
+                often just where you were. */}
+            {savedSearches.length > 0 && !needle && (
+              <>
+                <div className="px-2 pb-0.5 pt-1 text-2xs font-bold uppercase tracking-wide text-secondary">
+                  {t('search.saved')}
+                </div>
+                {savedSearches.map((search) => (
+                  <button
+                    key={search.id}
+                    type="button"
+                    title={search.query}
+                    onClick={() => {
+                      close()
+                      ui$.query.set(search.query)
+                    }}
+                    className={clsx(menuItemClass, 'w-full')}
+                  >
+                    <Bookmark size={13} className="shrink-0 text-secondary" />
+                    <span className="min-w-0 flex-1 truncate text-left">{search.name}</span>
+                  </button>
+                ))}
+                <div className="my-1 border-t border-border" />
+              </>
+            )}
             {tree.length === 0 ? (
               <div className="px-2 py-4 text-center text-xs font-medium text-secondary">
                 {loading ? t('folders.loading') : t('folders.noneAvailable')}

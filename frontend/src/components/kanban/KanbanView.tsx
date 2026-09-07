@@ -213,10 +213,10 @@ export function KanbanView({ boardId }: { boardId: string }) {
             <img
               src={board.avatarUrl}
               alt=""
-              className="h-9 w-9 shrink-0 rounded-xl object-cover border border-accent/10"
+              className="h-9 w-9 shrink-0 rounded-control object-cover border border-accent/10"
             />
           ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 text-accent shrink-0 border border-accent/10">
+            <div className="flex h-9 w-9 items-center justify-center rounded-control bg-accent/10 text-accent shrink-0 border border-accent/10">
               <Columns3 size={16} />
             </div>
           )}
@@ -225,7 +225,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
         {searchOpen ? (
           <div
             ref={searchBarRef}
-            className="flex h-9 min-w-0 basis-72 shrink items-center overflow-visible rounded-xl border border-transparent bg-hover focus-within:border-accent/40 focus-within:bg-chats"
+            className="flex h-9 min-w-0 basis-72 shrink items-center overflow-visible rounded-control border border-transparent bg-hover focus-within:border-accent/40 focus-within:bg-chats"
           >
             <div className="relative h-full min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={14} />
@@ -337,7 +337,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
             )}
             <button
               type="button"
-              className="group flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border/80 bg-chats/45 text-secondary backdrop-blur-sm transition-colors hover:border-accent/50 hover:bg-chats/75 hover:text-accent focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
+              className="group flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-control-sm border border-dashed border-border/80 bg-chats/45 text-secondary backdrop-blur-sm transition-colors hover:border-accent/50 hover:bg-chats/75 hover:text-accent focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
               title={t('kanban.actions.addColumn')}
               aria-label={t('kanban.actions.addColumn')}
               onClick={() => void openDialog()}

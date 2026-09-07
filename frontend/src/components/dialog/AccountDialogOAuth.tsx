@@ -37,8 +37,8 @@ export function AccountDialogOAuth({ ctl, isSetup }: { ctl: AccountDialogControl
                 onClick={() => void beginOAuth(provider.mode)}
                 className={`w-full flex items-center justify-center border bg-chats font-semibold transition-all ${
                   isSetup
-                    ? 'gap-3 rounded-2xl border-border px-5 py-4 text-[1.125rem] text-primary hover:border-secondary/50 hover:bg-hover'
-                    : 'gap-2 rounded-xl border-border px-4 py-2.5 text-xs shadow-sm hover:bg-hover'
+                    ? 'gap-3 rounded-panel border-border px-5 py-4 text-lg text-primary hover:border-secondary/50 hover:bg-hover'
+                    : 'gap-2 rounded-control border-border px-4 py-2.5 text-xs shadow-sm hover:bg-hover'
                 } ${busy ? 'opacity-70 cursor-wait' : ''} ${
                   !provider.configured ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
                 }`}
@@ -53,7 +53,7 @@ export function AccountDialogOAuth({ ctl, isSetup }: { ctl: AccountDialogControl
       {waitingForGoogle && (
         <div className="flex flex-col items-center gap-2">
           <p
-            className={`${isSetup ? 'text-base' : 'text-[0.625rem]'} text-accent font-semibold text-center animate-pulse`}
+            className={`${isSetup ? 'text-base' : 'text-2xs'} text-accent font-semibold text-center animate-pulse`}
           >
             {t('accounts.oauth.waitingForSignIn', { provider: oauthLabel })}
           </p>
@@ -61,7 +61,7 @@ export function AccountDialogOAuth({ ctl, isSetup }: { ctl: AccountDialogControl
             <button
               type="button"
               onClick={() => void navigator.clipboard?.writeText(oauthUrl)}
-              className="text-[0.625rem] font-medium text-secondary underline-offset-2 hover:text-primary hover:underline cursor-pointer"
+              className="text-2xs font-medium text-secondary underline-offset-2 hover:text-primary hover:underline cursor-pointer"
             >
               {t('accounts.oauth.copyLink', {
                 defaultValue: "Copy the sign-in link (if the browser didn't open, or is signed into another account)",

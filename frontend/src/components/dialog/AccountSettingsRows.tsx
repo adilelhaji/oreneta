@@ -4,10 +4,24 @@ import { InfoTip } from '../tooltip/InfoTip'
 import { SelectInput, TextInput } from '../field/Field'
 
 // iOS/chat-style switch, matching the look used across the settings UI.
-export function Switch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+//
+// The name is required rather than optional: a switch is a control with no
+// text of its own, and one that reads as "switch, on" says nothing about what
+// is on. Asking the caller — who has the wording right there — is the only
+// place the answer exists.
+export function Switch({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  label: string
+  onChange: () => void
+}) {
   return (
     <button
       role="switch"
+      aria-label={label}
       aria-checked={checked}
       onClick={onChange}
       className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -28,8 +42,8 @@ export function Switch({ checked, onChange }: { checked: boolean; onChange: () =
 export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 px-1 text-[0.75rem] font-semibold text-secondary">{title}</h3>
-      <div className="rounded-2xl bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
+      <h3 className="mb-2 px-1 text-xs font-semibold text-secondary">{title}</h3>
+      <div className="rounded-panel bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
         {children}
       </div>
     </section>
@@ -72,7 +86,7 @@ export function ToggleRow({
   checked: boolean
   onChange: () => void
 }) {
-  return <SettingRow icon={icon} title={title} hint={hint} control={<Switch checked={checked} onChange={onChange} />} />
+  return <SettingRow icon={icon} title={title} hint={hint} control={<Switch checked={checked} label={title} onChange={onChange} />} />
 }
 
 export function SegmentedRow<T extends string>({
@@ -96,7 +110,7 @@ export function SegmentedRow<T extends string>({
       title={title}
       hint={hint}
       control={
-        <div className="flex items-center gap-0.5 rounded-lg bg-active/70 p-0.5">
+        <div className="flex items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5">
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -158,7 +172,7 @@ export function NumberRow({
       control={
         <div className="flex items-center gap-2">
           {note && (
-            <span className={`text-[0.65625rem] font-semibold ${invalid ? 'text-rose-500' : 'text-secondary'}`}>
+            <span className={`text-caption font-semibold ${invalid ? 'text-rose-500' : 'text-secondary'}`}>
               {note}
             </span>
           )}
@@ -168,7 +182,7 @@ export function NumberRow({
               onClick={reset.onReset}
               title={reset.title}
               aria-label={reset.title}
-              className="flex h-6 w-6 items-center justify-center rounded-lg text-secondary hover:bg-active hover:text-primary cursor-pointer transition-colors"
+              className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active hover:text-primary cursor-pointer transition-colors"
             >
               <RotateCcw size={13} />
             </button>
@@ -186,7 +200,7 @@ export function NumberRow({
               aria-invalid={invalid}
               className="w-20 font-semibold"
             />
-            <span className="text-[0.65625rem] font-bold text-secondary">{suffix}</span>
+            <span className="text-caption font-bold text-secondary">{suffix}</span>
           </label>
         </div>
       }
@@ -253,7 +267,7 @@ export function SelectRow({
         <SelectInput
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-44 rounded-xl py-1.5 pl-3 font-semibold"
+          className="w-44 rounded-control py-1.5 pl-3 font-semibold"
         >
           {options.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-chats text-primary">

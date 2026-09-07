@@ -8,12 +8,16 @@ import {
   isShortcutCustomized,
   matchShortcut,
   sanitizeShortcutOverrides,
-  SHORTCUT_GROUPS,
   setShortcutOverrides,
+  SHORTCUT_GROUPS,
+  SHORTCUT_IDS,
+  SHORTCUT_LABELS,
+  SHORTCUT_SCHEMES,
   shortcutChord,
   shortcutConflict,
   shortcutForChord,
-  SHORTCUT_IDS,
+  type Chord,
+  type ShortcutId,
 } from './shortcuts'
 
 const keydown = (key: string, mods: Partial<KeyboardEvent> = {}): KeyboardEvent =>
@@ -173,5 +177,43 @@ describe('SHORTCUT_GROUPS', () => {
   it('lists every shortcut exactly once, so all of them are visible and rebindable', () => {
     const listed = SHORTCUT_GROUPS.flatMap((group) => group.ids)
     expect([...listed].sort()).toEqual([...SHORTCUT_IDS].sort())
+  })
+})
+
+describe('the letters other clients taught people', () => {
+  it('names only bindings this app can actually honour', () => {
+    // A scheme that promised Gmail's `g` then `i` — a two-key sequence this
+    // app has no machinery for — would be a scheme that quietly does not work.
+    for (const [name, scheme] of Object.entries(SHORTCUT_SCHEMES)) {
+      for (const id of Object.keys(scheme)) {
+        expect(SHORTCUT_IDS).toContain(id as ShortcutId)
+        expect(SHORTCUT_LABELS[id as ShortcutId]).toBeTruthy()
+      }
+      expect(name).toBeTruthy()
+    }
+  })
+
+  it('gives no scheme two actions on one chord', () => {
+    // Within a scheme, and against the defaults it leaves alone: a duplicate
+    // would make one of the two silently unreachable.
+    for (const scheme of Object.values(SHORTCUT_SCHEMES)) {
+      const merged = { ...DEFAULT_SHORTCUTS, ...scheme } as Record<string, Chord>
+      const seen = new Map<string, string>()
+      for (const [id, chord] of Object.entries(merged)) {
+        const key = `${chord.mod ? 'm' : ''}${chord.shift ? 's' : ''}${chord.alt ? 'a' : ''}${chord.key.toLowerCase()}`
+        expect(seen.has(key) ? `${seen.get(key)} and ${id} share ${key}` : '').toBe('')
+        seen.set(key, id)
+      }
+    }
+  })
+
+  it('leaves the app in its own scheme by default', () => {
+    expect(SHORTCUT_SCHEMES.oreneta).toEqual({})
+  })
+
+  it('uses the letters those clients are known for', () => {
+    expect(SHORTCUT_SCHEMES.gmail['compose.new']).toEqual({ key: 'c' })
+    expect(SHORTCUT_SCHEMES.gmail['search.global']).toEqual({ key: '/' })
+    expect(SHORTCUT_SCHEMES.outlook['thread.delete']).toEqual({ key: 'Delete' })
   })
 })

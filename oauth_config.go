@@ -26,7 +26,7 @@ const (
 	// set up together, so they are consented to together. A token issued
 	// without the calendar scope cannot call the Calendar API, so an account
 	// added before this scope existed has to be reconnected once.
-	googleScopes = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar"
+	googleScopes = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/contacts.readonly"
 )
 
 // Obfuscated Google OAuth credentials baked into release builds.

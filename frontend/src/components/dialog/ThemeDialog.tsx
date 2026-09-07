@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { Palette, Plus, X } from 'lucide-react'
+import { Palette, Plus } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import { BUILTIN_THEMES, DEFAULT_LIGHT_ID, type Appearance, type CustomTheme, type ThemeDef } from '../../lib/themes'
 import { confirmAction } from '../../states/ui'
 import { deleteCustomTheme, selectTheme, settings$ } from '../../states/settings'
-import { IconButton } from '../button/IconButton'
+import { Dialog } from './Dialog'
 import { ThemeEditorDialog } from './ThemeEditorDialog'
 import { ThemeSwatch } from './ThemeSwatch'
 
@@ -36,8 +35,8 @@ function ThemeSection({
   const { t } = useTranslation()
   return (
     <div className="flex flex-col gap-3">
-      <span className="text-[0.78125rem] font-semibold text-secondary">{label}</span>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <span className="text-ui font-semibold text-secondary">{label}</span>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {themes.map((item) => {
           const custom = customThemes.find((candidate) => candidate.id === item.id)
           return (
@@ -55,10 +54,10 @@ function ThemeSection({
         <button
           type="button"
           onClick={() => onEdit({ appearance: newTileAppearance, theme: null })}
-          className="flex min-h-[112px] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-secondary hover:text-accent hover:border-accent/50 cursor-pointer transition-colors"
+          className="flex min-h-[112px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-control border border-dashed border-border text-secondary transition-colors hover:border-accent/50 hover:text-accent"
         >
           <Plus size={16} />
-          <span className="text-[0.65625rem] font-bold">{t('theme.custom')}</span>
+          <span className="text-caption font-bold">{t('theme.custom')}</span>
         </button>
       </div>
     </div>
@@ -70,8 +69,6 @@ export function ThemeDialog({ onClose }: { onClose: () => void }) {
   const [editor, setEditor] = useState<EditorState | null>(null)
   const selectedId = useValue(settings$.themeId)
   const customThemes = useValue(settings$.customThemes)
-
-  useEscapeKey(onClose)
 
   const themes = [...BUILTIN_THEMES, ...customThemes]
   // A stale selection (deleted custom theme) highlights the default, matching
@@ -97,32 +94,23 @@ export function ThemeDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 dark:bg-black/65 backdrop-blur-[3px] p-4 animate-fade-in">
-        <div className="w-full max-w-3xl h-[620px] max-h-[90vh] rounded-3xl border border-border bg-chats text-primary shadow-2xl animate-slide-up flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b border-border/70 px-6 py-4 shrink-0">
-            <div className="flex items-center gap-2">
-              <Palette className="text-accent" size={16} />
-              <h3 className="text-[0.875rem] font-bold leading-tight">{t('common.theme')}</h3>
-            </div>
-            <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" onClick={onClose} />
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-            <ThemeSection
-              label={t('theme.light')}
-              themes={themes.filter((item) => item.appearance === 'light')}
-              newTileAppearance="light"
-              {...sectionProps}
-            />
-            <ThemeSection
-              label={t('theme.dark')}
-              themes={themes.filter((item) => item.appearance === 'dark')}
-              newTileAppearance="dark"
-              {...sectionProps}
-            />
-          </div>
+      {/* Raised: it opens over the settings dialog and the editor opens over it. */}
+      <Dialog title={t('common.theme')} icon={Palette} width="xl" layer="raised" onClose={onClose} className="h-[620px]">
+        <div className="flex flex-col gap-6">
+          <ThemeSection
+            label={t('theme.light')}
+            themes={themes.filter((item) => item.appearance === 'light')}
+            newTileAppearance="light"
+            {...sectionProps}
+          />
+          <ThemeSection
+            label={t('theme.dark')}
+            themes={themes.filter((item) => item.appearance === 'dark')}
+            newTileAppearance="dark"
+            {...sectionProps}
+          />
         </div>
-      </div>
+      </Dialog>
 
       {editor && (
         <ThemeEditorDialog appearance={editor.appearance} initial={editor.theme} onClose={() => setEditor(null)} />

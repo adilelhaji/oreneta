@@ -2,7 +2,15 @@ import { observable } from '@legendapp/state'
 import type { Folder, Message } from '../types'
 import { invoke } from '../lib/bridge'
 import { t } from '../lib/i18n'
-import { clearBulkSelection, confirmAction, ui$, showToast, showUndoToast, type BulkSelectionItem } from './ui'
+import {
+  clearBulkSelection,
+  confirmAction,
+  filterKey,
+  ui$,
+  showToast,
+  showUndoToast,
+  type BulkSelectionItem,
+} from './ui'
 import { accounts$, unifiedAccounts } from './accounts'
 import { kanban$, forgetDeletedMailViewFolder, removeKanbanColumnsForFolder } from './kanban'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
@@ -10,6 +18,17 @@ import { isUnifiedStarred, unifiedFolderRole, unifiedFolders } from '../lib/unif
 import { isLocalSendId, discardPendingSend } from './pendingSends'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { bareAddr, splitAddressList } from '../lib/address'
+import { settings$, sortParam } from './settings'
+
+/** What the core made of a typed search, for showing back. */
+export type SearchUnderstood = {
+  /** The words with no operator on them. */
+  text: string
+  /** Each part as `field:value`, in the order they are applied. */
+  parts: string[]
+  /** Whether anything beyond free text was recognised. */
+  hasOperators: boolean
+}
 
 // Mail data cache — the frontend view of the sidecar's `folders` and `messages`
 // tables (threads are messages grouped by the sidecar). Ephemeral: repopulated
@@ -23,6 +42,10 @@ export const mail$ = observable({
   foldersByAccount: {} as Record<string, Folder[]>,
   threads: [] as Message[],
   threadsCursor: '',
+  // How the core read the search box, as it answered. Kept rather than worked
+  // out again here: a second parser is a second reading, and what the reader
+  // is shown has to be what was actually searched for.
+  searchUnderstood: null as SearchUnderstood | null,
   threadAccountCursors: {} as Record<string, string>,
   threadsLoadingMore: false,
   // The view (`threadListViewKey`) whose threads are the ones in `threads`. An
@@ -256,6 +279,21 @@ export function isTrashFolderId(accountId: string, folderId: string): boolean {
   return isTrashFolder(folder) || looksLikeTrashName(folderId)
 }
 
+/**
+ * Whether a folder is where this account keeps unwanted mail.
+ *
+ * Same shape as the trash test beside it: the folder's declared role first,
+ * and a name check only for the servers that declare none.
+ */
+export function isJunkFolderId(accountId: string, folderId: string): boolean {
+  const accountFolders = mail$.foldersByAccount[accountId].get() ?? []
+  const selectedFolders = mail$.folders.get() ?? []
+  const folder = [...accountFolders, ...selectedFolders].find(
+    (item) => item.account_id === accountId && item.id === folderId,
+  )
+  return folder?.role === 'junk' || looksLikeJunkName(folderId)
+}
+
 function looksLikeJunkName(value: string): boolean {
   return ['junk', 'spam', 'junk e-mail', 'junk email', 'bulk mail', '[gmail]/spam'].includes(value.trim().toLowerCase())
 }
@@ -479,9 +517,9 @@ export function getFilteredThreads() {
   // The starred folder already lists starred threads only; a leftover filter
   // mode from the previous mailbox must not hide rows here.
   if (isUnifiedStarred(ui$.selectedAccount.get(), ui$.selectedFolder.get())) return threads
-  const filterMode = ui$.filterMode.get()
+  const facets = ui$.filters.get()
   const selected = ui$.selectedThread.get()
-  return filterThreads(threads, filterMode, selected, mail$.readThreads.get())
+  return filterThreads(threads, facets, selected, mail$.readThreads.get())
 }
 
 // Move the selection up (delta -1) or down (delta +1) through the visible
@@ -729,8 +767,17 @@ type ThreadSearchStage = 'auto' | 'cache' | 'live'
 // id nor a single-line search box carries one). Both the loader and the list
 // build the key from the same fields, so the list can tell "these rows are for
 // what I'm showing" from "these rows are the previous view's".
-export function threadListViewKey(account: string, folder: string, query: string, filter: string) {
-  return [account, folder, query, filter].join('\n')
+export function threadListViewKey(
+  account: string,
+  folder: string,
+  query: string,
+  filter: string,
+  sort = '',
+) {
+  // The ordering is part of the view. Without it here, changing the sort would
+  // leave the previous order's rows on screen looking settled, because the
+  // list would believe it was already showing the view it had loaded.
+  return [account, folder, query, filter, sort].join('\n')
 }
 
 export async function loadThreads(refresh = true, searchStage: ThreadSearchStage = 'auto') {
@@ -749,7 +796,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const initialAccount = ui$.selectedAccount.get()
   const initialFolder = ui$.selectedFolder.get()
   const initialQuery = ui$.query.get()
-  const initialFilter = ui$.filterMode.get()
+  const initialFilter = filterKey(ui$.filters.get())
   const activeAccount = accounts$.get().find((account) => account.id === initialAccount)
   // Starred is answered from the local cache, so there is no live stage to run.
   const canSearchLive =
@@ -765,7 +812,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       ui$.selectedAccount.get() !== initialAccount ||
       ui$.selectedFolder.get() !== initialFolder ||
       ui$.query.get() !== initialQuery ||
-      ui$.filterMode.get() !== initialFilter
+      filterKey(ui$.filters.get()) !== initialFilter
     ) {
       return
     }
@@ -776,8 +823,9 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const selectedAcc = ui$.selectedAccount.get()
   const selectedFol = ui$.selectedFolder.get()
   const q = ui$.query.get()
-  const filter = ui$.filterMode.get()
-  const viewKey = threadListViewKey(selectedAcc, selectedFol, q, filter)
+  const filter = filterKey(ui$.filters.get())
+  const sort = sortParam(settings$.listSort.get())
+  const viewKey = threadListViewKey(selectedAcc, selectedFol, q, filter, sort)
 
   // A background refresh steps aside for a server-bound load already running for
   // the same view. Taking the version from it would throw away the fresher rows
@@ -794,7 +842,8 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     ui$.selectedAccount.get() !== selectedAcc ||
     ui$.selectedFolder.get() !== selectedFol ||
     ui$.query.get() !== q ||
-    ui$.filterMode.get() !== filter
+    filterKey(ui$.filters.get()) !== filter ||
+    sortParam(settings$.listSort.get()) !== sort
   const previousThreads = mail$.threads.get()
   const currentSelected = ui$.selectedThread.get()
   const previousThreadsCursor = mail$.threadsCursor.get()
@@ -838,12 +887,14 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         next_cursor?: string
         folder_unreads?: Record<string, number>
         failures?: Array<{ account_id: string; message: string }>
+        search?: SearchUnderstood
       }>('mail.threadList', {
         account_id: 'unified',
         folder_id: role,
         folder_role: role,
         query: q,
         filter,
+        sort,
         refresh,
       })
       if (superseded()) return
@@ -860,6 +911,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       }
       mail$.threadAccountCursors.set({})
       mail$.threadsCursor.set(result.next_cursor ?? '')
+      mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load unified threads:', err)
@@ -868,13 +920,19 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     }
   } else {
     try {
-      const result = await invoke<{ threads: Message[]; next_cursor?: string; folder_unread?: number }>(
+      const result = await invoke<{
+        threads: Message[]
+        next_cursor?: string
+        folder_unread?: number
+        search?: SearchUnderstood
+      }>(
         'mail.threadList',
         {
           account_id: selectedAcc,
           folder_id: selectedFol,
           query: q,
           filter,
+          sort,
           refresh,
         },
       )
@@ -885,6 +943,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       allThreads = result.threads || []
       mail$.threadsCursor.set(result.next_cursor ?? '')
       mail$.threadAccountCursors.set({})
+      mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load threads:', err)
@@ -980,14 +1039,15 @@ export async function loadMoreThreads() {
   const selectedAcc = ui$.selectedAccount.get()
   const selectedFol = ui$.selectedFolder.get()
   const q = ui$.query.get()
-  const filter = ui$.filterMode.get()
+  const filter = filterKey(ui$.filters.get())
+  const sort = sortParam(settings$.listSort.get())
   const version = threadLoadVersion
   const stillCurrent = (cursor: string) =>
     threadLoadVersion === version &&
     ui$.selectedAccount.get() === selectedAcc &&
     ui$.selectedFolder.get() === selectedFol &&
     ui$.query.get() === q &&
-    ui$.filterMode.get() === filter &&
+    filterKey(ui$.filters.get()) === filter &&
     mail$.threadsCursor.get() === cursor
   // The starred filter is one unpaginated page; a search over it is paged like
   // any other, and every other view stops on an empty cursor below.
@@ -1638,6 +1698,48 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
   }
 }
 
+/**
+ * Files a conversation where the account keeps unwanted mail, or takes it back.
+ *
+ * A move, not a flag. On Gmail and Exchange the junk folder is what teaches
+ * the server's own filter, so this does what a reader means by "this is spam";
+ * on a plain IMAP server it files it and nothing more, which is all that
+ * server offers.
+ *
+ * Offered with an undo, like archiving, because the one thing a reader needs
+ * after mis-filing something is to put it back — and a message in the junk
+ * folder is a message they will not go looking for.
+ */
+export async function markThreadJunk(threadId: string, junk = true) {
+  if (!threadId) return
+  const sourceThread = findLocalThread(threadId)
+  const sourceFolder = sourceThread?.folder_id ?? ''
+  const { rollback } = removeThreadLocally(threadId)
+  try {
+    const res = await invoke<{ folder?: string; thread_id?: string } & MutationResult>('mail.markJunk', {
+      thread_id: threadId,
+      junk,
+    })
+    assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
+    applyMutationFolderUnreads(res)
+    const movedThreadId = res.thread_id ?? threadIdInFolder(threadId, sourceThread?.account_id, res.folder)
+    await refreshThreadLocation(sourceThread?.account_id, true)
+    if (sourceFolder) {
+      showUndoToast(
+        t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'),
+        () => void moveThreadToFolder(movedThreadId, sourceFolder, { undo: false }),
+      )
+    } else {
+      showToast(t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk'))
+    }
+  } catch (error) {
+    // Back where it was: a conversation that did not move must not look as
+    // though it had, least of all into a folder nobody reads.
+    rollback()
+    showToast(error instanceof Error ? error.message : t('mail.toast.junkFailed'), 'error')
+  }
+}
+
 export async function archiveThread(threadId: string) {
   if (!threadId) return
   const sourceThread = findLocalThread(threadId)
@@ -1946,6 +2048,51 @@ export async function deleteMessage(message: Message) {
   } catch (error) {
     mail$.messages.set(previousMessages)
     showToast(error instanceof Error ? error.message : t('mail.toast.deleteFailed'), 'error')
+  }
+}
+
+/**
+ * Files one message of a conversation away, leaving the rest where it is.
+ *
+ * The thread-level archive in the header moves the whole conversation; this is
+ * for the message, which is what a long thread needs — the reply worth keeping
+ * and the eleven "thanks" above it do not belong in the same place.
+ */
+export async function archiveMessage(message: Message) {
+  if (!message?.id || isLocalSendId(message.id)) return
+
+  const threadId = message.thread_id
+  const previousMessages = mail$.messages.get()
+  const nextMessages = previousMessages.filter((item) => item.id !== message.id)
+  mail$.messages.set(nextMessages)
+
+  try {
+    const res = await invoke<MutationResult>('mail.archive', {
+      thread_id: threadId,
+      message_ids: [message.id],
+      folder: message.folder_id,
+    })
+    assertMoveAffected(res, 'Archive')
+    applyMutationFolderUnreads(res)
+    showToast(t('mail.toast.archivedCount', { count: 1 }))
+    // Nothing of this thread left in view: the conversation is over here.
+    if (!nextMessages.some((item) => item.thread_id === threadId)) {
+      if (ui$.selectedThread.get() === threadId) {
+        ui$.selectedThread.set('')
+        requestThreadReselect()
+      }
+      removeKanbanThread(threadId)
+    }
+    await loadThreads(false)
+    const selectedAcc = ui$.selectedAccount.get()
+    if (selectedAcc) void loadFolders(selectedAcc, false)
+    if (message.account_id && message.account_id !== selectedAcc) {
+      void loadFolders(message.account_id, false)
+    }
+  } catch (error) {
+    // Back on screen: a message that did not move must not look as if it had.
+    mail$.messages.set(previousMessages)
+    showToast(error instanceof Error ? error.message : t('mail.toast.archiveFailed'), 'error')
   }
 }
 

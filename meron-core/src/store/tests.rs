@@ -201,6 +201,1026 @@ fn a_thread_put_aside_stays_out_of_the_way_until_its_time() {
 }
 
 #[test]
+fn a_recent_page_can_be_narrowed_by_more_than_one_thing_at_once() {
+    let conn = test_conn();
+    let message = |uid: u32, date: i64, seen: bool, starred: bool| MessageHeader {
+        uid,
+        subject: format!("Message {uid}"),
+        date,
+        seen,
+        starred,
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            message(1, 100, true, true),   // read, starred
+            message(2, 200, false, false), // unread, plain
+            message(3, 300, false, true),  // unread and starred
+        ],
+    )
+    .unwrap();
+
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(uids(RecentFilter::default()), vec![3, 2, 1]);
+    assert_eq!(uids(RecentFilter::unread()), vec![3, 2]);
+    assert_eq!(
+        uids(RecentFilter { unread_only: false, starred_only: true, ..Default::default() }),
+        vec![3, 1]
+    );
+    // Both at once is one question, answered by the query rather than by
+    // narrowing a page after it was already counted out.
+    assert_eq!(
+        uids(RecentFilter { unread_only: true, starred_only: true, ..Default::default() }),
+        vec![3]
+    );
+}
+
+#[test]
+fn recent_headers_carry_what_a_rule_needs_to_match_on() {
+    let conn = test_conn();
+    let recipient = |name: &str, addr: &str| crate::imap::Recipient {
+        name: name.to_string(),
+        addr: addr.to_string(),
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader {
+                uid: 1,
+                subject: "Older".to_string(),
+                from_name: "Team".to_string(),
+                from_addr: "team@example.com".to_string(),
+                date: 100,
+                to: vec![recipient("Me", "me@example.com")],
+                cc: vec![recipient("List", "list@example.com")],
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 2,
+                subject: "Newer".to_string(),
+                from_addr: "other@example.com".to_string(),
+                date: 200,
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+
+    let headers = recent_headers(&conn, "acct", "INBOX", 10).unwrap();
+    assert_eq!(headers.len(), 2);
+    assert_eq!(headers[0].subject, "Newer", "newest first");
+
+    // Cc comes along with To: a rule can match on either, and a dry run that
+    // looked at less than the real run would be a dry run that lies.
+    let older = &headers[1];
+    assert_eq!(older.to.len(), 1);
+    assert_eq!(older.cc.len(), 1);
+    assert_eq!(older.cc[0].addr, "list@example.com");
+    assert_eq!(older.from_name, "Team");
+    assert_eq!(older.folder, "INBOX");
+
+    assert_eq!(recent_headers(&conn, "acct", "INBOX", 1).unwrap().len(), 1);
+    assert!(recent_headers(&conn, "acct", "Archive", 10).unwrap().is_empty());
+}
+
+#[test]
+fn an_unknown_attachment_answer_is_not_a_no() {
+    let conn = test_conn();
+    let msg = |uid: u32, has: Option<bool>| MessageHeader {
+        uid,
+        date: 100 + uid as i64,
+        thread_key: format!("t-{uid}"),
+        has_attachments: has,
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[msg(1, Some(true)), msg(2, Some(false)), msg(3, None)],
+    )
+    .unwrap();
+
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+
+    // Only what is known to carry one. A message nobody has looked at is not
+    // a message without an attachment.
+    assert_eq!(
+        uids(RecentFilter { with_attachments: true, ..Default::default() }),
+        vec![1]
+    );
+    assert_eq!(uids(RecentFilter::default()), vec![3, 2, 1]);
+
+    // And the one nobody has looked at is exactly what the backfill asks about.
+    assert_eq!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap(), vec![3]);
+}
+
+#[test]
+fn a_resync_carrying_no_structure_does_not_forget_what_was_known() {
+    let conn = test_conn();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader { uid: 1, has_attachments: Some(true), ..Default::default() }],
+    )
+    .unwrap();
+
+    // A flag-only resync carries no BODYSTRUCTURE. Turning a known answer back
+    // into an unknown one would make the filter forget mail it had already
+    // found, over and over.
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader { uid: 1, seen: true, has_attachments: None, ..Default::default() }],
+    )
+    .unwrap();
+
+    assert!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap().is_empty());
+    let found = get_recent_page(
+        &conn,
+        "acct",
+        "INBOX",
+        50,
+        None,
+        RecentFilter { with_attachments: true, ..Default::default() },
+    )
+    .unwrap()
+    .0;
+    assert_eq!(found.len(), 1);
+}
+
+#[test]
+fn asking_the_server_makes_an_unknown_message_known() {
+    let conn = test_conn();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, thread_key: "t-2".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    assert_eq!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap().len(), 2);
+
+    set_has_attachments(&conn, "acct", "INBOX", &[(1, true), (2, false)]).unwrap();
+
+    assert!(uids_without_structure(&conn, "acct", "INBOX", 10).unwrap().is_empty());
+    // A paperclip belongs to the conversation: the thread whose message
+    // carries the invoice has an invoice in it.
+    let flagged = threads_with_attachments(&conn, "acct", &["t-1".into(), "t-2".into()]).unwrap();
+    assert!(flagged.contains("t-1"));
+    assert!(!flagged.contains("t-2"));
+}
+
+fn label(id: &str, name: &str) -> Label {
+    Label {
+        id: id.to_string(),
+        name: name.to_string(),
+        colour: "#2056dd".to_string(),
+    }
+}
+
+/// A small mailbox to try searches against.
+fn searchable_conn() -> Connection {
+    let conn = test_conn();
+    let recipient = |addr: &str| crate::imap::Recipient {
+        name: String::new(),
+        addr: addr.to_string(),
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader {
+                uid: 1,
+                subject: "Weekly report".into(),
+                from_name: "Ann Example".into(),
+                from_addr: "ann@example.com".into(),
+                date: 1_767_312_000, // 2026-01-02
+                seen: false,
+                starred: true,
+                thread_key: "t-1".into(),
+                to: vec![recipient("team@example.com")],
+                has_attachments: Some(true),
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 2,
+                subject: "Lunch".into(),
+                from_name: "Bob Other".into(),
+                from_addr: "bob@example.com".into(),
+                date: 1_769_990_400, // 2026-02-02
+                seen: true,
+                thread_key: "t-2".into(),
+                to: vec![recipient("me@example.com")],
+                has_attachments: Some(false),
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 3,
+                subject: "Weekly report".into(),
+                from_name: "Carol".into(),
+                from_addr: "carol@example.com".into(),
+                date: 1_772_409_600, // 2026-03-02
+                seen: false,
+                thread_key: "t-3".into(),
+                to: vec![recipient("team@example.com")],
+                ..Default::default() // attachment unknown
+            },
+        ],
+    )
+    .unwrap();
+    conn
+}
+
+fn found(conn: &Connection, query: &str) -> Vec<u32> {
+    search_messages(conn, "acct", "INBOX", query, 50, None)
+        .unwrap()
+        .into_iter()
+        .map(|header| header.uid)
+        .collect()
+}
+
+#[test]
+fn an_operator_narrows_the_search_it_names() {
+    let conn = searchable_conn();
+    assert_eq!(found(&conn, "from:ann"), vec![1]);
+    // The sender is name and address together: a term in the display name
+    // finds it just as one in the address does.
+    assert_eq!(found(&conn, r#"from:"Ann Example""#), vec![1]);
+    assert_eq!(found(&conn, "from:Other"), vec![2]);
+    // And a term that is in every address finds every one of them, which is
+    // what a substring search over a shared domain has to mean.
+    assert_eq!(found(&conn, "from:example.com"), vec![3, 2, 1]);
+    assert_eq!(found(&conn, "to:team"), vec![3, 1]);
+    assert_eq!(found(&conn, "subject:weekly"), vec![3, 1]);
+    assert_eq!(found(&conn, "is:unread"), vec![3, 1]);
+    assert_eq!(found(&conn, "is:read"), vec![2]);
+    assert_eq!(found(&conn, "is:starred"), vec![1]);
+}
+
+#[test]
+fn operators_asked_for_together_narrow_one_query() {
+    let conn = searchable_conn();
+    // One statement, not a page narrowed afterwards.
+    assert_eq!(found(&conn, "subject:weekly is:unread from:carol"), vec![3]);
+    assert!(found(&conn, "from:ann is:read").is_empty());
+}
+
+#[test]
+fn two_terms_for_one_field_mean_either_of_them() {
+    let conn = searchable_conn();
+    // Nobody writing this means a message from both people at once.
+    assert_eq!(found(&conn, "from:ann from:bob"), vec![2, 1]);
+}
+
+#[test]
+fn a_search_can_be_only_operators() {
+    let conn = searchable_conn();
+    // No free text at all: the index is not consulted, the predicates are the
+    // whole question.
+    assert_eq!(found(&conn, "is:starred"), vec![1]);
+    assert!(found(&conn, "").is_empty());
+}
+
+#[test]
+fn free_text_still_searches_as_it_always_did_beside_an_operator() {
+    let conn = searchable_conn();
+    assert_eq!(found(&conn, "weekly"), vec![3, 1]);
+    assert_eq!(found(&conn, "weekly from:carol"), vec![3]);
+}
+
+#[test]
+fn dates_bound_the_search_at_the_day() {
+    let conn = searchable_conn();
+    assert_eq!(found(&conn, "after:2026-02-01"), vec![3, 2]);
+    assert_eq!(found(&conn, "before:2026-02-01"), vec![1]);
+    assert_eq!(found(&conn, "after:2026-01-15 before:2026-02-15"), vec![2]);
+}
+
+#[test]
+fn an_attachment_nobody_has_looked_for_is_not_an_answer() {
+    let conn = searchable_conn();
+    // uid 3's structure has never been fetched. Offering it here would make
+    // the operator mean nothing.
+    assert_eq!(found(&conn, "has:attachment"), vec![1]);
+}
+
+#[test]
+fn a_label_can_be_searched_for_by_the_name_that_was_typed() {
+    let conn = searchable_conn();
+    replace_labels(&conn, &[label("l-1", "Work")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-2", &["l-1".into()]).unwrap();
+
+    assert_eq!(found(&conn, "label:Work"), vec![2]);
+    // The name as typed, in whatever case.
+    assert_eq!(found(&conn, "label:work"), vec![2]);
+    assert!(found(&conn, "label:Nonexistent").is_empty());
+}
+
+#[test]
+fn a_message_is_judged_as_it_lands_and_can_say_why() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let to_me = vec![crate::imap::Recipient {
+        name: String::new(),
+        addr: "me@example.com".into(),
+    }];
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            // Addressed to me by a person: worth interrupting for.
+            MessageHeader {
+                uid: 1,
+                from_addr: "ann@example.com".into(),
+                to: to_me.clone(),
+                thread_key: "t-1".into(),
+                date: 300,
+                ..Default::default()
+            },
+            // A robot nobody knows, addressed to a list: not.
+            MessageHeader {
+                uid: 2,
+                from_addr: "no-reply@shop.example".into(),
+                thread_key: "t-2".into(),
+                date: 200,
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+
+    let priority = |uid: u32| -> Option<bool> {
+        conn.query_row(
+            "SELECT priority FROM messages WHERE account = 'acct' AND uid = ?1",
+            params![uid],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .unwrap()
+        .map(|value| value != 0)
+    };
+    assert_eq!(priority(1), Some(true));
+    assert_eq!(priority(2), Some(false));
+}
+
+#[test]
+fn writing_to_someone_makes_them_worth_hearing_from() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO folders(account, name, delimiter) VALUES('acct', 'Sent', '/')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE folders SET special_use = '\\Sent' WHERE account = 'acct' AND name = 'Sent'",
+        [],
+    )
+    .ok();
+
+    // Nothing known about them yet: a bare sender is not priority.
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "carol@example.com".into(),
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    assert!(!has_written_to(&conn, "acct", "carol@example.com"));
+
+    // Writing to them is what changes it, noted from the Sent folder.
+    note_correspondents(&conn, "acct", &["Carol@Example.com".into()]).unwrap();
+    assert!(has_written_to(&conn, "acct", "carol@example.com"));
+    // Case and spacing are not the point of an address.
+    assert!(has_written_to(&conn, "acct", "  CAROL@example.com "));
+
+    // And the judgement is redone rather than left stale.
+    assert_eq!(rejudge_priority(&conn, "acct", false).unwrap(), 1);
+    let priority: Option<i64> = conn
+        .query_row(
+            "SELECT priority FROM messages WHERE account = 'acct' AND uid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(priority, Some(1));
+}
+
+#[test]
+fn what_the_reader_says_about_a_sender_sticks_and_can_be_taken_back() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let to_me = vec![crate::imap::Recipient {
+        name: String::new(),
+        addr: "me@example.com".into(),
+    }];
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "ann@example.com".into(),
+            to: to_me,
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+
+    let priority = || -> Option<i64> {
+        conn.query_row(
+            "SELECT priority FROM messages WHERE account = 'acct' AND uid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(priority(), Some(1));
+
+    // Said in so many words, and it outranks what the app worked out.
+    set_sender_priority(&conn, "acct", "ann@example.com", Some(false)).unwrap();
+    rejudge_priority(&conn, "acct", false).unwrap();
+    assert_eq!(priority(), Some(0));
+
+    // Taking it back goes to whatever the signals say, not to the opposite of
+    // whichever way it was last pushed.
+    set_sender_priority(&conn, "acct", "ann@example.com", None).unwrap();
+    assert_eq!(sender_priority(&conn, "acct", "ann@example.com"), None);
+    rejudge_priority(&conn, "acct", false).unwrap();
+    assert_eq!(priority(), Some(1));
+}
+
+#[test]
+fn a_list_can_be_ordered_by_something_other_than_the_date() {
+    use crate::thread_list::{Sort, SortDir, SortKey};
+    let conn = test_conn();
+    let msg = |uid: u32, date: i64, name: &str, addr: &str, subject: &str| MessageHeader {
+        uid,
+        date,
+        from_name: name.to_string(),
+        from_addr: addr.to_string(),
+        subject: subject.to_string(),
+        thread_key: format!("t-{uid}"),
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            msg(1, 300, "Carol", "carol@example.com", "Zebra"),
+            msg(2, 200, "ann", "ann@example.com", "apple"),
+            msg(3, 100, "", "bob@example.com", "Mango"),
+        ],
+    )
+    .unwrap();
+
+    let uids = |sort: Sort| {
+        get_recent_page_sorted(&conn, "acct", "INBOX", 50, None, RecentFilter::default(), sort)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+
+    // Newest first is still what a mailbox means by default.
+    assert_eq!(uids(Sort::default()), vec![1, 2, 3]);
+    assert_eq!(
+        uids(Sort { key: SortKey::Date, dir: SortDir::Asc }),
+        vec![3, 2, 1]
+    );
+
+    // By sender: the name when there is one, the address when there is not —
+    // which is what the list shows, and so what someone sorting by sender is
+    // looking at. Case is not part of a name's order.
+    assert_eq!(
+        uids(Sort { key: SortKey::Sender, dir: SortDir::Asc }),
+        vec![2, 3, 1]
+    );
+    assert_eq!(
+        uids(Sort { key: SortKey::Subject, dir: SortDir::Asc }),
+        vec![2, 3, 1]
+    );
+    assert_eq!(
+        uids(Sort { key: SortKey::Subject, dir: SortDir::Desc }),
+        vec![1, 3, 2]
+    );
+}
+
+#[test]
+fn a_sorted_list_pages_without_repeating_or_skipping_a_row() {
+    use crate::thread_list::{Sort, SortDir, SortKey};
+    let conn = test_conn();
+    let msg = |uid: u32, subject: &str| MessageHeader {
+        uid,
+        date: 100,
+        subject: subject.to_string(),
+        thread_key: format!("t-{uid}"),
+        ..Default::default()
+    };
+    // Every message shares a date, so only the ordering key and the uid
+    // tiebreaker keep the walk straight. This is the case that goes wrong when
+    // a cursor knows the wrong thing.
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[msg(1, "alpha"), msg(2, "bravo"), msg(3, "charlie"), msg(4, "delta"), msg(5, "echo")],
+    )
+    .unwrap();
+
+    let sort = Sort { key: SortKey::Subject, dir: SortDir::Asc };
+    let mut seen = Vec::new();
+    let mut cursor = None;
+    for _ in 0..5 {
+        let (page, next) =
+            get_recent_page_sorted(&conn, "acct", "INBOX", 2, cursor, RecentFilter::default(), sort)
+                .unwrap();
+        seen.extend(page.into_iter().map(|header| header.uid));
+        match next {
+            Some(token) => cursor = crate::thread_list::parse_mail_cursor(&token),
+            None => break,
+        }
+    }
+    assert_eq!(seen, vec![1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn a_sweep_says_what_it_would_move_and_keeps_the_newest() {
+    let conn = test_conn();
+    let from = |uid: u32, date: i64, addr: &str| MessageHeader {
+        uid,
+        date,
+        subject: format!("Offer {uid}"),
+        from_addr: addr.to_string(),
+        thread_key: format!("t-{uid}"),
+        ..Default::default()
+    };
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            from(1, 100, "shop@example.com"),
+            from(2, 200, "shop@example.com"),
+            from(3, 300, "shop@example.com"),
+            from(4, 400, "ann@example.com"),
+        ],
+    )
+    .unwrap();
+
+    let uids = |keep: u32| {
+        sweep_candidates(&conn, "acct", "INBOX", "shop@example.com", keep)
+            .unwrap()
+            .into_iter()
+            .map(|candidate| candidate.uid)
+            .collect::<Vec<_>>()
+    };
+
+    // The newest survives; the rest are what would go. Somebody else's mail is
+    // never in the answer, whatever the count.
+    assert_eq!(uids(1), vec![2, 1]);
+    assert_eq!(uids(2), vec![1]);
+    assert!(uids(3).is_empty());
+    assert!(uids(99).is_empty());
+
+    // Zero is a thing someone may mean, and it means all of them.
+    assert_eq!(uids(0), vec![3, 2, 1]);
+
+    // The address is matched whole and case-insensitively — a sweep that
+    // caught a substring would reach mail nobody named.
+    assert_eq!(
+        sweep_candidates(&conn, "acct", "INBOX", "  SHOP@Example.com ", 1)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(sweep_candidates(&conn, "acct", "INBOX", "shop", 0).unwrap().is_empty());
+
+    // And it says what each one is, so the list can be read before it is
+    // agreed to.
+    let shown = sweep_candidates(&conn, "acct", "INBOX", "shop@example.com", 1).unwrap();
+    assert_eq!(shown[0].subject, "Offer 2");
+    assert_eq!(shown[0].date, 200);
+}
+
+#[test]
+fn the_reason_shown_is_the_real_one() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "ann@example.com".into(),
+            to: vec![crate::imap::Recipient {
+                name: String::new(),
+                addr: "me@example.com".into(),
+            }],
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+
+    // Recipients are what make this message priority, so the signals have to
+    // carry them. Reading them from a query that does not — the thread-header
+    // one does not — produced "nothing known" for a message addressed to the
+    // reader by name, which is an explanation that is quietly false. A wrong
+    // reason is worse here than no reason at all.
+    let (sender, signals) = thread_priority_signals(&conn, "acct", "INBOX", "t-1")
+        .unwrap()
+        .expect("the conversation is there");
+    assert_eq!(sender, "ann@example.com");
+    assert!(signals.addressed_directly);
+
+    let verdict = crate::priority::verdict(signals);
+    assert!(verdict.priority);
+    assert_eq!(verdict.reasons, vec![crate::priority::Reason::AddressedDirectly]);
+
+    // A conversation nobody has is nothing, not a guess.
+    assert!(thread_priority_signals(&conn, "acct", "INBOX", "t-9").unwrap().is_none());
+}
+
+#[test]
+fn a_page_can_be_narrowed_to_what_is_worth_interrupting_for() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let to_me = vec![crate::imap::Recipient {
+        name: String::new(),
+        addr: "me@example.com".into(),
+    }];
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, from_addr: "ann@example.com".into(), to: to_me, date: 300, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, from_addr: "no-reply@shop.example".into(), date: 200, thread_key: "t-2".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(uids(RecentFilter::default()), vec![1, 2]);
+    assert_eq!(
+        uids(RecentFilter { priority_only: true, ..Default::default() }),
+        vec![1]
+    );
+}
+
+#[test]
+fn labels_are_kept_in_the_order_they_were_arranged() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+
+    let stored = labels(&conn).unwrap();
+    assert_eq!(stored.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(), vec!["l-1", "l-2"]);
+    assert_eq!(stored[0].name, "Work");
+
+    // Saving replaces the whole set rather than adding to it.
+    replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
+    assert_eq!(labels(&conn).unwrap().len(), 1);
+}
+
+#[test]
+fn a_label_that_is_deleted_takes_its_conversations_with_it() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into(), "l-2".into()]).unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1", "l-2"]);
+
+    replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
+
+    // Left behind, they would be a label nobody can see, name or remove — and
+    // a filter counting conversations it cannot show.
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-2"]);
+}
+
+#[test]
+fn setting_the_labels_of_a_conversation_states_the_whole_set() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-2".into()]).unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-2"]);
+
+    // A label nobody made cannot be put on anything, however it is asked for.
+    set_thread_labels(&conn, "acct", "t-1", &["l-9".into()]).unwrap();
+    assert!(thread_labels(&conn, "acct", "t-1").unwrap().is_empty());
+
+    // Another account's conversation of the same name is a different one.
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+    assert!(thread_labels(&conn, "other", "t-1").unwrap().is_empty());
+}
+
+#[test]
+fn a_rule_adds_a_label_without_removing_the_ones_already_there() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+
+    add_thread_label(&conn, "acct", "t-1", "l-2").unwrap();
+
+    // "Also label this" is not "these are now its labels": a rule must not
+    // quietly strip what the reader put there by hand.
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1", "l-2"]);
+
+    // Saying it twice changes nothing.
+    add_thread_label(&conn, "acct", "t-1", "l-2").unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap().len(), 2);
+}
+
+#[test]
+fn a_page_can_be_narrowed_to_one_label() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work")]).unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, date: 100, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 200, thread_key: "t-2".into(), ..Default::default() },
+            // A second message of the labelled thread: a label is on the
+            // conversation, so this one is in the answer too.
+            MessageHeader { uid: 3, date: 300, thread_key: "t-1".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+
+    let labelled = RecentFilter {
+        label_id: Some("l-1".into()),
+        ..Default::default()
+    };
+    let uids = get_recent_page(&conn, "acct", "INBOX", 50, None, labelled)
+        .unwrap()
+        .0
+        .into_iter()
+        .map(|header| header.uid)
+        .collect::<Vec<_>>();
+    assert_eq!(uids, vec![3, 1]);
+}
+
+#[test]
+fn the_labels_of_a_whole_page_are_read_in_one_go() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Work"), label("l-2", "Home")]).unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["l-2".into(), "l-1".into()]).unwrap();
+    set_thread_labels(&conn, "acct", "t-2", &["l-2".into()]).unwrap();
+
+    let found = labels_for_threads(&conn, "acct", &["t-1".into(), "t-2".into(), "t-3".into()]).unwrap();
+    // In the order the labels were arranged, not the order they were applied.
+    assert_eq!(found.get("t-1"), Some(&vec!["l-1".to_string(), "l-2".to_string()]));
+    assert_eq!(found.get("t-2"), Some(&vec!["l-2".to_string()]));
+    assert_eq!(found.get("t-3"), None);
+    assert!(labels_for_threads(&conn, "acct", &[]).unwrap().is_empty());
+}
+
+#[test]
+fn rules_are_kept_and_returned_in_the_order_they_run() {
+    let conn = test_conn();
+    replace_rules(
+        &conn,
+        &[
+            ("r-1".into(), String::new(), true, "{\"name\":\"first\"}".into()),
+            ("r-2".into(), "acct".into(), false, "{\"name\":\"second\"}".into()),
+        ],
+    )
+    .unwrap();
+
+    // Order is part of the meaning: rules run top to bottom and one can stop
+    // the rest, so it cannot be left to however SQLite feels like answering.
+    let stored = rules(&conn).unwrap();
+    assert_eq!(stored, vec!["{\"name\":\"first\"}", "{\"name\":\"second\"}"]);
+
+    // Saving replaces the whole list rather than adding to it.
+    replace_rules(&conn, &[("r-3".into(), String::new(), true, "{\"name\":\"only\"}".into())]).unwrap();
+    assert_eq!(rules(&conn).unwrap(), vec!["{\"name\":\"only\"}"]);
+
+    replace_rules(&conn, &[]).unwrap();
+    assert!(rules(&conn).unwrap().is_empty());
+}
+
+#[test]
+fn the_record_of_what_the_rules_did_is_kept_newest_first_and_bounded() {
+    let conn = test_conn();
+    let entry = |n: i64| RuleLogEntry {
+        at: 1_700_000_000 + n,
+        account: "acct".into(),
+        rule_id: "r-1".into(),
+        rule_name: "Reports".into(),
+        folder: "INBOX".into(),
+        uid: n as u32,
+        subject: format!("Message {n}"),
+        from_addr: "team@example.com".into(),
+        action: "moveTo:Reports".into(),
+        outcome: "done".into(),
+    };
+    for n in 0..3 {
+        log_rule_action(&conn, &entry(n)).unwrap();
+    }
+
+    // Most recent first: the question a reader asks is "what just moved my
+    // mail", not "what moved it first".
+    let read = rule_log(&conn, 10).unwrap();
+    assert_eq!(read.len(), 3);
+    assert_eq!(read[0].subject, "Message 2");
+    assert_eq!(read[0].action, "moveTo:Reports");
+
+    assert_eq!(rule_log(&conn, 1).unwrap().len(), 1);
+
+    clear_rule_log(&conn).unwrap();
+    assert!(rule_log(&conn, 10).unwrap().is_empty());
+}
+
+#[test]
+fn the_record_stops_growing_at_its_limit() {
+    let conn = test_conn();
+    let entry = |n: i64| RuleLogEntry {
+        at: n,
+        account: "acct".into(),
+        rule_id: "r-1".into(),
+        rule_name: "Reports".into(),
+        folder: "INBOX".into(),
+        uid: n as u32,
+        subject: format!("Message {n}"),
+        from_addr: "team@example.com".into(),
+        action: "star".into(),
+        outcome: "done".into(),
+    };
+    for n in 0..(RULE_LOG_LIMIT + 5) {
+        log_rule_action(&conn, &entry(n)).unwrap();
+    }
+
+    // A busy mailbox must not grow a log without end.
+    let read = rule_log(&conn, RULE_LOG_LIMIT * 2).unwrap();
+    assert_eq!(read.len() as i64, RULE_LOG_LIMIT);
+    // And what is dropped is the oldest, not the newest.
+    assert_eq!(read[0].subject, format!("Message {}", RULE_LOG_LIMIT + 4));
+}
+
+#[test]
+fn a_message_written_now_waits_for_its_hour_and_then_is_due() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+
+    schedule_send(&conn, "s-1", "acct", now + 3600, "Later", r#"{"to":"you@example.com"}"#)
+        .unwrap();
+    schedule_send(&conn, "s-2", "acct", now - 60, "Now", r#"{"to":"you@example.com"}"#).unwrap();
+
+    // Both are findable: a message put off is one the writer can still change
+    // their mind about.
+    let waiting = scheduled_sends(&conn, Some("acct")).unwrap();
+    assert_eq!(waiting.len(), 2);
+    assert_eq!(waiting[0].id, "s-2", "soonest first");
+
+    // Only the one whose hour has come is handed to the watch.
+    let due = due_scheduled_sends(&conn, now).unwrap();
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].id, "s-2");
+    assert_eq!(due[0].payload, r#"{"to":"you@example.com"}"#, "the message itself is kept");
+
+    // Cancelling gives the message back rather than taking it away.
+    let cancelled = cancel_scheduled_send(&conn, "s-2").unwrap().expect("was scheduled");
+    assert_eq!(cancelled.payload, r#"{"to":"you@example.com"}"#);
+    assert!(due_scheduled_sends(&conn, now).unwrap().is_empty());
+    assert_eq!(scheduled_sends(&conn, Some("acct")).unwrap().len(), 1);
+
+    // Cancelling something already gone is not an error, and says so.
+    assert!(cancel_scheduled_send(&conn, "s-2").unwrap().is_none());
+}
+
+#[test]
+fn a_refused_message_waits_longer_each_time_and_eventually_stops() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+    schedule_send(&conn, "s-1", "acct", now - 10, "Later", "{}").unwrap();
+
+    let mut attempts = 0;
+    let mut clock = now;
+    // Each refusal doubles the wait, so the tries spread over half an hour
+    // rather than being spent in five minutes of one outage.
+    for _ in 0..MAX_SEND_ATTEMPTS {
+        assert_eq!(due_scheduled_sends(&conn, clock).unwrap().len(), 1, "due at {clock}");
+        attempts = record_send_failure(&conn, "s-1", "no route to host", clock).unwrap();
+        assert!(
+            due_scheduled_sends(&conn, clock).unwrap().is_empty(),
+            "not tried twice in the same moment"
+        );
+        clock += RETRY_BACKOFF_SECONDS * (1 << attempts);
+    }
+    assert_eq!(attempts, MAX_SEND_ATTEMPTS);
+
+    // Having given up, it is no longer tried — but it is still there, with the
+    // reason, because a message that failed is the one its writer most needs
+    // to see.
+    assert!(due_scheduled_sends(&conn, clock + 86_400).unwrap().is_empty());
+    let left = scheduled_sends(&conn, None).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].last_error, "no route to host");
+    assert_eq!(left[0].attempts, MAX_SEND_ATTEMPTS);
+}
+
+#[test]
+fn a_message_no_retry_could_help_is_failed_at_once() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+    schedule_send(&conn, "s-1", "acct", now - 10, "Later", "not json").unwrap();
+
+    give_up_on_send(&conn, "s-1", "this message can no longer be read", now).unwrap();
+
+    // Not retried for half an hour on the pretence that something might
+    // change, and not dropped either.
+    assert!(due_scheduled_sends(&conn, now + 86_400).unwrap().is_empty());
+    let left = scheduled_sends(&conn, None).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].attempts, MAX_SEND_ATTEMPTS);
+    assert_eq!(left[0].last_error, "this message can no longer be read");
+}
+
+#[test]
+fn rescheduling_a_message_moves_it_rather_than_copying_it() {
+    let conn = test_conn();
+    let now = 1_700_000_000i64;
+    schedule_send(&conn, "s-1", "acct", now + 3600, "Later", "{}").unwrap();
+    record_send_failure(&conn, "s-1", "refused", now).unwrap();
+    schedule_send(&conn, "s-1", "acct", now + 7200, "Later", "{}").unwrap();
+
+    let waiting = scheduled_sends(&conn, None).unwrap();
+    assert_eq!(waiting.len(), 1, "one message goes once");
+    assert_eq!(waiting[0].due_at, now + 7200);
+    assert_eq!(waiting[0].attempts, 0, "a new hour is a fresh start, not a spent one");
+    assert_eq!(waiting[0].last_error, "");
+}
+
+#[test]
 fn putting_one_thread_aside_twice_replaces_the_first_answer() {
     let conn = test_conn();
     let now = 1_700_000_000i64;
@@ -746,7 +1766,7 @@ fn card_message_counts_span_the_folder_not_the_page() {
 
     // The unread view hands grouping only the two unread messages, so the cards
     // it produces tally one message each.
-    let (page, _) = get_recent_page(&conn, "acct", "INBOX", 50, None, true).unwrap();
+    let (page, _) = get_recent_page(&conn, "acct", "INBOX", 50, None, RecentFilter::unread()).unwrap();
     let cards = group_thread_cards(page, "INBOX");
     let keys = cards
         .iter()
@@ -869,11 +1889,11 @@ fn get_recent_page_can_return_only_unread_messages() {
     // insert_message stamps every row with the same date, so the date-ordered
     // list ties break on uid DESC and the cursor carries that shared date.
     const D: i64 = 1779580800;
-    let (all, all_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, false).unwrap();
+    let (all, all_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, RecentFilter::default()).unwrap();
     assert_eq!(all.iter().map(|m| m.uid).collect::<Vec<_>>(), vec![5, 4]);
     assert_eq!(all_cursor.as_deref(), Some(format!("date:{D}:4").as_str()));
 
-    let (unread, unread_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, true).unwrap();
+    let (unread, unread_cursor) = get_recent_page(&conn, "acct", "INBOX", 2, None, RecentFilter::unread()).unwrap();
     assert_eq!(unread.iter().map(|m| m.uid).collect::<Vec<_>>(), vec![5, 3]);
     assert_eq!(
         unread_cursor.as_deref(),
@@ -882,7 +1902,7 @@ fn get_recent_page_can_return_only_unread_messages() {
     assert!(unread.iter().all(|m| !m.seen));
 
     let (next_unread, next_cursor) =
-        get_recent_page(&conn, "acct", "INBOX", 2, Some((D, 3)), true).unwrap();
+        get_recent_page(&conn, "acct", "INBOX", 2, Some(crate::thread_list::PageCursor { date: D, text: String::new(), uid: 3 }), RecentFilter::unread()).unwrap();
     assert_eq!(
         next_unread.iter().map(|m| m.uid).collect::<Vec<_>>(),
         vec![2]
@@ -1664,7 +2684,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 28);
 
     for table in [
         "accounts",
@@ -1681,6 +2701,16 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "ews_item_ids",
         "calendars",
         "calendar_events",
+        "templates",
+        "people",
+        "person_emails",
+        "person_phones",
+        "contact_sources",
+        "pgp_certs",
+        "pgp_secret_keys",
+        "smime_certs",
+        "smime_identities",
+        "oof_replied",
     ] {
         let exists = conn
             .query_row(
@@ -1699,7 +2729,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 28);
 }
 
 #[test]
@@ -1727,7 +2757,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 15);
+    assert_eq!(version, 28);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3195,4 +4225,310 @@ fn cached_unseen_since_covers_only_recent_unread_mail() {
         cached_unseen_uids_since(&conn, "acct", "INBOX", now - 60 * day).unwrap(),
         vec![1, 3, 4]
     );
+}
+
+
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
+
+fn book(source: &str, account: &str, name: &str) -> BookOrigin {
+    BookOrigin {
+        source: source.into(),
+        account: account.into(),
+        book: name.into(),
+    }
+}
+
+fn someone(uid: &str, name: &str, addresses: &[&str]) -> crate::contacts::person::Person {
+    crate::contacts::person::Person {
+        uid: uid.into(),
+        name: name.into(),
+        organisation: String::new(),
+        note: String::new(),
+        emails: addresses
+            .iter()
+            .map(|addr| crate::contacts::person::EmailAddress {
+                addr: addr.to_string(),
+                label: String::new(),
+            })
+            .collect(),
+        phones: Vec::new(),
+        photo: None,
+    }
+}
+
+#[test]
+fn a_book_is_stored_with_its_addresses_and_read_back_whole() {
+    let conn = test_conn();
+    let origin = book("carddav", "acct", "default");
+    replace_book(
+        &conn,
+        &origin,
+        &[(someone("u1", "Ana Prat", &["ana@work.com", "ana@home.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].person.name, "Ana Prat");
+    assert_eq!(found[0].person.emails.len(), 2);
+    // The order the book gave them is the order they come back in.
+    assert_eq!(found[0].person.emails[0].addr, "ana@work.com");
+}
+
+#[test]
+fn a_re_sync_updates_in_place_rather_than_adding_everybody_again() {
+    let conn = test_conn();
+    let origin = book("carddav", "acct", "default");
+    replace_book(&conn, &origin, &[(someone("u1", "Ana", &["ana@x.com"]), String::new())], 100).unwrap();
+    replace_book(&conn, &origin, &[(someone("u1", "Ana Prat", &["ana@x.com"]), String::new())], 200).unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].person.name, "Ana Prat");
+}
+
+#[test]
+fn somebody_the_server_deleted_goes_away() {
+    let conn = test_conn();
+    let origin = book("carddav", "acct", "default");
+    replace_book(
+        &conn,
+        &origin,
+        &[
+            (someone("u1", "Ana", &["ana@x.com"]), String::new()),
+            (someone("u2", "Marc", &["marc@x.com"]), String::new()),
+        ],
+        100,
+    )
+    .unwrap();
+    replace_book(&conn, &origin, &[(someone("u1", "Ana", &["ana@x.com"]), String::new())], 200).unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    // Their addresses go with them, rather than being left behind pointing at
+    // a person who is no longer there.
+    let orphans: i64 = conn
+        .query_row("SELECT COUNT(*) FROM person_emails", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(orphans, 1);
+}
+
+#[test]
+fn syncing_one_book_does_not_empty_another() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "work"),
+        &[(someone("u1", "Ana", &["ana@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    replace_book(
+        &conn,
+        &book("google", "acct", "default"),
+        &[(someone("g1", "Marc", &["marc@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    replace_book(&conn, &book("carddav", "acct", "work"), &[], 200).unwrap();
+
+    let found = find_people(&conn, "", 50).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].person.name, "Marc");
+}
+
+#[test]
+fn the_same_person_in_two_books_stays_two_rows() {
+    let conn = test_conn();
+    for source in ["carddav", "google"] {
+        replace_book(
+            &conn,
+            &book(source, "acct", "default"),
+            &[(someone("u1", "Ana", &["ana@x.com"]), String::new())],
+            100,
+        )
+        .unwrap();
+    }
+    // Merging them would be a guess about two books that disagree; showing
+    // both is the truthful answer and the reader can see which is which.
+    assert_eq!(find_people(&conn, "", 50).unwrap().len(), 2);
+}
+
+#[test]
+fn people_are_found_by_name_by_organisation_and_by_address() {
+    let conn = test_conn();
+    let mut ana = someone("u1", "Ana Prat", &["ana@hospital.cat"]);
+    ana.organisation = "Hospital de Mataró".into();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(ana, String::new()), (someone("u2", "Marc", &["marc@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    assert_eq!(find_people(&conn, "prat", 50).unwrap().len(), 1);
+    assert_eq!(find_people(&conn, "mataró", 50).unwrap().len(), 1);
+    assert_eq!(find_people(&conn, "hospital.cat", 50).unwrap().len(), 1);
+    assert_eq!(find_people(&conn, "nobody", 50).unwrap().len(), 0);
+}
+
+#[test]
+fn a_book_that_names_nobody_still_keeps_its_people_apart() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[
+            (someone("", "Ana", &["ana@x.com"]), String::new()),
+            (someone("", "Marc", &["marc@x.com"]), String::new()),
+        ],
+        100,
+    )
+    .unwrap();
+    assert_eq!(find_people(&conn, "", 50).unwrap().len(), 2);
+}
+
+#[test]
+fn a_person_the_reader_keeps_outranks_an_address_that_merely_went_past() {
+    let conn = test_conn();
+    // A no-reply that has written many times.
+    for uid in 1..=5u32 {
+        insert_message(
+            &conn,
+            uid,
+            "Newsletter",
+            "Shop",
+            "no-reply@shop.com",
+            None,
+        );
+    }
+    // And one person in the book, never seen in mail.
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana Prat", &["ana@hospital.cat"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    let suggestions = suggest_contacts(&conn, "acct", "", 8).unwrap();
+    assert_eq!(suggestions[0].addr, "ana@hospital.cat");
+    assert!(suggestions[0].known);
+    assert!(suggestions.iter().any(|c| c.addr == "no-reply@shop.com" && !c.known));
+}
+
+#[test]
+fn an_address_in_the_book_is_not_offered_twice() {
+    let conn = test_conn();
+    insert_message(&conn, 1, "Hi", "Ana", "ana@hospital.cat", None);
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana Prat", &["ana@hospital.cat"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    let suggestions = suggest_contacts(&conn, "acct", "", 8).unwrap();
+    assert_eq!(suggestions.len(), 1);
+    // And it is the book's version, with the name the reader gave them.
+    assert_eq!(suggestions[0].name, "Ana Prat");
+}
+
+#[test]
+fn somebody_with_two_addresses_is_two_things_to_choose_between() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana", &["ana@work.com", "ana@home.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    let suggestions = suggest_contacts(&conn, "acct", "ana", 8).unwrap();
+    assert_eq!(suggestions.len(), 2);
+    assert!(suggestions.iter().all(|c| c.name == "Ana"));
+}
+
+#[test]
+fn the_book_is_searched_by_name_even_when_no_mail_matches() {
+    let conn = test_conn();
+    replace_book(
+        &conn,
+        &book("carddav", "acct", "default"),
+        &[(someone("u1", "Ana Prat", &["aprat@hospital.cat"]), String::new())],
+        100,
+    )
+    .unwrap();
+    let suggestions = suggest_contacts(&conn, "acct", "prat", 8).unwrap();
+    assert_eq!(suggestions.len(), 1);
+    assert_eq!(suggestions[0].addr, "aprat@hospital.cat");
+}
+
+#[test]
+fn removing_a_source_takes_its_people_with_it_and_nobody_else() {
+    let conn = test_conn();
+    let source = ContactSource {
+        id: "src-1".into(),
+        kind: "carddav".into(),
+        account: String::new(),
+        url: "https://dav.example.com/ana/contacts/".into(),
+        username: "ana".into(),
+        name: "Work".into(),
+        enabled: true,
+        ctag: String::new(),
+        last_sync_at: 0,
+        last_error: String::new(),
+    };
+    upsert_contact_source(&conn, &source, 100).unwrap();
+    replace_book(
+        &conn,
+        &book("carddav", "", "src-1"),
+        &[(someone("u1", "Ana", &["ana@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+    // Somebody from another book, who must survive.
+    replace_book(
+        &conn,
+        &book("google", "acct", "default"),
+        &[(someone("g1", "Marc", &["marc@x.com"]), String::new())],
+        100,
+    )
+    .unwrap();
+
+    delete_contact_source(&conn, "src-1").unwrap();
+
+    assert!(contact_sources(&conn).unwrap().is_empty());
+    let left = find_people(&conn, "", 50).unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].person.name, "Marc");
+}
+
+#[test]
+fn a_sync_outcome_is_recorded_and_a_good_one_clears_a_bad_one() {
+    let conn = test_conn();
+    let source = ContactSource {
+        id: "src-1".into(),
+        kind: "carddav".into(),
+        account: String::new(),
+        url: "https://dav.example.com/".into(),
+        username: String::new(),
+        name: String::new(),
+        enabled: true,
+        ctag: String::new(),
+        last_sync_at: 0,
+        last_error: String::new(),
+    };
+    upsert_contact_source(&conn, &source, 100).unwrap();
+    mark_contact_source_synced(&conn, "src-1", "", "refused", 200).unwrap();
+    assert_eq!(contact_source(&conn, "src-1").unwrap().unwrap().last_error, "refused");
+    mark_contact_source_synced(&conn, "src-1", "tok", "", 300).unwrap();
+    let after = contact_source(&conn, "src-1").unwrap().unwrap();
+    assert_eq!(after.last_error, "");
+    assert_eq!(after.last_sync_at, 300);
 }

@@ -1,6 +1,13 @@
 import { observable } from '@legendapp/state'
 import type { ChatWallpaper, Message } from '../types'
-import { isFilterMode, pauseMailFolderPersist, persistMailFolder, ui$, type FilterMode } from './ui'
+import {
+  facetsOf,
+  isFilterMode,
+  pauseMailFolderPersist,
+  persistMailFolder,
+  ui$,
+  type FilterMode,
+} from './ui'
 import { mail$, refreshAccountFoldersCache } from './mail'
 import { accounts$ } from './accounts'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
@@ -145,7 +152,7 @@ export function openCorrespondentMail(accountId: string, folderId: string, email
   // not a view resume. Let openMailAccount discard the stash before closing the
   // board and persist the destination through its single-write path.
   openMailAccount(accountId, folderId, false)
-  ui$.filterMode.set('all')
+  ui$.filters.set([])
   ui$.query.set(query)
   ui$.selectedThread.set('')
   thread$.mediaOpen.set(false)
@@ -521,7 +528,7 @@ export function selectAdjacentKanbanThread(delta: number) {
     const boardKey = kanbanBoardColumnKey(boardId, column)
     const rawThreads = allThreads[sourceKey] ?? []
     const filterMode = filters[sourceKey] ?? globalFilter
-    const list = filterThreads(rawThreads, filterMode, selected, mail$.readThreads.get())
+    const list = filterThreads(rawThreads, facetsOf(filterMode), selected, mail$.readThreads.get())
     if (!fallback && list.length > 0) {
       fallback = { key: boardKey, thread: delta >= 0 ? list[0] : list[list.length - 1], column }
     }

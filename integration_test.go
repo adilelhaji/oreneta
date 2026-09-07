@@ -242,7 +242,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 	})
 
 	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
-	subject := "Meron integration " + nonce
+	subject := "Oreneta integration " + nonce
 	// Bare id (no angle brackets) — the app convention: the frontend mints bare
 	// ids and the backend wraps them when emitting headers.
 	messageID := fmt.Sprintf("itest-%s@maddy.test", nonce)
@@ -305,7 +305,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 	})
 
 	t.Run("move and flags", func(t *testing.T) {
-		moveSubject := "Meron integration move " + nonce
+		moveSubject := "Oreneta integration move " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -385,7 +385,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// commit the local "seen"/"starred" state when the IMAP STORE itself
 		// fails (dropped connection, offline, etc) — otherwise the local store
 		// and every unread badge built on it silently drift from server truth.
-		flagFailSubject := "Meron integration flagfail " + nonce
+		flagFailSubject := "Oreneta integration flagfail " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -465,7 +465,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 	})
 
 	t.Run("search and starred items", func(t *testing.T) {
-		searchSubject := "Meron integration search " + nonce
+		searchSubject := "Oreneta integration search " + nonce
 		searchBody := "unique-search-token-" + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
@@ -510,7 +510,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 
 	t.Run("draft lifecycle", func(t *testing.T) {
 		draftID := fmt.Sprintf("itest-draft-%s@maddy.test", nonce)
-		draftSubject := "Meron integration draft " + nonce
+		draftSubject := "Oreneta integration draft " + nonce
 		if _, err := sidecar.Call("save_draft", map[string]any{
 			"account":  "alice",
 			"to":       "bob@maddy.test",
@@ -544,7 +544,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// conversation it answers (that is what the frontend hydrates the box
 		// from), and discard_draft with a thread_key must scrub it from the
 		// thread so a cleared reply cannot resurface on the next thread open.
-		quickSubject := "Meron integration quick reply " + nonce
+		quickSubject := "Oreneta integration quick reply " + nonce
 		quickMessageID := fmt.Sprintf("itest-qr-%s@maddy.test", nonce)
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
@@ -564,8 +564,8 @@ func TestIntegrationMailFlow(t *testing.T) {
 		}
 
 		// Same Message-ID shape the frontend mints (newDraftMessageId): the
-		// store-side thread cleanup only targets meron-draft-*@meron ids.
-		draftID := fmt.Sprintf("meron-draft-%s-itest@meron", nonce)
+		// store-side thread cleanup only targets oreneta-draft-*@oreneta ids.
+		draftID := fmt.Sprintf("oreneta-draft-%s-itest@oreneta", nonce)
 		draftSubject := "Re: " + quickSubject
 		if _, err := sidecar.Call("save_draft", map[string]any{
 			"account":     "bob",
@@ -618,7 +618,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 	})
 
 	t.Run("attachments", func(t *testing.T) {
-		attachmentSubject := "Meron integration attachment " + nonce
+		attachmentSubject := "Oreneta integration attachment " + nonce
 		attachmentBody := "attachment body " + nonce
 		attachmentBytes := []byte("hello attachment " + nonce)
 		if _, err := sidecar.Call("send", map[string]any{
@@ -681,7 +681,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 	t.Run("delete moves to trash", func(t *testing.T) {
 		// Delete is destructive and folder-aware: a non-draft inbox message must
 		// land in Trash (not expunge), so a stray UID never silently vanishes.
-		deleteSubject := "Meron integration delete " + nonce
+		deleteSubject := "Oreneta integration delete " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -720,7 +720,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// Emptying is folder-wide and permanent — it clears the server folder
 		// itself, not just the UIDs the client cached — and role-gated, so a
 		// request for INBOX must be refused before anything is touched.
-		emptySubject := "Meron integration empty " + nonce
+		emptySubject := "Oreneta integration empty " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -763,7 +763,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 	t.Run("copy keeps original", func(t *testing.T) {
 		// Copy must duplicate, not move: the source UID stays put while a copy
 		// appears in the target folder.
-		copySubject := "Meron integration copy " + nonce
+		copySubject := "Oreneta integration copy " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -808,8 +808,8 @@ func TestIntegrationMailFlow(t *testing.T) {
 	})
 
 	t.Run("mark all read", func(t *testing.T) {
-		readSubjectA := "Meron integration markall A " + nonce
-		readSubjectB := "Meron integration markall B " + nonce
+		readSubjectA := "Oreneta integration markall A " + nonce
+		readSubjectB := "Oreneta integration markall B " + nonce
 		for i, subj := range []string{readSubjectA, readSubjectB} {
 			if _, err := sidecar.Call("send", map[string]any{
 				"account":    "alice",
@@ -899,7 +899,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// A message another client deletes for good must not linger as a ghost
 		// row: the sync compares the server's UID set against the cache and
 		// drops what is no longer there.
-		expungeSubject := "Meron integration expunge " + nonce
+		expungeSubject := "Oreneta integration expunge " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -933,7 +933,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// The reverse direction of the server-truth checks above: another client
 		// can read or star a message, and the next sync must replace the cached
 		// flags and unread count with what IMAP reports.
-		flagSubject := "Meron integration external flags " + nonce
+		flagSubject := "Oreneta integration external flags " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -1009,8 +1009,8 @@ func TestIntegrationMailFlow(t *testing.T) {
 		if result := callMap(t, sidecar, "folders.create", map[string]any{"account": "bob", "name": folder}); !foldersContain(result, folder) {
 			t.Fatalf("folders.create did not return %s: %v", folder, result)
 		}
-		firstSubject := "Meron integration uidv first " + nonce
-		secondSubject := "Meron integration uidv second " + nonce
+		firstSubject := "Oreneta integration uidv first " + nonce
+		secondSubject := "Oreneta integration uidv second " + nonce
 		for i, subj := range []string{firstSubject, secondSubject} {
 			imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, folder, rawMessage([]string{
 				"From: Carol <carol@example.net>",
@@ -1032,7 +1032,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 			t.Skipf("maddy reused UIDVALIDITY %d for the recreated folder; nothing to reconcile", after)
 		}
 
-		freshSubject := "Meron integration uidv fresh " + nonce
+		freshSubject := "Oreneta integration uidv fresh " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, folder, rawMessage([]string{
 			"From: Carol <carol@example.net>",
 			"To: bob@maddy.test",
@@ -1071,7 +1071,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		callMap(t, sidecar, "watch.start", map[string]any{"account": "bob", "folder": folder})
 
 		baseline := synced()
-		pushedSubject := "Meron integration idle pushed " + nonce
+		pushedSubject := "Oreneta integration idle pushed " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, folder, rawMessage([]string{
 			"From: Carol <carol@example.net>",
 			"To: bob@maddy.test",
@@ -1117,7 +1117,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 		}
 		baseline = synced()
-		quietSubject := "Meron integration idle quiet " + nonce
+		quietSubject := "Oreneta integration idle quiet " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, folder, rawMessage([]string{
 			"From: Carol <carol@example.net>",
 			"To: bob@maddy.test",
@@ -1169,7 +1169,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// and merges the pages by date; markAllReadUnified fans the write out the
 		// same way. Both must cover *both* accounts and report no per-account
 		// failure — a partial merge looks like a working inbox with mail missing.
-		unifiedSubject := "Meron integration unified " + nonce
+		unifiedSubject := "Oreneta integration unified " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "bob",
 			"to":         "alice@maddy.test",
@@ -1250,8 +1250,8 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// Give both healthy accounts a known unread row, and give a third account
 		// a cached row before replacing its credentials with a bad password.
 		// The fan-out must continue past that failure and identify it precisely.
-		aliceSubject := "Meron integration unified partial alice " + nonce
-		bobSubject := "Meron integration unified partial bob " + nonce
+		aliceSubject := "Oreneta integration unified partial alice " + nonce
+		bobSubject := "Oreneta integration unified partial bob " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "bob",
 			"to":         "alice@maddy.test",
@@ -1341,8 +1341,8 @@ func TestIntegrationMailFlow(t *testing.T) {
 		connectAccount(t, sidecar, server, "bob", "bob@maddy.test")
 		nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 
-		aliceSubject := "Meron integration unified cursor alice " + nonce
-		bobSubject := "Meron integration unified cursor bob " + nonce
+		aliceSubject := "Oreneta integration unified cursor alice " + nonce
+		bobSubject := "Oreneta integration unified cursor bob " + nonce
 		fixtures := []struct {
 			account, to, subject, id string
 		}{{"bob", "alice@maddy.test", aliceSubject, "alice"}}
@@ -1441,9 +1441,9 @@ func TestIntegrationMailFlow(t *testing.T) {
 
 	t.Run("encoded subject and quoted-printable body decode", func(t *testing.T) {
 		// Real mail arrives encoded — an RFC 2047 subject and a quoted-printable
-		// body — and meron's own send path never emits either, so only a raw
+		// body — and Oreneta's own send path never emits either, so only a raw
 		// append exercises the decode on the way in.
-		want := "Méron héllo " + nonce
+		want := "Örenetà héllo " + nonce
 		encoded := "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(want)) + "?="
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, "INBOX", rawMessage([]string{
 			"From: Carol <carol@example.net>",
@@ -1474,7 +1474,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// The thread read serves text and HTML separately (the HTML view is a
 		// per-account preference), so a multipart/alternative message must land
 		// with both halves, not whichever part the walk saw last.
-		altSubject := "Meron integration alternative " + nonce
+		altSubject := "Oreneta integration alternative " + nonce
 		boundary := "itest-boundary-" + nonce
 		body := strings.Join([]string{
 			"--" + boundary,
@@ -1520,7 +1520,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		connectAccount(t, sidecar, server, "bob", "bob@maddy.test")
 		nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 
-		nestedSubject := "Meron integration nested MIME " + nonce
+		nestedSubject := "Oreneta integration nested MIME " + nonce
 		outer := "itest-outer-" + nonce
 		related := "itest-related-" + nonce
 		alternative := "itest-nested-alt-" + nonce
@@ -1618,7 +1618,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// Threading keys off Message-ID, but mail without one exists and must
 		// still be readable: it needs a synthesized thread_key, or the row is
 		// unreachable from the thread view even though the list shows it.
-		bareSubject := "Meron integration no message id " + nonce
+		bareSubject := "Oreneta integration no message id " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, "INBOX", rawMessage([]string{
 			"From: Carol <carol@example.net>",
 			"To: bob@maddy.test",
@@ -1660,7 +1660,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 			}
 			time.Sleep(300 * time.Millisecond)
 		}
-		junkSubject := "Meron integration junk " + nonce
+		junkSubject := "Oreneta integration junk " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, "Junk", rawMessage([]string{
 			"From: Spammer <spam@example.net>",
 			"To: bob@maddy.test",
@@ -1707,7 +1707,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 			t.Fatalf("clearing the cache emptied the database too: %v", cleared)
 		}
 
-		attachmentSubject := "Meron integration attachment " + nonce
+		attachmentSubject := "Oreneta integration attachment " + nonce
 		row := pollInbox(t, sidecar, "bob", func(m map[string]any) bool {
 			return str(m, "subject") == attachmentSubject
 		})
@@ -1742,7 +1742,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		cold, _ := startSidecar(t)
 		connectAccount(t, cold, server, "bob", "bob@maddy.test")
 
-		moveSubject := "Meron integration move " + nonce
+		moveSubject := "Oreneta integration move " + nonce
 		row := pollFolder(t, cold, "bob", "ITestFolder", func(m map[string]any) bool {
 			return str(m, "subject") == moveSubject
 		})
@@ -1765,11 +1765,11 @@ func TestIntegrationMailFlow(t *testing.T) {
 	})
 
 	t.Run("sent copy honors the account override", func(t *testing.T) {
-		// A generic IMAP server does not file sent mail itself, so meron APPENDs
+		// A generic IMAP server does not file sent mail itself, so Oreneta APPENDs
 		// the copy — exactly once, since a duplicate upload would show the
 		// message twice in Sent. The override exists for providers that do file
 		// their own, and must suppress the upload entirely.
-		defaultSubject := "Meron integration sentcopy default " + nonce
+		defaultSubject := "Oreneta integration sentcopy default " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -1790,7 +1790,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		// Back to the provider default, so nothing after this inherits it.
 		defer callMap(t, sidecar, "account.setSaveSentCopy", map[string]any{"account": "alice", "value": nil})
 
-		suppressedSubject := "Meron integration sentcopy off " + nonce
+		suppressedSubject := "Oreneta integration sentcopy off " + nonce
 		if _, err := sidecar.Call("send", map[string]any{
 			"account":    "alice",
 			"to":         "bob@maddy.test",
@@ -1873,7 +1873,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 
 		restartMaddy(t, server)
 
-		idleRestartSubject := "Meron integration idle restart " + nonce
+		idleRestartSubject := "Oreneta integration idle restart " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, folder, rawMessage([]string{
 			"From: Carol <carol@example.net>",
 			"To: bob@maddy.test",
@@ -1898,7 +1898,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 			t.Fatalf("reconnected IDLE watch did not cache %q: %v", idleRestartSubject, cached)
 		}
 
-		restartSubject := "Meron integration restart " + nonce
+		restartSubject := "Oreneta integration restart " + nonce
 		// Appended rather than sent: SMTP submission is a write path, and writes
 		// deliberately do not retry a pooled connection.
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, "INBOX", rawMessage([]string{
@@ -1955,7 +1955,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 		connectAccount(t, sidecar, &proxied, "bob", "bob@maddy.test")
 		nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 
-		staleSubject := "Meron integration stale pool " + nonce
+		staleSubject := "Oreneta integration stale pool " + nonce
 		imapAppend(t, server.imapPort, "bob@maddy.test", testPassword, "INBOX", rawMessage([]string{
 			"From: Carol <carol@example.net>",
 			"To: bob@maddy.test",
@@ -2009,9 +2009,9 @@ func TestIntegrationMailFlow(t *testing.T) {
 	// Last on purpose: no later subtest sends from alice, so nothing but the
 	// piggyback under test can refresh her Sent folder.
 	t.Run("sent from another client surfaces via inbox sync", func(t *testing.T) {
-		// From is a send-as alias meron knows nothing about: the message must
+		// From is a send-as alias Oreneta knows nothing about: the message must
 		// still classify as outgoing purely from its Sent-folder provenance.
-		externalSubject := "Meron integration external sent " + nonce
+		externalSubject := "Oreneta integration external sent " + nonce
 		raw := fmt.Sprintf(
 			"From: Alice Alias <alice-alias@example.net>\r\nTo: bob@maddy.test\r\nSubject: %s\r\n"+
 				"Message-ID: <itest-external-%s@maddy.test>\r\nDate: %s\r\n\r\n"+
@@ -2078,7 +2078,7 @@ func TestIntegrationMailFlow(t *testing.T) {
 }
 
 // imapClient is a bare-bones IMAP client standing in for another mail client
-// (webmail, a phone) touching the mailbox behind meron's back — and for reading
+// (webmail, a phone) touching the mailbox behind Oreneta's back — and for reading
 // server truth directly. Assertions that only consult the sidecar cannot tell a
 // write that reached the server from one that stopped at the local store.
 type imapClient struct {
@@ -2171,7 +2171,7 @@ func (c *imapClient) selectFolder(folder string) uint32 {
 }
 
 // imapAppend adds a message to a folder over raw IMAP, standing in for another
-// mail client (e.g. webmail) writing to the mailbox behind meron's back.
+// mail client (e.g. webmail) writing to the mailbox behind Oreneta's back.
 func imapAppend(t *testing.T, port int, user, password, folder string, message []byte) {
 	t.Helper()
 	client := dialIMAP(t, port, user, password)
@@ -2323,7 +2323,7 @@ func parseIMAPSearch(lines []string) []uint32 {
 }
 
 // rawMessage builds an RFC 5322 message for imapAppend. Headers are passed
-// verbatim so a test can deliver encodings and header shapes meron's own send
+// verbatim so a test can deliver encodings and header shapes Oreneta's own send
 // path never emits.
 func rawMessage(headers []string, body string) []byte {
 	joined := strings.Join(headers, "\r\n")

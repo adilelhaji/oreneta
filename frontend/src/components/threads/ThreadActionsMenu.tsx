@@ -195,6 +195,7 @@ export function ThreadActionsMenu({
   syncingLabel,
   allLabel,
   hideSnoozed,
+  hideFilters = false,
   onRemove,
   onSearch,
   searchLabel,
@@ -214,6 +215,8 @@ export function ThreadActionsMenu({
   syncingLabel?: string
   allLabel?: string
   hideSnoozed?: boolean
+  /** Set where the narrowings live somewhere the reader can already see. */
+  hideFilters?: boolean
   onRemove?: () => void
   onSearch?: () => void
   searchLabel?: string
@@ -230,12 +233,12 @@ export function ThreadActionsMenu({
     () => setOpen(false),
   )
 
-  const filterActive = filterMode !== 'all'
+  const filterActive = !hideFilters && filterMode !== 'all'
 
   return (
     <div ref={rootRef} className="relative">
       <button
-        className={`flex ${triggerClassName} shrink-0 items-center justify-center rounded-lg cursor-pointer transition-all ${
+        className={`flex ${triggerClassName} shrink-0 items-center justify-center rounded-control-sm cursor-pointer transition-all ${
           filterActive ? 'bg-accent text-white shadow-sm shadow-accent/20' : 'hover:bg-hover text-secondary'
         }`}
         onClick={(event) => {
@@ -248,7 +251,7 @@ export function ThreadActionsMenu({
       </button>
       {open && (
         <div
-          className="absolute right-0 mt-1.5 z-50 min-w-[160px] w-max rounded-xl border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
+          className="absolute right-0 mt-1.5 z-50 min-w-[160px] w-max rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
           onClick={(event) => event.stopPropagation()}
         >
           <ThreadActionsMenuItems
@@ -265,6 +268,7 @@ export function ThreadActionsMenu({
             syncingLabel={syncingLabel}
             allLabel={allLabel}
             hideSnoozed={hideSnoozed}
+            hideFilters={hideFilters}
             onRemove={onRemove}
             onSearch={onSearch}
             searchLabel={searchLabel}

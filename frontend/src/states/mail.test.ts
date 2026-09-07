@@ -13,6 +13,7 @@ import {
   deleteThread,
   discardSavedDraftCopy,
   ensureAccountFolders,
+  isJunkFolderId,
   loadMoreThreads,
   loadThread,
   loadThreads,
@@ -24,8 +25,15 @@ import {
   threadListViewKey,
   moveThreadToFolder,
 } from './mail'
-import { settings$ } from './settings'
-import { runToastUndo, settleConfirm, toggleBulkSelection, ui$, type BulkSelectionItem } from './ui'
+import { settings$, sortParam } from './settings'
+import {
+  filterKey,
+  runToastUndo,
+  settleConfirm,
+  toggleBulkSelection,
+  ui$,
+  type BulkSelectionItem,
+} from './ui'
 
 const thread = (overrides: Partial<Message> = {}): Message => ({
   id: 'acc:inbox:thread:1#101',
@@ -294,7 +302,7 @@ describe('thread list paging', () => {
     ui$.selectedFolder.set('inbox')
     ui$.selectedThread.set('')
     ui$.query.set('old')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
   })
 
   afterEach(() => {
@@ -390,7 +398,7 @@ describe('thread selection on load', () => {
     ui$.selectedFolder.set('inbox')
     ui$.selectedThread.set('')
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     kanban$.activeBoardId.set('')
     ;(window as any).go = {
       main: {
@@ -1642,7 +1650,13 @@ describe('ensureAccountFolders', () => {
 
 describe('thread list view identity', () => {
   const currentKey = () =>
-    threadListViewKey(ui$.selectedAccount.get(), ui$.selectedFolder.get(), ui$.query.get(), ui$.filterMode.get())
+    threadListViewKey(
+      ui$.selectedAccount.get(),
+      ui$.selectedFolder.get(),
+      ui$.query.get(),
+      filterKey(ui$.filters.get()),
+      sortParam(settings$.listSort.get()),
+    )
 
   beforeEach(() => {
     mail$.threads.set([])
@@ -1653,7 +1667,7 @@ describe('thread list view identity', () => {
     ui$.selectedFolder.set('inbox')
     ui$.selectedThread.set('')
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     ;(window as any).go = {
       main: { App: { Invoke: async () => ({ threads: [], next_cursor: '' }) } },
     }
@@ -1661,7 +1675,7 @@ describe('thread list view identity', () => {
 
   afterEach(() => {
     ui$.query.set('')
-    ui$.filterMode.set('all')
+    ui$.filters.set([])
     mail$.threadsLoadedKey.set('')
   })
 
@@ -1686,7 +1700,7 @@ describe('thread list view identity', () => {
     await loadThreads()
     expect(mail$.threadsLoadedKey.get()).toBe(currentKey())
 
-    ui$.filterMode.set('unread')
+    ui$.filters.set(['unread'])
     expect(mail$.threadsLoadedKey.get()).not.toBe(currentKey())
   })
 
@@ -1767,5 +1781,40 @@ describe('thread list view identity', () => {
     await loading
 
     expect(mail$.threadsLoadedKey.get()).toBe(currentKey())
+  })
+})
+
+describe('junk', () => {
+  beforeEach(() => {
+    mail$.foldersByAccount.set({
+      acct: [
+        { id: 'INBOX', name: 'Inbox', account_id: 'acct', role: 'inbox' },
+        { id: 'Junk', name: 'Junk', account_id: 'acct', role: 'junk' },
+        { id: 'Projects', name: 'Projects', account_id: 'acct', role: 'folder' },
+      ] as any,
+    })
+    mail$.folders.set([])
+  })
+
+  it('knows the folder an account keeps unwanted mail in', () => {
+    expect(isJunkFolderId('acct', 'Junk')).toBe(true)
+    expect(isJunkFolderId('acct', 'INBOX')).toBe(false)
+    expect(isJunkFolderId('acct', 'Projects')).toBe(false)
+  })
+
+  it('falls back to the name for a server that declares no role', () => {
+    mail$.foldersByAccount.set({
+      acct: [{ id: 'Spam', name: 'Spam', account_id: 'acct', role: 'folder' }] as any,
+    })
+    expect(isJunkFolderId('acct', 'Spam')).toBe(true)
+    expect(isJunkFolderId('acct', '[Gmail]/Spam')).toBe(true)
+  })
+
+  it('reads the name even for an account whose folders are not loaded', () => {
+    // The role lookup finds nothing for an unknown account, so the name test
+    // is what answers — which is the honest fallback, not a mistake: a folder
+    // called Junk is a junk folder whoever owns it.
+    expect(isJunkFolderId('other', 'Junk')).toBe(true)
+    expect(isJunkFolderId('other', 'Projects')).toBe(false)
   })
 })

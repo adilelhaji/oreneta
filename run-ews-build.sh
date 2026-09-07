@@ -1,13 +1,13 @@
 #!/bin/bash
-# Launches the locally built Meron against a separate profile, so the Exchange
+# Launches the locally built Oreneta against a separate profile, so the Exchange
 # work can be exercised without touching the installed Flatpak's accounts,
 # cache or keychain entries.
-export XDG_CONFIG_HOME="$HOME/meron-ews-test/config"
-export XDG_DATA_HOME="$HOME/meron-ews-test/data"
-export XDG_CACHE_HOME="$HOME/meron-ews-test/cache"
+export XDG_CONFIG_HOME="$HOME/oreneta-ews-test/config"
+export XDG_DATA_HOME="$HOME/oreneta-ews-test/data"
+export XDG_CACHE_HOME="$HOME/oreneta-ews-test/cache"
 # The file keyring keeps credentials inside this profile rather than in the
 # desktop's secret service, so the test build neither reads nor writes the
-# real Meron's stored passwords. "off" would keep them in memory only, and an
+# real Oreneta's stored passwords. "off" would keep them in memory only, and an
 # account would lose its password on every restart.
 # Google OAuth credentials for a test build, kept outside the repository so
 # they can never be committed. Optional: without it the build uses the

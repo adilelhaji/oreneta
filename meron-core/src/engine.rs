@@ -1301,6 +1301,12 @@ pub async fn search_mail_messages(
     }
 
     let mut by_key: HashMap<(String, u32), imap::MessageHeader> = HashMap::new();
+    // What the store says matches, once the live headers are in it. This is
+    // the exact answer: the server narrows for speed, the store narrows for
+    // correctness, and where they differ the store is right — it is the only
+    // one that knows about a local label, or about an attachment on a server
+    // with no IMAP key for one.
+    let mut matches_locally: HashSet<(String, u32)> = HashSet::new();
     {
         let db = engine.db.lock().unwrap();
         for (folder, headers) in &per_folder {
@@ -1309,12 +1315,27 @@ pub async fn search_mail_messages(
         for message in
             store::search_messages_in_folders(&db, account, folders, query, u32::MAX, None)?
         {
-            by_key.insert((message.folder.clone(), message.uid), message);
+            let key = (message.folder.clone(), message.uid);
+            matches_locally.insert(key.clone());
+            by_key.insert(key, message);
         }
     }
+    // The live headers are fresher than the store's projection of them, so
+    // they are laid over the top. Where the server was asked a wider question
+    // than the reader typed, though, they are only allowed to *replace* a row
+    // the store already matched — never to add one it rejected.
+    //
+    // Read conservatively — as though the server were not Gmail — because the
+    // store is right either way: these headers were just fetched with their
+    // structure, so nothing here is being rejected for want of an answer.
+    let narrow_to_local = crate::search::parse(query).needs_local_check(false);
     for (folder, headers) in per_folder {
         for message in headers {
-            by_key.insert((folder.clone(), message.uid), message);
+            let key = (folder.clone(), message.uid);
+            if narrow_to_local && !matches_locally.contains(&key) {
+                continue;
+            }
+            by_key.insert(key, message);
         }
     }
     let mut all_messages = by_key.into_values().collect::<Vec<_>>();

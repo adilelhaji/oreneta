@@ -59,7 +59,7 @@ export function ConnectivityBanner() {
             ui$.accountSettingsId.set('')
             ui$.settingsOpen.set(true)
           }}
-          className="inline-flex h-6 shrink-0 items-center rounded-lg px-2 font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
+          className="inline-flex h-6 shrink-0 items-center rounded-control-sm px-2 font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
         >
           {t('settings.network.proxy')}
         </button>
@@ -68,7 +68,7 @@ export function ConnectivityBanner() {
         type="button"
         onClick={retry}
         disabled={retrying}
-        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-lg px-2 font-semibold text-rose-700 hover:bg-rose-500/10 disabled:opacity-60 dark:text-rose-300"
+        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-control-sm px-2 font-semibold text-rose-700 hover:bg-rose-500/10 disabled:opacity-60 dark:text-rose-300"
       >
         <RefreshCw size={12} className={retrying ? 'animate-spin' : ''} />
         <span>{t('connectivity.retry')}</span>
@@ -78,7 +78,7 @@ export function ConnectivityBanner() {
         onClick={dismissSyncError}
         title={t('connectivity.dismiss')}
         aria-label={t('connectivity.dismiss')}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
       >
         <X size={13} />
       </button>

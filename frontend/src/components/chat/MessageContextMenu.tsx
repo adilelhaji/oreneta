@@ -53,7 +53,7 @@ export function MessageContextMenu({
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"
-      className="fixed z-[61] min-w-[180px] rounded-xl border border-border bg-header p-1 shadow-xl"
+      className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-xl"
     >
       {state.linkUrl ? (
         <>

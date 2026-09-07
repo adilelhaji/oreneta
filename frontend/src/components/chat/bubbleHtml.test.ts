@@ -58,3 +58,45 @@ describe('prepareBubbleHtml', () => {
     expect(doc.querySelector('body > table:last-child')).not.toBeNull()
   })
 })
+
+describe('simplifying a message', () => {
+  const sender =
+    '<html><body><table width="600" style="width:600px"><tr><td style="font-family:Comic Sans;font-size:9px">' +
+    '<p style="color:#c00">Careful</p></td></tr></table></body></html>'
+
+  it('leaves the sender in charge unless asked', () => {
+    const prepared = prepareBubbleHtml(sender)
+    // A newsletter or an invoice is laid out on purpose; flattening it by
+    // default would be destroying the thing the sender wrote.
+    expect(prepared).not.toContain('font-family: inherit')
+  })
+
+  it('gives the message the reader font and width when asked', () => {
+    const prepared = prepareBubbleHtml(sender, { family: null, zoom: 1, simplify: true })
+    expect(prepared).toContain('font-family: inherit !important')
+    expect(prepared).toContain('font-size: inherit !important')
+    // A message laid out for a 600px column reflows to the pane it is in.
+    expect(prepared).toContain('width: auto !important')
+    expect(prepared).toContain('table-layout: auto !important')
+  })
+
+  it('keeps code monospaced, which is not decoration', () => {
+    const prepared = prepareBubbleHtml('<pre>a = 1</pre>', { family: null, zoom: 1, simplify: true })
+    expect(prepared).toMatch(/pre, pre \*, code[^}]*monospace !important/)
+  })
+
+  it('does not repaint the sender colours', () => {
+    const prepared = prepareBubbleHtml(sender, { family: null, zoom: 1, simplify: true })
+    // Someone who wrote in a colour usually meant something by it, and a rule
+    // that repainted everything would turn a highlighted warning into prose.
+    expect(prepared).not.toMatch(/body \*[^}]*color: inherit !important/)
+    expect(prepared).toContain('#c00')
+  })
+
+  it('leaves the message itself untouched either way', () => {
+    const simplified = prepareBubbleHtml(sender, { family: null, zoom: 1, simplify: true })
+    // The sender's own markup survives: this restyles, it does not rewrite.
+    expect(simplified).toContain('Careful')
+    expect(simplified).toContain('width="600"')
+  })
+})

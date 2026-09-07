@@ -10,7 +10,7 @@ import { MenuItem } from '../menu/MenuItem'
 /** The chord a menu row triggers, so the keystroke is learnable from the menu. */
 function Hint({ id }: { id: ShortcutId }) {
   return (
-    <kbd className="shrink-0 text-[0.625rem] font-normal text-secondary/60">
+    <kbd className="shrink-0 text-2xs font-normal text-secondary/60">
       {formatShortcut(id).join(isMac ? '' : '+')}
     </kbd>
   )
@@ -45,7 +45,7 @@ export function QuickSettingsMenu({
         }}
       />
       <div
-        className={`fixed z-50 w-60 rounded-lg border border-border bg-chats p-2 shadow-2xl animate-fade-in text-primary ${
+        className={`fixed z-50 w-60 rounded-control-sm border border-border bg-chats p-2 shadow-2xl animate-fade-in text-primary ${
           anchor.placement === 'up' ? '-translate-y-full' : ''
         }`}
         style={{ left: anchor.x, top: anchor.placement === 'up' ? anchor.y - 4 : anchor.y + 4 }}

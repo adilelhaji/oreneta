@@ -91,7 +91,7 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-2xl border border-border bg-app shadow-xl">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-xl">
         {/* A band in the calendar's colour, so which calendar this belongs to
             is answered before the text is read. */}
         <div className="h-1.5 rounded-t-2xl" style={{ backgroundColor: color }} />
@@ -108,7 +108,7 @@ export function EventDetails() {
             type="button"
             onClick={closeDetails}
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
           >
             <X size={15} />
           </button>
@@ -211,7 +211,7 @@ export function EventDetails() {
                       {person.name || person.addr}
                     </span>
                     {person.response && (
-                      <span className="shrink-0 text-[0.625rem] text-secondary">
+                      <span className="shrink-0 text-2xs text-secondary">
                         {responseLabel(person.response, t)}
                       </span>
                     )}
@@ -238,7 +238,7 @@ export function EventDetails() {
             the three buttons are the whole mechanism. */}
         {invitation && (
           <div className="shrink-0 border-t border-border/60 px-5 py-3">
-            <p className="mb-2 text-[0.6875rem] text-secondary">
+            <p className="mb-2 text-caption text-secondary">
               {answered
                 ? t('calendar.yourAnswer', {
                     defaultValue: 'Your answer: {answer}',
@@ -256,7 +256,7 @@ export function EventDetails() {
                     setAnswering(true)
                     void respondToInvitation(event, choice).finally(() => setAnswering(false))
                   }}
-                  className={`flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer ${
+                  className={`flex-1 rounded-control border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer ${
                     answeredAs(event.my_response, choice)
                       ? 'border-accent bg-accent text-white'
                       : 'border-border bg-raised text-primary hover:bg-hover'
@@ -275,7 +275,7 @@ export function EventDetails() {
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
           {readOnly ? (
-            <p className="mr-auto text-[0.6875rem] text-secondary">
+            <p className="mr-auto text-caption text-secondary">
               {t('calendar.readOnlyEvent', {
                 defaultValue: 'This calendar is read-only — it belongs to whoever publishes it.',
               })}
@@ -288,7 +288,7 @@ export function EventDetails() {
                   ? setAsking(true)
                   : void deleteEvent(event)
               }
-              className="mr-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
             >
               <Trash2 size={13} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
@@ -297,7 +297,7 @@ export function EventDetails() {
           <button
             type="button"
             onClick={closeDetails}
-            className="rounded-xl px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="rounded-control px-3 py-2 text-xs font-medium text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
           >
             {t('calendar.close', { defaultValue: 'Close' })}
           </button>
@@ -305,7 +305,7 @@ export function EventDetails() {
             <button
               type="button"
               onClick={() => editEvent(event)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
             >
               <SquarePen size={13} />
               {t('calendar.editEvent', { defaultValue: 'Edit event' })}

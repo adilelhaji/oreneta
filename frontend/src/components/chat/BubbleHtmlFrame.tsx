@@ -42,7 +42,7 @@ export function BubbleHtmlFrame({
   // Typography is part of the key: the same HTML measures to a different height
   // once the message font or text size changes.
   const cacheKey = useMemo(
-    () => `${messageFont.family ?? ''}:${messageFont.zoom}:${cacheKeyForHtml(html)}`,
+    () => `${messageFont.family ?? ''}:${messageFont.zoom}:${messageFont.simplify ? 's' : 'o'}:${cacheKeyForHtml(html)}`,
     [html, messageFont],
   )
   const cachedHeight = measuredHeights.get(cacheKey)
@@ -157,33 +157,33 @@ export function BubbleHtmlFrame({
         const limit = doc.documentElement?.clientWidth ?? 0
         if (!limit) return
         for (const table of doc.querySelectorAll<HTMLTableElement>('table')) {
-          if (table.closest('.meron-table-scroll')) continue
+          if (table.closest('.oreneta-table-scroll')) continue
           const rect = table.getBoundingClientRect()
           const overflowsFrame = rect.left < -1 || rect.right > limit + 1
           const overflowsItself = table.scrollWidth > table.clientWidth + 1
           if (!overflowsFrame && !overflowsItself) continue
 
           const wrapper = doc.createElement('div')
-          wrapper.className = 'meron-table-scroll'
+          wrapper.className = 'oreneta-table-scroll'
           table.parentNode?.insertBefore(wrapper, table)
           wrapper.appendChild(table)
         }
       }
 
       for (const pre of doc.querySelectorAll<HTMLPreElement>('pre')) {
-        if (pre.closest('.meron-code-block')) continue
+        if (pre.closest('.oreneta-code-block')) continue
         // GitLab diff rows use one <pre> per line-content cell; wrapping each
         // one would add a copy button and block padding to every diff row.
         if (pre.closest('td.line_content, th.line_content')) continue
 
         const wrapper = doc.createElement('div')
-        wrapper.className = 'meron-code-block'
+        wrapper.className = 'oreneta-code-block'
         pre.parentNode?.insertBefore(wrapper, pre)
         wrapper.appendChild(pre)
 
         const button = doc.createElement('button')
         button.type = 'button'
-        button.className = 'meron-copy-code'
+        button.className = 'oreneta-copy-code'
         const copyCodeText = t('chat.copyCode')
         button.title = copyCodeText
         button.setAttribute('aria-label', copyCodeText)

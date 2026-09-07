@@ -98,6 +98,34 @@ export type Folder = {
 export type Contact = {
   name: string
   addr: string
+  /**
+   * True when this came out of an address book rather than out of mail seen.
+   *
+   * Two different claims: somebody the reader keeps, versus an address that
+   * went past in a header and which they may not recognise at all.
+   */
+  known?: boolean
+  /** Where they work, when a book said so. */
+  organisation?: string
+  /** True when this came from the organisation's directory, asked just now. */
+  directory?: boolean
+}
+
+/** Somebody in an address book. */
+export type Person = {
+  id: string
+  /** "carddav", "google", "exchange", "local". */
+  source: string
+  /** The account whose book they are in; empty for a book that is nobody's. */
+  account: string
+  book: string
+  name: string
+  organisation: string
+  note: string
+  /** Media key of their picture, served at `/media/<key>`; empty when none. */
+  photo: string
+  emails: { addr: string; label: string }[]
+  phones: { number: string; label: string }[]
 }
 
 export type Attachment = {
@@ -151,7 +179,7 @@ export type Message = {
   /** Send time as Unix epoch seconds (0 when unknown). Format via lib/date helpers. */
   date: number
   /** Sent by this account, classified by the core (own address or Sent-folder
-   * provenance) — true even for aliases not configured in meron. Absent on
+   * provenance) — true even for aliases not configured in Oreneta. Absent on
    * rows shaped before the flag existed; the UI then falls back to matching
    * the From address against the account's identities. */
   outgoing?: boolean
@@ -165,6 +193,23 @@ export type Message = {
   has_starred_items?: boolean
   has_draft?: boolean
   has_attachments: boolean
+  /** Ids of the local labels on this conversation, in the reader's order. */
+  labels?: string[]
+  /**
+   * What the message's own structure declares was done to it: "pgpEncrypted",
+   * "pgpSigned", "smimeEnveloped" and so on; absent when nothing was.
+   *
+   * A claim, not a verdict. Whether a signature is good needs keys and is a
+   * separate answer, so the interface must not present this as one.
+   */
+  protection?: string
+  /**
+   * Whether this is worth interrupting for, as the core judged it.
+   *
+   * Absent means nobody has judged it — a message cached before this existed —
+   * which is not the same as judged unimportant.
+   */
+  priority?: boolean
   attachments?: Attachment[]
   /** Source feed URL; present on RSS feed threads only. */
   feed_url?: string
@@ -217,6 +262,10 @@ export type ComposeDraft = {
     folderId: string
   }
   attachments: ComposerAttachment[]
+  /** Sign with the sender's own OpenPGP key before sending. */
+  pgpSign: boolean
+  /** Encrypt to every recipient's OpenPGP key before sending. */
+  pgpEncrypt: boolean
 }
 
 /** An open reader tab for a single message (alongside the default conversation view).

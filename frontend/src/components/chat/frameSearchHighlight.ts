@@ -3,8 +3,8 @@
 // is a live document we don't own, so matches are wrapped in the DOM instead —
 // that way a search never changes how the message itself renders.
 
-const HIT_CLASS = 'meron-search-hit'
-const ACTIVE_CLASS = 'meron-search-hit-active'
+const HIT_CLASS = 'oreneta-search-hit'
+const ACTIVE_CLASS = 'oreneta-search-hit-active'
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA'])
 
 /** Undo a previous highlight pass, restitching the text nodes it split. */

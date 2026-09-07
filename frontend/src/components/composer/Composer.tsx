@@ -8,6 +8,9 @@ import { ComposerToolbar } from './ComposerToolbar'
 import { ComposerAttachments } from './ComposerAttachments'
 import { ComposerFooter } from './ComposerFooter'
 import { closeMessageTab } from '../../states/compose'
+import { confirmAction } from '../../states/ui'
+import type { Template } from '../../states/templates'
+import { insertAtCaret, messageTemplateFields, messageTemplateOverwrites } from './applyTemplate'
 
 export function Composer({ tabId }: { tabId: string }) {
   const { t } = useTranslation()
@@ -30,9 +33,66 @@ export function Composer({ tabId }: { tabId: string }) {
     handleKeyDown,
     setLink,
     submit,
+    pgpPassphrase,
+    setPgpPassphrase,
   } = useComposer(tabId)
 
   if (!draft) return null
+
+  /**
+   * Put kept text into this message.
+   *
+   * A snippet only ever adds, so it goes in at the cursor without asking. A
+   * whole-message template states a subject and a body, which in a composer
+   * that already has words in it means replacing them — so that case asks
+   * first. Silently overwriting what somebody was writing is the one outcome
+   * this must not have.
+   */
+  const useTemplate = async (template: Template) => {
+    if (!draft) return
+
+    if (template.kind === 'message') {
+      if (
+        messageTemplateOverwrites(draft, template) &&
+        !(await confirmAction({
+          title: t('templates.replaceTitle'),
+          message: t('templates.replaceMessage', { name: template.name }),
+          confirmLabel: t('templates.replaceConfirm'),
+          cancelLabel: t('buttons.cancel'),
+        }))
+      ) {
+        return
+      }
+      const fields = messageTemplateFields(template, draft.rich)
+      update(fields)
+      // The editor holds its own copy of the body, so telling the draft is
+      // not enough: what is on screen has to be told as well.
+      if (draft.rich && editor) editor.commands.setContent(fields.html)
+      return
+    }
+
+    if (draft.rich && editor) {
+      editor.chain().focus().insertContent(template.bodyHtml || template.bodyText).run()
+      return
+    }
+
+    const area = textRef.current
+    const insert = template.bodyText || template.bodyHtml.replace(/<[^>]*>/g, '')
+    const { text, caret } = insertAtCaret(
+      draft.text,
+      insert,
+      area?.selectionStart ?? draft.text.length,
+      area?.selectionEnd ?? draft.text.length,
+    )
+    update({ text })
+    // After React has written the new value, put the cursor back where the
+    // writer was rather than at the top of the box.
+    queueMicrotask(() => {
+      if (!area) return
+      area.focus()
+      area.setSelectionRange(caret, caret)
+    })
+  }
 
   // In the full editor, bare Enter must always insert a newline (long-form /
   // rich body), so send is bound to Cmd/Ctrl+Enter regardless of the global
@@ -64,7 +124,7 @@ export function Composer({ tabId }: { tabId: string }) {
             onPaste={handlePaste}
             placeholder={t('composer.placeholders.message')}
             spellCheck={spellCheck}
-            className="h-full min-h-[240px] w-full resize-none bg-transparent text-[0.875rem] leading-relaxed text-primary placeholder-secondary outline-none"
+            className="h-full min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-primary placeholder-secondary outline-none"
           />
         )}
       </div>
@@ -74,7 +134,7 @@ export function Composer({ tabId }: { tabId: string }) {
         onRemove={(id) => update({ attachments: draft.attachments.filter((a) => a.id !== id) })}
       />
 
-      {error && <p className="shrink-0 px-4 pb-1 text-[0.6875rem] font-medium text-rose-500">{error}</p>}
+      {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-rose-500">{error}</p>}
 
       <ComposerFooter
         rich={draft.rich}
@@ -85,8 +145,16 @@ export function Composer({ tabId }: { tabId: string }) {
         onPickFiles={() => void pickAttachmentFiles()}
         onPickInlineImages={() => void pickInlineImages()}
         onToggleRich={toggleRich}
+        onUseTemplate={(template) => void useTemplate(template)}
+        pgpSign={draft.pgpSign}
+        pgpEncrypt={draft.pgpEncrypt}
+        pgpPassphrase={pgpPassphrase}
+        onPgpSignChange={(value) => update({ pgpSign: value })}
+        onPgpEncryptChange={(value) => update({ pgpEncrypt: value })}
+        onPgpPassphraseChange={setPgpPassphrase}
         onDiscard={() => void closeMessageTab(tabId)}
-        onSubmit={submit}
+        onSubmit={() => void submit()}
+        onSchedule={(at) => void submit(at)}
       />
     </div>
   )

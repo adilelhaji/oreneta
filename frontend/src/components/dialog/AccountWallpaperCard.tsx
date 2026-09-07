@@ -29,15 +29,15 @@ export function AccountWallpaperCard({ account }: { account: Account }) {
       title={t('settings.account.chatBackground')}
       control={
         <div className="flex items-center gap-3 select-none">
-          <span className="text-[0.6875rem] font-semibold text-secondary truncate max-w-32">{presetName}</span>
+          <span className="text-caption font-semibold text-secondary truncate max-w-32">{presetName}</span>
           <div
-            className={`h-7 w-11 rounded-lg border border-border/80 overflow-hidden relative shadow-inner shrink-0 ${previewInfo.className}`}
+            className={`h-7 w-11 rounded-control-sm border border-border/80 overflow-hidden relative shadow-inner shrink-0 ${previewInfo.className}`}
             style={previewInfo.style}
           />
           <button
             type="button"
             onClick={() => setDialogOpen(true)}
-            className="rounded-xl bg-active border border-border/30 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-active hover:border-border/50 cursor-pointer transition-colors"
+            className="rounded-control bg-active border border-border/30 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-active hover:border-border/50 cursor-pointer transition-colors"
           >
             {t('common.change')}
           </button>

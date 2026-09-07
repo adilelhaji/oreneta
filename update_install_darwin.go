@@ -25,7 +25,7 @@ func applyUpdate(channel updateChannel, payload string) error {
 		return fmt.Errorf("update: %s is not writable — install the update manually: %w", parent, err)
 	}
 
-	mount, err := os.MkdirTemp("", "meron-update-mount-")
+	mount, err := os.MkdirTemp("", "oreneta-update-mount-")
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func applyUpdate(channel updateChannel, payload string) error {
 		return err
 	}
 
-	staging := filepath.Join(parent, fmt.Sprintf(".meron-update-%d.app", os.Getpid()))
+	staging := filepath.Join(parent, fmt.Sprintf(".oreneta-update-%d.app", os.Getpid()))
 	_ = os.RemoveAll(staging)
 	// ditto preserves the bundle's symlinks, resource forks and signature;
 	// a plain copy would break codesigning.
@@ -54,7 +54,7 @@ func applyUpdate(channel updateChannel, payload string) error {
 		return fmt.Errorf("update: copy failed: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	previous := filepath.Join(parent, fmt.Sprintf(".meron-old-%d.app", os.Getpid()))
+	previous := filepath.Join(parent, fmt.Sprintf(".oreneta-old-%d.app", os.Getpid()))
 	_ = os.RemoveAll(previous)
 	if err := os.Rename(bundle, previous); err != nil {
 		_ = os.RemoveAll(staging)

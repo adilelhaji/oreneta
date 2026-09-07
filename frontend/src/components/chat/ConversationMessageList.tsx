@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { CSSProperties } from 'react'
-import { Loader2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { loadMoreMessages } from '../../states/mail'
@@ -10,6 +9,7 @@ import type { Message } from '../../types'
 import { LinkHoverPreview } from './LinkHoverPreview'
 import { MessageBubble } from './MessageBubble'
 import { MessageRow } from './MessageRow'
+import { ErrorState, LoadingState } from '../empty-state/StateViews'
 import { formatDateDivider } from './messageHelpers'
 import type { MessageContextMenuState } from './MessageContextMenu'
 
@@ -162,22 +162,13 @@ export function ConversationMessageList({
         onScroll={handleScroll}
         className="message-scroll flex-1 overflow-y-auto px-4 py-6 space-y-4 z-10 relative"
       >
-        {showThreadLoading && (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 size={28} className="animate-spin text-secondary/70" />
-          </div>
-        )}
+        {showThreadLoading && <LoadingState title={t('empty.loadingConversation')} />}
         {showThreadError && (
-          <div className="flex h-full flex-col items-center justify-center gap-3">
-            <p className="text-sm text-secondary">{t('chat.threadLoadFailed')}</p>
-            <button
-              type="button"
-              onClick={onRetryThreadLoad}
-              className="rounded-full bg-active border border-border/30 px-4 py-1 text-xs font-medium text-secondary hover:bg-active cursor-pointer"
-            >
-              {t('chat.retry')}
-            </button>
-          </div>
+          <ErrorState
+            title={t('chat.threadLoadFailed')}
+            retryLabel={t('chat.retry')}
+            onRetry={onRetryThreadLoad}
+          />
         )}
         {!showThreadLoading && messagesCursor && (
           <div className="flex justify-center pb-2">
@@ -187,7 +178,7 @@ export function ConversationMessageList({
               onClick={loadEarlier}
               className="rounded-full bg-active border border-border/30 px-4 py-1 text-xs font-medium text-secondary hover:bg-active disabled:opacity-50 cursor-pointer"
             >
-              {messagesLoadingMore ? 'Loading…' : 'Load earlier messages'}
+              {messagesLoadingMore ? t('common.loading') : t('chat.loadEarlier')}
             </button>
           </div>
         )}
@@ -207,7 +198,7 @@ export function ConversationMessageList({
                   onContextMenu={(event) => {
                     if (hasSelectedText()) return
                     event.preventDefault()
-                    let linkUrl = (event.nativeEvent as any)?.meronLinkUrl || (event as any)?.meronLinkUrl
+                    let linkUrl = (event.nativeEvent as any)?.orenetaLinkUrl || (event as any)?.orenetaLinkUrl
                     if (!linkUrl) {
                       const target = event.target as Element | null
                       const anchor =
@@ -228,7 +219,7 @@ export function ConversationMessageList({
                     }
                     onOpenContextMenu({ x: event.clientX, y: event.clientY, message, linkUrl })
                   }}
-                  className={`rounded-2xl transition-shadow ${traditional ? 'space-y-2' : 'space-y-4'} ${
+                  className={`rounded-panel transition-shadow ${traditional ? 'space-y-2' : 'space-y-4'} ${
                     activeSearchId === message.id || jumpMessageId === message.id
                       ? 'ring-2 ring-amber-300/80 ring-offset-2 ring-offset-transparent'
                       : ''
@@ -237,7 +228,7 @@ export function ConversationMessageList({
                   {/* The traditional layout carries a date on every message
                       header, so it needs no dividers. */}
                   {!traditional && label && label !== previousLabel && (
-                    <div className="mx-auto w-max select-none rounded-full bg-active border border-border/30 px-3 py-1.2 text-center text-[0.6875rem] font-semibold uppercase tracking-wider text-secondary">
+                    <div className="mx-auto w-max select-none rounded-full bg-active border border-border/30 px-3 py-1.2 text-center text-caption font-semibold uppercase tracking-wider text-secondary">
                       {label}
                     </div>
                   )}

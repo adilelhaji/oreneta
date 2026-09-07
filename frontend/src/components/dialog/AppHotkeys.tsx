@@ -23,6 +23,7 @@ import {
   syncMail,
   selectAdjacentThread,
   archiveThread,
+  markThreadJunk,
   deleteThread,
   toggleStarWithUndo,
   markUnreadWithUndo,
@@ -379,6 +380,11 @@ export function AppHotkeys() {
           event.preventDefault()
           thread$.mediaOpen.set(!thread$.mediaOpen.peek())
           break
+        case 'thread.junk':
+          if (!selected()) return
+          event.preventDefault()
+          void markThreadJunk(selected(), true)
+          break
         case 'reply.focus':
           if (!threadSearchVisible()) return
           event.preventDefault()
@@ -421,12 +427,12 @@ export function AppHotkeys() {
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('focusin', clearThreadListDeleteScope)
     window.addEventListener('pointerdown', clearThreadListDeleteScope)
-    window.addEventListener('meron.frameKeyDown', onFrameKeyDown)
+    window.addEventListener('oreneta.frameKeyDown', onFrameKeyDown)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('focusin', clearThreadListDeleteScope)
       window.removeEventListener('pointerdown', clearThreadListDeleteScope)
-      window.removeEventListener('meron.frameKeyDown', onFrameKeyDown)
+      window.removeEventListener('oreneta.frameKeyDown', onFrameKeyDown)
     }
   }, [])
 

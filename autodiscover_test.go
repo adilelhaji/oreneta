@@ -92,7 +92,7 @@ func TestExpandUsername(t *testing.T) {
 
 func TestFetchAutoconfigParsesUsableXML(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("User-Agent"); got != "Meron-Mail-Autoconfig" {
+		if got := r.Header.Get("User-Agent"); got != "Oreneta-Mail-Autoconfig" {
 			t.Fatalf("User-Agent = %q", got)
 		}
 		w.Header().Set("Content-Type", "application/xml")

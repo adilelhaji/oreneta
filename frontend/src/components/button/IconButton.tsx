@@ -15,8 +15,8 @@ const SIZES: Record<IconButtonSize, { box: string; icon: number }> = {
 
 const RADII: Record<IconButtonRadius, string> = {
   full: 'rounded-full',
-  lg: 'rounded-lg',
-  xl: 'rounded-xl',
+  lg: 'rounded-control-sm',
+  xl: 'rounded-control',
 }
 
 function variantClasses(variant: IconButtonVariant, active: boolean): string {

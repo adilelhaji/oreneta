@@ -14,6 +14,7 @@
 
 use anyhow::{bail, Context as _};
 use base64::Engine as _;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use ::ews::create_item::CreateItem;
@@ -300,6 +301,38 @@ impl EwsClient {
             }
         }
         Ok(people)
+    }
+
+    /// The mailbox's own Automatic Replies (Out of Office) settings — real,
+    /// reliable server-side state, unlike the client-side substitute plain
+    /// IMAP/SMTP accounts fall back to (see `crate::oof`), because there is
+    /// nothing server-side to ask there.
+    pub fn get_oof_settings(&self, mailbox: &str) -> anyhow::Result<EwsOofSettings> {
+        let response = self.call(::ews::user_oof_settings::GetUserOofSettingsRequest {
+            mailbox: oof_mailbox(mailbox),
+        })?;
+        match response.response_message {
+            ResponseClass::Success(_) | ResponseClass::Warning(_) => {}
+            ResponseClass::Error(error) => {
+                return Err(anyhow::Error::new(error).context("GetUserOofSettings"))
+            }
+        }
+        let wire = response
+            .oof_settings
+            .context("GetUserOofSettings succeeded but returned no OofSettings")?;
+        EwsOofSettings::from_wire(wire)
+    }
+
+    /// Writes the mailbox's Automatic Replies settings.
+    pub fn set_oof_settings(&self, mailbox: &str, settings: &EwsOofSettings) -> anyhow::Result<()> {
+        let response = self.call(::ews::user_oof_settings::SetUserOofSettingsRequest {
+            mailbox: oof_mailbox(mailbox),
+            user_oof_settings: settings.to_wire()?,
+        })?;
+        match response.response_message {
+            ResponseClass::Success(_) | ResponseClass::Warning(_) => Ok(()),
+            ResponseClass::Error(error) => Err(anyhow::Error::new(error).context("SetUserOofSettings")),
+        }
     }
 
     /// What a window cannot carry: the attendees and the notes.
@@ -2044,6 +2077,10 @@ impl EwsEnvelope {
             message_id: self.message_id,
             gmail_msg_id: None,
             in_reply_to: self.in_reply_to,
+            // Exchange answers this as a property of the item, but the sync
+            // path does not request it yet. Unknown, not "no": saying no would
+            // be a filter quietly hiding mail that does carry a file.
+            has_attachments: None,
             to: self.to,
             cc: self.cc,
             recipient_overflow: 0,
@@ -2195,6 +2232,119 @@ fn item_id(reference: &EwsId) -> BaseItemId {
     }
 }
 
+/// The mailbox identifier `GetUserOofSettings`/`SetUserOofSettings` address
+/// by — always this account's own address, since Automatic Replies has no
+/// concept of asking on someone else's behalf the way delegate access might.
+fn oof_mailbox(address: &str) -> ::ews::user_oof_settings::OofMailbox {
+    ::ews::user_oof_settings::OofMailbox {
+        name: None,
+        address: address.to_string(),
+        routing_type: Some("SMTP".to_string()),
+    }
+}
+
+/// A mailbox's Automatic Replies settings, in the shape the RPC layer and
+/// frontend read — flatter than the EWS wire schema (`Duration`/`ReplyBody`
+/// unwrapped into plain fields) since nothing outside this module needs
+/// their nesting, only what they mean.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EwsOofSettings {
+    pub state: EwsOofState,
+    pub external_audience: EwsExternalAudience,
+    /// Unix seconds; meaningful only when `state` is `Scheduled`.
+    #[serde(default)]
+    pub start_at: i64,
+    #[serde(default)]
+    pub end_at: i64,
+    #[serde(default)]
+    pub internal_reply: String,
+    #[serde(default)]
+    pub external_reply: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EwsOofState {
+    Disabled,
+    Enabled,
+    Scheduled,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EwsExternalAudience {
+    None,
+    Known,
+    All,
+}
+
+impl EwsOofSettings {
+    fn from_wire(wire: ::ews::user_oof_settings::OofSettings) -> anyhow::Result<Self> {
+        use ::ews::user_oof_settings::{ExternalAudience, OofState};
+
+        let (start_at, end_at) = match wire.duration {
+            Some(duration) => (oof_datetime_to_unix(duration.start_time), oof_datetime_to_unix(duration.end_time)),
+            None => (0, 0),
+        };
+        Ok(Self {
+            state: match wire.oof_state {
+                OofState::Disabled => EwsOofState::Disabled,
+                OofState::Enabled => EwsOofState::Enabled,
+                OofState::Scheduled => EwsOofState::Scheduled,
+            },
+            external_audience: match wire.external_audience {
+                ExternalAudience::None => EwsExternalAudience::None,
+                ExternalAudience::Known => EwsExternalAudience::Known,
+                ExternalAudience::All => EwsExternalAudience::All,
+            },
+            start_at,
+            end_at,
+            internal_reply: wire.internal_reply.and_then(|reply| reply.message).unwrap_or_default(),
+            external_reply: wire.external_reply.and_then(|reply| reply.message).unwrap_or_default(),
+        })
+    }
+
+    fn to_wire(&self) -> anyhow::Result<::ews::user_oof_settings::OofSettings> {
+        use ::ews::user_oof_settings::{Duration as OofDuration, ExternalAudience, OofSettings, OofState, ReplyBody};
+
+        let duration = match self.state {
+            EwsOofState::Scheduled => Some(OofDuration {
+                start_time: unix_to_oof_datetime(self.start_at)?,
+                end_time: unix_to_oof_datetime(self.end_at)?,
+            }),
+            EwsOofState::Disabled | EwsOofState::Enabled => None,
+        };
+        Ok(OofSettings {
+            oof_state: match self.state {
+                EwsOofState::Disabled => OofState::Disabled,
+                EwsOofState::Enabled => OofState::Enabled,
+                EwsOofState::Scheduled => OofState::Scheduled,
+            },
+            external_audience: match self.external_audience {
+                EwsExternalAudience::None => ExternalAudience::None,
+                EwsExternalAudience::Known => ExternalAudience::Known,
+                EwsExternalAudience::All => ExternalAudience::All,
+            },
+            duration,
+            internal_reply: Some(ReplyBody { message: Some(self.internal_reply.clone()) }),
+            external_reply: Some(ReplyBody { message: Some(self.external_reply.clone()) }),
+        })
+    }
+}
+
+fn unix_to_oof_datetime(unix_seconds: i64) -> anyhow::Result<::ews::user_oof_settings::OofDateTime> {
+    let odt = time::OffsetDateTime::from_unix_timestamp(unix_seconds).context("invalid out-of-office date")?;
+    Ok(::ews::user_oof_settings::OofDateTime(time::PrimitiveDateTime::new(
+        odt.date(),
+        odt.time(),
+    )))
+}
+
+fn oof_datetime_to_unix(value: ::ews::user_oof_settings::OofDateTime) -> i64 {
+    value.0.assume_utc().unix_timestamp()
+}
+
 /// The item a write should address: the occurrence itself, or the series it
 /// belongs to.
 ///
@@ -2242,6 +2392,43 @@ mod tests {
             id: id.to_string(),
             change_key: None,
         }
+    }
+
+    #[test]
+    fn oof_settings_disabled_round_trips_through_the_wire_shape() {
+        let settings = EwsOofSettings {
+            state: EwsOofState::Disabled,
+            external_audience: EwsExternalAudience::None,
+            start_at: 0,
+            end_at: 0,
+            internal_reply: String::new(),
+            external_reply: String::new(),
+        };
+        let wire = settings.to_wire().expect("to_wire");
+        assert!(wire.duration.is_none(), "Disabled must not carry a Duration");
+        let back = EwsOofSettings::from_wire(wire).expect("from_wire");
+        assert!(matches!(back.state, EwsOofState::Disabled));
+    }
+
+    #[test]
+    fn oof_settings_scheduled_carries_its_window_and_replies_through_the_wire_shape() {
+        let settings = EwsOofSettings {
+            state: EwsOofState::Scheduled,
+            external_audience: EwsExternalAudience::Known,
+            start_at: 1_800_000_000,
+            end_at: 1_800_600_000,
+            internal_reply: "Back Monday.".to_string(),
+            external_reply: "Away, limited access to email.".to_string(),
+        };
+        let wire = settings.to_wire().expect("to_wire");
+        assert!(wire.duration.is_some(), "Scheduled must carry a Duration");
+        let back = EwsOofSettings::from_wire(wire).expect("from_wire");
+        assert!(matches!(back.state, EwsOofState::Scheduled));
+        assert!(matches!(back.external_audience, EwsExternalAudience::Known));
+        assert_eq!(back.start_at, settings.start_at);
+        assert_eq!(back.end_at, settings.end_at);
+        assert_eq!(back.internal_reply, settings.internal_reply);
+        assert_eq!(back.external_reply, settings.external_reply);
     }
 
     #[test]

@@ -321,7 +321,7 @@ func (a *App) calendarSetColor(payload map[string]any) (any, error) {
 	})
 }
 
-// calendarCreateLocal adds a calendar that lives only in this copy of Meron.
+// calendarCreateLocal adds a calendar that lives only in this copy of Oreneta.
 // Nothing syncs it and nothing else holds a copy, which the interface says.
 func (a *App) calendarCreateLocal(payload map[string]any) (any, error) {
 	var req struct {

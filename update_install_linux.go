@@ -33,7 +33,7 @@ func replaceTarget(channel updateChannel, payload string) error {
 		return fmt.Errorf("update: %s is not writable — install the update manually: %w", parent, err)
 	}
 
-	staging := filepath.Join(parent, fmt.Sprintf(".meron-update-%d", os.Getpid()))
+	staging := filepath.Join(parent, fmt.Sprintf(".oreneta-update-%d", os.Getpid()))
 	_ = os.Remove(staging)
 
 	var err error
@@ -42,7 +42,7 @@ func replaceTarget(channel updateChannel, payload string) error {
 		// The payload is the new AppImage itself.
 		err = copyFile(payload, staging, 0o755)
 	case channelTarball:
-		err = extractBinaryFromTarGz(payload, "meron", staging)
+		err = extractBinaryFromTarGz(payload, "oreneta", staging)
 	default:
 		return fmt.Errorf("update: unsupported channel %q", channel.Kind)
 	}
@@ -63,7 +63,7 @@ func replaceTarget(channel updateChannel, payload string) error {
 }
 
 // extractBinaryFromTarGz pulls a single entry out of the release tarball. The
-// archive only ever holds the `meron` binary, but the name is matched on the
+// archive only ever holds the `oreneta` binary, but the name is matched on the
 // basename so a leading directory in a future layout still works.
 func extractBinaryFromTarGz(archive, name, dest string) error {
 	file, err := os.Open(archive)

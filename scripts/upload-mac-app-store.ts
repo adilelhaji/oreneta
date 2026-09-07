@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Build and upload Meron for the Mac App Store.
+// Build and upload Oreneta for the Mac App Store.
 //
 // Runs scripts/build-mas.sh (pass SKIP_BUILD=1 to upload an existing .pkg),
 // then hands the result to fastlane with the same App Store Connect API key the
@@ -33,8 +33,10 @@ const version: string = wails.info.productVersion
 
 // Whatever scripts/build-mas.sh writes; only meaningful to override alongside
 // SKIP_BUILD, since the build script's output path is fixed.
-const defaultPkgPath = resolve(repoRoot, 'dist/Meron-mas.pkg')
+const defaultPkgPath = resolve(repoRoot, 'dist/Oreneta-mas.pkg')
 const pkgPath = pkgArg ?? process.env.PKG_PATH ?? defaultPkgPath
+// jp.nonbili.meron on purpose: it is the App ID actually registered with
+// Apple for this app's provisioning profile (see scripts/build-mas.sh).
 const appIdentifier = process.env.MAC_APP_IDENTIFIER ?? 'jp.nonbili.meron'
 const releaseNotesPath = process.env.MAC_RELEASE_NOTES_PATH
   ?? resolve(mobileDir, 'fastlane/metadata/mac/en-US/release_notes.txt')

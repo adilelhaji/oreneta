@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { X, Rss, RefreshCw } from 'lucide-react'
+import { Rss, RefreshCw } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { useEscapeKey } from '../../lib/useEscapeKey'
 import { showToast } from '../../states/ui'
 import { submitFeed } from '../../states/feeds'
 import { ui$ } from '../../states/ui'
 import { accounts$ } from '../../states/accounts'
 import { Button } from '../button/Button'
-import { IconButton } from '../button/IconButton'
+import { TextInput } from '../field/Field'
+import { Dialog } from './Dialog'
 
 export function AddFeedDialog() {
   const { t } = useTranslation()
@@ -25,8 +25,6 @@ export function AddFeedDialog() {
     if (loading) return
     ui$.addFeedAccount.set('')
   }
-
-  useEscapeKey(onClose, !loading)
 
   const submit = async () => {
     const trimmed = url.trim()
@@ -45,43 +43,14 @@ export function AddFeedDialog() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
-      <div className="bg-chats border border-border text-primary max-w-md w-full rounded-3xl p-6 shadow-2xl animate-slide-up flex flex-col gap-5">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-              <Rss size={17} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-[0.9375rem] font-bold tracking-tight leading-tight">{t('feeds.actions.addFeed')}</h2>
-              <p className="text-[0.65625rem] text-secondary mt-1 font-medium truncate">
-                {t('feeds.subscribeUnder', { account: accountName })}
-              </p>
-            </div>
-          </div>
-          <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" onClick={onClose} />
-        </div>
-
-        {/* Content */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[0.6875rem] font-semibold text-secondary px-1">{t('feeds.url')}</label>
-          <input
-            autoFocus
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submit()
-            }}
-            placeholder="https://example.com/feed.xml"
-            className="w-full rounded-xl bg-hover px-3.5 py-2.5 text-[0.8125rem] text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent transition-all duration-150"
-          />
-          <p className="text-[0.65625rem] text-secondary px-1 leading-relaxed font-medium">{t('feeds.urlHint')}</p>
-          {error && <p className="text-[0.6875rem] text-rose-500 px-1 font-medium">{error}</p>}
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 select-none">
+    <Dialog
+      title={t('feeds.actions.addFeed')}
+      subtitle={t('feeds.subscribeUnder', { account: accountName })}
+      icon={Rss}
+      onClose={onClose}
+      closeDisabled={loading}
+      footer={
+        <>
           <Button variant="ghost" onClick={onClose} disabled={loading}>
             {t('buttons.cancel')}
           </Button>
@@ -89,8 +58,33 @@ export function AddFeedDialog() {
             {loading && <RefreshCw size={11} className="animate-spin" />}
             <span>{t('feeds.actions.addFeed')}</span>
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <label htmlFor="add-feed-url" className="px-1 text-caption font-semibold text-secondary">
+          {t('feeds.url')}
+        </label>
+        <TextInput
+          id="add-feed-url"
+          autoFocus
+          fieldSize="lg"
+          surface="hover"
+          value={url}
+          invalid={!!error}
+          onChange={(event) => setUrl(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void submit()
+          }}
+          placeholder="https://example.com/feed.xml"
+        />
+        <p className="px-1 text-caption font-medium leading-relaxed text-secondary">{t('feeds.urlHint')}</p>
+        {error && (
+          <p role="alert" className="px-1 text-caption font-medium text-rose-500">
+            {error}
+          </p>
+        )}
       </div>
-    </div>
+    </Dialog>
   )
 }

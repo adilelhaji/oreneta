@@ -220,7 +220,7 @@ function AttachmentImageGrid({ images, onOpen }: { images: Attachment[]; onOpen:
           type="button"
           onClick={() => onOpen(index)}
           title={image.filename}
-          className="overflow-hidden rounded-lg border border-border bg-black/[0.03] cursor-zoom-in"
+          className="overflow-hidden rounded-control-sm border border-border bg-black/[0.03] cursor-zoom-in"
         >
           <img src={mediaSrc(image)} alt={image.filename} className={`w-full object-contain ${imageClass}`} />
         </button>

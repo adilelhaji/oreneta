@@ -25,7 +25,7 @@ export function UpdateSection() {
   if (!status.supported) {
     if (!status.managed) return null
     return (
-      <div className="mt-5 w-full rounded-2xl border border-border/70 bg-raised/70 px-4 py-3 text-xs text-secondary">
+      <div className="mt-5 w-full rounded-panel border border-border/70 bg-raised/70 px-4 py-3 text-xs text-secondary">
         {t('updates.managedExternally')}
       </div>
     )
@@ -34,7 +34,7 @@ export function UpdateSection() {
   const percent = status.total > 0 ? Math.min(100, Math.round((status.downloaded / status.total) * 100)) : 0
 
   return (
-    <div className="mt-5 w-full rounded-2xl border border-border/70 bg-raised/70 px-4 py-3">
+    <div className="mt-5 w-full rounded-panel border border-border/70 bg-raised/70 px-4 py-3">
       {status.state === 'checking' && (
         <div className="flex items-center justify-center gap-2 text-xs font-semibold text-secondary">
           <Loader2 size={14} className="animate-spin" />
@@ -107,7 +107,7 @@ export function UpdateSection() {
             </Button>
           </div>
           {status.error && (
-            <p className="mt-2 break-words text-[0.6875rem] leading-4 text-rose-600 dark:text-rose-400">
+            <p className="mt-2 break-words text-caption leading-4 text-rose-600 dark:text-rose-400">
               {status.error}
             </p>
           )}
@@ -134,7 +134,7 @@ export function UpdateSection() {
         status.releasesUrl && (
           <button
             type="button"
-            className="mt-2 inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-secondary hover:text-primary"
+            className="mt-2 inline-flex items-center gap-1 text-caption font-semibold text-secondary hover:text-primary"
             onClick={() => openExternal(status.releasesUrl)}
           >
             {t('updates.downloadManually')}
@@ -143,7 +143,7 @@ export function UpdateSection() {
         )}
 
       {status.state === 'ready' && status.channel === 'nsis' && (
-        <p className="mt-2 text-[0.6875rem] leading-4 text-secondary">{t('updates.windowsPermissionHint')}</p>
+        <p className="mt-2 text-caption leading-4 text-secondary">{t('updates.windowsPermissionHint')}</p>
       )}
     </div>
   )

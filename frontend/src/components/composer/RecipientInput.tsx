@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ClipboardEvent, KeyboardEvent } from 'react'
+import { useTranslation } from '../../lib/i18n'
+import { formatContact, searchDirectory, suggestContacts } from '../../lib/contacts'
+import { useValue } from '@legendapp/state/react'
+import { accounts$ } from '../../states/accounts'
+import {
+  commitPending,
+  editAt,
+  fieldParts,
+  removeAt,
+  setPending,
+} from '../../lib/recipientField'
 import type { Contact } from '../../types'
-import { suggestContacts, formatContact } from '../../lib/contacts'
+import { Chip } from '../chip/Chip'
 
 type RecipientInputProps = {
   value: string
@@ -10,34 +22,57 @@ type RecipientInputProps = {
   autoFocus?: boolean
 }
 
-// A comma-separated recipient field carries multiple addresses; autocomplete
-// only ever completes the token after the final comma. Returns the leading
-// portion (including that comma) plus the active token being typed.
-function splitTail(value: string): { head: string; tail: string } {
-  const idx = value.lastIndexOf(',')
-  if (idx === -1) return { head: '', tail: value }
-  return { head: value.slice(0, idx + 1), tail: value.slice(idx + 1) }
-}
+const inputClass =
+  'min-w-[8rem] flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
 
-const inputClass = 'w-full bg-transparent text-[0.8125rem] text-primary placeholder-secondary outline-none'
-
+/**
+ * A recipient field whose entries are things rather than text.
+ *
+ * A comma-separated string is easy to write and hard to read: with four
+ * recipients it is a paragraph, a typo in the middle is invisible, and
+ * removing one means selecting exactly the right characters. Each entry
+ * becoming a chip fixes all three — and lets the field say, at the moment it
+ * is typed, that something is not an address, instead of at the moment the
+ * send fails.
+ *
+ * The string underneath is untouched: it is still what the draft saves and
+ * what the send path reads, and the token under the cursor stays text until a
+ * separator ends it, so nothing hardens a half-typed address. All of that
+ * lives in `recipientField`; this file is the keyboard and the markup.
+ */
 export function RecipientInput({ value, onChange, accountId, placeholder, autoFocus }: RecipientInputProps) {
+  const { t } = useTranslation()
   const [suggestions, setSuggestions] = useState<Contact[]>([])
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const focusedRef = useRef(false)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const tail = splitTail(value).tail.trim()
+  const { committed, pending } = fieldParts(value)
+  const accounts = useValue(accounts$)
+  const account = accounts.find((candidate) => candidate.id === accountId)
+  // Only an Exchange account has a directory to ask; asking anything else
+  // would be a round trip per keystroke for an answer known to be empty.
+  const hasDirectory = !!account && (account.provider === 'exchange' || !!account.ews_url)
 
-  // Fetch suggestions (debounced) while focused. An empty token surfaces the
-  // top correspondents; otherwise we match what's been typed so far.
+  // Suggestions follow the token under the cursor, debounced, and only while
+  // the field has focus — a dropdown over a field nobody is in is in the way.
   useEffect(() => {
     if (!focusedRef.current) return
     let cancelled = false
     const timer = setTimeout(async () => {
-      const results = await suggestContacts(accountId, tail)
+      const query = pending.trim()
+      // Local first, so the list appears at once; the directory's answer, when
+      // there is one, is merged in below it without repeating an address the
+      // book already had.
+      const [local, remote] = await Promise.all([
+        suggestContacts(accountId, query),
+        hasDirectory ? searchDirectory(accountId, query) : Promise.resolve([]),
+      ])
       if (cancelled) return
+      const taken = new Set(local.map((contact) => contact.addr.toLowerCase()))
+      const results = [...local, ...remote.filter((contact) => !taken.has(contact.addr.toLowerCase()))]
       setSuggestions(results)
       setActive(0)
       setOpen(results.length > 0)
@@ -46,92 +81,158 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
       cancelled = true
       clearTimeout(timer)
     }
-  }, [tail, accountId])
+  }, [pending, accountId, hasDirectory])
 
-  function accept(contact: Contact) {
-    const { head } = splitTail(value)
-    const prefix = head ? `${head} ` : ''
-    onChange(`${prefix}${formatContact(contact)}, `)
+  const close = () => {
     setOpen(false)
     setSuggestions([])
   }
 
-  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  const accept = (contact: Contact) => {
+    onChange(commitPending(value, formatContact(contact)))
+    close()
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (open && suggestions.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setActive((i) => (i + 1) % suggestions.length)
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setActive((index) => (index + 1) % suggestions.length)
         return
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setActive((i) => (i - 1 + suggestions.length) % suggestions.length)
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setActive((index) => (index - 1 + suggestions.length) % suggestions.length)
         return
       }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault()
         accept(suggestions[active])
         return
       }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        setOpen(false)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        close()
         return
       }
     }
+
+    // The separators do what they say: they end an entry. Enter and Tab do it
+    // too, because that is what every other client has taught people.
+    if (event.key === ',' || event.key === ';' || event.key === 'Enter' || event.key === 'Tab') {
+      if (!pending.trim()) return
+      event.preventDefault()
+      onChange(commitPending(value))
+      close()
+      return
+    }
+
+    // Backspace at the start of an empty token opens the previous chip back
+    // up rather than deleting it. A typo one character in is the common case,
+    // and losing the whole address to fix it is a poor trade.
+    if (event.key === 'Backspace' && !pending && committed.length > 0) {
+      event.preventDefault()
+      onChange(editAt(value, committed.length - 1))
+      close()
+    }
+  }
+
+  // A pasted list is a list, not one long address.
+  const onPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const text = event.clipboardData.getData('text')
+    if (!/[,;\n]/.test(text)) return
+    event.preventDefault()
+    onChange(commitPending(setPending(value, `${pending}${text}`)))
+    close()
   }
 
   return (
     <div className="relative flex-1">
-      <input
-        autoFocus={autoFocus}
-        value={value}
-        placeholder={placeholder}
-        spellCheck={false}
-        className={inputClass}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        onFocus={() => {
-          focusedRef.current = true
-          if (blurTimer.current) clearTimeout(blurTimer.current)
-          if (suggestions.length > 0) setOpen(true)
-          else
-            void suggestContacts(accountId, tail).then((r) => {
-              if (!focusedRef.current) return
-              setSuggestions(r)
-              setActive(0)
-              setOpen(r.length > 0)
-            })
-        }}
-        onBlur={() => {
-          // Delay so a mousedown on a suggestion registers before we close.
-          blurTimer.current = setTimeout(() => {
-            focusedRef.current = false
-            setOpen(false)
-          }, 150)
-        }}
-      />
-      {open && suggestions.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border bg-chats py-1 shadow-xl">
-          {suggestions.map((c, i) => (
-            <li
-              key={c.addr}
-              // mousedown (not click) so it fires before the input's blur.
-              onMouseDown={(e) => {
-                e.preventDefault()
-                accept(c)
+      <div className="flex flex-wrap items-center gap-1">
+        {committed.map((recipient, index) => {
+          const label = recipient.name || recipient.address || recipient.raw
+          const broken = recipient.status === 'malformed'
+          return (
+            <Chip
+              key={`${recipient.raw}-${index}`}
+              tone={broken ? 'danger' : 'neutral'}
+              title={broken ? t('composer.recipients.notAnAddress') : recipient.address || recipient.raw}
+              onClick={() => {
+                onChange(editAt(value, index))
+                inputRef.current?.focus()
               }}
-              onMouseEnter={() => setActive(i)}
-              className={`cursor-pointer px-3 py-1.5 text-[0.8125rem] ${i === active ? 'bg-accent/10' : ''}`}
+              onRemove={() => onChange(removeAt(value, index))}
+              removeLabel={t('composer.recipients.remove', { name: label })}
             >
-              {c.name.trim() && c.name.trim().toLowerCase() !== c.addr.toLowerCase() ? (
+              {label}
+            </Chip>
+          )
+        })}
+        <input
+          ref={inputRef}
+          autoFocus={autoFocus}
+          value={pending}
+          placeholder={committed.length === 0 ? placeholder : undefined}
+          spellCheck={false}
+          className={inputClass}
+          onChange={(event) => onChange(setPending(value, event.target.value))}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          onFocus={() => {
+            focusedRef.current = true
+            if (blurTimer.current) clearTimeout(blurTimer.current)
+            void suggestContacts(accountId, pending.trim()).then((results) => {
+              if (!focusedRef.current) return
+              setSuggestions(results)
+              setActive(0)
+              setOpen(results.length > 0)
+            })
+          }}
+          onBlur={() => {
+            // Delayed so a mousedown on a suggestion registers before the
+            // dropdown closes. Leaving the field also settles what was being
+            // typed: someone who tabs away having written a whole address
+            // meant it, and should not find it gone.
+            blurTimer.current = setTimeout(() => {
+              focusedRef.current = false
+              setOpen(false)
+              if (pending.trim()) onChange(commitPending(value))
+            }, 150)
+          }}
+        />
+      </div>
+      {open && suggestions.length > 0 && (
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-xl">
+          {suggestions.map((contact, index) => (
+            <li
+              key={contact.addr}
+              // mousedown, not click, so it fires before the input's blur.
+              onMouseDown={(event) => {
+                event.preventDefault()
+                accept(contact)
+              }}
+              onMouseEnter={() => setActive(index)}
+              className={`cursor-pointer px-3 py-1.5 text-ui ${index === active ? 'bg-accent/10' : ''}`}
+            >
+              {contact.name.trim() && contact.name.trim().toLowerCase() !== contact.addr.toLowerCase() ? (
                 <span>
-                  <span className="text-primary">{c.name.trim()}</span>{' '}
-                  <span className="text-secondary">{`<${c.addr}>`}</span>
+                  <span className="text-primary">{contact.name.trim()}</span>{' '}
+                  <span className="text-secondary">{`<${contact.addr}>`}</span>
+                  {/* Only for somebody the reader keeps. An address seen in a
+                      header carries no such fact, and inventing one would put
+                      a stranger's employer on screen as if it were known. */}
+                  {contact.known && contact.organisation && (
+                    <span className="text-2xs text-secondary/75"> · {contact.organisation}</span>
+                  )}
+                  {/* Said, because it is a different claim: not somebody the
+                      reader keeps, but somebody the organisation lists. */}
+                  {contact.directory && (
+                    <span className="text-2xs text-secondary/75"> · {t('composer.recipients.fromDirectory')}</span>
+                  )}
                 </span>
               ) : (
-                <span className="text-primary">{c.addr}</span>
+                <span className="text-primary">{contact.addr}</span>
               )}
             </li>
           ))}

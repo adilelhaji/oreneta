@@ -59,17 +59,17 @@ export function SortableBoard({ board, active, onSelect, onContextMenu }: Sortab
       {activeIndicator(active)}
       {board.avatarUrl ? (
         <div
-          className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 ${
+          className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 ${
             active
               ? 'ring-2 ring-accent ring-offset-2 ring-offset-sidenav scale-105'
               : 'opacity-75 hover:opacity-100 hover:scale-105'
           }`}
         >
-          <Avatar name={board.name} src={board.avatarUrl} size={44} className="!rounded-2xl pointer-events-none" />
+          <Avatar name={board.name} src={board.avatarUrl} size={44} className="!rounded-panel pointer-events-none" />
         </div>
       ) : (
         <div
-          className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 ${
+          className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 ${
             active
               ? 'bg-accent text-white shadow-lg shadow-accent/25 scale-105'
               : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
@@ -134,7 +134,7 @@ export function SortableAccount({
           other badges). */}
       <div className="relative">
         <div
-          className={`relative flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200 ${
+          className={`relative flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 ${
             active
               ? 'ring-2 ring-accent ring-offset-2 ring-offset-sidenav scale-105'
               : isPaused || needsReconnect
@@ -147,7 +147,7 @@ export function SortableAccount({
             src={account.avatar_url}
             size={44}
             fallback={isRSS ? <Rss size={20} /> : undefined}
-            className={`!rounded-2xl pointer-events-none transition-all ${
+            className={`!rounded-panel pointer-events-none transition-all ${
               isPaused || needsReconnect ? 'grayscale opacity-40' : ''
             }`}
           />

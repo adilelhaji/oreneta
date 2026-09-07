@@ -120,11 +120,11 @@ export function ConversationDetailsPanel({
               <h3 className="truncate text-sm font-bold text-primary">
                 {view === 'media' ? t('chat.media') : t('chat.files')}
               </h3>
-              <p className="mt-0.5 truncate text-[0.6875rem] font-medium text-secondary" title={scopeTitle}>
+              <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
                 {scopeTitle}
               </p>
               {scopeSubtitle && (
-                <p className="truncate text-[0.625rem] text-secondary/80" title={scopeSubtitle}>
+                <p className="truncate text-2xs text-secondary/80" title={scopeSubtitle}>
                   {scopeSubtitle}
                 </p>
               )}
@@ -219,7 +219,7 @@ export function ConversationDetailsPanel({
                 return (
                   <div
                     key={idx}
-                    className="group flex items-center rounded-xl border border-border/30 bg-black/[0.02] dark:bg-white/[0.02]"
+                    className="group flex items-center rounded-control border border-border/30 bg-black/[0.02] dark:bg-white/[0.02]"
                   >
                     <button
                       type="button"
@@ -232,12 +232,12 @@ export function ConversationDetailsPanel({
                           : 'cursor-default'
                       }`}
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control-sm bg-accent/10 text-accent">
                         <FileIcon size={16} />
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-primary">{file.filename}</p>
-                        <p className="text-[0.625rem] text-secondary">{formatFileSize(file.size)}</p>
+                        <p className="text-2xs text-secondary">{formatFileSize(file.size)}</p>
                       </div>
                       {downloadable && (
                         <Download
@@ -251,7 +251,7 @@ export function ConversationDetailsPanel({
                       onClick={() => onShowInConversation(file.messageId)}
                       title={t('chat.showInConversation')}
                       aria-label={t('chat.showInConversation')}
-                      className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-black/[0.06] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer"
+                      className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-black/[0.06] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer"
                     >
                       <MessageSquare size={15} />
                     </button>
@@ -269,7 +269,7 @@ export function ConversationDetailsPanel({
           onClose={() => setPersonMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[80]"
-          className="fixed z-[81] min-w-[180px] rounded-xl border border-border bg-header p-1 shadow-xl"
+          className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-xl"
           onContextMenu={(event) => event.preventDefault()}
         >
           <MenuItem
@@ -325,7 +325,7 @@ function Overview({
         </div>
       )}
       <div className="p-3">
-        <div className="mb-2 flex items-center gap-2 px-2 text-[0.6875rem] font-bold uppercase tracking-wide text-secondary">
+        <div className="mb-2 flex items-center gap-2 px-2 text-caption font-bold uppercase tracking-wide text-secondary">
           <Users size={15} />
           <span>{t('chat.people', { count: participants.length })}</span>
         </div>
@@ -340,7 +340,7 @@ function SummaryRow({ icon: Icon, label, onClick }: { icon: LucideIcon; label: s
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-3 text-left text-sm font-medium text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+      className="flex w-full cursor-pointer items-center gap-3 rounded-control-sm px-2 py-3 text-left text-sm font-medium text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
     >
       <Icon size={21} className="shrink-0" />
       <span>{label}</span>
@@ -376,25 +376,25 @@ function PeopleList({
             if (event.button === 2) openMenu(event, person)
           }}
           onContextMenu={(event) => openMenu(event, person)}
-          className="group flex items-center gap-3 rounded-xl p-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+          className="group flex items-center gap-3 rounded-control p-2 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
         >
           <Avatar name={person.name} email={person.email} size={36} />
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-primary selectable-text">
               <span className="truncate">{person.name}</span>
               {person.isSelf && (
-                <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-[0.5625rem] font-bold uppercase tracking-wide text-accent">
+                <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-accent">
                   {t('chat.you')}
                 </span>
               )}
             </p>
-            <p className="truncate text-[0.6875rem] text-secondary selectable-text">{person.email}</p>
+            <p className="truncate text-caption text-secondary selectable-text">{person.email}</p>
           </div>
           <button
             type="button"
             onClick={() => onComposeTo(person)}
             title={t('chat.newMessageTo', { email: person.email })}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-secondary opacity-0 transition-all hover:bg-black/[0.06] hover:text-primary group-hover:opacity-100 dark:hover:bg-white/[0.08] cursor-pointer"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary opacity-0 transition-all hover:bg-black/[0.06] hover:text-primary group-hover:opacity-100 dark:hover:bg-white/[0.08] cursor-pointer"
           >
             <SquarePen size={15} />
           </button>
