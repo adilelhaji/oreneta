@@ -57,5 +57,14 @@ func (a *App) mailMarkJunk(payload map[string]any) (any, error) {
 	}
 
 	payload["target_folder_id"] = target
-	return a.mailMove(payload)
+	result, err := a.mailMove(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	// The move itself is what matters; teaching the learned spam filter from
+	// it is secondary and must never turn a move that already succeeded into
+	// a reported failure.
+	_, _ = a.sidecar.Call("mail.recordSpamJudgment", map[string]any{"thread_id": threadID, "spam": junk})
+	return result, nil
 }

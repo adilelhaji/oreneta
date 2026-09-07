@@ -29,7 +29,7 @@ use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
     backup, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
-    search, secrets, smtp, store, thread_list, thread_read, unified,
+    search, secrets, smtp, spam, store, thread_list, thread_read, unified,
 };
 
 /// Shared, serialized writer so responses and events never interleave on stdout.
@@ -1591,6 +1591,54 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::set_sender_priority(&db, &account, &addr, choice)?;
             let judged = store::rejudge_priority(&db, &account, false)?;
             Ok(json!({ "ok": true, "judged": judged }))
+        }
+
+        // Why a conversation looks like spam by what the reader has taught
+        // this account, and what it would take to say otherwise. Same
+        // "only when asked" shape as `mail.priorityReason` — computing this
+        // for every row to show none of it would be work nobody asked for.
+        "mail.spamReason" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let (sender, signals) = store::thread_spam_signals(
+                &db,
+                &parsed.account,
+                &parsed.folder,
+                &parsed.thread_key,
+            )?
+            .context("no such conversation")?;
+            let verdict = spam::verdict(&signals);
+            Ok(json!({
+                "spam": verdict.spam,
+                "reasons": verdict.reasons,
+                "sender": sender,
+            }))
+        }
+
+        // Records what the reader decided about one conversation: spam
+        // confirmed, or said not spam. Never moves anything itself — the
+        // reader's own action (marking junk, or dismissing the notice) does
+        // that separately — and re-judges the account so already-cached mail
+        // from the same sender reflects the correction at once.
+        "mail.recordSpamJudgment" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let is_spam = p
+                .get("spam")
+                .and_then(Value::as_bool)
+                .context("missing spam")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let sender = store::record_spam_judgment(
+                &db,
+                &parsed.account,
+                &parsed.folder,
+                &parsed.thread_key,
+                is_spam,
+            )?;
+            Ok(json!({ "ok": true, "sender": sender }))
         }
 
         // Address books on a CardDAV server, found from what somebody typed:

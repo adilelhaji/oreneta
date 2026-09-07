@@ -449,6 +449,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailSetSenderPriority(payload)
 	case "mail.markJunk":
 		return a.mailMarkJunk(payload)
+	case "mail.spamReason":
+		return a.mailSpamReason(payload)
+	case "mail.recordSpamJudgment":
+		return a.mailRecordSpamJudgment(payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":
