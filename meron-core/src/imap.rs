@@ -177,6 +177,13 @@ pub struct MessageHeader {
     /// Gmail's stable per-message id (`X-GM-MSGID`), when the server exposes it.
     #[serde(default)]
     pub gmail_msg_id: Option<u64>,
+    /// This message's Gmail labels (`X-GM-LABELS`), when the server exposes
+    /// them. Always populated (possibly empty) on a Gmail account, since it
+    /// is requested alongside FLAGS everywhere flags are — see
+    /// `docs/adr/0002-remote-label-linking.md` for what reconciles against
+    /// it. Empty, not absent, on a non-Gmail account.
+    #[serde(default)]
+    pub gmail_labels: Vec<String>,
     /// Normalized RFC In-Reply-To from the envelope, when available.
     #[serde(default)]
     pub in_reply_to: String,
@@ -586,6 +593,10 @@ pub async fn fetch_recent(session: &mut Session, folder: &str, limit: u32) -> Re
             thread_key,
             message_id: ef.message_id,
             gmail_msg_id: fetch.gmail_msg_id().copied(),
+            gmail_labels: fetch
+                .gmail_labels()
+                .map(|labels| labels.iter().map(|label| label.to_string()).collect())
+                .unwrap_or_default(),
             in_reply_to: ef.in_reply_to,
             folder: String::new(),
             has_attachments: fetch.bodystructure().map(structure_has_attachment),
@@ -840,6 +851,10 @@ pub async fn fetch_by_message_ids(
                 thread_key,
                 message_id: ef.message_id,
                 gmail_msg_id: fetch.gmail_msg_id().copied(),
+                gmail_labels: fetch
+                    .gmail_labels()
+                    .map(|labels| labels.iter().map(|label| label.to_string()).collect())
+                    .unwrap_or_default(),
                 in_reply_to: ef.in_reply_to,
                 has_attachments: fetch.bodystructure().map(structure_has_attachment),
                 to: ef.to,
@@ -917,6 +932,10 @@ pub async fn fetch_headers_by_uid(
             thread_key,
             message_id: ef.message_id,
             gmail_msg_id: fetch.gmail_msg_id().copied(),
+            gmail_labels: fetch
+                .gmail_labels()
+                .map(|labels| labels.iter().map(|label| label.to_string()).collect())
+                .unwrap_or_default(),
             in_reply_to: ef.in_reply_to,
             folder: String::new(),
             has_attachments: fetch.bodystructure().map(structure_has_attachment),
@@ -935,7 +954,7 @@ pub async fn fetch_headers_by_uid(
 /// fetch.
 pub struct FlagSync {
     pub highest_modseq: u64,
-    pub changes: Vec<(u32, bool, bool)>, // (uid, seen, starred)
+    pub changes: Vec<(u32, bool, bool, Vec<String>)>, // (uid, seen, starred, gmail_labels)
 }
 
 /// Reconcile \Seen and \Flagged across an entire folder using CONDSTORE so updates made
@@ -1003,6 +1022,10 @@ pub async fn sync_flags(
             changes: Vec::new(),
         });
     }
+    // Checked here rather than threaded in from the caller, matching
+    // supports_condstore just above: a second capability check, answered from
+    // the same cached CAPABILITY response, not a second round trip.
+    let gmail = supports_gmail_ext(session).await;
     let mailbox = session
         .select_condstore(folder)
         .await
@@ -1020,7 +1043,14 @@ pub async fn sync_flags(
         });
     }
 
-    let query = format!("(FLAGS) (CHANGEDSINCE {since_modseq})");
+    // X-GM-LABELS alongside FLAGS: a label changed on another client (or on
+    // this one, on another device) is a change CONDSTORE already promises to
+    // report on this same pass, the same way \Seen and \Flagged already are.
+    let query = if gmail {
+        format!("(FLAGS X-GM-LABELS) (CHANGEDSINCE {since_modseq})")
+    } else {
+        format!("(FLAGS) (CHANGEDSINCE {since_modseq})")
+    };
     let mut stream = session
         .uid_fetch("1:*", query)
         .await
@@ -1038,7 +1068,11 @@ pub async fn sync_flags(
         let starred = fetch
             .flags()
             .any(|flag| matches!(flag, async_imap::types::Flag::Flagged));
-        changes.push((uid, seen, starred));
+        let gmail_labels = fetch
+            .gmail_labels()
+            .map(|labels| labels.iter().map(|label| label.to_string()).collect())
+            .unwrap_or_default();
+        changes.push((uid, seen, starred, gmail_labels));
     }
     drop(stream);
     Ok(FlagSync {
@@ -1098,6 +1132,36 @@ pub async fn store_seen(session: &mut Session, uids: &[u32], seen: bool) -> Resu
         "-FLAGS.SILENT (\\Seen)"
     };
     store_flag(session, uids, op).await
+}
+
+/// Add or remove one Gmail label on a set of UIDs already in the selected
+/// mailbox. The caller must first run [`prepare_flag_update`] on the
+/// session. See docs/adr/0002-remote-label-linking.md — this is the write
+/// half of a linked label; membership itself is always decided by what the
+/// next sync reads back, never assumed from having sent this.
+pub async fn store_gmail_label(
+    session: &mut Session,
+    uids: &[u32],
+    label: &str,
+    present: bool,
+) -> Result<()> {
+    if uids.is_empty() {
+        return Ok(());
+    }
+    // Self-guarded, the same way sync_flags guards on CONDSTORE: a label
+    // linked on an account that turns out not to be Gmail (today, linking
+    // itself does not check) is a silent no-op here rather than a STORE the
+    // server cannot parse.
+    if !supports_gmail_ext(session).await {
+        return Ok(());
+    }
+    let quoted = imap_quote(label);
+    let op = if present {
+        format!("+X-GM-LABELS.SILENT ({quoted})")
+    } else {
+        format!("-X-GM-LABELS.SILENT ({quoted})")
+    };
+    store_flag(session, uids, &op).await
 }
 
 /// Add or remove the `\Flagged` flag on a set of UIDs already in the selected
@@ -1776,8 +1840,10 @@ fn is_inline_image(
 
 fn fetch_items(gmail: bool, body: bool) -> &'static str {
     match (gmail, body) {
-        (true, true) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID BODYSTRUCTURE BODY.PEEK[])",
-        (true, false) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID BODYSTRUCTURE)",
+        (true, true) => {
+            "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID X-GM-LABELS BODYSTRUCTURE BODY.PEEK[])"
+        }
+        (true, false) => "(UID FLAGS RFC822.HEADER X-GM-MSGID X-GM-THRID X-GM-LABELS BODYSTRUCTURE)",
         (false, true) => "(UID FLAGS RFC822.HEADER BODYSTRUCTURE BODY.PEEK[])",
         (false, false) => "(UID FLAGS RFC822.HEADER BODYSTRUCTURE)",
     }
@@ -1961,6 +2027,17 @@ mod tests {
         // The listing fetch still asks for no body: the structure is what says
         // whether there is an attachment, not the attachment itself.
         assert!(!fetch_items(false, false).contains("BODY.PEEK"));
+    }
+
+    #[test]
+    fn gmail_labels_are_requested_only_on_gmail_and_alongside_the_thread_id() {
+        for items in [fetch_items(true, false), fetch_items(true, true)] {
+            assert!(items.contains("X-GM-LABELS"), "{items}");
+            assert!(items.contains("X-GM-THRID"), "{items}");
+        }
+        for items in [fetch_items(false, false), fetch_items(false, true)] {
+            assert!(!items.contains("X-GM-LABELS"), "{items}");
+        }
     }
 
     #[test]

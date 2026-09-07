@@ -374,6 +374,16 @@ impl Session {
         }
     }
 
+    /// The write half of a linked label — see
+    /// docs/adr/0002-remote-label-linking.md. A no-op on any account that
+    /// isn't Gmail, including Exchange: nothing here to write to.
+    pub async fn store_gmail_label(&mut self, uids: &[u32], label: &str, present: bool) -> Result<()> {
+        match self {
+            Session::Imap(session) => imap::store_gmail_label(session, uids, label, present).await,
+            Session::Ews(_) => Ok(()),
+        }
+    }
+
     pub async fn move_to_folder(
         &mut self,
         source_folder: &str,

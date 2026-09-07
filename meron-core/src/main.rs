@@ -2262,6 +2262,46 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         .collect()
                 })
                 .unwrap_or_default();
+
+            // What changed, among labels this account has a link for — the
+            // only ones a remote write could mean anything for. Read before
+            // the local write, so "changed" compares against what was
+            // really there a moment ago, not against what this same request
+            // is about to make true.
+            let (before, links) = {
+                let db = engine.db.lock().unwrap();
+                let before = store::thread_labels(&db, &parsed.account, &parsed.thread_key)?;
+                let links: Vec<store::LabelLink> = store::label_links(&db)?
+                    .into_iter()
+                    .filter(|link| link.account_id == parsed.account)
+                    .collect();
+                (before, links)
+            };
+            let before_set: std::collections::HashSet<&str> =
+                before.iter().map(String::as_str).collect();
+            let after_set: std::collections::HashSet<&str> =
+                label_ids.iter().map(String::as_str).collect();
+
+            // Written before the local state changes, matching how a flag
+            // write already works: if the remote write fails, local state is
+            // never touched, so the two never quietly disagree about which
+            // one is right.
+            for link in &links {
+                let was_on = before_set.contains(link.label_id.as_str());
+                let now_on = after_set.contains(link.label_id.as_str());
+                if was_on == now_on {
+                    continue;
+                }
+                write_gmail_label_change(
+                    engine,
+                    &parsed.account,
+                    &parsed.thread_key,
+                    &link.remote_name,
+                    now_on,
+                )
+                .await?;
+            }
+
             let db = engine.db.lock().unwrap();
             store::set_thread_labels(&db, &parsed.account, &parsed.thread_key, &label_ids)?;
             Ok(json!({ "labels": store::thread_labels(&db, &parsed.account, &parsed.thread_key)? }))

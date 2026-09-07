@@ -626,6 +626,53 @@ pub async fn sync_folders(
     Ok(folders)
 }
 
+/// Writes one linked label's change to the account it is linked on, for
+/// every message the thread has, in every folder it appears in — Gmail
+/// labels are per-message, Oreneta's own are per-conversation, and
+/// docs/adr/0002-remote-label-linking.md's assign rule is to touch every
+/// message rather than invent a narrower remote unit that does not exist.
+/// One STORE per folder the thread spans; a thread real people work with
+/// almost always spans one, occasionally two. Self-guards on a non-Gmail
+/// account (see `backend::Session::store_gmail_label`) rather than erroring:
+/// linking itself does not yet check what an account supports.
+pub async fn write_gmail_label_change(
+    engine: &Arc<Engine>,
+    account: &str,
+    thread_key: &str,
+    remote_name: &str,
+    present: bool,
+) -> anyhow::Result<()> {
+    let headers = {
+        let db = engine.db.lock().unwrap();
+        store::get_thread_headers_all_folders(&db, account, thread_key)?
+    };
+    let mut by_folder: std::collections::HashMap<String, Vec<u32>> = std::collections::HashMap::new();
+    for header in headers {
+        by_folder.entry(header.folder).or_default().push(header.uid);
+    }
+    for (folder, uids) in by_folder {
+        let remote_name = remote_name.to_string();
+        engine
+            .with_preflighted_write_session(
+                account,
+                {
+                    let folder = folder.clone();
+                    move |session| {
+                        let folder = folder.clone();
+                        Box::pin(async move { session.prepare_flag_update(&folder).await })
+                    }
+                },
+                move |session| {
+                    let uids = uids.clone();
+                    let remote_name = remote_name.clone();
+                    Box::pin(async move { session.store_gmail_label(&uids, &remote_name, present).await })
+                },
+            )
+            .await?;
+    }
+    Ok(())
+}
+
 /// Delete messages on the server. Returns `None` for a permanent expunge
 /// (Drafts, or items already in Trash), or `Some(trash)` when moved to Trash.
 pub async fn delete_to_trash(
@@ -948,15 +995,31 @@ pub async fn sync_messages(
             );
         }
     }
+    // Every UID this pass touched — fetched fresh, or only its flags/labels
+    // reconciled — is a UID whose thread might now carry a different set of
+    // linked labels than it did a moment ago.
+    let mut touched_uids: Vec<u32> = batch.messages.iter().map(|m| m.uid).collect();
     if let Some(fs) = flag_sync {
-        for &(uid, seen, starred) in &fs.changes {
-            store::update_message_seen(&db, account, folder, uid, seen)?;
-            store::update_message_starred(&db, account, folder, uid, starred)?;
+        for (uid, seen, starred, gmail_labels) in &fs.changes {
+            store::update_message_seen(&db, account, folder, *uid, *seen)?;
+            store::update_message_starred(&db, account, folder, *uid, *starred)?;
+            // Unlike upsert_messages's skip-if-empty (justified there: it
+            // shares a JSON blob with fields a flag-only fetch never
+            // populates, so skipping avoids clobbering them), this call
+            // touches only the gmail_labels key. CONDSTORE always reports a
+            // changed UID's *current* full label set, not a diff, so a
+            // skip here would leave a stale non-empty cache the moment a
+            // message's last label is removed — exactly the update this
+            // path exists to catch.
+            store::update_message_gmail_labels(&db, account, folder, *uid, gmail_labels)?;
+            touched_uids.push(*uid);
         }
         if fs.highest_modseq > 0 {
             store::set_folder_modseq(&db, account, folder, fs.highest_modseq)?;
         }
     }
+    let touched_threads = store::thread_keys_for_uids(&db, account, folder, &touched_uids)?;
+    store::reconcile_gmail_labels(&db, account, &touched_threads)?;
     store::set_folder_state(&db, account, folder, batch.uidvalidity, batch.uid_next)?;
     Ok(SyncMessagesResult {
         count,
