@@ -14,6 +14,8 @@ export type Label = {
   name: string
   /** As `#rrggbb`; the interface paints the chip in it. */
   colour: string
+  /** Shows as a chip in the quick filter bar, not only in the dropdown. */
+  inBar: boolean
 }
 
 export const labels$ = observable({
@@ -45,6 +47,7 @@ export function newLabel(existing: Label[]): Label {
     name: '',
     // Walks the list so two labels made in a row do not come out the same.
     colour: LABEL_COLOURS[existing.length % LABEL_COLOURS.length],
+    inBar: false,
   }
 }
 

@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Label name",
   "labels.noneYet": "No labels yet.",
   "labels.saveFailed": "The labels could not be saved",
+  "labels.showInBar": "クイックフィルターバーに表示",
+  "labels.showInBarShort": "バーに表示",
   "labels.title": "Labels",
   "labels.unnamed": "this label",
   "layout.resizeConversation": "会話のサイズ変更",

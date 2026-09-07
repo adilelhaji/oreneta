@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Label name",
   "labels.noneYet": "No labels yet.",
   "labels.saveFailed": "The labels could not be saved",
+  "labels.showInBar": "Visa i snabbfilterfältet",
+  "labels.showInBarShort": "I fältet",
   "labels.title": "Labels",
   "labels.unnamed": "this label",
   "layout.resizeConversation": "Ändra storlek på konversation",

@@ -4,7 +4,7 @@ import { mail$ } from './mail'
 import { activeLabelId, nextFilters } from './ui'
 import type { Label } from './labels'
 
-const label = (id: string, name: string): Label => ({ id, name, colour: '#2056dd' })
+const label = (id: string, name: string, inBar = false): Label => ({ id, name, colour: '#2056dd', inBar })
 
 describe('names the reader puts on conversations', () => {
   const calls: { command: string; payload: any }[] = []

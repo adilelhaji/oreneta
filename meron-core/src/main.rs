@@ -2199,7 +2199,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({
                 "labels": stored
                     .iter()
-                    .map(|label| json!({ "id": label.id, "name": label.name, "colour": label.colour }))
+                    .map(|label| json!({
+                        "id": label.id,
+                        "name": label.name,
+                        "colour": label.colour,
+                        "inBar": label.in_bar,
+                    }))
                     .collect::<Vec<_>>()
             }))
         }
@@ -2221,6 +2226,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     id: req_str(value, "id")?,
                     name: name.trim().to_string(),
                     colour: req_str(value, "colour").unwrap_or_else(|_| "#2056dd".to_string()),
+                    in_bar: value.get("inBar").and_then(Value::as_bool).unwrap_or(false),
                 });
             }
             store::replace_labels(&engine.db.lock().unwrap(), &labels)?;

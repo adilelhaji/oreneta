@@ -2573,16 +2573,20 @@ pub struct Label {
     pub name: String,
     /// A colour the interface paints it in, as `#rrggbb`.
     pub colour: String,
+    /// Whether it shows as a chip in the quick filter bar, rather than only
+    /// in the "any label" dropdown.
+    pub in_bar: bool,
 }
 
 /// Every label, in the order they were arranged.
 pub fn labels(conn: &Connection) -> Result<Vec<Label>> {
-    let mut stmt = conn.prepare("SELECT id, name, colour FROM labels ORDER BY position")?;
+    let mut stmt = conn.prepare("SELECT id, name, colour, in_bar FROM labels ORDER BY position")?;
     let rows = stmt.query_map([], |row| {
         Ok(Label {
             id: row.get(0)?,
             name: row.get(1)?,
             colour: row.get(2)?,
+            in_bar: row.get::<_, i64>(3)? != 0,
         })
     })?;
     Ok(rows.filter_map(Result::ok).collect())
@@ -2596,10 +2600,17 @@ pub fn labels(conn: &Connection) -> Result<Vec<Label>> {
 pub fn replace_labels(conn: &Connection, labels: &[Label]) -> Result<()> {
     conn.execute("DELETE FROM labels", [])?;
     {
-        let mut stmt =
-            conn.prepare("INSERT INTO labels(id, name, colour, position) VALUES(?1, ?2, ?3, ?4)")?;
+        let mut stmt = conn.prepare(
+            "INSERT INTO labels(id, name, colour, position, in_bar) VALUES(?1, ?2, ?3, ?4, ?5)",
+        )?;
         for (position, label) in labels.iter().enumerate() {
-            stmt.execute(params![label.id, label.name, label.colour, position as i64])?;
+            stmt.execute(params![
+                label.id,
+                label.name,
+                label.colour,
+                position as i64,
+                label.in_bar,
+            ])?;
         }
     }
     conn.execute(

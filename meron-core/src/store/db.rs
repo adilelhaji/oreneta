@@ -621,6 +621,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 28 {
         migrate_v28(&tx)?;
     }
+    if version < 29 {
+        migrate_v29(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1186,6 +1189,15 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 28;")?;
+    Ok(())
+}
+
+/// Whether a label shows as a chip in the quick filter bar, or only in the
+/// dropdown. Off by default: an install with a dozen labels should not wake
+/// up to a bar crowded with all of them.
+fn migrate_v29(conn: &Connection) -> Result<()> {
+    conn.execute_batch("ALTER TABLE labels ADD COLUMN in_bar INTEGER NOT NULL DEFAULT 0;")?;
+    conn.execute_batch("PRAGMA user_version = 29;")?;
     Ok(())
 }
 

@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Label name",
   "labels.noneYet": "No labels yet.",
   "labels.saveFailed": "The labels could not be saved",
+  "labels.showInBar": "إظهار في شريط التصفية السريع",
+  "labels.showInBarShort": "في الشريط",
   "labels.title": "Labels",
   "labels.unnamed": "this label",
   "layout.resizeConversation": "تغيير حجم المحادثة",

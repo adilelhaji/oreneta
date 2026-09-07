@@ -678,6 +678,8 @@
   "labels.namePlaceholder": "Label name",
   "labels.noneYet": "No labels yet.",
   "labels.saveFailed": "The labels could not be saved",
+  "labels.showInBar": "Mostrar na barra de filtros rápidos",
+  "labels.showInBarShort": "Na barra",
   "labels.title": "Labels",
   "labels.unnamed": "this label",
   "layout.resizeConversation": "Redimensionar conversa",
