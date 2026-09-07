@@ -2195,16 +2195,27 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // one device and silently not on another would be worse than one that
         // never claimed to travel.
         "labels.list" => {
-            let stored = store::labels(&engine.db.lock().unwrap())?;
+            let db = engine.db.lock().unwrap();
+            let stored = store::labels(&db)?;
+            let links = store::label_links(&db)?;
+            drop(db);
             Ok(json!({
                 "labels": stored
                     .iter()
-                    .map(|label| json!({
-                        "id": label.id,
-                        "name": label.name,
-                        "colour": label.colour,
-                        "inBar": label.in_bar,
-                    }))
+                    .map(|label| {
+                        let label_links: serde_json::Map<String, Value> = links
+                            .iter()
+                            .filter(|link| link.label_id == label.id)
+                            .map(|link| (link.account_id.clone(), json!(link.remote_name)))
+                            .collect();
+                        json!({
+                            "id": label.id,
+                            "name": label.name,
+                            "colour": label.colour,
+                            "inBar": label.in_bar,
+                            "links": label_links,
+                        })
+                    })
                     .collect::<Vec<_>>()
             }))
         }
@@ -2254,6 +2265,42 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let db = engine.db.lock().unwrap();
             store::set_thread_labels(&db, &parsed.account, &parsed.thread_key, &label_ids)?;
             Ok(json!({ "labels": store::thread_labels(&db, &parsed.account, &parsed.thread_key)? }))
+        }
+
+        // Links a label to an account's remote concept — a Gmail label name,
+        // an Exchange category, an IMAP keyword — matched by name. Schema and
+        // storage only: no protocol reads or writes the remote side yet (see
+        // docs/adr/0002-remote-label-linking.md). Re-linking under a new name
+        // replaces the old one rather than adding a second link.
+        "labels.link" => {
+            let label_id = req_str(p, "label_id")?;
+            let account_id = req_str(p, "account_id")?;
+            let remote_name = req_str(p, "remote_name")?;
+            if remote_name.trim().is_empty() {
+                anyhow::bail!("a link needs a remote name; use labels.unlink to clear one");
+            }
+            let db = engine.db.lock().unwrap();
+            let exists: bool = db
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM labels WHERE id = ?1)",
+                    rusqlite::params![label_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            if !exists {
+                anyhow::bail!("no such label: {label_id}");
+            }
+            store::set_label_link(&db, &label_id, &account_id, remote_name.trim())?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Clears a label's link on one account. The label and whatever it was
+        // linked to are both left as they were.
+        "labels.unlink" => {
+            let label_id = req_str(p, "label_id")?;
+            let account_id = req_str(p, "account_id")?;
+            store::clear_label_link(&engine.db.lock().unwrap(), &label_id, &account_id)?;
+            Ok(json!({ "ok": true }))
         }
 
         // The rules as they stand, in the order they run.

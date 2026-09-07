@@ -10,6 +10,7 @@ const label = (id: string, name: string, inBar: boolean, colour = '#2056dd'): La
   name,
   colour,
   inBar,
+  links: {},
 })
 
 describe('QuickFilterBar', () => {

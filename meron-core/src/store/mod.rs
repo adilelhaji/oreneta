@@ -2617,6 +2617,59 @@ pub fn replace_labels(conn: &Connection, labels: &[Label]) -> Result<()> {
         "DELETE FROM thread_labels WHERE label_id NOT IN (SELECT id FROM labels)",
         [],
     )?;
+    conn.execute(
+        "DELETE FROM label_links WHERE label_id NOT IN (SELECT id FROM labels)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// A label's link to a remote concept on one account — see
+/// docs/adr/0002-remote-label-linking.md. `remote_name` is whatever that
+/// protocol calls it: a Gmail label name, an Exchange category name, an
+/// IMAP keyword atom.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LabelLink {
+    pub label_id: String,
+    pub account_id: String,
+    pub remote_name: String,
+}
+
+/// Every link, for every label and account. Read once and grouped by the
+/// caller rather than queried per label, so listing labels stays one round
+/// trip regardless of how many carry a link.
+pub fn label_links(conn: &Connection) -> Result<Vec<LabelLink>> {
+    let mut stmt = conn.prepare("SELECT label_id, account_id, remote_name FROM label_links")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(LabelLink {
+            label_id: row.get(0)?,
+            account_id: row.get(1)?,
+            remote_name: row.get(2)?,
+        })
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Links (or re-links, under a new name) a label to an account's remote
+/// concept. Matching by name is a decision the reader makes explicitly, not
+/// a background heuristic — this is the one place that decision is written.
+pub fn set_label_link(conn: &Connection, label_id: &str, account_id: &str, remote_name: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO label_links(label_id, account_id, remote_name) VALUES(?1, ?2, ?3)
+         ON CONFLICT(label_id, account_id) DO UPDATE SET remote_name = excluded.remote_name",
+        params![label_id, account_id, remote_name],
+    )?;
+    Ok(())
+}
+
+/// Clears a label's link on one account. The label and the remote concept it
+/// pointed at are both left exactly as they were — unlinking only forgets the
+/// connection between them.
+pub fn clear_label_link(conn: &Connection, label_id: &str, account_id: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM label_links WHERE label_id = ?1 AND account_id = ?2",
+        params![label_id, account_id],
+    )?;
     Ok(())
 }
 

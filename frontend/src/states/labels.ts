@@ -16,6 +16,13 @@ export type Label = {
   colour: string
   /** Shows as a chip in the quick filter bar, not only in the dropdown. */
   inBar: boolean
+  /**
+   * The remote concept this label is linked to, per account it has a link
+   * on — a Gmail label name, an Exchange category, an IMAP keyword — keyed
+   * by account id. Empty for a label that is purely local, which is every
+   * label until it is linked. See docs/adr/0002-remote-label-linking.md.
+   */
+  links: Record<string, string>
 }
 
 export const labels$ = observable({
@@ -48,6 +55,7 @@ export function newLabel(existing: Label[]): Label {
     // Walks the list so two labels made in a row do not come out the same.
     colour: LABEL_COLOURS[existing.length % LABEL_COLOURS.length],
     inBar: false,
+    links: {},
   }
 }
 
@@ -90,6 +98,40 @@ export async function saveLabels(labels: Label[]) {
           ? { ...thread, labels: thread.labels.filter((id) => kept.has(id)) }
           : thread,
       ),
+  )
+}
+
+/**
+ * Links a label to an account's remote concept, matched by the name given —
+ * an explicit choice the reader makes, not a background guess. Re-linking
+ * under a new name replaces the old one.
+ */
+export async function linkLabel(labelId: string, accountId: string, remoteName: string) {
+  const trimmed = remoteName.trim()
+  if (!trimmed) return
+  await invoke('labels.link', { label_id: labelId, account_id: accountId, remote_name: trimmed })
+  labels$.labels.set(
+    labels$.labels
+      .peek()
+      .map((label) =>
+        label.id === labelId ? { ...label, links: { ...label.links, [accountId]: trimmed } } : label,
+      ),
+  )
+}
+
+/**
+ * Clears a label's link on one account. The label itself, and whatever it
+ * was linked to on the server, are both left as they were.
+ */
+export async function unlinkLabel(labelId: string, accountId: string) {
+  await invoke('labels.unlink', { label_id: labelId, account_id: accountId })
+  labels$.labels.set(
+    labels$.labels.peek().map((label) => {
+      if (label.id !== labelId) return label
+      const links = { ...label.links }
+      delete links[accountId]
+      return { ...label, links }
+    }),
   )
 }
 
