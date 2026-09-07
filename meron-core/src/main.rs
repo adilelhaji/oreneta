@@ -1143,6 +1143,12 @@ async fn sync_and_notify(
     } else {
         std::collections::HashSet::new()
     };
+    // Independent of what rules did with an arrival: an out-of-office reply
+    // answers the person who wrote in, which still makes sense even for a
+    // message a rule went on to file away.
+    if let Some(headers) = new_inbox.as_deref() {
+        apply_oof_to_arrivals(engine, account, headers).await;
+    }
     let new_inbox = new_inbox.map(|headers| {
         headers
             .into_iter()
@@ -2052,6 +2058,76 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }
             }
             Ok(json!({ "ok": false, "failure": last_failure }))
+        }
+
+        // Out-of-office / Automatic Replies. Which shape the settings take —
+        // and where they live — depends entirely on the account's protocol,
+        // decided here from the account's own credentials rather than
+        // trusted from the caller: an Exchange account's settings live on
+        // the server (real, reliable even when Oreneta is closed); a plain
+        // IMAP/SMTP account has no server-side equivalent, so its settings
+        // are this app's own preference and its auto-replies only go out
+        // while Oreneta is running. See `crate::oof` and
+        // `store::accounts::OofPrefs` for why.
+        "oof.get" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if creds.is_ews() {
+                let (own_address, _) = {
+                    let db = engine.db.lock().unwrap();
+                    store::resolve_send_from(&db, &account, &creds.user, "")?
+                };
+                let config = exchange::EwsConfig {
+                    url: creds.ews_url.clone(),
+                    username: creds.user.clone(),
+                    password: creds.password.clone(),
+                };
+                let settings = tokio::task::spawn_blocking(move || {
+                    exchange::EwsClient::new(config).get_oof_settings(&own_address)
+                })
+                .await??;
+                return Ok(json!({ "kind": "ews", "settings": settings }));
+            }
+            let prefs = store::oof_prefs(&engine.db.lock().unwrap(), &account)?;
+            Ok(json!({ "kind": "imap", "settings": prefs }))
+        }
+
+        "oof.set" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            let settings_json = p
+                .get("settings")
+                .cloned()
+                .context("missing out-of-office settings")?;
+            if creds.is_ews() {
+                let settings: exchange::EwsOofSettings =
+                    serde_json::from_value(settings_json).context("invalid out-of-office settings")?;
+                let (own_address, _) = {
+                    let db = engine.db.lock().unwrap();
+                    store::resolve_send_from(&db, &account, &creds.user, "")?
+                };
+                let config = exchange::EwsConfig {
+                    url: creds.ews_url.clone(),
+                    username: creds.user.clone(),
+                    password: creds.password.clone(),
+                };
+                tokio::task::spawn_blocking(move || {
+                    exchange::EwsClient::new(config).set_oof_settings(&own_address, &settings)
+                })
+                .await??;
+                return Ok(json!({ "ok": true }));
+            }
+            let prefs: store::OofPrefs =
+                serde_json::from_value(settings_json).context("invalid out-of-office settings")?;
+            {
+                let db = engine.db.lock().unwrap();
+                store::set_account_pref_json(&db, &account, "oof", Some(serde_json::to_value(&prefs)?))?;
+                // A fresh save starts every sender's reply count back at
+                // zero — see the table's own doc for why this must not be
+                // skipped even when only, say, the reply body changed.
+                store::clear_oof_replies(&db, &account)?;
+            }
+            Ok(json!({ "ok": true }))
         }
 
         // People, from whichever books have been brought in. An empty query
@@ -5121,6 +5197,94 @@ async fn apply_rules_to_arrivals(
         }
     }
     handled
+}
+
+/// Reply automatically to genuinely new inbox mail, for an account with the
+/// client-side out-of-office auto-responder on. Exchange accounts never
+/// reach this: they configure the server's own Automatic Replies instead
+/// (`oof.get`/`oof.set` calling the EWS operations directly), which sends
+/// the reply itself regardless of whether Oreneta is even running — the
+/// whole reason that path exists alongside this one. See `crate::oof` for
+/// what makes a message worth replying to at all.
+async fn apply_oof_to_arrivals(engine: &Arc<Engine>, account: &str, headers: &[imap::MessageHeader]) {
+    if headers.is_empty() {
+        return;
+    }
+    let Ok(creds) = engine.ensure_valid_creds(account).await else {
+        return;
+    };
+    if creds.is_ews() {
+        return;
+    }
+    let oof = {
+        let db = engine.db.lock().unwrap();
+        store::oof_prefs(&db, account).unwrap_or_default()
+    };
+    if !oof.active_at(now_seconds()) {
+        return;
+    }
+    let (own_address, sender_name) = {
+        let db = engine.db.lock().unwrap();
+        match store::resolve_send_from(&db, account, &creds.user, "") {
+            Ok(pair) => pair,
+            Err(_) => return,
+        }
+    };
+    let subject = if oof.subject.trim().is_empty() {
+        "Automatic reply".to_string()
+    } else {
+        oof.subject.clone()
+    };
+
+    for header in headers {
+        let from_addr = header.from_addr.trim().to_lowercase();
+        if from_addr.is_empty() {
+            continue;
+        }
+        let already_replied = {
+            let db = engine.db.lock().unwrap();
+            store::oof_already_replied(&db, account, &from_addr).unwrap_or(true)
+        };
+        if already_replied {
+            continue;
+        }
+
+        let uid = header.uid;
+        let raw = engine
+            .with_read_session(account, |session| {
+                Box::pin(async move { session.fetch_raw_messages_for_copy("INBOX", &[uid]).await })
+            })
+            .await
+            .ok()
+            .and_then(|mut messages| messages.pop());
+        let Some(raw) = raw else { continue };
+        let Ok(mail) = mailparse::parse_mail(&raw.raw) else {
+            continue;
+        };
+        if !meron_core::oof::should_reply(&mail, &header.from_addr, &own_address) {
+            continue;
+        }
+
+        match smtp::send_oof_reply(
+            &creds,
+            &own_address,
+            &sender_name,
+            &header.from_addr,
+            &subject,
+            &oof.body,
+            &header.message_id,
+        )
+        .await
+        {
+            Ok(_) => {
+                let db = engine.db.lock().unwrap();
+                let _ = store::record_oof_reply(&db, account, &from_addr, now_seconds());
+            }
+            Err(err) => {
+                eprintln!("meron-core: out-of-office reply to {account} failed: {err:#}");
+            }
+        }
+    }
 }
 
 /// A scheduled message that will not be tried again, and why.

@@ -361,6 +361,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.smimeRemoveIdentity(payload)
 	case "smime.decrypt":
 		return a.smimeDecrypt(payload)
+	case "oof.get":
+		return a.oofGet(payload)
+	case "oof.set":
+		return a.oofSet(payload)
 	case "pgp.verify":
 		return a.pgpVerify(payload)
 	case "carddav.discover":

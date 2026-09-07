@@ -446,6 +446,42 @@ pub async fn send(
         None => raw,
     };
 
+    // SMTP envelope addresses must be bare ("addr@host"); MIME header entries
+    // may carry a display name. The header form survives in `to_list`/`cc_list`
+    // for the builder above; here we strip down to the address for RCPT TO.
+    let recipients = envelope_recipients(&to_list, &cc_list, &bcc_list);
+    transport(creds, from, &recipients, &raw).await?;
+
+    // Return the copy to file in Sent: identical to the transmitted message
+    // unless there's a Bcc, in which case we rebuild with the `Bcc:` header (and
+    // the same Message-ID) so the user's Sent folder records who they bcc'd.
+    if bcc_list.is_empty() {
+        Ok(raw)
+    } else {
+        build_message(
+            sender_name,
+            from,
+            to,
+            cc,
+            bcc,
+            true,
+            subject,
+            body,
+            html,
+            attachments,
+            in_reply_to,
+            references,
+            reply_to,
+            &message_id,
+        )
+    }
+}
+
+/// Connect, authenticate, and hand one already-built MIME message to the
+/// SMTP server for exactly the recipients given — the wire mechanics shared
+/// by every outgoing message this app sends over SMTP, whether composed by
+/// the reader (`send`) or generated automatically (`send_oof_reply`).
+async fn transport(creds: &Creds, from: &str, recipients: &[String], raw: &[u8]) -> Result<()> {
     // Fall back to the IMAP host if SMTP settings were not provided.
     let host = if creds.smtp_host.is_empty() {
         creds.host.as_str()
@@ -569,50 +605,70 @@ pub async fn send(
         }
     }
 
-    // SMTP envelope addresses must be bare ("addr@host"); MIME header entries
-    // may carry a display name. The header form survives in `to_list`/`cc_list`
-    // for the builder above; here we strip down to the address for RCPT TO.
-    let mut recipients = Vec::new();
-    for addr in envelope_recipients(&to_list, &cc_list, &bcc_list) {
-        recipients.push(EmailAddress::new(addr).context("recipient address")?);
+    let mut envelope_addrs = Vec::new();
+    for addr in recipients {
+        envelope_addrs.push(EmailAddress::new(addr.clone()).context("recipient address")?);
     }
     let envelope = Envelope::new(
         Some(EmailAddress::new(from.to_string()).context("from address")?),
-        recipients,
+        envelope_addrs,
     )
     .context("envelope")?;
     with_timeout(
         SMTP_DATA_TIMEOUT,
         "smtp send",
-        transport.send(SendableEmail::new(envelope, raw.clone())),
+        transport.send(SendableEmail::new(envelope, raw.to_vec())),
     )
     .await?
     .context("smtp send")?;
     let _ = with_timeout(Duration::from_secs(10), "smtp quit", transport.quit()).await;
+    Ok(())
+}
 
-    // Return the copy to file in Sent: identical to the transmitted message
-    // unless there's a Bcc, in which case we rebuild with the `Bcc:` header (and
-    // the same Message-ID) so the user's Sent folder records who they bcc'd.
-    if bcc_list.is_empty() {
-        Ok(raw)
-    } else {
-        build_message(
-            sender_name,
-            from,
-            to,
-            cc,
-            bcc,
-            true,
-            subject,
-            body,
-            html,
-            attachments,
-            in_reply_to,
-            references,
-            reply_to,
-            &message_id,
-        )
+/// Build one out-of-office auto-reply — deliberately much simpler than
+/// `build_message`: plain text, no attachments, no Cc/Bcc, because that is
+/// all an auto-reply is. Marked `Auto-Submitted: auto-replied` (RFC 3834) so
+/// any *other* auto-responder that receives it knows not to answer back —
+/// the same courtesy `oof::looks_automated` checks for on the way in.
+fn build_oof_reply(sender_name: &str, from: &str, to: &str, subject: &str, body: &str, in_reply_to: &str) -> Result<Vec<u8>> {
+    use mail_builder::headers::text::Text;
+
+    let mut builder = MessageBuilder::new()
+        .from((sender_name, from))
+        .to(vec![("", to)])
+        .subject(subject)
+        .text_body(body)
+        .header("Auto-Submitted", Text::new("auto-replied"));
+
+    let in_reply_to_bare = bare_id(in_reply_to);
+    if !in_reply_to_bare.is_empty() {
+        builder = builder.in_reply_to(in_reply_to_bare.as_str());
+        builder = builder.references(&[in_reply_to_bare.as_str()][..]);
     }
+    builder.write_to_vec().context("build out-of-office reply")
+}
+
+/// Send one out-of-office auto-reply over SMTP. IMAP/SMTP accounts only —
+/// an Exchange account configures the server's own Automatic Replies
+/// instead (see `crate::oof`) and never calls this.
+pub async fn send_oof_reply(
+    creds: &Creds,
+    from_addr: &str,
+    sender_name: &str,
+    to: &str,
+    subject: &str,
+    body: &str,
+    in_reply_to: &str,
+) -> Result<Vec<u8>> {
+    let from = if from_addr.trim().is_empty() {
+        creds.user.as_str()
+    } else {
+        from_addr.trim()
+    };
+    let raw = build_oof_reply(sender_name, from, to, subject, body, in_reply_to)?;
+    let recipients = vec![bare_addr(to)];
+    transport(creds, from, &recipients, &raw).await?;
+    Ok(raw)
 }
 
 /// Flatten to/cc/bcc header entries into the bare envelope address list,
@@ -656,7 +712,7 @@ fn bare_id(token: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        as_smtp_cert_error, bare_addr, bare_id, build_message, parse_addrs, split_name_addr,
+        as_smtp_cert_error, bare_addr, bare_id, build_message, build_oof_reply, parse_addrs, split_name_addr,
     };
 
     /// A send and a sync fail the same way inside rustls; only the marker tells
@@ -848,6 +904,30 @@ mod tests {
             raw.contains("References: <root@x.com> <parent@x.com>"),
             "raw: {raw}"
         );
+    }
+
+    #[test]
+    fn oof_reply_is_marked_auto_submitted_and_threaded() {
+        let raw = String::from_utf8(
+            build_oof_reply("Alice", "alice@x.com", "bob@y.com", "Out of office", "I'm away.", "parent@x.com")
+                .expect("build_oof_reply"),
+        )
+        .expect("utf8");
+        assert!(raw.contains("Auto-Submitted: auto-replied"), "raw: {raw}");
+        assert!(raw.contains("In-Reply-To: <parent@x.com>"), "raw: {raw}");
+        assert!(raw.contains("References: <parent@x.com>"), "raw: {raw}");
+        assert!(raw.contains("Subject: Out of office"), "raw: {raw}");
+        assert!(raw.contains("bob@y.com"), "raw: {raw}");
+    }
+
+    #[test]
+    fn oof_reply_with_no_message_id_to_thread_against_has_no_reply_headers() {
+        let raw = String::from_utf8(
+            build_oof_reply("Alice", "alice@x.com", "bob@y.com", "Out of office", "I'm away.", "").expect("build_oof_reply"),
+        )
+        .expect("utf8");
+        assert!(!raw.contains("In-Reply-To:"), "raw: {raw}");
+        assert!(!raw.contains("References:"), "raw: {raw}");
     }
 
     #[test]

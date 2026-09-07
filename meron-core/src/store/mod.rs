@@ -2533,6 +2533,39 @@ pub fn delete_smime_identity(conn: &Connection, fingerprint: &str) -> Result<()>
     Ok(())
 }
 
+/// Whether the client-side out-of-office auto-responder has already replied
+/// to this sender during the current activation.
+pub fn oof_already_replied(conn: &Connection, account: &str, sender_addr: &str) -> Result<bool> {
+    Ok(conn
+        .query_row(
+            "SELECT 1 FROM oof_replied WHERE account = ?1 AND sender_addr = ?2",
+            params![account, sender_addr],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some())
+}
+
+/// Record that the auto-responder has now replied to this sender, so a
+/// second message from them during the same activation gets no reply.
+pub fn record_oof_reply(conn: &Connection, account: &str, sender_addr: &str, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO oof_replied(account, sender_addr, replied_at) VALUES(?1, ?2, ?3)
+         ON CONFLICT(account, sender_addr) DO UPDATE SET replied_at = excluded.replied_at",
+        params![account, sender_addr, now],
+    )?;
+    Ok(())
+}
+
+/// Clear every recorded auto-reply for an account — called whenever its
+/// out-of-office settings are saved, so a fresh activation (or even just an
+/// edited message) starts every sender's reply count back at zero rather
+/// than silently withholding one because of a stale row from before.
+pub fn clear_oof_replies(conn: &Connection, account: &str) -> Result<()> {
+    conn.execute("DELETE FROM oof_replied WHERE account = ?1", params![account])?;
+    Ok(())
+}
+
 /// A label the reader has made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {

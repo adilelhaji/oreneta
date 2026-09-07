@@ -149,6 +149,40 @@ struct AccountPrefs {
     /// Signature override; unset follows the app-wide signature setting.
     #[serde(deserialize_with = "lenient_pref")]
     signature: Option<AccountSignature>,
+    /// Client-side out-of-office auto-reply; unset means off. Exchange
+    /// accounts configure the server's own Automatic Replies instead (see
+    /// `crypto`-sibling module `oof.rs`) and never set this pref — the two
+    /// are mutually exclusive, not layered.
+    #[serde(deserialize_with = "lenient_pref")]
+    oof: Option<OofPrefs>,
+}
+
+/// A client-side out-of-office auto-reply, for an account with no
+/// server-side equivalent. Unlike Exchange's Automatic Replies, this only
+/// takes effect while Oreneta is running — there is no IMAP/SMTP standard
+/// for a server-side vacation responder — which the interface must say so
+/// plainly rather than let the reader believe they are covered when the app
+/// is closed.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct OofPrefs {
+    pub enabled: bool,
+    /// Unix seconds; 0 means "no start date", i.e. active immediately.
+    #[serde(default)]
+    pub start_at: i64,
+    /// Unix seconds; 0 means "no end date", i.e. stays on until turned off.
+    #[serde(default)]
+    pub end_at: i64,
+    pub subject: String,
+    pub body: String,
+}
+
+impl OofPrefs {
+    /// Whether this should be replying right now: enabled, and `now` (Unix
+    /// seconds) falls inside whichever bound(s) are set.
+    pub fn active_at(&self, now: i64) -> bool {
+        self.enabled && (self.start_at == 0 || now >= self.start_at) && (self.end_at == 0 || now <= self.end_at)
+    }
 }
 
 impl AccountPrefs {
@@ -209,6 +243,11 @@ impl AccountPrefs {
     /// app-wide signature".
     fn signature_json(&self) -> serde_json::Value {
         json!(self.signature)
+    }
+
+    /// The out-of-office auto-reply settings, or the (disabled) default.
+    fn oof(&self) -> OofPrefs {
+        self.oof.clone().unwrap_or_default()
     }
 }
 
@@ -930,6 +969,11 @@ pub fn account_paused(conn: &Connection, id: &str) -> Result<bool> {
 /// Explicit Sent-copy override for an account. None means use provider default.
 pub fn save_sent_copy_pref(conn: &Connection, id: &str) -> Result<Option<bool>> {
     Ok(account_prefs(conn, id)?.and_then(|p| p.save_sent_copy()))
+}
+
+/// The out-of-office auto-reply settings for an account (disabled if never set).
+pub fn oof_prefs(conn: &Connection, id: &str) -> Result<OofPrefs> {
+    Ok(account_prefs(conn, id)?.map(|p| p.oof()).unwrap_or_default())
 }
 
 /// The parsed `prefs` for an account, or None if the account row is missing.

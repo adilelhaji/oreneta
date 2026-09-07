@@ -18,6 +18,7 @@ pub mod ffi;
 pub mod imap;
 pub mod log;
 pub mod mail_model;
+pub mod oof;
 pub mod parse;
 pub mod priority;
 pub mod protocol;

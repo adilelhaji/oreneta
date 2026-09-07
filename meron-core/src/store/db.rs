@@ -618,6 +618,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 27 {
         migrate_v27(&tx)?;
     }
+    if version < 28 {
+        migrate_v28(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1160,6 +1163,29 @@ fn migrate_v27(conn: &Connection) -> Result<()> {
          );",
     )?;
     conn.execute_batch("PRAGMA user_version = 27;")?;
+    Ok(())
+}
+
+/// Senders already auto-replied to during the current out-of-office
+/// activation, for accounts using the client-side auto-responder (plain
+/// IMAP/SMTP — Exchange accounts configure the server's own Automatic
+/// Replies instead and never touch this table). One row per sender per
+/// account is the whole point: without it, every new message from the same
+/// person while OOF is on would get its own reply. Cleared whenever the
+/// reader saves out-of-office settings (`oof.set`), so turning it off and
+/// on — or just editing the message — starts a fresh round of replies
+/// rather than silently withholding one because of a stale row from an
+/// earlier vacation.
+fn migrate_v28(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS oof_replied (
+           account     TEXT NOT NULL,
+           sender_addr TEXT NOT NULL,
+           replied_at  INTEGER NOT NULL DEFAULT 0,
+           PRIMARY KEY (account, sender_addr)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 28;")?;
     Ok(())
 }
 
