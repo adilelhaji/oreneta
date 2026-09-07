@@ -222,6 +222,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.importBackup(payload)
 	case "account.remove":
 		return a.accountRemove(payload)
+	case "account.addSharedMailbox":
+		return a.accountAddSharedMailbox(payload)
 	case "account.setImages":
 		return a.accountSetImages(payload)
 	case "account.setConversationHtml":

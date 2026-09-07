@@ -242,6 +242,37 @@ func (a *App) accountRemove(payload map[string]any) (any, error) {
 	return map[string]any{"ok": true}, nil
 }
 
+// accountAddSharedMailbox adds a shared mailbox an Exchange account has been
+// granted full-access permission on — see meron-core's
+// account.addSharedMailbox for why this needs no credentials of its own.
+func (a *App) accountAddSharedMailbox(payload map[string]any) (any, error) {
+	parentAccount, _ := payload["parent_account"].(string)
+	address, _ := payload["address"].(string)
+	displayName, _ := payload["display_name"].(string)
+	if parentAccount == "" {
+		return nil, errors.New("no account given")
+	}
+	if !strings.Contains(address, "@") {
+		return nil, errors.New("invalid address")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	// Deterministic from the address, the same as any other account's id —
+	// see accountID — so this does not need to parse it back out of the
+	// sidecar's response.
+	id := accountID(address)
+	if _, err := a.sidecar.Call("account.addSharedMailbox", map[string]any{
+		"parent_account": parentAccount,
+		"address":        address,
+		"display_name":   displayName,
+	}); err != nil {
+		return nil, err
+	}
+	_, _ = a.sidecar.Call("watch.start", map[string]any{"account": id})
+	return map[string]any{"id": id}, nil
+}
+
 func (a *App) accountSetImages(payload map[string]any) (any, error) {
 	id, _ := payload["id"].(string)
 	if id == "" {

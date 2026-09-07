@@ -91,6 +91,7 @@ import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
 import { OofSettingsCard } from './OofSettingsCard'
+import { SharedMailboxesCard } from './SharedMailboxesCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
 import { useAccountAvatar } from './useAccountAvatar'
 import { AccountAliasesCard } from './AccountAliasesCard'
@@ -1499,6 +1500,9 @@ function AccountPanel({ account }: { account: Account }) {
       {!isRSS && <AccountAliasesCard account={account} />}
       {!isRSS && <AccountSignatureCard account={account} />}
       {!isRSS && <OofSettingsCard account={account} />}
+      {!isRSS && (account.provider === 'exchange' || account.ews_url) && !account.delegate_account_id && (
+        <SharedMailboxesCard account={account} />
+      )}
       {isRSS && <OpmlGroup account={account.id} />}
 
       <button

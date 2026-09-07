@@ -941,6 +941,10 @@ pub fn list_accounts(conn: &Connection) -> Result<Vec<serde_json::Value>> {
                 // Empty for IMAP accounts; what the settings dialog uses to
                 // recognise an Exchange one and offer its own panel.
                 "ews_url": c.ews_url,
+                // Set only for a shared mailbox: the account whose
+                // credentials actually open it. Empty for every other
+                // account, including the one doing the delegating.
+                "delegate_account_id": c.delegate_account_id,
             }));
         }
     }

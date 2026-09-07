@@ -134,6 +134,36 @@ export async function writeAccountChatWallpaperFile(
   return res.url
 }
 
+/**
+ * Every shared mailbox that opens through `account.id`'s own credentials —
+ * derived from the loaded account list, not a separate fetch: `account.list`
+ * already returns every account, shared mailboxes included, each carrying
+ * `delegate_account_id`.
+ */
+export function sharedMailboxesOf(accountId: string): Account[] {
+  return accounts$.get().filter((acc) => acc.delegate_account_id === accountId)
+}
+
+/**
+ * Add a shared mailbox: an Exchange mailbox `accountId` has been granted
+ * full-access permission on, reached through its own credentials rather
+ * than its own. Re-runs the full boot sequence afterward — the same as
+ * `deleteAccount` — because a new account row exists now, not something an
+ * optimistic local patch can represent.
+ */
+export async function addSharedMailbox(
+  accountId: string,
+  address: string,
+  displayName: string,
+): Promise<void> {
+  await invoke('account.addSharedMailbox', {
+    parent_account: accountId,
+    address,
+    display_name: displayName,
+  })
+  await boot()
+}
+
 export async function deleteAccount(accountId: string) {
   if (
     !(await confirmAction({
