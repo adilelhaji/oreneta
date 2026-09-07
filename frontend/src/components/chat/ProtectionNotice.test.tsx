@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { ProtectionNotice } from './ProtectionNotice'
 import type { Message } from '../../types'
 
@@ -39,6 +39,22 @@ function stubVerify(command: 'pgp.verify' | 'smime.verify', result: unknown) {
   ;(window as any).go = {
     main: { App: { Invoke: async (called: string) => (called === command ? result : {}) } },
   }
+}
+
+/** Stub the bridge and record which command "Open it" actually calls. */
+function stubDecrypt(command: 'pgp.decrypt' | 'smime.decrypt', result: unknown) {
+  const calls: string[] = []
+  ;(window as any).go = {
+    main: {
+      App: {
+        Invoke: async (called: string) => {
+          calls.push(called)
+          return called === command ? result : {}
+        },
+      },
+    },
+  }
+  return calls
 }
 
 describe('what a message says was done to it', () => {
@@ -119,5 +135,23 @@ describe('what a message says was done to it', () => {
     stubVerify('smime.verify', { verdict: 'bad' })
     const view = render(<ProtectionNotice message={checkable('smimeSigned')} />)
     await waitFor(() => expect(view.container.textContent).toContain('Signature does not check out'))
+  })
+
+  it('opens an S/MIME-encrypted message through smime.decrypt, not pgp.decrypt', async () => {
+    const calls = stubDecrypt('smime.decrypt', { ok: true, body: 'The figures are attached.' })
+    const view = render(<ProtectionNotice message={checkable('smimeEnveloped')} />)
+    fireEvent.click(view.getByText('Open it'))
+    await waitFor(() => expect(view.container.textContent).toContain('The figures are attached.'))
+    expect(calls).toContain('smime.decrypt')
+    expect(calls).not.toContain('pgp.decrypt')
+  })
+
+  it('opens a PGP-encrypted message through pgp.decrypt, not smime.decrypt', async () => {
+    const calls = stubDecrypt('pgp.decrypt', { ok: true, body: 'Lunch tomorrow?' })
+    const view = render(<ProtectionNotice message={checkable('pgpEncrypted')} />)
+    fireEvent.click(view.getByText('Open it'))
+    await waitFor(() => expect(view.container.textContent).toContain('Lunch tomorrow?'))
+    expect(calls).toContain('pgp.decrypt')
+    expect(calls).not.toContain('smime.decrypt')
   })
 })

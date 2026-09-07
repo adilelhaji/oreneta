@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { KeyRound, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { decryptMessage, verifyMessage, type DecryptResult } from '../../states/pgp'
-import { verifySmimeMessage } from '../../states/smime'
+import { decryptSmimeMessage, verifySmimeMessage } from '../../states/smime'
 import type { SignatureResult } from '../../states/signatureVerdict'
 import type { Message } from '../../types'
 import { Notice } from '../notice/Notice'
@@ -71,6 +71,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
 
   const encrypted =
     protection === 'pgpEncrypted' || protection === 'pgpInline' || protection === 'smimeEnveloped'
+  const isSmimeEncrypted = protection === 'smimeEnveloped'
 
   if (encrypted) {
     const uid = Number(message.id.split('#').pop())
@@ -79,7 +80,13 @@ export function ProtectionNotice({ message }: { message: Message }) {
     const open = () => {
       setBusy(true)
       setFailure(null)
-      void decryptMessage(message.account_id, message.folder_id, uid, passphrase || undefined)
+      // S/MIME never needs a passphrase here: the identity's private key was
+      // unlocked once, at import, so there is nothing left to ask for beyond
+      // whether one is held at all.
+      const opening = isSmimeEncrypted
+        ? decryptSmimeMessage(message.account_id, message.folder_id, uid)
+        : decryptMessage(message.account_id, message.folder_id, uid, passphrase || undefined)
+      void opening
         .then((answer: DecryptResult) => {
           if (answer.ok) {
             setOpened({ body: answer.body })
