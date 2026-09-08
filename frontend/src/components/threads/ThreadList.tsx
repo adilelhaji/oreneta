@@ -23,7 +23,7 @@ import {
   type BulkSelectionItem,
 } from '../../states/ui'
 import { thread$ } from '../../states/thread'
-import { settings$ } from '../../states/settings'
+import { settings$, sortParam } from '../../states/settings'
 import { groupByDate } from '../../lib/dateGroups'
 import {
   mail$,
@@ -94,7 +94,9 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // true from the first paint of a navigation, which is a frame or more before
   // the effect that starts the load.
   const threadsLoadedKey = useValue(mail$.threadsLoadedKey)
-  const threadsLoading = threadsLoadedKey !== threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters))
+  const threadsLoading = threadsLoadedKey !== threadListViewKey(
+    selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort),
+  )
   const threadMenu = useThreadContextMenu(accounts)
   // Starred is a folder of the unified view whose rows span every account. It
   // lists ordinary threads, so it shares this list's selection, context menu and

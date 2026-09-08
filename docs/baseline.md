@@ -86,7 +86,7 @@ characterization alongside the production fix, not weakening the assertion.
 | H01: Sweep reviewed-set scope | #27 | Hypothesis; executable reproduction still required |
 | H02: incomplete CardDAV replacement | #28 | Hypothesis; executable reproduction still required |
 | H03: uncertain send/retry and Sent archival | #29 | Hypothesis; executable reproduction still required |
-| H04: sort/pagination and stale-row identity | #30 | Hypothesis; executable reproduction still required |
+| H04: sort/pagination and stale-row identity | #30 | #63 reproduces frontend propagation/stale-view defects; remaining ordering scope in [mailbox paging](mailbox-paging.md) |
 | H05: cross-provider search semantics | #31 | Hypothesis; executable reproduction still required |
 | H06 | #23 | Definition absent from inspected repository/issue bodies; not invented or reproduced |
 

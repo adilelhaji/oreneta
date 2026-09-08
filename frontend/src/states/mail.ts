@@ -42,13 +42,16 @@ export const mail$ = observable({
   foldersByAccount: {} as Record<string, Folder[]>,
   threads: [] as Message[],
   threadsCursor: '',
+  // Owner of the current rows/cursor, including cache-only pages. Separate
+  // from threadsLoadedKey, which only marks a completed foreground load.
+  threadsViewKey: '',
   // How the core read the search box, as it answered. Kept rather than worked
   // out again here: a second parser is a second reading, and what the reader
   // is shown has to be what was actually searched for.
   searchUnderstood: null as SearchUnderstood | null,
   threadAccountCursors: {} as Record<string, string>,
   threadsLoadingMore: false,
-  // The view (`threadListViewKey`) whose threads are the ones in `threads`. An
+  // The last foreground-completed view (`threadListViewKey`). An
   // empty list means "nothing here" only once this matches the view on screen:
   // before that the rows simply have not arrived, and saying the folder is empty
   // — at startup, or for the second or two a folder load takes — is wrong, then
@@ -762,7 +765,7 @@ export function requestThreadReselect() {
 
 type ThreadSearchStage = 'auto' | 'cache' | 'live'
 
-// Identity of a thread-list view: the four inputs `loadThreads` reads and
+// Identity of a thread-list view: the five inputs `loadThreads` reads and
 // `superseded` watches, newline-joined like `kanbanColumnKey` (neither a folder
 // id nor a single-line search box carries one). Both the loader and the list
 // build the key from the same fields, so the list can tell "these rows are for
@@ -772,7 +775,7 @@ export function threadListViewKey(
   folder: string,
   query: string,
   filter: string,
-  sort = '',
+  sort: string,
 ) {
   // The ordering is part of the view. Without it here, changing the sort would
   // leave the previous order's rows on screen looking settled, because the
@@ -797,6 +800,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const initialFolder = ui$.selectedFolder.get()
   const initialQuery = ui$.query.get()
   const initialFilter = filterKey(ui$.filters.get())
+  const initialSort = sortParam(settings$.listSort.get())
   const activeAccount = accounts$.get().find((account) => account.id === initialAccount)
   // Starred is answered from the local cache, so there is no live stage to run.
   const canSearchLive =
@@ -812,7 +816,8 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       ui$.selectedAccount.get() !== initialAccount ||
       ui$.selectedFolder.get() !== initialFolder ||
       ui$.query.get() !== initialQuery ||
-      filterKey(ui$.filters.get()) !== initialFilter
+      filterKey(ui$.filters.get()) !== initialFilter ||
+      sortParam(settings$.listSort.get()) !== initialSort
     ) {
       return
     }
@@ -845,6 +850,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     filterKey(ui$.filters.get()) !== filter ||
     sortParam(settings$.listSort.get()) !== sort
   const previousThreads = mail$.threads.get()
+  const samePreviousView = mail$.threadsViewKey.get() === viewKey
   const currentSelected = ui$.selectedThread.get()
   const previousThreadsCursor = mail$.threadsCursor.get()
   const previousAccountCursors = snapshotRecord(mail$.threadAccountCursors.get())
@@ -855,7 +861,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   // scrolled the list and loaded extra pages, replacing the whole array with just
   // the first page collapses it and resets the scroll position. In that case we
   // merge the fresh page into the list we already have instead.
-  const mergeBackground = !refresh && searchStage !== 'cache' && previousThreads.length > 0
+  const mergeBackground = !refresh && searchStage !== 'cache' && samePreviousView && previousThreads.length > 0
 
   let allThreads: Message[] = []
 
@@ -952,7 +958,10 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     }
   }
 
-  if (filter !== 'all' && currentSelected && !allThreads.some((thread) => thread.thread_id === currentSelected)) {
+  if (
+    samePreviousView && filter !== 'all' && currentSelected &&
+    !allThreads.some((thread) => thread.thread_id === currentSelected)
+  ) {
     const selectedThread = previousThreads.find((thread) => thread.thread_id === currentSelected)
     if (selectedThread) {
       allThreads = [...allThreads, selectedThread]
@@ -977,6 +986,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   }
 
   mail$.threads.set(allThreads)
+  mail$.threadsViewKey.set(viewKey)
   // These rows now stand for this view — but only a load that went to the server
   // for them may say so, which is what `refresh` marks. The two cache-only kinds
   // both answer from the local index, so an empty result from either means "not
@@ -1041,6 +1051,10 @@ export async function loadMoreThreads() {
   const q = ui$.query.get()
   const filter = filterKey(ui$.filters.get())
   const sort = sortParam(settings$.listSort.get())
+  const viewKey = threadListViewKey(selectedAcc, selectedFol, q, filter, sort)
+  // Navigation changes state before its reload effect runs. An old cursor
+  // cannot be interpreted using the new folder/query/sort in that gap.
+  if (mail$.threadsViewKey.get() !== viewKey) return
   const version = threadLoadVersion
   const stillCurrent = (cursor: string) =>
     threadLoadVersion === version &&
@@ -1048,6 +1062,8 @@ export async function loadMoreThreads() {
     ui$.selectedFolder.get() === selectedFol &&
     ui$.query.get() === q &&
     filterKey(ui$.filters.get()) === filter &&
+    sortParam(settings$.listSort.get()) === sort &&
+    mail$.threadsViewKey.get() === viewKey &&
     mail$.threadsCursor.get() === cursor
   // The starred filter is one unpaginated page; a search over it is paged like
   // any other, and every other view stops on an empty cursor below.
@@ -1084,6 +1100,7 @@ export async function loadMoreThreads() {
         folder_role: role,
         query: q,
         filter,
+        sort,
         before_cursor: cursor,
         refresh: false,
       })
@@ -1106,6 +1123,7 @@ export async function loadMoreThreads() {
           folder_id: selectedFol,
           query: q,
           filter,
+          sort,
           before_cursor: cursor,
           refresh: false,
         },
@@ -1119,7 +1137,14 @@ export async function loadMoreThreads() {
     if (moreThreads.length > 0) {
       const existing = mail$.threads.get()
       const seen = new Set(existing.map((thread) => thread.thread_id))
-      const merged = [...existing, ...moreThreads.filter((thread) => !seen.has(thread.thread_id))]
+      const merged = [
+        ...existing,
+        ...moreThreads.filter((thread) => {
+          if (seen.has(thread.thread_id)) return false
+          seen.add(thread.thread_id)
+          return true
+        }),
+      ]
       if (selectedAcc === 'unified') {
         merged.sort((a, b) => b.date - a.date)
       }

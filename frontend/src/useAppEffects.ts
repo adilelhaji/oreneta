@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { boot } from './boot'
+import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
-import { filterKey, ui$, showToast } from './states/ui'
+import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
 import {
@@ -31,7 +32,6 @@ import {
 } from './states/scheduledSends'
 import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
 
-const SEARCH_DEBOUNCE_MS = 300
 const DEFAULT_RSS_SYNC_INTERVAL_MINUTES = 60
 const MIN_RSS_SYNC_INTERVAL_MINUTES = 5
 const MAX_RSS_SYNC_INTERVAL_MINUTES = 1440
@@ -51,8 +51,6 @@ export function useAppEffects() {
   const selectedFolder = useValue(ui$.selectedFolder)
   const selectedThread = useValue(ui$.selectedThread)
   const query = useValue(ui$.query)
-  const filters = useValue(ui$.filters)
-  const activeBoardId = useValue(kanban$.activeBoardId)
   const startupSyncDone = useRef(false)
   const language = useValue(settings$.language)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
@@ -287,21 +285,7 @@ export function useAppEffects() {
     void loadFolders(selectedAccount)
   }, [selectedAccount])
 
-  // Also keyed on the open board: loads are skipped while one is up (the mail
-  // list is off screen and its rows wait for the board to close), so closing it
-  // has to reload — otherwise a board visit that never touched a card leaves the
-  // selection unchanged, and the list stays as stale as the visit was long.
-  useEffect(() => {
-    if (!selectedAccount || !selectedFolder || activeBoardId) return
-    if (!query.trim()) {
-      void loadThreads()
-      return
-    }
-    const timer = window.setTimeout(() => {
-      void loadThreads()
-    }, SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timer)
-  }, [selectedAccount, selectedFolder, query, filterKey(filters), activeBoardId])
+  useThreadListLoader()
 
   useEffect(() => {
     if (!selectedThread) return

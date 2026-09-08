@@ -303,6 +303,7 @@ describe('thread list paging', () => {
     ui$.selectedThread.set('')
     ui$.query.set('old')
     ui$.filters.set([])
+    mail$.threadsViewKey.set(threadListViewKey('acc', 'inbox', 'old', 'all', sortParam(settings$.listSort.get())))
   })
 
   afterEach(() => {
