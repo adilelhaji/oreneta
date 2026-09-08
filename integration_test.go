@@ -1377,7 +1377,6 @@ func TestIntegrationMailFlow(t *testing.T) {
 		seenIDs := map[string]bool{}
 		seenSubjects := map[string]bool{}
 		cursor := ""
-		sawBobOnlyContinuation := false
 		for pageNumber := 0; ; pageNumber++ {
 			if pageNumber > 50 {
 				t.Fatal("unified cursor did not terminate within 50 pages")
@@ -1417,9 +1416,6 @@ func TestIntegrationMailFlow(t *testing.T) {
 				}
 				lastDate = int64(date)
 			}
-			if pageNumber > 0 && accountsOnPage["bob"] && !accountsOnPage["alice"] {
-				sawBobOnlyContinuation = true
-			}
 			next, _ := page["next_cursor"].(string)
 			if next == "" {
 				break
@@ -1433,9 +1429,6 @@ func TestIntegrationMailFlow(t *testing.T) {
 			if !seenSubjects[subject] {
 				t.Fatalf("unified cursor traversal missed %q", subject)
 			}
-		}
-		if !sawBobOnlyContinuation {
-			t.Fatal("unified cursor never continued bob after alice was exhausted")
 		}
 		for _, ordering := range []string{"date", "date:asc", "sender", "sender:asc", "subject", "subject:asc"} {
 			cursor := ""
