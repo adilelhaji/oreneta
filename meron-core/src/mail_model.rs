@@ -158,6 +158,25 @@ fn thread_cards_json_keyed(
     draft_thread_keys: &HashSet<String>,
 ) -> anyhow::Result<Vec<(String, Value)>> {
     let cards = store::group_thread_cards_with_drafts(messages, folder_id, draft_thread_keys);
+    grouped_thread_cards_json_keyed(conn, account_id, cards)
+}
+
+/// Enrich only the cards selected by conversation-level pagination. Grouping
+/// again here would replace the chosen representative and aggregates.
+pub(crate) fn grouped_thread_cards_json(
+    conn: &Connection,
+    account_id: &str,
+    cards: Vec<store::ThreadCard>,
+) -> anyhow::Result<Vec<Value>> {
+    Ok(grouped_thread_cards_json_keyed(conn, account_id, cards)?
+        .into_iter().map(|(_, card)| card).collect())
+}
+
+fn grouped_thread_cards_json_keyed(
+    conn: &Connection,
+    account_id: &str,
+    cards: Vec<store::ThreadCard>,
+) -> anyhow::Result<Vec<(String, Value)>> {
 
     // The page these cards were grouped from is a filtered, cursor-paged slice
     // of messages, so its per-card tally is not the thread size. Re-count from

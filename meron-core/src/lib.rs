@@ -8,6 +8,7 @@
 pub mod backend;
 pub mod backup;
 pub mod calendar;
+pub mod cached_conversations;
 pub mod carddav;
 pub mod changelog;
 pub mod contacts;

@@ -31,7 +31,7 @@ New text cursors carry the exact SQL ordering key, preserving whitespace and
 database case-folding semantics; see [text-key pagination](text-page-cursors.md).
 Cursor encoding and supported sort capabilities remain unchanged.
 
-## Remaining #30 work
+## R4.3 (#67): shared cursor primitive
 
 [ADR 0003](adr/0003-conversation-pagination.md) records the approved replacement
 contract. #67 introduces its shared ordering/cursor primitive only; existing
@@ -60,6 +60,8 @@ Existing display-name resolution queries still apply. This favors correctness
 without a persistent projection; it is not a constant-time large-mailbox claim.
 Routes and clients are not activated by #69; the follow-up must handle refresh
 replacement, cursor errors, stale responses and backend-order preservation.
+
+## Remaining #30 work
 
 - Unified server fan-out and merge still impose date ordering.
 - Search and starred use date-based contracts; snoozed uses wake-up order and
