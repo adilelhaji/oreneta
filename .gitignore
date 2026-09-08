@@ -44,3 +44,6 @@
 /.claude/
 /AGENTS.md
 /CLAUDE.md
+frontend/baseline-results/
+frontend/playwright-report/
+frontend/baseline/playwright-report/
