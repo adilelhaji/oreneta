@@ -9,10 +9,7 @@ import (
 )
 
 func TestWriteChatWallpaperFileWritesValidatedImage(t *testing.T) {
-	cacheHome := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	t.Setenv("devserver", "")
-	t.Setenv("frontenddevserverurl", "")
+	isolateTestProfile(t)
 
 	png, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")
 	if err != nil {
@@ -47,9 +44,7 @@ func TestWriteChatWallpaperFileWritesValidatedImage(t *testing.T) {
 }
 
 func TestWriteChatWallpaperFileRejectsNonImage(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("devserver", "")
-	t.Setenv("frontenddevserverurl", "")
+	isolateTestProfile(t)
 
 	app := &App{}
 	_, err := app.writeChatWallpaperFile(map[string]any{

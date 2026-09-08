@@ -76,11 +76,12 @@ func TestDetectChannelFrom(t *testing.T) {
 			wantTarget: `C:\Users\u\Downloads\oreneta\oreneta.exe`,
 		},
 		{
-			name:       "macOS app bundle",
-			goos:       "darwin",
-			exe:        "/Applications/Oreneta.app/Contents/MacOS/oreneta",
-			wantKind:   channelDMG,
-			wantTarget: "/Applications/Oreneta.app",
+			name:     "macOS app bundle",
+			goos:     "darwin",
+			exe:      "/Applications/Oreneta.app/Contents/MacOS/oreneta",
+			wantKind: channelDMG,
+			// appBundleRoot walks the host filesystem API, also in foreign-OS fixtures.
+			wantTarget: filepath.FromSlash("/Applications/Oreneta.app"),
 		},
 		{
 			name:     "macOS binary outside a bundle",

@@ -31,6 +31,20 @@ jobs:
         run: mkdir -p frontend/dist && touch frontend/dist/placeholder
       - run: go test -tags webkit2_41 ./...
 
+  go-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Create frontend/dist placeholder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force frontend/dist | Out-Null
+          New-Item -ItemType File frontend/dist/placeholder | Out-Null
+      - run: go test ./...
+
   rust:
     runs-on: ubuntu-latest
     steps:

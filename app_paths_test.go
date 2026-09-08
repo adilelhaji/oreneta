@@ -8,21 +8,8 @@ import (
 )
 
 func TestAppDirsUseProductionProfileByDefault(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("XDG_CACHE_HOME", "")
-	t.Setenv("devserver", "")
-	t.Setenv("frontenddevserverurl", "")
-
-	var wantConfig, wantCache string
-	if runtime.GOOS == "darwin" {
-		wantConfig = filepath.Join(home, "Library", "Application Support", "oreneta")
-		wantCache = filepath.Join(home, "Library", "Caches", "oreneta")
-	} else {
-		wantConfig = filepath.Join(home, ".config", "oreneta")
-		wantCache = filepath.Join(home, ".cache", "oreneta")
-	}
+	p := isolateTestProfile(t)
+	wantConfig, wantCache := filepath.Join(p.Config, "oreneta"), filepath.Join(p.Cache, "oreneta")
 
 	if got, want := appDirName(), "oreneta"; got != want {
 		t.Fatalf("appDirName() = %q, want %q", got, want)
@@ -39,21 +26,11 @@ func TestAppDirsUseProductionProfileByDefault(t *testing.T) {
 }
 
 func TestAppDirsUseDevProfileForWailsDev(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("XDG_CACHE_HOME", "")
+	p := isolateTestProfile(t)
 	t.Setenv("devserver", "127.0.0.1:34115")
 	t.Setenv("frontenddevserverurl", "")
 
-	var wantConfig, wantCache string
-	if runtime.GOOS == "darwin" {
-		wantConfig = filepath.Join(home, "Library", "Application Support", "oreneta-dev")
-		wantCache = filepath.Join(home, "Library", "Caches", "oreneta-dev")
-	} else {
-		wantConfig = filepath.Join(home, ".config", "oreneta-dev")
-		wantCache = filepath.Join(home, ".cache", "oreneta-dev")
-	}
+	wantConfig, wantCache := filepath.Join(p.Config, "oreneta-dev"), filepath.Join(p.Cache, "oreneta-dev")
 
 	if got, want := appDirName(), "oreneta-dev"; got != want {
 		t.Fatalf("appDirName() = %q, want %q", got, want)
@@ -70,16 +47,17 @@ func TestAppDirsUseDevProfileForWailsDev(t *testing.T) {
 }
 
 func TestAppDirsRespectXDGBaseDirs(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("XDG base directories are not respected on macOS (os.UserConfigDir uses ~/Library/Application Support)")
-	}
-
+	p := isolateTestProfile(t)
 	configHome := t.TempDir()
 	cacheHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	t.Setenv("devserver", "")
 	t.Setenv("frontenddevserverurl", "http://127.0.0.1:5178")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		// These OS APIs intentionally ignore XDG, even if inherited from a shell.
+		configHome, cacheHome = p.Config, p.Cache
+	}
 
 	configHomeReal, err := filepath.EvalSymlinks(configHome)
 	if err != nil {
@@ -111,21 +89,11 @@ func TestAppDirsRespectXDGBaseDirs(t *testing.T) {
 }
 
 func TestSidecarEnvUsesProfileDirs(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("XDG_CACHE_HOME", "")
+	p := isolateTestProfile(t)
 	t.Setenv("devserver", "127.0.0.1:34115")
 	t.Setenv("frontenddevserverurl", "")
 
-	var wantConfig, wantCache string
-	if runtime.GOOS == "darwin" {
-		wantConfig = filepath.Join(home, "Library", "Application Support", "oreneta-dev")
-		wantCache = filepath.Join(home, "Library", "Caches", "oreneta-dev")
-	} else {
-		wantConfig = filepath.Join(home, ".config", "oreneta-dev")
-		wantCache = filepath.Join(home, ".cache", "oreneta-dev")
-	}
+	wantConfig, wantCache := filepath.Join(p.Config, "oreneta-dev"), filepath.Join(p.Cache, "oreneta-dev")
 
 	env := sidecarEnv()
 	assertEnvContains(t, env, "MERON_CORE_DB="+filepath.Join(wantConfig, "meron.db"))

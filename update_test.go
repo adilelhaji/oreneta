@@ -117,7 +117,7 @@ func TestDownloadToVerifiesPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	isolateTestProfile(t)
 	u := newUpdater(&App{})
 
 	t.Run("good payload lands in the cache dir", func(t *testing.T) {
@@ -217,7 +217,7 @@ func TestUpdaterCheckThenDownload(t *testing.T) {
 		}`))
 	})
 
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	isolateTestProfile(t)
 	t.Setenv("MERON_UPDATE_MANIFEST_URL", server.URL+"/latest.json")
 
 	app := &App{}
@@ -287,7 +287,7 @@ func TestUpdaterCheckWhenCurrent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	isolateTestProfile(t)
 	t.Setenv("MERON_UPDATE_MANIFEST_URL", server.URL)
 
 	app := &App{}

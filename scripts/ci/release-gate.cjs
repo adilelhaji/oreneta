@@ -1,6 +1,6 @@
 'use strict'
 
-const REQUIRED_JOBS = ['go', 'rust', 'frontend', 'mobile', 'integration', 'workflow-policy']
+const REQUIRED_JOBS = ['go', 'go-windows', 'rust', 'frontend', 'mobile', 'integration', 'workflow-policy']
 
 async function verifyRelease({ github, owner, repo, sha, tag, allowMissingTag = false }) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('A full release commit SHA is required')

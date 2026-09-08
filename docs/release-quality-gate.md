@@ -3,7 +3,7 @@
 Desktop and Android release workflows depend on `verify-release.yml` before
 building or reading signing secrets. The gate is read-only and requires the
 latest `test.yml` **push to main** run for the exact release commit to complete
-successfully. All six suites (`go`, `rust`, `frontend`, `mobile`, `integration`,
+successfully. All seven suites (`go`, `go-windows`, `rust`, `frontend`, `mobile`, `integration`,
 and `workflow-policy`) must be present and successful; skipped, missing,
 cancelled, failed, and pending jobs block the release. A green PR run or a green
 run on another commit is not sufficient. API/permission errors also fail closed.
