@@ -53,14 +53,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install localization test dependencies
+        run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: frontend
       - name: Generate localization catalogs
         run: bun scripts/i18n/catalog.ts generate
+      - name: Validate localization catalogs and tests
+        run: |
+          bun scripts/i18n/catalog.ts validate
+          bun test scripts/i18n/catalog.test.ts
       - run: bun run typecheck
         working-directory: frontend
       - run: bun test
         working-directory: frontend
+      - name: Install baseline browser
+        run: bunx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Capture and verify synthetic baseline
+        run: bun run baseline:verify
+        working-directory: frontend
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-${{ github.sha }}
+          path: |
+            frontend/baseline-results/
+            frontend/playwright-report/
+          if-no-files-found: error
 
   mobile:
     runs-on: ubuntu-latest
