@@ -33,6 +33,10 @@ Cursor encoding and supported sort capabilities remain unchanged.
 
 ## Remaining #30 work
 
+[ADR 0003](adr/0003-conversation-pagination.md) records the approved replacement
+contract. #67 introduces its shared ordering/cursor primitive only; existing
+routes still use the R4.1/R4.2 behavior until their adapters are migrated.
+
 - Unified server fan-out and merge still impose date ordering.
 - Search and starred use date-based contracts; snoozed uses wake-up order and
   RSS has its own listing. Generic table headers do not establish support.
