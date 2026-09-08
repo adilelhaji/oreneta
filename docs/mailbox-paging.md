@@ -37,6 +37,30 @@ Cursor encoding and supported sort capabilities remain unchanged.
 contract. #67 introduces its shared ordering/cursor primitive only; existing
 routes still use the R4.1/R4.2 behavior until their adapters are migrated.
 
+## R4.4 (#69): cache adapter preparation
+
+The shared cache service reads lightweight folder headers in 1,024-message
+chunks through the existing message keyset query, without a total-row cutoff.
+It groups the complete cached folder, retains cards with a matching message,
+and uses the latest matching `(date, UID)` for displayed sender/date. Canonical
+root subjects and branch IDs come from the complete folder, not filtered hits.
+Unread/starred aggregates cover the cached folder card; message counts retain
+the existing reader-scope, cross-folder deduplication. Snoozed card/root keys
+are excluded before pagination. No bodies are fetched and no seen flags change.
+
+One SQLite read transaction covers candidate acquisition, paging and enrichment.
+The caller supplies resolved mail scopes and source namespace; scopes are
+canonicalized/deduplicated and all eligible cards share one global limit.
+Search, starred-only, snoozed and RSS are not inputs to this Recent-only service.
+Only selected cards receive metadata enrichment, grouped by account/folder.
+
+Cost: each response scans the cached header set (and a second filtered set for
+faceted views), retains O(headers + cards) metadata, and sorts O(cards log cards).
+Existing display-name resolution queries still apply. This favors correctness
+without a persistent projection; it is not a constant-time large-mailbox claim.
+Routes and clients are not activated by #69; the follow-up must handle refresh
+replacement, cursor errors, stale responses and backend-order preservation.
+
 - Unified server fan-out and merge still impose date ordering.
 - Search and starred use date-based contracts; snoozed uses wake-up order and
   RSS has its own listing. Generic table headers do not establish support.
