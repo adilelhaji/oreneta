@@ -13,6 +13,7 @@ import jp.nonbili.meron.shared.ThreadSummary
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlin.test.Test
@@ -133,6 +134,14 @@ class ComposeSaveLifecycleTest {
             core.releaseFirstSave.complete(Unit)
             core.sendFinished.await()
             core.discardFinished.await()
+            // discardFinished only marks that the discard *call* landed; the
+            // send's own cleanup (clearComposeDraftState) runs afterward, still
+            // inside the same composeSaveMutex section that guarded the send.
+            // Without this, whichever of "the test's own await resumes" or
+            // "cleanup keeps running" gets dispatched first on the shared
+            // dispatcher is a race — and asserting on the loser flakes.
+            // Acquiring the mutex blocks until that section fully releases it.
+            state.composeSaveMutex.withLock {}
             yield()
 
             assertEquals("", state.composeDraftId)

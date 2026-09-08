@@ -29,7 +29,7 @@ use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
     backup, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
-    search, secrets, smtp, store, thread_list, thread_read, unified,
+    search, secrets, smtp, spam, store, thread_list, thread_read, unified,
 };
 
 /// Shared, serialized writer so responses and events never interleave on stdout.
@@ -1593,6 +1593,139 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "judged": judged }))
         }
 
+        // Why a conversation looks like spam by what the reader has taught
+        // this account, and what it would take to say otherwise. Same
+        // "only when asked" shape as `mail.priorityReason` — computing this
+        // for every row to show none of it would be work nobody asked for.
+        "mail.spamReason" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let (sender, signals) = store::thread_spam_signals(
+                &db,
+                &parsed.account,
+                &parsed.folder,
+                &parsed.thread_key,
+            )?
+            .context("no such conversation")?;
+            let verdict = spam::verdict(&signals);
+            Ok(json!({
+                "spam": verdict.spam,
+                "reasons": verdict.reasons,
+                "sender": sender,
+            }))
+        }
+
+        // Records what the reader decided about one conversation: spam
+        // confirmed, or said not spam. Never moves anything itself — the
+        // reader's own action (marking junk, or dismissing the notice) does
+        // that separately — and re-judges the account so already-cached mail
+        // from the same sender reflects the correction at once.
+        "mail.recordSpamJudgment" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let is_spam = p
+                .get("spam")
+                .and_then(Value::as_bool)
+                .context("missing spam")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let sender = store::record_spam_judgment(
+                &db,
+                &parsed.account,
+                &parsed.folder,
+                &parsed.thread_key,
+                is_spam,
+            )?;
+            Ok(json!({ "ok": true, "sender": sender }))
+        }
+
+        // Every local to-do, across every account and folder — message-tied
+        // only, so each one carries the conversation it hangs off.
+        "tasks.list" => {
+            let include_completed = p
+                .get("include_completed")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let db = engine.db.lock().unwrap();
+            let tasks = store::list_tasks(&db, include_completed)?;
+            Ok(json!({
+                "tasks": tasks
+                    .iter()
+                    .map(|task| json!({
+                        "id": task.id,
+                        "thread_id": mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key),
+                        "account_id": task.account,
+                        "folder_id": task.folder,
+                        "note": task.note,
+                        "due_at": task.due_at,
+                        "completed_at": task.completed_at,
+                        "created_at": task.created_at,
+                        "subject": task.subject,
+                        "from_name": task.from_name,
+                        "from_addr": task.from_addr,
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Creates a task on a conversation, or edits the one already open on
+        // it (a second "convert to task" on the same thread is a save, not a
+        // duplicate — see `store::save_task`).
+        "tasks.save" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let due_at = p.get("due_at").and_then(Value::as_i64);
+            let note = p
+                .get("note")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
+                .context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let id = store::save_task(
+                &db,
+                &parsed.account,
+                &parsed.thread_key,
+                &parsed.folder,
+                due_at,
+                &note,
+                now_seconds(),
+            )?;
+            Ok(json!({ "ok": true, "id": id }))
+        }
+
+        // One task's own due date and note — the embedded card field only
+        // ever carries `id`/`due_at`, so the editor asks for the rest before
+        // opening on an existing task, rather than starting from a blank
+        // note that would overwrite the real one on save.
+        "tasks.get" => {
+            let id = req_i64(p, "id")?;
+            let db = engine.db.lock().unwrap();
+            let task = store::get_task(&db, id)?;
+            Ok(match task {
+                Some((due_at, note)) => json!({ "due_at": due_at, "note": note }),
+                None => Value::Null,
+            })
+        }
+
+        "tasks.setCompleted" => {
+            let id = req_i64(p, "id")?;
+            let completed = req_bool(p, "completed")?;
+            let db = engine.db.lock().unwrap();
+            store::set_task_completed(&db, id, completed, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // "Never mind, this was not one" — removes the task outright.
+        "tasks.delete" => {
+            let id = req_i64(p, "id")?;
+            let db = engine.db.lock().unwrap();
+            store::delete_task(&db, id)?;
+            Ok(json!({ "ok": true }))
+        }
+
         // Address books on a CardDAV server, found from what somebody typed:
         // an email address, a host, or a URL. Nothing is stored by this; it
         // is the question asked before deciding which book to keep.
@@ -2081,6 +2214,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     url: creds.ews_url.clone(),
                     username: creds.user.clone(),
                     password: creds.password.clone(),
+                    target_mailbox: creds.target_mailbox.clone(),
                 };
                 let settings = tokio::task::spawn_blocking(move || {
                     exchange::EwsClient::new(config).get_oof_settings(&own_address)
@@ -2110,6 +2244,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     url: creds.ews_url.clone(),
                     username: creds.user.clone(),
                     password: creds.password.clone(),
+                    target_mailbox: creds.target_mailbox.clone(),
                 };
                 tokio::task::spawn_blocking(move || {
                     exchange::EwsClient::new(config).set_oof_settings(&own_address, &settings)
@@ -2878,6 +3013,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 // Present only for Exchange accounts, and what routes them to
                 // the EWS backend; see `backend::connect`.
                 ews_url: ews_url.clone(),
+                // A shared mailbox is added through `account.addSharedMailbox`,
+                // never through this general add/reconnect path.
+                delegate_account_id: String::new(),
+                target_mailbox: String::new(),
             };
             // A reconnect resends the setup form, which has no field for the
             // account's proxy or the certificates it accepted. Carry those over
@@ -2917,6 +3056,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         url: creds.ews_url.clone(),
                         username: creds.user.clone(),
                         password: creds.password.clone(),
+                        target_mailbox: creds.target_mailbox.clone(),
                     };
                     tokio::time::timeout(Duration::from_secs(20), exchange::validate(config))
                         .await
@@ -4712,6 +4852,16 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // next loop and exits.
         "account.remove" => {
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
+            // A shared mailbox delegating to this account has no path back
+            // to working once it is gone — nothing left to reconnect — so
+            // it goes with it rather than sitting stuck forever.
+            let dependents = store::shared_mailboxes_of(&engine.db.lock().unwrap(), &id).unwrap_or_default();
+            for dependent in &dependents {
+                engine.accounts.lock().await.remove(dependent);
+                engine.clear_pool(dependent);
+                let db = engine.db.lock().unwrap();
+                store::delete_account(&db, dependent)?;
+            }
             engine.accounts.lock().await.remove(&id);
             // Drop any warm sessions: their creds are gone and must not be reused.
             engine.clear_pool(&id);
@@ -4722,6 +4872,96 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             parse::remove_account_media(&parse::media_root(), &id);
             let _ = secrets::delete(&id);
             Ok(json!({ "ok": true }))
+        }
+
+        // Add a shared mailbox: an Exchange account the reader has been
+        // granted full-access permission on, reached through an existing
+        // Exchange account's own credentials rather than its own. Stored as
+        // an ordinary account row with delegate_account_id set — see
+        // `imap::Creds::delegate_account_id` and `Engine::resolve_shared_mailbox`
+        // for how that becomes a real, connectable account.
+        "account.addSharedMailbox" => {
+            let parent_id = req_str(p, "parent_account")?;
+            let address = req_str(p, "address")?.trim().to_lowercase();
+            if address.is_empty() {
+                return Err(anyhow::anyhow!("no shared mailbox address given"));
+            }
+            let display_name = req_str(p, "display_name")
+                .ok()
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| address.clone());
+
+            let parent_creds = engine
+                .ensure_valid_creds(&parent_id)
+                .await
+                .context("the account granting access needs to be reconnected first")?;
+            if !parent_creds.is_ews() {
+                return Err(anyhow::anyhow!(
+                    "only an Exchange account can add a shared mailbox"
+                ));
+            }
+
+            let id = address.clone();
+            {
+                let db = engine.db.lock().unwrap();
+                // The id is the address, the same as any other account — if
+                // one already exists here and is not already this exact
+                // shared mailbox, adding would silently overwrite a real
+                // account's credentials or someone else's delegation.
+                if let Some(existing) = store::load_account(&db, &id)? {
+                    if existing.delegate_account_id != parent_id {
+                        return Err(anyhow::anyhow!(
+                            "an account already exists for {address}"
+                        ));
+                    }
+                }
+            }
+
+            let creds = imap::Creds {
+                host: String::new(),
+                port: 993,
+                user: String::new(),
+                password: String::new(),
+                tls: true,
+                starttls: false,
+                smtp_host: String::new(),
+                smtp_port: 587,
+                smtp_tls: true,
+                smtp_starttls: false,
+                auth_type: "password".to_string(),
+                access_token: None,
+                refresh_token: None,
+                token_expires_at: 0,
+                oauth_client_id: String::new(),
+                oauth_client_secret: String::new(),
+                oauth_token_url: String::new(),
+                oauth_scope: String::new(),
+                proxy: proxy::ProxyChoice::default(),
+                cert_pin: None,
+                smtp_cert_pin: None,
+                ews_url: String::new(),
+                delegate_account_id: parent_id.clone(),
+                target_mailbox: address.clone(),
+            };
+            {
+                let db = engine.db.lock().unwrap();
+                store::upsert_account(
+                    &db,
+                    &id,
+                    &store::AccountMeta {
+                        engine: "mail".to_string(),
+                        provider: "exchange".to_string(),
+                        email: address,
+                        display_name,
+                        avatar_url: String::new(),
+                        sender_name: String::new(),
+                    },
+                    &creds,
+                )?;
+            }
+            // Usable immediately, without waiting for the sidecar to restart.
+            engine.resolve_shared_mailbox(&id, &parent_id).await;
+            Ok(json!({ "id": id }))
         }
 
         // Set the per-account "load remote images" preference.

@@ -30,6 +30,10 @@ export type Account = {
   smtp_tls?: boolean
   smtp_starttls?: boolean
   ews_url?: string
+  /** Set only for a shared mailbox: the account whose credentials actually
+   * open it. Empty for every other account, including the one granting
+   * access — see meron-core's `imap::Creds::delegate_account_id`. */
+  delegate_account_id?: string
   /** Server certificates this account accepted, when they cannot be validated normally. */
   cert_pin?: string
   smtp_cert_pin?: string
@@ -210,6 +214,17 @@ export type Message = {
    * which is not the same as judged unimportant.
    */
   priority?: boolean
+  /**
+   * Whether the learned spam filter flags this, as the core judged it.
+   *
+   * Absent means nobody has judged it — the identical rule as `priority`,
+   * and the same reason: unjudged must never read as "checked and clean".
+   * Never acted on by itself; see `components/chat/SpamNotice.tsx`.
+   */
+  spam?: boolean
+  /** The open task on this conversation, if any — never a completed one; the
+   * Tasks view is where those are found. */
+  task?: { id: number; due_at: number | null } | null
   attachments?: Attachment[]
   /** Source feed URL; present on RSS feed threads only. */
   feed_url?: string

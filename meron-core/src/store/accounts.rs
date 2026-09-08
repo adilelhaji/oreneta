@@ -282,6 +282,7 @@ fn creds_to_config(creds: &Creds) -> String {
         "cert_pin": creds.cert_pin,
         "smtp_cert_pin": creds.smtp_cert_pin,
         "ews_url": creds.ews_url,
+        "delegate_account_id": creds.delegate_account_id,
     })
     .to_string()
 }
@@ -323,6 +324,9 @@ fn config_to_creds(json: &str) -> Creds {
         cert_pin: config_cert_pin(&v, "cert_pin"),
         smtp_cert_pin: config_cert_pin(&v, "smtp_cert_pin"),
         ews_url: v["ews_url"].as_str().unwrap_or("").to_string(),
+        delegate_account_id: v["delegate_account_id"].as_str().unwrap_or("").to_string(),
+        // Resolved by `Engine`'s delegate-resolution pass, never stored.
+        target_mailbox: String::new(),
     }
 }
 
@@ -745,6 +749,24 @@ pub fn delete_secret(conn: &Connection, account_id: &str) -> Result<()> {
 
 /// Remove an account and all of its cached state (mail folders/messages and rss
 /// subscriptions/items) from the DB.
+/// The shared mailboxes (see `imap::Creds::delegate_account_id`) that
+/// borrow `parent_id`'s credentials. Used when `parent_id` is removed: a
+/// shared mailbox left delegating to a gone account has no path back to
+/// working — nothing to reconnect — so it is removed alongside it rather
+/// than left stuck needing reconnect forever.
+///
+/// `delegate_account_id` lives in the `config` JSON, the same as every
+/// other connection detail (`ews_url`, `auth_type`, ...) — no schema
+/// column of its own, so this reads it with `json_extract` rather than a
+/// plain `WHERE` on a column.
+pub fn shared_mailboxes_of(conn: &Connection, parent_id: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT id FROM accounts WHERE json_extract(config, '$.delegate_account_id') = ?1",
+    )?;
+    let rows = stmt.query_map(params![parent_id], |row| row.get::<_, String>(0))?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 pub fn delete_account(conn: &Connection, id: &str) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
@@ -919,6 +941,10 @@ pub fn list_accounts(conn: &Connection) -> Result<Vec<serde_json::Value>> {
                 // Empty for IMAP accounts; what the settings dialog uses to
                 // recognise an Exchange one and offer its own panel.
                 "ews_url": c.ews_url,
+                // Set only for a shared mailbox: the account whose
+                // credentials actually open it. Empty for every other
+                // account, including the one doing the delegating.
+                "delegate_account_id": c.delegate_account_id,
             }));
         }
     }
@@ -994,6 +1020,19 @@ pub fn account_engine(conn: &Connection, id: &str) -> Result<Option<String>> {
     Ok(conn
         .query_row(
             "SELECT engine FROM accounts WHERE id = ?1",
+            params![id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?)
+}
+
+/// An account's own stored address, if it exists. A shared mailbox's
+/// delegate-resolution pass uses this to say which mailbox its borrowed
+/// connection should actually address — see `imap::Creds::target_mailbox`.
+pub fn account_email(conn: &Connection, id: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT email FROM accounts WHERE id = ?1",
             params![id],
             |row| row.get::<_, String>(0),
         )

@@ -222,6 +222,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.importBackup(payload)
 	case "account.remove":
 		return a.accountRemove(payload)
+	case "account.addSharedMailbox":
+		return a.accountAddSharedMailbox(payload)
 	case "account.setImages":
 		return a.accountSetImages(payload)
 	case "account.setConversationHtml":
@@ -447,6 +449,20 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailSetSenderPriority(payload)
 	case "mail.markJunk":
 		return a.mailMarkJunk(payload)
+	case "mail.spamReason":
+		return a.mailSpamReason(payload)
+	case "mail.recordSpamJudgment":
+		return a.mailRecordSpamJudgment(payload)
+	case "tasks.list":
+		return a.tasksList(payload)
+	case "tasks.get":
+		return a.tasksGet(payload)
+	case "tasks.save":
+		return a.tasksSave(payload)
+	case "tasks.setCompleted":
+		return a.tasksSetCompleted(payload)
+	case "tasks.delete":
+		return a.tasksDelete(payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":
