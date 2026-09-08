@@ -9,6 +9,7 @@ import { accounts$ } from '../../states/accounts'
 import { openMailAccount } from '../../states/kanban'
 import { nextRssAccountDisplayName } from '../../states/feeds'
 import { errorMessage } from '../../lib/errors'
+import { accountSetupAddress, newAccountForm } from './accountSetup'
 import { securityForPort, serverSelectionAfterDiscovery, type MailSecurity } from './accountSecurity'
 import {
   certificateProbePayload,
@@ -74,29 +75,7 @@ export function useAccountDialog() {
   const oauthConfigured = mode === 'outlook' ? outlookConfigured : gmailConfigured
   const oauthLabel = mode === 'outlook' ? 'Microsoft' : 'Google'
 
-  const [form, setForm] = useState({
-    email: '',
-    display_name: '',
-    sender_name: '',
-    imap_host: '',
-    imap_host_touched: false,
-    imap_port: '993',
-    imap_port_touched: false,
-    imap_security: 'tls' as MailSecurity,
-    imap_security_touched: false,
-    smtp_host: '',
-    smtp_host_touched: false,
-    smtp_port: '465',
-    smtp_port_touched: false,
-    smtp_security: 'tls' as MailSecurity,
-    smtp_security_touched: false,
-    username: '',
-    username_touched: false,
-    password: '',
-    auth_code: '',
-    feed_url: '',
-    ews_url: '',
-  })
+  const [form, setForm] = useState(newAccountForm)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [discovering, setDiscovering] = useState(false)
@@ -110,6 +89,9 @@ export function useAccountDialog() {
   // able to paste the link into a private window is the way out — the loopback
   // listener belongs to this app, so any browser can finish the flow.
   const [oauthUrl, setOauthUrl] = useState('')
+  const oauthGenerationRef = useRef(0)
+  const oauthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const oauthPollInFlightRef = useRef<number | null>(null)
   const [certPrompt, setCertPrompt] = useState<CertificatePrompt | null>(null)
   // Pins accepted during the save in flight. A bridge can refuse on IMAP and
   // then again on submission, and the second prompt must not drop the first.
@@ -137,12 +119,20 @@ export function useAccountDialog() {
 
   useEffect(() => {
     return () => {
-      if ((window as any)._oauthPollInterval) {
-        clearInterval((window as any)._oauthPollInterval)
-        ;(window as any)._oauthPollInterval = null
-      }
+      oauthGenerationRef.current++
+      if (oauthIntervalRef.current) clearInterval(oauthIntervalRef.current)
     }
   }, [])
+
+  // Leaving the assistant stops consumption of late browser callbacks. It does
+  // not revoke a provider grant; the next Begin creates a fresh backend state.
+  function stopOAuth() {
+    oauthGenerationRef.current++
+    if (oauthIntervalRef.current) clearInterval(oauthIntervalRef.current)
+    oauthIntervalRef.current = null
+    setWaitingForGoogle(false)
+    setOauthUrl('')
+  }
 
   useEffect(() => {
     if (!reconnectAccount) return
@@ -206,13 +196,34 @@ export function useAccountDialog() {
   }, [mode, reconnectAccount, accounts])
 
   const setMode = (newMode: SetupMode) => {
+    stopOAuth()
+    discoveryGenerationRef.current++
+    setDiscovering(false)
+    setDiscoverNote('')
+    setError('')
+    setCertPrompt(null)
+    pins.current = {}
+    setExchangedTokens(null)
     ui$.reconnectAccountId.set('')
     ui$.setupMode.set(newMode)
     setAdvancedOpen(false)
     setAppPasswordHint(null)
   }
 
-  async function pollProfile(intervalId: any, provider: 'gmail' | 'outlook') {
+  function startNewAccount(mode: SetupMode, email: string) {
+    const next = newAccountForm(email)
+    formRef.current = next
+    setForm(next)
+    setMode(mode)
+  }
+
+  async function pollProfile(
+    intervalId: ReturnType<typeof setInterval>,
+    provider: 'gmail' | 'outlook',
+    generation: number,
+  ) {
+    if (generation !== oauthGenerationRef.current || oauthPollInFlightRef.current === generation) return
+    oauthPollInFlightRef.current = generation
     const addCommand = provider === 'outlook' ? 'account.addOutlookOAuth' : 'account.addGmailOAuth'
     const providerLabel = provider === 'outlook' ? 'Microsoft' : 'Google'
     try {
@@ -229,10 +240,11 @@ export function useAccountDialog() {
         }
       }>(`oauth.${provider}PollProfile`)
 
+      if (generation !== oauthGenerationRef.current) return
       if (res.exchanged && res.profile) {
         const before = new Set(accounts$.peek().map((acc) => acc.id))
         clearInterval(intervalId)
-        ;(window as any)._oauthPollInterval = null
+        oauthIntervalRef.current = null
         setWaitingForGoogle(false)
         setLoading(true)
         setForm((f) => ({
@@ -266,15 +278,20 @@ export function useAccountDialog() {
         }
       }
     } catch (err) {
-      console.error('Failed to poll profile', err)
+      if (generation !== oauthGenerationRef.current) return
+      clearInterval(intervalId)
+      oauthIntervalRef.current = null
       setWaitingForGoogle(false)
       setError(errorMessage(err, `${providerLabel} sign-in completed, but account save failed`))
     } finally {
-      setLoading(false)
+      if (oauthPollInFlightRef.current === generation) oauthPollInFlightRef.current = null
+      if (generation === oauthGenerationRef.current) setLoading(false)
     }
   }
 
   async function beginOAuth(provider: 'gmail' | 'outlook' = oauthProvider) {
+    stopOAuth()
+    const generation = oauthGenerationRef.current
     const providerLabel = provider === 'outlook' ? 'Microsoft' : 'Google'
     try {
       setError('')
@@ -282,19 +299,21 @@ export function useAccountDialog() {
       setWaitingForGoogle(true)
       setOauthUrl('')
       const res = await invoke<{ url: string; needs_external_browser?: boolean }>(`oauth.${provider}Begin`)
+      if (generation !== oauthGenerationRef.current) return
       if (res.url && res.needs_external_browser) setOauthUrl(res.url)
       if (res.url && !res.needs_external_browser) {
         window.location.href = res.url
       }
       if (res.url) {
         const id = setInterval(() => {
-          void pollProfile(id, provider)
+          void pollProfile(id, provider, generation)
         }, 1000)
-        ;(window as any)._oauthPollInterval = id
+        oauthIntervalRef.current = id
       } else {
         setWaitingForGoogle(false)
       }
     } catch (err) {
+      if (generation !== oauthGenerationRef.current) return
       setWaitingForGoogle(false)
       setError(errorMessage(err, `Failed to begin ${providerLabel} sign in`))
     }
@@ -309,7 +328,7 @@ export function useAccountDialog() {
   }, [reconnectAccount, mode, oauthConfigured, waitingForGoogle])
 
   async function runDiscovery(email: string) {
-    if (!email.includes('@') || email.endsWith('@')) return
+    if (!accountSetupAddress(email)) return
     const requestGeneration = ++discoveryGenerationRef.current
     setDiscoverNote('')
     setAppPasswordHint(null)
@@ -362,12 +381,15 @@ export function useAccountDialog() {
       setAppPasswordHint(cfg.app_password_hint ?? null)
       if (cfg.source === 'guess') {
         setAdvancedOpen(true)
-        setDiscoverNote("Couldn't find settings automatically — please verify the servers below.")
+        setDiscoverNote(translate('accounts.discovery.verifyServers'))
       } else {
-        setDiscoverNote(`Settings found${cfg.provider_name ? ` for ${cfg.provider_name}` : ''}.`)
+        setDiscoverNote(translate('accounts.discovery.found'))
       }
     } catch {
-      if (requestGeneration === discoveryGenerationRef.current) setDiscoverNote('')
+      if (requestGeneration === discoveryGenerationRef.current) {
+        setAdvancedOpen(true)
+        setDiscoverNote(translate('accounts.discovery.failed'))
+      }
     } finally {
       if (requestGeneration === discoveryGenerationRef.current) setDiscovering(false)
     }
@@ -530,17 +552,19 @@ export function useAccountDialog() {
 
   const saveDisabled =
     loading ||
+    discovering ||
     (mode === 'gmail' || mode === 'outlook'
       ? !exchangedTokens && !form.auth_code
       : mode === 'rss'
         ? !form.display_name
         : mode === 'ews'
-          ? !form.email || !form.ews_url || (!form.password && !editing)
-          : !form.email || (!form.password && !editing))
+          ? (!reconnectAccount && !accountSetupAddress(form.email)) || !form.ews_url || (!form.password && !editing)
+          : (!reconnectAccount && !accountSetupAddress(form.email)) || (!form.password && !editing))
 
   return {
     mode,
     setMode,
+    startNewAccount,
     oauthConfigured,
     oauthLabel,
     gmailConfigured,
@@ -558,6 +582,7 @@ export function useAccountDialog() {
     oauthUrl,
     runDiscovery,
     beginOAuth,
+    stopOAuth,
     save,
     certPrompt,
     trustCertificate,

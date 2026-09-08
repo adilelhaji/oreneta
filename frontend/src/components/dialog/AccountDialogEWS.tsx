@@ -4,6 +4,7 @@ import { useTranslation } from '../../lib/i18n'
 import { Field } from '../field/Field'
 import type { AccountDialogController } from './useAccountDialog'
 import type { DialogClasses } from './accountDialogStyles'
+import { accountSetupAddress } from './accountSetup'
 
 /// Setup panel for an Exchange (EWS) account. Far fewer fields than the IMAP
 /// panel: EWS carries mail and submission over one HTTPS endpoint, so there
@@ -25,6 +26,7 @@ export function AccountDialogEWS({
     <>
       <Field
         label={t('accounts.fields.emailAddress')}
+        type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
         inputClassName={inputClass}
@@ -33,6 +35,11 @@ export function AccountDialogEWS({
         // Remove + Add, deliberately, as on the IMAP panel.
         disabled={editing}
       />
+      {!ctl.reconnectAccount && form.email && !accountSetupAddress(form.email) && (
+        <p role="alert" className="text-caption text-secondary">
+          {t('accounts.wizard.invalidEmail')}
+        </p>
+      )}
       <Field
         label={t('accounts.fields.ewsUrl', { defaultValue: 'EWS server URL' })}
         value={form.ews_url}

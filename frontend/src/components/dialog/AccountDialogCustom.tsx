@@ -5,6 +5,7 @@ import { Field } from '../field/Field'
 import { securityAfterPortEdit, type MailSecurity } from './accountSecurity'
 import type { AccountDialogController } from './useAccountDialog'
 import type { DialogClasses } from './accountDialogStyles'
+import { accountSetupAddress } from './accountSetup'
 
 // The custom IMAP/SMTP section: email (with autodiscovery), sender name, password,
 // the app-password hint, and the collapsible advanced server settings.
@@ -38,6 +39,7 @@ export function AccountDialogCustom({
     <>
       <Field
         label={t('accounts.fields.emailAddress')}
+        type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
         onBlur={() => runDiscovery(form.email)}
@@ -48,10 +50,13 @@ export function AccountDialogCustom({
         // one. Renaming is Remove + Add, deliberately.
         disabled={editing}
       />
+      {!ctl.reconnectAccount && form.email && !accountSetupAddress(form.email) && (
+        <p role="alert" className="text-caption text-secondary">
+          {t('accounts.wizard.invalidEmail')}
+        </p>
+      )}
       {(discovering || discoverNote) && (
-        <p
-          className={`flex items-center gap-1.5 px-1 -mt-2 text-caption font-medium ${discovering ? 'text-secondary' : discoverNote.startsWith("Couldn't") ? 'text-amber-600 dark:text-amber-400' : 'text-accent'}`}
-        >
+        <p role="status" className="flex items-center gap-1.5 px-1 text-caption font-medium text-secondary">
           {discovering && <RefreshCw size={11} className="animate-spin" />}
           {discovering ? t('accounts.discovery.lookingUp') : discoverNote}
         </p>

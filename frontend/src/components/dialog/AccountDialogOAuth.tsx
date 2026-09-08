@@ -5,10 +5,17 @@ import { useTranslation } from '../../lib/i18n'
 // The OAuth sign-in section mirrors mobile: one row per supported OAuth
 // provider. The outer provider rail stays generic so more providers can be added
 // here later without adding more account-type tabs.
-export function AccountDialogOAuth({ ctl, isSetup }: { ctl: AccountDialogController; isSetup: boolean }) {
+export function AccountDialogOAuth({
+  ctl,
+  isSetup,
+  provider: selectedProvider,
+}: {
+  ctl: AccountDialogController
+  isSetup: boolean
+  provider?: 'gmail' | 'outlook'
+}) {
   const { t } = useTranslation()
-  const { mode, oauthLabel, gmailConfigured, outlookConfigured, waitingForGoogle, oauthUrl, beginOAuth } =
-    ctl
+  const { mode, oauthLabel, gmailConfigured, outlookConfigured, waitingForGoogle, oauthUrl, beginOAuth } = ctl
   const providerButtons = [
     {
       mode: 'gmail' as const,
@@ -27,32 +34,42 @@ export function AccountDialogOAuth({ ctl, isSetup }: { ctl: AccountDialogControl
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-4">
-        {providerButtons.map((provider) => {
-          const busy = waitingForGoogle && mode === provider.mode
-          return (
-            <div key={provider.mode} className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                disabled={waitingForGoogle || !provider.configured}
-                onClick={() => void beginOAuth(provider.mode)}
-                className={`w-full flex items-center justify-center border bg-chats font-semibold transition-all ${
-                  isSetup
-                    ? 'gap-3 rounded-panel border-border px-5 py-4 text-lg text-primary hover:border-secondary/50 hover:bg-hover'
-                    : 'gap-2 rounded-control border-border px-4 py-2.5 text-xs shadow-sm hover:bg-hover'
-                } ${busy ? 'opacity-70 cursor-wait' : ''} ${
-                  !provider.configured ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                }`}
-              >
-                {provider.icon}
-                {provider.label}
-              </button>
-            </div>
-          )
-        })}
+        {providerButtons
+          .filter((provider) => !selectedProvider || provider.mode === selectedProvider)
+          .map((provider) => {
+            const busy = waitingForGoogle && mode === provider.mode
+            return (
+              <div key={provider.mode} className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  disabled={waitingForGoogle || !provider.configured}
+                  onClick={() => void beginOAuth(provider.mode)}
+                  className={`w-full flex items-center justify-center border bg-chats font-semibold transition-all ${
+                    isSetup
+                      ? 'gap-3 rounded-panel border-border px-5 py-4 text-lg text-primary hover:border-secondary/50 hover:bg-hover'
+                      : 'gap-2 rounded-control border-border px-4 py-2.5 text-xs shadow-sm hover:bg-hover'
+                  } ${busy ? 'opacity-70 cursor-wait' : ''} ${
+                    !provider.configured ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  {provider.icon}
+                  {provider.label}
+                </button>
+                {!provider.configured && (
+                  <p role="status" className="text-caption leading-relaxed text-secondary">
+                    {t('accounts.wizard.oauthUnavailable', {
+                      provider: provider.mode === 'gmail' ? 'Google' : 'Microsoft',
+                    })}
+                  </p>
+                )}
+              </div>
+            )
+          })}
       </div>
       {waitingForGoogle && (
         <div className="flex flex-col items-center gap-2">
           <p
+            role="status"
             className={`${isSetup ? 'text-base' : 'text-2xs'} text-accent font-semibold text-center animate-pulse`}
           >
             {t('accounts.oauth.waitingForSignIn', { provider: oauthLabel })}
