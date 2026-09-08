@@ -2578,11 +2578,25 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     if include_secrets {
                         let ids = {
                             let conn = engine.db.lock().unwrap();
-                            store::list_accounts(&conn)?
+                            let mut ids: Vec<String> = store::list_accounts(&conn)?
                                 .iter()
                                 .filter_map(|account| account.get("id").and_then(Value::as_str))
                                 .map(str::to_string)
-                                .collect::<Vec<_>>()
+                                .collect();
+                            // The reader's own OpenPGP/S-MIME identities: not
+                            // accounts, but the same keychain and the same
+                            // "read every id up front" reasoning applies.
+                            ids.extend(
+                                store::pgp_secret_keys(&conn)?
+                                    .into_iter()
+                                    .map(|key| format!("pgp-secret-{}", key.fingerprint)),
+                            );
+                            ids.extend(
+                                store::smime_identities(&conn)?
+                                    .into_iter()
+                                    .map(|identity| format!("smime-identity-{}", identity.fingerprint)),
+                            );
+                            ids
                         };
                         ids.into_iter()
                             // An account whose entry is missing or unreadable exports

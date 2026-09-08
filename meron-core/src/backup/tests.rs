@@ -618,6 +618,7 @@ fn accounts_with_a_blank_id_are_dropped() {
             },
         ],
         settings: Map::new(),
+        ..Default::default()
     };
 
     let target = test_conn();
@@ -635,6 +636,7 @@ fn empty_engine_and_provider_fall_back_to_mail_defaults() {
             ..Default::default()
         }],
         settings: Map::new(),
+        ..Default::default()
     };
 
     let target = test_conn();
@@ -780,4 +782,143 @@ fn a_backup_without_a_platform_map_is_unaffected() {
 
     assert_eq!(data.settings["theme_id"], "nord");
     assert_eq!(data.settings.len(), 1);
+}
+
+// ---- PGP secret keys and S/MIME identities ----------------------------------
+
+fn insert_pgp_secret_key(conn: &Connection, fingerprint: &str) {
+    store::upsert_pgp_secret_key(
+        conn,
+        &store::StoredSecretKey {
+            fingerprint: fingerprint.to_string(),
+            user_ids: vec!["Ada Lovelace <ada@example.com>".to_string()],
+            addresses: vec!["ada@example.com".to_string()],
+            protected: true,
+            added_at: 0,
+        },
+        100,
+    )
+    .unwrap();
+}
+
+fn insert_smime_identity(conn: &Connection, fingerprint: &str) {
+    store::upsert_smime_identity(
+        conn,
+        &store::StoredSmimeIdentity {
+            fingerprint: fingerprint.to_string(),
+            subject: "CN=Ada Lovelace".to_string(),
+            addresses: vec!["ada@example.com".to_string()],
+            der: b"fake certificate DER".to_vec(),
+            added_at: 0,
+        },
+        100,
+    )
+    .unwrap();
+}
+
+/// A `load_secrets` stand-in that answers by id, the way the real prefetch
+/// (main.rs's `backup.export` handler) does — unlike [`secrets_with`], which
+/// answers the same secret for every id and so cannot tell a misrouted key
+/// from a correctly-routed one.
+fn secrets_by_id<'a>(entries: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Secrets + 'a {
+    move |id| {
+        entries
+            .iter()
+            .find(|(key, _)| *key == id)
+            .map(|(_, password)| secrets_with(password))
+            .unwrap_or_default()
+    }
+}
+
+#[test]
+fn pgp_and_smime_secrets_round_trip_through_an_encrypted_backup() {
+    let source = test_conn();
+    insert_pgp_secret_key(&source, "AAAA1111");
+    insert_smime_identity(&source, "BBBB2222");
+
+    let load = secrets_by_id(&[
+        ("pgp-secret-AAAA1111", "armoured-pgp-key"),
+        ("smime-identity-BBBB2222", "base64-pkcs8-key"),
+    ]);
+    let text = export(&source, true, Some("correct horse"), Host::default(), &load).unwrap();
+    assert!(!text.contains("armoured-pgp-key"));
+    assert!(!text.contains("base64-pkcs8-key"));
+
+    let data = parse(&text, Some("correct horse")).unwrap();
+    assert_eq!(data.pgp_secret_keys[0].fingerprint, "AAAA1111");
+    assert_eq!(data.pgp_secret_keys[0].key.as_deref(), Some("armoured-pgp-key"));
+    assert_eq!(data.smime_identities[0].fingerprint, "BBBB2222");
+    assert_eq!(data.smime_identities[0].key.as_deref(), Some("base64-pkcs8-key"));
+    // The certificate is public and always carried, distinct from the key.
+    assert_eq!(data.smime_identities[0].der, STANDARD.encode(b"fake certificate DER"));
+
+    let target = test_conn();
+    let sink = SecretSink::default();
+    let summary = apply(&target, &data, &sink.saver()).unwrap();
+    assert_eq!(summary.pgp_keys, 1);
+    assert_eq!(summary.smime_identities, 1);
+
+    let restored_keys = store::pgp_secret_keys(&target).unwrap();
+    assert_eq!(restored_keys[0].fingerprint, "AAAA1111");
+    assert!(restored_keys[0].protected);
+    let restored_identities = store::smime_identities(&target).unwrap();
+    assert_eq!(restored_identities[0].fingerprint, "BBBB2222");
+    assert_eq!(restored_identities[0].der, b"fake certificate DER");
+
+    let stored = sink.0.lock().unwrap();
+    assert_eq!(stored.get("pgp-secret-AAAA1111").unwrap(), "armoured-pgp-key");
+    assert_eq!(stored.get("smime-identity-BBBB2222").unwrap(), "base64-pkcs8-key");
+}
+
+#[test]
+fn plaintext_backup_carries_pgp_and_smime_metadata_but_never_key_material() {
+    let source = test_conn();
+    insert_pgp_secret_key(&source, "AAAA1111");
+    insert_smime_identity(&source, "BBBB2222");
+
+    let load = secrets_by_id(&[
+        ("pgp-secret-AAAA1111", "armoured-pgp-key"),
+        ("smime-identity-BBBB2222", "base64-pkcs8-key"),
+    ]);
+    // include_secrets = false: metadata (and, for S/MIME, the public
+    // certificate) still exports — only `key` is withheld.
+    let text = export(&source, false, None, Host::default(), &load).unwrap();
+    let data = parse(&text, None).unwrap();
+
+    assert_eq!(data.pgp_secret_keys[0].fingerprint, "AAAA1111");
+    assert!(data.pgp_secret_keys[0].key.is_none());
+    assert_eq!(data.smime_identities[0].fingerprint, "BBBB2222");
+    assert!(data.smime_identities[0].key.is_none());
+    assert_eq!(data.smime_identities[0].der, STANDARD.encode(b"fake certificate DER"));
+}
+
+#[test]
+fn restoring_a_fingerprint_already_present_locally_is_skipped_not_overwritten() {
+    let source = test_conn();
+    insert_pgp_secret_key(&source, "AAAA1111");
+    insert_smime_identity(&source, "BBBB2222");
+    let load = secrets_by_id(&[
+        ("pgp-secret-AAAA1111", "armoured-pgp-key"),
+        ("smime-identity-BBBB2222", "base64-pkcs8-key"),
+    ]);
+    let data = parse(
+        &export(&source, true, Some("pw"), Host::default(), &load).unwrap(),
+        Some("pw"),
+    )
+    .unwrap();
+
+    // The target already holds both fingerprints (e.g. the reader imported
+    // them locally before ever restoring a backup).
+    let target = test_conn();
+    insert_pgp_secret_key(&target, "AAAA1111");
+    insert_smime_identity(&target, "BBBB2222");
+
+    let sink = SecretSink::default();
+    let summary = apply(&target, &data, &sink.saver()).unwrap();
+
+    assert_eq!(summary.pgp_keys, 0);
+    assert_eq!(summary.smime_identities, 0);
+    // Never even asked to store a secret for either: existing local material
+    // is not replaced by whatever the backup happened to carry.
+    assert!(sink.0.lock().unwrap().is_empty());
 }

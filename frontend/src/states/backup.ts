@@ -19,10 +19,23 @@ export type BackupSummary = {
   feeds: number
   settings: number
   secrets: number
+  /** OpenPGP secret keys restored to the OS keyring. */
+  pgpKeys: number
+  /** S/MIME identities (certificate + private key) restored to the OS keyring. */
+  smimeIdentities: number
 }
 
 type ExportResult = { saved: boolean; path?: string; encrypted?: boolean }
-type ImportResult = Partial<BackupSummary> & { cancelled?: boolean; needsPassphrase?: boolean; path?: string }
+// The bridge's own field names, snake_case as the Go/Rust side writes them —
+// distinct from BackupSummary's camelCase, so the two new counts don't read
+// as present just because the key happens to share a name.
+type ImportResult = Partial<Omit<BackupSummary, 'pgpKeys' | 'smimeIdentities'>> & {
+  pgp_keys?: number
+  smime_identities?: number
+  cancelled?: boolean
+  needsPassphrase?: boolean
+  path?: string
+}
 
 /**
  * Write a backup to a file the user picks.
@@ -67,6 +80,8 @@ export async function importBackup(path?: string, passphrase = ''): Promise<Impo
     feeds: res?.feeds ?? 0,
     settings: res?.settings ?? 0,
     secrets: res?.secrets ?? 0,
+    pgpKeys: res?.pgp_keys ?? 0,
+    smimeIdentities: res?.smime_identities ?? 0,
   }
   // Restored rows land straight in the DB, so every cached view is stale:
   // re-bootstrap for accounts + settings, then refresh the open mail panes.

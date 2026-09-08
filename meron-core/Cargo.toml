@@ -105,3 +105,7 @@ ndk-context = "0.1.1"
 # Fork adds a `gmail_thread_id()` accessor (X-GM-THRID) missing from upstream.
 [patch.crates-io]
 async-imap = { git = "https://github.com/nonbili/async-imap.git", rev = "d04be74" }
+# Maddy 0.8 (and potentially other real-world IMAP servers) serializes an
+# empty BODYSTRUCTURE parameter list as `()` instead of the RFC-mandated NIL.
+# Keep the compatibility patch local and covered by the vendored crate's tests.
+imap-proto = { path = "../third_party/imap-proto" }
