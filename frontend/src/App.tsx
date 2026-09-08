@@ -14,6 +14,8 @@ import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
 import { PeopleView } from './components/people/PeopleView'
+import { TasksView } from './components/tasks/TasksView'
+import { TaskDialog } from './components/tasks/TaskDialog'
 import { MessagePane } from './components/chat/MessagePane'
 import { AboutDialog } from './components/dialog/AboutDialog'
 import { ChangelogDialog } from './components/dialog/ChangelogDialog'
@@ -50,6 +52,8 @@ export default function App() {
   const kanbanPaneWidth = useValue(settings$.kanbanPaneWidth)
   const calendarOpen = useValue(ui$.calendarOpen)
   const peopleOpen = useValue(ui$.peopleOpen)
+  const tasksOpen = useValue(ui$.tasksOpen)
+  const taskEditor = useValue(ui$.taskEditor)
   const setupOpen = useValue(ui$.setupOpen)
   const settingsOpen = useValue(ui$.settingsOpen)
   const addFeedAccount = useValue(ui$.addFeedAccount)
@@ -91,6 +95,10 @@ export default function App() {
           <ErrorBoundary label="calendar">
             <CalendarView />
           </ErrorBoundary>
+        ) : tasksOpen ? (
+          <ErrorBoundary label="tasks">
+            <TasksView />
+          </ErrorBoundary>
         ) : (
         <ErrorBoundary label="thread list">
           {activeBoardId ? (
@@ -100,7 +108,7 @@ export default function App() {
           )}
         </ErrorBoundary>
         )}
-        {calendarOpen || peopleOpen ? null : !activeBoardId ? (
+        {calendarOpen || peopleOpen || tasksOpen ? null : !activeBoardId ? (
           <ErrorBoundary label="conversation">
             <MessagePane />
           </ErrorBoundary>
@@ -137,6 +145,7 @@ export default function App() {
         {scheduledSendsOpen && <ScheduledSendsDialog />}
         {ruleLogOpen && <RuleLogDialog />}
         {catalogueOpen && <DesignCatalogue />}
+        {taskEditor && <TaskDialog />}
         {sweepTarget && (
           <SweepDialog
             accountId={sweepTarget.accountId}

@@ -121,6 +121,39 @@ pub struct BackupAccount {
     pub secrets: Option<Secrets>,
 }
 
+/// One OpenPGP secret key the reader has imported. Metadata (fingerprint,
+/// addresses, whether it's passphrase-protected) is carried in every backup,
+/// same as an account's connection settings; `key` — the armoured secret key
+/// itself, from the OS keyring — only in one exported with secrets.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct BackupPgpSecretKey {
+    pub fingerprint: String,
+    #[serde(default)]
+    pub user_ids: Vec<String>,
+    #[serde(default)]
+    pub addresses: Vec<String>,
+    #[serde(default)]
+    pub protected: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
+/// One S/MIME identity the reader has imported from a PKCS#12 file. `der` is
+/// the certificate — public, always carried. `key` — the PKCS#8 private key,
+/// base64, from the OS keyring — only in a backup exported with secrets, the
+/// same rule [`BackupPgpSecretKey::key`] follows.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct BackupSmimeIdentity {
+    pub fingerprint: String,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub addresses: Vec<String>,
+    pub der: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+}
+
 /// The decrypted body of a backup. Not `Debug`, for the same reason as
 /// [`BackupAccount`].
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -130,6 +163,12 @@ pub struct BackupData {
     /// The `settings` table, key -> parsed JSON value.
     #[serde(default)]
     pub settings: Map<String, Value>,
+    /// Absent from a backup written before this field existed, which is
+    /// exactly the same as an empty one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pgp_secret_keys: Vec<BackupPgpSecretKey>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub smime_identities: Vec<BackupSmimeIdentity>,
 }
 
 /// What [`import`] changed, for the "restored N accounts" confirmation.
@@ -140,6 +179,8 @@ pub struct ImportSummary {
     pub feeds: u32,
     pub settings: u32,
     pub secrets: u32,
+    pub pgp_keys: u32,
+    pub smime_identities: u32,
 }
 
 impl ImportSummary {
@@ -150,6 +191,8 @@ impl ImportSummary {
             "feeds": self.feeds,
             "settings": self.settings,
             "secrets": self.secrets,
+            "pgp_keys": self.pgp_keys,
+            "smime_identities": self.smime_identities,
         })
     }
 }
@@ -208,7 +251,57 @@ pub fn collect(
         redact_settings(&mut settings);
     }
 
-    Ok(BackupData { accounts, settings })
+    let pgp_secret_keys = store::pgp_secret_keys(conn)?
+        .into_iter()
+        .map(|stored| BackupPgpSecretKey {
+            key: pgp_secret_key_id(&stored.fingerprint)
+                .filter(|_| include_secrets)
+                .map(|id| load_secrets(&id))
+                .map(|secrets| secrets.password)
+                .filter(|armoured| !armoured.is_empty()),
+            fingerprint: stored.fingerprint,
+            user_ids: stored.user_ids,
+            addresses: stored.addresses,
+            protected: stored.protected,
+        })
+        .collect();
+
+    let smime_identities = store::smime_identities(conn)?
+        .into_iter()
+        .map(|stored| BackupSmimeIdentity {
+            key: smime_identity_id(&stored.fingerprint)
+                .filter(|_| include_secrets)
+                .map(|id| load_secrets(&id))
+                .map(|secrets| secrets.password)
+                .filter(|der_b64| !der_b64.is_empty()),
+            fingerprint: stored.fingerprint,
+            subject: stored.subject,
+            addresses: stored.addresses,
+            der: STANDARD.encode(&stored.der),
+        })
+        .collect();
+
+    Ok(BackupData {
+        accounts,
+        settings,
+        pgp_secret_keys,
+        smime_identities,
+    })
+}
+
+/// The OS-keyring id an OpenPGP secret key's material is stored under —
+/// `pgp.importSecret` writes it, `pgp.decrypt` reads it back. `None` only for
+/// an empty fingerprint, which the store never actually hands back; the
+/// `Option` exists so a malformed row degrades to "no secret" rather than a
+/// panic.
+fn pgp_secret_key_id(fingerprint: &str) -> Option<String> {
+    (!fingerprint.is_empty()).then(|| format!("pgp-secret-{fingerprint}"))
+}
+
+/// The OS-keyring id an S/MIME identity's private key is stored under, the
+/// parallel to [`pgp_secret_key_id`] — see `smime.importIdentity`.
+fn smime_identity_id(fingerprint: &str) -> Option<String> {
+    (!fingerprint.is_empty()).then(|| format!("smime-identity-{fingerprint}"))
 }
 
 fn collect_subscriptions(conn: &Connection, account: &str) -> Result<Vec<BackupSubscription>> {
@@ -534,6 +627,75 @@ pub fn apply(
             store_secrets(&tx, id, secrets)?;
             summary.secrets += 1;
         }
+    }
+
+    for key in &data.pgp_secret_keys {
+        let fingerprint = key.fingerprint.trim();
+        if fingerprint.is_empty() {
+            continue;
+        }
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pgp_secret_keys WHERE fingerprint = ?1)",
+            params![fingerprint],
+            |row| row.get::<_, i64>(0),
+        )? != 0;
+        if exists {
+            continue;
+        }
+        store::upsert_pgp_secret_key(
+            &tx,
+            &store::StoredSecretKey {
+                fingerprint: fingerprint.to_string(),
+                user_ids: key.user_ids.clone(),
+                addresses: key.addresses.clone(),
+                protected: key.protected,
+                added_at: 0,
+            },
+            now,
+        )?;
+        if let Some(armoured) = &key.key
+            && let Some(id) = pgp_secret_key_id(fingerprint)
+        {
+            store_secrets(&tx, &id, &Secrets { password: armoured.clone(), ..Default::default() })?;
+        }
+        summary.pgp_keys += 1;
+    }
+
+    for identity in &data.smime_identities {
+        let fingerprint = identity.fingerprint.trim();
+        if fingerprint.is_empty() {
+            continue;
+        }
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM smime_identities WHERE fingerprint = ?1)",
+            params![fingerprint],
+            |row| row.get::<_, i64>(0),
+        )? != 0;
+        if exists {
+            continue;
+        }
+        let Ok(der) = STANDARD.decode(identity.der.trim()) else {
+            // A hand-edited or corrupt backup: skip this one identity rather
+            // than failing the whole restore over it.
+            continue;
+        };
+        store::upsert_smime_identity(
+            &tx,
+            &store::StoredSmimeIdentity {
+                fingerprint: fingerprint.to_string(),
+                subject: identity.subject.clone(),
+                addresses: identity.addresses.clone(),
+                der,
+                added_at: 0,
+            },
+            now,
+        )?;
+        if let Some(key_b64) = &identity.key
+            && let Some(id) = smime_identity_id(fingerprint)
+        {
+            store_secrets(&tx, &id, &Secrets { password: key_b64.clone(), ..Default::default() })?;
+        }
+        summary.smime_identities += 1;
     }
 
     for (key, value) in &data.settings {

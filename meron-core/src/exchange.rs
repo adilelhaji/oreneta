@@ -55,6 +55,11 @@ pub struct EwsConfig {
     /// `user@domain` or `DOMAIN\user`, whichever the server accepts.
     pub username: String,
     pub password: String,
+    /// The mailbox distinguished-folder operations should address, when it
+    /// differs from the authenticated user's own — a shared mailbox this
+    /// account has been granted full access to. Empty for the ordinary
+    /// case. See [`distinguished_folder_id`].
+    pub target_mailbox: String,
 }
 
 /// A blocking EWS client bound to one account.
@@ -70,6 +75,15 @@ impl EwsClient {
         Self { config }
     }
 
+    /// A distinguished folder reference, addressed at this client's
+    /// `target_mailbox` when it has one (a shared mailbox this account has
+    /// been granted full access to) or the authenticated user's own mailbox
+    /// otherwise — the ordinary case, and every case before shared mailboxes
+    /// existed.
+    fn distinguished(&self, id: &str) -> BaseFolderId {
+        distinguished_folder_id(&self.config.target_mailbox, id)
+    }
+
     /// Runs one folder-hierarchy sync round. With `sync_state = None` the
     /// server returns a `Create` change for every folder in the mailbox;
     /// with a previous round's state it returns only the delta since then.
@@ -81,11 +95,7 @@ impl EwsClient {
             folder_shape: FolderShape {
                 base_shape: BaseShape::AllProperties,
             },
-            sync_folder_id: Some(BaseFolderId::DistinguishedFolderId {
-                id: "msgfolderroot".to_string(),
-                change_key: None,
-                mailbox: None,
-            }),
+            sync_folder_id: Some(self.distinguished("msgfolderroot")),
             sync_state,
         })?;
         single_message(into_successes(response).context("SyncFolderHierarchy")?)
@@ -120,11 +130,7 @@ impl EwsClient {
     pub fn create_calendar(&self, name: &str) -> anyhow::Result<String> {
         let response = self.call(::ews::create_folder::CreateFolder {
             // Under the mailbox root, where the account's own calendars live.
-            parent_folder_id: BaseFolderId::DistinguishedFolderId {
-                id: "calendar".to_string(),
-                change_key: None,
-                mailbox: None,
-            },
+            parent_folder_id: self.distinguished("calendar"),
             folders: vec![::ews::Folder::CalendarFolder {
                 folder_id: None,
                 parent_folder_id: None,
@@ -830,11 +836,7 @@ impl EwsSession {
             },
             folder_ids: wanted
                 .iter()
-                .map(|(id, _)| BaseFolderId::DistinguishedFolderId {
-                    id: id.to_string(),
-                    change_key: None,
-                    mailbox: None,
-                })
+                .map(|(id, _)| distinguished_folder_id(&client.config.target_mailbox, id))
                 .collect(),
         })?;
 
@@ -1501,11 +1503,7 @@ impl EwsSession {
             folder_shape: FolderShape {
                 base_shape: BaseShape::IdOnly,
             },
-            folder_ids: vec![BaseFolderId::DistinguishedFolderId {
-                id: id.to_string(),
-                change_key: None,
-                mailbox: None,
-            }],
+            folder_ids: vec![distinguished_folder_id(&client.config.target_mailbox, id)],
         })?;
         for message in response.into_response_messages() {
             let (ResponseClass::Success(message) | ResponseClass::Warning(message)) = message
@@ -2232,6 +2230,25 @@ fn item_id(reference: &EwsId) -> BaseItemId {
     }
 }
 
+/// A distinguished folder reference. `target_mailbox`, when not empty,
+/// addresses it at that mailbox instead of the authenticated user's own —
+/// the shape a shared mailbox (Exchange full-access delegation) needs every
+/// distinguished-folder operation to use; empty is every account before
+/// shared mailboxes existed, and every account since that is not one.
+fn distinguished_folder_id(target_mailbox: &str, id: &str) -> BaseFolderId {
+    BaseFolderId::DistinguishedFolderId {
+        id: id.to_string(),
+        change_key: None,
+        mailbox: (!target_mailbox.is_empty()).then(|| ::ews::Mailbox {
+            name: None,
+            email_address: Some(target_mailbox.to_string()),
+            routing_type: Some("SMTP".to_string()),
+            mailbox_type: None,
+            item_id: None,
+        }),
+    }
+}
+
 /// The mailbox identifier `GetUserOofSettings`/`SetUserOofSettings` address
 /// by — always this account's own address, since Automatic Replies has no
 /// concept of asking on someone else's behalf the way delegate access might.
@@ -2392,6 +2409,27 @@ mod tests {
             id: id.to_string(),
             change_key: None,
         }
+    }
+
+    #[test]
+    fn an_ordinary_account_addresses_no_mailbox_explicitly() {
+        let BaseFolderId::DistinguishedFolderId { id, mailbox, .. } = distinguished_folder_id("", "inbox") else {
+            panic!("expected a DistinguishedFolderId");
+        };
+        assert_eq!(id, "inbox");
+        assert!(mailbox.is_none(), "an empty target_mailbox must not address anyone");
+    }
+
+    #[test]
+    fn a_shared_mailbox_addresses_its_own_mailbox_explicitly() {
+        let BaseFolderId::DistinguishedFolderId { mailbox, .. } =
+            distinguished_folder_id("support@corp.example.com", "inbox")
+        else {
+            panic!("expected a DistinguishedFolderId");
+        };
+        let mailbox = mailbox.expect("a shared mailbox must be addressed explicitly");
+        assert_eq!(mailbox.email_address.as_deref(), Some("support@corp.example.com"));
+        assert_eq!(mailbox.routing_type.as_deref(), Some("SMTP"));
     }
 
     #[test]
@@ -2915,6 +2953,7 @@ mod tests {
             url,
             username: "u".to_string(),
             password: "p".to_string(),
+        target_mailbox: String::new(),
         });
         let envelopes = client
             .fetch_envelopes(&[("AAMkENV=".to_string(), None)])
@@ -3097,6 +3136,7 @@ mod tests {
                 url,
                 username: "u".to_string(),
                 password: "p".to_string(),
+            target_mailbox: String::new(),
             },
             "acct",
             db.clone(),
@@ -3348,6 +3388,7 @@ mod tests {
                 url: "http://127.0.0.1:1".to_string(),
                 username: "u".to_string(),
                 password: "p".to_string(),
+            target_mailbox: String::new(),
             },
             "acct",
             db,
@@ -3483,6 +3524,7 @@ mod tests {
             url,
             username: "CORP\\user".to_string(),
             password: "pw".to_string(),
+        target_mailbox: String::new(),
         });
         let round = client
             .folder_hierarchy(None)
@@ -3509,6 +3551,7 @@ mod tests {
             url,
             username: "u".to_string(),
             password: "p".to_string(),
+        target_mailbox: String::new(),
         });
         let fetched = client
             .fetch_mime(&[("AAMkMIME=".to_string(), None)])
