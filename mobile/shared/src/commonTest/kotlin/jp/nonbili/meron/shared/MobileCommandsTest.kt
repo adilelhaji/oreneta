@@ -6,6 +6,7 @@ import kotlin.coroutines.startCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 class MobileCommandsTest {
     @Test
@@ -554,7 +555,7 @@ class MobileCommandsTest {
 
         runSuspend { client.listThreads(ThreadListParams(accountId = "acc1")) }
         assertEquals(MobileCommand.ThreadList, core.lastCommand)
-        assertEquals("""{"account_id":"acc1","folder_id":"inbox","query":"","filter":"all","refresh":false}""", core.lastPayloadJson)
+        assertEquals("""{"account_id":"acc1","folder_id":"inbox","query":"","filter":"all","refresh":false,"sort":"date"}""", core.lastPayloadJson)
 
         runSuspend { client.listStarredItems() }
         assertEquals(MobileCommand.StarredItems, core.lastCommand)
@@ -638,7 +639,7 @@ class MobileCommandsTest {
             )
 
         assertEquals(
-            """{"id":4,"method":"mail.threadList","params":{"account_id":"acc1","folder_id":"inbox","query":"design","filter":"unread","before_cursor":"1700000000:44","refresh":true}}""",
+            """{"id":4,"method":"mail.threadList","params":{"account_id":"acc1","folder_id":"inbox","query":"design","filter":"unread","before_cursor":"1700000000:44","refresh":true,"sort":"date"}}""",
             request.toJson(),
         )
     }
@@ -648,11 +649,11 @@ class MobileCommandsTest {
     @Test
     fun threadListSendsLimitOnlyWhenSet() {
         assertEquals(
-            """{"account_id":"acc1","folder_id":"inbox","query":"","filter":"all","refresh":false,"limit":150}""",
+            """{"account_id":"acc1","folder_id":"inbox","query":"","filter":"all","refresh":false,"limit":150,"sort":"date"}""",
             ThreadListParams(accountId = "acc1", limit = 150).toJson(),
         )
         assertEquals(
-            """{"account_id":"acc1","folder_id":"inbox","query":"","filter":"all","refresh":false}""",
+            """{"account_id":"acc1","folder_id":"inbox","query":"","filter":"all","refresh":false,"sort":"date"}""",
             ThreadListParams(accountId = "acc1").toJson(),
         )
     }
@@ -663,6 +664,25 @@ class MobileCommandsTest {
             """{"id":6,"method":"mail.folderCreate","params":{"account_id":"acc1","name":"Work"}}""",
             folderCreateRequest(id = 6, params = FolderCreateParams(accountId = "acc1", name = "Work")).toJson(),
         )
+    }
+
+    @Test
+    fun threadListForwardsEverySortAndRejectsCoreErrors() {
+        for (sort in listOf("date", "date:asc", "sender", "sender:asc", "subject", "subject:asc")) {
+            val params = ThreadListParams(accountId = "unified", folderRole = "inbox", beforeCursor = "conv1:opaque", sort = sort)
+            val core = FakeMeronCore("""{"threads":[],"next_cursor":"conv1:next"}""")
+            runSuspend { MobileMailCommandClient(core).listThreads(params) }
+            assertTrue(core.lastPayloadJson.contains("\"sort\":\"$sort\""))
+            assertTrue(core.lastPayloadJson.contains("\"before_cursor\":\"conv1:opaque\""))
+        }
+        for (message in listOf("offline", "conversation cursor invalid for this view; reload the first page")) {
+            val error = """{"error":{"message":"$message"}}"""
+            assertEquals(message, assertFailsWith<RuntimeException> {
+                runSuspend { MobileMailCommandClient(FakeMeronCore(error)).listThreads(ThreadListParams(accountId = "a")) }
+            }.message)
+            assertEquals(message, assertFailsWith<RuntimeException> { parseThreadListPage(error) }.message)
+        }
+        assertTrue(parseThreadListPage("""{"threads":[]}""").threads.isEmpty())
     }
 
     @Test
