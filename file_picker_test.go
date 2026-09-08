@@ -1,14 +1,16 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
 )
 
 func TestFilePickerDefaultDirKeepsExistingCandidate(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	isolateTestProfile(t)
 	candidate := t.TempDir()
 
 	expected, err := filepath.EvalSymlinks(candidate)
@@ -22,8 +24,7 @@ func TestFilePickerDefaultDirKeepsExistingCandidate(t *testing.T) {
 }
 
 func TestFilePickerDefaultDirFallsBackToHome(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := isolateTestProfile(t).Home
 	missing := filepath.Join(home, "Downloads")
 
 	expected, err := filepath.EvalSymlinks(home)
@@ -37,11 +38,13 @@ func TestFilePickerDefaultDirFallsBackToHome(t *testing.T) {
 }
 
 func TestFilePickerDefaultDirResolvesSymlink(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := isolateTestProfile(t).Home
 	target := t.TempDir()
 	link := filepath.Join(home, "Downloads")
 	if err := os.Symlink(target, link); err != nil {
+		if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(1314)) {
+			t.Skip("Windows symlink privilege unavailable")
+		}
 		t.Fatalf("create symlink: %v", err)
 	}
 

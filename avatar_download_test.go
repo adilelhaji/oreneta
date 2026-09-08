@@ -11,10 +11,7 @@ import (
 )
 
 func TestDownloadAndSaveAvatar(t *testing.T) {
-	cacheHome := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	t.Setenv("devserver", "")
-	t.Setenv("frontenddevserverurl", "")
+	isolateTestProfile(t)
 
 	// 1x1 transparent PNG
 	pngBytes, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=")

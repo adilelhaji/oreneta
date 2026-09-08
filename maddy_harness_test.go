@@ -170,8 +170,8 @@ func restartMaddy(t *testing.T, server *maddyServer) {
 }
 
 // startSidecar launches the Rust core against a throwaway profile dir, and
-// records the events it pushes. The sidecar resolves its DB/media paths from XDG
-// dirs (sidecarEnv), so pointing XDG_* and HOME at a temp dir isolates it;
+// records the events it pushes. The sidecar resolves its DB/media paths from
+// native profile dirs (sidecarEnv), isolated by the shared temporary fixture;
 // MERON_KEYRING=off keeps the test run out of the OS keychain.
 //
 // The profile and the env pointing at it are scoped to the `t` passed in, so
@@ -184,10 +184,7 @@ func startSidecar(t *testing.T) (*Sidecar, *eventLog) {
 		t.Fatalf("sidecar binary missing at %s — run `cargo build --manifest-path meron-core/Cargo.toml` first", bin)
 	}
 
-	profile := t.TempDir()
-	t.Setenv("HOME", profile)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(profile, "config"))
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(profile, "cache"))
+	isolateTestProfile(t)
 	t.Setenv("MERON_KEYRING", "off")
 
 	sidecar := NewSidecar(bin, os.Stderr)
