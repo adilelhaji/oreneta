@@ -123,14 +123,17 @@ func (a *App) importBackup(payload map[string]any) (any, error) {
 	}
 
 	summary := map[string]any{
-		"accounts": jsonInt(resMap["accounts"]),
-		"skipped":  jsonInt(resMap["skipped"]),
-		"feeds":    jsonInt(resMap["feeds"]),
-		"settings": jsonInt(resMap["settings"]),
-		"secrets":  jsonInt(resMap["secrets"]),
+		"accounts":         jsonInt(resMap["accounts"]),
+		"skipped":          jsonInt(resMap["skipped"]),
+		"feeds":            jsonInt(resMap["feeds"]),
+		"settings":         jsonInt(resMap["settings"]),
+		"secrets":          jsonInt(resMap["secrets"]),
+		"pgp_keys":         jsonInt(resMap["pgp_keys"]),
+		"smime_identities": jsonInt(resMap["smime_identities"]),
 	}
-	a.logf("backup.import: restored %d accounts (%d skipped), %d feeds, %d settings from %s",
-		summary["accounts"], summary["skipped"], summary["feeds"], summary["settings"], src)
+	a.logf("backup.import: restored %d accounts (%d skipped), %d feeds, %d settings, %d PGP keys, %d S/MIME identities from %s",
+		summary["accounts"], summary["skipped"], summary["feeds"], summary["settings"],
+		summary["pgp_keys"], summary["smime_identities"], src)
 	return summary, nil
 }
 
