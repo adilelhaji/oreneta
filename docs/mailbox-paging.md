@@ -61,7 +61,7 @@ without a persistent projection; it is not a constant-time large-mailbox claim.
 Routes and clients are not activated by #69; the follow-up must handle refresh
 replacement, cursor errors, stale responses and backend-order preservation.
 
-## Remaining #30 work
+## R4.5 (#71): mobile safeguards
 
 R4.5 (#71) prepares mobile: thread-list errors propagate instead of becoming
 empty pages; requests explicitly carry the default date sort (the shared command
@@ -72,9 +72,40 @@ error triggers a no-cursor replacement load for the same current view; ordinary
 failures retain the cursor for retry. Existing depth-aware refresh replacement
 is retained. This does not activate the new core routes.
 
-- Unified server fan-out and merge still impose date ordering.
-- Search and starred use date-based contracts; snoozed uses wake-up order and
-  RSS has its own listing. Generic table headers do not establish support.
+## R4.6 (#73): mail activation
+
+Grouped Recent mail uses the shared conversation service on desktop and mobile,
+including unified roles whose resolved scopes contain only mail accounts.
+The response declares `pagination: "conversation-v1"` even on terminal/empty
+pages. Role resolution, global limit and response metadata are shared. Existing
+attachment/priority preparation is retained; only first-page requests start
+background sync. Raw-message callers keep message cursors. A `conv1:` cursor
+sent to an unmigrated source is rejected, never interpreted as a first page.
+
+Cursor context binds the **effective** RecentFilter, not a reordered raw facet
+string: the legacy parser selects the first label facet, so reversing conflicting
+label facets must invalidate continuation. The optional label is encoded safely.
+
+Desktop forwards page depth through the Go bridge (default 50). Conversation
+refreshes replace rows and continuation together, requesting the loaded depth
+for background refreshes. They never merge a new prefix onto an old cursor or
+re-sort unified results by date. An open reader's summary can be retained
+separately from listed rows; it must not be injected into the sorted result.
+Explicit cursor-reload errors trigger a no-cursor replacement, and stale errors
+cannot reload another view. Normal request failures retain retry state.
+
+Search, starred-only, snoozed, RSS and mixed mail/RSS unified views retain their
+existing source contracts. This migration does not certify their generic table
+sort headers or add a provider/search snapshot contract. No release is implied.
+
+## Remaining #30 work
+
+- Unified Recent (mail-only) uses shared cached conversation paging and no longer
+  depends on legacy fan-out merge date ordering.
+- Search and starred keep date-based contracts; snoozed uses wake-up order and
+  RSS has its own listing. Mixed/source-agnostic unified views are still legacy
+  unless they follow #30 follow-up scope.
+- Generic table headers do not certify provider-wide ordering.
 - Retained selection, same-view background merges, incremental insertions and
   grouped-card keys still require ordering validation.
 

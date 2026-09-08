@@ -42,6 +42,10 @@ export const mail$ = observable({
   foldersByAccount: {} as Record<string, Folder[]>,
   threads: [] as Message[],
   threadsCursor: '',
+  threadsPagination: '',
+  // Reader summary retained independently when a refreshed sorted prefix no
+  // longer contains the open card. Never insert it into the paginated rows.
+  retainedThread: null as Message | null,
   // Owner of the current rows/cursor, including cache-only pages. Separate
   // from threadsLoadedKey, which only marks a completed foreground load.
   threadsViewKey: '',
@@ -443,6 +447,8 @@ export async function deleteFolder(accountId: string, folderId: string, name?: s
 export function findLocalThread(threadId: string): Message | undefined {
   const thread = mail$.threads.get().find((item) => item.thread_id === threadId)
   if (thread) return thread
+  const retained = mail$.retainedThread.get()
+  if (retained?.thread_id === threadId) return retained
   for (const threads of Object.values(kanban$.threads.get())) {
     const match = threads.find((item) => item.thread_id === threadId)
     if (match) return match
@@ -550,6 +556,8 @@ export function getActiveThread() {
   if (fromList) return fromList
   const fromAllThreads = threads.find((thread) => thread.thread_id === selected)
   if (fromAllThreads) return fromAllThreads
+  const retained = mail$.retainedThread.get()
+  if (retained?.thread_id === selected) return retained
   const kanbanColumns = kanban$.threads.get()
   for (const threads of Object.values(kanbanColumns)) {
     const match = threads.find((thread) => thread.thread_id === selected)
@@ -853,6 +861,8 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   const samePreviousView = mail$.threadsViewKey.get() === viewKey
   const currentSelected = ui$.selectedThread.get()
   const previousThreadsCursor = mail$.threadsCursor.get()
+  const previousPagination = mail$.threadsPagination.get()
+  const previousRetained = mail$.retainedThread.get()
   const previousAccountCursors = snapshotRecord(mail$.threadAccountCursors.get())
   const userInitiated = refresh || searchStage === 'cache'
 
@@ -862,8 +872,12 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   // the first page collapses it and resets the scroll position. In that case we
   // merge the fresh page into the list we already have instead.
   const mergeBackground = !refresh && searchStage !== 'cache' && samePreviousView && previousThreads.length > 0
+  const pageLimit = mergeBackground && previousPagination === 'conversation-v1'
+    ? Math.max(50, previousThreads.length) : 50
 
   let allThreads: Message[] = []
+  let pagination = ''
+  let loadFailed = false
 
   // Starred spans every account and every folder, so it is answered by a
   // cross-account cache query rather than the per-account folder fan-out. Its
@@ -882,6 +896,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load starred items:', err)
+      loadFailed = true
       mail$.threadsCursor.set('')
       mail$.threadAccountCursors.set({})
     }
@@ -894,6 +909,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         folder_unreads?: Record<string, number>
         failures?: Array<{ account_id: string; message: string }>
         search?: SearchUnderstood
+        pagination?: string
       }>('mail.threadList', {
         account_id: 'unified',
         folder_id: role,
@@ -902,9 +918,11 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         filter,
         sort,
         refresh,
+        limit: pageLimit,
       })
       if (superseded()) return
       allThreads = result.threads || []
+      pagination = result.pagination ?? ''
       // Only the Inbox totals feed the side-nav badges; the other unified
       // folders have no badge to keep in sync.
       if (role === 'inbox') {
@@ -921,6 +939,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load unified threads:', err)
+      loadFailed = true
       mail$.threadAccountCursors.set({})
       mail$.threadsCursor.set('')
     }
@@ -931,6 +950,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         next_cursor?: string
         folder_unread?: number
         search?: SearchUnderstood
+        pagination?: string
       }>(
         'mail.threadList',
         {
@@ -940,6 +960,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
           filter,
           sort,
           refresh,
+          limit: pageLimit,
         },
       )
       if (superseded()) return
@@ -947,19 +968,29 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         updateCachedFolderUnread(selectedAcc, selectedFol, result.folder_unread)
       }
       allThreads = result.threads || []
+      pagination = result.pagination ?? ''
       mail$.threadsCursor.set(result.next_cursor ?? '')
       mail$.threadAccountCursors.set({})
       mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
       console.error('Failed to load threads:', err)
+      loadFailed = true
       mail$.threadsCursor.set('')
       mail$.threadAccountCursors.set({})
     }
   }
 
+  if (loadFailed && samePreviousView && previousPagination === 'conversation-v1') {
+    mail$.threadsCursor.set(previousThreadsCursor)
+    mail$.threadAccountCursors.set(previousAccountCursors)
+    if (pendingRefreshKey === viewKey) pendingRefreshKey = ''
+    return
+  }
+
+  const conversationPage = pagination === 'conversation-v1'
   if (
-    samePreviousView && filter !== 'all' && currentSelected &&
+    !conversationPage && samePreviousView && filter !== 'all' && currentSelected &&
     !allThreads.some((thread) => thread.thread_id === currentSelected)
   ) {
     const selectedThread = previousThreads.find((thread) => thread.thread_id === currentSelected)
@@ -969,7 +1000,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     }
   }
 
-  if (mergeBackground) {
+  if (mergeBackground && !conversationPage) {
     // Update the threads we already show with their fresh copies (new unread
     // counts, latest message, etc.), keep the extra pages the user loaded by
     // scrolling, and prepend any threads that are brand-new since the last load.
@@ -985,6 +1016,13 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     mail$.threadAccountCursors.set(previousAccountCursors)
   }
 
+  const retained = samePreviousView && conversationPage && currentSelected &&
+    !allThreads.some((thread) => thread.thread_id === currentSelected)
+    ? previousThreads.find((thread) => thread.thread_id === currentSelected) ??
+      (previousRetained?.thread_id === currentSelected ? previousRetained : null)
+    : null
+  mail$.retainedThread.set(retained || null)
+  mail$.threadsPagination.set(pagination)
   mail$.threads.set(allThreads)
   mail$.threadsViewKey.set(viewKey)
   // These rows now stand for this view — but only a load that went to the server
@@ -1032,6 +1070,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     // scrolled down to and opened from a later page would look "missing" and
     // get closed a second or two later.
     userInitiated &&
+    !(conversationPage && samePreviousView) &&
     !allThreads.some((thread) => thread.thread_id === currentSelected) &&
     // A selection whose conversation is still being fetched — a notification or
     // starred jump that set account, folder and thread together — isn't missing,
@@ -1056,6 +1095,7 @@ export async function loadMoreThreads() {
   // cannot be interpreted using the new folder/query/sort in that gap.
   if (mail$.threadsViewKey.get() !== viewKey) return
   const version = threadLoadVersion
+  const pageCursor = mail$.threadsCursor.get()
   const stillCurrent = (cursor: string) =>
     threadLoadVersion === version &&
     ui$.selectedAccount.get() === selectedAcc &&
@@ -1145,11 +1185,19 @@ export async function loadMoreThreads() {
           return true
         }),
       ]
-      if (selectedAcc === 'unified') {
+      if (selectedAcc === 'unified' && mail$.threadsPagination.get() !== 'conversation-v1') {
         merged.sort((a, b) => b.date - a.date)
       }
       mail$.threads.set(merged)
     }
+  } catch (error) {
+    if (!stillCurrent(pageCursor)) return
+    const message = error instanceof Error ? error.message : String(error)
+    if (message === 'conversation cursor invalid for this view; reload the first page') {
+      await loadThreads(false)
+      return
+    }
+    throw error
   } finally {
     mail$.threadsLoadingMore.set(false)
   }

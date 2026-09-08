@@ -129,6 +129,27 @@ func TestThreadsJSONOmitsCursorWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestConversationPaginationMetadataSurvivesTerminalPages(t *testing.T) {
+	for _, field := range []string{"cards", "threads"} {
+		out := threadsJSON("acc", "INBOX", map[string]any{
+			field: []any{}, "pagination": "conversation-v1",
+		}).(map[string]any)
+		if out["pagination"] != "conversation-v1" {
+			t.Fatalf("%s path dropped terminal-page contract: %v", field, out)
+		}
+	}
+}
+
+func TestThreadListDepthDefaultsAndExplicitLimits(t *testing.T) {
+	for _, input := range []uint32{0, 1, 50, 150, 1000} {
+		want := input
+		if want == 0 { want = 50 }
+		if got := (ThreadListRequest{Limit: input}).pageLimit(); got != want {
+			t.Fatalf("limit %d: got %d, want %d", input, got, want)
+		}
+	}
+}
+
 func TestThreadsJSONUsesCoreAccountForUnifiedCards(t *testing.T) {
 	raw := map[string]any{
 		"cards": []any{

@@ -1,11 +1,11 @@
-//! Complete cache-backed Recent candidates for ADR 0003. No transport routes
-//! use this service until their cursor/refresh handling is migrated together.
+//! Complete cache-backed Recent conversations shared by desktop and mobile.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use anyhow::{Result, bail};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use rusqlite::{Connection, params};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::conversation_page::{self, Candidate, Scope, View};
 use crate::imap::MessageHeader;
@@ -13,6 +13,7 @@ use crate::thread_list::{MailSource, ThreadListQuery};
 use crate::{mail_model, store, thread_list};
 
 const HEADER_CHUNK: u32 = 1_024;
+pub const PAGINATION: &str = "conversation-v1";
 
 pub struct FolderState {
     pub account: String,
@@ -25,6 +26,50 @@ pub struct Page {
     pub threads: Vec<Value>,
     pub next_cursor: Option<String>,
     pub folders: Vec<FolderState>,
+}
+
+impl Page {
+    pub fn into_response(self, unified: bool) -> Value {
+        let mut out = json!({
+            "threads": self.threads,
+            "pagination": PAGINATION,
+            "folder_unread": self.folders.iter().map(|folder| u64::from(folder.unread)).sum::<u64>(),
+            "folder_synced": !self.folders.is_empty() && self.folders.iter().all(|folder| folder.synced),
+        });
+        if unified {
+            let unreads: BTreeMap<_, _> = self.folders.into_iter()
+                .map(|folder| (folder.account, folder.unread)).collect();
+            out["folder_unreads"] = json!(unreads);
+            out["failures"] = json!([]);
+        }
+        if let Some(cursor) = self.next_cursor { out["next_cursor"] = json!(cursor); }
+        out
+    }
+}
+
+/// None means the resolved view contains RSS and keeps its legacy source
+/// contract. Missing special-role folders are omitted as before.
+pub fn unified_mail_scopes(conn: &Connection, role: &str) -> Result<Option<Vec<Scope>>> {
+    let mut scopes = Vec::new();
+    for account in store::list_accounts(conn)? {
+        if !account["included_in_unified"].as_bool().unwrap_or(true) { continue; }
+        let Some(id) = account["id"].as_str() else { continue };
+        let Some(folder) = store::folder_for_role(conn, id, role)? else { continue };
+        if store::account_engine(conn, id)?.as_deref() == Some("rss") { return Ok(None); }
+        scopes.push(Scope { account: id.to_string(), folder });
+    }
+    Ok(Some(scopes))
+}
+
+pub fn reject_conversation_cursor(raw: Option<&str>) -> Result<()> {
+    if raw.is_some_and(|cursor| cursor.starts_with("conv1:")) {
+        bail!(conversation_page::RELOAD_REQUIRED);
+    }
+    Ok(())
+}
+
+pub fn should_sync(before: Option<&str>, refresh: bool) -> bool {
+    refresh && before.is_none_or(str::is_empty)
 }
 
 struct LocatedCard {
@@ -142,7 +187,14 @@ pub fn page(
     scopes.dedup();
     let view = View {
         namespace: namespace.to_string(), scopes: scopes.clone(),
-        query: request.query.clone(), filter: request.filter.clone(), sort: request.sort(),
+        query: request.query.clone(),
+        // Bind the actual eligibility. The legacy parser selects the first
+        // label facet, so a sorted set of raw facets is not a safe context.
+        filter: URL_SAFE_NO_PAD.encode(serde_json::to_vec(&(
+            filter.unread_only, filter.starred_only, filter.with_attachments,
+            filter.priority_only, &filter.label_id,
+        ))?),
+        sort: request.sort(),
     };
     let tx = conn.unchecked_transaction()?;
     let now = store::now_unix();

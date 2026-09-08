@@ -1377,7 +1377,6 @@ func TestIntegrationMailFlow(t *testing.T) {
 		seenIDs := map[string]bool{}
 		seenSubjects := map[string]bool{}
 		cursor := ""
-		sawBobOnlyContinuation := false
 		for pageNumber := 0; ; pageNumber++ {
 			if pageNumber > 50 {
 				t.Fatal("unified cursor did not terminate within 50 pages")
@@ -1417,9 +1416,6 @@ func TestIntegrationMailFlow(t *testing.T) {
 				}
 				lastDate = int64(date)
 			}
-			if pageNumber > 0 && accountsOnPage["bob"] && !accountsOnPage["alice"] {
-				sawBobOnlyContinuation = true
-			}
 			next, _ := page["next_cursor"].(string)
 			if next == "" {
 				break
@@ -1434,8 +1430,53 @@ func TestIntegrationMailFlow(t *testing.T) {
 				t.Fatalf("unified cursor traversal missed %q", subject)
 			}
 		}
-		if !sawBobOnlyContinuation {
-			t.Fatal("unified cursor never continued bob after alice was exhausted")
+		for _, ordering := range []string{"date", "date:asc", "sender", "sender:asc", "subject", "subject:asc"} {
+			cursor := ""
+			seen := map[string]bool{}
+			lastKey, lastID := "", ""
+			var lastDate int64
+			first := true
+			for pageNumber := 0; ; pageNumber++ {
+				if pageNumber > 50 { t.Fatal("conversation cursor did not terminate") }
+				params := map[string]any{"limit": 2, "refresh": false, "sort": ordering}
+				if cursor != "" { params["before_cursor"] = cursor }
+				page := callMap(t, sidecar, "messages.unifiedRecent", params)
+				rows, _ := page["threads"].([]any)
+				if len(rows) > 2 || str(page, "pagination") != "conversation-v1" {
+					t.Fatalf("global conversation limit/contract violated: %v", page)
+				}
+				for _, item := range rows {
+					card := item.(map[string]any)
+					id := str(card, "thread_id")
+					if seen[id] { t.Fatalf("%s repeated %s", ordering, id) }
+					seen[id] = true
+					key := str(card, "subject")
+					if strings.HasPrefix(ordering, "sender") {
+						key = str(card, "from_name")
+						if key == "" { key = str(card, "from_addr") }
+					}
+					key = strings.Map(func(r rune) rune {
+						if r >= 'A' && r <= 'Z' { return r + ('a' - 'A') }
+						return r
+					}, key)
+					date := int64(card["date"].(float64))
+					comparison := strings.Compare(key, lastKey)
+					if strings.HasPrefix(ordering, "date") {
+						comparison = 0
+						if date < lastDate { comparison = -1 }
+						if date > lastDate { comparison = 1 }
+					}
+					if comparison == 0 { comparison = strings.Compare(id, lastID) }
+					ascending := strings.HasSuffix(ordering, ":asc")
+					if !first && ((ascending && comparison < 0) || (!ascending && comparison > 0)) {
+						t.Fatalf("%s broke global order at %s", ordering, id)
+					}
+					first, lastKey, lastID, lastDate = false, key, id, date
+				}
+				cursor = str(page, "next_cursor")
+				if cursor == "" { break }
+			}
+			if len(seen) != len(seenIDs) { t.Fatalf("%s missed conversations: %d vs %d", ordering, len(seen), len(seenIDs)) }
 		}
 	})
 

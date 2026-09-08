@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { Message } from '../types'
 import { accounts$ } from './accounts'
 import { kanban$ } from './kanban'
-import { loadMoreThreads, loadThreads, mail$ } from './mail'
+import { getActiveThread, loadMoreThreads, loadThreads, mail$ } from './mail'
 import { settings$, type ListSort } from './settings'
 import { ui$ } from './ui'
 
@@ -32,7 +32,7 @@ const deferred = () => {
 const sorts: ListSort[] = ['date', 'sender', 'subject'].flatMap((key) =>
   ['asc', 'desc'].map((dir) => ({ key, dir }) as ListSort),
 )
-type Request = { before_cursor?: string; sort?: string; refresh?: boolean }
+type Request = { before_cursor?: string; sort?: string; refresh?: boolean; limit?: number }
 let requests: Request[]
 let respond: (request: Request) => unknown
 let previousGo: unknown
@@ -49,6 +49,8 @@ beforeEach(() => {
   ui$.filters.set([])
   mail$.threads.set([])
   mail$.threadsCursor.set('')
+  mail$.threadsPagination.set('')
+  mail$.retainedThread.set(null)
   mail$.threadsViewKey.set('')
   mail$.threadsLoadingMore.set(false)
   requests = []
@@ -72,11 +74,96 @@ afterEach(() => {
   ui$.query.set('')
   ui$.filters.set([])
   mail$.threadsCursor.set('')
+  mail$.threadsPagination.set('')
+  mail$.retainedThread.set(null)
   mail$.threadsLoadedKey.set('')
   mail$.threadsViewKey.set('')
 })
 
 describe('mailbox pagination view contract', () => {
+  for (const account of ['acc', 'unified']) {
+    it(`keeps conversation order and replaces background traversal (${account})`, async () => {
+      ui$.selectedAccount.set(account)
+      settings$.listSort.set({ key: 'sender', dir: 'asc' })
+      respond = () => ({ threads: [{ ...row('a'), date: 1 }], next_cursor: 'conv1:first', pagination: 'conversation-v1' })
+      await loadThreads()
+      respond = () => ({ threads: [{ ...row('b'), date: 999 }], next_cursor: 'conv1:tail', pagination: 'conversation-v1' })
+      await loadMoreThreads()
+      expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['a', 'b'])
+      respond = () => ({ threads: [row('fresh'), row('b')], next_cursor: 'conv1:fresh', pagination: 'conversation-v1' })
+      await loadThreads(false)
+      expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['fresh', 'b'])
+      expect(mail$.threadsCursor.get()).toBe('conv1:fresh')
+    })
+  }
+
+  it('requests loaded depth and honors the conversation marker on terminal pages', async () => {
+    respond = () => ({ threads: Array.from({ length: 60 }, (_, i) => row(`r${i}`)), next_cursor: 'conv1:tail', pagination: 'conversation-v1' })
+    await loadThreads()
+    respond = () => ({ threads: [], pagination: 'conversation-v1' })
+    await loadThreads(false)
+    expect(requests.at(-1)?.limit).toBe(60)
+    expect(mail$.threads.get()).toEqual([])
+    expect(mail$.threadsCursor.get()).toBe('')
+    expect(mail$.threadsPagination.get()).toBe('conversation-v1')
+  })
+
+  it('retains the open reader independently of filtered sorted rows', async () => {
+    ui$.filters.set(['unread'])
+    respond = () => ({ threads: [row('open'), row('other')], pagination: 'conversation-v1' })
+    await loadThreads()
+    ui$.selectedThread.set('open')
+    respond = () => ({ threads: [row('other')], pagination: 'conversation-v1' })
+    await loadThreads(false)
+    expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['other'])
+    expect(ui$.selectedThread.get()).toBe('open')
+    expect(getActiveThread()?.thread_id).toBe('open')
+    await loadThreads(false)
+    expect(getActiveThread()?.thread_id).toBe('open')
+    ui$.selectedFolder.set('Sent')
+    await loadThreads()
+    expect(mail$.retainedThread.get()).toBeNull()
+    expect(getActiveThread()).toBeNull()
+  })
+
+  it('reloads an incompatible conversation cursor without grafting a first page', async () => {
+    respond = () => ({ threads: [row('old')], next_cursor: 'conv1:old', pagination: 'conversation-v1' })
+    await loadThreads()
+    respond = (request) => {
+      if (request.before_cursor) throw new Error('conversation cursor invalid for this view; reload the first page')
+      return { threads: [row('fresh')], next_cursor: 'conv1:fresh', pagination: 'conversation-v1' }
+    }
+    await loadMoreThreads()
+    expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['fresh'])
+    expect(mail$.threadsCursor.get()).toBe('conv1:fresh')
+    expect(requests.at(-1)?.before_cursor).toBeUndefined()
+    expect(mail$.threadsLoadingMore.get()).toBe(false)
+  })
+
+  it('keeps conversation retry state when a same-view refresh fails', async () => {
+    respond = () => ({ threads: [row('old')], next_cursor: 'conv1:old', pagination: 'conversation-v1' })
+    await loadThreads()
+    respond = () => { throw new Error('offline') }
+    await loadThreads(false)
+    expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['old'])
+    expect(mail$.threadsCursor.get()).toBe('conv1:old')
+    expect(mail$.threadsPagination.get()).toBe('conversation-v1')
+  })
+
+  it('does not reload another view when a stale cursor error arrives', async () => {
+    respond = () => ({ threads: [row('old')], next_cursor: 'conv1:old', pagination: 'conversation-v1' })
+    await loadThreads()
+    let reject!: (error: Error) => void
+    respond = () => new Promise((_, fail) => { reject = fail })
+    const loading = loadMoreThreads()
+    ui$.selectedFolder.set('Sent')
+    reject(new Error('conversation cursor invalid for this view; reload the first page'))
+    await loading
+    expect(requests).toHaveLength(2)
+    expect(mail$.threadsCursor.get()).toBe('conv1:old')
+    expect(mail$.threadsLoadingMore.get()).toBe(false)
+  })
+
   for (const account of ['acc', 'unified']) {
     it.each(sorts)(`forwards %o on every page (${account})`, async (sort) => {
       ui$.selectedAccount.set(account)
