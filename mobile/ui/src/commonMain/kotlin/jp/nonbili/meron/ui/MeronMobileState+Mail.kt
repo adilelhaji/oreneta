@@ -326,6 +326,13 @@ internal fun MeronMobileState.selectCoreMailbox(
     folderId: String = INBOX_FOLDER,
 ) {
     cacheVisibleMailbox()
+    // Invalidate even an away-and-back transition restored entirely from cache.
+    activeMailboxLoadToken += 1
+    activeMailboxLoadKey = null
+    activeMailboxLoadStartedAtMillis = 0L
+    blockingMailboxLoadWarned = false
+    blockingMailboxLoadSlow = false
+    syncing = false
     selectedCoreAccountId = accountId.ifBlank { UNIFIED_ACCOUNT_ID }
     selectedCoreFolder = folderId.ifBlank { INBOX_FOLDER }
     saveLastMailLocation(prefs, selectedCoreAccountId, selectedCoreFolder)
@@ -730,20 +737,32 @@ internal fun MeronMobileState.pageableCoreAccounts(): List<AccountSummary> =
 // list back to its first page, and the resulting refetch chain would otherwise
 // toast once per page.
 internal fun MeronMobileState.loadMoreCoreThreads(quiet: Boolean = false) {
-    if (!coreLoaded || loadingMoreThreads) return
+    if (!coreLoaded || loadingMoreThreads || syncing) return
     val accountId = selectedCoreAccountId.ifBlank { UNIFIED_ACCOUNT_ID }
     val requestedFolder = selectedCoreFolder.ifBlank { INBOX_FOLDER }
     val query = mailSearch
     val filter = mailFilter
     val selectedAccounts = pageableCoreAccounts()
     if (selectedAccounts.isEmpty()) return
+    val requestKey = mailboxCacheKey(accountId, requestedFolder, query, filter)
+    if (visibleMailboxKey != requestKey) return
+    val cursor = mailboxCursor
+    val requestToken = activeMailboxLoadToken
+    val accountIds = selectedAccounts.map { it.id }.toSet()
+    fun stillCurrent(): Boolean =
+        activeMailboxLoadToken == requestToken &&
+            selectedCoreAccountId.ifBlank { UNIFIED_ACCOUNT_ID } == accountId &&
+            selectedCoreFolder.ifBlank { INBOX_FOLDER } == requestedFolder &&
+            mailSearch == query && mailFilter == filter &&
+            visibleMailboxKey == requestKey && mailboxCursor == cursor &&
+            pageableCoreAccounts().map { it.id }.toSet() == accountIds
     loadingMoreThreads = true
     scope.launch {
         runCatching {
             withContext(ioDispatcher) {
                 val client = MobileMailCommandClient(core)
                 if (accountId == UNIFIED_ACCOUNT_ID && isUnifiedStarredFolder(requestedFolder)) {
-                    loadUnifiedStarred(client = client, query = query, filter = filter, beforeCursor = mailboxCursor)
+                    loadUnifiedStarred(client = client, query = query, filter = filter, beforeCursor = cursor)
                 } else if (accountId == UNIFIED_ACCOUNT_ID) {
                     loadUnifiedInbox(
                         client = client,
@@ -751,7 +770,7 @@ internal fun MeronMobileState.loadMoreCoreThreads(quiet: Boolean = false) {
                         query = query,
                         filter = filter,
                         syncFirst = false,
-                        beforeCursor = mailboxCursor,
+                        beforeCursor = cursor,
                         folderRole = requestedFolder,
                     )
                 } else {
@@ -762,18 +781,20 @@ internal fun MeronMobileState.loadMoreCoreThreads(quiet: Boolean = false) {
                         query = query,
                         filter = filter,
                         syncFirst = false,
-                        beforeCursor = mailboxCursor,
+                        beforeCursor = cursor,
                     )
                 }
             }
         }.onSuccess { result ->
+            loadingMoreThreads = false
+            if (!stillCurrent()) return@onSuccess
             if (result.folders.isNotEmpty()) {
                 coreFolders = result.folders
                 foldersByAccount = foldersByAccount + result.folders.groupBy { it.accountId }
             }
             val existingIds = coreThreads.map { it.id }.toSet()
-            val appended = withLocalDraftFlags(result.threads).filterNot { it.id in existingIds }
-            coreThreads = (coreThreads + appended).sortedByDescending { it.dateEpochSeconds }
+            val appended = withLocalDraftFlags(result.threads).distinctBy { it.id }.filterNot { it.id in existingIds }
+            coreThreads = coreThreads + appended
             mailboxCursor = result.nextCursor
             mailboxAccountCursors = result.accountCursors
             // One more page is on screen, so event-driven reloads have to re-read
@@ -787,6 +808,15 @@ internal fun MeronMobileState.loadMoreCoreThreads(quiet: Boolean = false) {
             }
         }.onFailure {
             loadingMoreThreads = false
+            if (!stillCurrent()) return@onFailure
+            if (it.message == "conversation cursor invalid for this view; reload the first page") {
+                mailboxCursor = ""
+                mailboxAccountCursors = emptyMap()
+                // The refresh replaces rows and cursor together at the loaded
+                // depth. Never append a first-page response onto the old tail.
+                syncCoreThreads(accountOverride = accountId, folderOverride = requestedFolder, syncFirst = false)
+                return@onFailure
+            }
             errorBanner = it.message ?: "Load more failed"
             status = "Load more failed: ${it.message}"
         }

@@ -276,6 +276,7 @@ data class ThreadListPage(
 )
 
 fun parseThreadListPage(responseJson: String): ThreadListPage {
+    requireCoreOk(responseJson)
     val threadsJson =
         responseJson.findJsonArrayProperty("threads")
             ?: return ThreadListPage(

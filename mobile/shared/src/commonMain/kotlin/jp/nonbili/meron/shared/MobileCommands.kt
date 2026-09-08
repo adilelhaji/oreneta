@@ -610,6 +610,8 @@ data class ThreadListParams(
     // mailbox drop out of the merge. Omitted for a single account, whose
     // folderId already names a real mailbox.
     val folderRole: String? = null,
+    // Explicit on every page; the mobile UI currently uses date descending.
+    val sort: String = "date",
 ) {
     fun toJson(): String =
         jsonObject(
@@ -621,6 +623,7 @@ data class ThreadListParams(
             "refresh" to refresh.toString(),
             "limit" to limit?.toString(),
             "folder_role" to folderRole?.jsonString(),
+            "sort" to sort.jsonString(),
         )
 }
 
@@ -1095,7 +1098,7 @@ class MobileMailCommandClient(
 
     suspend fun suggestContacts(params: ContactSuggestParams): String = core.invoke(MobileCommand.ContactSuggest, params.toJson())
 
-    suspend fun listThreads(params: ThreadListParams): String = core.invoke(MobileCommand.ThreadList, params.toJson())
+    suspend fun listThreads(params: ThreadListParams): String = requireCoreOk(core.invoke(MobileCommand.ThreadList, params.toJson()))
 
     suspend fun listStarredItems(params: StarredItemsParams = StarredItemsParams()): String = core.invoke(MobileCommand.StarredItems, params.toJson())
 

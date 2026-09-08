@@ -22,6 +22,126 @@ import kotlin.test.assertTrue
 
 class ComposeSaveLifecycleTest {
     @Test
+    fun mailboxPaginationPreservesBackendOrderAndDeduplicates() = runBlocking {
+        val core = PagingCore()
+        val state = mailboxState(core, this)
+        state.loadMoreCoreThreads()
+        core.started.await()
+        core.response.complete("""{"threads":[{"id":"old","date":100},{"id":"second","date":200},{"id":"second","date":200},{"id":"third","date":300}],"next_cursor":"conv1:next"}""")
+        withTimeout(5_000) { while (state.loadingMoreThreads) yield() }
+        assertEquals(listOf("old", "second", "third"), state.coreThreads.map { it.id })
+        assertEquals("conv1:next", state.mailboxCursor)
+        assertTrue(core.payloads.single().contains("\"before_cursor\":\"conv1:old\""))
+        assertTrue(core.payloads.single().contains("\"sort\":\"date\""))
+    }
+
+    @Test
+    fun mailboxPaginationRejectsEveryStaleViewAndRefreshResponse() = runBlocking {
+        for (change in listOf("account", "folder", "query", "filter", "cursor", "membership", "refresh", "away-back")) {
+            val core = PagingCore()
+            val state = mailboxState(core, this)
+            state.loadMoreCoreThreads()
+            core.started.await()
+            when (change) {
+                "account" -> state.selectedCoreAccountId = "b"
+                "folder" -> state.selectedCoreFolder = "Archive"
+                "query" -> state.mailSearch = "new"
+                "filter" -> state.mailFilter = FilterMode.Unread
+                "cursor" -> state.mailboxCursor = "conv1:changed"
+                "membership" -> state.coreAccounts = state.coreAccounts.filterNot { it.id == "a" }
+                "refresh" -> {
+                    state.syncCoreThreads(syncFirst = false)
+                    withTimeout(5_000) { while (state.syncing) yield() }
+                }
+                else -> {
+                    state.selectCoreMailbox("b", "INBOX")
+                    state.selectCoreMailbox("a", "INBOX")
+                }
+            }
+            val expectedIds = state.coreThreads.map { it.id }
+            val expectedCursor = state.mailboxCursor
+            core.response.complete("""{"threads":[{"id":"stale","date":999}],"next_cursor":"conv1:stale"}""")
+            withTimeout(5_000) { while (state.loadingMoreThreads) yield() }
+            assertEquals(expectedIds, state.coreThreads.map { it.id }, change)
+            assertEquals(expectedCursor, state.mailboxCursor, change)
+        }
+    }
+
+    @Test
+    fun mailboxInvalidCursorReloadsAndReplacesWithoutAppending() = runBlocking {
+        val core = PagingCore()
+        val state = mailboxState(core, this)
+        state.loadMoreCoreThreads()
+        core.started.await()
+        core.response.complete("""{"error":{"message":"conversation cursor invalid for this view; reload the first page"}}""")
+        withTimeout(5_000) { while (state.loadingMoreThreads || state.syncing) yield() }
+        assertEquals(listOf("fresh"), state.coreThreads.map { it.id })
+        assertEquals("conv1:fresh", state.mailboxCursor)
+        assertEquals(2, core.payloads.size)
+        assertTrue(!core.payloads[1].contains("before_cursor"))
+    }
+
+    @Test
+    fun mailboxOrdinaryFailureRetainsCursorAndStaleFailureDoesNotReload() = runBlocking {
+        for (stale in listOf(false, true)) {
+            val core = PagingCore()
+            val state = mailboxState(core, this)
+            state.loadMoreCoreThreads()
+            core.started.await()
+            if (stale) state.selectedCoreFolder = "Archive"
+            val error = if (stale) "conversation cursor invalid for this view; reload the first page" else "offline"
+            core.response.complete("""{"error":{"message":"$error"}}""")
+            withTimeout(5_000) { while (state.loadingMoreThreads) yield() }
+            assertEquals("conv1:old", state.mailboxCursor)
+            assertEquals(listOf("old"), state.coreThreads.map { it.id })
+            assertEquals(1, core.payloads.size)
+            assertEquals(if (stale) null else "offline", state.errorBanner)
+            if (!stale) {
+                core.retryResponse = """{"threads":[{"id":"retry","date":200}]}"""
+                state.loadMoreCoreThreads()
+                withTimeout(5_000) { while (state.loadingMoreThreads) yield() }
+                assertEquals(listOf("old", "retry"), state.coreThreads.map { it.id })
+                assertEquals("", state.mailboxCursor)
+                assertEquals(2, core.payloads.size)
+            }
+        }
+    }
+
+    private fun mailboxState(core: MeronCore, scope: CoroutineScope): MeronMobileState = state(core, scope).apply {
+        selectedCoreFolder = "INBOX"
+        mailSearch = ""
+        mailFilter = FilterMode.All
+        visibleMailboxKey = mailboxCacheKey("a", "INBOX", "", FilterMode.All)
+        initialThreadsLoaded = true
+        coreThreads = listOf(ThreadSummary(id = "old", accountId = "a", folder = "INBOX", subject = "Old", sender = "A", dateEpochSeconds = 100))
+        mailboxCursor = "conv1:old"
+    }
+
+    private class PagingCore : MeronCore {
+        val started = CompletableDeferred<Unit>()
+        val response = CompletableDeferred<String>()
+        val payloads = mutableListOf<String>()
+        var retryResponse: String? = null
+        override suspend fun invoke(command: String, payloadJson: String): String = when (command) {
+            MobileCommand.FolderList -> """{"folders":[{"id":"INBOX","name":"INBOX","account_id":"a"}]}"""
+            MobileCommand.ThreadList -> {
+                payloads += payloadJson
+                if (payloadJson.contains("before_cursor")) {
+                    started.complete(Unit)
+                    retryResponse ?: response.await()
+                } else {
+                    """{"threads":[{"id":"fresh","account_id":"a","folder_id":"INBOX","date":500}],"next_cursor":"conv1:fresh"}"""
+                }
+            }
+            else -> "{}"
+        }
+        override fun events(): CoreEventStream = object : CoreEventStream {
+            override fun subscribe(listener: (CoreEvent) -> Unit): CloseableHandle = CloseableHandle {}
+        }
+        override suspend fun protocolVersion(): Int = 0
+    }
+
+    @Test
     fun fullComposeSavesAreSerialized() =
         runBlocking {
             val core = SaveCore()
