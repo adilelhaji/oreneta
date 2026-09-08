@@ -25,6 +25,12 @@ frontend suite passed 831 tests; typecheck and the 24 Chromium baseline cases
 passed. CI reruns the suite for the delivery commit; browser mocks do not
 certify provider ordering.
 
+## R4.2 (#65)
+
+New text cursors carry the exact SQL ordering key, preserving whitespace and
+database case-folding semantics; see [text-key pagination](text-page-cursors.md).
+Cursor encoding and supported sort capabilities remain unchanged.
+
 ## Remaining #30 work
 
 - Unified server fan-out and merge still impose date ordering.
@@ -32,8 +38,6 @@ certify provider ordering.
   RSS has its own listing. Generic table headers do not establish support.
 - Retained selection, same-view background merges, incremental insertions and
   grouped-card keys still require ordering validation.
-- SQL text collation and cursor text normalization require parity checks for
-  whitespace/non-ASCII sender and subject values.
 
 Do not close #30 until those contracts and stable-dataset traversal are tested.
 New arrivals can change a live mailbox; this slice does not introduce a snapshot
