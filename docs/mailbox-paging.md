@@ -100,9 +100,12 @@ sort headers or add a provider/search snapshot contract. No release is implied.
 
 ## Remaining #30 work
 
-- Unified server fan-out and merge still impose date ordering.
-- Search and starred use date-based contracts; snoozed uses wake-up order and
-  RSS has its own listing. Generic table headers do not establish support.
+- Unified Recent (mail-only) uses shared cached conversation paging and no longer
+  depends on legacy fan-out merge date ordering.
+- Search and starred keep date-based contracts; snoozed uses wake-up order and
+  RSS has its own listing. Mixed/source-agnostic unified views are still legacy
+  unless they follow #30 follow-up scope.
+- Generic table headers do not certify provider-wide ordering.
 - Retained selection, same-view background merges, incremental insertions and
   grouped-card keys still require ordering validation.
 
