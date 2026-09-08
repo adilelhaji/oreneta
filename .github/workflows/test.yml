@@ -33,6 +33,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: meron-core
+      - name: Test vendored IMAP parser compatibility
+        run: cargo test --manifest-path third_party/imap-proto/Cargo.toml
       - run: cargo test --manifest-path meron-core/Cargo.toml
 
   frontend:

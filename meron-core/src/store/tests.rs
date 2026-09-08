@@ -401,6 +401,7 @@ fn label(id: &str, name: &str) -> Label {
         id: id.to_string(),
         name: name.to_string(),
         colour: "#2056dd".to_string(),
+        in_bar: false,
     }
 }
 
@@ -945,6 +946,66 @@ fn labels_are_kept_in_the_order_they_were_arranged() {
     // Saving replaces the whole set rather than adding to it.
     replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
     assert_eq!(labels(&conn).unwrap().len(), 1);
+}
+
+#[test]
+fn whether_a_label_shows_in_the_quick_filter_bar_round_trips() {
+    let conn = test_conn();
+    let mut starred = label("l-1", "Starred");
+    starred.in_bar = true;
+    replace_labels(&conn, &[starred, label("l-2", "Home")]).unwrap();
+
+    let stored = labels(&conn).unwrap();
+    assert!(stored[0].in_bar);
+    assert!(!stored[1].in_bar, "off unless set — a fresh label default");
+}
+
+#[test]
+fn a_label_link_is_set_read_and_cleared_per_account() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Clients")]).unwrap();
+
+    set_label_link(&conn, "l-1", "acct-1", "Important").unwrap();
+    set_label_link(&conn, "l-1", "acct-2", "VIP").unwrap();
+
+    let links = label_links(&conn).unwrap();
+    assert_eq!(links.len(), 2);
+    assert!(links.contains(&LabelLink {
+        label_id: "l-1".into(),
+        account_id: "acct-1".into(),
+        remote_name: "Important".into(),
+    }));
+
+    clear_label_link(&conn, "l-1", "acct-1").unwrap();
+    let links = label_links(&conn).unwrap();
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].account_id, "acct-2");
+}
+
+#[test]
+fn re_linking_the_same_account_replaces_the_remote_name_rather_than_duplicating() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Clients")]).unwrap();
+
+    set_label_link(&conn, "l-1", "acct-1", "Important").unwrap();
+    set_label_link(&conn, "l-1", "acct-1", "Renamed").unwrap();
+
+    let links = label_links(&conn).unwrap();
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].remote_name, "Renamed");
+}
+
+#[test]
+fn deleting_a_label_takes_its_links_with_it() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Clients"), label("l-2", "Home")]).unwrap();
+    set_label_link(&conn, "l-1", "acct-1", "Important").unwrap();
+
+    // Saving without l-1 deletes it, the same way it already takes
+    // thread_labels rows with it.
+    replace_labels(&conn, &[label("l-2", "Home")]).unwrap();
+
+    assert!(label_links(&conn).unwrap().is_empty());
 }
 
 #[test]
@@ -2684,7 +2745,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 30);
 
     for table in [
         "accounts",
@@ -2729,7 +2790,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 30);
 }
 
 #[test]
@@ -2757,7 +2818,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 28);
+    assert_eq!(version, 30);
 
     let _ = std::fs::remove_dir_all(dir);
 }

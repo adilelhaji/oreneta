@@ -1,10 +1,26 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
-import { assignLabels, LABEL_COLOURS, labelById, labels$, loadLabels, newLabel, saveLabels } from './labels'
+import {
+  assignLabels,
+  LABEL_COLOURS,
+  labelById,
+  labels$,
+  linkLabel,
+  loadLabels,
+  newLabel,
+  saveLabels,
+  unlinkLabel,
+} from './labels'
 import { mail$ } from './mail'
 import { activeLabelId, nextFilters } from './ui'
 import type { Label } from './labels'
 
-const label = (id: string, name: string): Label => ({ id, name, colour: '#2056dd' })
+const label = (id: string, name: string, inBar = false): Label => ({
+  id,
+  name,
+  colour: '#2056dd',
+  inBar,
+  links: {},
+})
 
 describe('names the reader puts on conversations', () => {
   const calls: { command: string; payload: any }[] = []
@@ -97,5 +113,36 @@ describe('names the reader puts on conversations', () => {
     expect(activeLabelId(['unread'])).toBe('')
     // And picking the same one again lets it go.
     expect(nextFilters(one, 'label:l-1')).toEqual(['unread'])
+  })
+
+  it('links a label to an account, by name, and remembers it locally', async () => {
+    labels$.labels.set([label('l-1', 'Work')])
+
+    await linkLabel('l-1', 'acct-1', '  Client work  ')
+
+    const call = calls.find((c) => c.command === 'labels.link')
+    // Sent trimmed: a link named by trailing whitespace is a link to nothing
+    // a server would recognise.
+    expect(call?.payload).toEqual({ label_id: 'l-1', account_id: 'acct-1', remote_name: 'Client work' })
+    expect(labels$.labels.peek()[0].links).toEqual({ 'acct-1': 'Client work' })
+  })
+
+  it('does nothing for a blank remote name, rather than linking to nothing', async () => {
+    labels$.labels.set([label('l-1', 'Work')])
+
+    await linkLabel('l-1', 'acct-1', '   ')
+
+    expect(calls.some((c) => c.command === 'labels.link')).toBe(false)
+    expect(labels$.labels.peek()[0].links).toEqual({})
+  })
+
+  it('unlinks a label from one account without touching its other links', async () => {
+    labels$.labels.set([{ ...label('l-1', 'Work'), links: { 'acct-1': 'Client work', 'acct-2': 'Clients' } }])
+
+    await unlinkLabel('l-1', 'acct-1')
+
+    const call = calls.find((c) => c.command === 'labels.unlink')
+    expect(call?.payload).toEqual({ label_id: 'l-1', account_id: 'acct-1' })
+    expect(labels$.labels.peek()[0].links).toEqual({ 'acct-2': 'Clients' })
   })
 })
