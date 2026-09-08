@@ -37,7 +37,7 @@ class ComposeSaveLifecycleTest {
 
     @Test
     fun mailboxPaginationRejectsEveryStaleViewAndRefreshResponse() = runBlocking {
-        for (change in listOf("account", "folder", "query", "filter", "cursor", "refresh", "away-back")) {
+        for (change in listOf("account", "folder", "query", "filter", "cursor", "membership", "refresh", "away-back")) {
             val core = PagingCore()
             val state = mailboxState(core, this)
             state.loadMoreCoreThreads()
@@ -48,6 +48,7 @@ class ComposeSaveLifecycleTest {
                 "query" -> state.mailSearch = "new"
                 "filter" -> state.mailFilter = FilterMode.Unread
                 "cursor" -> state.mailboxCursor = "conv1:changed"
+                "membership" -> state.coreAccounts = state.coreAccounts.filterNot { it.id == "a" }
                 "refresh" -> {
                     state.syncCoreThreads(syncFirst = false)
                     withTimeout(5_000) { while (state.syncing) yield() }
@@ -95,6 +96,14 @@ class ComposeSaveLifecycleTest {
             assertEquals(listOf("old"), state.coreThreads.map { it.id })
             assertEquals(1, core.payloads.size)
             assertEquals(if (stale) null else "offline", state.errorBanner)
+            if (!stale) {
+                core.retryResponse = """{"threads":[{"id":"retry","date":200}]}"""
+                state.loadMoreCoreThreads()
+                withTimeout(5_000) { while (state.loadingMoreThreads) yield() }
+                assertEquals(listOf("old", "retry"), state.coreThreads.map { it.id })
+                assertEquals("", state.mailboxCursor)
+                assertEquals(2, core.payloads.size)
+            }
         }
     }
 
@@ -112,13 +121,14 @@ class ComposeSaveLifecycleTest {
         val started = CompletableDeferred<Unit>()
         val response = CompletableDeferred<String>()
         val payloads = mutableListOf<String>()
+        var retryResponse: String? = null
         override suspend fun invoke(command: String, payloadJson: String): String = when (command) {
             MobileCommand.FolderList -> """{"folders":[{"id":"INBOX","name":"INBOX","account_id":"a"}]}"""
             MobileCommand.ThreadList -> {
                 payloads += payloadJson
                 if (payloadJson.contains("before_cursor")) {
                     started.complete(Unit)
-                    response.await()
+                    retryResponse ?: response.await()
                 } else {
                     """{"threads":[{"id":"fresh","account_id":"a","folder_id":"INBOX","date":500}],"next_cursor":"conv1:fresh"}"""
                 }
