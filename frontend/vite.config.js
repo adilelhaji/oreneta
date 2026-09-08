@@ -98,5 +98,7 @@ function pdfjsData() {
 }
 
 export default defineConfig({
+  // Linked/hoisted packages must share the renderer's React dispatcher.
+  resolve: { dedupe: ['react', 'react-dom'] },
   plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData()],
 })

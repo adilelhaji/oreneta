@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "test:bundler": "node --test build-tests/*.check.mjs",
+    "startup:verify": "bun run build && playwright test --config e2e/playwright.config.ts",
     "baseline:serve": "vite --config baseline/vite.config.ts",
     "baseline:verify": "playwright test --config baseline/playwright.config.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",

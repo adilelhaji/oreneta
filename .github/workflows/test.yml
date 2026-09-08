@@ -72,11 +72,17 @@ jobs:
         working-directory: frontend
       - run: bun test
         working-directory: frontend
+      - name: Verify production React runtime resolution
+        run: bun run test:bundler
+        working-directory: frontend
       - name: Install baseline browser
         run: bunx playwright install --with-deps chromium
         working-directory: frontend
       - name: Capture and verify synthetic baseline
         run: bun run baseline:verify
+        working-directory: frontend
+      - name: Verify production app startup and navigation
+        run: bun run startup:verify
         working-directory: frontend
       - name: Upload baseline evidence
         if: always()
@@ -86,6 +92,8 @@ jobs:
           path: |
             frontend/baseline-results/
             frontend/playwright-report/
+            frontend/startup-results/
+            frontend/startup-report/
           if-no-files-found: error
 
   mobile:

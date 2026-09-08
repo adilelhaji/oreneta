@@ -174,3 +174,15 @@ test('both release builders depend on the reusable gate without bypass condition
   const ci = fs.readFileSync(path.join(workflowDir, 'test.yml'), 'utf8')
   for (const job of REQUIRED_JOBS) assert.match(ci, new RegExp(`^  ${job}:`, 'm'))
 })
+
+test('Windows release requires native startup before packaging', () => {
+  const source = fs.readFileSync(path.join(workflowDir, 'release.yml'), 'utf8')
+  const start = source.indexOf('      - name: Verify native Windows startup and restart')
+  const packageStart = source.indexOf('      - name: package windows zip')
+  assert.ok(start > 0 && packageStart > start)
+  const step = source.slice(start).split(/\r?\n      - name:/)[0]
+  assert.match(step, /if: startsWith\(matrix.os, 'windows'\)/)
+  assert.match(step, /shell: pwsh/)
+  assert.match(step, /test-windows-startup\.ps1 -Executable build\/bin\/oreneta\.exe/)
+  assert.doesNotMatch(step, /continue-on-error/)
+})
