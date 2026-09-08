@@ -627,6 +627,12 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 30 {
         migrate_v30(&tx)?;
     }
+    if version < 31 {
+        migrate_v31(&tx)?;
+    }
+    if version < 32 {
+        migrate_v32(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1195,6 +1201,33 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Whether a label shows as a chip in the quick filter bar, or only in the
+/// dropdown. Off by default: an install with a dozen labels should not wake
+/// up to a bar crowded with all of them.
+fn migrate_v29(conn: &Connection) -> Result<()> {
+    conn.execute_batch("ALTER TABLE labels ADD COLUMN in_bar INTEGER NOT NULL DEFAULT 0;")?;
+    conn.execute_batch("PRAGMA user_version = 29;")?;
+    Ok(())
+}
+
+/// A label's optional link to a remote concept — a Gmail label, an Exchange
+/// category, an IMAP keyword — per account, matched by name. See
+/// docs/adr/0002-remote-label-linking.md for the model this implements:
+/// unlinked by default, and a link here is the schema only, not any
+/// protocol's actual read/write of the remote side.
+fn migrate_v30(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS label_links (
+           label_id    TEXT NOT NULL,
+           account_id  TEXT NOT NULL,
+           remote_name TEXT NOT NULL,
+           PRIMARY KEY (label_id, account_id)
+         );",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 30;")?;
+    Ok(())
+}
+
 /// What the reader has taught this app about spam, and room for the verdict
 /// it now gives new arrivals from it — never acted on by itself; see `spam.rs`.
 ///
@@ -1212,7 +1245,7 @@ fn migrate_v28(conn: &Connection) -> Result<()> {
 /// signal that only sometimes exists is not one this feature can be honest
 /// about). A word only becomes a reason once it has recurred enough times,
 /// clearly more in spam-confirmed messages than in ham-confirmed ones.
-fn migrate_v29(conn: &Connection) -> Result<()> {
+fn migrate_v31(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "ALTER TABLE messages ADD COLUMN spam INTEGER;
          CREATE TABLE IF NOT EXISTS sender_spam (
@@ -1230,7 +1263,7 @@ fn migrate_v29(conn: &Connection) -> Result<()> {
            PRIMARY KEY (account, word)
          );",
     )?;
-    conn.execute_batch("PRAGMA user_version = 29;")?;
+    conn.execute_batch("PRAGMA user_version = 31;")?;
     Ok(())
 }
 
@@ -1250,7 +1283,7 @@ fn migrate_v29(conn: &Connection) -> Result<()> {
 /// silently creating a duplicate a reader would have to notice and merge by
 /// hand. A thread can still gain a new task after an old one is completed:
 /// the index only excludes rows that are still open.
-fn migrate_v30(conn: &Connection) -> Result<()> {
+fn migrate_v32(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tasks (
            id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1265,7 +1298,7 @@ fn migrate_v30(conn: &Connection) -> Result<()> {
          CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_open_thread
            ON tasks(account, thread_key) WHERE completed_at IS NULL;",
     )?;
-    conn.execute_batch("PRAGMA user_version = 30;")?;
+    conn.execute_batch("PRAGMA user_version = 32;")?;
     Ok(())
 }
 

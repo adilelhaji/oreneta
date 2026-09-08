@@ -4,6 +4,7 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { activeLabelId, nextFilters, ui$, type FilterFacet } from '../../states/ui'
 import { labels$ } from '../../states/labels'
+import { Chip } from '../chip/Chip'
 import { SelectInput } from '../field/Field'
 import { settings$ } from '../../states/settings'
 
@@ -37,6 +38,12 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
   const activeLabel = activeLabelId(filters)
 
   const offered = FACETS.filter(({ facet }) => !(hideSnoozed && facet === 'snoozed'))
+  // A chip per label marked to show here, in the order the labels are
+  // arranged; the rest stay reachable through the dropdown so a large label
+  // set doesn't crowd the bar.
+  const chipLabels = labels.filter((label) => label.inBar)
+  const dropdownLabels = labels.filter((label) => !label.inBar)
+  const toggleLabel = (id: string) => ui$.filters.set(nextFilters(filters, `label:${id}` as const))
 
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-1.5">
@@ -59,11 +66,24 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
         )
       })}
 
-      {/* One label at a time, as a picker rather than a chip each: a mailbox
-          can have twenty labels and the bar has room for none of them. */}
-      {labels.length > 0 && (
+      {chipLabels.map((label) => (
+        <Chip
+          key={label.id}
+          size="sm"
+          colour={label.colour}
+          selected={activeLabel === label.id}
+          onClick={() => toggleLabel(label.id)}
+        >
+          {label.name}
+        </Chip>
+      ))}
+
+      {/* Whatever isn't already a chip, as a picker rather than one chip
+          each: a mailbox can have twenty labels and the bar has room for
+          only a few of them. */}
+      {dropdownLabels.length > 0 && (
         <SelectInput
-          value={activeLabel}
+          value={dropdownLabels.some((label) => label.id === activeLabel) ? activeLabel : ''}
           onChange={(event) => {
             const id = event.target.value
             const withoutLabel = filters.filter((facet) => !facet.startsWith('label:'))
@@ -72,11 +92,11 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
           aria-label={t('labels.filterBy')}
           className={clsx(
             'ml-1 max-w-[10rem] rounded-control-sm py-1 pl-2 text-caption font-semibold',
-            activeLabel && 'text-accent',
+            activeLabel && dropdownLabels.some((label) => label.id === activeLabel) && 'text-accent',
           )}
         >
           <option value="">{t('labels.anyLabel')}</option>
-          {labels.map((label) => (
+          {dropdownLabels.map((label) => (
             <option key={label.id} value={label.id}>
               {label.name}
             </option>
