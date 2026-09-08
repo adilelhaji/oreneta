@@ -198,6 +198,14 @@ type ThreadListRequest struct {
 	Sort         string `json:"sort"`
 	BeforeCursor string `json:"before_cursor"`
 	Refresh      bool   `json:"refresh"`
+	Limit        uint32 `json:"limit,omitempty"`
+}
+
+func (r ThreadListRequest) pageLimit() uint32 {
+	if r.Limit == 0 {
+		return 50
+	}
+	return r.Limit
 }
 
 type AttachmentInput struct {

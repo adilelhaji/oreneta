@@ -182,7 +182,7 @@ func (a *App) threadList(payload map[string]any) (any, error) {
 		"filter":        req.Filter,
 		"sort":          req.Sort,
 		"before_cursor": req.BeforeCursor,
-		"limit":         50,
+		"limit":         req.pageLimit(),
 		"refresh":       req.Refresh,
 		// Thread grouping (subject branching, root titles, unread counts)
 		// runs in the core, shared with mobile; the bridge only mints ids.

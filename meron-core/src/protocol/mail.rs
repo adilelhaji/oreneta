@@ -607,6 +607,7 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
         return list_mobile_unified_threads(data_dir, params);
     }
     let request = thread_list::ThreadListQuery::from_params(params, "folder_id");
+    let before = params.get("before_cursor").and_then(Value::as_str).filter(|value| !value.is_empty());
     let folder_id = request.folder.clone();
     let limit = request.limit;
     let refresh = params
@@ -620,10 +621,24 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
     .as_bool()
     .unwrap_or(false);
     if is_rss {
+        crate::cached_conversations::reject_conversation_cursor(before).map_err(|err| err.to_string())?;
         return with_mobile_db(data_dir, |conn| {
             thread_list::rss_page(&conn, &account_id, &request).map_err(|err| format!("{err:#}"))
         });
     }
+
+    if params.get("conversation_paging").and_then(Value::as_bool).unwrap_or(true)
+        && crate::cached_conversations::recent_filter(&request).is_some()
+    {
+        return with_mobile_db(data_dir, |conn| {
+            crate::cached_conversations::page(
+                &conn,
+                vec![crate::conversation_page::Scope { account: account_id.clone(), folder: folder_id.clone() }],
+                &format!("recent:account:{account_id}"), &request, before,
+            ).map(|page| page.into_response(false)).map_err(|err| err.to_string())
+        });
+    }
+    crate::cached_conversations::reject_conversation_cursor(before).map_err(|err| err.to_string())?;
 
     // Mobile is cache-first: unlike desktop, starred reads the flags the last
     // sync stored so the list still answers offline, and a failed live search
@@ -637,27 +652,13 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
         // with nothing rather than pretending the view is empty of its own
         // accord.
         thread_list::MailSource::Snoozed => (Vec::new(), None),
-        thread_list::MailSource::Recent {
-            unread_only,
-            starred_only,
-            label_id,
-            with_attachments,
-            priority_only,
-        } => {
-            get_cached_mobile_mail_page(
-                data_dir,
-                &account_id,
-                &folder_id,
-                limit,
-                request.before_cursor,
-                store::RecentFilter {
-                    unread_only,
-                    starred_only,
-                    label_id,
-                    with_attachments,
-                    priority_only,
-                },
-            )?
+        thread_list::MailSource::Recent { .. } => {
+            // Internal mixed-source fan-out keeps its existing message cursors.
+            let conn = open_mobile_db(data_dir)?;
+            store::get_recent_page(
+                &conn, &account_id, &folder_id, limit, request.before_cursor.clone(),
+                crate::cached_conversations::recent_filter(&request).expect("Recent source"),
+            ).map_err(|err| err.to_string())?
         }
         thread_list::MailSource::Search => {
             // One folder list for both halves: the live search and the offline
@@ -727,6 +728,18 @@ pub(crate) fn list_mobile_threads(data_dir: &str, params: &Value) -> Result<Valu
 }
 
 fn list_mobile_unified_threads(data_dir: &str, params: &Value) -> Result<Value, String> {
+    let request = thread_list::ThreadListQuery::from_params(params, "folder_id");
+    let before = params.get("before_cursor").and_then(Value::as_str).filter(|value| !value.is_empty());
+    let role = params.get("folder_role").and_then(Value::as_str).unwrap_or("inbox").to_ascii_lowercase();
+    if crate::cached_conversations::recent_filter(&request).is_some() {
+        let conn = open_mobile_db(data_dir)?;
+        if let Some(scopes) = crate::cached_conversations::unified_mail_scopes(&conn, &role).map_err(|err| err.to_string())? {
+            return crate::cached_conversations::page(
+                &conn, scopes, &format!("recent:unified:{role}"), &request, before,
+            ).map(|page| page.into_response(true)).map_err(|err| err.to_string());
+        }
+    }
+    crate::cached_conversations::reject_conversation_cursor(before).map_err(|err| err.to_string())?;
     let account_cursors = params
         .get("before_cursor")
         .and_then(Value::as_str)
@@ -791,6 +804,7 @@ fn list_mobile_unified_threads(data_dir: &str, params: &Value) -> Result<Value, 
             .ok_or_else(|| "params must be an object".to_string())?;
         object.insert("account_id".to_string(), Value::String(account_id.clone()));
         object.insert("folder_id".to_string(), Value::String(folder));
+        object.insert("conversation_paging".to_string(), Value::Bool(false));
         match account_cursors.get(&account_id) {
             Some(cursor) => {
                 object.insert("before_cursor".to_string(), Value::String(cursor.clone()));
@@ -815,19 +829,6 @@ fn open_mobile_db(data_dir: &str) -> Result<rusqlite::Connection, String> {
         None => store::open_at(&db_path),
     }
     .map_err(|err| err.to_string())
-}
-
-fn get_cached_mobile_mail_page(
-    data_dir: &str,
-    account_id: &str,
-    folder_id: &str,
-    limit: u32,
-    before_cursor: Option<crate::thread_list::PageCursor>,
-    filter: store::RecentFilter,
-) -> Result<(Vec<MessageHeader>, Option<String>), String> {
-    let conn = open_mobile_db(data_dir)?;
-    store::get_recent_page(&conn, account_id, folder_id, limit, before_cursor, filter)
-        .map_err(|err| err.to_string())
 }
 
 fn get_cached_mobile_starred(

@@ -28,7 +28,7 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
-    backup, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
+    backup, cached_conversations, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
     search, secrets, smtp, spam, store, thread_list, thread_read, unified,
 };
 
@@ -1417,6 +1417,19 @@ async fn handle(engine: Arc<Engine>, req: Request, out: &Writer) {
             // RPC errors are diagnosable.
             eprintln!("meron-core: {} failed: {e:#}", req.method);
             respond_error(out, req.id, &format!("{e:#}")).await;
+        }
+    }
+}
+
+async fn prepare_recent_cache(
+    engine: &Arc<Engine>, account: &str, folder: &str, request: &thread_list::ThreadListQuery,
+) {
+    let Some(filter) = cached_conversations::recent_filter(request) else { return };
+    // Preserve the existing attachment/priority backfill before answering facets.
+    if filter.with_attachments { fill_in_attachment_flags(engine, account, folder).await; }
+    if filter.priority_only {
+        if let Err(err) = store::rejudge_priority(&engine.db.lock().unwrap(), account, true) {
+            eprintln!("meron-core: judging {account}: {err:#}");
         }
     }
 }
@@ -3635,6 +3648,27 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         }
 
         "messages.unifiedRecent" => {
+            let request = thread_list::ThreadListQuery::from_params(p, "folder");
+            let before = p.get("before_cursor").and_then(Value::as_str).filter(|value| !value.is_empty());
+            let role = req_str(p, "folder_role").unwrap_or_else(|_| "inbox".to_string()).to_ascii_lowercase();
+            if cached_conversations::recent_filter(&request).is_some() {
+                let scopes = cached_conversations::unified_mail_scopes(&engine.db.lock().unwrap(), &role)?;
+                if let Some(scopes) = scopes {
+                    for scope in &scopes {
+                        prepare_recent_cache(engine, &scope.account, &scope.folder, &request).await;
+                    }
+                    let page = cached_conversations::page(
+                        &engine.db.lock().unwrap(), scopes.clone(), &format!("recent:unified:{role}"), &request, before,
+                    )?.into_response(true);
+                    if cached_conversations::should_sync(before, p.get("refresh").and_then(Value::as_bool).unwrap_or(true)) {
+                        for scope in scopes {
+                            spawn_message_sync(engine.clone(), out.clone(), scope.account, scope.folder, request.limit);
+                        }
+                    }
+                    return Ok(page);
+                }
+            }
+            cached_conversations::reject_conversation_cursor(before)?;
             let cursors = p
                 .get("before_cursor")
                 .and_then(Value::as_str)
@@ -3681,6 +3715,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     "limit": req_u16(p, "limit").unwrap_or(50),
                     "refresh": p.get("refresh").and_then(Value::as_bool).unwrap_or(true),
                     "group": true,
+                    // Mixed RSS/mail remains on its existing per-account
+                    // message cursor contract until that source is migrated.
+                    "conversation_paging": false,
                 });
                 if let Some(cursor) = cursors.get(&account) {
                     params["before_cursor"] = Value::String(cursor.clone());
@@ -3703,8 +3740,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "messages.recent" => {
             let account = req_str(p, "account")?;
             let request = thread_list::ThreadListQuery::from_params(p, "folder");
+            let before = p.get("before_cursor").and_then(Value::as_str).filter(|value| !value.is_empty());
             let refresh = p.get("refresh").and_then(Value::as_bool).unwrap_or(true);
             if is_rss(engine, &account)? {
+                cached_conversations::reject_conversation_cursor(before)?;
                 let page = thread_list::rss_page(&engine.db.lock().unwrap(), &account, &request)?;
                 if refresh {
                     spawn_rss_sync(engine.clone(), out.clone(), account);
@@ -3718,6 +3757,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // metadata must describe that same snapshot.
             let folder_synced_before =
                 store::get_folder_state(&engine.db.lock().unwrap(), &account, &folder)?.is_some();
+            if p.get("group").and_then(Value::as_bool).unwrap_or(false)
+                && p.get("conversation_paging").and_then(Value::as_bool).unwrap_or(true)
+                && cached_conversations::recent_filter(&request).is_some()
+            {
+                prepare_recent_cache(engine, &account, &folder, &request).await;
+                let mut page = cached_conversations::page(
+                    &engine.db.lock().unwrap(),
+                    vec![meron_core::conversation_page::Scope { account: account.clone(), folder: folder.clone() }],
+                    &format!("recent:account:{account}"), &request, before,
+                )?.into_response(false);
+                page["folder_synced"] = json!(folder_synced_before);
+                if cached_conversations::should_sync(before, refresh) {
+                    spawn_message_sync(engine.clone(), out.clone(), account, folder, limit);
+                }
+                return Ok(page);
+            }
+            cached_conversations::reject_conversation_cursor(before)?;
             // Desktop starred reads are online-first. Search first paints the
             // local index with refresh=false, then repeats with refresh=true;
             // snapshot-backed later pages are local even though they travel

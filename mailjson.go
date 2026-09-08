@@ -117,6 +117,9 @@ func threadsJSON(accountID, folder string, raw any) any {
 }
 
 func copyPageMetadata(object, out map[string]any) {
+	if pagination, _ := object["pagination"].(string); pagination != "" {
+		out["pagination"] = pagination
+	}
 	if folderSynced, ok := object["folder_synced"].(bool); ok {
 		out["folder_synced"] = folderSynced
 	}

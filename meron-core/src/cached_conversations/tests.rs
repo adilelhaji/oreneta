@@ -256,3 +256,54 @@ fn empty_scopes_are_empty_and_rss_is_an_explicit_unsupported_source() {
     assert!(page(&conn, vec![scope("feed", "INBOX")], "recent:feed", &query, None).is_err());
     assert!(conn.is_autocommit());
 }
+
+#[test]
+fn cursor_binds_effective_first_label_not_a_sorted_raw_facet_set() {
+    let conn = conn();
+    let inbox = scope("a", "INBOX");
+    let mut messages = vec![header(1, "gmthrid:one", 1, "A", "One"),
+        header(2, "gmthrid:two", 2, "B", "Two"), header(3, "gmthrid:three", 3, "C", "Three")];
+    for message in &mut messages { message.seen = false; }
+    seed(&conn, &inbox, &messages);
+    conn.execute("INSERT INTO labels(id, name, colour, position) VALUES('a', 'A', '#000', 0), ('b', 'B', '#000', 1)", []).unwrap();
+    for key in ["gmthrid:one", "gmthrid:two"] { store::add_thread_label(&conn, "a", key, "a").unwrap(); }
+    store::add_thread_label(&conn, "a", "gmthrid:three", "b").unwrap();
+    let first = page(&conn, vec![inbox.clone()], "recent:a", &request("date", "unread,label:a,label:b", 1), None).unwrap();
+    let cursor = first.next_cursor.as_deref().unwrap();
+    let equivalent = page(&conn, vec![inbox.clone()], "recent:a", &request("date", "label:a,unread,unread,label:b", 1), Some(cursor)).unwrap();
+    assert_eq!(equivalent.threads.len(), 1);
+    let error = page(&conn, vec![inbox], "recent:a", &request("date", "unread,label:b,label:a", 1), Some(cursor)).err().unwrap();
+    assert_eq!(error.to_string(), conversation_page::RELOAD_REQUIRED);
+}
+
+#[test]
+fn response_declares_contract_at_end_and_raw_sources_reject_conv1() {
+    let conn = conn();
+    let response = page(&conn, vec![], "recent:unified", &request("date", "all", 1), None).unwrap().into_response(true);
+    assert_eq!(response["pagination"], PAGINATION);
+    assert_eq!(response["threads"], json!([]));
+    assert_eq!(response["failures"], json!([]));
+    assert_eq!(response["folder_unread"], 0);
+    assert!(response.get("next_cursor").is_none());
+    assert!(reject_conversation_cursor(Some("conv1:opaque")).is_err());
+    assert!(reject_conversation_cursor(Some("date:10:1")).is_ok());
+    assert!(reject_conversation_cursor(None).is_ok());
+    for refresh in [false, true] {
+        assert_eq!(should_sync(None, refresh), refresh);
+        assert_eq!(should_sync(Some(""), refresh), refresh);
+        assert!(!should_sync(Some("conv1:opaque"), refresh));
+        assert!(!should_sync(Some("date:10:1"), refresh));
+    }
+}
+
+#[test]
+fn unified_resolution_excludes_opt_out_and_missing_roles_but_preserves_rss_contract() {
+    let conn = conn();
+    conn.execute("INSERT INTO accounts(id, engine) VALUES('a', 'mail'), ('excluded', 'mail'), ('feed', 'rss')", []).unwrap();
+    store::set_account_pref(&conn, "excluded", "included_in_unified", false).unwrap();
+    store::upsert_folders(&conn, "a", &[crate::imap::Folder { name: "CustomSent".into(), special_use: Some("sent".into()), ..Default::default() }]).unwrap();
+    assert!(unified_mail_scopes(&conn, "inbox").unwrap().is_none());
+    assert_eq!(unified_mail_scopes(&conn, "sent").unwrap().unwrap(), vec![scope("a", "CustomSent")]);
+    store::set_account_pref(&conn, "feed", "included_in_unified", false).unwrap();
+    assert_eq!(unified_mail_scopes(&conn, "inbox").unwrap().unwrap(), vec![scope("a", "INBOX")]);
+}

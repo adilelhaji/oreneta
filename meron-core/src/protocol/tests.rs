@@ -9,6 +9,62 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static TEST_UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn mobile_recent_uses_shared_conversation_pages_for_all_sorts_and_scopes() {
+    let data_dir = unique_data_dir("conversation-pagination");
+    for account in ["a", "b"] { seed_mobile_account(&data_dir, account); }
+    let conn = store::open_at(data_dir.join("meron.db")).unwrap();
+    for account in ["a", "b"] {
+        store::ensure_folder(&conn, account, "INBOX").unwrap();
+        store::upsert_messages(&conn, account, "INBOX", &[
+            MessageHeader { uid: 1, date: 30, subject: "Root".into(), from_name: "Zulu".into(), thread_key: "gmthrid:one".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 40, subject: "Re: Root".into(), from_name: "Alpha".into(), thread_key: "gmthrid:one".into(), ..Default::default() },
+            MessageHeader { uid: 3, date: 20, subject: "Other".into(), from_name: "Beta".into(), thread_key: "gmthrid:two".into(), ..Default::default() },
+        ]).unwrap();
+    }
+    for account in ["a", "unified"] {
+        let scopes = if account == "unified" { vec!["a", "b"] } else { vec!["a"] };
+        for sort in ["date", "date:asc", "sender", "sender:asc", "subject", "subject:asc"] {
+            let request = crate::thread_list::ThreadListQuery::from_params(&json!({"sort": sort, "limit": 100}), "folder");
+            let namespace = if account == "unified" { "recent:unified:inbox" } else { "recent:account:a" };
+            let expected = crate::cached_conversations::page(&conn, scopes.iter().map(|id| crate::conversation_page::Scope {
+                account: id.to_string(), folder: "INBOX".into(),
+            }).collect(), namespace, &request, None).unwrap().threads;
+            let mut actual = Vec::new();
+            let mut cursor = None;
+            for attempt in 0..=4 {
+                let value = invoke_mobile_protocol_json(&json!({"id": 1, "method": "mail.threadList", "params": {
+                    "account_id": account, "folder_id": "INBOX", "folder_role": "inbox", "sort": sort,
+                    "limit": 1, "refresh": false, "before_cursor": cursor,
+                }}).to_string(), Some(data_dir.to_str().unwrap()));
+                assert!(value.get("error").is_none(), "{value}");
+                assert_eq!(value["result"]["pagination"], "conversation-v1");
+                let rows = value["result"]["threads"].as_array().unwrap();
+                assert_eq!(rows.len(), 1);
+                actual.extend(rows.iter().cloned());
+                cursor = value["result"]["next_cursor"].as_str().map(str::to_string);
+                if cursor.is_none() { break; }
+                assert!(cursor.as_deref().unwrap().starts_with("conv1:"));
+                assert!(attempt < 4);
+            }
+            assert_eq!(actual, expected, "account={account} sort={sort}");
+        }
+    }
+    for filter in ["all", "starred", "snoozed"] {
+        let invalid = invoke_mobile_protocol_json(&json!({"id": 2, "method": "mail.threadList", "params": {
+            "account_id": "a", "folder_id": "INBOX", "filter": filter, "before_cursor": "conv1:invalid",
+        }}).to_string(), Some(data_dir.to_str().unwrap()));
+        assert_eq!(invalid["error"]["message"], crate::conversation_page::RELOAD_REQUIRED);
+    }
+    let legacy = invoke_mobile_protocol_json(&json!({"id": 3, "method": "mail.threadList", "params": {
+        "account_id": "a", "folder_id": "INBOX", "conversation_paging": false, "limit": 1,
+    }}).to_string(), Some(data_dir.to_str().unwrap()));
+    assert!(legacy["result"].get("pagination").is_none());
+    assert!(legacy["result"]["next_cursor"].as_str().unwrap().starts_with("date:"));
+    drop(conn);
+    let _ = std::fs::remove_dir_all(data_dir);
+}
+
+#[test]
 fn request_defaults_missing_params_to_null() {
     let req: Request = serde_json::from_str(r#"{"id":7,"method":"ping"}"#).unwrap();
     assert_eq!(req.id, 7);
