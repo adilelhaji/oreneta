@@ -53,7 +53,9 @@ ui$.mobilePane.set(scene === 'reader' ? 'conversation' : 'threads')
 mail$.folders.set(structuredClone(fixture.folders))
 mail$.foldersByAccount.set({ [fixture.account.id]: structuredClone(fixture.folders) })
 mail$.threads.set(structuredClone(fixture.threads))
-mail$.threadsLoadedKey.set(threadListViewKey(fixture.account.id, 'INBOX', '', 'all'))
+settings$.listSort.set({ key: 'date', dir: 'desc' })
+mail$.threadsLoadedKey.set(threadListViewKey(fixture.account.id, 'INBOX', '', 'all', 'date'))
+mail$.threadsViewKey.set(mail$.threadsLoadedKey.get())
 mail$.messages.set(structuredClone(fixture.messages))
 labels$.set({
   loaded: true,
