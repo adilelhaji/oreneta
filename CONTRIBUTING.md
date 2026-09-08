@@ -78,6 +78,12 @@ bun run test:integration   # tagged integration tests against a mail harness
 
 ## Localization
 
+Date-format tests preserve the user's host locale and local timezone. Assert the
+requested formatting options and compare against the native formatter for fixed
+local dates; do not hardcode English month names or change production defaults.
+The #60 regression covers unknown, same-day, same-year and other-year timestamps
+in both thread lists and message bubbles. CI runs these with the frontend suite.
+
 Translation catalogs live in [`locales/`](locales/). Validate and regenerate
 generated message types with:
 
