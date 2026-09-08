@@ -1268,7 +1268,7 @@ class MobileCommandsTest {
     @Test
     fun jsonBuilderEscapesPayloadStrings() {
         assertEquals(
-            """{"account_id":"a\"b","folder_id":"line\nbreak","query":"","filter":"all","refresh":false}""",
+            """{"account_id":"a\"b","folder_id":"line\nbreak","query":"","filter":"all","refresh":false,"sort":"date"}""",
             ThreadListParams(accountId = "a\"b", folderId = "line\nbreak").toJson(),
         )
     }
