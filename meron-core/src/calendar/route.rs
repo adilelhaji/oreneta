@@ -493,6 +493,8 @@ mod tests {
             cert_pin: None,
             smtp_cert_pin: None,
             ews_url: ews_url.to_string(),
+            delegate_account_id: String::new(),
+            target_mailbox: String::new(),
         }
     }
 

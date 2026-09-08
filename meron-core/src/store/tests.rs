@@ -698,6 +698,306 @@ fn what_the_reader_says_about_a_sender_sticks_and_can_be_taken_back() {
 }
 
 #[test]
+fn a_sender_confirmed_spam_more_than_once_flags_their_next_message() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "spammer@example.com".into(),
+            subject: "Amazing offer".into(),
+            thread_key: "t-1".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+
+    let spam = || -> Option<i64> {
+        conn.query_row(
+            "SELECT spam FROM messages WHERE account = 'acct' AND uid = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    // Nothing taught yet: not flagged.
+    assert_eq!(spam(), Some(0));
+
+    // One correction alone must not brand the sender.
+    assert_eq!(
+        record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap(),
+        Some("spammer@example.com".to_string())
+    );
+    assert_eq!(spam(), Some(0));
+
+    // A second one gives it a clear lead, and the account is re-judged at once.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
+    assert_eq!(spam(), Some(1));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 0));
+
+    // Saying "not spam" afterward lifts it again — a correction taken back,
+    // not stuck at whichever way it was last pushed.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", false).unwrap();
+    assert_eq!(spam(), Some(0));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 1));
+}
+
+#[test]
+fn subject_words_seen_repeatedly_in_confirmed_spam_flag_a_later_message() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader {
+                uid: 1,
+                from_addr: "one@example.com".into(),
+                subject: "Free prize offer".into(),
+                thread_key: "t-1".into(),
+                date: 1,
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 2,
+                from_addr: "two@example.com".into(),
+                subject: "Win a prize today".into(),
+                thread_key: "t-2".into(),
+                date: 2,
+                ..Default::default()
+            },
+            MessageHeader {
+                uid: 3,
+                from_addr: "four@example.com".into(),
+                subject: "Your prize package".into(),
+                thread_key: "t-4".into(),
+                date: 3,
+                ..Default::default()
+            },
+            // A different, never-corrected sender whose subject happens to
+            // reuse the same word — never taught anything about this sender
+            // specifically.
+            MessageHeader {
+                uid: 4,
+                from_addr: "three@example.com".into(),
+                subject: "Prize committee meeting notes".into(),
+                thread_key: "t-3".into(),
+                date: 4,
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+
+    // Three different senders, each confirmed spam once: below the sender
+    // threshold on its own for any of them, but "prize" now has three spam
+    // confirmations against zero ham — enough to be a trigger on its own.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "t-2", true).unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "t-4", true).unwrap();
+
+    let spam = |uid: u32| -> Option<i64> {
+        conn.query_row(
+            "SELECT spam FROM messages WHERE account = 'acct' AND uid = ?1",
+            params![uid],
+            |row| row.get(0),
+        )
+        .unwrap()
+    };
+    // None of the three taught senders crosses the sender threshold alone,
+    // but "prize" does — and uid 4's subject reuses the same word, so a
+    // message from an unrelated, never-corrected sender gets flagged by its
+    // words alone. That is content-based learning working as intended, not
+    // a false positive to paper over: the reader can still say "not spam".
+    assert_eq!(spam(4), Some(1));
+
+    let reasons = crate::spam::verdict(&spam_signals(
+        &conn,
+        "acct",
+        "three@example.com",
+        "Prize committee meeting notes",
+    ))
+    .reasons;
+    assert_eq!(reasons, vec![crate::spam::Reason::TriggerWords]);
+}
+
+#[test]
+fn thread_spam_signals_is_none_for_a_conversation_that_does_not_exist() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    assert!(thread_spam_signals(&conn, "acct", "INBOX", "t-missing")
+        .unwrap()
+        .is_none());
+    assert!(record_spam_judgment(&conn, "acct", "INBOX", "t-missing", true)
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn saving_a_task_twice_on_the_same_thread_edits_it_rather_than_duplicating_it() {
+    let conn = test_conn();
+    let id = save_task(&conn, "acct", "t-1", "INBOX", Some(100), "Follow up", 10).unwrap();
+
+    // The same conversation again: edits the open task in place.
+    let again = save_task(&conn, "acct", "t-1", "INBOX", Some(200), "Follow up harder", 20).unwrap();
+    assert_eq!(again, id);
+
+    let tasks = list_tasks(&conn, true).unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].due_at, Some(200));
+    assert_eq!(tasks[0].note, "Follow up harder");
+}
+
+#[test]
+fn completing_a_task_keeps_it_and_a_new_one_can_open_on_the_same_thread() {
+    let conn = test_conn();
+    let id = save_task(&conn, "acct", "t-1", "INBOX", None, "First round", 10).unwrap();
+    set_task_completed(&conn, id, true, 50).unwrap();
+
+    let after_complete = list_tasks(&conn, true).unwrap();
+    assert_eq!(after_complete.len(), 1);
+    assert_eq!(after_complete[0].completed_at, Some(50));
+
+    // The partial unique index only covers open tasks, so the same thread can
+    // gain a new one — a recurring follow-up, not a thread stuck at "done" forever.
+    let second_id = save_task(&conn, "acct", "t-1", "INBOX", None, "Second round", 60).unwrap();
+    assert_ne!(second_id, id);
+    assert_eq!(list_tasks(&conn, true).unwrap().len(), 2);
+}
+
+#[test]
+fn uncompleting_a_task_that_would_collide_with_an_already_open_one_fails_loud() {
+    let conn = test_conn();
+    let done_id = save_task(&conn, "acct", "t-1", "INBOX", None, "Old", 10).unwrap();
+    set_task_completed(&conn, done_id, true, 20).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "New", 30).unwrap();
+
+    // Taking the old one back would leave two open tasks on the same thread —
+    // the database's own constraint is what refuses it, not a check this
+    // function has to remember to make.
+    assert!(set_task_completed(&conn, done_id, false, 40).is_err());
+}
+
+#[test]
+fn deleting_a_task_removes_it_and_frees_the_thread_for_a_new_open_task() {
+    let conn = test_conn();
+    let id = save_task(&conn, "acct", "t-1", "INBOX", None, "Note", 10).unwrap();
+    delete_task(&conn, id).unwrap();
+    assert!(list_tasks(&conn, true).unwrap().is_empty());
+
+    // Freed, not merely hidden: a fresh task on the same thread is a normal insert.
+    save_task(&conn, "acct", "t-1", "INBOX", None, "Note again", 20).unwrap();
+    assert_eq!(list_tasks(&conn, true).unwrap().len(), 1);
+}
+
+#[test]
+fn get_task_reports_its_own_fields_and_none_for_an_unknown_id() {
+    let conn = test_conn();
+    let id = save_task(&conn, "acct", "t-1", "INBOX", Some(123), "The real note", 10).unwrap();
+    assert_eq!(get_task(&conn, id).unwrap(), Some((Some(123), "The real note".to_string())));
+    assert_eq!(get_task(&conn, id + 999).unwrap(), None);
+}
+
+#[test]
+fn tasks_list_open_first_soonest_due_date_then_completed_most_recent_first() {
+    let conn = test_conn();
+    let soon = save_task(&conn, "acct", "t-soon", "INBOX", Some(100), "", 1).unwrap();
+    let no_due = save_task(&conn, "acct", "t-no-due", "INBOX", None, "", 2).unwrap();
+    let later = save_task(&conn, "acct", "t-later", "INBOX", Some(200), "", 3).unwrap();
+    let done = save_task(&conn, "acct", "t-done", "INBOX", None, "", 4).unwrap();
+    set_task_completed(&conn, done, true, 500).unwrap();
+
+    let ids: Vec<i64> = list_tasks(&conn, true).unwrap().into_iter().map(|t| t.id).collect();
+    assert_eq!(ids, vec![soon, later, no_due, done]);
+
+    // Excluding completed drops the done one but keeps the same open order.
+    let open_only: Vec<i64> = list_tasks(&conn, false).unwrap().into_iter().map(|t| t.id).collect();
+    assert_eq!(open_only, vec![soon, later, no_due]);
+}
+
+#[test]
+fn a_task_carries_its_conversations_subject_and_sender_when_cached() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "ann@example.com".into(),
+            from_name: "Ann".into(),
+            subject: "Renew the contract".into(),
+            thread_key: "t-1".into(),
+            date: 5,
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+
+    let tasks = list_tasks(&conn, true).unwrap();
+    assert_eq!(tasks[0].subject, "Renew the contract");
+    assert_eq!(tasks[0].from_name, "Ann");
+
+    // A task whose message is no longer cached still appears — a reader's
+    // own task is not lost because the local cache happens to have moved on.
+    let orphan = save_task(&conn, "acct", "t-gone", "INBOX", None, "Orphaned", 20).unwrap();
+    let tasks = list_tasks(&conn, true).unwrap();
+    let found = tasks.iter().find(|t| t.id == orphan).unwrap();
+    assert_eq!(found.subject, "");
+}
+
+#[test]
+fn open_tasks_for_threads_is_scoped_to_the_account_and_excludes_completed() {
+    let conn = test_conn();
+    let open_id = save_task(&conn, "acct", "t-1", "INBOX", Some(42), "", 10).unwrap();
+    let done_id = save_task(&conn, "acct", "t-2", "INBOX", None, "", 20).unwrap();
+    set_task_completed(&conn, done_id, true, 30).unwrap();
+    // A different account's task on the same thread key must not leak in.
+    save_task(&conn, "other-acct", "t-1", "INBOX", None, "", 40).unwrap();
+
+    let found = open_tasks_for_threads(
+        &conn,
+        "acct",
+        &["t-1".to_string(), "t-2".to_string(), "t-3".to_string()],
+    )
+    .unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found.get("t-1"), Some(&(open_id, Some(42))));
+}
+
+#[test]
+fn open_tasks_for_threads_finds_the_task_regardless_of_which_folder_the_card_is_rendered_in() {
+    // The task was made from the Inbox copy of a thread a server also files
+    // under Archive; browsing Archive must still show it as already a task.
+    let conn = test_conn();
+    let id = save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    let found = open_tasks_for_threads(&conn, "acct", &["t-1".to_string()]).unwrap();
+    assert_eq!(found.get("t-1"), Some(&(id, None)));
+}
+
+#[test]
 fn a_list_can_be_ordered_by_something_other_than_the_date() {
     use crate::thread_list::{Sort, SortDir, SortKey};
     let conn = test_conn();
@@ -2745,7 +3045,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 32);
 
     for table in [
         "accounts",
@@ -2772,6 +3072,10 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "smime_certs",
         "smime_identities",
         "oof_replied",
+        "label_links",
+        "sender_spam",
+        "spam_triggers",
+        "tasks",
     ] {
         let exists = conn
             .query_row(
@@ -2790,7 +3094,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 32);
 }
 
 #[test]
@@ -2818,9 +3122,40 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 30);
+    assert_eq!(version, 32);
 
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
+    let conn = test_conn();
+    // Recreate the schema shipped on main before the tasks/spam integration.
+    conn.execute_batch(
+        "DROP TABLE tasks;
+         DROP TABLE sender_spam;
+         DROP TABLE spam_triggers;
+         ALTER TABLE messages DROP COLUMN spam;
+         INSERT INTO label_links(label_id, account_id, remote_name)
+           VALUES ('work', 'account', 'Work');
+         PRAGMA user_version = 30;",
+    ).unwrap();
+
+    db::run_migrations(&conn).unwrap();
+    db::run_migrations(&conn).unwrap();
+
+    let remote: String = conn.query_row(
+        "SELECT remote_name FROM label_links WHERE label_id = 'work'",
+        [], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(remote, "Work");
+    for table in ["tasks", "sender_spam", "spam_triggers"] {
+        assert!(conn.prepare(&format!("SELECT * FROM {table}")).is_ok());
+    }
+    assert!(conn.prepare("SELECT spam FROM messages").is_ok());
+    assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
+    let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+    assert_eq!(version, 32);
 }
 
 #[test]
@@ -2906,6 +3241,33 @@ fn delete_account_removes_account_scoped_state_only() {
             .unwrap();
         assert_eq!(other_count, 1, "{table} removed another account's row");
     }
+}
+
+#[test]
+fn shared_mailboxes_of_finds_only_accounts_delegating_to_that_one() {
+    let conn = test_conn();
+    let meta = |email: &str| AccountMeta {
+        engine: "mail".to_string(),
+        provider: "exchange".to_string(),
+        email: email.to_string(),
+        display_name: email.to_string(),
+        avatar_url: String::new(),
+        sender_name: String::new(),
+    };
+    upsert_account(&conn, "parent", &meta("ana@corp.example.com"), &proxy_test_creds(crate::proxy::ProxyChoice::default())).unwrap();
+    upsert_account(&conn, "other-parent", &meta("marc@corp.example.com"), &proxy_test_creds(crate::proxy::ProxyChoice::default())).unwrap();
+
+    let mut shared = proxy_test_creds(crate::proxy::ProxyChoice::default());
+    shared.delegate_account_id = "parent".to_string();
+    upsert_account(&conn, "support", &meta("support@corp.example.com"), &shared).unwrap();
+
+    let mut other_shared = shared.clone();
+    other_shared.delegate_account_id = "other-parent".to_string();
+    upsert_account(&conn, "sales", &meta("sales@corp.example.com"), &other_shared).unwrap();
+
+    assert_eq!(shared_mailboxes_of(&conn, "parent").unwrap(), vec!["support".to_string()]);
+    assert_eq!(shared_mailboxes_of(&conn, "other-parent").unwrap(), vec!["sales".to_string()]);
+    assert!(shared_mailboxes_of(&conn, "support").unwrap().is_empty());
 }
 
 #[test]
@@ -3924,6 +4286,8 @@ fn proxy_test_creds(proxy: crate::proxy::ProxyChoice) -> crate::imap::Creds {
         cert_pin: None,
         smtp_cert_pin: None,
         ews_url: String::new(),
+        delegate_account_id: String::new(),
+        target_mailbox: String::new(),
     }
 }
 

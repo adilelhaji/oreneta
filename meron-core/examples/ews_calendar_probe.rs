@@ -115,6 +115,7 @@ fn main() -> anyhow::Result<()> {
         url: env("EWS_URL"),
         username: env("EWS_USER"),
         password: env("EWS_PASSWORD"),
+        target_mailbox: String::new(),
     });
 
     // A wide window is what settles whether the server expands a series: a

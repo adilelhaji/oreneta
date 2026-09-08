@@ -64,6 +64,21 @@ pub struct Creds {
     /// Empty for IMAP accounts, which is what decides the protocol at connect
     /// time — see [`crate::backend::connect`].
     pub ews_url: String,
+    /// Set only on a shared-mailbox pseudo-account: the id of the real
+    /// Exchange account whose credentials actually open it. Empty for every
+    /// account that connects for itself — every account before this
+    /// feature, and every non-Exchange account after it. A row with this
+    /// set has no host/user/password of its own; `Engine`'s account
+    /// resolution replaces it with a clone of the named account's own
+    /// (already-secreted) `Creds` before it ever reaches a connection —
+    /// see `Engine::new`'s delegate-resolution pass.
+    pub delegate_account_id: String,
+    /// The mailbox this session's operations should address, when it
+    /// differs from the account actually authenticated — set by delegate
+    /// resolution to a shared mailbox's own address, empty for the
+    /// ordinary case of a mailbox opened with its own credentials. Not
+    /// persisted: this is a resolved, per-session fact, not configuration.
+    pub target_mailbox: String,
 }
 
 impl Creds {

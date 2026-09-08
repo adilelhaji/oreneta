@@ -158,6 +158,51 @@ pub fn creds_have_required_secret(creds: &imap::Creds) -> bool {
     }
 }
 
+/// Load and secret one ordinary (non-delegate) account by id. `None` when it
+/// does not exist, or exists but has nothing usable to connect with.
+fn load_and_secret_one(conn: &Connection, host: &dyn EngineHost, id: &str) -> Option<imap::Creds> {
+    let (_, mut creds) = store::load_accounts(conn)
+        .ok()?
+        .into_iter()
+        .find(|(row_id, _)| row_id == id)?;
+    host.apply_secret(conn, id, &mut creds);
+    creds_have_required_secret(&creds).then_some(creds)
+}
+
+/// A shared mailbox's `Creds`: a clone of its delegate's own (already
+/// resolved) credentials, addressed at the shared mailbox's own address
+/// instead of the delegate's. Loads and secrets the delegate first if it is
+/// not already in `accounts` — a shared mailbox can be resolved before its
+/// delegate happens to have been.
+///
+/// `None` when the delegate does not exist, has nothing usable to connect
+/// with, or is not an Exchange account — Exchange is the only protocol this
+/// app can address a non-own mailbox with today (see `oreneta`'s shared
+/// mailbox decision), so a delegate of any other kind means there is
+/// nothing correct to build.
+fn resolve_delegate(
+    conn: &Connection,
+    host: &dyn EngineHost,
+    accounts: &mut HashMap<String, imap::Creds>,
+    shared_mailbox_id: &str,
+    delegate_account_id: &str,
+) -> Option<imap::Creds> {
+    if !accounts.contains_key(delegate_account_id) {
+        let parent = load_and_secret_one(conn, host, delegate_account_id)?;
+        accounts.insert(delegate_account_id.to_string(), parent);
+    }
+    let parent = accounts.get(delegate_account_id)?;
+    if !parent.is_ews() {
+        return None;
+    }
+    let mut resolved = parent.clone();
+    resolved.target_mailbox = store::account_email(conn, shared_mailbox_id)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    Some(resolved)
+}
+
 /// Return a session to `account`'s free-list, or drop it if already at
 /// `max_pooled` (the transient-overflow case). Pure for testability.
 pub fn pool_return<S>(
@@ -203,13 +248,33 @@ impl Engine {
             eprintln!("meron-core: could not load the proxy setting: {err:#}");
         }
         let mut accounts: HashMap<String, imap::Creds> = HashMap::new();
+        // Ordinary accounts first, each with its own secret; shared mailboxes
+        // (delegate_account_id set) have none of their own and are resolved
+        // in a second pass, borrowing whichever delegate they name.
+        let mut shared_mailboxes: Vec<(String, String)> = Vec::new();
         for (id, mut creds) in store::load_accounts(&conn)? {
+            if !creds.delegate_account_id.is_empty() {
+                shared_mailboxes.push((id, creds.delegate_account_id));
+                continue;
+            }
             host.apply_secret(&conn, &id, &mut creds);
             if !creds_have_required_secret(&creds) {
                 eprintln!("meron-core: account {id} needs reconnect; no stored secret found");
                 continue;
             }
             accounts.insert(id, creds);
+        }
+        for (id, delegate_account_id) in shared_mailboxes {
+            match resolve_delegate(&conn, host.as_ref(), &mut accounts, &id, &delegate_account_id) {
+                Some(creds) => {
+                    accounts.insert(id, creds);
+                }
+                None => {
+                    eprintln!(
+                        "meron-core: shared mailbox {id} needs its delegate account ({delegate_account_id}) reconnected"
+                    );
+                }
+            }
         }
         Ok(Self {
             accounts: Mutex::new(accounts),
@@ -235,6 +300,27 @@ impl Engine {
         store::account_muted(&self.db.lock().unwrap(), account).unwrap_or(false)
     }
 
+    /// Resolve a freshly-added shared mailbox into the live credential map
+    /// right away, so it is usable immediately rather than waiting for the
+    /// next lazy-hydrate or restart. `true` when it resolved; `false` means
+    /// its delegate is not itself resolvable (needs reconnecting first) —
+    /// the caller has already required the delegate to be valid before
+    /// getting this far, so this should not normally happen.
+    pub async fn resolve_shared_mailbox(&self, id: &str, delegate_account_id: &str) -> bool {
+        let mut accounts = self.accounts.lock().await;
+        let resolved = {
+            let conn = self.db.lock().unwrap();
+            resolve_delegate(&conn, self.host.as_ref(), &mut accounts, id, delegate_account_id)
+        };
+        match resolved {
+            Some(creds) => {
+                accounts.insert(id.to_string(), creds);
+                true
+            }
+            None => false,
+        }
+    }
+
     pub async fn ensure_valid_creds(&self, account: &str) -> anyhow::Result<imap::Creds> {
         let mut accounts = self.accounts.lock().await;
         // Lazily hydrate accounts added out-of-band (the mobile host adds/edits
@@ -246,9 +332,21 @@ impl Engine {
                 .ok()
                 .and_then(|rows| rows.into_iter().find(|(id, _)| id == account));
             if let Some((id, mut creds)) = loaded {
-                self.host
-                    .apply_secret(&self.db.lock().unwrap(), &id, &mut creds);
-                accounts.insert(id, creds);
+                if creds.delegate_account_id.is_empty() {
+                    self.host
+                        .apply_secret(&self.db.lock().unwrap(), &id, &mut creds);
+                    if creds_have_required_secret(&creds) {
+                        accounts.insert(id, creds);
+                    }
+                } else if let Some(resolved) = resolve_delegate(
+                    &self.db.lock().unwrap(),
+                    self.host.as_ref(),
+                    &mut accounts,
+                    &id,
+                    &creds.delegate_account_id,
+                ) {
+                    accounts.insert(id, resolved);
+                }
             }
         }
         let creds = accounts
@@ -2103,12 +2201,86 @@ pub fn attach_html(message: &mut parse::Message, load_remote_images: bool) {
 mod tests {
     use super::{
         Pooled, cached_archive_folder_from_folders, cached_search_mail_page, companion_folders,
-        find_role_folder, limit_prefetch_uids, parse_background_sync_timeout, pool_return,
-        pool_take, record_search_folder_result, should_append_sent_copy, thread_gap_search_folders,
+        find_role_folder, limit_prefetch_uids, load_and_secret_one, parse_background_sync_timeout,
+        pool_return, pool_take, record_search_folder_result, resolve_delegate,
+        should_append_sent_copy, thread_gap_search_folders, EngineHost,
     };
+    use crate::{imap::Creds, secrets, store};
     use rusqlite::{Connection, params};
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
+
+    fn test_conn() -> Connection {
+        store::open_in_memory_for_test().expect("open store")
+    }
+
+    fn bare_creds(ews_url: &str) -> Creds {
+        Creds {
+            host: String::new(),
+            port: 993,
+            user: "user@corp.example.com".to_string(),
+            password: String::new(),
+            tls: true,
+            starttls: false,
+            smtp_host: String::new(),
+            smtp_port: 587,
+            smtp_tls: true,
+            smtp_starttls: false,
+            auth_type: "password".to_string(),
+            access_token: None,
+            refresh_token: None,
+            token_expires_at: 0,
+            oauth_client_id: String::new(),
+            oauth_client_secret: String::new(),
+            oauth_token_url: String::new(),
+            oauth_scope: String::new(),
+            proxy: crate::proxy::ProxyChoice::default(),
+            cert_pin: None,
+            smtp_cert_pin: None,
+            ews_url: ews_url.to_string(),
+            delegate_account_id: String::new(),
+            target_mailbox: String::new(),
+        }
+    }
+
+    fn insert_account(conn: &Connection, id: &str, email: &str, creds: &Creds) {
+        store::upsert_account(
+            conn,
+            id,
+            &store::AccountMeta {
+                engine: "mail".to_string(),
+                provider: if creds.is_ews() { "exchange".to_string() } else { "custom".to_string() },
+                email: email.to_string(),
+                display_name: email.to_string(),
+                avatar_url: String::new(),
+                sender_name: String::new(),
+            },
+            creds,
+        )
+        .unwrap();
+    }
+
+    /// A test double for `EngineHost` whose keyring is just a map: only the
+    /// accounts explicitly given a password here have one, the same as a
+    /// shared mailbox genuinely having no secret of its own in the real OS
+    /// keychain.
+    struct FakeHost {
+        passwords: HashMap<String, String>,
+    }
+
+    impl EngineHost for FakeHost {
+        fn open_db(&self) -> anyhow::Result<Connection> {
+            unreachable!("not used by these tests")
+        }
+        fn apply_secret(&self, _conn: &Connection, account: &str, creds: &mut Creds) {
+            if let Some(password) = self.passwords.get(account) {
+                creds.password = password.clone();
+            }
+        }
+        fn store_secret(&self, _conn: &Connection, _account: &str, _secrets: &secrets::Secrets) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
 
     const MAX_IDLE: Duration = Duration::from_secs(120);
     const MAX_POOLED: usize = 3;
@@ -2423,5 +2595,99 @@ mod tests {
         assert_eq!(successes[0].1[0].folder, "INBOX");
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].0, "Sent");
+    }
+
+    #[test]
+    fn a_shared_mailbox_borrows_its_delegates_credentials_targeted_at_its_own_address() {
+        let conn = test_conn();
+        let mut parent = bare_creds("https://mail.corp.example.com/EWS/Exchange.asmx");
+        parent.host = "mail.corp.example.com".to_string();
+        insert_account(&conn, "parent", "ana@corp.example.com", &parent);
+        insert_account(&conn, "shared", "support@corp.example.com", &{
+            let mut c = bare_creds("");
+            c.delegate_account_id = "parent".to_string();
+            c
+        });
+        let host = FakeHost { passwords: HashMap::from([("parent".to_string(), "hunter2".to_string())]) };
+
+        let mut accounts = HashMap::new();
+        let resolved = resolve_delegate(&conn, &host, &mut accounts, "shared", "parent")
+            .expect("should resolve through the delegate");
+
+        // The delegate's own connection details, borrowed wholesale...
+        assert_eq!(resolved.host, "mail.corp.example.com");
+        assert_eq!(resolved.password, "hunter2");
+        assert!(resolved.is_ews());
+        // ...but addressed at the shared mailbox's own mailbox, not the delegate's.
+        assert_eq!(resolved.target_mailbox, "support@corp.example.com");
+        // The delegate itself is now cached too, under its own id.
+        assert!(accounts.contains_key("parent"));
+    }
+
+    #[test]
+    fn a_shared_mailbox_with_a_missing_delegate_does_not_resolve() {
+        let conn = test_conn();
+        insert_account(&conn, "shared", "support@corp.example.com", &{
+            let mut c = bare_creds("");
+            c.delegate_account_id = "nobody".to_string();
+            c
+        });
+        let host = FakeHost { passwords: HashMap::new() };
+        let mut accounts = HashMap::new();
+
+        assert!(resolve_delegate(&conn, &host, &mut accounts, "shared", "nobody").is_none());
+    }
+
+    #[test]
+    fn a_shared_mailbox_cannot_borrow_a_non_exchange_delegate() {
+        let conn = test_conn();
+        // A plain IMAP account: no ews_url, so it has nothing this app can
+        // address a non-own mailbox with — see the shared-mailbox decision.
+        insert_account(&conn, "parent", "ana@example.com", &bare_creds(""));
+        insert_account(&conn, "shared", "support@example.com", &{
+            let mut c = bare_creds("");
+            c.delegate_account_id = "parent".to_string();
+            c
+        });
+        let host = FakeHost { passwords: HashMap::from([("parent".to_string(), "hunter2".to_string())]) };
+        let mut accounts = HashMap::new();
+
+        assert!(resolve_delegate(&conn, &host, &mut accounts, "shared", "parent").is_none());
+    }
+
+    #[test]
+    fn a_delegate_with_no_secret_of_its_own_does_not_resolve_either() {
+        let conn = test_conn();
+        insert_account(&conn, "parent", "ana@corp.example.com", &bare_creds("https://mail.corp.example.com/EWS/Exchange.asmx"));
+        insert_account(&conn, "shared", "support@corp.example.com", &{
+            let mut c = bare_creds("");
+            c.delegate_account_id = "parent".to_string();
+            c
+        });
+        // No password given to FakeHost for "parent" — it needs reconnecting,
+        // and a shared mailbox borrowing it is no better off.
+        let host = FakeHost { passwords: HashMap::new() };
+        let mut accounts = HashMap::new();
+
+        assert!(resolve_delegate(&conn, &host, &mut accounts, "shared", "parent").is_none());
+    }
+
+    #[test]
+    fn load_and_secret_one_returns_none_without_a_usable_secret() {
+        let conn = test_conn();
+        insert_account(&conn, "acct", "ana@example.com", &bare_creds(""));
+        let host = FakeHost { passwords: HashMap::new() };
+
+        assert!(load_and_secret_one(&conn, &host, "acct").is_none());
+    }
+
+    #[test]
+    fn load_and_secret_one_applies_the_hosts_secret() {
+        let conn = test_conn();
+        insert_account(&conn, "acct", "ana@example.com", &bare_creds(""));
+        let host = FakeHost { passwords: HashMap::from([("acct".to_string(), "s3cret".to_string())]) };
+
+        let creds = load_and_secret_one(&conn, &host, "acct").expect("should load");
+        assert_eq!(creds.password, "s3cret");
     }
 }

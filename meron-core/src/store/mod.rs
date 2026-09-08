@@ -278,8 +278,8 @@ pub fn upsert_messages(
             upserted_ids.insert(message_id);
         }
         tx.execute(
-            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments, priority)
-             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            "INSERT INTO messages(account, folder, msg_id, uid, subject, from_name, from_addr, date, seen, starred, thread_key, json, recipients, has_attachments, priority, spam)
+             VALUES(?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
              ON CONFLICT(account, folder, msg_id) DO UPDATE SET
                subject    = excluded.subject,
                from_name  = excluded.from_name,
@@ -299,7 +299,8 @@ pub fn upsert_messages(
                -- can change under a message (a reply sent to its sender, a
                -- decision recorded) and a stale verdict is one nobody asked
                -- for and nobody can see.
-               priority = excluded.priority",
+               priority = excluded.priority,
+               spam     = excluded.spam",
             params![
                 account,
                 folder,
@@ -320,7 +321,8 @@ pub fn upsert_messages(
                 crate::priority::verdict(priority_signals(
                     &tx, account, &m.from_addr, &m.to, &m.cc, &mine
                 ))
-                .priority as i64
+                .priority as i64,
+                crate::spam::verdict(&spam_signals(&tx, account, &m.from_addr, &m.subject)).spam as i64
             ],
         )?;
     }
@@ -1737,6 +1739,37 @@ pub fn priority_for_threads(
     Ok(out)
 }
 
+/// The learned spam verdict on each of these conversations, same shape and
+/// same "any message in it" rule as [`priority_for_threads`] — a thread whose
+/// latest reply looks like spam is a thread worth flagging, whatever the rest
+/// of it was.
+pub fn spam_for_threads(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashMap<String, bool>> {
+    let mut out: HashMap<String, bool> = HashMap::new();
+    if thread_keys.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT COALESCE(NULLIF(thread_key, ''), 'uid:' || uid), MAX(spam)
+           FROM messages
+          WHERE account = ?1 AND uid <> 0 AND spam IS NOT NULL
+          GROUP BY COALESCE(NULLIF(thread_key, ''), 'uid:' || uid)",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    for (key, spam) in rows.filter_map(Result::ok) {
+        if wanted.contains(&key) {
+            out.insert(key, spam != 0);
+        }
+    }
+    Ok(out)
+}
+
 /// Records that this account has written to these addresses.
 ///
 /// Called with the recipients of anything the account sent. Cheap and
@@ -1960,6 +1993,353 @@ pub fn rejudge_priority(conn: &Connection, account: &str, only_unjudged: bool) -
     }
     tx.commit()?;
     Ok(judged)
+}
+
+// ---- Spam (learned) --------------------------------------------------------
+
+/// How many times the reader has confirmed spam from this exact address,
+/// versus said mail from them was not spam.
+pub fn sender_spam_counts(conn: &Connection, account: &str, addr: &str) -> (u32, u32) {
+    conn.query_row(
+        "SELECT spam_count, ham_count FROM sender_spam WHERE account = ?1 AND addr = ?2",
+        params![account, addr.trim().to_lowercase()],
+        |row| Ok((row.get::<_, i64>(0)? as u32, row.get::<_, i64>(1)? as u32)),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .unwrap_or((0, 0))
+}
+
+/// Records one judgement about a sender: spam confirmed, or said not spam.
+pub fn note_sender_spam(conn: &Connection, account: &str, addr: &str, is_spam: bool) -> Result<()> {
+    let addr = addr.trim().to_lowercase();
+    if addr.is_empty() {
+        return Ok(());
+    }
+    let (spam_delta, ham_delta): (i64, i64) = if is_spam { (1, 0) } else { (0, 1) };
+    conn.execute(
+        "INSERT INTO sender_spam(account, addr, spam_count, ham_count) VALUES(?1, ?2, ?3, ?4)
+         ON CONFLICT(account, addr) DO UPDATE SET
+           spam_count = sender_spam.spam_count + excluded.spam_count,
+           ham_count  = sender_spam.ham_count + excluded.ham_count",
+        params![account, addr, spam_delta, ham_delta],
+    )?;
+    Ok(())
+}
+
+/// The subject words of this text that already clear the bar to be a reason,
+/// from what the reader has taught this account so far.
+///
+/// The subject is short, so this is a handful of point lookups keyed on the
+/// table's primary key, not a scan.
+pub fn spam_trigger_words(conn: &Connection, account: &str, subject: &str) -> Vec<String> {
+    crate::spam::tokenize(subject)
+        .into_iter()
+        .filter(|word| {
+            let counts: Option<(i64, i64)> = conn
+                .query_row(
+                    "SELECT spam_count, ham_count FROM spam_triggers WHERE account = ?1 AND word = ?2",
+                    params![account, word],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()
+                .ok()
+                .flatten();
+            counts.is_some_and(|(spam_count, ham_count)| {
+                crate::spam::is_trigger(spam_count as u32, ham_count as u32)
+            })
+        })
+        .collect()
+}
+
+/// Records the subject words of one judged message, one count each toward
+/// spam or toward not-spam — never toward both, and never more than once
+/// each even if a word repeats in the same subject (see `spam::tokenize`).
+pub fn note_spam_trigger_words(conn: &Connection, account: &str, subject: &str, is_spam: bool) -> Result<()> {
+    let (spam_delta, ham_delta): (i64, i64) = if is_spam { (1, 0) } else { (0, 1) };
+    for word in crate::spam::tokenize(subject) {
+        conn.execute(
+            "INSERT INTO spam_triggers(account, word, spam_count, ham_count) VALUES(?1, ?2, ?3, ?4)
+             ON CONFLICT(account, word) DO UPDATE SET
+               spam_count = spam_triggers.spam_count + excluded.spam_count,
+               ham_count  = spam_triggers.ham_count + excluded.ham_count",
+            params![account, word, spam_delta, ham_delta],
+        )?;
+    }
+    Ok(())
+}
+
+/// The signals for one message, gathered from what the reader has taught
+/// this account so far. Everything here is local, same as `priority_signals`.
+pub fn spam_signals(conn: &Connection, account: &str, from_addr: &str, subject: &str) -> crate::spam::Signals {
+    let (sender_spam_count, sender_ham_count) = sender_spam_counts(conn, account, from_addr);
+    crate::spam::Signals {
+        sender_spam_count,
+        sender_ham_count,
+        trigger_words: spam_trigger_words(conn, account, subject),
+    }
+}
+
+/// The sender and subject of the newest message of one conversation — what a
+/// spam judgement made about the conversation is really made about.
+///
+/// Its own query for the same reason `thread_priority_signals` has one: the
+/// cached-row projections used elsewhere don't carry what this needs, and an
+/// explanation built from the wrong row would be a wrong explanation, which
+/// is worse here than none.
+fn newest_message_sender_and_subject(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+) -> Result<Option<(String, String)>> {
+    conn.query_row(
+        "SELECT from_addr, COALESCE(subject, '')
+           FROM messages
+          WHERE account = ?1 AND folder = ?2
+            AND COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) = ?3
+          ORDER BY date DESC, uid DESC LIMIT 1",
+        params![account, folder, thread_key],
+        |row| Ok((row.get::<_, Option<String>>(0)?.unwrap_or_default(), row.get(1)?)),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+/// The spam signals for the newest message of one conversation.
+pub fn thread_spam_signals(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+) -> Result<Option<(String, crate::spam::Signals)>> {
+    let Some((from_addr, subject)) = newest_message_sender_and_subject(conn, account, folder, thread_key)? else {
+        return Ok(None);
+    };
+    let signals = spam_signals(conn, account, &from_addr, &subject);
+    Ok(Some((from_addr, signals)))
+}
+
+/// Records the reader's judgement of one conversation's newest message —
+/// spam confirmed, or said not spam — against its sender and subject words,
+/// then re-judges the account so already-cached messages reflect it at once.
+pub fn record_spam_judgment(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+    is_spam: bool,
+) -> Result<Option<String>> {
+    let Some((from_addr, subject)) = newest_message_sender_and_subject(conn, account, folder, thread_key)? else {
+        return Ok(None);
+    };
+    note_sender_spam(conn, account, &from_addr, is_spam)?;
+    note_spam_trigger_words(conn, account, &subject, is_spam)?;
+    rejudge_spam(conn, account, false)?;
+    Ok(Some(from_addr))
+}
+
+/// Judges every message of an account that has not been judged yet — the
+/// same gap `rejudge_priority` closes, and for the same reason: a mailbox
+/// cached before this existed gets a verdict in one pass rather than being
+/// quietly treated as "not spam", which is a claim nobody checked.
+pub fn rejudge_spam(conn: &Connection, account: &str, only_unjudged: bool) -> Result<usize> {
+    let where_clause = if only_unjudged { "AND spam IS NULL" } else { "" };
+    let rows: Vec<(i64, String, String)> = {
+        let sql = format!(
+            "SELECT id, from_addr, COALESCE(subject, '') FROM messages
+              WHERE account = ?1 AND uid <> 0 {where_clause}"
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let mapped = stmt.query_map(params![account], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                row.get(2)?,
+            ))
+        })?;
+        mapped.filter_map(Result::ok).collect()
+    };
+
+    let tx = conn.unchecked_transaction()?;
+    let mut judged = 0;
+    {
+        let mut stmt = tx.prepare("UPDATE messages SET spam = ?2 WHERE id = ?1")?;
+        for (id, from_addr, subject) in rows {
+            let signals = spam_signals(&tx, account, &from_addr, &subject);
+            let verdict = crate::spam::verdict(&signals);
+            stmt.execute(params![id, verdict.spam as i64])?;
+            judged += 1;
+        }
+    }
+    tx.commit()?;
+    Ok(judged)
+}
+
+// ---- Tasks (local, message-tied to-dos) ------------------------------------
+
+/// One task as the Tasks view shows it: its own fields plus enough of the
+/// conversation it hangs off to render without a second round trip.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskCard {
+    pub id: i64,
+    pub account: String,
+    pub folder: String,
+    pub thread_key: String,
+    pub note: String,
+    pub due_at: Option<i64>,
+    pub completed_at: Option<i64>,
+    pub created_at: i64,
+    pub subject: String,
+    pub from_name: String,
+    pub from_addr: String,
+}
+
+/// Creates a task on this conversation, or edits the one already open on it.
+///
+/// The partial unique index (`account, thread_key` where `completed_at IS
+/// NULL`) is what makes this idempotent rather than a bare `INSERT` that
+/// would need its own existence check first — a second "convert to task" on
+/// the same thread edits in place instead of quietly duplicating it.
+pub fn save_task(
+    conn: &Connection,
+    account: &str,
+    thread_key: &str,
+    folder: &str,
+    due_at: Option<i64>,
+    note: &str,
+    now: i64,
+) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(account, thread_key) WHERE completed_at IS NULL DO UPDATE SET
+           note = excluded.note,
+           due_at = excluded.due_at",
+        params![account, thread_key, folder, note, due_at, now],
+    )?;
+    conn.query_row(
+        "SELECT id FROM tasks WHERE account = ?1 AND thread_key = ?2 AND completed_at IS NULL",
+        params![account, thread_key],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+/// Marks a task done, or takes that back.
+///
+/// Un-completing can collide with a task opened on the same thread since:
+/// the partial unique index rejects it rather than silently ending up with
+/// two open tasks on one conversation, and that constraint error is the
+/// honest answer here, not a case to paper over.
+pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64) -> Result<()> {
+    let completed_at: Option<i64> = completed.then_some(now);
+    conn.execute(
+        "UPDATE tasks SET completed_at = ?2 WHERE id = ?1",
+        params![id, completed_at],
+    )?;
+    Ok(())
+}
+
+/// One task's own fields, for the editor to open on — the embedded card
+/// field only ever carries `id`/`due_at`, never the note, so opening the
+/// editor on an existing task asks for the rest rather than starting from a
+/// blank note that would overwrite the real one on save.
+pub fn get_task(conn: &Connection, id: i64) -> Result<Option<(Option<i64>, String)>> {
+    conn.query_row(
+        "SELECT due_at, note FROM tasks WHERE id = ?1",
+        params![id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+/// Removes a task outright — "never mind, this was not one."
+pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+/// Every task, across every account and folder.
+///
+/// Open ones first, soonest due date first (no due date sorts after any
+/// that have one); completed ones after, most recently finished first — so
+/// completing a task moves it out of the way without erasing the record of
+/// it. A task whose message is no longer cached still appears, with blank
+/// subject/sender rather than vanishing: the reader made the task, and a
+/// gap in the local cache is not a reason to lose it.
+pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<TaskCard>> {
+    let where_clause = if include_completed { "" } else { "WHERE t.completed_at IS NULL" };
+    let sql = format!(
+        "SELECT t.id, t.account, t.folder, t.thread_key, t.note, t.due_at, t.completed_at, t.created_at,
+                COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, '')
+           FROM tasks t
+           LEFT JOIN messages m
+             ON m.account = t.account AND m.folder = t.folder
+            AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = t.thread_key
+            AND m.date = (SELECT MAX(m2.date) FROM messages m2
+                            WHERE m2.account = m.account AND m2.folder = m.folder
+                              AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = t.thread_key)
+          {where_clause}
+          ORDER BY (t.completed_at IS NOT NULL), t.due_at IS NULL, t.due_at ASC, t.completed_at DESC, t.created_at DESC"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], |row| {
+        Ok(TaskCard {
+            id: row.get(0)?,
+            account: row.get(1)?,
+            folder: row.get(2)?,
+            thread_key: row.get(3)?,
+            note: row.get(4)?,
+            due_at: row.get(5)?,
+            completed_at: row.get(6)?,
+            created_at: row.get(7)?,
+            subject: row.get(8)?,
+            from_name: row.get(9)?,
+            from_addr: row.get(10)?,
+        })
+    })?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// The open task's id and due date, if any, on each of these conversations —
+/// same one-query-per-page shape as `priority_for_threads`/`spam_for_threads`,
+/// for the row chip and for "already a task" in the convert-to-task menu.
+///
+/// Scoped to the account only, not the folder a card happens to be rendered
+/// in: the task's own `folder` column is just where to find the conversation
+/// again, same as `snoozed_threads`'. A thread a server files under several
+/// folders must show the same "already a task" state in every one of them —
+/// scoping by folder here would hide it everywhere but the one it was made in.
+pub fn open_tasks_for_threads(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &[String],
+) -> Result<HashMap<String, (i64, Option<i64>)>> {
+    let mut out: HashMap<String, (i64, Option<i64>)> = HashMap::new();
+    if thread_keys.is_empty() {
+        return Ok(out);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT thread_key, id, due_at FROM tasks
+          WHERE account = ?1 AND completed_at IS NULL",
+    )?;
+    let wanted: HashSet<&String> = thread_keys.iter().collect();
+    let rows = stmt.query_map(params![account], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, Option<i64>>(2)?,
+        ))
+    })?;
+    for (key, id, due_at) in rows.filter_map(Result::ok) {
+        if wanted.contains(&key) {
+            out.insert(key, (id, due_at));
+        }
+    }
+    Ok(out)
 }
 
 /// Every kept template, in the order they were arranged.

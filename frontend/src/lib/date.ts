@@ -41,3 +41,27 @@ export function formatDeferredWhen(at: number, now = new Date()): string {
         minute: '2-digit',
       })
 }
+
+/** Where a task's due date sits relative to today — a date, never a time. */
+export type DueStatus = 'overdue' | 'today' | 'tomorrow' | 'upcoming'
+
+export function dueStatus(dueAtEpochSeconds: number, now = new Date()): DueStatus {
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const days = Math.round(
+    (startOfDay(new Date(dueAtEpochSeconds * 1000)).getTime() - startOfDay(now).getTime()) / 86_400_000,
+  )
+  if (days < 0) return 'overdue'
+  if (days === 0) return 'today'
+  if (days === 1) return 'tomorrow'
+  return 'upcoming'
+}
+
+/** A due date past tomorrow, as a plain date — never a time of day. */
+export function formatDueDate(dueAtEpochSeconds: number, now = new Date()): string {
+  const date = new Date(dueAtEpochSeconds * 1000)
+  const options: Intl.DateTimeFormatOptions =
+    date.getFullYear() === now.getFullYear()
+      ? { month: 'short', day: 'numeric' }
+      : { month: 'short', day: 'numeric', year: 'numeric' }
+  return date.toLocaleDateString(undefined, options)
+}

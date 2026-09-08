@@ -39,6 +39,7 @@ fn main() -> anyhow::Result<()> {
         url: env("EWS_URL"),
         username: env("EWS_USER"),
         password: env("EWS_PASSWORD"),
+        target_mailbox: String::new(),
     });
     let wanted_folder = std::env::var("EWS_FOLDER").unwrap_or_else(|_| "Inbox".to_string());
 

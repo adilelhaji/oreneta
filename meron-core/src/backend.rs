@@ -41,6 +41,7 @@ pub async fn connect(
                 url: creds.ews_url.clone(),
                 username: creds.user.clone(),
                 password: creds.password.clone(),
+                target_mailbox: creds.target_mailbox.clone(),
             },
             account,
             db,
