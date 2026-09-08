@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "baseline:serve": "vite --config baseline/vite.config.ts",
+    "baseline:verify": "playwright test --config baseline/playwright.config.ts",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
   },
@@ -32,6 +34,7 @@
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@happy-dom/global-registrator": "^20.11.2",
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/react": "^16.3.2",
