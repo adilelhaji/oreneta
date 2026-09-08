@@ -5,14 +5,12 @@ import { ui$ } from '../../states/ui'
 import { Field } from '../field/Field'
 import { Button } from '../button/Button'
 import { IconButton } from '../button/IconButton'
-import logo from '../../assets/logo.png'
 import { useAccountDialog, type AccountDialogController } from './useAccountDialog'
 import { dialogClasses, type DialogClasses } from './accountDialogStyles'
 import { AccountDialogOAuth } from './AccountDialogOAuth'
 import { AccountDialogCustom } from './AccountDialogCustom'
 import { AccountDialogEWS } from './AccountDialogEWS'
-import { AccountProviderGrid } from './AccountProviderGrid'
-import { AccountProviderRail } from './AccountProviderRail'
+import { AccountSetupWizard } from './AccountSetupWizard'
 import { PROVIDERS } from './providerIcons'
 import { CertificateTrustPanel } from './CertificateTrustPanel'
 
@@ -24,7 +22,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
   const { t } = useTranslation()
   const isSetup = variant === 'setup'
   const ctl = useAccountDialog()
-  const { mode, setMode } = ctl
+  const { mode } = ctl
   // Both reuse the existing-account layout (no provider rail); only the wording
   // differs — see `editing` in useAccountDialog.
   const reconnecting = !!ctl.reconnectAccount
@@ -37,7 +35,8 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
   const isOAuth = mode === 'gmail' || mode === 'outlook'
 
   const onClose = () => {
-    if (isSetup) return
+    if (isSetup || ctl.loading) return
+    ctl.stopOAuth()
     ui$.reconnectAccountId.set('')
     ui$.setupOpen.set(false)
   }
@@ -46,46 +45,38 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
   // variant has no close affordance, so it ignores Esc.
   useEscapeKey(onClose, !isSetup)
 
-  // The full-screen first-run onboarding: provider cards stacked above the form.
-  if (isSetup) {
+  if (!reconnecting) {
     return (
-      <div className={classes.panelClass}>
-        <div>
-          <div className="w-16 h-16 mb-4">
-            <img src={logo} alt={t('app.logoAlt')} className="w-full h-full object-contain" />
-          </div>
-          <h2 className="text-[1.625rem] max-[640px]:text-2xl font-bold tracking-tight leading-tight">
-            {t('accounts.setup.connectMailAccount')}
-          </h2>
-          <p className="mt-2 text-title leading-6 text-secondary">{t('accounts.setup.chooseProvider')}</p>
-        </div>
-
-        <AccountProviderGrid mode={mode} setMode={setMode} isSetup />
-
-        <div className={classes.scrollClass}>
-          <AccountDialogForm ctl={ctl} classes={classes} isSetup />
-        </div>
-
-        <AccountDialogError error={ctl.error} />
-        {ctl.certPrompt && (
-          <CertificateTrustPanel
-            prompt={ctl.certPrompt}
-            onTrust={ctl.trustCertificate}
-            onDismiss={ctl.dismissCertPrompt}
-          />
-        )}
-
-        {!isOAuth && (
-          <div className="flex gap-2 mt-1 select-none justify-stretch">
-            <SaveButton ctl={ctl} isSetup />
-          </div>
-        )}
-      </div>
+      <AccountSetupWizard
+        ctl={ctl}
+        isSetup={isSetup}
+        onClose={onClose}
+        form={
+          isOAuth ? (
+            <AccountDialogOAuth ctl={ctl} isSetup={isSetup} provider={mode as 'gmail' | 'outlook'} />
+          ) : (
+            <AccountDialogForm ctl={ctl} classes={classes} isSetup={isSetup} />
+          )
+        }
+        feedback={
+          <>
+            <AccountDialogError error={ctl.error} />
+            {ctl.certPrompt && (
+              <CertificateTrustPanel
+                prompt={ctl.certPrompt}
+                onTrust={ctl.trustCertificate}
+                onDismiss={ctl.dismissCertPrompt}
+              />
+            )}
+          </>
+        }
+        saveButton={<SaveButton ctl={ctl} isSetup={false} />}
+      />
     )
   }
 
-  // The in-app add-account modal: a provider rail on the left, the form for the
-  // selected provider on the right — same shape as the Settings dialog.
+  // Existing accounts retain their server-settings/reconnect form; the provider
+  // is already known and must not be changed by the new-account assistant.
   const active = PROVIDERS.find((p) => p.isActive(mode))
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
@@ -95,17 +86,13 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
           <h2 className="text-title font-bold tracking-tight leading-tight">
             {ctl.editing
               ? t('accounts.actions.editAccountTitle', { defaultValue: 'Account server settings' })
-              : reconnecting
-                ? t('accounts.actions.reconnectAccountTitle', { defaultValue: 'Reconnect account' })
-                : t('accounts.actions.addAccountTitle')}
+              : t('accounts.actions.reconnectAccountTitle', { defaultValue: 'Reconnect account' })}
           </h2>
           <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" onClick={onClose} />
         </div>
 
-        {/* Body: add-account shows provider selection; reconnect already knows
-            the provider, so it uses the full width for the active form. */}
+        {/* Reconnect/edit already knows the provider. */}
         <div className="flex h-[500px] min-h-0">
-          {!reconnecting && <AccountProviderRail mode={mode} setMode={setMode} />}
           <div className="flex-1 min-w-0 overflow-y-auto p-5 flex flex-col gap-4">
             <div>
               <h3 className="text-ui font-bold tracking-tight leading-tight">{active?.label}</h3>
@@ -184,7 +171,10 @@ function AccountDialogForm({
 function AccountDialogError({ error }: { error: string }) {
   if (!error) return null
   return (
-    <p className="rounded-control bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-caption leading-relaxed text-red-600 dark:text-red-400 font-medium">
+    <p
+      role="alert"
+      className="rounded-control bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-caption leading-relaxed text-red-600 dark:text-red-400 font-medium"
+    >
       {error}
     </p>
   )

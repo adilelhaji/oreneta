@@ -34,6 +34,7 @@ for ($launch = 1; $launch -le 2; $launch++) {
     try {
         $deadline = [DateTime]::UtcNow.AddSeconds(40)
         $names = @()
+        $hasEmailInput = $false
         do {
             if ($process.HasExited) { throw "Application exited during launch $launch" }
             $process.Refresh()
@@ -41,12 +42,13 @@ for ($launch = 1; $launch -le 2; $launch++) {
                 $window = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
                 $elements = $window.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
                 $names = @($elements | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
-                if ($names -contains 'IMAP / SMTP') { break }
+                $hasEmailInput = @($elements | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit }).Count -gt 0
+                if ($hasEmailInput -and $names -contains 'Google' -and $names -contains 'Microsoft') { break }
             }
             Start-Sleep -Milliseconds 250
         } while ([DateTime]::UtcNow -lt $deadline)
         $names | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-ui.json")
-        if ($names -notcontains 'IMAP / SMTP') { throw "Onboarding did not render on launch $launch" }
+        if (!$hasEmailInput -or $names -notcontains 'Google' -or $names -notcontains 'Microsoft') { throw "Onboarding did not render on launch $launch" }
         if ($names -match 'Something went wrong|useSyncExternalStore') { throw 'React startup error in native UI' }
 
         $deadline = [DateTime]::UtcNow.AddSeconds(20)
