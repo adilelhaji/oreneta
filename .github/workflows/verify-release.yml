@@ -1,0 +1,40 @@
+name: Verify release commit
+
+on:
+  workflow_call:
+    inputs:
+      product:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require successful main CI on the release commit
+        uses: actions/github-script@v7
+        env:
+          RELEASE_PRODUCT: ${{ inputs.product }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { verifyRelease } = require('./scripts/ci/release-gate.cjs');
+            const product = process.env.RELEASE_PRODUCT;
+            if (!['desktop', 'android'].includes(product)) throw new Error('Unknown release product');
+            const isTag = context.ref.startsWith('refs/tags/');
+            const tag = product === 'desktop'
+              ? `v${JSON.parse(fs.readFileSync('wails.json', 'utf8')).info.productVersion}`
+              : isTag ? context.ref.slice('refs/tags/'.length) : undefined;
+            if (product === 'desktop' && isTag && context.ref !== `refs/tags/${tag}`) {
+              throw new Error('Desktop tag must match wails.json productVersion');
+            }
+            const result = await verifyRelease({ github, ...context.repo, sha: context.sha, tag,
+              allowMissingTag: product === 'desktop' && context.eventName === 'workflow_dispatch' && !isTag });
+            core.notice(`Validated ${result.sha} by CI run ${result.runId}, attempt ${result.runAttempt}`);
+            await core.summary.addHeading('Release commit verified')
+              .addRaw(`Commit: ${result.sha}\n\nCI: ${result.url}\n\n`).write();

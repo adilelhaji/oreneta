@@ -6,6 +6,17 @@ on:
   pull_request:
 
 jobs:
+  workflow-policy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/ci/*.test.cjs
+
   go:
     runs-on: ubuntu-latest
     steps:
