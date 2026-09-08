@@ -40,6 +40,9 @@ toolchains are unavailable locally; their CI results are recorded separately.
 The initial frontend run on the Spanish Windows host had 770 passing tests and
 four English-only date expectation failures, tracked in #60. Production locale
 behavior is not changed to make those tests pass.
+The #60 correction asserts native locale output and exact formatting options,
+including same-day and cross-year branches. Its affected suite passed 41 tests
+on that Spanish host; full-suite and CI results belong to #60's delivery commit.
 
 ## Reproduction in CI
 

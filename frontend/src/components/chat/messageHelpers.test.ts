@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, setSystemTime } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, type Mock, setSystemTime, spyOn } from 'bun:test'
 import {
   escapeRegExp,
   extractAddr,
@@ -180,19 +180,63 @@ describe('messageHelpers text and link helpers', () => {
 })
 
 describe('messageHelpers timestamp helpers', () => {
-  it('formats bubble stamps with Gmail-style dates', () => {
-    expect(formatMessageStamp(0, false)).toBe('')
-    expect(formatMessageStamp(sec(new Date(2026, 5, 10, 9, 5)), false)).toBe('09:05')
-    expect(formatMessageStamp(sec(new Date(2026, 5, 9, 9, 0)), false)).toMatch(/Jun 9/)
-    expect(formatMessageStamp(sec(new Date(2025, 11, 31, 9, 0)), false)).toMatch(/2025/)
+  let dateFormat: Mock<Date['toLocaleDateString']>
+  let timeFormat: Mock<Date['toLocaleTimeString']>
+
+  beforeEach(() => {
+    dateFormat = spyOn(Date.prototype, 'toLocaleDateString')
+    timeFormat = spyOn(Date.prototype, 'toLocaleTimeString')
   })
+
+  afterEach(() => {
+    dateFormat.mockRestore()
+    timeFormat.mockRestore()
+  })
+
+  for (const showDate of [false, true]) {
+    it(`keeps unknown timestamps empty (showDate=${showDate})`, () => {
+      expect(formatMessageStamp(0, showDate)).toBe('')
+      expect(dateFormat).not.toHaveBeenCalled()
+      expect(timeFormat).not.toHaveBeenCalled()
+    })
+
+    it.each([0, 9, 23])(`formats same-day hour %i with local 24-hour time (showDate=${showDate})`, (hour) => {
+      const date = new Date(2026, 5, 10, hour, 5)
+      const options = { hour: '2-digit', minute: '2-digit', hour12: false } as const
+      const expected = date.toLocaleTimeString([], options)
+      timeFormat.mockClear()
+      expect(formatMessageStamp(sec(date), showDate)).toBe(expected)
+      expect(timeFormat.mock.calls).toEqual([[[], options]])
+      expect(dateFormat).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['yesterday', new Date(2026, 5, 9, 9), false],
+      ['earlier this week', new Date(2026, 5, 8, 9), false],
+      ['older this year', new Date(2026, 4, 1, 9), false],
+      ['later this year', new Date(2026, 11, 31, 9), false],
+      ['prior year', new Date(2025, 11, 31, 9), true],
+      ['next year', new Date(2027, 0, 1, 9), true],
+    ] as const)(`formats %s using host locale date fields (showDate=${showDate})`, (_name, date, includeYear) => {
+      const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+      if (includeYear) options.year = 'numeric'
+      const expected = date.toLocaleDateString([], options)
+      dateFormat.mockClear()
+      expect(formatMessageStamp(sec(date), showDate)).toBe(expected)
+      expect(dateFormat.mock.calls).toEqual([[[], options]])
+      expect(timeFormat).not.toHaveBeenCalled()
+    })
+  }
 })
 
 describe('messageHelpers recipient summary', () => {
   it('summarizes To and Cc the way an outgoing bubble header shows them', () => {
     // The reply: named recipients, To plus Cc, in order.
     expect(
-      formatRecipientSummary('"adilelhaji/oreneta" <reply+abc@reply.github.com>', '"Comment" <comment@noreply.github.com>'),
+      formatRecipientSummary(
+        '"adilelhaji/oreneta" <reply+abc@reply.github.com>',
+        '"Comment" <comment@noreply.github.com>',
+      ),
     ).toBe('adilelhaji/oreneta, Comment')
     // The forward: empty display name falls back to the address local part.
     expect(formatRecipientSummary('"" <ping.eminel@gmail.com>', undefined)).toBe('ping.eminel')
