@@ -37,6 +37,8 @@ onboarding controls; each launch must separately log embedded-core startup and
 a successful account query. Evidence is uploaded even on failure. No debugger
 override, real account or production profile is used. This does not test an
 installer upgrade or provider authentication.
+Native logs remain CI evidence; release publication downloads only the
+`oreneta-*` distributable artifacts.
 
 References: [React duplicate runtime diagnosis](https://react.dev/warnings/invalid-hook-call-warning#duplicate-react),
 [Vite dependency deduplication](https://vite.dev/config/shared-options.html#resolve-dedupe).

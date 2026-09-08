@@ -424,6 +424,8 @@ jobs:
       - name: download artifacts
         uses: actions/download-artifact@v4
         with:
+          # Native startup evidence is a CI artifact, not a release payload.
+          pattern: oreneta-*
           path: dist
           merge-multiple: true
 

@@ -185,4 +185,6 @@ test('Windows release requires native startup before packaging', () => {
   assert.match(step, /shell: pwsh/)
   assert.match(step, /test-windows-startup\.ps1 -Executable build\/bin\/oreneta\.exe/)
   assert.doesNotMatch(step, /continue-on-error/)
+  const download = source.split('      - name: download artifacts')[1].split(/\r?\n      - name:/)[0]
+  assert.match(download, /pattern: oreneta-\*/)
 })
