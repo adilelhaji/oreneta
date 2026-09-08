@@ -4957,3 +4957,165 @@ fn a_sync_outcome_is_recorded_and_a_good_one_clears_a_bad_one() {
     assert_eq!(after.last_error, "");
     assert_eq!(after.last_sync_at, 300);
 }
+
+// ---- Gmail label reconciliation ----------------------------------------------
+
+fn gmail_message(uid: u32, thread_key: &str, gmail_labels: &[&str]) -> crate::imap::MessageHeader {
+    crate::imap::MessageHeader {
+        uid,
+        thread_key: thread_key.to_string(),
+        gmail_labels: gmail_labels.iter().map(|s| s.to_string()).collect(),
+        date: 1779580800,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_thread_gains_a_linked_label_it_carries_in_gmail() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Important")]).unwrap();
+    set_label_link(&conn, "l-1", "acct", "Important").unwrap();
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[gmail_message(1, "t-1", &["Important", "Inbox"])],
+    )
+    .unwrap();
+
+    let mut threads = std::collections::HashSet::new();
+    threads.insert("t-1".to_string());
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1"]);
+}
+
+#[test]
+fn a_thread_loses_a_linked_label_no_message_of_it_carries_anymore() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Important")]).unwrap();
+    set_label_link(&conn, "l-1", "acct", "Important").unwrap();
+    add_thread_label(&conn, "acct", "t-1", "l-1").unwrap();
+
+    // The one message in this thread no longer carries the Gmail label.
+    upsert_messages(&conn, "acct", "INBOX", &[gmail_message(1, "t-1", &["Inbox"])]).unwrap();
+
+    let mut threads = std::collections::HashSet::new();
+    threads.insert("t-1".to_string());
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+
+    assert!(thread_labels(&conn, "acct", "t-1").unwrap().is_empty());
+}
+
+#[test]
+fn a_linked_label_survives_on_a_thread_while_any_one_message_still_carries_it() {
+    // The exact case that ruled out reconciling message by message: the
+    // newest message in the thread does not carry the label, but an older
+    // one in the same thread still does, so the thread must keep it.
+    let conn = test_conn();
+    replace_labels(&conn, &[label("l-1", "Important")]).unwrap();
+    set_label_link(&conn, "l-1", "acct", "Important").unwrap();
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            gmail_message(1, "t-1", &["Important"]),
+            gmail_message(2, "t-1", &["Inbox"]),
+        ],
+    )
+    .unwrap();
+
+    let mut threads = std::collections::HashSet::new();
+    threads.insert("t-1".to_string());
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1"]);
+}
+
+#[test]
+fn reconciliation_never_touches_a_label_with_no_link_on_this_account() {
+    let conn = test_conn();
+    // A purely local label, never linked to anything.
+    replace_labels(&conn, &[label("l-1", "Personal")]).unwrap();
+    add_thread_label(&conn, "acct", "t-1", "l-1").unwrap();
+
+    upsert_messages(&conn, "acct", "INBOX", &[gmail_message(1, "t-1", &["Inbox"])]).unwrap();
+
+    let mut threads = std::collections::HashSet::new();
+    threads.insert("t-1".to_string());
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+
+    // Still there: nothing links it, so nothing decides it should come off.
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1"]);
+}
+
+#[test]
+fn thread_keys_for_uids_reads_back_what_the_messages_table_actually_stored() {
+    let conn = test_conn();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[gmail_message(1, "t-1", &[]), gmail_message(2, "t-2", &[])],
+    )
+    .unwrap();
+
+    // The set of a batch's thread keys, read from the store rather than
+    // trusted from the MessageHeaders that were handed to upsert_messages —
+    // upsert_messages can itself decide a message belongs to a different
+    // (merged) thread than the key it arrived with, so this is the only
+    // place that answer is actually settled.
+    let resolved = thread_keys_for_uids(&conn, "acct", "INBOX", &[1, 2]).unwrap();
+    assert_eq!(
+        resolved,
+        std::collections::HashSet::from(["t-1".to_string(), "t-2".to_string()])
+    );
+}
+
+#[test]
+fn update_message_gmail_labels_overwrites_only_that_field() {
+    let conn = test_conn();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[gmail_message(1, "t-1", &["Important"])],
+    )
+    .unwrap();
+
+    update_message_gmail_labels(&conn, "acct", "INBOX", 1, &["Important".into(), "Starred".into()]).unwrap();
+
+    replace_labels(&conn, &[label("l-1", "Starred")]).unwrap();
+    set_label_link(&conn, "l-1", "acct", "Starred").unwrap();
+    let mut threads = std::collections::HashSet::new();
+    threads.insert("t-1".to_string());
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1"]);
+}
+
+#[test]
+fn update_message_gmail_labels_with_an_empty_set_genuinely_clears_the_cache() {
+    // The exact case a skip-if-empty guard around this call would break:
+    // CONDSTORE reports a changed UID's current full label set, not a
+    // diff, so "the label was removed" arrives as an empty Vec, and that
+    // has to actually land, not be silently ignored as "nothing to say."
+    let conn = test_conn();
+    upsert_messages(&conn, "acct", "INBOX", &[gmail_message(1, "t-1", &["Important"])]).unwrap();
+    replace_labels(&conn, &[label("l-1", "Important")]).unwrap();
+    set_label_link(&conn, "l-1", "acct", "Important").unwrap();
+    let mut threads = std::collections::HashSet::new();
+    threads.insert("t-1".to_string());
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+    assert_eq!(thread_labels(&conn, "acct", "t-1").unwrap(), vec!["l-1"]);
+
+    // The label was removed in Gmail; the next CONDSTORE pass reports this
+    // UID as changed, now carrying no labels at all.
+    update_message_gmail_labels(&conn, "acct", "INBOX", 1, &[]).unwrap();
+    reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
+
+    assert!(thread_labels(&conn, "acct", "t-1").unwrap().is_empty());
+}

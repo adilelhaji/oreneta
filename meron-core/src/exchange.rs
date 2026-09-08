@@ -2074,6 +2074,8 @@ impl EwsEnvelope {
             thread_key,
             message_id: self.message_id,
             gmail_msg_id: None,
+            // Not a Gmail server; no labels to carry.
+            gmail_labels: Vec::new(),
             in_reply_to: self.in_reply_to,
             // Exchange answers this as a property of the item, but the sync
             // path does not request it yet. Unknown, not "no": saying no would
