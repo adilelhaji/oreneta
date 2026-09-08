@@ -496,7 +496,7 @@ pub fn get_recent_page_sorted(
     let op = sort.cursor_op();
     let sql = format!(
         "SELECT uid, subject, from_name, from_addr, date, seen, starred, thread_key,
-                json_extract(json, '$.to') FROM messages
+                json_extract(json, '$.to'), CAST({key} AS TEXT) FROM messages
          WHERE account = ?1 AND folder = ?2
            AND (?6 = 0 OR seen = 0)
            AND (?7 = 0 OR starred = 1)
@@ -550,7 +550,7 @@ pub fn get_recent_page_sorted(
         ],
         |row| {
             let uid = row.get(0)?;
-            Ok(MessageHeader {
+            let header = MessageHeader {
                 uid,
                 subject: row.get(1)?,
                 from_name: row.get(2)?,
@@ -565,7 +565,10 @@ pub fn get_recent_page_sorted(
                 to: parse_recipients_json(row.get::<_, Option<String>>(8)?),
                 folder: String::new(),
                 ..Default::default()
-            })
+            };
+            // Reuse the database key verbatim: Rust Unicode lowercase and
+            // trimming do not match SQLite lower()/NULLIF semantics.
+            Ok((header, row.get::<_, String>(9)?))
         },
     )?;
     let mut out = rows.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -574,21 +577,13 @@ pub fn get_recent_page_sorted(
         out.truncate(limit as usize);
     }
     let next_cursor = if has_more {
-        out.last().map(|header| {
-            let text_key = match sort.key {
-                crate::thread_list::SortKey::Date => String::new(),
-                crate::thread_list::SortKey::Sender => {
-                    let name = header.from_name.trim();
-                    if name.is_empty() { header.from_addr.to_lowercase() } else { name.to_lowercase() }
-                }
-                crate::thread_list::SortKey::Subject => header.subject.to_lowercase(),
-            };
-            crate::thread_list::format_page_cursor(sort, &text_key, header.date, header.uid)
+        out.last().map(|(header, text_key)| {
+            crate::thread_list::format_page_cursor(sort, text_key, header.date, header.uid)
         })
     } else {
         None
     };
-    Ok((out, next_cursor))
+    Ok((out.into_iter().map(|(header, _)| header).collect(), next_cursor))
 }
 
 fn now_epoch_seconds() -> i64 {

@@ -1094,6 +1094,75 @@ fn a_sorted_list_pages_without_repeating_or_skipping_a_row() {
 }
 
 #[test]
+fn sorted_cursors_use_the_sql_key_for_unicode_whitespace_and_ties() {
+    use crate::thread_list::{Sort, SortDir, SortKey, parse_mail_cursor};
+    let conn = test_conn();
+    let names = ["", " ", "  Alice  ", "Alice", "alice", "Änne", "änne", "Zoe", "", "İpek"];
+    let messages: Vec<MessageHeader> = names
+        .iter()
+        .enumerate()
+        .map(|(index, name)| MessageHeader {
+            uid: index as u32 + 1,
+            // Repeated and unknown date keys exercise the UID tiebreaker too.
+            date: (index % 3) as i64 * 100,
+            from_name: (*name).to_string(),
+            from_addr: if index == 0 { String::new() } else { "ÄMAIL@example.test".to_string() },
+            subject: (*name).to_string(),
+            thread_key: format!("thread-{index}"),
+            ..Default::default()
+        })
+        .collect();
+    upsert_messages(&conn, "acct", "INBOX", &messages).unwrap();
+
+    for key in [SortKey::Date, SortKey::Sender, SortKey::Subject] {
+        for dir in [SortDir::Asc, SortDir::Desc] {
+            let sort = Sort { key, dir };
+            let (all, terminal) = get_recent_page_sorted(
+                &conn, "acct", "INBOX", 50, None, RecentFilter::default(), sort,
+            ).unwrap();
+            assert!(terminal.is_none());
+            let expected: Vec<u32> = all.iter().map(|header| header.uid).collect();
+            assert_eq!(expected.len(), messages.len());
+
+            for limit in [1, 2, 3] {
+                let mut cursor = None;
+                let mut seen = Vec::new();
+                let mut ended = false;
+                // Bounded even if a broken cursor repeats a row forever.
+                for _ in 0..=messages.len() {
+                    let (page, next) = get_recent_page_sorted(
+                        &conn, "acct", "INBOX", limit, cursor, RecentFilter::default(), sort,
+                    ).unwrap();
+                    assert!(page.len() <= limit as usize);
+                    seen.extend(page.iter().map(|header| header.uid));
+                    match next {
+                        Some(token) => {
+                            let parsed = parse_mail_cursor(&token).expect("valid existing cursor format");
+                            let last = page.last().expect("a cursor follows a non-empty page");
+                            assert_eq!(parsed.uid, last.uid);
+                            if key != SortKey::Date {
+                                let sql = format!(
+                                    "SELECT {} FROM messages WHERE account = ?1 AND folder = ?2 AND uid = ?3",
+                                    sort.column(),
+                                );
+                                let actual_key: String = conn.query_row(
+                                    &sql, params!["acct", "INBOX", last.uid], |row| row.get(0),
+                                ).unwrap();
+                                assert_eq!(parsed.text, actual_key, "{sort:?}, limit={limit}");
+                            }
+                            cursor = Some(parsed);
+                        }
+                        None => { ended = true; break; }
+                    }
+                }
+                assert!(ended, "pagination did not terminate: {sort:?}, limit={limit}");
+                assert_eq!(seen, expected, "{sort:?}, limit={limit}");
+            }
+        }
+    }
+}
+
+#[test]
 fn a_sweep_says_what_it_would_move_and_keeps_the_newest() {
     let conn = test_conn();
     let from = |uid: u32, date: i64, addr: &str| MessageHeader {
