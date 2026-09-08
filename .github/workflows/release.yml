@@ -7,10 +7,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify-release.yml
+    with:
+      product: desktop
+
   build:
+    needs: verify
     name: Build ${{ matrix.artifact }}
     strategy:
       fail-fast: true
@@ -390,8 +397,11 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
+    needs: [verify, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
 
     steps:
       - uses: actions/checkout@v4
@@ -451,6 +461,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           # The updater's manifest lives behind releases/latest/download/, so a
           # desktop release must always own the latest pointer.
           make_latest: true
