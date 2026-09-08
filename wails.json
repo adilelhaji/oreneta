@@ -2,7 +2,7 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "oreneta",
   "outputfilename": "oreneta",
-  "frontend:install": "bun install",
+  "frontend:install": "bun install --frozen-lockfile",
   "frontend:build": "bun run build",
   "frontend:dev:watcher": "bun run dev -- --host 127.0.0.1 --port 5178 --strictPort",
   "frontend:dev:serverUrl": "http://127.0.0.1:5178",

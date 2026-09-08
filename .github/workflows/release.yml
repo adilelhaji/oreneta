@@ -56,6 +56,8 @@ jobs:
           cache: true
 
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
 
       - name: install rust
         uses: dtolnay/rust-toolchain@stable
@@ -163,6 +165,19 @@ jobs:
           extra=""
           if [[ "${{ matrix.os }}" == windows* ]]; then extra="-nsis"; fi
           wails build -clean -platform ${{ matrix.platform }} -tags "${{ matrix.tags }}" $extra
+
+      - name: Verify native Windows startup and restart
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: ./scripts/test-windows-startup.ps1 -Executable build/bin/oreneta.exe -OutputDirectory native-startup-results
+
+      - name: Upload native Windows startup evidence
+        if: always() && startsWith(matrix.os, 'windows')
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-startup-${{ github.sha }}
+          path: native-startup-results/
+          if-no-files-found: warn
 
       - name: package macOS dmg
         if: startsWith(matrix.os, 'macos')
@@ -409,6 +424,8 @@ jobs:
       - name: download artifacts
         uses: actions/download-artifact@v4
         with:
+          # Native startup evidence is a CI artifact, not a release payload.
+          pattern: oreneta-*
           path: dist
           merge-multiple: true
 

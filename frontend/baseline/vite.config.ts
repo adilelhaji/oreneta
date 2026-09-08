@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
+  resolve: { dedupe: ['react', 'react-dom'] },
   root: fileURLToPath(new URL('.', import.meta.url)),
   publicDir: false,
   plugins: [
