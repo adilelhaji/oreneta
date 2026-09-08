@@ -265,6 +265,9 @@ pub fn upsert_messages(
         if let Some(gmail_msg_id) = m.gmail_msg_id {
             extra.insert("gmail_msg_id".to_string(), json!(gmail_msg_id));
         }
+        if !m.gmail_labels.is_empty() {
+            extra.insert("gmail_labels".to_string(), json!(m.gmail_labels));
+        }
         if !m.in_reply_to.is_empty() {
             extra.insert("in_reply_to".to_string(), json!(m.in_reply_to));
         }
@@ -1396,6 +1399,34 @@ pub fn get_starred_all_accounts(
         out.push((thread.0, header));
     }
     Ok(out)
+}
+
+/// The resolved thread keys a set of UIDs actually landed under, after
+/// `upsert_messages`'s own resolution (which can merge a message into an
+/// existing thread rather than keeping the key it arrived with). The set to
+/// hand `reconcile_gmail_labels`, rather than trusting a `MessageHeader`'s
+/// own `thread_key` field, which is the pre-resolution candidate.
+pub fn thread_keys_for_uids(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    uids: &[u32],
+) -> Result<std::collections::HashSet<String>> {
+    if uids.is_empty() {
+        return Ok(std::collections::HashSet::new());
+    }
+    let placeholders = uids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT DISTINCT COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) FROM messages
+         WHERE account = ? AND folder = ? AND uid IN ({placeholders})"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut query_params: Vec<&dyn rusqlite::ToSql> = vec![&account, &folder];
+    for uid in uids {
+        query_params.push(uid);
+    }
+    let rows = stmt.query_map(query_params.as_slice(), |row| row.get::<_, String>(0))?;
+    Ok(rows.filter_map(Result::ok).collect())
 }
 
 pub fn get_thread_headers(
@@ -3109,6 +3140,70 @@ pub fn add_thread_label(
     Ok(())
 }
 
+/// The parallel to [`add_thread_label`], for the sync-driven side of a
+/// linked label: the server no longer reports it, so it comes off.
+pub fn remove_thread_label(
+    conn: &Connection,
+    account: &str,
+    thread_key: &str,
+    label_id: &str,
+) -> Result<()> {
+    conn.execute(
+        "DELETE FROM thread_labels WHERE account = ?1 AND thread_key = ?2 AND label_id = ?3",
+        params![account, thread_key, label_id],
+    )?;
+    Ok(())
+}
+
+/// Recomputes, for each of `thread_keys`, whether each label linked on
+/// `account` belongs to that thread — the union of Gmail labels across every
+/// message the thread has, in any folder, exactly as
+/// docs/adr/0002-remote-label-linking.md specifies. Called after messages or
+/// their flags were just written, so the union it reads is current.
+///
+/// A thread with no message carrying a linked label's remote name loses it;
+/// one with at least one message carrying it gets it. Membership is decided
+/// here, every time — never inferred from what a previous pass already
+/// decided.
+pub fn reconcile_gmail_labels(
+    conn: &Connection,
+    account: &str,
+    thread_keys: &std::collections::HashSet<String>,
+) -> Result<()> {
+    if thread_keys.is_empty() {
+        return Ok(());
+    }
+    let links: Vec<LabelLink> = label_links(conn)?
+        .into_iter()
+        .filter(|link| link.account_id == account)
+        .collect();
+    if links.is_empty() {
+        return Ok(());
+    }
+    for thread_key in thread_keys {
+        for link in &links {
+            let present: bool = conn.query_row(
+                "SELECT EXISTS(
+                   SELECT 1 FROM messages, json_each(
+                     COALESCE(json_extract(messages.json, '$.gmail_labels'), '[]')
+                   )
+                   WHERE messages.account = ?1
+                     AND COALESCE(NULLIF(messages.thread_key, ''), 'uid:' || messages.uid) = ?2
+                     AND json_each.value = ?3
+                 )",
+                params![account, thread_key, link.remote_name],
+                |row| row.get(0),
+            )?;
+            if present {
+                add_thread_label(conn, account, thread_key, &link.label_id)?;
+            } else {
+                remove_thread_label(conn, account, thread_key, &link.label_id)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The labels on each of a set of conversations, so a list can show them
 /// without asking once per row.
 pub fn labels_for_threads(
@@ -4222,6 +4317,26 @@ pub fn update_message_starred(
     conn.execute(
         "UPDATE messages SET starred = ?4 WHERE account = ?1 AND folder = ?2 AND uid = ?3",
         params![account, folder, uid, starred as i64],
+    )?;
+    Ok(())
+}
+
+/// Updates one message's cached Gmail labels — the incremental (CONDSTORE)
+/// counterpart to the full value `upsert_messages` already writes. Stored in
+/// the same JSON blob `gmail_msg_id` lives in, since (unlike `seen`/
+/// `starred`) nothing indexes on it directly; `reconcile_gmail_labels`
+/// reads it back via `json_each`.
+pub fn update_message_gmail_labels(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    uid: u32,
+    labels: &[String],
+) -> Result<()> {
+    conn.execute(
+        "UPDATE messages SET json = json_set(COALESCE(json, '{}'), '$.gmail_labels', json(?4))
+         WHERE account = ?1 AND folder = ?2 AND uid = ?3",
+        params![account, folder, uid, json!(labels).to_string()],
     )?;
     Ok(())
 }
