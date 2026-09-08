@@ -135,6 +135,10 @@ class ComposeSaveLifecycleTest {
             }
             else -> "{}"
         }
+        override fun events(): CoreEventStream = object : CoreEventStream {
+            override fun subscribe(listener: (CoreEvent) -> Unit): CloseableHandle = CloseableHandle {}
+        }
+        override suspend fun protocolVersion(): Int = 0
     }
 
     @Test
