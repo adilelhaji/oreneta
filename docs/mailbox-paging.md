@@ -63,6 +63,15 @@ replacement, cursor errors, stale responses and backend-order preservation.
 
 ## Remaining #30 work
 
+R4.5 (#71) prepares mobile: thread-list errors propagate instead of becoming
+empty pages; requests explicitly carry the default date sort (the shared command
+also accepts other sorts, without adding a UI control). Appends preserve core
+order and deduplicate IDs. A captured view/generation/cursor rejects stale
+pagination after navigation or refresh. The explicit conversation-cursor reload
+error triggers a no-cursor replacement load for the same current view; ordinary
+failures retain the cursor for retry. Existing depth-aware refresh replacement
+is retained. This does not activate the new core routes.
+
 - Unified server fan-out and merge still impose date ordering.
 - Search and starred use date-based contracts; snoozed uses wake-up order and
   RSS has its own listing. Generic table headers do not establish support.
