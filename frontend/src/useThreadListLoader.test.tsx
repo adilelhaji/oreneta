@@ -22,6 +22,7 @@ const fixture = {
 }
 const calls: Record<string, unknown>[] = []
 let previousGo: unknown
+let previousListView: 'cards' | 'table'
 let reply: (payload: Record<string, unknown>) => unknown
 
 function MailboxControls() {
@@ -40,6 +41,7 @@ function MailboxControls() {
 
 beforeEach(() => {
   previousGo = (window as any).go
+  previousListView = settings$.listView.peek()
   accounts$.set([structuredClone(fixture.account)])
   kanban$.activeBoardId.set('')
   settings$.listSort.set({ key: 'date', dir: 'desc' })
@@ -72,7 +74,7 @@ afterEach(() => {
   cleanup()
   ;(window as any).go = previousGo
   settings$.listSort.set({ key: 'date', dir: 'desc' })
-  settings$.listView.set('cards')
+  settings$.listView.set(previousListView)
   ui$.query.set('')
   kanban$.activeBoardId.set('')
 })

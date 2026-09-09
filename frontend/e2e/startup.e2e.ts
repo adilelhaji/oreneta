@@ -30,7 +30,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
   )
   const fixture = createFixture()
   await page.addInitScript(
-    ({ accounts, folders, template, options, threads }) => {
+    ({ accounts, folders, template, options, threads, messages }) => {
       const calls: string[] = []
       const requests: Array<{ command: string; payload: Record<string, unknown> }> = []
       const unexpected: string[] = []
@@ -78,6 +78,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           currentVersion: '0.1.0',
         },
       }
+      Object.assign((replies['app.prefsGet'] as { prefs: Record<string, unknown> }).prefs, JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))
       Object.assign(window, {
         startupProbe: { calls, unexpected, saves, requests },
         go: {
@@ -92,6 +93,14 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
                 }
                 if (options.navigation && command === 'mail.threadList') {
                   return { threads: payload.account_id === template.id && String(payload.folder_id).toLowerCase() === 'inbox' ? threads : [], next_cursor: '', pagination: 'conversation-v1' }
+                }
+                if (options.navigation && command === 'mail.threadRead') {
+                  return { messages: payload.thread_id === 'thread-1' ? messages : threads.filter((thread) => thread.thread_id === payload.thread_id), next_cursor: '' }
+                }
+                if (command === 'app.prefsSet') {
+                  const prefs = (replies['app.prefsGet'] as { prefs: Record<string, unknown> }).prefs
+                  prefs[String(payload.key)] = structuredClone(payload.value)
+                  sessionStorage.setItem('synthetic-prefs', JSON.stringify(prefs))
                 }
                 if (command === 'account.autodiscover') {
                   if (options.discovery === 'failure') throw new Error('Synthetic discovery outage')
@@ -164,12 +173,65 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         : [],
       folders: withAccount ? [...fixture.folders, ...(options.navigation ? [{ id: 'project-42', account_id: fixture.account.id, name: 'Projects/Reviews', role: '', delimiter: '/', unread: 2 }] : [])] : [],
       threads: options.navigation ? fixture.threads : [],
+      messages: options.navigation ? fixture.messages : [],
       template: fixture.account,
       options,
     },
   )
   return errors
 }
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({ page }, info) => {
+    const errors = await prepareStartup(page, true, { navigation: true, theme })
+    await page.goto('/')
+    const table = page.getByRole('table')
+    await expect(table).toBeVisible()
+    const first = table.getByRole('button', { name: /Pilot checklist/ })
+    await first.focus()
+    await page.keyboard.press('Enter')
+    await expect(first).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(2)
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    await page.getByTitle('Collapse message', { exact: true }).first().click()
+    await expect(page.getByTitle('Expand message', { exact: true })).toBeVisible()
+    await page.getByTitle('Expand message', { exact: true }).click()
+    await info.attach('production-conventional-reader', { body: await page.screenshot({ path: info.outputPath('mail-reader.png'), animations: 'disabled' }), contentType: 'image/png' })
+    const reply = page.getByPlaceholder('Write a message...')
+    await reply.fill('Synthetic reply draft — do not send')
+    await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.saveDraft').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', to: 'morgan@example.test', body: 'Synthetic reply draft — do not send' })
+    await table.getByRole('button', { name: /Budget review/ }).click()
+    await expect(table.getByRole('button', { name: /Budget review/ })).toHaveAttribute('aria-current', 'true')
+    await expect(reply).toHaveValue('')
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await nav.getByRole('button', { name: 'Sent', exact: true }).click()
+    await expect(table).toHaveCount(0)
+    await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
+    await expect(table).toBeVisible()
+    expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+    expect(errors).toEqual([])
+  })
+}
+
+test('legacy cards/chat stay selected until explicit layout controls change them and persist across reload', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true, theme: 'indigo-dark', preferences: { conversation_layout: 'chat', list_view: 'cards', list_density: 'relaxed' } })
+  await page.goto('/')
+  await expect(page.getByRole('table')).toHaveCount(0)
+  await page.getByText('Pilot checklist — synthetic conversation', { exact: true }).first().click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(0)
+  await page.keyboard.press('Control+,')
+  await page.getByRole('button', { name: 'Traditional', exact: true }).click()
+  await page.getByRole('button', { name: 'Table', exact: true }).click()
+  await page.getByRole('button', { name: 'Compact', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))).toMatchObject({ conversation_layout: 'traditional', list_view: 'table', list_density: 'compact', theme_id: 'indigo-dark', mark_read_mode: 'manual' })
+  await page.keyboard.press('Escape')
+  await page.reload()
+  await expect(page.getByRole('table')).toBeVisible()
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(2)
+  expect(errors).toEqual([])
+})
 
 test('production entry boots onboarding and survives reload without React errors', async ({ page }) => {
   const errors = await prepareStartup(page)
@@ -458,7 +520,11 @@ for (const appearance of ['light', 'dark'] as const) {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('meron-theme-cache')!).themeId)).toBe(`oreneta-${appearance}`)
     await page.keyboard.press('Control+n')
     await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
-    const filled = page.locator('.bg-accent.text-white').first()
+    await page.getByPlaceholder('recipient@example.com').fill('morgan@example.test')
+    await page.getByPlaceholder('recipient@example.com').press('Enter')
+    await page.locator('.tiptap[contenteditable="true"]').fill('Contrast check, not sent')
+    const filled = page.getByRole('button', { name: 'Send', exact: true })
+    await expect(filled).toBeEnabled()
     await expect(filled).toHaveCSS('color', appearance === 'light' ? 'rgb(255, 255, 255)' : 'rgb(16, 27, 46)')
     expect(errors).toEqual([])
   })
