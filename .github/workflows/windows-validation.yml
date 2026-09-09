@@ -1,0 +1,101 @@
+name: Validate Windows artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require exact main CI without publishing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { verifyRelease } = require('./scripts/ci/release-gate.cjs');
+            const result = await verifyRelease({ github, ...context.repo, sha: context.sha });
+            core.notice(`Validated ${result.sha} by CI ${result.url}`);
+
+  build:
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      OPENSSL_SRC_PERL: C:\Strawberry\perl\bin\perl.exe
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: meron-core
+      - name: Install locked localization dependencies
+        run: bun install --frozen-lockfile
+      - name: Install build tools
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+          if ($LASTEXITCODE -ne 0) { throw 'Wails installation failed' }
+          choco install nsis --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          'C:\Program Files (x86)\NSIS' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Build and embed locked sidecar
+        run: |
+          cargo build --locked --release --manifest-path meron-core/Cargo.toml --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Sidecar build failed' }
+          New-Item -ItemType Directory -Path build/sidecar -Force | Out-Null
+          Copy-Item -LiteralPath meron-core/target/x86_64-pc-windows-msvc/release/meron-core.exe -Destination build/sidecar/meron-core
+      - name: Build executable and installer
+        run: wails build -clean -platform windows/amd64 -tags embed_sidecar -nsis
+      - name: Validate native startup and Graph choice
+        run: ./scripts/test-windows-startup.ps1 -Executable build/bin/oreneta.exe -OutputDirectory native-startup-results -RequireGraph
+      - name: Bind canonical artifacts to source SHA
+        env:
+          VALIDATED_SHA: ${{ github.sha }}
+          VALIDATED_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actualSha = (git rev-parse HEAD).Trim()
+          if ($actualSha -ne $env:VALIDATED_SHA) { throw 'Source SHA mismatch' }
+          New-Item -ItemType Directory -Path validation-artifacts -Force | Out-Null
+          $files = @('oreneta.exe', 'oreneta-amd64-installer.exe')
+          $hashes = @{}
+          foreach ($name in $files) {
+            $source = Join-Path 'build/bin' $name
+            Copy-Item -LiteralPath $source -Destination (Join-Path 'validation-artifacts' $name)
+            $hashes[$name] = (Get-FileHash -LiteralPath (Join-Path 'validation-artifacts' $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          @{ schema = 1; source_sha = $actualSha; run = $env:VALIDATED_RUN; platform = 'windows/amd64'; native_startup = 'passed'; provider_acceptance = 'not-tested'; installer_acceptance = 'not-tested'; files = $hashes } |
+            ConvertTo-Json -Depth 3 | Set-Content -LiteralPath validation-artifacts/manifest.json -Encoding utf8
+      - name: Upload validated binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-validation-${{ github.sha }}
+          path: validation-artifacts/
+          if-no-files-found: error
+      - name: Upload native evidence including failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-evidence-${{ github.sha }}
+          path: native-startup-results/
+          if-no-files-found: warn

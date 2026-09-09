@@ -1,0 +1,52 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const source = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/windows-validation.yml'), 'utf8')
+const native = fs.readFileSync(path.resolve(__dirname, '../test-windows-startup.ps1'), 'utf8')
+
+test('Windows validation is explicit, read-only and never publishes', () => {
+  assert.match(source, /on:\r?\n  workflow_dispatch:/)
+  assert.doesNotMatch(source, /^  (push|pull_request|schedule):/m)
+  assert.match(source, /permissions:\r?\n  contents: read\r?\n  actions: read/)
+  assert.doesNotMatch(source, /: write|write-all|secrets\.|gh-release|gen-latest|git push|gh release|gh api|publish snap/)
+  assert.equal((source.match(/persist-credentials: false/g) || []).length, 2)
+  assert.equal((source.match(/ref: \$\{\{ github.sha \}\}/g) || []).length, 2)
+  assert.doesNotMatch(source, /ref: main|inputs\.|continue-on-error/)
+})
+
+test('Windows build requires exact-SHA main policy without a tag or bypass', async () => {
+  assert.match(source, /build:\r?\n    needs: verify\r?\n    runs-on: windows-latest/)
+  const script = source.split(/script: \|\r?\n/)[1].split(/\r?\n  build:/)[0].replace(/^            /gm, '')
+  const run = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'github', 'context', 'core', script)
+  const context = { sha: 'a'.repeat(40), repo: { owner: 'owner', repo: 'repo' } }
+  let captured
+  await run((module) => {
+    assert.equal(module, './scripts/ci/release-gate.cjs')
+    return { verifyRelease: async (args) => { captured = args; return { sha: args.sha, url: 'ci' } } }
+  }, 'github', context, { notice() {} })
+  assert.deepEqual(captured, { github: 'github', owner: 'owner', repo: 'repo', sha: context.sha })
+  await assert.rejects(run(() => ({ verifyRelease: async () => { throw new Error('required job failed') } }), {}, context, {}), /required job failed/)
+})
+
+test('locked native validation precedes binary upload and binds provenance', () => {
+  assert.match(source, /bun install --frozen-lockfile/)
+  assert.match(source, /cargo build --locked --release/)
+  assert.match(source, /wails build -clean -platform windows\/amd64 -tags embed_sidecar -nsis/)
+  const validate = source.indexOf('      - name: Validate native startup and Graph choice')
+  const manifest = source.indexOf('      - name: Bind canonical artifacts')
+  const upload = source.indexOf('      - name: Upload validated binaries')
+  assert.ok(validate > 0 && manifest > validate && upload > manifest)
+  assert.match(source.slice(validate, manifest), /test-windows-startup.ps1.*-RequireGraph/)
+  assert.doesNotMatch(source.slice(validate, upload), /if:|continue-on-error/)
+  assert.match(source, /actualSha -ne \$env:VALIDATED_SHA/)
+  assert.match(source, /Get-FileHash.*-Algorithm SHA256/)
+  assert.match(source, /source_sha = \$actualSha/)
+  assert.match(source, /provider_acceptance = 'not-tested'; installer_acceptance = 'not-tested'/)
+  assert.match(source.slice(upload), /Upload native evidence including failure\r?\n        if: always\(\)/)
+  assert.match(native, /\[switch\]\$RequireGraph/)
+  assert.match(native, /if \(\$RequireGraph -and !\(\$names -match '\^Microsoft Graph'\)\)/)
+  assert.match(native, /\$launch -le 2/)
+  assert.match(native, /MERON_DISABLE_SELF_UPDATE.*'1'/)
+  assert.match(native, /MERON_KEYRING.*'off'/)
+})
