@@ -46,14 +46,14 @@ fn read_request(stream: &mut TcpStream) -> String {
     String::from_utf8(bytes).unwrap()
 }
 
-struct Fixture {
-    base: Url,
+pub(super) struct Fixture {
+    pub(super) base: Url,
     requests: Arc<Mutex<Vec<String>>>,
     stop: Arc<AtomicBool>,
     handle: Option<thread::JoinHandle<()>>,
 }
 impl Fixture {
-    fn new(responses: impl FnOnce(&Url) -> Vec<(u16, String, String)>) -> Self {
+    pub(super) fn new(responses: impl FnOnce(&Url) -> Vec<(u16, String, String)>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let base = Url::parse(&format!("http://{}/v1.0/", listener.local_addr().unwrap())).unwrap();
@@ -116,7 +116,7 @@ impl Fixture {
         client.base = self.base.clone();
         client
     }
-    fn requests(&self) -> Vec<String> {
+    pub(super) fn requests(&self) -> Vec<String> {
         self.requests.lock().unwrap().clone()
     }
 }

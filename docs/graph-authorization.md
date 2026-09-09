@@ -10,6 +10,9 @@ Implements accepted ADR-0004; no change to existing Outlook/Gmail OAuth.
   and consumes one valid callback. Cancellation/replacement invalidates the
   generation; a late exchange cannot commit. Wrong-state callbacks cannot
   consume a legitimate pending request.
+- Only one unassociated new-account flow can be pending. Disconnect cancels
+  unassociated flows too: their identity is not yet known, so none may recreate
+  the removed grant after its token exchange completes.
 - Request only `openid email profile offline_access` and Graph `Mail.Read`.
   Global Microsoft v2 endpoints only. HTTPS, no redirects, per-account proxy,
   bounded response and timeout. Errors expose local categories, not provider
@@ -28,6 +31,16 @@ Implements accepted ADR-0004; no change to existing Outlook/Gmail OAuth.
   namespace. Existing keychain chunking/encryption stays in use. No mail-account
   secret, configuration, label, draft or cache is overwritten. Missing/disabled
   secure storage fails explicitly; malformed records never become empty grants.
+- Before storing a Graph credential, journal a non-secret association marker in
+  SQLite settings (`graph.grant.<hashed account>`). Account removal invalidates
+  pending flows and deletes a journalled Graph grant before deleting account
+  data; unavailable storage blocks removal of that grant. A failed token write
+  may leave a harmless marker, which is removed after successful vault deletion.
+  Ordinary accounts without a marker retain their existing removal behavior.
+- Desktop account removal and Graph authorization startup share an asynchronous
+  lifecycle lock. The selected account is checked while holding it; removal
+  keeps it until the local account/cache has been deleted. A waiting startup
+  cannot recreate an association from a stale account-existence check.
 - Refresh is serialized with disconnect/reconnect for that grant. Persist a
   rotated refresh token before reporting success; omitted rotation retains the
   current token. Reauthentication, revoked consent and storage failure preserve

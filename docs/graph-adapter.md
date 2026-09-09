@@ -5,10 +5,12 @@ First implementation: #125 in `meron-core/src/graph` (shared native library).
 
 ## Availability
 
-X1 is a callable Rust read adapter, **not yet an account option in the app**.
-It does not exchange/refresh/store credentials, replace `backend::Session`,
-modify IMAP/SMTP/EWS accounts, update the cache or send mail. No executable or
-installer is replaced by these changes. Real-provider acceptance remains open.
+X1 is a callable Rust read adapter. X2 adds the backend/browser authorization
+and isolated credential lifecycle in [graph-authorization.md](graph-authorization.md).
+Graph is **not yet an active account option**: #128 owns the UI, mail session
+and cache projection. Neither slice modifies existing IMAP/SMTP/EWS grants or
+sends mail. No executable or installer is replaced by these changes.
+Real-provider acceptance remains open.
 
 | Capability | X1 | Required delegated scope |
 |---|---|---|
@@ -22,7 +24,7 @@ installer is replaced by these changes. Real-provider acceptance remains open.
 | Generic public-folder / group-mailbox CRUD | Known Graph parity gaps | Not solved by consent |
 
 `Grant` must receive a Graph token, **provider-returned** scopes, expiry and
-verified account binding from the later OAuth integration. Its public Rust
+verified account binding from the X2 OAuth integration. Its public Rust
 constructor is not a token validator: the OAuth host must validate issuer,
 account and audience before constructing it. No grant/token/checkpoint is
 serialized or exposed over the frontend bridge. No debug output for grants;

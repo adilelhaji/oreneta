@@ -11,6 +11,8 @@ const MAX_BODY: u64 = 4 * 1024 * 1024;
 const MAX_ITEMS: usize = 1000;
 const TIMEOUT: Duration = Duration::from_secs(30);
 
+pub mod auth;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     InvalidInput,

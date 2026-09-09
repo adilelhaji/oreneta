@@ -33,6 +33,8 @@ type App struct {
 	oauthProvider    string
 	oauthRedirectURI string
 	oauthProfile     *ExchangedProfile
+	graphOnce        sync.Once
+	graph            *graphBrowser
 
 	mailtoMu      sync.Mutex
 	pendingMailto []string
@@ -125,6 +127,7 @@ func (a *App) HandleSecondInstanceLaunch(args []string) {
 func (a *App) Shutdown(ctx context.Context) {
 	a.logf("shutdown")
 	a.stopTray()
+	a.graphBrowser().close()
 	if a.sidecar != nil {
 		a.sidecar.Close()
 	}
@@ -256,6 +259,18 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.accountReorder(payload)
 	case "oauth.gmailBegin":
 		return a.gmailBegin()
+	case "oauth.graphBegin":
+		account, _ := payload["account"].(string)
+		return a.graphBrowser().begin(account, outlookClientID())
+	case "oauth.graphPoll":
+		attempt, _ := payload["attempt"].(string)
+		return a.graphBrowser().poll(attempt)
+	case "oauth.graphCancel":
+		attempt, _ := payload["attempt"].(string)
+		return a.graphBrowser().cancel(attempt)
+	case "graph.disconnect":
+		account, _ := payload["account"].(string)
+		return a.graphBrowser().disconnect(account)
 	case "oauth.outlookBegin":
 		return a.outlookBegin()
 	case "oauth.gmailPollProfile", "oauth.outlookPollProfile":

@@ -46,6 +46,8 @@ fn oauth_defaults() -> OAuthDefaults {
 /// Engine state: per-account credentials plus the on-disk store.
 /// Reads serve from SQLite; syncs reconnect to IMAP and refresh stored rows.
 pub struct Engine {
+    pub graph_auth: Arc<crate::graph::auth::NativeManager>,
+    pub graph_lifecycle: Mutex<()>,
     pub accounts: Mutex<HashMap<String, imap::Creds>>,
     /// Shared so protocol backends that keep their own server-side identity
     /// mapping (see [`crate::exchange`]) can reach the store from a session,
@@ -276,9 +278,12 @@ impl Engine {
                 }
             }
         }
+        let db = Arc::new(std::sync::Mutex::new(conn));
         Ok(Self {
+            graph_auth: Arc::new(crate::graph::auth::NativeManager::for_store(db.clone())),
+            graph_lifecycle: Mutex::new(()),
             accounts: Mutex::new(accounts),
-            db: std::sync::Arc::new(std::sync::Mutex::new(conn)),
+            db,
             watched: std::sync::Mutex::new(HashSet::new()),
             syncing: std::sync::Mutex::new(HashSet::new()),
             gap_attempts: std::sync::Mutex::new(HashMap::new()),

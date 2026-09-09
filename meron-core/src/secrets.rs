@@ -197,6 +197,24 @@ pub fn load(account: &str) -> Result<Secrets> {
     }
 }
 
+// Versioned Graph records must not be decoded as legacy IMAP Secrets. Reuse
+// platform encryption/chunking but fail closed on unavailable/corrupt storage.
+pub(crate) fn graph_record_load(key: &str) -> Result<Option<String>> {
+    anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
+    anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
+    backend_load(key)
+}
+pub(crate) fn graph_record_store(key: &str, value: &str) -> Result<()> {
+    anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
+    anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
+    backend_store(key, value)
+}
+pub(crate) fn graph_record_delete(key: &str) -> Result<()> {
+    anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
+    anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
+    backend_delete(key)
+}
+
 // ---- Backends ---------------------------------------------------------------
 //
 // On Linux the keychain is a D-Bus service that may be absent (a Flatpak with
