@@ -51,7 +51,9 @@ test('ledger freezes version, provenance and unique acceptance identities', () =
   ledger.rows.forEach(validate)
 })
 test('a planned acceptance procedure cannot count as verified evidence', () => {
-  assert.throws(() => validate({ ...structuredClone(ledger.rows[0]), status: 'verified' }), /automated evidence/)
+  const row = { ...structuredClone(ledger.rows[0]), status: 'verified' }
+  row.evidence = { automated: [], native: [], provider: [] }
+  assert.throws(() => validate(row), /automated evidence/)
 })
 test('unknown state, owner and unsafe or nonexistent code paths are rejected', () => {
   for (const patch of [{ status: 'done' }, { issue: -1 }, { code: '../outside' }, { code: 'missing-parity-file' }]) assert.throws(() => validate({ ...structuredClone(ledger.rows[0]), ...patch }))

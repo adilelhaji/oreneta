@@ -182,6 +182,69 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [599, 600, 601, 768, 769, 1024, 1025]) {
+    test(`mail boundary ${width}px retains reader, back and composer (${theme})`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, theme })
+      await page.goto('/')
+      await verifyMailBoundary(page, width)
+      if (width === 600 || width === 769) await info.attach('production-boundary-composer', { body: await page.screenshot({ path: info.outputPath('boundary-composer.png'), animations: 'disabled' }), contentType: 'image/png' })
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 720, height: 900 }, deviceScaleFactor: 2, locale: 'en-US' })
+  try {
+    const page = await context.newPage()
+    const errors = await prepareStartup(page, true, { navigation: true, theme: 'oreneta-dark' })
+    await page.goto('http://127.0.0.1:4182/')
+    await verifyMailBoundary(page, 720)
+    expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+    expect(errors).toEqual([])
+  } finally {
+    await context.close()
+  }
+})
+
+async function verifyMailBoundary(page: Page, width: number) {
+  const list = page.locator('[data-thread-list]')
+  await expect(list).toBeInViewport({ ratio: 0.95 })
+  const inbox = page.getByRole('table')
+  await inbox.getByRole('button', { name: /Pilot checklist/ }).click()
+  const reply = page.getByPlaceholder('Write a message...')
+  await expect(reply).toBeInViewport({ ratio: 1 })
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'More actions', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('button', { name: 'Archive thread', exact: true })).toBeInViewport({ ratio: 1 })
+  const box = await reply.boundingBox()
+  expect(box!.x).toBeGreaterThanOrEqual(0)
+  expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
+  if (width < 769) {
+    await expect(list).not.toBeVisible()
+    await page.getByTitle('Back to Chats', { exact: true }).click()
+    await expect(list).toBeInViewport({ ratio: 0.95 })
+    await expect(inbox.getByRole('button', { name: /Pilot checklist/ })).toHaveAttribute('aria-current', 'true')
+    await inbox.getByRole('button', { name: /Budget review/ }).click()
+    await expect(reply).toBeInViewport({ ratio: 1 })
+    await page.getByTitle('Back to Chats', { exact: true }).click()
+  }
+  if (width > 1024) {
+    await page.getByRole('navigation', { name: 'Accounts and folders' }).getByRole('button', { name: 'Sent', exact: true }).click()
+  } else {
+    await page.getByTitle('Switch folder', { exact: true }).click()
+    await page.getByRole('button', { name: 'Sent', exact: true }).click()
+  }
+  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
+  await page.keyboard.press('Control+n')
+  await expect(page.locator('.tiptap[contenteditable="true"]')).toBeInViewport()
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('button', { name: 'Discard', exact: true })).toBeInViewport({ ratio: 1 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+}
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
   test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({ page }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
     await page.goto('/')

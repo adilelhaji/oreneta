@@ -25,7 +25,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "8ce3396a0caac9175af9d4bd7c769a1c9c0b3b7a",
+            "result": "https://github.com/adilelhaji/oreneta/actions/runs/34326510250/attempts/2"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -45,7 +50,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "8ce3396a0caac9175af9d4bd7c769a1c9c0b3b7a",
+            "result": "https://github.com/adilelhaji/oreneta/actions/runs/34326510250/attempts/2"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -65,7 +75,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
+            "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -85,7 +100,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
+            "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -96,7 +116,7 @@
       "section": "Appearance/Layout",
       "outcome": "Reader, navigation and essential actions remain usable at pane boundaries",
       "status": "partial",
-      "present": "Known 600px offscreen-reader characterization remains",
+      "present": "#85 aligns pane visibility at 769px, reveals new composers and wraps footer actions; native 200-percent zoom remains pending",
       "code": "frontend/baseline",
       "acceptance": "Positive visible-reader and back/list tests at 599/600/601, 1024/1025 and 200% zoom",
       "platform": "Windows desktop",

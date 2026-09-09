@@ -849,6 +849,7 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
     compose: draft,
   })
   compose$.activeTab.set(id)
+  ui$.mobilePane.set('conversation')
   return id
 }
 

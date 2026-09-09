@@ -82,21 +82,13 @@ for (const theme of ['light', 'dark']) {
         expect(metadata.denied).toEqual([])
         expect(externalRequests).toEqual([])
         expect(errors).toEqual([])
-        // Characterize the existing strict <600px breakpoint rather than
-        // silently cropping/overriding production CSS to make the fixture pass.
+        // #85 replaces the historical 600px cutoff with positive visibility.
         const knownLimitations: string[] = []
         if (scene === 'reader') {
           const reply = page.getByText('Thanks Morgan. I will review the checklist today.', {
             exact: false,
           })
-          if (width === 600) {
-            await expect(reply).not.toBeInViewport()
-            knownLimitations.push(
-              '#34: reader is clipped at exactly 600px; DOM presence is not visible-reader evidence',
-            )
-          } else {
-            await expect(reply).toBeInViewport()
-          }
+          await expect(reply).toBeInViewport()
         }
         const screenshot = await page.screenshot({
           path: info.outputPath('baseline.png'),
