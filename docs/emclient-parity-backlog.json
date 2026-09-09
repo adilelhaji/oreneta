@@ -329,6 +329,24 @@
   ],
   "issues": [
     {
+      "key": "idle-readiness",
+      "sprint": "S01",
+      "title": "Make IMAP IDLE integration acceptance wait for watcher readiness",
+      "areas": "integration test; CI",
+      "architecture": "none",
+      "criteria": [
+        "Wait for initial catch-up before appending, with a bounded event deadline.",
+        "Preserve independent push, cache-only result and watcher-stop assertions.",
+        "Run full integration and three repeated targeted cases in CI."
+      ],
+      "relatedIssues": ["#37"],
+      "blockedBy": [],
+      "number": 121,
+      "url": "https://github.com/adilelhaji/oreneta/issues/121",
+      "status": "implemented-unverified",
+      "evidence": "Initial event race found in PR120 CI run34326510250 attempt1; see docs/imap-idle-acceptance.md"
+    },
+    {
       "key": "theme",
       "sprint": "S01",
       "title": "Ship Oreneta cobalt light/dark defaults without overwriting preferences",

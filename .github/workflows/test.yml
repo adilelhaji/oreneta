@@ -148,3 +148,7 @@ jobs:
         env:
           # No Secret Service on CI runners; the sidecar's keyring no-op mode.
           MERON_KEYRING: 'off'
+      - name: Repeat IDLE readiness and push acceptance
+        run: go test -tags 'integration webkit2_41' -run 'TestIntegrationMailFlow/idle_pushes_folder_updates_while_watched' -count=3 -timeout 5m .
+        env:
+          MERON_KEYRING: 'off'

@@ -1068,7 +1068,18 @@ func TestIntegrationMailFlow(t *testing.T) {
 					strings.EqualFold(str(event.detail, "folder"), folder)
 			})
 		}
+		// watch.start returns before the asynchronous initial catch-up emits its
+		// mail.synced, including for an empty folder. Do not mistake that event
+		// for the later append's push (#121).
+		initial := synced()
 		callMap(t, sidecar, "watch.start", map[string]any{"account": "bob", "folder": folder})
+		readyDeadline := time.Now().Add(60 * time.Second)
+		for synced() <= initial {
+			if time.Now().After(readyDeadline) {
+				t.Fatalf("watch.start initial catch-up never completed for %s", folder)
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
 
 		baseline := synced()
 		pushedSubject := "Oreneta integration idle pushed " + nonce
