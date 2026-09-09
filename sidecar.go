@@ -347,6 +347,9 @@ func sidecarErrorMessage(value any) string {
 
 func sidecarCallTimeout(method string) time.Duration {
 	switch method {
+	case "graph.authComplete":
+		// Token exchange + JWKS + read-only Graph probe have independent bounds.
+		return 90 * time.Second
 	case "account.connect":
 		return 45 * time.Second
 	// A probe dials the server and shakes hands; the core caps that at 15s.

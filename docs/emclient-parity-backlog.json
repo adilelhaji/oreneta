@@ -342,9 +342,9 @@
       "relatedIssues": ["#46", "#24", "#25"],
       "blockedBy": ["#125"],
       "number": 127,
-      "url": "https://github.com/adilelhaji/oreneta/issues/127",
-      "status": "absent",
-      "evidence": "Approved direction; implementation pending X1. See docs/graph-adapter.md."
+        "url": "https://github.com/adilelhaji/oreneta/issues/127",
+        "status": "implemented-unverified",
+        "evidence": "Backend/browser PKCE, pinned OIDC principal, isolated journalled keychain lifecycle and refresh/cancellation fixtures. See docs/graph-authorization.md; native/provider acceptance remains open, active account/read projection belongs to #128."
     },
     {
       "key": "graph-read-integration",

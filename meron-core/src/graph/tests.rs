@@ -43,17 +43,35 @@ fn read_request(stream: &mut TcpStream) -> String {
             Ok(n) => bytes.extend_from_slice(&buf[..n]),
         }
     }
+    // POST fixtures must consume the complete form before closing the socket.
+    // Otherwise Windows may reset the connection with unread request bytes,
+    // replacing the intended OAuth response with a sporadic transport failure.
+    if let Some(end) = bytes.windows(4).position(|s| s == b"\r\n\r\n") {
+        let header_end = end + 4;
+        let length = String::from_utf8_lossy(&bytes[..end])
+            .lines()
+            .filter_map(|line| line.split_once(':'))
+            .find(|(key, _)| key.eq_ignore_ascii_case("content-length"))
+            .map(|(_, value)| value.trim().parse::<usize>().unwrap())
+            .unwrap_or(0);
+        assert!(length <= 65536, "fixture request body exceeds bound");
+        while bytes.len() < header_end + length {
+            let n = stream.read(&mut buf).unwrap();
+            assert!(n > 0, "incomplete fixture request body");
+            bytes.extend_from_slice(&buf[..n]);
+        }
+    }
     String::from_utf8(bytes).unwrap()
 }
 
-struct Fixture {
-    base: Url,
+pub(super) struct Fixture {
+    pub(super) base: Url,
     requests: Arc<Mutex<Vec<String>>>,
     stop: Arc<AtomicBool>,
     handle: Option<thread::JoinHandle<()>>,
 }
 impl Fixture {
-    fn new(responses: impl FnOnce(&Url) -> Vec<(u16, String, String)>) -> Self {
+    pub(super) fn new(responses: impl FnOnce(&Url) -> Vec<(u16, String, String)>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let base = Url::parse(&format!("http://{}/v1.0/", listener.local_addr().unwrap())).unwrap();
@@ -116,7 +134,7 @@ impl Fixture {
         client.base = self.base.clone();
         client
     }
-    fn requests(&self) -> Vec<String> {
+    pub(super) fn requests(&self) -> Vec<String> {
         self.requests.lock().unwrap().clone()
     }
 }

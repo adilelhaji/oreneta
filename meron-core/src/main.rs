@@ -171,6 +171,60 @@ mod tests {
     use super::{BackgroundSyncCancelled, is_transient_sync_error, retry_background_sync};
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+    struct GraphTestHost;
+    impl meron_core::engine::EngineHost for GraphTestHost {
+        fn open_db(&self) -> anyhow::Result<rusqlite::Connection> { meron_core::store::open_at(":memory:") }
+        fn apply_secret(&self, _: &rusqlite::Connection, _: &str, _: &mut meron_core::imap::Creds) {}
+        fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
+    }
+    #[tokio::test]
+    async fn graph_rpc_begin_poll_cancel_and_legacy_removal_are_secret_free() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value| Request{id:1,method:method.into(),params};
+        let params=json!({"client_id":"11111111-1111-4111-8111-111111111111","redirect_uri":"http://127.0.0.1:2345/"});
+        let begin=dispatch(&engine,&request("graph.authBegin",params.clone()),&writer).await.unwrap();
+        let attempt=begin["attempt"].as_str().unwrap();
+        let poll=dispatch(&engine,&request("graph.authPoll",json!({"attempt":attempt})),&writer).await.unwrap();
+        assert_eq!(poll["state"],"pending"); assert_eq!(poll["mail_backend_ready"],false);
+        assert!(!poll.to_string().contains("token"));
+        dispatch(&engine,&request("graph.authCancel",json!({"attempt":attempt})),&writer).await.unwrap();
+        assert_eq!(engine.graph_auth.poll(attempt).state,"cancelled");
+        let mut unknown=params; unknown["account"]=json!("missing@example.test");
+        assert!(dispatch(&engine,&request("graph.authBegin",unknown),&writer).await.is_err());
+        assert!(dispatch(&engine,&request("graph.authComplete",json!({"attempt":attempt,"state":attempt,"code":"secret"})),&writer).await.is_err());
+        assert!(dispatch(&engine,&request("app.prefsSet",json!({"key":"graph.grant.reserved","value":false})),&writer).await.is_err());
+        // No association marker: no OS vault read/write is needed for Graph cleanup.
+        engine.graph_auth.forget_account("legacy@example.test").unwrap();
+    }
+
+    #[tokio::test]
+    async fn graph_begin_waits_for_removal_then_rechecks_selected_account() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let account="removing@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,email) VALUES(?1,?1)",[account]).unwrap();
+        // The same guard spans account.remove's cleanup and SQLite deletion.
+        let lifecycle=engine.graph_lifecycle.lock().await;
+        let worker=engine.clone();
+        let begun=Arc::new(tokio::sync::Notify::new());
+        let starting=begun.clone();
+        let handle=tokio::spawn(async move {
+            starting.notify_one();
+            dispatch(&worker,&Request{id:1,method:"graph.authBegin".into(),params:json!({"account":account,"client_id":"11111111-1111-4111-8111-111111111111","redirect_uri":"http://127.0.0.1:2345/"})},&Arc::new(Mutex::new(tokio::io::stdout()))).await
+        });
+        begun.notified().await;
+        tokio::task::yield_now().await;
+        assert!(!handle.is_finished(), "authorization bypassed account lifecycle lock");
+        engine.graph_auth.forget_account(account).unwrap();
+        store::delete_account(&engine.db.lock().unwrap(),account).unwrap();
+        drop(lifecycle);
+        let result=handle.await.unwrap();
+        assert!(result.unwrap_err().to_string().contains("unknown account"));
+        assert!(store::load_account(&engine.db.lock().unwrap(),account).unwrap().is_none());
+    }
+
     #[test]
     fn imap_disconnect_errors_are_transient() {
         let lost = anyhow::Error::new(async_imap::error::Error::ConnectionLost);
@@ -1439,6 +1493,52 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
     match req.method.as_str() {
         "ping" => Ok(ping_response()),
 
+        "graph.authBegin" => {
+            let _lifecycle = engine.graph_lifecycle.lock().await;
+            let selected = p.get("account").and_then(Value::as_str)
+                .filter(|s| !s.is_empty()).map(str::to_owned);
+            let route = if let Some(account) = &selected {
+                let conn = engine.db.lock().unwrap();
+                let creds = store::load_account(&conn, account)?
+                    .context("Graph authorization: unknown account")?;
+                anyhow::ensure!(creds.delegate_account_id.is_empty() && creds.target_mailbox.is_empty(),
+                    "Graph authorization: shared mailbox unsupported");
+                creds.proxy
+            } else { proxy::ProxyChoice::Global };
+            let manager = engine.graph_auth.clone();
+            let client = req_str(p, "client_id")?;
+            let redirect = req_str(p, "redirect_uri")?;
+            let begin = tokio::task::spawn_blocking(move || manager.begin(selected, &client, &redirect, route)).await??;
+            Ok(serde_json::to_value(begin)?)
+        }
+        "graph.authPoll" => {
+            let manager = engine.graph_auth.clone();
+            let attempt = req_str(p, "attempt")?;
+            Ok(serde_json::to_value(tokio::task::spawn_blocking(move || manager.poll(&attempt)).await?)?)
+        }
+        "graph.authCancel" => {
+            let manager = engine.graph_auth.clone();
+            let attempt = req_str(p, "attempt")?;
+            tokio::task::spawn_blocking(move || manager.cancel(&attempt)).await?;
+            Ok(json!({"ok":true}))
+        }
+        "graph.authComplete" => {
+            let manager = engine.graph_auth.clone();
+            let attempt = req_str(p, "attempt")?;
+            let state = req_str(p, "state")?;
+            let code = p.get("code").and_then(Value::as_str).unwrap_or("").to_owned();
+            let denied = p.get("denied").and_then(Value::as_bool).unwrap_or(false);
+            let result = tokio::task::spawn_blocking(move ||
+                manager.complete(&attempt, &state, &code, denied)).await??;
+            Ok(serde_json::to_value(result)?)
+        }
+        "graph.disconnect" => {
+            let manager = engine.graph_auth.clone();
+            let account = req_str(p, "account")?;
+            tokio::task::spawn_blocking(move || manager.disconnect(&account)).await??;
+            Ok(json!({"ok":true}))
+        }
+
         // Fetch the in-app changelog from the GitHub releases atom feed. The
         // network call runs on the blocking pool.
         "changelog.fetch" => {
@@ -1469,6 +1569,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         "app.prefsSet" => {
             let key = req_str(p, "key")?;
+            anyhow::ensure!(!key.starts_with("graph.grant."), "reserved Graph association setting");
             let value = p.get("value").cloned().unwrap_or(Value::Null);
             store::setting_set(&engine.db.lock().unwrap(), &key, &value)?;
             // The proxy lives in a process-global slot that socket code reads
@@ -4947,7 +5048,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // keychain secret. The IDLE watcher notices the account is gone on its
         // next loop and exits.
         "account.remove" => {
+            let _lifecycle = engine.graph_lifecycle.lock().await;
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
+            let graph = engine.graph_auth.clone();
+            let graph_account = id.clone();
+            // Secure cleanup first: failure must preserve the account and cache.
+            tokio::task::spawn_blocking(move || graph.forget_account(&graph_account)).await??;
             // A shared mailbox delegating to this account has no path back
             // to working once it is gone — nothing left to reconnect — so
             // it goes with it rather than sitting stuck forever.
