@@ -56,8 +56,8 @@ export function ComposerFooter({
   const draftAutosaveFailed = t('composer.status.draftAutosaveFailed')
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-header px-4 py-2.5 select-none">
-      <div className="flex items-center gap-1">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-header px-4 py-2.5 select-none">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
         <IconButton
           icon={Paperclip}
           iconSize={16}
@@ -94,7 +94,7 @@ export function ComposerFooter({
           {rich ? t('composer.modes.richText') : t('composer.modes.plainText')}
         </button>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
         {saveStatus === 'saving' && (
           <span className="flex items-center gap-1.5 text-caption text-secondary">
             <RefreshCw size={11} className="animate-spin" />

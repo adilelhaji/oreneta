@@ -1159,6 +1159,25 @@ describe('signatures in a new compose tab', () => {
 
   const draftOf = (id: string | undefined) => compose$.tabs.get().find((tab) => tab.id === id)?.compose
 
+  it('reveals the composer pane without changing the mailbox context', () => {
+    ui$.mobilePane.set('threads')
+    const context = [ui$.selectedAccount.peek(), ui$.selectedFolder.peek(), ui$.selectedThread.peek(), ui$.query.peek()]
+    const id = openComposeTab({ to: 'recipient@example.test', subject: 'Seeded reply', text: 'Keep this body' })
+    expect(ui$.mobilePane.peek()).toBe('conversation')
+    expect(id).toBeDefined()
+    expect(compose$.activeTab.peek()).toBe(id!)
+    expect(draftOf(id)).toMatchObject({ to: 'recipient@example.test', subject: 'Seeded reply', text: 'Keep this body' })
+    expect([ui$.selectedAccount.peek(), ui$.selectedFolder.peek(), ui$.selectedThread.peek(), ui$.query.peek()]).toEqual(context)
+  })
+
+  it('does not leave the list if no account can compose', () => {
+    accounts$.set([])
+    ui$.mobilePane.set('threads')
+    expect(openComposeTab()).toBeUndefined()
+    expect(ui$.mobilePane.peek()).toBe('threads')
+    expect(compose$.tabs.peek()).toEqual([])
+  })
+
   it('seeds a rich draft with the app-wide signature', () => {
     settings$.signature.set('<p>Ping</p>')
 

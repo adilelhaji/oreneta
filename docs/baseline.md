@@ -58,12 +58,11 @@ SHA, fixture checksum, browser/runtime and display settings). CI uploads the
 checkout SHAs may be GitHub's synthetic merge commit; provenance records both
 values rather than mislabelling branch-head tests as post-merge evidence.
 
-Known visual defect (#34): at exactly 600 px, current strict `<600px` responsive
-rules leave the selected reader outside the viewport. Both 600px reader captures
-record this defect in `knownLimitations` and assert the offscreen state explicitly;
-they are not successful visible-reader evidence. The other reader widths must
-intersect the viewport. Fixing the breakpoint requires updating this deliberate
-characterization alongside the production fix, not weakening the assertion.
+Historical defect (#34, corrected by #85): the strict `<600px` visibility rules
+left the reader outside the viewport from 600 through 768px while the list still
+occupied full width. Both 600px reader captures now require positive viewport
+visibility. See [mail boundaries](design/mail-boundaries.md) for the production
+boundary and zoom-equivalent checks; native zoom remains separate evidence.
 
 ## Capability ledger
 
