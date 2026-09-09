@@ -97,6 +97,7 @@ for (const theme of ['light', 'dark'])
 test('reference keyboard reading, reply, validation and uncertain draft retention', async ({ page }) => {
   await page.setViewportSize({ width: 600, height: 900 })
   await page.goto('/reference.html?scene=inbox')
+  await expect(page.getByRole('button', { name: 'Resume draft' })).toHaveCount(0)
   const message = page.getByRole('button', { name: /Morgan Rivera.*Pilot checklist/ }).first()
   await message.focus()
   await page.keyboard.press('Enter')

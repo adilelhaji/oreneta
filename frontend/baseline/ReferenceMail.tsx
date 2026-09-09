@@ -32,6 +32,7 @@ export function ReferenceMail({ fixture, scene, theme }: { fixture: BaselineFixt
   const [query, setQuery] = useState('')
   const [foldersOpen, setFoldersOpen] = useState(false)
   const [composing, setComposing] = useState(scene === 'composer' || scene === 'uncertain')
+  const [draftAvailable, setDraftAvailable] = useState(scene === 'composer' || scene === 'uncertain')
   const [uncertain, setUncertain] = useState(scene === 'uncertain')
   const [to, setTo] = useState('morgan@example.test')
   const [subject, setSubject] = useState('Re: Pilot checklist')
@@ -63,6 +64,7 @@ export function ReferenceMail({ fixture, scene, theme }: { fixture: BaselineFixt
   }
   function compose(mode: 'new' | 'reply' | 'forward') {
     setFoldersOpen(false)
+    setDraftAvailable(true)
     setTo(mode === 'reply' ? (selected?.from_addr ?? '') : '')
     setSubject(mode === 'new' ? '' : `${mode === 'reply' ? 'Re' : 'Fwd'}: ${selected?.subject ?? ''}`)
     setBody(mode === 'forward' ? (selected?.body ?? '') : '')
@@ -91,7 +93,7 @@ export function ReferenceMail({ fixture, scene, theme }: { fixture: BaselineFixt
         <button className="reference-primary" onClick={() => compose('new')}>
           <PenLine /> New message
         </button>
-        {!composing && body && (
+        {!composing && draftAvailable && (
           <button
             onClick={() => {
               setFoldersOpen(false)
