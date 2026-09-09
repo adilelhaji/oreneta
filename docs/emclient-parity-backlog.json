@@ -1,0 +1,1440 @@
+{
+  "reference": {
+    "date": "2026-09-09",
+    "stable": "10.4.5674.0 Windows",
+    "beta": "11.0.282.0",
+    "baselineSha": "100976d423258eb302bcc903c9c059838666e40c"
+  },
+  "program": {
+    "number": 21,
+    "url": "https://github.com/adilelhaji/oreneta/issues/21"
+  },
+  "sprints": [
+    {
+      "key": "S01",
+      "title": "Real mail appearance",
+      "exit": "Active candidate; #22 then theme, mail-default, narrow. Exit: actual mail workflow in light/dark, safe preference preservation and boundary regression fixed.",
+      "number": 1,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/1",
+      "status": "active-candidate"
+    },
+    {
+      "key": "S02",
+      "title": "Integrity and architecture contracts",
+      "exit": "Reproduce data-loss/uncertain-send risks first; define only needed domain contracts. Exit: reviewed-set actions, contact preservation and recovery evidence; architecture decisions recorded.",
+      "number": 2,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/2",
+      "status": "planned"
+    },
+    {
+      "key": "S03",
+      "title": "Complete desktop shell and reader",
+      "exit": "Finish primitives, navigation, columns, reader and contextual sidebar. Exit: complete production flow and consistent keyboard/zoom behavior.",
+      "number": 3,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/3",
+      "status": "planned"
+    },
+    {
+      "key": "S04",
+      "title": "Composition and delivery lifecycle",
+      "exit": "Drafts, libraries, files, delayed actions and personalized messages. Exit: recovered content and visible per-message outcomes, no blind retry.",
+      "number": 4,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/4",
+      "status": "planned"
+    },
+    {
+      "key": "S05",
+      "title": "Search and automation",
+      "exit": "Queries, categories, tags, attachments, local rules and macros. Server rules are S06. Exit: consistent scope and observable partial coverage across providers.",
+      "number": 5,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/5",
+      "status": "planned"
+    },
+    {
+      "key": "S06",
+      "title": "Accounts and interoperability",
+      "exit": "Onboarding, POP3, profiles, provider matrix, Exchange continuity/delegation. Start #46 discovery immediately, not after S05; implementation waits for approved architecture.",
+      "number": 6,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/6",
+      "status": "planned"
+    },
+    {
+      "key": "S07",
+      "title": "Calendar and invitations",
+      "exit": "Event views/sync, recurrence, reminders, availability and invitation lifecycle. Exit: independent interoperability evidence.",
+      "number": 7,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/7",
+      "status": "planned"
+    },
+    {
+      "key": "S08",
+      "title": "Contacts, tasks and notes",
+      "exit": "Conflict-safe contacts, standalone/synced tasks and notes after model approval. Exit: offline recovery and provider-specific evidence.",
+      "number": 8,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/8",
+      "status": "planned"
+    },
+    {
+      "key": "S09",
+      "title": "Security and language tools",
+      "exit": "PGP/S-MIME interoperability, grammar, translation and tracking protection. Security bugs may preempt earlier sprints; exit requires independent fixtures.",
+      "number": 9,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/9",
+      "status": "planned"
+    },
+    {
+      "key": "S10",
+      "title": "External integrations and chat",
+      "exit": "Cloud files, online meetings, explicit-consent AI and approved chat adapters. Exit: each listed integration verified; missing access remains a blocker.",
+      "number": 10,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/10",
+      "status": "planned"
+    },
+    {
+      "key": "S11",
+      "title": "Migration and Windows delivery",
+      "exit": "Imports, archives, full backups, performance, native Windows testing and exact-SHA artifacts. Exit: complete stable Windows matrix, not automatic public release.",
+      "number": 11,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/11",
+      "status": "planned"
+    },
+    {
+      "key": "S12",
+      "title": "Desktop cross-platform acceptance",
+      "exit": "macOS native parity and Linux regression compatibility, accessibility and controlled acceptance. Exit: no unresolved stable-target requirement for the claimed platform.",
+      "number": 12,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/12",
+      "status": "planned"
+    },
+    {
+      "key": "S13",
+      "title": "Version 11 and mobile discovery",
+      "exit": "Separate post-stable discovery queue; not an implementation commitment. Reconcile beta changes/mobile scope and obtain architecture decisions.",
+      "number": 13,
+      "url": "https://github.com/adilelhaji/oreneta/milestone/13",
+      "status": "discovery-queue"
+    }
+  ],
+  "existing": [
+    {
+      "number": 9,
+      "sprint": "S09",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 12,
+      "sprint": "S09",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 22,
+      "sprint": "S01",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 24,
+      "sprint": "S02",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 25,
+      "sprint": "S02",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 27,
+      "sprint": "S02",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 28,
+      "sprint": "S02",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 29,
+      "sprint": "S02",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 30,
+      "sprint": "S03",
+      "status": "partial",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 31,
+      "sprint": "S05",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 32,
+      "sprint": "S03",
+      "status": "partial",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 33,
+      "sprint": "S03",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 34,
+      "sprint": "S03",
+      "status": "partial",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 35,
+      "sprint": "S03",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 36,
+      "sprint": "S03",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 37,
+      "sprint": "S12",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 38,
+      "sprint": "S08",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 39,
+      "sprint": "S04",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 40,
+      "sprint": "S04",
+      "status": "partial",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 41,
+      "sprint": "S08",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 42,
+      "sprint": "S08",
+      "status": "partial",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 43,
+      "sprint": "S05",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 45,
+      "sprint": "S04",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 46,
+      "sprint": "S06",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 47,
+      "sprint": "S06",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 48,
+      "sprint": "S06",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 49,
+      "sprint": "S09",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 50,
+      "sprint": "S05",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 51,
+      "sprint": "S10",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 52,
+      "sprint": "S10",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 53,
+      "sprint": "S11",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 54,
+      "sprint": "S11",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    },
+    {
+      "number": 55,
+      "sprint": "S12",
+      "status": "unassessed",
+      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+    }
+  ],
+  "closed": [
+    {
+      "number": 8,
+      "replacement": 33,
+      "reason": "Consolidate outstanding design-catalogue link, not completed."
+    },
+    {
+      "number": 44,
+      "replacement": 91,
+      "reason": "Optional people/service grouping is not stable-target inbox categories; not planned for parity."
+    }
+  ],
+  "issues": [
+    {
+      "key": "theme",
+      "sprint": "S01",
+      "title": "Ship Oreneta cobalt light/dark defaults without overwriting preferences",
+      "areas": "frontend/src/lib/themes.ts; settings; shared styles",
+      "architecture": "none",
+      "criteria": [
+        "New profiles use the documented cobalt/navy light/dark theme; system appearance remains coherent.",
+        "Existing built-in and custom selections survive restart unchanged; reset is explicit.",
+        "Theme contrast, semantic tokens and long labels are covered by automated tests and production-entry screenshots."
+      ],
+      "relatedIssues": [
+        "#33"
+      ],
+      "blockedBy": [],
+      "number": 83,
+      "url": "https://github.com/adilelhaji/oreneta/issues/83",
+      "status": "partial",
+      "evidence": "Main 100976d: existing styles/modes; new defaults not delivered"
+    },
+    {
+      "key": "mail-default",
+      "sprint": "S01",
+      "title": "Make the real mail workspace default to a conventional list and reader",
+      "areas": "settings; mail list; reader; startup tests",
+      "architecture": "none",
+      "criteria": [
+        "New profiles open a conventional mail list and stacked message reader instead of chat/cards; reuse existing supported modes.",
+        "Preserve explicit existing chat/cards choices; show an explicit switch to the new experience.",
+        "Verify inbox, open, reply, selection and navigation in the production entry in both themes; synthetic reference alone cannot close this issue."
+      ],
+      "relatedIssues": [
+        "#32"
+      ],
+      "blockedBy": [],
+      "number": 84,
+      "url": "https://github.com/adilelhaji/oreneta/issues/84",
+      "status": "partial",
+      "evidence": "Main 100976d: existing styles/modes; new defaults not delivered"
+    },
+    {
+      "key": "narrow",
+      "sprint": "S01",
+      "title": "Fix the 600px reader cutoff and verify mail navigation at boundary widths",
+      "areas": "responsive shell; baseline; production startup tests",
+      "architecture": "none",
+      "criteria": [
+        "Reader and essential actions remain usable at 599/600/601 and 1024/1025px and 200% zoom.",
+        "Replace the known offscreen-reader characterization with a positive visibility regression.",
+        "Opening, returning to list, selecting and composing preserve context without horizontal shell overflow."
+      ],
+      "relatedIssues": [
+        "#34"
+      ],
+      "blockedBy": [],
+      "number": 85,
+      "url": "https://github.com/adilelhaji/oreneta/issues/85",
+      "status": "partial",
+      "evidence": "docs/baseline.md known 600px limitation"
+    },
+    {
+      "key": "sidebar",
+      "sprint": "S03",
+      "title": "Deliver a real contextual sidebar for agenda, people and attachment history",
+      "areas": "mail shell; contacts; calendar; attachment queries",
+      "architecture": "gate if new cross-domain identity/storage contract is needed",
+      "criteria": [
+        "Sidebar follows selected message/contact and exposes agenda, invitations, communication and file history with origin links.",
+        "Account changes, missing cache and partial history are visible and cannot leak another account's records.",
+        "Resize/collapse, keyboard focus and state restoration work using existing approved contracts."
+      ],
+      "relatedIssues": [
+        "#35",
+        "#41"
+      ],
+      "blockedBy": [],
+      "number": 86,
+      "url": "https://github.com/adilelhaji/oreneta/issues/86",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "folders",
+      "sprint": "S03",
+      "title": "Complete folder management, favorites, colors and safe drag/drop",
+      "areas": "MailNavigation; folder RPC/store; preferences",
+      "architecture": "none unless provider capability contract changes",
+      "criteria": [
+        "Create/rename/move/delete supported folders; protect system/read-only folders and report permission failures.",
+        "Favorites and folder colors persist; arbitrary nesting and provider delimiters remain intact.",
+        "Drag/drop and bulk moves identify exact scope; undo only for a verified inverse; no operation on structural parents."
+      ],
+      "relatedIssues": [
+        "#34"
+      ],
+      "blockedBy": [
+        "#27"
+      ],
+      "number": 87,
+      "url": "https://github.com/adilelhaji/oreneta/issues/87",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "text-library",
+      "sprint": "S04",
+      "title": "Complete QuickText, templates and account-aware signature libraries",
+      "areas": "composer; templates; signatures; provider adapters",
+      "architecture": "gate for new signature-sync adapter",
+      "criteria": [
+        "Searchable libraries support placeholders, cursor insertion, formatting and per-account defaults without mixing identities.",
+        "HTML/plaintext, tables, inline images, mentions and quoted reply headers survive draft round trips; unsupported features are explicit.",
+        "Gmail/Exchange signature synchronization is capability-gated, conflict-safe and independently tested; local libraries work offline."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "#39",
+        "#40"
+      ],
+      "number": 88,
+      "url": "https://github.com/adilelhaji/oreneta/issues/88",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "send-time",
+      "sprint": "S04",
+      "title": "Complete scheduled send, undo-send and snooze lifecycle",
+      "areas": "outbox; scheduler; snooze; notifications",
+      "architecture": "gate if durable lifecycle contract must change",
+      "criteria": [
+        "Immediate, delayed and undo-send share documented durable transitions; undo is not recall after server acceptance.",
+        "Restart, suspend, DST, clock changes and overdue jobs produce visible, nonduplicating recovery; disclose app-running requirements.",
+        "Snooze returns to the right account/folder and survives moves; cancellation cannot falsely promise delivery prevention."
+      ],
+      "relatedIssues": [
+        "#45"
+      ],
+      "blockedBy": [
+        "#29"
+      ],
+      "number": 89,
+      "url": "https://github.com/adilelhaji/oreneta/issues/89",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "mail-merge",
+      "sprint": "S04",
+      "title": "Deliver reviewed personalized mass mail with per-recipient outcomes",
+      "areas": "composer; recipient parser; outbox",
+      "architecture": "gate for bulk-send persistence model",
+      "criteria": [
+        "Preview every personalized message and final recipient set before user submission; no hidden BCC or recipient-data leakage.",
+        "Invalid/missing placeholders and duplicate recipients are reported; cancellation and provider rate limits preserve per-recipient status.",
+        "Ambiguous delivery is never blindly retried; all automated delivery tests use controlled recipients."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "#29",
+        "#39",
+        "text-library"
+      ],
+      "number": 90,
+      "url": "https://github.com/adilelhaji/oreneta/issues/90",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "categories",
+      "sprint": "S05",
+      "title": "Add transparent inbox categories with user corrections and complete access",
+      "areas": "mail list; classification; settings",
+      "architecture": "gate for new classifier/data model",
+      "criteria": [
+        "Provide configurable category tabs, manual correction and rule-based assignment with visible reasons.",
+        "All-mail remains available; unknown/unclassified messages are not silently omitted; counts explain partial coverage.",
+        "Assignments survive synchronization and restart without being confused with remote labels or optional people/service grouping."
+      ],
+      "relatedIssues": [
+        "#50"
+      ],
+      "blockedBy": [
+        "#31"
+      ],
+      "number": 91,
+      "url": "https://github.com/adilelhaji/oreneta/issues/91",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "actions",
+      "sprint": "S05",
+      "title": "Add configurable Quick Action macros over reviewed message sets",
+      "areas": "rules; commands; bulk action UI",
+      "architecture": "gate if new persistent macro model is needed",
+      "criteria": [
+        "Compose supported ordered actions with preview, keyboard invocation and clear local/server runtime requirements.",
+        "Exact reviewed IDs are frozen; new arrivals are excluded; interrupted chains report per-step/per-message outcomes.",
+        "No macro silently escalates to external sends or unrecoverable deletes; reject recursive/unsupported chains."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "#27",
+        "#50"
+      ],
+      "number": 92,
+      "url": "https://github.com/adilelhaji/oreneta/issues/92",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "attachments",
+      "sprint": "S05",
+      "title": "Deliver an all-attachments workspace and bounded content search",
+      "areas": "attachment metadata; search; viewer",
+      "architecture": "gate before introducing a content-indexing service/dependency",
+      "criteria": [
+        "Search/filter files by account, contact, name, type, date and size with source-message links and explicit downloaded coverage.",
+        "Preview/open/save supported files safely; deleted/moved mail and stale queries do not open a different file.",
+        "Content indexing requires an approved isolated, resource-bounded design; encrypted or unsupported formats are clearly marked, not fabricated as searchable."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "#31",
+        "#40",
+        "#43"
+      ],
+      "number": 93,
+      "url": "https://github.com/adilelhaji/oreneta/issues/93",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "remote-rules",
+      "sprint": "S06",
+      "title": "Implement provider-backed mail rules and vacation/forwarding capabilities",
+      "areas": "Gmail/Exchange rules; capability UI",
+      "architecture": "gate for new provider adapters/permissions",
+      "criteria": [
+        "Inventory then implement stable-target supported server filters, ordering and supported vacation/forwarding operations per provider.",
+        "Clearly distinguish always-on server rules from local rules; unsupported conditions cannot silently become broader rules.",
+        "Round-trip edits, conflict/revocation, loops, partial saves and server renames are tested; no real external forwarding is enabled by tests."
+      ],
+      "relatedIssues": [
+        "#50"
+      ],
+      "blockedBy": [
+        "#48"
+      ],
+      "number": 94,
+      "url": "https://github.com/adilelhaji/oreneta/issues/94",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "label-parity",
+      "sprint": "S05",
+      "title": "Certify remote labels, categories and local annotations across workflows",
+      "areas": "labels; Gmail/Exchange/IMAP; reader notes",
+      "architecture": "respect ADR-0002; gate for unrelated new persistence",
+      "criteria": [
+        "Explicit links retain ADR-0002 account isolation and message/thread union semantics across move, sync and restart.",
+        "Verify local tags and provider categories in lists, search, compose and bulk actions; preserve name/color capabilities.",
+        "Inventory message annotations and flags against the stable reference; any new persistence requires a bounded documented slice."
+      ],
+      "relatedIssues": [
+        "#43"
+      ],
+      "blockedBy": [
+        "#31"
+      ],
+      "number": 95,
+      "url": "https://github.com/adilelhaji/oreneta/issues/95",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "setup",
+      "sprint": "S06",
+      "title": "Complete eM-style account onboarding and actionable reconnect diagnostics",
+      "areas": "account wizard; OAuth; discovery; diagnostics",
+      "architecture": "gate before new identity provider/consent architecture",
+      "criteria": [
+        "Build on #79/#80 email-first setup: discovery, service summary, OAuth/manual fallback, validation and first-sync progress.",
+        "Cancellation, expired/revoked consent, MFA/app-password guidance, certificate errors and partial service setup preserve recoverable state.",
+        "No plaintext secrets in logs; use Oreneta-owned OAuth registrations and explicit scopes before distributable provider certification."
+      ],
+      "relatedIssues": [
+        "#24",
+        "#46"
+      ],
+      "blockedBy": [],
+      "number": 96,
+      "url": "https://github.com/adilelhaji/oreneta/issues/96",
+      "status": "partial",
+      "evidence": "Existing #80 setup; full parity acceptance pending"
+    },
+    {
+      "key": "providers",
+      "sprint": "S06",
+      "title": "Certify the stable-target provider matrix with independent account fixtures",
+      "areas": "Rust providers; CI integration fixtures; compatibility docs",
+      "architecture": "gate per new adapter; test access is separate",
+      "criteria": [
+        "Map every official email-service entry to protocol, auth and mail/calendar/contact/task/note capabilities and known limits.",
+        "Exercise Gmail/Workspace, Outlook/M365, Exchange on-prem, iCloud and generic IMAP/SMTP first; retain all listed remaining services as tracked unverified rows.",
+        "Test sync, send, delete/move, permissions, offline/reconnect, quotas and rate limits using independent controlled fixtures; mocks alone cannot mark a provider verified."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "setup",
+        "pop3",
+        "#47",
+        "#48"
+      ],
+      "number": 98,
+      "url": "https://github.com/adilelhaji/oreneta/issues/98",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "pop3",
+      "sprint": "S06",
+      "title": "Specify and implement POP3 capability without duplicate downloads or data loss",
+      "areas": "provider boundary; account setup; local folders",
+      "architecture": "required: approve POP3 identity, retention and recovery design first",
+      "criteria": [
+        "Document gap and approve UIDL identity, leave-on-server/deletion policy, auth including advertised OAuth, and interrupted-download recovery.",
+        "Implement approved adapter with visible retention controls and no implicit server deletion.",
+        "Independent POP3 tests cover repeated fetch, changed UIDL, partial RETR, TLS/auth failure, restart and local-only archive preservation."
+      ],
+      "relatedIssues": [
+        "#24",
+        "#25",
+        "#29"
+      ],
+      "blockedBy": [],
+      "number": 97,
+      "url": "https://github.com/adilelhaji/oreneta/issues/97",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "profiles",
+      "sprint": "S06",
+      "title": "Deliver account groups and isolated user profiles with safe switching",
+      "areas": "profile lifecycle; account navigation; preferences",
+      "architecture": "required before extending profile/storage isolation",
+      "criteria": [
+        "Inventory existing profile/account-group behavior and approve any missing isolation/migration contract.",
+        "Switch profiles without mixing accounts, secrets, drafts, notifications or searches; unsaved work is preserved.",
+        "Account groups, aliases and global-folder inclusion remain explicit; corrupt/locked profiles have recovery and safe diagnostics."
+      ],
+      "relatedIssues": [
+        "#25"
+      ],
+      "blockedBy": [
+        "setup"
+      ],
+      "number": 99,
+      "url": "https://github.com/adilelhaji/oreneta/issues/99",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "calendar-ui",
+      "sprint": "S07",
+      "title": "Complete calendar views, event editing and reminders",
+      "areas": "Calendar; event editor; agenda; reminder scheduler",
+      "architecture": "none within existing calendar model; escalate unsupported model changes",
+      "criteria": [
+        "Deliver day/week/month/agenda navigation, multi-calendar visibility, search, categories and accessible drag/resize.",
+        "Editing covers recurrence exceptions, all-day and timezone/DST behavior; no duplicate reminders after restart/suspend.",
+        "Compare actual screens and flows with stable reference; shared/read-only calendars expose only allowed actions."
+      ],
+      "relatedIssues": [
+        "#38"
+      ],
+      "blockedBy": [],
+      "number": 100,
+      "url": "https://github.com/adilelhaji/oreneta/issues/100",
+      "status": "partial",
+      "evidence": "Existing calendar documented in README; full parity acceptance pending"
+    },
+    {
+      "key": "calendar-sync",
+      "sprint": "S07",
+      "title": "Complete CalDAV, Google and Exchange calendar synchronization",
+      "areas": "calendar providers; recurrence; sync",
+      "architecture": "required for missing adapters/recurrence identity contracts",
+      "criteria": [
+        "Inventory existing EWS/subscription implementation and approve missing provider slices before coding.",
+        "Sync create/edit/delete, recurrence exceptions, shared and subscribed calendars with conflict-safe offline replay.",
+        "ICS import/export, cancellation, invalid tokens, partial responses, server timezone differences and read-only feeds have interoperability evidence."
+      ],
+      "relatedIssues": [
+        "#24",
+        "#25"
+      ],
+      "blockedBy": [
+        "#47",
+        "calendar-ui"
+      ],
+      "number": 101,
+      "url": "https://github.com/adilelhaji/oreneta/issues/101",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "invitations",
+      "sprint": "S07",
+      "title": "Complete invitations, availability and meeting lifecycle",
+      "areas": "iTIP/iMIP; calendar; mail reader; agenda",
+      "architecture": "gate for new scheduling/provider contracts",
+      "criteria": [
+        "Handle request, accept/tentative/decline, updates, cancellation and supported counterproposal/forwarding with organizer/attendee identities.",
+        "Show free/busy capability and stale/unavailable information explicitly; received email never authorizes sending an RSVP automatically.",
+        "Test recurrence-instance invitations, timezone changes, delegated/read-only calendars, duplicate sequence numbers and safe retry."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "calendar-sync",
+        "#48"
+      ],
+      "number": 102,
+      "url": "https://github.com/adilelhaji/oreneta/issues/102",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "tasks-full",
+      "sprint": "S08",
+      "title": "Extend local linked tasks to full task lists and provider synchronization",
+      "areas": "task model; Tasks UI; Google/CalDAV/Exchange adapters",
+      "architecture": "required: current one-open-task-per-conversation local-only contract must not be silently changed",
+      "criteria": [
+        "Present a decision covering standalone tasks, lists, recurrence, priorities, reminders, delegation and provider capability differences.",
+        "After approval, implement in bounded slices with tags, search and agenda integration; retain existing linked tasks and missing-message recovery.",
+        "Verify CRUD/complete/reopen, offline conflicts, recurrence, migration and provider permissions independently; local-only is not full task parity."
+      ],
+      "relatedIssues": [
+        "#24",
+        "#25"
+      ],
+      "blockedBy": [
+        "#42"
+      ],
+      "number": 103,
+      "url": "https://github.com/adilelhaji/oreneta/issues/103",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "notes",
+      "sprint": "S08",
+      "title": "Deliver standalone rich notes with safe local and provider synchronization",
+      "areas": "Notes module; rich editor; note-capable providers",
+      "architecture": "required: approve standalone note identity/storage and provider mapping first",
+      "criteria": [
+        "Distinguish standalone notes from message/task annotations; support rich text, pictures, attachments, tags and search.",
+        "Use existing editor/bridge boundaries; implement local CRUD/recovery then Exchange/Office365/IceWarp/note-capable CalDAV slices.",
+        "Unsupported servers show local-only mode; conflict, deletion, interrupted attachment writes and offline recovery cannot silently overwrite notes."
+      ],
+      "relatedIssues": [
+        "#24",
+        "#25",
+        "#38"
+      ],
+      "blockedBy": [],
+      "number": 104,
+      "url": "https://github.com/adilelhaji/oreneta/issues/104",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "grammar",
+      "sprint": "S09",
+      "title": "Integrate offline grammar checking under ADR-0001",
+      "areas": "TipTap; Harper WASM; dependency inventory",
+      "architecture": "ADR-0001 accepted; escalate any departure",
+      "criteria": [
+        "Integrate pinned Harper with documented language coverage and on-device execution; no remote text transmission.",
+        "Suggestions can be ignored/applied without damaging markup, selection, undo or draft recovery.",
+        "Test large text, unsupported languages, worker cancellation, initialization failure and packaged WASM loading; record SOUP/license provenance."
+      ],
+      "relatedIssues": [
+        "#54"
+      ],
+      "blockedBy": [
+        "#39"
+      ],
+      "number": 105,
+      "url": "https://github.com/adilelhaji/oreneta/issues/105",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "translation",
+      "sprint": "S09",
+      "title": "Integrate offline reading and composing translation under ADR-0001",
+      "areas": "reader; composer; Bergamot models; backend download",
+      "architecture": "ADR-0001 accepted; escalate new services or model distribution conflicts",
+      "criteria": [
+        "Offer explicit language/model choice and visible download size/consent; inference remains offline after download.",
+        "Retain original text and mark translated content; composing translation requires review and preserves source draft.",
+        "Check model integrity, disk quota, interrupted download, unsupported pair, cancellation and packaged runtime; document languages and licenses."
+      ],
+      "relatedIssues": [
+        "#54"
+      ],
+      "blockedBy": [
+        "#35",
+        "#39"
+      ],
+      "number": 106,
+      "url": "https://github.com/adilelhaji/oreneta/issues/106",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "tracking",
+      "sprint": "S09",
+      "title": "Apply privacy-preserving tracking protection under ADR-0001",
+      "areas": "HTML sanitizer; remote images; EasyPrivacy rules",
+      "architecture": "ADR-0001 accepted; no new remote telemetry",
+      "criteria": [
+        "Integrate pinned/versioned EasyPrivacy filtering with safe backend update path and visible blocking state.",
+        "Per-message exceptions are explicit; remote images, links and read receipts do not bypass account privacy settings.",
+        "Adversarial HTML/CSS/URLs and update failures are tested without contacting trackers; valid mail remains readable and filters have provenance."
+      ],
+      "relatedIssues": [
+        "#54"
+      ],
+      "blockedBy": [
+        "#35"
+      ],
+      "number": 107,
+      "url": "https://github.com/adilelhaji/oreneta/issues/107",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "cloud",
+      "sprint": "S10",
+      "title": "Add cloud attachment providers with explicit sharing permissions",
+      "areas": "attachment picker; backend integrations; OAuth",
+      "architecture": "required: approve external data flow, permissions and provider adapters",
+      "criteria": [
+        "Implement bounded providers for Dropbox, OneDrive, Drive, ownCloud, Nextcloud, vBoxxCloud and leitzcloud after inventory and approval.",
+        "Show destination, upload progress, actual access/expiry/password capabilities and final link before sending; no public sharing default.",
+        "Cancellation, revoked access, quota, failed upload, retry and link permission mismatch are tested; unsupported provider features remain visible."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "#39",
+        "#40"
+      ],
+      "number": 108,
+      "url": "https://github.com/adilelhaji/oreneta/issues/108",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "meetings",
+      "sprint": "S10",
+      "title": "Integrate online meeting creation and updates into calendar workflows",
+      "areas": "calendar; external meeting integrations",
+      "architecture": "required per provider: permissions, credentials, external operations",
+      "criteria": [
+        "Track Zoom, Meet, Teams, Webex, IceWarp, GoToMeeting, Meetn and additional stable-history services in the reference matrix.",
+        "Create/update/cancel only after explicit user action; bind meeting URL and organizer to the correct event/account.",
+        "Test unsupported licenses, revoked permission, request ambiguity and cancellation without duplicate meetings; no real invite delivery in CI."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "invitations"
+      ],
+      "number": 109,
+      "url": "https://github.com/adilelhaji/oreneta/issues/109",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "chat-design",
+      "sprint": "S10",
+      "title": "Decide native chat integration boundaries and provider capability contracts",
+      "areas": "architecture docs; chat prototype only",
+      "architecture": "required human architecture decision; discovery only",
+      "criteria": [
+        "Propose XMPP, Teams, Slack, Rocket.Chat and IceWarp TeamChat capability/permission matrix and per-provider slices.",
+        "Document independent message identity, history retention, file transfers, notifications, secret isolation and reconnect model within native architecture.",
+        "Review privacy, supported APIs/licenses, test tenancy and maintenance costs; no chat service/network implementation before approval."
+      ],
+      "relatedIssues": [
+        "#24",
+        "#25",
+        "#54"
+      ],
+      "blockedBy": [],
+      "number": 110,
+      "url": "https://github.com/adilelhaji/oreneta/issues/110",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "chat",
+      "sprint": "S10",
+      "title": "Implement approved direct, group and channel chat with attachments",
+      "areas": "chat UI; backend adapters; notifications",
+      "architecture": "blocked until chat-design approval",
+      "criteria": [
+        "Implement provider slices for direct/group/channel conversations with unread, history, mentions and supported files/presence capabilities.",
+        "Reconcile reconnect and partial history without duplicated sends; show uncertain outcomes and unsupported operations.",
+        "Independent provider evidence plus native UI tests cover ordering, permissions, account switching, notifications, file failures and cancellation."
+      ],
+      "relatedIssues": [
+        "#38"
+      ],
+      "blockedBy": [
+        "chat-design"
+      ],
+      "number": 111,
+      "url": "https://github.com/adilelhaji/oreneta/issues/111",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "migration",
+      "sprint": "S11",
+      "title": "Deliver guided import/export and local archive data files",
+      "areas": "import/export; local archives; onboarding",
+      "architecture": "required for new format dependencies/data-file model",
+      "criteria": [
+        "Inventory stable import sources (Outlook/PST, Thunderbird, Postbox and legacy clients) and EML/MBOX/ICS/VCF/settings round trips; each remains a tracked row.",
+        "Preview supported items, mappings, duplicates and warnings; copy before destructive changes and never mutate source profiles.",
+        "Large/corrupt/encrypted inputs, cancel/resume, repeat imports, attachments and Unicode get independent fixtures; unsupported formats cannot count as parity."
+      ],
+      "relatedIssues": [
+        "#25"
+      ],
+      "blockedBy": [
+        "#40",
+        "calendar-sync"
+      ],
+      "number": 112,
+      "url": "https://github.com/adilelhaji/oreneta/issues/112",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "backup",
+      "sprint": "S11",
+      "title": "Deliver scheduled complete-profile backups and rehearsed recovery",
+      "areas": "backup/restore; scheduler; profile migration",
+      "architecture": "required for consistency/encryption/retention contract changes",
+      "criteria": [
+        "Inventory all irreplaceable data, settings, drafts, identities and keys; distinguish rebuildable cache.",
+        "Schedule consistent backups while the app operates and support validated restore with explicit overwrite and snapshot-age warnings.",
+        "Test interruption, disk full, corrupted archive, key recovery, schema upgrade and failed update; keep sources intact until restoration verification."
+      ],
+      "relatedIssues": [
+        "#25",
+        "#54"
+      ],
+      "blockedBy": [
+        "profiles"
+      ],
+      "number": 113,
+      "url": "https://github.com/adilelhaji/oreneta/issues/113",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "windows",
+      "sprint": "S11",
+      "title": "Validate the actual Windows application and reproducible install/update artifacts",
+      "areas": "Windows packaging; WebView2; native integrations; CI",
+      "architecture": "gate only for signing/update policy changes; release authorization separate",
+      "criteria": [
+        "Exercise native WebView2 startup, real controlled mail read/send, setup, attachments, print, mailto/default app, tray and notifications.",
+        "Verify install/update/uninstall, DPI/IME, sleep/reconnect, proxy/certificate behavior and recovery on stated Windows versions/architectures.",
+        "Tie executable and installer to exact green CI SHA/checksums; retain only latest validated canonical artifacts after replacement verification, never discard locked/unsaved sessions."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "#53",
+        "#54",
+        "backup"
+      ],
+      "number": 114,
+      "url": "https://github.com/adilelhaji/oreneta/issues/114",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "macos",
+      "sprint": "S12",
+      "title": "Verify desktop parity on macOS and preserve existing Linux compatibility",
+      "areas": "WKWebView; WebKitGTK; packaging; native integration",
+      "architecture": "gate for platform/distribution policy changes",
+      "criteria": [
+        "Run desktop feature matrix on supported macOS OS/architectures with WKWebView, keychain, notifications, printing, IME and update/install evidence.",
+        "Linux remains a regression-supported Oreneta platform, not proof of eM macOS parity.",
+        "Record unavailable devices/signing/provider access as blockers; Windows screenshots or cross-compilation do not count as native platform verification."
+      ],
+      "relatedIssues": [],
+      "blockedBy": [
+        "windows",
+        "#37"
+      ],
+      "number": 115,
+      "url": "https://github.com/adilelhaji/oreneta/issues/115",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "mobile-scope",
+      "sprint": "S13",
+      "title": "Inventory mobile parity separately and request any new platform architecture",
+      "areas": "mobile inventory; product/architecture docs only",
+      "architecture": "discovery only; new iOS/Android architecture needs approval",
+      "criteria": [
+        "Compare current mobile product features with eM iOS/Android separately from desktop 10.4.",
+        "Map existing Oreneta Android capability and every missing platform feature to a follow-up; no claim of desktop completion proving mobile parity.",
+        "Propose supported-platform scope, maintenance and test budget; preserve desktop progress without quietly excluding mobile from a universal parity claim."
+      ],
+      "relatedIssues": [
+        "#22"
+      ],
+      "blockedBy": [],
+      "number": 116,
+      "url": "https://github.com/adilelhaji/oreneta/issues/116",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "beta-delta",
+      "sprint": "S13",
+      "title": "Maintain a separately versioned eM Client 11 beta delta backlog",
+      "areas": "reference inventory; scoped follow-up issues",
+      "architecture": "discovery first; architecture changes require individual approval",
+      "criteria": [
+        "Track 11.0.282.0 beta separately: AI assistant/natural-language search and rules, MCP, eM Sync, Matrix, Graph, and changed productivity/calendar behavior.",
+        "Create bounded implementation follow-ups only after stable overlap and architecture review; source version/date each row.",
+        "Recheck stable version at each sprint boundary; never silently enlarge committed sprint scope or count beta-only work as a stable blocker."
+      ],
+      "relatedIssues": [
+        "#22",
+        "#51",
+        "#52",
+        "#46"
+      ],
+      "blockedBy": [],
+      "number": 117,
+      "url": "https://github.com/adilelhaji/oreneta/issues/117",
+      "status": "unassessed",
+      "evidence": "No full-parity acceptance evidence yet"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "C01",
+      "domain": "Identity and shared design",
+      "issues": [
+        8,
+        33,
+        83
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Cobalt themes, semantic tokens, typography, icons, menus, forms, contrast, no decorative drift"
+    },
+    {
+      "id": "C02",
+      "domain": "Mail workspace",
+      "issues": [
+        32,
+        33,
+        34,
+        35,
+        36,
+        84,
+        85
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Conventional initial list/reader, persistent panels, density, keyboard, narrow/zoom behavior"
+    },
+    {
+      "id": "C03",
+      "domain": "Folder operations",
+      "issues": [
+        27,
+        34,
+        87
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Real hierarchy, favorites, colors, management, safe moves and selections"
+    },
+    {
+      "id": "C04",
+      "domain": "Reader",
+      "issues": [
+        35
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "HTML/plaintext, quotations, images, per-message actions, body zoom and scoped printing"
+    },
+    {
+      "id": "C05",
+      "domain": "Context",
+      "issues": [
+        86
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Agenda, invitations, contact communication/file history with origin and coverage"
+    },
+    {
+      "id": "C06",
+      "domain": "Lists",
+      "issues": [
+        30,
+        36
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Global order, stable pagination, configurable columns, saved layout and selection semantics"
+    },
+    {
+      "id": "C07",
+      "domain": "Compose",
+      "issues": [
+        39,
+        40,
+        88
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Account/alias, recipients, rich text/tables/images, spellcheck, drafts, attachments and recovery"
+    },
+    {
+      "id": "C08",
+      "domain": "Sending",
+      "issues": [
+        29,
+        45,
+        89
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Accepted versus unknown outcomes, Sent archival, scheduling, undo delay and follow-up"
+    },
+    {
+      "id": "C09",
+      "domain": "Personalized mail",
+      "issues": [
+        90
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Reviewed recipient-specific messages and accurate partial outcomes"
+    },
+    {
+      "id": "C10",
+      "domain": "Search",
+      "issues": [
+        31,
+        43
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Operators, visual filters, account/folder scopes, saved live views and partial coverage"
+    },
+    {
+      "id": "C11",
+      "domain": "Filing",
+      "issues": [
+        91,
+        95
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Categories, local/remote labels, flags, message annotations, reversible actions"
+    },
+    {
+      "id": "C12",
+      "domain": "Automation",
+      "issues": [
+        48,
+        50,
+        92,
+        94
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Local/server rules, spam correction, macros, vacation/forwarding where supported"
+    },
+    {
+      "id": "C13",
+      "domain": "Files",
+      "issues": [
+        40,
+        93
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "All-attachments search, previews, save/source links, bounded indexing"
+    },
+    {
+      "id": "C14",
+      "domain": "Accounts",
+      "issues": [
+        96,
+        99
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Email-first discovery, OAuth/manual recovery, service capability display, groups/profiles"
+    },
+    {
+      "id": "C15",
+      "domain": "Protocols/providers",
+      "issues": [
+        46,
+        47,
+        48,
+        97,
+        98
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "IMAP/SMTP, POP3, Gmail/Workspace, Outlook/M365, EWS on-prem, iCloud and listed service variants"
+    },
+    {
+      "id": "C16",
+      "domain": "Calendar",
+      "issues": [
+        100,
+        101
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Views/editing, recurrence, timezones, sync, subscriptions, reminders and search"
+    },
+    {
+      "id": "C17",
+      "domain": "Scheduling",
+      "issues": [
+        102
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Invitations/updates/cancellations, free/busy, delegated and read-only behavior"
+    },
+    {
+      "id": "C18",
+      "domain": "People",
+      "issues": [
+        28,
+        41,
+        86
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Detailed fields, groups, safe deduplication, editing, import/export, provenance/history"
+    },
+    {
+      "id": "C19",
+      "domain": "Tasks",
+      "issues": [
+        42,
+        103
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Existing linked-task recovery plus standalone lists, recurrence, reminders, delegation and sync"
+    },
+    {
+      "id": "C20",
+      "domain": "Notes",
+      "issues": [
+        104
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Standalone rich notes, tags/files/search, local and supported server sync"
+    },
+    {
+      "id": "C21",
+      "domain": "Crypto",
+      "issues": [
+        9,
+        12,
+        49
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Signing/encryption/decryption, key import/export/discovery policy and truthful trust states"
+    },
+    {
+      "id": "C22",
+      "domain": "Privacy",
+      "issues": [
+        54,
+        107
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Unsafe content isolation, tracker blocking, secrets, consent and diagnostic redaction"
+    },
+    {
+      "id": "C23",
+      "domain": "Language",
+      "issues": [
+        105,
+        106
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Offline grammar and translation, honest language coverage and packaged models"
+    },
+    {
+      "id": "C24",
+      "domain": "Assistant",
+      "issues": [
+        51,
+        52
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Explicit-context generation, revision/tone, summary and reviewed extraction, no autonomous mail actions"
+    },
+    {
+      "id": "C25",
+      "domain": "Integrations",
+      "issues": [
+        108,
+        109
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Cloud sharing and meeting lifecycle across the published provider inventory"
+    },
+    {
+      "id": "C26",
+      "domain": "Chat",
+      "issues": [
+        110,
+        111
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Direct/group/channel chat, supported presence/history/files and account isolation"
+    },
+    {
+      "id": "C27",
+      "domain": "Portability",
+      "issues": [
+        25,
+        112,
+        113
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Legacy imports, standard exports, local archives/data files, profiles and scheduled complete backups"
+    },
+    {
+      "id": "C28",
+      "domain": "Desktop operations",
+      "issues": [
+        37,
+        114,
+        115
+      ],
+      "status": "partial",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Notifications, shortcuts, touch, mailto/default app, proxy/TLS, printing, DPI/IME, install/update/recovery"
+    },
+    {
+      "id": "C29",
+      "domain": "Completion",
+      "issues": [
+        37,
+        53,
+        54,
+        55,
+        114,
+        115
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "Performance, accessibility, native E2E, current artifacts, remaining limitations and support"
+    },
+    {
+      "id": "C30",
+      "domain": "Later-version/platform deltas",
+      "issues": [
+        117,
+        116
+      ],
+      "status": "unassessed",
+      "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
+      "acceptance": "v11 beta and mobile separately scoped and tested"
+    }
+  ]
+}
