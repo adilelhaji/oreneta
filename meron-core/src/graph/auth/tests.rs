@@ -545,9 +545,11 @@ fn oauth_http_errors_are_bounded_sanitized_and_never_follow_redirects() {
                     Some(&[("code", "fixture-code")])
                 )
                 .err(),
-            Some(expected)
+            Some(expected),
+            "HTTP {code}"
         );
         assert_eq!(f.requests().len(), 1);
+        assert!(f.requests()[0].ends_with("code=fixture-code"));
     }
     let f = Fixture::new(|_| vec![(200, String::new(), "x".repeat(MAX_JSON as usize + 1))]);
     assert_eq!(

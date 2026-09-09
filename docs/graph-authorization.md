@@ -52,6 +52,8 @@ Implements accepted ADR-0004; no change to existing Outlook/Gmail OAuth.
 Validation: synthetic signed JWT/JWKS, OAuth and keychain fixtures; expiry,
 scope/resource/nonce/principal mismatch, cancellation/replay, refresh rotation,
 storage failure and secret-free responses. Existing required CI remains the gate.
+The HTTP fixture consumes POST bodies before closing its socket to avoid a
+Windows unread-request reset masking the intended provider error response.
 
 Sources checked 2026-09-09:
 [Microsoft code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow),
