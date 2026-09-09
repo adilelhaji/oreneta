@@ -329,6 +329,24 @@
   ],
   "issues": [
     {
+      "key": "graph-read-adapter",
+      "sprint": "S06",
+      "title": "Graph X1: account-scoped native read adapter and safe paging",
+      "areas": "meron-core/src/graph; docs/adr/0004-microsoft-graph.md",
+      "architecture": "approved ADR-0004; no account migration or active protocol switch in X1",
+      "criteria": [
+        "Typed folder/message reads and sparse delta checkpoints with account/collection isolation.",
+        "Minimal delegated scope checks, immutable IDs, bounded responses and safe HTTP transport.",
+        "Fixture/loopback tests, technical/business review and green exact-head CI; no live-provider parity claim."
+      ],
+      "relatedIssues": ["#46", "#24", "#25"],
+      "blockedBy": [],
+      "number": 125,
+      "url": "https://github.com/adilelhaji/oreneta/issues/125",
+      "status": "implemented-unverified",
+      "evidence": "ADR-0004 approved 2026-09-09; docs/graph-adapter.md records X1 boundaries and remaining integration."
+    },
+    {
       "key": "idle-readiness",
       "sprint": "S01",
       "title": "Make IMAP IDLE integration acceptance wait for watcher readiness",

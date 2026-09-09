@@ -85,6 +85,8 @@ rsa = "0.10.0-rc.1"
 der = "0.8.1"
 chrono = "0.4.44"
 url = "2.5.8"
+# Already resolved by url; decode Graph's equivalent OData continuation paths.
+percent-encoding = "2.3.2"
 uuid = { version = "1.23.1", features = ["v4"] }
 hickory-resolver = { version = "0.26.1", features = ["system-config"] }
 ring = "0.17"
