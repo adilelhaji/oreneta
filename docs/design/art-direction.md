@@ -24,13 +24,10 @@ identity decisions that were never written down anywhere.
 ## Palette
 
 The app icon (`assets/oreneta.svg`) is a cobalt swallow on navy — `#2E63F0`
-and `#15316E` — and the marketing page (`docs/index.html`) already uses the
-same blue. No shipped theme uses it: the default theme is "Indigo"
-(`#4f46e5`), and the two themes named for the pre-fork app — "Meron Light"
-and "Meron Dark" — are a green tuned to *that* icon, not this one. A design
-issue closes that gap directly (default theme, and retiring or renaming the
-two Meron-named ones); this page just states the colours those themes
-should be built from:
+and `#15316E` — and the marketing page uses the same blue. The
+[cobalt defaults](cobalt-themes.md) implement this palette for new profiles.
+Existing Indigo and legacy green selections remain available without palette
+rewrites. The target colors are:
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
@@ -38,12 +35,12 @@ should be built from:
 | `bg-sidenav` | `#15316e`-adjacent navy | near-black navy | The account rail |
 | Neutrals | Off-white with a faint cool cast, not pure `#fff` | Near-black navy, not pure `#000` | Everything else |
 
-### Semantic tokens (new)
+### Semantic tokens
 
 The 385 hardcoded uses above are almost all one of four ideas — success,
 warning, danger, informational — expressed as a Tailwind colour name
 instead of a token. Add four tokens, one pair of light/dark values each,
-to every theme (all 14 built-ins) and to the custom-theme editor's derived
+to every theme and to the custom-theme editor's derived
 output in [`lib/themes.ts`](../../frontend/src/lib/themes.ts):
 
 ```
@@ -58,6 +55,11 @@ token is the icon/text/border colour. This mirrors how `accent` /
 `accent-hover` already work. Migrating the 385 call sites onto these is a
 separate, mechanical issue — the same shape as the 311-call-site migration
 the original type-scale tokens went through.
+
+#83 adds these slots to all 16 built-ins and custom palettes, plus
+`--me-accent-text` for readable filled controls. Existing hardcoded status-color
+call sites still require the separate #33 migration; token availability is not
+evidence that every screen has adopted them.
 
 ## Type
 

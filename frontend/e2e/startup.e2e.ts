@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { createFixture } from '../baseline/fixtures'
+import { defaultCustomInput, deriveThemeTokens } from '../src/lib/themes'
 
 test.afterEach(async ({ page }) => {
   expect(await page.evaluate(() => (window as any).startupProbe?.unexpected ?? [])).toEqual([])
@@ -14,6 +15,7 @@ type SetupOptions = {
   navigation?: boolean
   theme?: string
   hideAccounts?: boolean
+  preferences?: Record<string, unknown>
 }
 async function prepareStartup(page: Page, withAccount = false, options: SetupOptions = {}) {
   const errors: string[] = []
@@ -60,7 +62,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'smime.certs': { certs: [] },
         'smime.identities': { identities: [] },
         'mail.suggestContacts': { contacts: [] },
-        'app.prefsGet': { prefs: { auto_update_check: false, language: options.language, ...(options.navigation ? { session_account: template.id, session_folder: 'INBOX', theme_id: options.theme ?? 'indigo', mark_read_mode: 'manual', sticky_filters: true, ...(options.hideAccounts ? { hidden_sidenav_accounts: [template.id, 'second-account'] } : {}) } : {}) } },
+        'app.prefsGet': { prefs: { auto_update_check: false, language: options.language, ...(options.navigation ? { session_account: template.id, session_folder: 'INBOX', ...(options.theme === 'default' ? {} : { theme_id: options.theme ?? 'indigo' }), mark_read_mode: 'manual', sticky_filters: true, ...(options.hideAccounts ? { hidden_sidenav_accounts: [template.id, 'second-account'] } : {}) } : {}), ...options.preferences } },
         'app.prefsSet': { ok: true },
         'mailto.consumePending': [],
         'i18n.setNativeLabels': { ok: true },
@@ -191,7 +193,7 @@ test('production entry boots onboarding and survives reload without React errors
   }
 })
 
-for (const theme of ['indigo', 'indigo-dark']) {
+for (const theme of ['indigo', 'indigo-dark', 'oreneta-light', 'oreneta-dark']) {
   test(`production mailbox navigation uses real folder IDs and account-scoped caches (${theme})`, async ({ page }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
     await page.goto('/')
@@ -433,5 +435,62 @@ test('production shell navigates settings, people, tasks and composer without ho
   await expect(editor).toContainText('Synthetic draft.')
   await expect(page.getByText(/Something went wrong/)).toHaveCount(0)
   expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+for (const appearance of ['light', 'dark'] as const) {
+  test(`fresh profile chooses cobalt ${appearance}, then preserves its choice across reload and OS changes`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: appearance })
+    const errors = await prepareStartup(page, true, { navigation: true, theme: 'default' })
+    await page.goto('/')
+    await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+    await expect(page.locator('html')).toHaveCSS('--me-accent', appearance === 'light' ? '#2056dd' : '#7ea6ff')
+    await expect(page.locator('html')).toHaveCSS('color-scheme', appearance)
+    for (const width of [1440, 1024, 600]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await info.attach(`cobalt-${appearance}-${width}`, { body: await page.screenshot({ path: info.outputPath(`cobalt-${width}.png`), animations: 'disabled' }), contentType: 'image/png' })
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.emulateMedia({ colorScheme: appearance === 'light' ? 'dark' : 'light' })
+    await page.reload()
+    await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+    await expect(page.locator('html')).toHaveCSS('color-scheme', appearance)
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('meron-theme-cache')!).themeId)).toBe(`oreneta-${appearance}`)
+    await page.keyboard.press('Control+n')
+    await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+    const filled = page.locator('.bg-accent.text-white').first()
+    await expect(filled).toHaveCSS('color', appearance === 'light' ? 'rgb(255, 255, 255)' : 'rgb(16, 27, 46)')
+    expect(errors).toEqual([])
+  })
+}
+
+test('saved legacy and custom theme palettes remain authoritative over OS appearance', async ({ page }) => {
+  const source = defaultCustomInput('light')
+  const tokens = { ...deriveThemeTokens(source), bgApp: '#123456', accent: '#654321' } as Record<string, string>
+  for (const key of ['success', 'successSoft', 'warning', 'warningSoft', 'danger', 'dangerSoft', 'info', 'infoSoft', 'accentText']) delete tokens[key]
+  const custom = { id: 'custom-saved', name: 'Saved custom palette', appearance: 'light', source, tokens }
+  await page.emulateMedia({ colorScheme: 'dark' })
+  const errors = await prepareStartup(page, true, { navigation: true, preferences: { theme_id: custom.id, custom_themes: [custom] } })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  for (let i = 0; i < 2; i++) {
+    await expect(page.locator('html')).toHaveCSS('--me-bg-app', '#123456')
+    await expect(page.locator('html')).toHaveCSS('--me-accent', '#654321')
+    await expect(page.locator('html')).toHaveCSS('color-scheme', 'light')
+    if (i === 0) await page.reload()
+  }
+  expect(errors).toEqual([])
+})
+
+test('a saved theme changes to cobalt only after an explicit picker action', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true, theme: 'indigo-dark' })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await expect(page.locator('html')).toHaveCSS('--me-accent', '#6366f1')
+  await page.keyboard.press('Control+,')
+  await page.getByText('Theme', { exact: true }).locator('../..').getByRole('button', { name: 'Change', exact: true }).click()
+  await page.getByRole('button', { name: 'Oreneta Light', exact: true }).click()
+  await expect(page.locator('html')).toHaveCSS('--me-accent', '#2056dd')
+  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'theme_id').at(-1)?.payload.value)).toBe('oreneta-light')
   expect(errors).toEqual([])
 })
