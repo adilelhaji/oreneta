@@ -63,16 +63,21 @@ not equate Outlook-resource scopes, app-only or shared scopes with `/me` access.
 
 ## Next implementation slices
 
-1. OAuth/PKCE and explicit account activation; distinct secure Graph grant,
+1. #127: OAuth/PKCE and explicit per-account authorization; distinct secure Graph grant,
    returned-scope verification, cancellation and refresh/revocation tests.
-2. Account-qualified Graph-to-cache projection, delta commit/recovery, local
-   draft/label preservation and compatible UI/session integration (#24/#25).
+2. #128: account-qualified Graph-to-cache projection, delta commit/recovery, local
+   draft/label preservation and explicit activation/UI/session integration (#24/#25).
 3. Writes, attachments, conditional updates and reconciled send lifecycle.
 4. Calendar/contacts and delegated capabilities; provider/native acceptance.
 
 X1 fixture/loopback tests run under the existing Rust CI job, offline from
 Microsoft. They test protocol behavior, not authorization of a real tenant or
 Windows/WebView2 rendering. #46 and the parity program remain open.
+The loopback fixture explicitly switches accepted sockets to blocking mode
+(Windows inherits the listener mode), and its proxy case completes CONNECT
+before reading the tunneled GET. Transport failure uses an owned connection,
+not a released ephemeral port. Local command:
+`cargo test --locked --manifest-path meron-core/Cargo.toml --lib graph::`.
 
 Sources verified 2026-09-09:
 [folder API](https://learn.microsoft.com/en-us/graph/api/user-list-mailfolders?view=graph-rest-1.0),

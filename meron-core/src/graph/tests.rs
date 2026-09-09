@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use std::{
     io::{Read, Write},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -34,6 +34,18 @@ fn wire_folder(id: &str) -> serde_json::Value {
         "unreadItemCount":2,"totalItemCount":3,"futureField":"ignored"})
 }
 
+fn read_request(stream: &mut TcpStream) -> String {
+    let mut bytes = Vec::new();
+    let mut buf = [0; 1024];
+    while !bytes.windows(4).any(|s| s == b"\r\n\r\n") && bytes.len() < 65536 {
+        match stream.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => bytes.extend_from_slice(&buf[..n]),
+        }
+    }
+    String::from_utf8(bytes).unwrap()
+}
+
 struct Fixture {
     base: Url,
     requests: Arc<Mutex<Vec<String>>>,
@@ -56,24 +68,25 @@ impl Fixture {
             while !stopping.load(Ordering::SeqCst) && Instant::now() < deadline {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Windows inherits the listener's nonblocking mode;
+                        // otherwise an early WouldBlock truncates the request.
+                        stream.set_nonblocking(false).unwrap();
                         stream
-                            .set_read_timeout(Some(Duration::from_secs(2)))
+                            .set_read_timeout(Some(Duration::from_secs(10)))
                             .unwrap();
                         stream
-                            .set_write_timeout(Some(Duration::from_secs(2)))
+                            .set_write_timeout(Some(Duration::from_secs(10)))
                             .unwrap();
-                        let mut bytes = Vec::new();
-                        let mut buf = [0; 1024];
-                        while !bytes.windows(4).any(|s| s == b"\r\n\r\n") && bytes.len() < 65536 {
-                            match stream.read(&mut buf) {
-                                Ok(0) | Err(_) => break,
-                                Ok(n) => bytes.extend_from_slice(&buf[..n]),
-                            }
+                        let mut request = read_request(&mut stream);
+                        if request.starts_with("CONNECT ") {
+                            // ureq HTTP proxies establish a tunnel, even for
+                            // this fixture's plaintext HTTP target.
+                            stream
+                                .write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                                .unwrap();
+                            request.push_str(&read_request(&mut stream));
                         }
-                        received
-                            .lock()
-                            .unwrap()
-                            .push(String::from_utf8(bytes).unwrap());
+                        received.lock().unwrap().push(request);
                         if let Some((status, headers, body)) = replies.next() {
                             let response = format!(
                                 "HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}",
@@ -294,6 +307,32 @@ fn child_folder_requires_scope_and_is_not_implicitly_a_full_tree() {
         ErrorKind::ConsentRequired
     );
     assert_eq!(fixture.requests().len(), 1);
+}
+
+#[test]
+fn explicit_account_proxy_is_used_instead_of_direct_origin() {
+    let origin = Fixture::new(|_| vec![]);
+    let proxy = Fixture::new(|_| vec![ok(json!({"value":[]}))]);
+    let mut client = origin.client();
+    client.proxy = crate::proxy::ProxyChoice::Custom(crate::proxy::ProxyConfig {
+        kind: crate::proxy::ProxyKind::Http,
+        host: "127.0.0.1".into(),
+        port: proxy.base.port().unwrap(),
+        username: String::new(),
+        password: String::new(),
+    });
+    let result = client.folders(None, None);
+    assert!(
+        result.is_ok(),
+        "{result:?}; origin {:?}; proxy {:?}",
+        origin.requests(),
+        proxy.requests()
+    );
+    assert!(result.unwrap().items.is_empty());
+    assert!(origin.requests().is_empty());
+    assert_eq!(proxy.requests().len(), 1);
+    assert!(proxy.requests()[0].starts_with("CONNECT "));
+    assert!(proxy.requests()[0].contains("GET /v1.0/me/mailFolders?"));
 }
 
 #[test]
@@ -529,13 +568,11 @@ fn retry_after_handles_seconds_and_http_dates_without_shortening_provider_delay(
 
 #[test]
 fn transport_failure_does_not_expose_request_url_or_token() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    drop(listener);
-    let mut client = client();
-    client.base = Url::parse(&format!("http://{addr}/v1.0/")).unwrap();
-    let err = client.folders(None, None).unwrap_err();
+    // Accepted connection closes without an HTTP response; no race for a
+    // recently released ephemeral port with concurrently running fixtures.
+    let fixture = Fixture::new(|_| vec![]);
+    let err = fixture.client().folders(None, None).unwrap_err();
     assert_eq!(err.kind, ErrorKind::Transport);
-    assert!(!format!("{err:?} {err}").contains(&addr.to_string()));
+    assert!(!format!("{err:?} {err}").contains(fixture.base.as_str()));
     assert!(!format!("{err:?} {err}").contains("fixture-token"));
 }

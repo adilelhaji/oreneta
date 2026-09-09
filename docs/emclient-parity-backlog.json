@@ -329,6 +329,42 @@
   ],
   "issues": [
     {
+      "key": "graph-oauth",
+      "sprint": "S06",
+      "title": "Graph X2: explicit delegated OAuth and isolated credential lifecycle",
+      "areas": "native OAuth; secure credentials; Graph grants",
+      "architecture": "approved ADR-0004; document exact secure-store contract before code",
+      "criteria": [
+        "Verified per-account identity, returned scopes and independent Graph grant.",
+        "PKCE/cancellation/refresh/revocation/storage failure tests; no existing-grant overwrite.",
+        "No working-account claim before X3 read/cache activation."
+      ],
+      "relatedIssues": ["#46", "#24", "#25"],
+      "blockedBy": ["#125"],
+      "number": 127,
+      "url": "https://github.com/adilelhaji/oreneta/issues/127",
+      "status": "absent",
+      "evidence": "Approved direction; implementation pending X1. See docs/graph-adapter.md."
+    },
+    {
+      "key": "graph-read-integration",
+      "sprint": "S06",
+      "title": "Graph X3: recoverable mail projection and explicit account activation",
+      "areas": "mail session; local store; account activation UI",
+      "architecture": "approved ADR-0004; document exact additive projection/recovery contract before code",
+      "criteria": [
+        "Full read hierarchy and recoverable atomic delta projection without identity/data loss.",
+        "Explicit account activation and honest unsupported write/send states.",
+        "Bridge/core/frontend fixtures preserve IMAP/EWS; provider/native acceptance separate."
+      ],
+      "relatedIssues": ["#46", "#24", "#25"],
+      "blockedBy": ["#125", "#127"],
+      "number": 128,
+      "url": "https://github.com/adilelhaji/oreneta/issues/128",
+      "status": "absent",
+      "evidence": "Approved direction; implementation follows separate grant lifecycle. See docs/graph-adapter.md."
+    },
+    {
       "key": "graph-read-adapter",
       "sprint": "S06",
       "title": "Graph X1: account-scoped native read adapter and safe paging",
