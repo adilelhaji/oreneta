@@ -1,13 +1,7 @@
+import { readOnlyTarget, isReadOnlyMail } from '../lib/mailCapabilities'
 import { observable } from '@legendapp/state'
 import type { ChatWallpaper, Message } from '../types'
-import {
-  facetsOf,
-  isFilterMode,
-  pauseMailFolderPersist,
-  persistMailFolder,
-  ui$,
-  type FilterMode,
-} from './ui'
+import { facetsOf, isFilterMode, pauseMailFolderPersist, persistMailFolder, ui$, type FilterMode } from './ui'
 import { mail$, refreshAccountFoldersCache } from './mail'
 import { accounts$ } from './accounts'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
@@ -409,6 +403,12 @@ export function switchKanbanColumnFolder(boardId: string, column: KanbanColumn, 
 // outside the loaded page are cleared too; RSS/starred aggregates fall back to
 // per loaded item/thread operations because they have no folder-wide unread flag.
 export async function markColumnAllRead(column: KanbanColumn) {
+  if (
+    readOnlyTarget(accounts$.peek(), column.accountId) ||
+    (column.accountId === 'unified' &&
+      accounts$.peek().some((a) => isReadOnlyMail(a) && a.included_in_unified !== false))
+  )
+    return
   const key = kanbanColumnKey(column)
   const threads = kanban$.threads[key].get() ?? []
   const unread = threads.filter((thread) => thread.unread)

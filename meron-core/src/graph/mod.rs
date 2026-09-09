@@ -1,8 +1,8 @@
 //! Microsoft Graph v1.0 read boundary (ADR-0004). Blocking: async hosts must
-//! use spawn_blocking. Not yet connected to account setup or the mail pool.
-//! No token exchange, persistence, automatic retries or protocol fallback.
+//! use spawn_blocking. Authorization and durable mail projection live in the
+//! auth and mail modules; this transport never retries or falls back to IMAP.
 
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{collections::HashSet, fmt, time::Duration};
 use url::Url;
 
@@ -12,8 +12,10 @@ const MAX_ITEMS: usize = 1000;
 const TIMEOUT: Duration = Duration::from_secs(30);
 
 pub mod auth;
+pub mod mail;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ErrorKind {
     InvalidInput,
     Reauthenticate,
@@ -26,6 +28,9 @@ pub enum ErrorKind {
     Unavailable,
     InvalidResponse,
     Transport,
+    Storage,
+    Cancelled,
+    AccountConflict,
 }
 
 /// Only locally generated categories; never provider text, URLs or tokens.
@@ -181,14 +186,16 @@ pub struct Page<T> {
     pub checkpoint: Option<Checkpoint>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Folder {
     pub id: ResourceId,
     pub fields: FolderFields,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderFields {
+    #[serde(rename = "@odata.type")]
+    pub item_type: Option<String>,
     pub display_name: String,
     pub parent_folder_id: Option<String>,
     pub child_folder_count: u32,
@@ -196,14 +203,14 @@ pub struct FolderFields {
     pub total_item_count: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Message {
     pub id: ResourceId,
     pub fields: MessageFields,
 }
 /// Delta responses may contain just changed fields. None is absent/unknown,
 /// never a request to clear a cached value. Tombstones contain only id/removed.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageFields {
     #[serde(rename = "@odata.etag")]
@@ -222,23 +229,29 @@ pub struct MessageFields {
     pub to_recipients: Option<Vec<Recipient>>,
     pub cc_recipients: Option<Vec<Recipient>>,
     pub body: Option<Body>,
+    pub flag: Option<Flag>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Flag {
+    pub flag_status: String,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Removed {
     pub reason: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recipient {
     pub email_address: EmailAddress,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EmailAddress {
     pub name: Option<String>,
     pub address: Option<String>,
 }
 /// Raw Graph HTML is untrusted: consumers must use the existing sanitizer.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Body {
     pub content_type: String,
@@ -272,6 +285,28 @@ impl Client {
             proxy,
             base: Url::parse(API).expect("static Graph URL"),
         }
+    }
+
+    /// Resolve a built-in role by its documented alias, never by display name.
+    pub fn well_known_folder(&self, alias: &str) -> Result<Folder> {
+        if !matches!(
+            alias,
+            "msgfolderroot"
+                | "inbox"
+                | "sentitems"
+                | "drafts"
+                | "deleteditems"
+                | "junkemail"
+                | "archive"
+        ) {
+            return Err(Error::new(ErrorKind::InvalidInput));
+        }
+        self.grant.authorize(false)?;
+        let item: WireItem<FolderFields> = self.get(&self.route(&["me", "mailFolders", alias]))?;
+        Ok(Folder {
+            id: self.response_id(ResourceKind::Folder, &item.id)?,
+            fields: item.fields,
+        })
     }
 
     /// Root folders only, or immediate children of the specified folder.
@@ -331,6 +366,8 @@ impl Client {
         let mut url = self.route(&["me", "mailFolders", &folder.opaque, "messages"]);
         if delta {
             url.path_segments_mut().unwrap().push("delta");
+            // Bodies are loaded on demand, not multiplied by an entire page.
+            url.query_pairs_mut().append_pair("$select", "id,parentFolderId,conversationId,internetMessageId,subject,receivedDateTime,isRead,isDraft,hasAttachments,from,toRecipients,ccRecipients,flag");
         }
         let page: Page<WireItem<MessageFields>> = self.page(url, checkpoint, delta)?;
         Ok(Page {
@@ -417,7 +454,13 @@ impl Client {
             _ => None,
         }
         .map(|(link, kind)| {
-            self.validate_link(&link, &collection)?;
+            if self
+                .validate_link(&link, &collection)?
+                .query()
+                .is_none_or(str::is_empty)
+            {
+                return Err(Error::new(ErrorKind::InvalidResponse));
+            }
             if kind == CheckpointKind::NextPage
                 && self.validate_link(&link, &collection)?.query() == url.query()
             {

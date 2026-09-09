@@ -41,7 +41,9 @@ export function RulesSettingsSection() {
   }, [])
 
   // Feeds have no mailbox to file into, so they are not offered as a target.
-  const mailAccounts = accounts.filter((account) => !isRssAccount(account, account.id))
+  const mailAccounts = accounts.filter(
+    (account) => !isRssAccount(account, account.id) && account.auth_type !== 'graph_oauth',
+  )
 
   const persist = async (next: Rule[]) => {
     try {
@@ -139,9 +141,7 @@ export function RulesSettingsSection() {
                   label={rule.name}
                   onChange={() =>
                     void persist(
-                      stored.map((item) =>
-                        item.id === rule.id ? { ...item, enabled: !item.enabled } : item,
-                      ),
+                      stored.map((item) => (item.id === rule.id ? { ...item, enabled: !item.enabled } : item)),
                     )
                   }
                 />
@@ -151,9 +151,7 @@ export function RulesSettingsSection() {
                   className="min-w-0 flex-1 text-left cursor-pointer"
                 >
                   <span className="block truncate text-ui font-semibold">{rule.name}</span>
-                  <span className="block truncate text-caption text-secondary">
-                    {ruleSummary(rule, t)}
-                  </span>
+                  <span className="block truncate text-caption text-secondary">{ruleSummary(rule, t)}</span>
                 </button>
                 <button
                   type="button"

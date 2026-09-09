@@ -51,6 +51,15 @@ export type ProviderDef = {
 // OAuth tab; the OAuth panel lists concrete provider sign-in buttons.
 export const PROVIDERS: ProviderDef[] = [
   {
+    id: 'graph',
+    label: 'Microsoft Graph',
+    descriptionKey: 'accounts.graph.readOnly',
+    defaultDescription: 'Read-only',
+    mode: 'graph',
+    isActive: (mode) => mode === 'graph',
+    icon: (s) => <MicrosoftIcon size={s} />,
+  },
+  {
     id: 'oauth',
     label: 'OAuth',
     descriptionKey: 'accounts.providers.oauthDescription',

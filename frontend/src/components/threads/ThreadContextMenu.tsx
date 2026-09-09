@@ -42,6 +42,7 @@ import {
 } from '../../states/mail'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
+import { readOnlyTarget } from '../../lib/mailCapabilities'
 import { formatDeferredWhen } from '../../lib/date'
 import type { Account, Message } from '../../types'
 import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
@@ -373,7 +374,8 @@ export function ThreadContextMenu({
   }
 
   const accountFolders = foldersByAccount[menu.accountId] ?? []
-  const canMove = accountFolders.some((folder) => folder.id !== menu.folderId)
+  const readOnly = readOnlyTarget(accounts, menu.accountId)
+  const canMove = !readOnly && accountFolders.some((folder) => folder.id !== menu.folderId)
   const copyAccountGroups = mailAccounts.map((account) => ({
     account,
     folders: foldersByAccount[account.id] ?? [],
@@ -394,6 +396,7 @@ export function ThreadContextMenu({
       onContextMenu={(event) => event.preventDefault()}
     >
       <MenuItem
+        disabled={readOnly}
         icon={
           menu.unread ? (
             <MailOpen size={13} className="text-secondary" />
@@ -411,6 +414,7 @@ export function ThreadContextMenu({
         }}
       />
       <MenuItem
+        disabled={readOnly}
         icon={<Star size={13} className={menu.starred ? 'fill-amber-500 text-amber-500' : 'text-secondary'} />}
         label={menu.starred ? t('threads.actions.unstarThread') : t('threads.actions.starThread')}
         onClick={() => {
@@ -460,23 +464,24 @@ export function ThreadContextMenu({
         />
       ) : (
         snoozeChoices().map((choice) => (
-        <MenuItem
-          key={choice.key}
-          icon={<Clock size={13} className="text-secondary" />}
-          label={t(`threads.snooze.${choice.key}`, {
-            defaultValue: choice.key,
-            when: formatDeferredWhen(choice.at),
-          })}
-          onClick={() => {
-            const threadId = menu.threadId
-            close()
-            void snoozeThread(threadId, choice.at).then(() => after('snooze', threadId))
-          }}
-        />
+          <MenuItem
+            key={choice.key}
+            icon={<Clock size={13} className="text-secondary" />}
+            label={t(`threads.snooze.${choice.key}`, {
+              defaultValue: choice.key,
+              when: formatDeferredWhen(choice.at),
+            })}
+            onClick={() => {
+              const threadId = menu.threadId
+              close()
+              void snoozeThread(threadId, choice.at).then(() => after('snooze', threadId))
+            }}
+          />
         ))
       )}
       <div className="my-1 border-t border-border" />
       <MenuItem
+        disabled={readOnly}
         icon={<Archive size={13} className="text-secondary" />}
         label={t('threads.actions.archiveThread')}
         onClick={() => {
@@ -489,6 +494,7 @@ export function ThreadContextMenu({
           the one offered. This branch is mail only — a feed returned above,
           and a feed has no junk folder to file into. */}
       <MenuItem
+        disabled={readOnly}
         icon={<Ban size={13} className="text-secondary" />}
         label={inJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')}
         onClick={() => {
@@ -511,12 +517,7 @@ export function ThreadContextMenu({
           ui$.taskEditor.set(editorState)
         }}
       />
-      <PriorityMenuSection
-        threadId={menu.threadId}
-        accountId={menu.accountId}
-        folderId={menu.folderId}
-        onAct={close}
-      />
+      <PriorityMenuSection threadId={menu.threadId} accountId={menu.accountId} folderId={menu.folderId} onAct={close} />
       {canMove && (
         <div
           ref={moveAnchorRef}
@@ -560,7 +561,7 @@ export function ThreadContextMenu({
           )}
         </div>
       )}
-      {mailAccounts.length > 0 && (
+      {!readOnly && mailAccounts.length > 0 && (
         <div
           ref={copyAnchorRef}
           onMouseEnter={() => {
@@ -618,6 +619,7 @@ export function ThreadContextMenu({
       <div className="my-1 border-t border-border" />
       <MenuItem
         danger
+        disabled={readOnly}
         icon={<Trash2 size={13} />}
         label={
           inTrash

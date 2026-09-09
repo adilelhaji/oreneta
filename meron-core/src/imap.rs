@@ -82,6 +82,8 @@ pub struct Creds {
 }
 
 impl Creds {
+    pub fn is_graph(&self) -> bool { self.auth_type == "graph_oauth" }
+
     /// Whether this account is served by the Exchange backend.
     pub fn is_ews(&self) -> bool {
         !self.ews_url.is_empty()
@@ -282,6 +284,7 @@ pub(crate) async fn starttls_socket(tcp: TcpStream) -> Result<TcpStream> {
 }
 
 pub async fn connect(creds: &Creds) -> Result<Session> {
+    if creds.is_graph() { return crate::graph::mail::unsupported(); }
     // STARTTLS connects in cleartext and upgrades after the greeting; implicit
     // TLS wraps the socket up front. Plaintext (neither flag) is for local test
     // servers only.

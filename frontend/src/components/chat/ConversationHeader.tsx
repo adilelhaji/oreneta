@@ -23,14 +23,7 @@ import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
-import {
-  archiveThread,
-  deleteThread,
-  mail$,
-  markThreadRead,
-  markThreadUnread,
-  starThread,
-} from '../../states/mail'
+import { archiveThread, deleteThread, mail$, markThreadRead, markThreadUnread, starThread } from '../../states/mail'
 import { printConversation } from '../../lib/print'
 import { LabelPicker } from './LabelPicker'
 import { thread$, type ConversationMode } from '../../states/thread'
@@ -45,6 +38,7 @@ import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
 import { accountIdentities, accounts$ } from '../../states/accounts'
+import { readOnlyTarget } from '../../lib/mailCapabilities'
 
 // The conversation header: back/close affordances, sender info, the desktop
 // in-thread search box and the overflow actions menu (view mode, star, archive,
@@ -81,6 +75,7 @@ export function ConversationHeader({
   const loadedMessages = useValue(mail$.messages)
   const messagesCursor = useValue(mail$.messagesCursor)
   const accounts = useValue(accounts$)
+  const readOnly = readOnlyTarget(accounts, activeThread.account_id)
   const ownAddresses = accounts
     .filter((account) => account.id === activeThread.account_id)
     .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
@@ -261,12 +256,14 @@ export function ConversationHeader({
                   only less immediate. */}
               <IconButton
                 icon={Star}
+                disabled={readOnly}
                 label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
                 className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-amber-500')}
                 onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
               />
               <IconButton
                 icon={activeThread.unread ? MailOpen : Mail}
+                disabled={readOnly}
                 label={activeThread.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
                 className="hidden min-[860px]:flex"
                 onClick={() =>
@@ -280,11 +277,13 @@ export function ConversationHeader({
                   <LabelPicker threadId={activeThread.thread_id} applied={activeThread.labels ?? []} />
                   <IconButton
                     icon={Archive}
+                    disabled={readOnly}
                     label={t('threads.actions.archiveThread')}
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   <IconButton
                     icon={Trash2}
+                    disabled={readOnly}
                     label={t('threads.actions.moveToTrash')}
                     onClick={() => void deleteThread(activeThread.thread_id)}
                   />
@@ -338,9 +337,7 @@ export function ConversationHeader({
                       // Every message of the conversation, in the order they
                       // were written: a printout of one message out of twelve
                       // is a printout of a fragment.
-                      messages: mail$.messages
-                        .peek()
-                        .filter((message) => message.thread_id === activeThread.thread_id),
+                      messages: mail$.messages.peek().filter((message) => message.thread_id === activeThread.thread_id),
                       printedLabel: t('print.printedOn'),
                       toLabel: t('print.to'),
                       ccLabel: t('print.cc'),
@@ -352,6 +349,7 @@ export function ConversationHeader({
                   <Printer size={15} className="shrink-0" /> {t('print.action')}
                 </button>
                 <button
+                  disabled={readOnly}
                   onClick={() => {
                     void starThread(activeThread.thread_id, !activeThread.starred)
                     setActionsMenuOpen(false)
@@ -367,6 +365,7 @@ export function ConversationHeader({
                 {!isRSS && (
                   <>
                     <button
+                      disabled={readOnly}
                       onClick={() => {
                         void archiveThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
@@ -376,6 +375,7 @@ export function ConversationHeader({
                       <Archive size={15} className="shrink-0" /> {t('threads.actions.archiveThread')}
                     </button>
                     <button
+                      disabled={readOnly}
                       onClick={() => {
                         void deleteThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
@@ -431,7 +431,7 @@ export function ConversationHeader({
           <MenuItem
             icon={<SquarePen size={13} className="text-accent" />}
             label={t('chat.newMessageTo', { email: senderEmail })}
-            disabled={!senderEmail}
+            disabled={!senderEmail || readOnly}
             onClick={() => {
               openComposeTab({ accountId: activeThread.account_id, to: senderRecipient })
               setSenderMenu(null)

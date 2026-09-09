@@ -442,7 +442,8 @@ fn delta_preserves_sparse_changes_tombstones_and_round_boundary() {
         .unwrap();
     assert_eq!(third.items[0].fields.is_read, Some(false));
     let requests = fixture.requests();
-    assert!(requests[0].starts_with("GET /v1.0/me/mailFolders/A/messages/delta HTTP/"));
+    assert!(requests[0].starts_with("GET /v1.0/me/mailFolders/A/messages/delta?"));
+    assert!(requests[0].contains("%24select="));
     assert!(requests[1].contains("?$skiptoken=next "));
     assert!(requests[1].starts_with("GET /v1.0/me/mailfolders('A')/messages/delta?"));
     assert!(requests[2].contains("?$deltatoken=final "));

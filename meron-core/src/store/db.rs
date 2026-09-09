@@ -633,6 +633,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 32 {
         migrate_v32(&tx)?;
     }
+    if version < 33 {
+        tx.execute_batch(crate::graph::mail::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 33)?;
+    }
 
     tx.commit()?;
     Ok(())

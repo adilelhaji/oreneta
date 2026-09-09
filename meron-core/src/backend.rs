@@ -21,6 +21,7 @@ use crate::parse;
 pub enum Session {
     Imap(imap::Session),
     Ews(crate::exchange::EwsSession),
+    Graph(crate::graph::mail::Session),
 }
 
 /// Establish a fresh authenticated session for `creds`. An account's protocol
@@ -35,6 +36,7 @@ pub async fn connect(
     account: &str,
     db: std::sync::Arc<std::sync::Mutex<rusqlite::Connection>>,
 ) -> Result<Session> {
+    if creds.is_graph() { return crate::graph::mail::unsupported(); }
     if creds.is_ews() {
         return Ok(Session::Ews(crate::exchange::EwsSession::new(
             crate::exchange::EwsConfig {
@@ -67,6 +69,7 @@ fn ews_unsupported<T>(operation: &str) -> Result<T> {
 impl Session {
     pub async fn list_folders(&mut self) -> Result<Vec<imap::Folder>> {
         match self {
+            Session::Graph(session) => session.list_folders(),
             Session::Imap(session) => imap::list_folders(session).await,
             Session::Ews(session) => session.list_folders().await,
         }
@@ -74,6 +77,7 @@ impl Session {
 
     pub async fn create_folder(&mut self, name: &str) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::create_folder(session, name).await,
             Session::Ews(_) => ews_unsupported("create_folder"),
         }
@@ -81,6 +85,7 @@ impl Session {
 
     pub async fn prepare_folder_delete(&mut self) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::prepare_folder_delete(session).await,
             Session::Ews(_) => ews_unsupported("prepare_folder_delete"),
         }
@@ -88,6 +93,7 @@ impl Session {
 
     pub async fn delete_folders(&mut self, names: &[String]) -> Result<Vec<String>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::delete_folders(session, names).await,
             Session::Ews(_) => ews_unsupported("delete_folders"),
         }
@@ -95,6 +101,7 @@ impl Session {
 
     pub async fn fetch_recent(&mut self, folder: &str, limit: u32) -> Result<imap::RecentBatch> {
         match self {
+            Session::Graph(session) => session.cached_recent(folder, limit),
             Session::Imap(session) => imap::fetch_recent(session, folder, limit).await,
             Session::Ews(session) => session.fetch_recent(folder, limit).await,
         }
@@ -105,6 +112,7 @@ impl Session {
     /// unreadable message cannot sink the batch.
     pub async fn recent_uids(&mut self, folder: &str, limit: u32) -> Result<(u32, u32, Vec<u32>)> {
         match self {
+            Session::Graph(session) => { let b=session.cached_recent(folder,limit)?; Ok((b.uidvalidity,b.uid_next,b.messages.into_iter().map(|m|m.uid).collect())) },
             Session::Imap(session) => imap::recent_uids(session, folder, limit).await,
             Session::Ews(session) => {
                 // Exchange has no UIDVALIDITY, and the mapping already knows
@@ -119,6 +127,7 @@ impl Session {
 
     pub async fn search_uids(&mut self, folder: &str, query: &str) -> Result<Vec<u32>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::search_uids(session, folder, query).await,
             Session::Ews(_) => ews_unsupported("search_uids"),
         }
@@ -126,6 +135,7 @@ impl Session {
 
     pub async fn list_all_uids(&mut self, folder: &str) -> Result<HashSet<u32>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::list_all_uids(session, folder).await,
             Session::Ews(_) => ews_unsupported("list_all_uids"),
         }
@@ -133,6 +143,7 @@ impl Session {
 
     pub async fn search_starred_uids(&mut self, folder: &str, limit: u32) -> Result<Vec<u32>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::search_starred_uids(session, folder, limit).await,
             Session::Ews(_) => ews_unsupported("search_starred_uids"),
         }
@@ -146,6 +157,7 @@ impl Session {
         account: &str,
     ) -> Result<Vec<imap::FetchedMessage>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => {
                 imap::fetch_by_message_ids(session, folder, ids, media_root, account).await
             }
@@ -159,6 +171,7 @@ impl Session {
         uids: &[u32],
     ) -> Result<Vec<imap::MessageHeader>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::fetch_headers_by_uid(session, folder, uids).await,
             Session::Ews(_) => ews_unsupported("fetch_headers_by_uid"),
         }
@@ -176,6 +189,7 @@ impl Session {
         uids: &[u32],
     ) -> Result<Vec<(u32, bool)>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::fetch_attachment_flags(session, folder, uids).await,
             Session::Ews(_) => Ok(Vec::new()),
         }
@@ -188,6 +202,7 @@ impl Session {
         validity_matches: bool,
     ) -> Result<imap::FlagSync> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => {
                 imap::sync_flags(session, folder, since_modseq, validity_matches).await
             }
@@ -202,6 +217,7 @@ impl Session {
         media: &parse::MediaCtx,
     ) -> Result<parse::Message> {
         match self {
+            Session::Graph(session) => session.read_message(folder, uid).await,
             Session::Imap(session) => imap::read_message(session, folder, uid, media).await,
             Session::Ews(session) => session.read_message(folder, uid, media).await,
         }
@@ -209,6 +225,7 @@ impl Session {
 
     pub async fn prepare_flag_update(&mut self, folder: &str) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::prepare_flag_update(session, folder).await,
             Session::Ews(session) => {
                 session.prepare_flag_update(folder);
@@ -224,6 +241,7 @@ impl Session {
     /// not have to know which protocols answer.
     pub async fn list_calendars(&mut self) -> Result<Vec<crate::calendar::Calendar>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Ok(Vec::new()),
             Session::Ews(session) => session.list_calendars().await,
         }
@@ -237,6 +255,7 @@ impl Session {
         to: i64,
     ) -> Result<Vec<crate::calendar::Event>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Ok(Vec::new()),
             Session::Ews(session) => session.events_in_window(calendar_id, from, to).await,
         }
@@ -244,6 +263,7 @@ impl Session {
 
     pub async fn create_calendar(&mut self, name: &str) -> Result<String> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.create_calendar(name).await,
         }
@@ -251,6 +271,7 @@ impl Session {
 
     pub async fn rename_calendar(&mut self, calendar_id: &str, name: &str) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.rename_calendar(calendar_id, name).await,
         }
@@ -258,6 +279,7 @@ impl Session {
 
     pub async fn delete_calendar(&mut self, calendar_id: &str) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.delete_calendar(calendar_id).await,
         }
@@ -270,6 +292,7 @@ impl Session {
         notify: bool,
     ) -> Result<crate::calendar::Event> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.create_event(event, notify).await,
         }
@@ -283,6 +306,7 @@ impl Session {
         response: crate::calendar::Response,
     ) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.respond(event_id, change_key, response).await,
         }
@@ -296,6 +320,7 @@ impl Session {
         query: &str,
     ) -> Result<Vec<crate::calendar::Participant>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Ok(Vec::new()),
             Session::Ews(session) => session.resolve_names(query).await,
         }
@@ -308,6 +333,7 @@ impl Session {
         change_key: Option<&str>,
     ) -> Result<(Vec<crate::calendar::Participant>, String)> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Ok((Vec::new(), String::new())),
             Session::Ews(session) => session.event_details(event_id, change_key).await,
         }
@@ -320,6 +346,7 @@ impl Session {
         change_key: Option<&str>,
     ) -> Result<Option<crate::calendar::Recurrence>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Ok(None),
             Session::Ews(session) => session.series_rule(event_id, change_key).await,
         }
@@ -332,6 +359,7 @@ impl Session {
         notify: bool,
     ) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.update_event(event, whole_series, notify).await,
         }
@@ -345,6 +373,7 @@ impl Session {
         notify: bool,
     ) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!("this account has no calendar")),
             Session::Ews(session) => session.delete_event(id, change_key, whole_series, notify).await,
         }
@@ -354,6 +383,7 @@ impl Session {
     /// accounts submit through SMTP, which is not a session operation.
     pub async fn send_mime(&mut self, raw: Vec<u8>) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(_) => Err(anyhow::anyhow!(
                 "IMAP accounts send through SMTP, not the mail session"
             )),
@@ -363,6 +393,7 @@ impl Session {
 
     pub async fn store_seen(&mut self, uids: &[u32], seen: bool) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::store_seen(session, uids, seen).await,
             Session::Ews(session) => session.store_seen(uids, seen).await,
         }
@@ -370,6 +401,7 @@ impl Session {
 
     pub async fn store_starred(&mut self, uids: &[u32], starred: bool) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::store_starred(session, uids, starred).await,
             Session::Ews(_) => ews_unsupported("store_starred"),
         }
@@ -380,6 +412,7 @@ impl Session {
     /// isn't Gmail, including Exchange: nothing here to write to.
     pub async fn store_gmail_label(&mut self, uids: &[u32], label: &str, present: bool) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::store_gmail_label(session, uids, label, present).await,
             Session::Ews(_) => Ok(()),
         }
@@ -392,6 +425,7 @@ impl Session {
         uids: &[u32],
     ) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => {
                 imap::move_to_folder(session, source_folder, dest_folder, uids).await
             }
@@ -407,6 +441,7 @@ impl Session {
         uids: &[u32],
     ) -> Result<Vec<imap::RawMessageCopy>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => {
                 imap::fetch_raw_messages_for_copy(session, folder, uids).await
             }
@@ -420,6 +455,7 @@ impl Session {
         message: &imap::RawMessageCopy,
     ) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::append_copied_message(session, folder, message).await,
             Session::Ews(_) => ews_unsupported("append_copied_message"),
         }
@@ -427,6 +463,7 @@ impl Session {
 
     pub async fn expunge_uids(&mut self, folder: &str, uids: &[u32]) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::expunge_uids(session, folder, uids).await,
             Session::Ews(session) => session.expunge_uids(folder, uids).await,
         }
@@ -434,6 +471,7 @@ impl Session {
 
     pub async fn empty_folder(&mut self, folder: &str) -> Result<u32> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::empty_folder(session, folder).await,
             Session::Ews(_) => ews_unsupported("empty_folder"),
         }
@@ -441,6 +479,7 @@ impl Session {
 
     pub async fn append_to_sent(&mut self, folder: &str, raw: &[u8]) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::append_to_sent(session, folder, raw).await,
             Session::Ews(_) => ews_unsupported("append_to_sent"),
         }
@@ -453,6 +492,7 @@ impl Session {
         message_id: &str,
     ) -> Result<()> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::replace_draft(session, folder, raw, message_id).await,
             Session::Ews(_) => ews_unsupported("replace_draft"),
         }
@@ -460,6 +500,7 @@ impl Session {
 
     pub async fn discard_draft(&mut self, folder: &str, message_id: &str) -> Result<usize> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::discard_draft(session, folder, message_id).await,
             Session::Ews(_) => ews_unsupported("discard_draft"),
         }
@@ -520,6 +561,7 @@ impl Session {
         peek: bool,
     ) -> Result<Option<parse::Message>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::fetch_full_message(session, uid, media, peek).await,
             Session::Ews(_) => ews_unsupported("fetch_full_message"),
         }
@@ -533,6 +575,7 @@ impl Session {
         account: &str,
     ) -> Result<Vec<(u32, parse::Message)>> {
         match self {
+            Session::Graph(session) => session.fetch_bodies(folder, uids).await,
             Session::Imap(session) => {
                 imap::fetch_bodies(session, folder, uids, media_root, account).await
             }
@@ -544,6 +587,7 @@ impl Session {
 
     pub async fn search_prefetch_uids(&mut self, folder: &str, days: u32) -> Result<Vec<u32>> {
         match self {
+            Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::search_prefetch_uids(session, folder, days).await,
             Session::Ews(session) => session.search_prefetch_uids(folder, days),
         }

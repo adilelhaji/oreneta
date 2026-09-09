@@ -57,6 +57,7 @@ fn is_transient_io_error(error: &std::io::Error) -> bool {
 }
 
 fn is_transient_sync_error(error: &anyhow::Error) -> bool {
+    if error.downcast_ref::<meron_core::graph::Error>().is_some() { return false; }
     for cause in error.chain() {
         if let Some(io_error) = cause.downcast_ref::<std::io::Error>()
             && is_transient_io_error(io_error)
@@ -176,6 +177,31 @@ mod tests {
         fn open_db(&self) -> anyhow::Result<rusqlite::Connection> { meron_core::store::open_at(":memory:") }
         fn apply_secret(&self, _: &rusqlite::Connection, _: &str, _: &mut meron_core::imap::Creds) {}
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
+    }
+    #[tokio::test]
+    async fn graph_activation_rpc_rejects_unauthorized_and_remote_mutations() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        assert!(dispatch(&engine,&request("graph.activationBegin",json!({"attempt":"unknown"})),&writer).await.is_err());
+        let account="graph@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[account]).unwrap();
+        for method in ["send","save_draft","discard_draft","messages.markRead","messages.markStarred","messages.delete","messages.move","messages.copy","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
+            assert!(error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        assert!(dispatch(&engine,&request("account.connect",json!({"account":account,"host":"should-not-dial"})),&writer).await.is_err());
+        let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
+        assert_eq!(list["accounts"][0]["needs_reconnect"],true);
+        assert!(!list.to_string().contains("access_token"));
+    }
+    #[test]
+    fn graph_failures_do_not_enter_imap_retry_policy() {
+        for kind in [meron_core::graph::ErrorKind::Throttled,meron_core::graph::ErrorKind::Transport,meron_core::graph::ErrorKind::Unavailable,meron_core::graph::ErrorKind::Reauthenticate] {
+            let error=meron_core::graph::Error{kind,status:None,retry_after_seconds:Some(30)};
+            assert!(!is_transient_sync_error(&anyhow::Error::new(error).context("timeout must not override Graph retry policy")));
+        }
     }
     #[tokio::test]
     async fn graph_rpc_begin_poll_cancel_and_legacy_removal_are_secret_free() {
@@ -1110,7 +1136,7 @@ async fn idle_watch(engine: Arc<Engine>, out: Writer, account: String, folder: S
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
-            Some(creds) if creds.is_ews() => {
+            Some(creds) if creds.is_ews() || creds.is_graph() => {
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
@@ -1490,6 +1516,7 @@ async fn prepare_recent_cache(
 
 async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::Result<Value> {
     let p = &req.params;
+    meron_core::graph::mail::guard_command(&engine.db.lock().unwrap(),&req.method,p)?;
     match req.method.as_str() {
         "ping" => Ok(ping_response()),
 
@@ -1516,6 +1543,32 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let attempt = req_str(p, "attempt")?;
             Ok(serde_json::to_value(tokio::task::spawn_blocking(move || manager.poll(&attempt)).await?)?)
         }
+        "graph.activationBegin" => {
+            let _lifecycle=engine.graph_lifecycle.lock().await;
+            let lease=engine.graph_mail.activate(&req_str(p,"attempt")?,p.get("display_name").and_then(Value::as_str).unwrap_or("Microsoft Graph"))?;
+            Ok(serde_json::to_value(lease)?)
+        }
+        "graph.activationPoll" => {
+            let account=req_str(p,"account")?;
+            let generation=req_str(p,"generation")?;
+            let status={
+                let conn=engine.db.lock().unwrap();
+                let current:String=conn.query_row("SELECT generation FROM graph_profiles WHERE account=?1",[&account],|r|r.get(0))?;
+                anyhow::ensure!(generation==current,"Microsoft Graph: Cancelled");
+                meron_core::graph::mail::status(&conn,&account)?
+            };
+            if status.mail_backend_ready {
+                let mut accounts=engine.accounts.lock().await;
+                if let Some(creds)=store::load_account(&engine.db.lock().unwrap(),&account)? {accounts.insert(account,creds);}
+            }
+            Ok(serde_json::to_value(status)?)
+        }
+        "graph.activationCancel" => {
+            let _lifecycle=engine.graph_lifecycle.lock().await;
+            let lease=meron_core::graph::mail::Lease{account:req_str(p,"account")?,generation:req_str(p,"generation")?};
+            meron_core::graph::mail::cancel(&engine.db.lock().unwrap(),&lease)?;
+            Ok(json!({"ok":true}))
+        }
         "graph.authCancel" => {
             let manager = engine.graph_auth.clone();
             let attempt = req_str(p, "attempt")?;
@@ -1533,8 +1586,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(serde_json::to_value(result)?)
         }
         "graph.disconnect" => {
+            let _lifecycle=engine.graph_lifecycle.lock().await;
             let manager = engine.graph_auth.clone();
             let account = req_str(p, "account")?;
+            {
+                let conn=engine.db.lock().unwrap();
+                if let Ok(generation)=conn.query_row("SELECT generation FROM graph_profiles WHERE account=?1",[&account],|r|r.get::<_,String>(0)) {
+                    meron_core::graph::mail::cancel(&conn,&meron_core::graph::mail::Lease{account:account.clone(),generation})?;
+                }
+            }
             tokio::task::spawn_blocking(move || manager.disconnect(&account)).await??;
             Ok(json!({"ok":true}))
         }
@@ -2929,6 +2989,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     continue;
                 };
                 if let Some(obj) = account.as_object_mut() {
+                    if obj.get("auth_type").and_then(Value::as_str)==Some("graph_oauth") {
+                        let status=meron_core::graph::mail::status(&engine.db.lock().unwrap(),&id);
+                        let reconnect=status.as_ref().map_or(true,|s|matches!(s.error.as_deref(),Some("reauthenticate"|"consent_required"|"access_denied")));
+                        obj.insert("needs_reconnect".into(),json!(reconnect));
+                        continue;
+                    }
                     let needs_reconnect = live_accounts
                         .get(&id)
                         .is_none_or(|creds| !creds_have_required_secret(creds));
@@ -3083,6 +3149,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // Store (and validate) IMAP credentials for an account.
         "account.connect" => {
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
+            anyhow::ensure!(p.get("auth_type").and_then(Value::as_str)!=Some("graph_oauth") && !store::load_account(&engine.db.lock().unwrap(),&id)?.is_some_and(|c|c.is_graph()),"Graph accounts require the dedicated authorization and activation flow");
             // Exchange accounts carry an EWS endpoint URL and no IMAP server,
             // so `host` is required only for the IMAP path.
             let ews_url = p
@@ -3647,11 +3714,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 let folders = rss::folders(&engine.db.lock().unwrap(), &account)?;
                 return Ok(json!({ "folders": folders }));
             }
-            let folders = store::get_folders(&engine.db.lock().unwrap(), &account)?;
+            let mut folders = serde_json::to_value(store::get_folders(&engine.db.lock().unwrap(), &account)?)?;
+            meron_core::graph::mail::decorate_folders(&engine.db.lock().unwrap(),&account,&mut folders)?;
             if p.get("refresh").and_then(Value::as_bool).unwrap_or(true) {
                 spawn_folder_sync(engine.clone(), out.clone(), account);
             }
-            Ok(json!({ "folders": serde_json::to_value(folders)? }))
+            Ok(json!({ "folders": folders }))
         }
 
         "folders.create" => {
@@ -5722,7 +5790,7 @@ async fn apply_oof_to_arrivals(engine: &Arc<Engine>, account: &str, headers: &[i
     let Ok(creds) = engine.ensure_valid_creds(account).await else {
         return;
     };
-    if creds.is_ews() {
+    if creds.is_ews() || creds.is_graph() {
         return;
     }
     let oof = {
@@ -5835,6 +5903,7 @@ fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
 /// later. A message posted at eight has to be the same message in every
 /// respect as the one that would have gone at six.
 async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> {
+        meron_core::graph::mail::guard_command(&engine.db.lock().unwrap(),"send",p)?;
         let account = req_str(p, "account")?;
         let to = req_str(p, "to")?;
         let cc = req_str(p, "cc").unwrap_or_default();
