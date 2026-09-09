@@ -20,6 +20,12 @@ Meron does, plus:
   (Exchange, Google Calendar), alongside local calendars and read-only
   subscriptions to published `.ics` addresses.
 
+## Delivery roadmap
+
+The [eM Client parity plan](docs/emclient-parity-plan.md) tracks the frozen
+reference, sprint backlog, architecture gates and acceptance evidence. It is a
+delivery target, not a claim that Oreneta has already reached parity.
+
 ## Building
 
 ```sh
