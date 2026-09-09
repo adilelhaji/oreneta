@@ -1,0 +1,734 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "version": "10.4.5674.0",
+    "platform": "Windows desktop",
+    "reviewedAt": "2026-09-09",
+    "releaseHistory": "https://www.emclient.com/release-history?os=win",
+    "settingsIndex": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+    "note": "10.0 docs identify settings families; reconcile detailed behavior with frozen 10.4 before asserting exact parity. Beta/mobile are separate."
+  },
+  "baselineSha": "e1bb6d439fc13aa9d0d16285068b0ecc59c83486",
+  "rows": [
+    {
+      "id": "S01-01",
+      "issue": 83,
+      "section": "Appearance/Themes",
+      "outcome": "Absent theme preference selects documented cobalt light/dark defaults",
+      "status": "partial",
+      "present": "DEFAULT_LIGHT_ID/DEFAULT_DARK_ID still select Indigo",
+      "code": "frontend/src/lib/themes.ts",
+      "acceptance": "Unit default-ID/token/contrast checks plus real-entry light/dark startup and restart",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "S01-02",
+      "issue": 83,
+      "section": "Appearance/Themes",
+      "outcome": "Persisted built-in and custom choices survive startup and restart",
+      "status": "implemented-unverified",
+      "present": "Existing bootstrapThemeSelection/loadSettings/applyActiveTheme paths require regression characterization",
+      "code": "frontend/src/states/settings.ts",
+      "acceptance": "Test existing IDs, custom token round-trip, invalid IDs, cache/backend precedence and explicit reset",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "S01-03",
+      "issue": 84,
+      "section": "Appearance/Lists; Mail/Conversations",
+      "outcome": "New profiles open conventional list and reader; explicit old modes remain",
+      "status": "partial",
+      "present": "listView=cards and conversationLayout=chat are current defaults",
+      "code": "frontend/src/states/settings.ts",
+      "acceptance": "Test missing vs saved preferences and production read/reply/select workflow",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "S01-04",
+      "issue": 84,
+      "section": "Appearance/Layout",
+      "outcome": "An existing user can deliberately select the conventional experience",
+      "status": "unassessed",
+      "present": "Existing separate controls must be evaluated for a discoverable explicit switch",
+      "code": "frontend/src/components/dialog/SettingsDialog.tsx",
+      "acceptance": "Exercise switching and persistence without modifying drafts or account identity",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "S01-05",
+      "issue": 85,
+      "section": "Appearance/Layout",
+      "outcome": "Reader, navigation and essential actions remain usable at pane boundaries",
+      "status": "partial",
+      "present": "Known 600px offscreen-reader characterization remains",
+      "code": "frontend/baseline",
+      "acceptance": "Positive visible-reader and back/list tests at 599/600/601, 1024/1025 and 200% zoom",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "S01-06",
+      "issue": 34,
+      "section": "Appearance/Lists",
+      "outcome": "Unread, open, focused and multi-selected rows have distinct meaning",
+      "status": "partial",
+      "present": "Real navigation merged in #82; list/selection acceptance incomplete",
+      "code": "frontend/src/components",
+      "acceptance": "Production-entry keyboard/pointer scenarios in both themes; reviewed selection excludes new arrivals",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "S01-07",
+      "issue": 35,
+      "section": "Mail/Read",
+      "outcome": "Wide HTML remains contained and message actions disclose their scope",
+      "status": "partial",
+      "present": "Existing reader needs complete content/printing validation",
+      "code": "frontend/src/components",
+      "acceptance": "Long subject, wide table, blocked images, quote folding, zoom, print scope; no shell overflow",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-01",
+      "issue": 114,
+      "section": "General/Notifications",
+      "outcome": "Sounds, badges, tray and quiet-state behavior",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/states/settings.ts",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-02",
+      "issue": 114,
+      "section": "General/Shortcuts; Swipe",
+      "outcome": "Custom shortcuts and touch actions without accidental destructive gestures",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/states/settings.ts",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-03",
+      "issue": 113,
+      "section": "General/Backup; Storage",
+      "outcome": "Scheduled consistent backups and explicit cache/data retention",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-04",
+      "issue": 54,
+      "section": "General/Password protection",
+      "outcome": "Profile protection and truthful key/secret security boundaries",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-05",
+      "issue": 35,
+      "section": "General/Print",
+      "outcome": "Native message/conversation printing configuration and completeness",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-06",
+      "issue": 105,
+      "section": "General/Spell Checker",
+      "outcome": "Language selection and spell/grammar behavior in rich composition",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-07",
+      "issue": 87,
+      "section": "General/Folders",
+      "outcome": "Folder rules, favorites, colors and account-scoped operations",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components/sidenav/MailNavigation.tsx",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-08",
+      "issue": 33,
+      "section": "Appearance/Toolbars",
+      "outcome": "Consistent customizable controls and discoverable settings",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-09",
+      "issue": 39,
+      "section": "Mail/Replies and Forwards",
+      "outcome": "Reply identity, quote/header formatting and recipient handling",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-10",
+      "issue": 88,
+      "section": "Mail/Templates and Signatures; QuickText",
+      "outcome": "Templates, account signatures and safe placeholder expansion",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-11",
+      "issue": 107,
+      "section": "Mail/Privacy; Receipts",
+      "outcome": "Tracking protection, remote content and explicit receipt policy",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-12",
+      "issue": 50,
+      "section": "Mail/Blacklist and whitelist",
+      "outcome": "Repeat-safe correction and explainable block/allow rules",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-13",
+      "issue": 112,
+      "section": "Mail/Automatic archiving",
+      "outcome": "Local archive policy, data files and import/export fidelity",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-14",
+      "issue": 106,
+      "section": "Mail/Translation",
+      "outcome": "Reader/composer language selection and model availability",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/adr/0001-web-engine-and-extensions.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-15",
+      "issue": 45,
+      "section": "Mail/Watch for Reply",
+      "outcome": "Reminder states and matching without subject-only inference",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-16",
+      "issue": 52,
+      "section": "Mail/Artificial Intelligence",
+      "outcome": "Explicit-context writing transformations and reviewed suggestions",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-17",
+      "issue": 49,
+      "section": "Signing and Encryption/Policies; Key Lookup Services",
+      "outcome": "Identity-specific policies and public-key discovery without implicit trust",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "meron-core/src/crypto",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-18",
+      "issue": 100,
+      "section": "Calendar/General; Weather",
+      "outcome": "Calendar configuration and weather availability/privacy policy",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-19",
+      "issue": 41,
+      "section": "Contacts/General",
+      "outcome": "Names, fields, groups, duplicates and provenance in contact preferences",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-20",
+      "issue": 103,
+      "section": "Tasks/General",
+      "outcome": "Task lists, reminders, recurrence and provider capability differences",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-21",
+      "issue": 111,
+      "section": "Chat/General",
+      "outcome": "Chat presence/history/file preferences and account isolation",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-22",
+      "issue": 109,
+      "section": "Online Meetings/General",
+      "outcome": "Meeting provider choices and authorized lifecycle operations",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-23",
+      "issue": 86,
+      "section": "Widgets/General",
+      "outcome": "Sidebar widgets, agenda and contextual history with reliable scope",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-24",
+      "issue": 54,
+      "section": "Advanced/Logging",
+      "outcome": "Reviewable diagnostics with no secret or message-content leakage",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-25",
+      "issue": 112,
+      "section": "Settings/Import and Export",
+      "outcome": "Settings migration, archive formats and unsupported data warnings",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-26",
+      "issue": 116,
+      "section": "Settings/QR Export",
+      "outcome": "Mobile portability evaluated separately from desktop completion",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-27",
+      "issue": 37,
+      "section": "General/Language",
+      "outcome": "Full locale coverage, long labels, RTL/CJK and native input",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/states/settings.ts",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-28",
+      "issue": 29,
+      "section": "Mail/Send; General/Confirmations",
+      "outcome": "Durable send state, undo window and accurate destructive confirmations",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "docs/emclient-parity-plan.md",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "SET-29",
+      "issue": 100,
+      "section": "General/Reminders",
+      "outcome": "Event reminders survive restart, suspend and timezone changes",
+      "status": "unassessed",
+      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "code": "frontend/src/components",
+      "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
+      "platform": "Windows desktop",
+      "provider": "Not certified by this row; owning domain must specify provider if applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    }
+  ]
+}

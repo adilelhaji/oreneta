@@ -5,6 +5,7 @@ reused including the program; 2 closed without deleting history.
 
 Program: [#21](https://github.com/adilelhaji/oreneta/issues/21).
 Execution inventory: [backlog manifest](emclient-parity-backlog.json).
+Acceptance cases and current evidence: [versioned ledger](emclient-parity-acceptance.md).
 This replaces the **scheduling and scope** of the old internal-pilot plan, not its
 unresolved safety requirements. Planning does not approve new architecture.
 
