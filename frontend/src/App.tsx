@@ -10,6 +10,7 @@ import { settings$ } from './states/settings'
 import { startKanbanResize, startThreadListResize } from './lib/paneResize'
 import { useAppEffects } from './useAppEffects'
 import { SideNav } from './components/sidenav/SideNav'
+import { MailNavigation } from './components/sidenav/MailNavigation'
 import { ThreadList } from './components/threads/ThreadList'
 import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
@@ -87,6 +88,11 @@ export default function App() {
         <ErrorBoundary label="side navigation">
           <SideNav />
         </ErrorBoundary>
+        {!peopleOpen && !calendarOpen && !tasksOpen && !activeBoardId && (
+          <ErrorBoundary label="mail navigation">
+            <MailNavigation />
+          </ErrorBoundary>
+        )}
         {peopleOpen ? (
           <ErrorBoundary label="people">
             <PeopleView />
