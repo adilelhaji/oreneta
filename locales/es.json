@@ -1,4 +1,10 @@
 {
+  "mailNavigation.title": "Cuentas y carpetas",
+  "mailNavigation.accounts": "Cuentas",
+  "mailNavigation.folders": "Carpetas",
+  "mailNavigation.collapseFolder": "Contraer {folder}",
+  "mailNavigation.expandFolder": "Expandir {folder}",
+  "mailNavigation.noMatches": "No hay carpetas coincidentes",
   "accounts.wizard.steps": "Configuración de cuenta",
   "accounts.wizard.emailStep": "Tu correo",
   "accounts.wizard.connectStep": "Conectar",

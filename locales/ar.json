@@ -1,4 +1,10 @@
 {
+  "mailNavigation.title": "Accounts and folders",
+  "mailNavigation.accounts": "Accounts",
+  "mailNavigation.folders": "Folders",
+  "mailNavigation.collapseFolder": "Collapse {folder}",
+  "mailNavigation.expandFolder": "Expand {folder}",
+  "mailNavigation.noMatches": "No matching folders",
   "accounts.wizard.steps": "Account setup",
   "accounts.wizard.emailStep": "Your email",
   "accounts.wizard.connectStep": "Connect",

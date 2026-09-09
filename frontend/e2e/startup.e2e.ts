@@ -11,6 +11,9 @@ type SetupOptions = {
   saveError?: boolean
   language?: string
   existingEmail?: string
+  navigation?: boolean
+  theme?: string
+  hideAccounts?: boolean
 }
 async function prepareStartup(page: Page, withAccount = false, options: SetupOptions = {}) {
   const errors: string[] = []
@@ -25,8 +28,9 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
   )
   const fixture = createFixture()
   await page.addInitScript(
-    ({ accounts, folders, template, options }) => {
+    ({ accounts, folders, template, options, threads }) => {
       const calls: string[] = []
+      const requests: Array<{ command: string; payload: Record<string, unknown> }> = []
       const unexpected: string[] = []
       const saves: Array<{ command: string; payload: Record<string, unknown> }> = []
       const replies: Record<string, unknown> = {
@@ -56,7 +60,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'smime.certs': { certs: [] },
         'smime.identities': { identities: [] },
         'mail.suggestContacts': { contacts: [] },
-        'app.prefsGet': { prefs: { auto_update_check: false, language: options.language } },
+        'app.prefsGet': { prefs: { auto_update_check: false, language: options.language, ...(options.navigation ? { session_account: template.id, session_folder: 'INBOX', theme_id: options.theme ?? 'indigo', mark_read_mode: 'manual', sticky_filters: true, ...(options.hideAccounts ? { hidden_sidenav_accounts: [template.id, 'second-account'] } : {}) } : {}) } },
         'app.prefsSet': { ok: true },
         'mailto.consumePending': [],
         'i18n.setNativeLabels': { ok: true },
@@ -73,12 +77,20 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         },
       }
       Object.assign(window, {
-        startupProbe: { calls, unexpected, saves },
+        startupProbe: { calls, unexpected, saves, requests },
         go: {
           main: {
             App: {
               Invoke: async (command: string, payload: Record<string, unknown>) => {
                 calls.push(command)
+                requests.push({ command, payload: structuredClone(payload) })
+                if (options.navigation && command === 'mail.folderList') {
+                  const accountId = String(payload.account_id)
+                  return { folders: accountId === template.id ? folders : [{ id: 'OtherInbox', account_id: accountId, name: 'Other mailbox', role: 'inbox', unread: 7 }] }
+                }
+                if (options.navigation && command === 'mail.threadList') {
+                  return { threads: payload.account_id === template.id && String(payload.folder_id).toLowerCase() === 'inbox' ? threads : [], next_cursor: '', pagination: 'conversation-v1' }
+                }
                 if (command === 'account.autodiscover') {
                   if (options.discovery === 'failure') throw new Error('Synthetic discovery outage')
                   return {
@@ -146,9 +158,10 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
     },
     {
       accounts: withAccount
-        ? [{ ...fixture.account, email: options.existingEmail ?? fixture.account.email, conversation_html: true }]
+        ? [{ ...fixture.account, email: options.existingEmail ?? fixture.account.email, conversation_html: true }, ...(options.navigation ? [{ ...fixture.account, id: 'second-account', display_name: 'Second account', email: 'second@example.test', included_in_unified: false }] : [])]
         : [],
-      folders: withAccount ? fixture.folders : [],
+      folders: withAccount ? [...fixture.folders, ...(options.navigation ? [{ id: 'project-42', account_id: fixture.account.id, name: 'Projects/Reviews', role: '', delimiter: '/', unread: 2 }] : [])] : [],
+      threads: options.navigation ? fixture.threads : [],
       template: fixture.account,
       options,
     },
@@ -176,6 +189,62 @@ test('production entry boots onboarding and survives reload without React errors
     expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
     expect(errors).toEqual([])
   }
+})
+
+for (const theme of ['indigo', 'indigo-dark']) {
+  test(`production mailbox navigation uses real folder IDs and account-scoped caches (${theme})`, async ({ page }, info) => {
+    const errors = await prepareStartup(page, true, { navigation: true, theme })
+    await page.goto('/')
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await expect(nav).toBeInViewport()
+    await expect(nav.getByRole('button', { name: 'Inbox 3', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByText('Pilot checklist — synthetic conversation', { exact: true }).first()).toBeVisible()
+    await info.attach('production-mail-navigation', { body: await page.screenshot({ path: info.outputPath('mail-navigation.png'), animations: 'disabled' }), contentType: 'image/png' })
+    await nav.getByRole('button', { name: 'Sent', exact: true }).focus()
+    await page.keyboard.press('Enter')
+    await expect(nav.getByRole('button', { name: 'Sent', exact: true })).toHaveAttribute('aria-current', 'page')
+    await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
+    await nav.getByRole('searchbox').pressSequentially('reviews')
+    await expect(nav.getByRole('searchbox')).toBeFocused()
+    await nav.getByRole('button', { name: 'Reviews 2', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'project-42' })
+    await nav.getByRole('button', { name: /Second account/ }).click()
+    await expect(nav.getByRole('searchbox')).toHaveValue('')
+    await expect(nav.getByRole('button', { name: 'Other mailbox 7', exact: true })).toBeVisible()
+    await expect(nav.getByRole('button', { name: 'Reviews 2', exact: true })).toHaveCount(0)
+    await nav.getByRole('button', { name: 'Unified inbox', exact: true }).click()
+    await expect(nav.getByRole('button', { name: 'Inbox 3', exact: true })).toBeVisible()
+    await expect(nav.getByRole('button', { name: 'Inbox 10', exact: true })).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
+}
+
+test('production mailbox navigation yields space to existing narrow folder selectors', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await page.setViewportSize({ width: 1025, height: 900 })
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeInViewport()
+  for (const width of [1024, 600]) {
+    await page.setViewportSize({ width, height: 900 })
+    await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).not.toBeVisible()
+    await page.getByTitle('Switch folder', { exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Sent', exact: true })).toBeInViewport()
+    await page.keyboard.press('Escape')
+  }
+  expect(errors).toEqual([])
+})
+
+test('production mailbox navigation retains selected hidden account and mail search', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true, hideAccounts: true })
+  await page.goto('/')
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  await expect(nav.getByRole('button', { name: /Alex.*alex@example.test/ })).toBeVisible()
+  await expect(nav.getByRole('button', { name: /Second account/ })).toHaveCount(0)
+  await page.getByPlaceholder('Search messages...').fill('budget')
+  await nav.getByRole('button', { name: 'Sent', exact: true }).click()
+  await expect(page.getByPlaceholder('Search messages...')).toHaveValue('budget')
+  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent', query: 'budget' })
+  expect(errors).toEqual([])
 })
 
 test('email-first setup validates input, recommends exact providers and preserves address on Back', async ({
@@ -324,6 +393,7 @@ test('editing an existing account preserves its identity and stored password', a
   await page.keyboard.press('Control+,')
   await page
     .getByRole('navigation')
+    .filter({ has: page.getByRole('button', { name: 'General', exact: true }) })
     .getByRole('button', { name: /Alex · Demo/ })
     .click()
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
