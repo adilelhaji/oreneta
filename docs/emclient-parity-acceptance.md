@@ -45,4 +45,3 @@ rows rather than relabel a generic test as a provider certification.
 CI runs scripts/ci/parity-ledger.test.cjs through the existing workflow-policy job.
 It validates references, unique IDs, repository paths, states and required evidence
 for verified rows. S01 ends with its actual implementation PRs, not this ledger PR.
-
