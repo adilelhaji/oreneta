@@ -17,6 +17,7 @@ pub mod crypto;
 pub mod engine;
 pub mod exchange;
 pub mod ffi;
+pub mod graph;
 pub mod imap;
 pub mod log;
 pub mod mail_model;

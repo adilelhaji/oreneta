@@ -175,7 +175,7 @@ S01 does not close the entire design epic or claim functional parity.
 | Gate | Required decision before affected implementation |
 |---|---|
 | #24 / #25 | Changed identity, wire compatibility, durable ownership, migrations and recovery contracts |
-| #46 → #47 | Exchange Online exposure and Graph auth/sync/migration; retain on-premises EWS |
+| #46 → #125 → #127/#128; #47 delegation | Graph direction approved in [ADR-0004](adr/0004-microsoft-graph.md) on 2026-09-09; incremental native adapter, explicit per-account adoption, preserved IMAP/SMTP/EWS local. Exact slice contracts documented before code; exposure/provider acceptance still open. |
 | pop3 / profiles | POP3 retention/identity and profile isolation if missing from current contracts |
 | tasks-full | Standalone/synced tasks conflict with current local, one-open-task-per-thread contract |
 | notes | Standalone note storage, identity and note-capable provider semantics |

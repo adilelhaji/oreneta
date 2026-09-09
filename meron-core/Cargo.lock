@@ -2619,6 +2619,7 @@ dependencies = [
  "ndk-context",
  "oo7",
  "pbkdf2 0.13.0",
+ "percent-encoding",
  "pkcs12",
  "pkcs8 0.11.0",
  "quick-xml 0.37.5",
