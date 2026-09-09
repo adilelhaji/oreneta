@@ -1,3 +1,4 @@
+import { readOnlyTarget } from '../../lib/mailCapabilities'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
@@ -58,13 +59,14 @@ export function BulkActionBar({
   const [moveFlyoutPosition, setMoveFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const [copyFlyoutPosition, setCopyFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const mailItems = useMemo(() => items.filter((item) => item.kind === 'mail'), [items])
+  const readOnly = items.some((item) => readOnlyTarget(accounts, item.accountId))
   const mailAccounts = accounts.filter(isSendableAccount)
   const accountIds = Array.from(new Set(mailItems.map((item) => item.accountId)))
   const singleAccountId = accountIds.length === 1 ? accountIds[0] : ''
   const selectedFolders = new Set(mailItems.map((item) => item.folderId))
-  const canArchive = mailItems.length > 0 && mailItems.every((item) => !item.draft && !item.trash)
-  const canMove = mailItems.length > 0 && !!singleAccountId
-  const canCopy = mailItems.length > 0 && mailAccounts.length > 0
+  const canArchive = !readOnly && mailItems.length > 0 && mailItems.every((item) => !item.draft && !item.trash)
+  const canMove = !readOnly && mailItems.length > 0 && !!singleAccountId
+  const canCopy = !readOnly && mailItems.length > 0 && mailAccounts.length > 0
 
   const loadCopyTargetFolders = async () => {
     if (copyLoadRef.current) return
@@ -211,7 +213,7 @@ export function BulkActionBar({
           <MenuItem
             icon={<MailOpen size={13} className="text-secondary" />}
             label={t('threads.actions.markAsRead')}
-            disabled={mailItems.length === 0}
+            disabled={readOnly || mailItems.length === 0}
             onClick={() => {
               setMenu(null)
               void bulkMarkSelectedRead(mailItems)
@@ -220,7 +222,7 @@ export function BulkActionBar({
           <MenuItem
             icon={<Mail size={13} className="text-secondary" />}
             label={t('threads.actions.markAsUnread')}
-            disabled={mailItems.length === 0}
+            disabled={readOnly || mailItems.length === 0}
             onClick={() => {
               setMenu(null)
               void bulkMarkSelectedUnread(mailItems)
@@ -229,7 +231,7 @@ export function BulkActionBar({
           <MenuItem
             icon={<Star size={13} className="text-secondary" />}
             label={t('threads.actions.starThread')}
-            disabled={mailItems.length === 0}
+            disabled={readOnly || mailItems.length === 0}
             onClick={() => {
               setMenu(null)
               void bulkStarSelected(mailItems, true)
@@ -238,7 +240,7 @@ export function BulkActionBar({
           <MenuItem
             icon={<Star size={13} className="fill-amber-500 text-amber-500" />}
             label={t('threads.actions.unstarThread')}
-            disabled={mailItems.length === 0}
+            disabled={readOnly || mailItems.length === 0}
             onClick={() => {
               setMenu(null)
               void bulkStarSelected(mailItems, false)
@@ -248,7 +250,7 @@ export function BulkActionBar({
           <MenuItem
             icon={<Archive size={13} className="text-secondary" />}
             label={t('threads.actions.archiveThread')}
-            disabled={!canArchive}
+            disabled={readOnly || !canArchive}
             onClick={() => {
               setMenu(null)
               void bulkArchiveSelected(mailItems)
@@ -267,7 +269,7 @@ export function BulkActionBar({
               icon={<FolderInput size={13} className="text-secondary" />}
               label={t('threads.actions.moveTo')}
               trailing={<ChevronRight size={13} className="text-secondary" />}
-              disabled={!canMove}
+              disabled={readOnly || !canMove}
               onClick={() => {
                 if (!canMove) return
                 setMoveOpen((open) => !open)
@@ -308,7 +310,7 @@ export function BulkActionBar({
               icon={<Copy size={13} className="text-secondary" />}
               label={t('threads.actions.copyTo')}
               trailing={<ChevronRight size={13} className="text-secondary" />}
-              disabled={!canCopy}
+              disabled={readOnly || !canCopy}
               onClick={() => {
                 if (!canCopy) return
                 setCopyOpen((open) => !open)
@@ -349,7 +351,7 @@ export function BulkActionBar({
             icon={<Trash2 size={13} />}
             label={t('buttons.delete')}
             danger
-            disabled={mailItems.length === 0}
+            disabled={readOnly || mailItems.length === 0}
             onClick={() => {
               setMenu(null)
               void bulkDeleteSelected(mailItems)

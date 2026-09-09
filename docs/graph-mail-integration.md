@@ -26,6 +26,9 @@ global-service, signed-in mailbox only. No automatic IMAP/EWS conversion.
   in this slice. Disable their UI affordances and reject their backend commands
   before any mutation, SMTP, IMAP or delegated fallback. Local labels and
   existing local drafts are preserved; reading does not mark remote mail read.
+  Local label assignments remain available; remote label linking is blocked.
+  This includes keyboard/bulk paths, draft menus, folder creation and kanban
+  dragging. Failed wizard cancellation retains its handle for an explicit retry.
 
 ## Identity and folder projection
 
@@ -89,6 +92,9 @@ progress, error/retry/cancel, read-only account and legacy setup regression.
 Logic/business reviews and all seven exact-head CI jobs precede merge commit.
 Fixtures do not establish real-tenant or native Windows interoperability;
 those and installable exact-SHA artifacts remain separate acceptance evidence.
+
+UI copy: English and Spanish; new Graph strings use English fallback in the
+other canonical catalogs. This is not complete localization parity.
 
 Sources checked 2026-09-09: [folders](https://learn.microsoft.com/en-us/graph/api/resources/mailfolder?view=graph-rest-1.0),
 [message delta](https://learn.microsoft.com/en-us/graph/delta-query-messages).

@@ -10,6 +10,7 @@ import { dialogClasses, type DialogClasses } from './accountDialogStyles'
 import { AccountDialogOAuth } from './AccountDialogOAuth'
 import { AccountDialogCustom } from './AccountDialogCustom'
 import { AccountDialogEWS } from './AccountDialogEWS'
+import { AccountDialogGraph } from './AccountDialogGraph'
 import { AccountSetupWizard } from './AccountSetupWizard'
 import { PROVIDERS } from './providerIcons'
 import { CertificateTrustPanel } from './CertificateTrustPanel'
@@ -32,7 +33,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
   // and closes the dialog on success), so the standalone "Save Account" button is
   // never reachable for them — the in-form sign-in button is the only CTA. Manual
   // setups (IMAP, RSS) still need the explicit Save button.
-  const isOAuth = mode === 'gmail' || mode === 'outlook'
+  const isOAuth = mode === 'gmail' || mode === 'outlook' || mode === 'graph'
 
   const onClose = () => {
     if (isSetup || ctl.loading) return
@@ -52,7 +53,9 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
         isSetup={isSetup}
         onClose={onClose}
         form={
-          isOAuth ? (
+          mode === 'graph' ? (
+            <AccountDialogGraph ctl={ctl} />
+          ) : isOAuth ? (
             <AccountDialogOAuth ctl={ctl} isSetup={isSetup} provider={mode as 'gmail' | 'outlook'} />
           ) : (
             <AccountDialogForm ctl={ctl} classes={classes} isSetup={isSetup} />
@@ -138,6 +141,7 @@ function AccountDialogForm({
 }) {
   const { t } = useTranslation()
   const { mode, form, setForm } = ctl
+  if (mode === 'graph') return <AccountDialogGraph ctl={ctl} />
   if (mode === 'rss') {
     return (
       <>

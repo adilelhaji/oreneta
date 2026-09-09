@@ -113,19 +113,13 @@ const SEND_SHORTCUT_OPTIONS: { value: SendShortcut; label: string }[] = [
   { value: 'mod_enter', label: sendShortcutLabel('mod_enter') },
 ]
 
-const LIST_DENSITY_OPTIONS = (
-  t: ReturnType<typeof useTranslation>['t'],
-): { value: ListDensity; label: string }[] =>
+const LIST_DENSITY_OPTIONS = (t: ReturnType<typeof useTranslation>['t']): { value: ListDensity; label: string }[] =>
   LIST_DENSITIES.map((value) => ({ value, label: t(`settings.reading.density.${value}`) }))
 
-const READING_WIDTH_OPTIONS = (
-  t: ReturnType<typeof useTranslation>['t'],
-): { value: ReadingWidth; label: string }[] =>
+const READING_WIDTH_OPTIONS = (t: ReturnType<typeof useTranslation>['t']): { value: ReadingWidth; label: string }[] =>
   READING_WIDTHS.map((value) => ({ value, label: t(`settings.reading.width.${value}`) }))
 
-const MARK_READ_OPTIONS = (
-  t: ReturnType<typeof useTranslation>['t'],
-): { value: MarkReadMode; label: string }[] =>
+const MARK_READ_OPTIONS = (t: ReturnType<typeof useTranslation>['t']): { value: MarkReadMode; label: string }[] =>
   MARK_READ_MODES.map((value) => ({ value, label: t(`settings.reading.markRead.${value}`) }))
 
 const CONVERSATION_LAYOUT_OPTIONS = (
@@ -143,6 +137,8 @@ function isRssAccount(account: Account) {
 // configured without opening the editor. Mirrors the security labels the setup
 // form offers (TLS / STARTTLS / None).
 function serverSummary(account: Account, t: ReturnType<typeof useTranslation>['t']) {
+  if (account.auth_type === 'graph_oauth')
+    return `Microsoft Graph — ${t('accounts.graph.readOnly', { defaultValue: 'Read-only' })}`
   // TLS/STARTTLS are protocol names and stay verbatim; only "none" is prose.
   const security = (tls?: boolean, starttls?: boolean) =>
     starttls ? 'STARTTLS' : tls === false ? t('accounts.security.none') : 'TLS'
@@ -152,6 +148,7 @@ function serverSummary(account: Account, t: ReturnType<typeof useTranslation>['t
 }
 
 function reconnectMode(account: Account): SetupMode {
+  if (account.auth_type === 'graph_oauth') return 'graph'
   if (account.auth_type === 'outlook_oauth' || account.provider === 'outlook') return 'outlook'
   if (account.auth_type === 'gmail_oauth' || account.provider === 'gmail') return 'gmail'
   // An Exchange account has no IMAP server to show, so the custom panel would
@@ -191,11 +188,8 @@ export function SettingsDialog() {
   // Calendars are addressed as "calendar:<account>:<id>" so their key cannot
   // collide with an account or board id.
   const selectedCalendar =
-    !selectedAccount && !selectedBoard
-      ? calendars.find((calendar) => calendarKey(calendar) === selected)
-      : undefined
-  const activeKey: string =
-    selectedAccount || selectedBoard || selectedCalendar ? selected : 'general'
+    !selectedAccount && !selectedBoard ? calendars.find((calendar) => calendarKey(calendar) === selected) : undefined
+  const activeKey: string = selectedAccount || selectedBoard || selectedCalendar ? selected : 'general'
 
   const mailAccounts = accounts.filter((acc) => !isRssAccount(acc))
   const feedAccounts = accounts.filter(isRssAccount)
@@ -394,9 +388,7 @@ function groupsBySource(
 ): { label: string; calendars: CalendarModel[] }[] {
   const groups: { label: string; calendars: CalendarModel[] }[] = []
   for (const account of accounts) {
-    const own = calendars.filter(
-      (calendar) => calendar.accountId === account.id && calendar.kind === 'account',
-    )
+    const own = calendars.filter((calendar) => calendar.accountId === account.id && calendar.kind === 'account')
     if (own.length) groups.push({ label: account.email, calendars: own })
   }
   const local = calendars.filter((calendar) => calendar.kind === 'local')
@@ -432,11 +424,9 @@ function lastSyncedLabel(syncedAt: number, t: ReturnType<typeof useTranslation>[
   const seconds = Math.max(0, Date.now() / 1000 - syncedAt)
   if (seconds < 90) return t('calendar.syncedJustNow', { defaultValue: 'Updated just now' })
   const minutes = Math.round(seconds / 60)
-  if (minutes < 60)
-    return t('calendar.syncedMinutes', { defaultValue: 'Updated {count} min ago', count: minutes })
+  if (minutes < 60) return t('calendar.syncedMinutes', { defaultValue: 'Updated {count} min ago', count: minutes })
   const hours = Math.round(seconds / 3600)
-  if (hours < 24)
-    return t('calendar.syncedHours', { defaultValue: 'Updated {count} h ago', count: hours })
+  if (hours < 24) return t('calendar.syncedHours', { defaultValue: 'Updated {count} h ago', count: hours })
   const days = Math.round(seconds / 86400)
   return t('calendar.syncedDays', { defaultValue: 'Updated {count} days ago', count: days })
 }
@@ -497,80 +487,72 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
 
   return (
     <>
-    <SettingsGroup title={t('calendar.title', { defaultValue: 'Calendar' })}>
-      {calendars.length === 0 && (
-        <p className="px-4 py-3.5 text-caption text-secondary">
-          {t('calendar.calendarsAppearOnSync', {
-            defaultValue: "The account's calendars appear here once its first sync finishes.",
-          })}
-        </p>
-      )}
-      {calendars.map((calendar) => {
-        const color = calendar.color || accountColor(calendar.accountId)
-        return (
-          <div key={calendar.id} className="flex items-center gap-3 px-4 py-3">
-            <span
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
-              style={{ backgroundColor: `${color}1a` }}
-            >
-              <CalendarDays size={13} style={{ color }} />
-            </span>
-            <button
-              type="button"
-              onClick={() => setPropertiesFor(calendar.id)}
-              title={t('calendar.properties', { defaultValue: 'Calendar properties' })}
-              className="min-w-0 flex-1 text-left transition-colors hover:text-accent cursor-pointer"
-            >
-              <span className="block truncate text-xs font-medium text-primary">
-                {calendar.name}
+      <SettingsGroup title={t('calendar.title', { defaultValue: 'Calendar' })}>
+        {calendars.length === 0 && (
+          <p className="px-4 py-3.5 text-caption text-secondary">
+            {t('calendar.calendarsAppearOnSync', {
+              defaultValue: "The account's calendars appear here once its first sync finishes.",
+            })}
+          </p>
+        )}
+        {calendars.map((calendar) => {
+          const color = calendar.color || accountColor(calendar.accountId)
+          return (
+            <div key={calendar.id} className="flex items-center gap-3 px-4 py-3">
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+                style={{ backgroundColor: `${color}1a` }}
+              >
+                <CalendarDays size={13} style={{ color }} />
               </span>
-              {/* When its contents last came from the server. A hidden
+              <button
+                type="button"
+                onClick={() => setPropertiesFor(calendar.id)}
+                title={t('calendar.properties', { defaultValue: 'Calendar properties' })}
+                className="min-w-0 flex-1 text-left transition-colors hover:text-accent cursor-pointer"
+              >
+                <span className="block truncate text-xs font-medium text-primary">{calendar.name}</span>
+                {/* When its contents last came from the server. A hidden
                   calendar is not fetched at all, so it says that instead of
                   showing a time that stopped advancing for reasons of its
                   own. */}
-              <span className="block truncate text-2xs text-secondary">
-                {!calendar.enabled
-                  ? t('calendar.notSyncedHidden', { defaultValue: 'Hidden — not fetched' })
-                  : lastSyncedLabel(calendar.synced_at, t)}
-              </span>
-            </button>
-            {calendar.read_only && <Lock size={11} className="shrink-0 text-secondary/70" />}
-            <Switch
-              checked={calendar.enabled}
-              label={calendar.name}
-              onChange={() =>
-                void setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled)
-              }
-            />
-          </div>
-        )
-      })}
-      <div className="flex items-center gap-1.5 px-4 py-3">
-        <button
-          type="button"
-          disabled={importing}
-          onClick={() => void runImport()}
-          className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
-        >
-          <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
-          {t('calendar.importFromAccount', { defaultValue: "Import the account's calendars" })}
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 cursor-pointer"
-        >
-          <Plus size={13} />
-          {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
-        </button>
-      </div>
-    </SettingsGroup>
-    {selected && (
-      <CalendarPropertiesDialog calendar={selected} onClose={() => setPropertiesFor(null)} />
-    )}
-    {adding && (
-      <AddAccountCalendarDialog accountId={account.id} onClose={() => setAdding(false)} />
-    )}
+                <span className="block truncate text-2xs text-secondary">
+                  {!calendar.enabled
+                    ? t('calendar.notSyncedHidden', { defaultValue: 'Hidden — not fetched' })
+                    : lastSyncedLabel(calendar.synced_at, t)}
+                </span>
+              </button>
+              {calendar.read_only && <Lock size={11} className="shrink-0 text-secondary/70" />}
+              <Switch
+                checked={calendar.enabled}
+                label={calendar.name}
+                onChange={() => void setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled)}
+              />
+            </div>
+          )
+        })}
+        <div className="flex items-center gap-1.5 px-4 py-3">
+          <button
+            type="button"
+            disabled={importing}
+            onClick={() => void runImport()}
+            className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
+          >
+            <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+            {t('calendar.importFromAccount', { defaultValue: "Import the account's calendars" })}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 cursor-pointer"
+          >
+            <Plus size={13} />
+            {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
+          </button>
+        </div>
+      </SettingsGroup>
+      {selected && <CalendarPropertiesDialog calendar={selected} onClose={() => setPropertiesFor(null)} />}
+      {adding && <AddAccountCalendarDialog accountId={account.id} onClose={() => setAdding(false)} />}
     </>
   )
 }
@@ -578,19 +560,10 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
 /// A calendar's properties in a dialog, like Thunderbird's: the same controls
 /// as the calendar's settings page, opened over the account page so the
 /// reader never leaves the account they were configuring.
-function CalendarPropertiesDialog({
-  calendar,
-  onClose,
-}: {
-  calendar: CalendarModel
-  onClose: () => void
-}) {
+function CalendarPropertiesDialog({ calendar, onClose }: { calendar: CalendarModel; onClose: () => void }) {
   const { t } = useTranslation()
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-app p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
@@ -617,13 +590,7 @@ function CalendarPropertiesDialog({
 
 /// Creating one more calendar on this account's server. The account is fixed
 /// — the dialog was opened from its page — so the only question is the name.
-function AddAccountCalendarDialog({
-  accountId,
-  onClose,
-}: {
-  accountId: string
-  onClose: () => void
-}) {
+function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; onClose: () => void }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -642,10 +609,7 @@ function AddAccountCalendarDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}
@@ -693,13 +657,7 @@ function AddAccountCalendarDialog({
 
 /// The calendars group in the settings rail, one entry per calendar, with the
 /// same shape the boards and accounts groups have.
-function CalendarGroup({
-  activeKey,
-  onSelect,
-}: {
-  activeKey: string
-  onSelect: (key: string) => void
-}) {
+function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (key: string) => void }) {
   const { t } = useTranslation()
   const calendars = useValue(calendar$.calendars)
   const accounts = useValue(accounts$)
@@ -716,12 +674,12 @@ function CalendarGroup({
           {t('calendar.title', { defaultValue: 'Calendar' })}
         </span>
         <button
-            onClick={() => setAdding(true)}
-            title={t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
-            className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
-          >
-            <Plus size={13} />
-          </button>
+          onClick={() => setAdding(true)}
+          title={t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
+          className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
+        >
+          <Plus size={13} />
+        </button>
       </div>
       {adding && <NewCalendarDialog onClose={() => setAdding(false)} />}
       {calendars.length === 0 ? (
@@ -746,15 +704,10 @@ function CalendarGroup({
                       backgroundColor: `${calendar.color || accountColor(calendar.accountId)}1a`,
                     }}
                   >
-                    <CalendarDays
-                      size={12}
-                      style={{ color: calendar.color || accountColor(calendar.accountId) }}
-                    />
+                    <CalendarDays size={12} style={{ color: calendar.color || accountColor(calendar.accountId) }} />
                   </span>
                   <span className="truncate">{calendar.name}</span>
-                  {calendar.read_only && (
-                    <Lock size={11} className="ml-auto shrink-0 text-secondary/70" />
-                  )}
+                  {calendar.read_only && <Lock size={11} className="ml-auto shrink-0 text-secondary/70" />}
                 </NavItem>
               )
             })}

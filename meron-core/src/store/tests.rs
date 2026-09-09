@@ -3114,7 +3114,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 
     for table in [
         "accounts",
@@ -3163,7 +3163,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 }
 
 #[test]
@@ -3191,7 +3191,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3200,6 +3200,9 @@ fn concurrent_first_open_runs_migrations_once() {
 fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     let conn = test_conn();
     // Recreate the schema shipped on main before the tasks/spam integration.
+    for table in ["graph_profiles", "graph_folders", "graph_items", "graph_memberships", "graph_delta", "graph_rounds", "graph_staged_items", "graph_round_links"] {
+        conn.execute_batch(&format!("DROP TABLE {table};")).unwrap();
+    }
     conn.execute_batch(
         "DROP TABLE tasks;
          DROP TABLE sender_spam;
@@ -3218,13 +3221,13 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
         [], |row| row.get(0),
     ).unwrap();
     assert_eq!(remote, "Work");
-    for table in ["tasks", "sender_spam", "spam_triggers"] {
+    for table in ["tasks", "sender_spam", "spam_triggers", "graph_profiles", "graph_items", "graph_delta"] {
         assert!(conn.prepare(&format!("SELECT * FROM {table}")).is_ok());
     }
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 32);
+    assert_eq!(version, 33);
 }
 
 #[test]

@@ -1035,6 +1035,7 @@ async function openDraftMessageInCompose(draft: Message) {
 // stored as normal IMAP messages, but clicking one should resume editing rather
 // than open a read-only conversation.
 export async function openDraftCompose(thread: Message) {
+  if (accounts$.peek().find((account) => account.id === thread.account_id)?.auth_type === 'graph_oauth') return false
   if (!isDraftFolder(thread.folder_id, thread.account_id)) return false
   if (accounts$.get().filter(isSendableAccount).length === 0) {
     showToast(t('compose.toast.addMailAccountBeforeComposing'))
@@ -1060,6 +1061,12 @@ export async function openDraftCompose(thread: Message) {
 }
 
 export async function openDraftConversationOrCompose(thread: Message) {
+  if (accounts$.peek().find((account) => account.id === thread.account_id)?.auth_type === 'graph_oauth') {
+    compose$.activeTab.set('')
+    ui$.selectedThread.set(thread.thread_id)
+    ui$.mobilePane.set('conversation')
+    return true
+  }
   if (!isDraftFolder(thread.folder_id, thread.account_id)) return false
 
   try {

@@ -1,5 +1,6 @@
+import { readOnlyTarget as matchesReadOnlyTarget, isReadOnlyMail } from '../lib/mailCapabilities'
 import { observable } from '@legendapp/state'
-import type { Folder, Message } from '../types'
+import type { Account, Folder, Message } from '../types'
 import { invoke } from '../lib/bridge'
 import { t } from '../lib/i18n'
 import {
@@ -19,6 +20,10 @@ import { isLocalSendId, discardPendingSend } from './pendingSends'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { bareAddr, splitAddressList } from '../lib/address'
 import { settings$, sortParam } from './settings'
+
+function readOnlyTarget(accounts: Account[], id: string): boolean {
+  return matchesReadOnlyTarget(accounts, id) || matchesReadOnlyTarget(accounts, findLocalThread(id)?.account_id ?? '')
+}
 
 /** What the core made of a typed search, for showing back. */
 export type SearchUnderstood = {
@@ -312,6 +317,7 @@ function looksLikeJunkName(value: string): boolean {
 // menu label and confirm wording, or null when the folder is not emptiable.
 export function emptiableFolder(folder?: Folder | null): { role: 'trash' | 'junk'; name: string } | null {
   if (!folder) return null
+  if (readOnlyTarget(accounts$.peek(), folder.account_id)) return null
   const name = folder.name || folder.id
   if (folder.role === 'junk' || looksLikeJunkName(folder.id) || looksLikeJunkName(folder.name)) {
     return { role: 'junk', name }
@@ -330,6 +336,7 @@ export async function emptyFolder(
   target: { role: 'trash' | 'junk'; name: string },
 ): Promise<boolean> {
   if (!accountId || !folderId || accountId === 'unified') return false
+  if (readOnlyTarget(accounts$.peek(), accountId)) return false
 
   if (
     !(await confirmAction({
@@ -372,6 +379,7 @@ export function deletableFolder(
   folders: Folder[],
 ): { name: string; nested: number } | null {
   if (!folder || !folder.id || folder.account_id === 'unified') return null
+  if (readOnlyTarget(accounts$.peek(), folder.account_id)) return null
   if (folder.role && folder.role !== 'folder') return null
   const prefix = `${folder.id}${folder.delimiter || '/'}`
   const nested = folders.filter((item) => item.id !== folder.id && item.id.startsWith(prefix))
@@ -385,6 +393,7 @@ export function deletableFolder(
 // subtree is deletable. Returns true when the folder is gone, so the caller can
 // move its view elsewhere.
 export async function deleteFolder(accountId: string, folderId: string, name?: string, nested = 0): Promise<boolean> {
+  if (readOnlyTarget(accounts$.peek(), accountId)) return false
   if (!accountId || !folderId || accountId === 'unified') return false
   const label = name || folderId
 
@@ -493,6 +502,7 @@ export async function downloadAttachment(att: { key: string | null; filename: st
 // the bridge refetches them over IMAP — this fails offline, and a message still
 // being sent has no server-side copy to fetch.
 export async function saveMessageAsEml(message: Message) {
+  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
   if (!message?.id || isLocalSendId(message.id)) return
   try {
     const res = await invoke<{ saved: boolean; path?: string }>('mail.saveEml', {
@@ -778,13 +788,7 @@ type ThreadSearchStage = 'auto' | 'cache' | 'live'
 // id nor a single-line search box carries one). Both the loader and the list
 // build the key from the same fields, so the list can tell "these rows are for
 // what I'm showing" from "these rows are the previous view's".
-export function threadListViewKey(
-  account: string,
-  folder: string,
-  query: string,
-  filter: string,
-  sort: string,
-) {
+export function threadListViewKey(account: string, folder: string, query: string, filter: string, sort: string) {
   // The ordering is part of the view. Without it here, changing the sort would
   // leave the previous order's rows on screen looking settled, because the
   // list would believe it was already showing the view it had loaded.
@@ -872,8 +876,8 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   // the first page collapses it and resets the scroll position. In that case we
   // merge the fresh page into the list we already have instead.
   const mergeBackground = !refresh && searchStage !== 'cache' && samePreviousView && previousThreads.length > 0
-  const pageLimit = mergeBackground && previousPagination === 'conversation-v1'
-    ? Math.max(50, previousThreads.length) : 50
+  const pageLimit =
+    mergeBackground && previousPagination === 'conversation-v1' ? Math.max(50, previousThreads.length) : 50
 
   let allThreads: Message[] = []
   let pagination = ''
@@ -951,18 +955,15 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
         folder_unread?: number
         search?: SearchUnderstood
         pagination?: string
-      }>(
-        'mail.threadList',
-        {
-          account_id: selectedAcc,
-          folder_id: selectedFol,
-          query: q,
-          filter,
-          sort,
-          refresh,
-          limit: pageLimit,
-        },
-      )
+      }>('mail.threadList', {
+        account_id: selectedAcc,
+        folder_id: selectedFol,
+        query: q,
+        filter,
+        sort,
+        refresh,
+        limit: pageLimit,
+      })
       if (superseded()) return
       if (typeof result.folder_unread === 'number') {
         updateCachedFolderUnread(selectedAcc, selectedFol, result.folder_unread)
@@ -990,7 +991,10 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
 
   const conversationPage = pagination === 'conversation-v1'
   if (
-    !conversationPage && samePreviousView && filter !== 'all' && currentSelected &&
+    !conversationPage &&
+    samePreviousView &&
+    filter !== 'all' &&
+    currentSelected &&
     !allThreads.some((thread) => thread.thread_id === currentSelected)
   ) {
     const selectedThread = previousThreads.find((thread) => thread.thread_id === currentSelected)
@@ -1016,11 +1020,14 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     mail$.threadAccountCursors.set(previousAccountCursors)
   }
 
-  const retained = samePreviousView && conversationPage && currentSelected &&
+  const retained =
+    samePreviousView &&
+    conversationPage &&
+    currentSelected &&
     !allThreads.some((thread) => thread.thread_id === currentSelected)
-    ? previousThreads.find((thread) => thread.thread_id === currentSelected) ??
-      (previousRetained?.thread_id === currentSelected ? previousRetained : null)
-    : null
+      ? (previousThreads.find((thread) => thread.thread_id === currentSelected) ??
+        (previousRetained?.thread_id === currentSelected ? previousRetained : null))
+      : null
   mail$.retainedThread.set(retained || null)
   mail$.threadsPagination.set(pagination)
   mail$.threads.set(allThreads)
@@ -1378,6 +1385,7 @@ export async function loadMoreMessages(threadId: string) {
 }
 
 export async function markThreadRead(threadId: string) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
   const previousThreads = mail$.threads.get()
   const previousMessages = mail$.messages.get()
@@ -1433,6 +1441,7 @@ export async function markThreadRead(threadId: string) {
 // server-side. Marking every message unread would reopen the thread at its
 // oldest message and shed the count again as the reader scrolls down.
 export async function markThreadUnread(threadId: string) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
   const threadMessages = mail$.messages.get().filter((message) => message.thread_id === threadId)
   const newestMessage = threadMessages.reduce<Message | null>(
@@ -1471,6 +1480,7 @@ export async function markThreadUnread(threadId: string) {
 }
 
 export async function starThread(threadId: string, starred: boolean) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
 
   // Optimistic update
@@ -1587,6 +1597,7 @@ async function refreshThreadLocation(accountId?: string, refresh = false) {
 }
 
 export async function moveThreadToFolder(threadId: string, targetFolderId: string, options: { undo?: boolean } = {}) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId || !targetFolderId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -1616,6 +1627,7 @@ export async function moveThreadToFolder(threadId: string, targetFolderId: strin
 }
 
 export async function copyThreadToFolder(threadId: string, targetAccountId: string, targetFolderId: string) {
+  if (readOnlyTarget(accounts$.peek(), threadId) || readOnlyTarget(accounts$.peek(), targetAccountId)) return
   if (!threadId || !targetAccountId || !targetFolderId) return
   const sourceThread = findLocalThread(threadId)
   try {
@@ -1645,6 +1657,7 @@ function uniqueThreadItems(items: BulkSelectionItem[]) {
 }
 
 export async function bulkMarkSelectedRead(items: BulkSelectionItem[]) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
   await Promise.all(targets.map((item) => markThreadRead(item.threadId)))
   clearBulkSelection()
@@ -1652,6 +1665,7 @@ export async function bulkMarkSelectedRead(items: BulkSelectionItem[]) {
 }
 
 export async function bulkMarkSelectedUnread(items: BulkSelectionItem[]) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
   await Promise.all(targets.map((item) => markThreadUnread(item.threadId)))
   clearBulkSelection()
@@ -1659,6 +1673,7 @@ export async function bulkMarkSelectedUnread(items: BulkSelectionItem[]) {
 }
 
 export async function bulkStarSelected(items: BulkSelectionItem[], starred: boolean) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
   await Promise.all(targets.map((item) => starThread(item.threadId, starred)))
   clearBulkSelection()
@@ -1666,6 +1681,7 @@ export async function bulkStarSelected(items: BulkSelectionItem[], starred: bool
 }
 
 export async function bulkArchiveSelected(items: BulkSelectionItem[]) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items).filter((item) => !item.draft && !item.trash)
   if (targets.length === 0) return
   const rollbacks: Array<() => void> = []
@@ -1688,6 +1704,7 @@ export async function bulkArchiveSelected(items: BulkSelectionItem[]) {
 }
 
 export async function bulkMoveSelectedToFolder(items: BulkSelectionItem[], targetFolderId: string) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items).filter((item) => item.folderId !== targetFolderId)
   if (targets.length === 0) return
   const rollbacks: Array<() => void> = []
@@ -1712,6 +1729,11 @@ export async function bulkCopySelectedToFolder(
   targetAccountId: string,
   targetFolderId: string,
 ) {
+  if (
+    readOnlyTarget(accounts$.peek(), targetAccountId) ||
+    items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))
+  )
+    return
   const targets = uniqueThreadItems(items)
   if (targets.length === 0) return
   try {
@@ -1733,6 +1755,7 @@ export async function bulkCopySelectedToFolder(
 }
 
 export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
   if (targets.length === 0) return
   const permanentTargets = targets.filter(
@@ -1784,6 +1807,7 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
  * folder is a message they will not go looking for.
  */
 export async function markThreadJunk(threadId: string, junk = true) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -1814,6 +1838,7 @@ export async function markThreadJunk(threadId: string, junk = true) {
 }
 
 export async function archiveThread(threadId: string) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -1845,6 +1870,7 @@ export async function archiveThread(threadId: string) {
 }
 
 export async function deleteThread(threadId: string, options: { permanent?: boolean } = {}) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -1950,9 +1976,7 @@ export async function unsnoozeThread(threadId: string) {
 }
 
 /// What has been put aside, so it can be found again.
-export async function listSnoozed(
-  accountId: string,
-): Promise<{ threadKey: string; folder: string; until: number }[]> {
+export async function listSnoozed(accountId: string): Promise<{ threadKey: string; folder: string; until: number }[]> {
   try {
     const res = await invoke<{
       threads: { threadKey: string; folder: string; until: number }[]
@@ -2065,6 +2089,7 @@ export async function discardSavedDraftCopy(
 // Drafts are discarded permanently (engine expunges them); other messages go to
 // Trash. The confirm/toast wording reflects which.
 export async function deleteMessage(message: Message) {
+  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
   if (!message?.id) return
 
   // Local-only optimistic send (still sending, or failed): it has no
@@ -2132,6 +2157,7 @@ export async function deleteMessage(message: Message) {
  * and the eleven "thanks" above it do not belong in the same place.
  */
 export async function archiveMessage(message: Message) {
+  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
   if (!message?.id || isLocalSendId(message.id)) return
 
   const threadId = message.thread_id
@@ -2173,6 +2199,17 @@ export async function archiveMessage(message: Message) {
 // unread messages outside the loaded page are cleared too; RSS feeds are marked
 // per visible thread because they do not have an IMAP-style folder flag.
 export async function markAllRead() {
+  if (
+    accounts$
+      .peek()
+      .some(
+        (a) =>
+          isReadOnlyMail(a) &&
+          (a.id === ui$.selectedAccount.peek() ||
+            (ui$.selectedAccount.peek() === 'unified' && a.included_in_unified !== false)),
+      )
+  )
+    return
   const threads = mail$.threads.get()
   const unread = threads.filter((thread) => thread.unread)
 
@@ -2229,6 +2266,7 @@ export async function markAllRead() {
 // chrome such as the side navigation menu. This deliberately does not depend on
 // the currently selected account/folder.
 export async function markAccountInboxRead(accountId: string) {
+  if (readOnlyTarget(accounts$.peek(), accountId)) return
   if (!accountId || accountId === 'unified') return
 
   const accountFolders = mail$.foldersByAccount[accountId].get() ?? []
@@ -2304,6 +2342,7 @@ export async function markAccountInboxRead(accountId: string) {
 }
 
 export async function markMessagesRead(threadId: string, messageIds: string[]) {
+  if (readOnlyTarget(accounts$.peek(), threadId)) return
   const uniqueIds = Array.from(new Set(messageIds.filter(Boolean)))
   if (!threadId || uniqueIds.length === 0) return
 
@@ -2410,6 +2449,7 @@ export async function markMessagesRead(threadId: string, messageIds: string[]) {
 }
 
 export async function markMessageReadState(message: Message, seen: boolean) {
+  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
   if (!message?.id || !message.thread_id) return
   if (message.unread === !seen) return
 
@@ -2451,6 +2491,7 @@ export async function markMessageReadState(message: Message, seen: boolean) {
 }
 
 export async function starMessage(message: Message, starred: boolean) {
+  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
   if (!message?.id || !message.thread_id) return
 
   const nextMessages = mail$.messages.get().map((item) => (item.id === message.id ? { ...item, starred } : item))

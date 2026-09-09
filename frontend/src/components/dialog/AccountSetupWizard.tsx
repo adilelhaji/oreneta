@@ -37,7 +37,7 @@ export function AccountSetupWizard({
   const input = useRef<HTMLInputElement>(null)
   const connectionTitle = useRef<HTMLHeadingElement>(null)
   const busy = ctl.loading || ctl.waitingForGoogle
-  const isOAuth = ctl.mode === 'gmail' || ctl.mode === 'outlook'
+  const isOAuth = ctl.mode === 'gmail' || ctl.mode === 'outlook' || ctl.mode === 'graph'
 
   useEffect(() => {
     if (step === 'email') input.current?.focus()
@@ -151,6 +151,14 @@ export function AccountSetupWizard({
                 <MicrosoftIcon size={20} />
                 Microsoft
               </button>
+              <button
+                type="button"
+                onClick={() => connect('graph')}
+                className={`${actionClass} col-span-2 border border-border hover:bg-hover`}
+              >
+                <MicrosoftIcon size={20} /> Microsoft Graph —{' '}
+                {t('accounts.graph.readOnly', { defaultValue: 'Read-only' })}
+              </button>
             </div>
           </div>
           <button
@@ -169,7 +177,9 @@ export function AccountSetupWizard({
               {isOAuth
                 ? ctl.mode === 'gmail'
                   ? 'Google'
-                  : 'Microsoft'
+                  : ctl.mode === 'graph'
+                    ? 'Microsoft Graph'
+                    : 'Microsoft'
                 : ctl.mode === 'ews'
                   ? 'Exchange'
                   : ctl.mode === 'rss'

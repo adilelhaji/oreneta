@@ -271,6 +271,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 	case "graph.disconnect":
 		account, _ := payload["account"].(string)
 		return a.graphBrowser().disconnect(account)
+	case "graph.activationBegin", "graph.activationPoll", "graph.activationCancel":
+		return a.graphBrowser().activation(command, payload)
 	case "oauth.outlookBegin":
 		return a.outlookBegin()
 	case "oauth.gmailPollProfile", "oauth.outlookPollProfile":

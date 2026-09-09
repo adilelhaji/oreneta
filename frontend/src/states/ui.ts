@@ -25,27 +25,14 @@ import { persistedField } from '../lib/sessionPref'
  */
 export type FilterMode = 'all' | FilterFacet
 
-export const isFilterMode = (value: unknown): value is FilterMode =>
-  value === 'all' || isFilterFacet(value)
+export const isFilterMode = (value: unknown): value is FilterMode => value === 'all' || isFilterFacet(value)
 
 /** The one narrowing a single-valued surface holds, as a set. */
 export const facetsOf = (mode: FilterMode): FilterFacet[] => (mode === 'all' ? [] : [mode])
 
-export type FilterFacet =
-  | 'unread'
-  | 'starred'
-  | 'snoozed'
-  | 'attachments'
-  | 'priority'
-  | `label:${string}`
+export type FilterFacet = 'unread' | 'starred' | 'snoozed' | 'attachments' | 'priority' | `label:${string}`
 
-export const FILTER_FACETS: FilterFacet[] = [
-  'priority',
-  'unread',
-  'starred',
-  'attachments',
-  'snoozed',
-]
+export const FILTER_FACETS: FilterFacet[] = ['priority', 'unread', 'starred', 'attachments', 'snoozed']
 
 const isFilterFacet = (value: unknown): value is FilterFacet =>
   value === 'unread' ||
@@ -111,13 +98,16 @@ export function parseFilters(raw: unknown): FilterFacet[] | undefined {
   }
   if (typeof raw !== 'string') return undefined
   if (raw === 'all' || raw === '') return []
-  const facets = raw.split(',').map((name) => name.trim()).filter(isFilterFacet)
+  const facets = raw
+    .split(',')
+    .map((name) => name.trim())
+    .filter(isFilterFacet)
   // A stored value made entirely of names this version does not know is not a
   // filter it can honour, so the caller keeps its default rather than showing
   // an empty list nobody asked for.
   return facets.length > 0 ? facets : undefined
 }
-export type SetupMode = 'gmail' | 'outlook' | 'custom' | 'ews' | 'rss'
+export type SetupMode = 'gmail' | 'outlook' | 'graph' | 'custom' | 'ews' | 'rss'
 export type MobilePane = 'threads' | 'conversation'
 export type ToastTone = 'success' | 'error'
 export type EditFeed = { threadId: string; name: string; url?: string }

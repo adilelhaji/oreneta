@@ -24,7 +24,9 @@ import { Dialog } from './Dialog'
 /// filled in.
 export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation()
-  const accounts = useValue(accounts$).filter((account) => !isRssAccount(account, account.id))
+  const accounts = useValue(accounts$).filter(
+    (account) => !isRssAccount(account, account.id) && account.auth_type !== 'graph_oauth',
+  )
   // Only an account whose server keeps calendars can host a new one; a plain
   // IMAP account has nowhere to put it. Local calendars and subscriptions are
   // merely *listed under* an account, so any account can take those.
@@ -64,7 +66,8 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
         })
       : kind === 'local'
         ? t('calendar.kindLocalHint', {
-            defaultValue: 'Kept only in this copy of Oreneta. Nothing else has a copy, so it is lost if this profile is.',
+            defaultValue:
+              'Kept only in this copy of Oreneta. Nothing else has a copy, so it is lost if this profile is.',
           })
         : t('calendar.kindSubscribedHint', {
             defaultValue: 'Follows a published calendar file. Read-only — it belongs to whoever publishes it.',
@@ -89,9 +92,24 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="grid grid-cols-3 gap-1 rounded-panel border border-border/80 bg-raised p-1" role="radiogroup">
-        <KindTab active={kind === 'account'} icon={<Cloud size={16} />} label={t('calendar.kindAccount', { defaultValue: 'In an account' })} onClick={() => setKind('account')} />
-        <KindTab active={kind === 'local'} icon={<HardDrive size={16} />} label={t('calendar.kindLocal', { defaultValue: 'On this computer' })} onClick={() => setKind('local')} />
-        <KindTab active={kind === 'subscribed'} icon={<Link2 size={16} />} label={t('calendar.kindSubscribed', { defaultValue: 'From a link' })} onClick={() => setKind('subscribed')} />
+        <KindTab
+          active={kind === 'account'}
+          icon={<Cloud size={16} />}
+          label={t('calendar.kindAccount', { defaultValue: 'In an account' })}
+          onClick={() => setKind('account')}
+        />
+        <KindTab
+          active={kind === 'local'}
+          icon={<HardDrive size={16} />}
+          label={t('calendar.kindLocal', { defaultValue: 'On this computer' })}
+          onClick={() => setKind('local')}
+        />
+        <KindTab
+          active={kind === 'subscribed'}
+          icon={<Link2 size={16} />}
+          label={t('calendar.kindSubscribed', { defaultValue: 'From a link' })}
+          onClick={() => setKind('subscribed')}
+        />
       </div>
 
       <p className="px-0.5 text-caption text-secondary">{hint}</p>
@@ -106,7 +124,14 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="flex flex-col gap-3">
           <Labelled label={t('calendar.name', { defaultValue: 'Name' })}>
-            <TextInput value={name} onChange={(e) => setName(e.target.value)} autoFocus fieldSize="md" surface="raised" className="w-full" />
+            <TextInput
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+              fieldSize="md"
+              surface="raised"
+              className="w-full"
+            />
           </Labelled>
 
           {kind === 'subscribed' && (
@@ -130,7 +155,12 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
                   : t('calendar.listedUnder', { defaultValue: 'Listed under' })
               }
             >
-              <SelectInput value={chosen} onChange={(e) => setAccountId(e.target.value)} fieldSize="md" surface="raised">
+              <SelectInput
+                value={chosen}
+                onChange={(e) => setAccountId(e.target.value)}
+                fieldSize="md"
+                surface="raised"
+              >
                 {pool.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.email}
@@ -151,7 +181,17 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-function KindTab({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
+function KindTab({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
@@ -159,7 +199,9 @@ function KindTab({ active, icon, label, onClick }: { active: boolean; icon: Reac
       aria-checked={active}
       onClick={onClick}
       className={`flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-control px-2 py-2.5 text-center transition-all ${
-        active ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80' : 'text-secondary hover:bg-chats/60 hover:text-primary'
+        active
+          ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
+          : 'text-secondary hover:bg-chats/60 hover:text-primary'
       }`}
     >
       <span className={active ? 'text-accent' : ''}>{icon}</span>

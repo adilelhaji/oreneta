@@ -9,6 +9,7 @@ import {
   bulkArchiveSelected,
   bulkDeleteSelected,
   bulkMarkSelectedUnread,
+  bulkCopySelectedToFolder,
   copyThreadToFolder,
   deleteThread,
   discardSavedDraftCopy,
@@ -26,14 +27,7 @@ import {
   moveThreadToFolder,
 } from './mail'
 import { settings$, sortParam } from './settings'
-import {
-  filterKey,
-  runToastUndo,
-  settleConfirm,
-  toggleBulkSelection,
-  ui$,
-  type BulkSelectionItem,
-} from './ui'
+import { filterKey, runToastUndo, settleConfirm, toggleBulkSelection, ui$, type BulkSelectionItem } from './ui'
 
 const thread = (overrides: Partial<Message> = {}): Message => ({
   id: 'acc:inbox:thread:1#101',
@@ -71,6 +65,29 @@ const bulkItem = (message: Message, overrides: Partial<BulkSelectionItem> = {}):
 })
 
 describe('thread message refresh reconciliation', () => {
+  it('bulk copying to Graph is rejected before invoking the backend', async () => {
+    const previous = accounts$.peek()
+    const previousGo = (window as any).go
+    const calls: string[] = []
+    accounts$.set([{ id: 'graph@example.test', auth_type: 'graph_oauth' } as (typeof previous)[number]])
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            calls.push(command)
+            return {}
+          },
+        },
+      },
+    }
+    try {
+      await bulkCopySelectedToFolder([bulkItem(thread())], 'graph@example.test', 'INBOX')
+      expect(calls).toEqual([])
+    } finally {
+      accounts$.set(previous)
+      ;(window as any).go = previousGo
+    }
+  })
   it('keeps an optimistic reply until the canonical Sent copy arrives', () => {
     const original = thread({ id: 'm1', thread_id: 't1', message_id: 'root@example.com', date: 100 })
     const optimistic = thread({

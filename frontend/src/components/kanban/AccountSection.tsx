@@ -10,6 +10,7 @@ import { TextInput } from '../field/Field'
 import { FolderTreeRow } from './FolderTreeRow'
 import { pickDelimiter } from '../../lib/folderTree'
 import type { AccountGroup, TreeNode } from '../../lib/folderTree'
+import { useReadOnlyMail } from '../../lib/useReadOnlyMail'
 
 // One account's collapsible section in the column picker: an inline "new folder"
 // form (for non-RSS accounts) and its folder tree.
@@ -25,6 +26,7 @@ export function AccountSection({
   onCreateFolder?: (accountId: string, name: string) => Promise<Folder>
 }) {
   const { t } = useTranslation()
+  const readOnly = useReadOnlyMail(group.accountId)
   const [expanded, setExpanded] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
@@ -38,7 +40,7 @@ export function AccountSection({
   }, [createOpen])
 
   async function createFolder() {
-    if (!onCreateFolder || group.isRSS || creating || !createOpen) return
+    if (!onCreateFolder || group.isRSS || readOnly || creating || !createOpen) return
     const trimmed = name.trim()
     if (!trimmed) {
       setError(t('folders.nameRequired'))
@@ -98,13 +100,14 @@ export function AccountSection({
             radius="lg"
             variant={createOpen ? 'accentSoft' : 'ghost'}
             active={createOpen}
+            disabled={readOnly}
             onClick={openCreate}
           />
         )}
       </div>
       {expanded && (
         <div>
-          {!group.isRSS && onCreateFolder && createOpen && (
+          {!group.isRSS && !readOnly && onCreateFolder && createOpen && (
             <form
               className="mx-2 mb-1 flex flex-col gap-1"
               onSubmit={(event) => {

@@ -361,8 +361,8 @@
       "blockedBy": ["#125", "#127"],
       "number": 128,
       "url": "https://github.com/adilelhaji/oreneta/issues/128",
-      "status": "absent",
-      "evidence": "Approved direction; implementation follows separate grant lifecycle. See docs/graph-adapter.md."
+      "status": "implemented-unverified",
+      "evidence": "Explicit read-only Graph onboarding, durable folder/message delta projection and offline reader implemented with core/bridge/frontend fixtures. See docs/graph-mail-integration.md; real-provider/native Windows acceptance and installable exact-SHA artifacts remain open."
     },
     {
       "key": "graph-read-adapter",

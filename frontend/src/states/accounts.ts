@@ -23,7 +23,13 @@ export function getActiveAccount() {
 }
 
 export function isSendableAccount(acc: Account | undefined | null): boolean {
-  return !!acc && acc.provider !== 'rss' && acc.auth_type !== 'rss' && acc.needs_reconnect !== true
+  return (
+    !!acc &&
+    acc.provider !== 'rss' &&
+    acc.auth_type !== 'rss' &&
+    acc.auth_type !== 'graph_oauth' &&
+    acc.needs_reconnect !== true
+  )
 }
 
 // All send-as identities for an account: the primary address first (carrying the
@@ -151,11 +157,7 @@ export function sharedMailboxesOf(accountId: string): Account[] {
  * `deleteAccount` — because a new account row exists now, not something an
  * optimistic local patch can represent.
  */
-export async function addSharedMailbox(
-  accountId: string,
-  address: string,
-  displayName: string,
-): Promise<void> {
+export async function addSharedMailbox(accountId: string, address: string, displayName: string): Promise<void> {
   await invoke('account.addSharedMailbox', {
     parent_account: accountId,
     address,

@@ -7,6 +7,8 @@ test.afterEach(async ({ page }) => {
 })
 
 type SetupOptions = {
+  graph?: 'success' | 'pending' | 'late' | 'error'
+  graphAccount?: boolean
   oauth?: 'waiting' | 'late' | 'success' | 'error'
   discovery?: 'guess' | 'failure'
   saveError?: boolean
@@ -35,13 +37,14 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       const requests: Array<{ command: string; payload: Record<string, unknown> }> = []
       const unexpected: string[] = []
       const saves: Array<{ command: string; payload: Record<string, unknown> }> = []
+      let graphPolls = 0
       const replies: Record<string, unknown> = {
         'system.check': {
           platform: 'windows',
           mail_engine: 'meron_mail',
           meron_mail: { configured: true, available: true, server_path: 'synthetic' },
           gmail_oauth_configured: !!options.oauth,
-          outlook_oauth_configured: !!options.oauth,
+          outlook_oauth_configured: !!options.oauth || !!options.graph,
           database_path: 'synthetic',
         },
         'account.list': { accounts },
@@ -62,7 +65,23 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'smime.certs': { certs: [] },
         'smime.identities': { identities: [] },
         'mail.suggestContacts': { contacts: [] },
-        'app.prefsGet': { prefs: { auto_update_check: false, language: options.language, ...(options.navigation ? { session_account: template.id, session_folder: 'INBOX', ...(options.theme === 'default' ? {} : { theme_id: options.theme ?? 'indigo' }), mark_read_mode: 'manual', sticky_filters: true, ...(options.hideAccounts ? { hidden_sidenav_accounts: [template.id, 'second-account'] } : {}) } : {}), ...options.preferences } },
+        'app.prefsGet': {
+          prefs: {
+            auto_update_check: false,
+            language: options.language,
+            ...(options.navigation
+              ? {
+                  session_account: template.id,
+                  session_folder: 'INBOX',
+                  ...(options.theme === 'default' ? {} : { theme_id: options.theme ?? 'indigo' }),
+                  mark_read_mode: 'manual',
+                  sticky_filters: true,
+                  ...(options.hideAccounts ? { hidden_sidenav_accounts: [template.id, 'second-account'] } : {}),
+                }
+              : {}),
+            ...options.preferences,
+          },
+        },
         'app.prefsSet': { ok: true },
         'mailto.consumePending': [],
         'i18n.setNativeLabels': { ok: true },
@@ -78,7 +97,10 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           currentVersion: '0.1.0',
         },
       }
-      Object.assign((replies['app.prefsGet'] as { prefs: Record<string, unknown> }).prefs, JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))
+      Object.assign(
+        (replies['app.prefsGet'] as { prefs: Record<string, unknown> }).prefs,
+        JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'),
+      )
       Object.assign(window, {
         startupProbe: { calls, unexpected, saves, requests },
         go: {
@@ -87,15 +109,87 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
               Invoke: async (command: string, payload: Record<string, unknown>) => {
                 calls.push(command)
                 requests.push({ command, payload: structuredClone(payload) })
+                if (command === 'oauth.graphBegin') return { attempt: 'graph-attempt' }
+                if (command === 'oauth.graphPoll')
+                  return { state: 'authorized', account: 'graph-account', mail_backend_ready: false }
+                if (command === 'oauth.graphCancel' || command === 'graph.activationCancel') return { ok: true }
+                if (command === 'graph.activationBegin') {
+                  graphPolls = 0
+                  if (options.graph === 'late')
+                    return new Promise((resolve) => {
+                      ;(window as any).startupProbe.finishGraph = () =>
+                        resolve({ account: 'graph-account', generation: 'graph-generation' })
+                    })
+                  return { account: 'graph-account', generation: 'graph-generation' }
+                }
+                if (command === 'graph.activationPoll') {
+                  graphPolls++
+                  if (options.graph === 'error')
+                    return {
+                      account: 'graph-account',
+                      state: 'failed',
+                      error: 'throttled',
+                      retry_after_seconds: 60,
+                      mail_backend_ready: false,
+                    }
+                  if (options.graph === 'pending' || graphPolls < 2)
+                    return {
+                      account: 'graph-account',
+                      state: 'syncing',
+                      pages: 2,
+                      changes: 100,
+                      mail_backend_ready: false,
+                    }
+                  replies['account.list'] = {
+                    accounts: [
+                      ...accounts,
+                      {
+                        ...template,
+                        id: 'graph-account',
+                        email: 'graph@example.test',
+                        display_name: 'Graph reader',
+                        auth_type: 'graph_oauth',
+                        provider: 'outlook',
+                      },
+                    ],
+                  }
+                  return { account: 'graph-account', state: 'ready', pages: 3, changes: 101, mail_backend_ready: true }
+                }
                 if (options.navigation && command === 'mail.folderList') {
                   const accountId = String(payload.account_id)
-                  return { folders: accountId === template.id ? folders : [{ id: 'OtherInbox', account_id: accountId, name: 'Other mailbox', role: 'inbox', unread: 7 }] }
+                  return {
+                    folders:
+                      accountId === template.id
+                        ? folders
+                        : [
+                            {
+                              id: 'OtherInbox',
+                              account_id: accountId,
+                              name: 'Other mailbox',
+                              role: 'inbox',
+                              unread: 7,
+                            },
+                          ],
+                  }
                 }
                 if (options.navigation && command === 'mail.threadList') {
-                  return { threads: payload.account_id === template.id && String(payload.folder_id).toLowerCase() === 'inbox' ? threads : [], next_cursor: '', pagination: 'conversation-v1' }
+                  return {
+                    threads:
+                      payload.account_id === template.id && String(payload.folder_id).toLowerCase() === 'inbox'
+                        ? threads
+                        : [],
+                    next_cursor: '',
+                    pagination: 'conversation-v1',
+                  }
                 }
                 if (options.navigation && command === 'mail.threadRead') {
-                  return { messages: payload.thread_id === 'thread-1' ? messages : threads.filter((thread) => thread.thread_id === payload.thread_id), next_cursor: '' }
+                  return {
+                    messages:
+                      payload.thread_id === 'thread-1'
+                        ? messages
+                        : threads.filter((thread) => thread.thread_id === payload.thread_id),
+                    next_cursor: '',
+                  }
                 }
                 if (command === 'app.prefsSet') {
                   const prefs = (replies['app.prefsGet'] as { prefs: Record<string, unknown> }).prefs
@@ -169,9 +263,43 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
     },
     {
       accounts: withAccount
-        ? [{ ...fixture.account, email: options.existingEmail ?? fixture.account.email, conversation_html: true }, ...(options.navigation ? [{ ...fixture.account, id: 'second-account', display_name: 'Second account', email: 'second@example.test', included_in_unified: false }] : [])]
+        ? [
+            {
+              ...fixture.account,
+              ...(options.graphAccount ? { auth_type: 'graph_oauth' as const, provider: 'outlook' } : {}),
+              email: options.existingEmail ?? fixture.account.email,
+              conversation_html: true,
+            },
+            ...(options.navigation && !options.graphAccount
+              ? [
+                  {
+                    ...fixture.account,
+                    id: 'second-account',
+                    display_name: 'Second account',
+                    email: 'second@example.test',
+                    included_in_unified: false,
+                  },
+                ]
+              : []),
+          ]
         : [],
-      folders: withAccount ? [...fixture.folders, ...(options.navigation ? [{ id: 'project-42', account_id: fixture.account.id, name: 'Projects/Reviews', role: '', delimiter: '/', unread: 2 }] : [])] : [],
+      folders: withAccount
+        ? [
+            ...fixture.folders,
+            ...(options.navigation
+              ? [
+                  {
+                    id: 'project-42',
+                    account_id: fixture.account.id,
+                    name: 'Projects/Reviews',
+                    role: '',
+                    delimiter: '/',
+                    unread: 2,
+                  },
+                ]
+              : []),
+          ]
+        : [],
       threads: options.navigation ? fixture.threads : [],
       messages: options.navigation ? fixture.messages : [],
       template: fixture.account,
@@ -188,14 +316,22 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       const errors = await prepareStartup(page, true, { navigation: true, theme })
       await page.goto('/')
       await verifyMailBoundary(page, width)
-      if (width === 600 || width === 769) await info.attach('production-boundary-composer', { body: await page.screenshot({ path: info.outputPath('boundary-composer.png'), animations: 'disabled' }), contentType: 'image/png' })
+      if (width === 600 || width === 769)
+        await info.attach('production-boundary-composer', {
+          body: await page.screenshot({ path: info.outputPath('boundary-composer.png'), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
       expect(errors).toEqual([])
     })
   }
 }
 
 test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
-  const context = await browser.newContext({ viewport: { width: 720, height: 900 }, deviceScaleFactor: 2, locale: 'en-US' })
+  const context = await browser.newContext({
+    viewport: { width: 720, height: 900 },
+    deviceScaleFactor: 2,
+    locale: 'en-US',
+  })
   try {
     const page = await context.newPage()
     const errors = await prepareStartup(page, true, { navigation: true, theme: 'oreneta-dark' })
@@ -206,6 +342,81 @@ test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CS
   } finally {
     await context.close()
   }
+})
+
+test('Graph setup is explicit and finishes only after initial mailbox readiness', async ({ page }) => {
+  const errors = await prepareStartup(page, false, { graph: 'success' })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Microsoft Graph — Read-only', exact: true }).click()
+  await expect(page.getByText(/Sending, editing, attachments/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save Account', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Sign in with Microsoft Graph', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Preparing folders and Inbox' })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).startupProbe.calls.filter((c: string) => c === 'graph.activationPoll').length,
+      ),
+    )
+    .toBeGreaterThanOrEqual(2)
+  await expect(page.getByRole('button', { name: 'Sign in with Microsoft Graph', exact: true })).toHaveCount(0)
+  const calls = await page.evaluate(() => (window as any).startupProbe.calls as string[])
+  expect(calls).not.toContain('account.addOutlookOAuth')
+  expect(calls).not.toContain('account.addPassword')
+  expect(calls).not.toContain('mail.send')
+  expect(errors).toEqual([])
+})
+
+test('Graph setup cancels a late activation when leaving the wizard', async ({ page }) => {
+  const errors = await prepareStartup(page, false, { graph: 'late' })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Microsoft Graph — Read-only', exact: true }).click()
+  await page.getByRole('button', { name: 'Sign in with Microsoft Graph', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => typeof (window as any).startupProbe.finishGraph)).toBe('function')
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.evaluate(() => (window as any).startupProbe.finishGraph())
+  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.calls)).toContain('graph.activationCancel')
+  await expect(page.getByRole('textbox', { name: 'Email Address', exact: true })).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+test('Graph setup exposes throttling and permits an explicit retry', async ({ page }) => {
+  const errors = await prepareStartup(page, false, { graph: 'error' })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Microsoft Graph — Read-only', exact: true }).click()
+  await page.getByRole('button', { name: 'Sign in with Microsoft Graph', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('throttled')
+  await expect(page.getByRole('alert')).toContainText('60')
+  await page.getByRole('button', { name: 'Sign in with Microsoft Graph', exact: true }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).startupProbe.calls.filter((c: string) => c === 'oauth.graphBegin').length),
+    )
+    .toBe(2)
+  expect(errors).toEqual([])
+})
+
+test('Graph mailbox reader remains read-only without automatic flag or draft writes', async ({ page }) => {
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    graphAccount: true,
+    preferences: { mark_read_mode: 'immediately' },
+  })
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: /Pilot checklist/ })
+    .first()
+    .click()
+  await expect(page.getByRole('status').filter({ hasText: 'Microsoft Graph — read-only' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Reply' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Archive thread', exact: true }).first()).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Mark as read', exact: true }).first()).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Label', exact: true }).first()).toBeEnabled()
+  await page.getByRole('button', { name: 'Conversation details', exact: true }).first().click({ button: 'right' })
+  await expect(page.getByRole('button', { name: /New message to/ })).toBeDisabled()
+  const calls = await page.evaluate(() => (window as any).startupProbe.calls as string[])
+  for (const command of ['mail.markRead', 'mail.saveDraft', 'mail.send']) expect(calls).not.toContain(command)
+  expect(errors).toEqual([])
 })
 
 async function verifyMailBoundary(page: Page, width: number) {
@@ -231,12 +442,21 @@ async function verifyMailBoundary(page: Page, width: number) {
     await page.getByTitle('Back to Chats', { exact: true }).click()
   }
   if (width > 1024) {
-    await page.getByRole('navigation', { name: 'Accounts and folders' }).getByRole('button', { name: 'Sent', exact: true }).click()
+    await page
+      .getByRole('navigation', { name: 'Accounts and folders' })
+      .getByRole('button', { name: 'Sent', exact: true })
+      .click()
   } else {
     await page.getByTitle('Switch folder', { exact: true }).click()
     await page.getByRole('button', { name: 'Sent', exact: true }).click()
   }
-  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.threadList').at(-1)?.payload,
+      ),
+    )
+    .toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
   await page.keyboard.press('Control+n')
   await expect(page.locator('.tiptap[contenteditable="true"]')).toBeInViewport()
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
@@ -245,7 +465,9 @@ async function verifyMailBoundary(page: Page, width: number) {
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
-  test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({ page }, info) => {
+  test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({
+    page,
+  }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
     await page.goto('/')
     const table = page.getByRole('table')
@@ -259,10 +481,24 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     await page.getByTitle('Collapse message', { exact: true }).first().click()
     await expect(page.getByTitle('Expand message', { exact: true })).toBeVisible()
     await page.getByTitle('Expand message', { exact: true }).click()
-    await info.attach('production-conventional-reader', { body: await page.screenshot({ path: info.outputPath('mail-reader.png'), animations: 'disabled' }), contentType: 'image/png' })
+    await info.attach('production-conventional-reader', {
+      body: await page.screenshot({ path: info.outputPath('mail-reader.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
     const reply = page.getByPlaceholder('Write a message...')
     await reply.fill('Synthetic reply draft — do not send')
-    await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.saveDraft').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', to: 'morgan@example.test', body: 'Synthetic reply draft — do not send' })
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.saveDraft').at(-1)?.payload,
+        ),
+      )
+      .toMatchObject({
+        account_id: 'synthetic-account',
+        to: 'morgan@example.test',
+        body: 'Synthetic reply draft — do not send',
+      })
     await table.getByRole('button', { name: /Budget review/ }).click()
     await expect(table.getByRole('button', { name: /Budget review/ })).toHaveAttribute('aria-current', 'true')
     await expect(reply).toHaveValue('')
@@ -276,8 +512,14 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   })
 }
 
-test('legacy cards/chat stay selected until explicit layout controls change them and persist across reload', async ({ page }) => {
-  const errors = await prepareStartup(page, true, { navigation: true, theme: 'indigo-dark', preferences: { conversation_layout: 'chat', list_view: 'cards', list_density: 'relaxed' } })
+test('legacy cards/chat stay selected until explicit layout controls change them and persist across reload', async ({
+  page,
+}) => {
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    theme: 'indigo-dark',
+    preferences: { conversation_layout: 'chat', list_view: 'cards', list_density: 'relaxed' },
+  })
   await page.goto('/')
   await expect(page.getByRole('table')).toHaveCount(0)
   await page.getByText('Pilot checklist — synthetic conversation', { exact: true }).first().click()
@@ -287,11 +529,22 @@ test('legacy cards/chat stay selected until explicit layout controls change them
   await page.getByRole('button', { name: 'Traditional', exact: true }).click()
   await page.getByRole('button', { name: 'Table', exact: true }).click()
   await page.getByRole('button', { name: 'Compact', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))).toMatchObject({ conversation_layout: 'traditional', list_view: 'table', list_density: 'compact', theme_id: 'indigo-dark', mark_read_mode: 'manual' })
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')))
+    .toMatchObject({
+      conversation_layout: 'traditional',
+      list_view: 'table',
+      list_density: 'compact',
+      theme_id: 'indigo-dark',
+      mark_read_mode: 'manual',
+    })
   await page.keyboard.press('Escape')
   await page.reload()
   await expect(page.getByRole('table')).toBeVisible()
-  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  await page
+    .getByRole('table')
+    .getByRole('button', { name: /Pilot checklist/ })
+    .click()
   await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(2)
   expect(errors).toEqual([])
 })
@@ -319,22 +572,43 @@ test('production entry boots onboarding and survives reload without React errors
 })
 
 for (const theme of ['indigo', 'indigo-dark', 'oreneta-light', 'oreneta-dark']) {
-  test(`production mailbox navigation uses real folder IDs and account-scoped caches (${theme})`, async ({ page }, info) => {
+  test(`production mailbox navigation uses real folder IDs and account-scoped caches (${theme})`, async ({
+    page,
+  }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
     await page.goto('/')
     const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
     await expect(nav).toBeInViewport()
     await expect(nav.getByRole('button', { name: 'Inbox 3', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.getByText('Pilot checklist — synthetic conversation', { exact: true }).first()).toBeVisible()
-    await info.attach('production-mail-navigation', { body: await page.screenshot({ path: info.outputPath('mail-navigation.png'), animations: 'disabled' }), contentType: 'image/png' })
+    await info.attach('production-mail-navigation', {
+      body: await page.screenshot({ path: info.outputPath('mail-navigation.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
     await nav.getByRole('button', { name: 'Sent', exact: true }).focus()
     await page.keyboard.press('Enter')
     await expect(nav.getByRole('button', { name: 'Sent', exact: true })).toHaveAttribute('aria-current', 'page')
-    await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)
+              ?.payload,
+        ),
+      )
+      .toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent' })
     await nav.getByRole('searchbox').pressSequentially('reviews')
     await expect(nav.getByRole('searchbox')).toBeFocused()
     await nav.getByRole('button', { name: 'Reviews 2', exact: true }).click()
-    await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'project-42' })
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)
+              ?.payload,
+        ),
+      )
+      .toMatchObject({ account_id: 'synthetic-account', folder_id: 'project-42' })
     await nav.getByRole('button', { name: /Second account/ }).click()
     await expect(nav.getByRole('searchbox')).toHaveValue('')
     await expect(nav.getByRole('button', { name: 'Other mailbox 7', exact: true })).toBeVisible()
@@ -370,7 +644,15 @@ test('production mailbox navigation retains selected hidden account and mail sea
   await page.getByPlaceholder('Search messages...').fill('budget')
   await nav.getByRole('button', { name: 'Sent', exact: true }).click()
   await expect(page.getByPlaceholder('Search messages...')).toHaveValue('budget')
-  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)?.payload)).toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent', query: 'budget' })
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests.filter((request: any) => request.command === 'mail.threadList').at(-1)
+            ?.payload,
+      ),
+    )
+    .toMatchObject({ account_id: 'synthetic-account', folder_id: 'Sent', query: 'budget' })
   expect(errors).toEqual([])
 })
 
@@ -564,7 +846,9 @@ test('production shell navigates settings, people, tasks and composer without ho
 })
 
 for (const appearance of ['light', 'dark'] as const) {
-  test(`fresh profile chooses cobalt ${appearance}, then preserves its choice across reload and OS changes`, async ({ page }, info) => {
+  test(`fresh profile chooses cobalt ${appearance}, then preserves its choice across reload and OS changes`, async ({
+    page,
+  }, info) => {
     await page.emulateMedia({ colorScheme: appearance })
     const errors = await prepareStartup(page, true, { navigation: true, theme: 'default' })
     await page.goto('/')
@@ -573,14 +857,19 @@ for (const appearance of ['light', 'dark'] as const) {
     await expect(page.locator('html')).toHaveCSS('color-scheme', appearance)
     for (const width of [1440, 1024, 600]) {
       await page.setViewportSize({ width, height: 1000 })
-      await info.attach(`cobalt-${appearance}-${width}`, { body: await page.screenshot({ path: info.outputPath(`cobalt-${width}.png`), animations: 'disabled' }), contentType: 'image/png' })
+      await info.attach(`cobalt-${appearance}-${width}`, {
+        body: await page.screenshot({ path: info.outputPath(`cobalt-${width}.png`), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
     }
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.emulateMedia({ colorScheme: appearance === 'light' ? 'dark' : 'light' })
     await page.reload()
     await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
     await expect(page.locator('html')).toHaveCSS('color-scheme', appearance)
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('meron-theme-cache')!).themeId)).toBe(`oreneta-${appearance}`)
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('meron-theme-cache')!).themeId)).toBe(
+      `oreneta-${appearance}`,
+    )
     await page.keyboard.press('Control+n')
     await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
     await page.getByPlaceholder('recipient@example.com').fill('morgan@example.test')
@@ -596,10 +885,24 @@ for (const appearance of ['light', 'dark'] as const) {
 test('saved legacy and custom theme palettes remain authoritative over OS appearance', async ({ page }) => {
   const source = defaultCustomInput('light')
   const tokens = { ...deriveThemeTokens(source), bgApp: '#123456', accent: '#654321' } as Record<string, string>
-  for (const key of ['success', 'successSoft', 'warning', 'warningSoft', 'danger', 'dangerSoft', 'info', 'infoSoft', 'accentText']) delete tokens[key]
+  for (const key of [
+    'success',
+    'successSoft',
+    'warning',
+    'warningSoft',
+    'danger',
+    'dangerSoft',
+    'info',
+    'infoSoft',
+    'accentText',
+  ])
+    delete tokens[key]
   const custom = { id: 'custom-saved', name: 'Saved custom palette', appearance: 'light', source, tokens }
   await page.emulateMedia({ colorScheme: 'dark' })
-  const errors = await prepareStartup(page, true, { navigation: true, preferences: { theme_id: custom.id, custom_themes: [custom] } })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { theme_id: custom.id, custom_themes: [custom] },
+  })
   await page.goto('/')
   await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
   for (let i = 0; i < 2; i++) {
@@ -617,9 +920,22 @@ test('a saved theme changes to cobalt only after an explicit picker action', asy
   await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
   await expect(page.locator('html')).toHaveCSS('--me-accent', '#6366f1')
   await page.keyboard.press('Control+,')
-  await page.getByText('Theme', { exact: true }).locator('../..').getByRole('button', { name: 'Change', exact: true }).click()
+  await page
+    .getByText('Theme', { exact: true })
+    .locator('../..')
+    .getByRole('button', { name: 'Change', exact: true })
+    .click()
   await page.getByRole('button', { name: 'Oreneta Light', exact: true }).click()
   await expect(page.locator('html')).toHaveCSS('--me-accent', '#2056dd')
-  await expect.poll(() => page.evaluate(() => (window as any).startupProbe.requests.filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'theme_id').at(-1)?.payload.value)).toBe('oreneta-light')
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests
+            .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'theme_id')
+            .at(-1)?.payload.value,
+      ),
+    )
+    .toBe('oreneta-light')
   expect(errors).toEqual([])
 })

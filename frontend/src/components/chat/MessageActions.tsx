@@ -3,6 +3,7 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { archiveMessage, deleteMessage, markMessageReadState, starMessage } from '../../states/mail'
 import type { Message } from '../../types'
+import { useReadOnlyMail } from '../../lib/useReadOnlyMail'
 
 /**
  * What can be done to one message, above the message itself.
@@ -36,6 +37,7 @@ export function MessageActions({
   variant?: 'floating' | 'inline'
 }) {
   const { t } = useTranslation()
+  const readOnly = useReadOnlyMail(message.account_id)
 
   const button = (
     key: string,
@@ -47,6 +49,7 @@ export function MessageActions({
     <button
       key={key}
       type="button"
+      disabled={readOnly && ((key !== 'open' && key !== 'more') || (key === 'open' && isDraft))}
       title={label}
       aria-label={label}
       onClick={onClick}
@@ -72,12 +75,7 @@ export function MessageActions({
           : 'shrink-0',
       )}
     >
-      {button(
-        'open',
-        ExternalLink,
-        isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab'),
-        onOpen,
-      )}
+      {button('open', ExternalLink, isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab'), onOpen)}
       {/* A feed item is not mail: it cannot be starred on a server, marked
           read for anyone else, or filed anywhere. */}
       {!isRSS && !isDraft && (

@@ -38,7 +38,7 @@ export function AccountContextMenu({
       />
       <RailMenuItem
         className="disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!hasUnread}
+        disabled={!hasUnread || account.auth_type === 'graph_oauth'}
         icon={<CheckCheck size={13} className={secondary} />}
         label={t('threads.actions.markAllAsRead')}
         onClick={() => {

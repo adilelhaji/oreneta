@@ -3,7 +3,7 @@
 
 import type { SignatureMark } from './lib/signature'
 
-export type AuthType = 'password' | 'gmail_oauth' | 'outlook_oauth' | 'rss'
+export type AuthType = 'password' | 'gmail_oauth' | 'outlook_oauth' | 'graph_oauth' | 'rss'
 
 /** A send-as identity for an account: an owned address and an optional From
  * display name (blank falls back to the account's `sender_name`). */
@@ -90,6 +90,8 @@ export type AccountProxy = {
 export type ChatWallpaper = { kind: 'preset'; presetId: string } | { kind: 'custom'; url: string }
 
 export type Folder = {
+  /** Explicit Graph parent locator; empty string is the mailbox root. */
+  parent_id?: string
   id: string
   account_id: string
   name: string

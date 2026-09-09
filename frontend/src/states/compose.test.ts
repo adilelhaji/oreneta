@@ -52,6 +52,16 @@ const message = (overrides: Partial<Message> = {}): Message => ({
 describe('openThreadTabById', () => {
   const calls: { command: string; payload: unknown }[] = []
 
+  it('Graph remote drafts remain readable but never open an editable composer', async () => {
+    accounts$.set(accounts$.peek().map((account) => ({ ...account, auth_type: 'graph_oauth' as const })))
+    const draft = message({ folder_id: 'Drafts' })
+    expect(await openDraftCompose(draft)).toBe(false)
+    expect(await openDraftConversationOrCompose(draft)).toBe(true)
+    expect(compose$.tabs.peek()).toEqual([])
+    expect(ui$.selectedThread.peek()).toBe(draft.thread_id)
+    expect(calls).toEqual([])
+  })
+
   beforeEach(() => {
     calls.length = 0
     // These exercise what happens once a send has left; the grace period is
@@ -1167,7 +1177,12 @@ describe('signatures in a new compose tab', () => {
     expect(id).toBeDefined()
     expect(compose$.activeTab.peek()).toBe(id!)
     expect(draftOf(id)).toMatchObject({ to: 'recipient@example.test', subject: 'Seeded reply', text: 'Keep this body' })
-    expect([ui$.selectedAccount.peek(), ui$.selectedFolder.peek(), ui$.selectedThread.peek(), ui$.query.peek()]).toEqual(context)
+    expect([
+      ui$.selectedAccount.peek(),
+      ui$.selectedFolder.peek(),
+      ui$.selectedThread.peek(),
+      ui$.query.peek(),
+    ]).toEqual(context)
   })
 
   it('does not leave the list if no account can compose', () => {

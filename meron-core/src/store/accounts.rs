@@ -778,6 +778,9 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<()> {
     )?;
     tx.execute("DELETE FROM folder_state WHERE account = ?1", params![id])?;
     tx.execute("DELETE FROM ews_item_ids WHERE account = ?1", params![id])?;
+    for table in ["graph_profiles", "graph_folders", "graph_items", "graph_memberships", "graph_delta", "graph_rounds", "graph_staged_items", "graph_round_links"] {
+        tx.execute(&format!("DELETE FROM {table} WHERE account = ?1"), params![id])?;
+    }
     tx.execute(
         "DELETE FROM calendar_events WHERE account = ?1",
         params![id],

@@ -155,7 +155,8 @@ pub fn get_folders(conn: &Connection, account: &str) -> Result<Vec<Folder>> {
     let mut stmt = conn.prepare(
         "SELECT f.name, f.delimiter, f.special_use,
                 (SELECT COUNT(*) FROM messages m
-                  WHERE m.account = f.account AND m.folder = f.name AND m.seen = 0) AS unread
+                  WHERE m.account = f.account AND m.folder = f.name AND m.seen = 0) AS unread,
+                (SELECT g.display_name FROM graph_folders g WHERE g.account=f.account AND g.local_name=f.name AND g.active=1)
            FROM folders f WHERE f.account = ?1 ORDER BY f.name",
     )?;
     let rows = stmt.query_map(params![account], |row| {
@@ -163,7 +164,7 @@ pub fn get_folders(conn: &Connection, account: &str) -> Result<Vec<Folder>> {
         let special_use = row.get::<_, Option<String>>(2)?;
         Ok(Folder {
             role: classify_folder_role(&name, special_use.as_deref()).to_string(),
-            display_name: crate::utf7::decode(&name),
+            display_name: row.get::<_, Option<String>>(4)?.unwrap_or_else(||crate::utf7::decode(&name)),
             name,
             delimiter: row.get(1)?,
             special_use,
@@ -229,6 +230,17 @@ pub fn upsert_messages(
     messages: &[MessageHeader],
 ) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
+    upsert_messages_in_transaction(&tx, account, folder, messages)?;
+    tx.commit()?;
+    Ok(())
+}
+
+pub(crate) fn upsert_messages_in_transaction(
+    tx: &rusqlite::Transaction<'_>,
+    account: &str,
+    folder: &str,
+    messages: &[MessageHeader],
+) -> Result<()> {
     // The Message-IDs this batch cached: the only ids whose arrival can hand a
     // canonical thread key down to rows already in the cache.
     let mut upserted_ids: HashSet<String> = HashSet::new();
@@ -327,7 +339,6 @@ pub fn upsert_messages(
         )?;
     }
     reconcile_thread_keys_from(&tx, account, upserted_ids)?;
-    tx.commit()?;
     Ok(())
 }
 
@@ -337,7 +348,7 @@ fn resolve_message_thread_key(
     thread_key: &str,
 ) -> Result<String> {
     let key = thread_key.trim();
-    if key.is_empty() || key.starts_with("uid:") || key.starts_with("gmthrid:") {
+    if key.is_empty() || key.starts_with("uid:") || key.starts_with("gmthrid:") || key.starts_with("graph:") {
         return Ok(thread_key.to_string());
     }
 
@@ -406,7 +417,8 @@ fn reconcile_thread_keys_from(
                     AND lower(COALESCE(thread_key, '')) = ?2
                     AND thread_key <> ?3
                     AND thread_key NOT LIKE 'uid:%'
-                    AND thread_key NOT LIKE 'gmthrid:%'",
+                    AND thread_key NOT LIKE 'gmthrid:%'
+                    AND thread_key NOT LIKE 'graph:%'",
             )?;
             let children = stmt
                 .query_map(params![account, parent_id, canonical], |row| {

@@ -18,6 +18,7 @@ import { openExternal } from '../../lib/native'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import type { Message } from '../../types'
+import { useReadOnlyMail } from '../../lib/useReadOnlyMail'
 
 export type MessageContextMenuState = {
   x: number
@@ -45,6 +46,7 @@ export function MessageContextMenu({
   onSelectMessage?: (message: Message) => void
 }) {
   const { t } = useTranslation()
+  const readOnly = useReadOnlyMail(state.message.account_id)
   const isDraft = isDraftFolder(state.message.folder_id, state.message.account_id)
   return (
     <FloatingContextMenu
@@ -86,6 +88,7 @@ export function MessageContextMenu({
                 )
               }
               label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
+              disabled={isDraft && readOnly}
               onClick={() => {
                 if (isDraft) {
                   void openDraftCompose(state.message)
@@ -115,6 +118,7 @@ export function MessageContextMenu({
               )
             }
             label={state.message.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
+            disabled={readOnly}
             onClick={() => {
               const message = state.message
               onClose()
@@ -126,6 +130,7 @@ export function MessageContextMenu({
               <Star size={13} className={state.message.starred ? 'fill-amber-500 text-amber-500' : 'text-accent'} />
             }
             label={state.message.starred ? t('chat.unstar') : t('chat.star')}
+            disabled={readOnly}
             onClick={() => {
               const message = state.message
               onClose()
@@ -136,6 +141,7 @@ export function MessageContextMenu({
             <MenuItem
               icon={<Forward size={13} className="text-accent" />}
               label={t('chat.actions.forward')}
+              disabled={readOnly}
               onClick={() => {
                 const message = state.message
                 onClose()
@@ -147,6 +153,7 @@ export function MessageContextMenu({
             <MenuItem
               icon={<Copy size={13} className="text-accent" />}
               label={t('chat.actions.editAsNewMessage')}
+              disabled={readOnly}
               onClick={() => {
                 const message = state.message
                 onClose()
@@ -158,6 +165,7 @@ export function MessageContextMenu({
             <MenuItem
               icon={<Download size={13} className="text-accent" />}
               label={t('chat.actions.saveAsEml')}
+              disabled={readOnly}
               onClick={() => {
                 const message = state.message
                 onClose()
@@ -170,6 +178,7 @@ export function MessageContextMenu({
               danger
               icon={<Trash2 size={13} />}
               label={isDraft ? t('chat.actions.discardDraft') : t('chat.actions.deleteMessage')}
+              disabled={readOnly}
               onClick={() => {
                 const message = state.message
                 onClose()

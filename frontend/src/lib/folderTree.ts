@@ -27,6 +27,30 @@ export function pickDelimiter(folders: Folder[]): string {
 }
 
 export function buildFolderTree(folders: Folder[]): TreeNode[] {
+  if (folders.some((folder) => folder.parent_id !== undefined)) {
+    const nodes = new Map(
+      folders.map((folder) => [folder.id, { name: folder.name, folder, children: [] as TreeNode[] }]),
+    )
+    const roots: TreeNode[] = []
+    for (const folder of folders) {
+      const node = nodes.get(folder.id)!
+      let parentId = folder.parent_id
+      const visited = new Set([folder.id])
+      let cyclic = false
+      while (parentId && nodes.has(parentId)) {
+        if (visited.has(parentId)) {
+          cyclic = true
+          break
+        }
+        visited.add(parentId)
+        parentId = nodes.get(parentId)!.folder.parent_id
+      }
+      const parent = !cyclic && folder.parent_id ? nodes.get(folder.parent_id) : undefined
+      if (parent) parent.children.push(node)
+      else roots.push(node)
+    }
+    return roots
+  }
   const delimiter = pickDelimiter(folders)
   const roots: TreeNode[] = []
   const byPath = new Map<string, TreeNode>()

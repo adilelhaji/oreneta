@@ -52,12 +52,13 @@ type Alias struct {
 }
 
 type Folder struct {
-	ID        string `json:"id"`
-	AccountID string `json:"account_id"`
-	Name      string `json:"name"`
-	Role      string `json:"role"`
-	Delimiter string `json:"delimiter"`
-	Unread    uint32 `json:"unread"`
+	ParentID  *string `json:"parent_id,omitempty"`
+	ID        string  `json:"id"`
+	AccountID string  `json:"account_id"`
+	Name      string  `json:"name"`
+	Role      string  `json:"role"`
+	Delimiter string  `json:"delimiter"`
+	Unread    uint32  `json:"unread"`
 }
 
 type Message struct {

@@ -46,6 +46,7 @@ fn oauth_defaults() -> OAuthDefaults {
 /// Engine state: per-account credentials plus the on-disk store.
 /// Reads serve from SQLite; syncs reconnect to IMAP and refresh stored rows.
 pub struct Engine {
+    pub graph_mail: Arc<crate::graph::mail::Service>,
     pub graph_auth: Arc<crate::graph::auth::NativeManager>,
     pub graph_lifecycle: Mutex<()>,
     pub accounts: Mutex<HashMap<String, imap::Creds>>,
@@ -149,6 +150,7 @@ pub fn pool_debug(account: &str, what: &str) {
 }
 
 pub fn creds_have_required_secret(creds: &imap::Creds) -> bool {
+    if creds.is_graph() { return true; }
     if creds.is_oauth() {
         creds
             .refresh_token
@@ -167,7 +169,7 @@ fn load_and_secret_one(conn: &Connection, host: &dyn EngineHost, id: &str) -> Op
         .ok()?
         .into_iter()
         .find(|(row_id, _)| row_id == id)?;
-    host.apply_secret(conn, id, &mut creds);
+    if !creds.is_graph() { host.apply_secret(conn, id, &mut creds); }
     creds_have_required_secret(&creds).then_some(creds)
 }
 
@@ -259,7 +261,7 @@ impl Engine {
                 shared_mailboxes.push((id, creds.delegate_account_id));
                 continue;
             }
-            host.apply_secret(&conn, &id, &mut creds);
+            if !creds.is_graph() { host.apply_secret(&conn, &id, &mut creds); }
             if !creds_have_required_secret(&creds) {
                 eprintln!("meron-core: account {id} needs reconnect; no stored secret found");
                 continue;
@@ -279,8 +281,10 @@ impl Engine {
             }
         }
         let db = Arc::new(std::sync::Mutex::new(conn));
+        let graph_auth=Arc::new(crate::graph::auth::NativeManager::for_store(db.clone()));
         Ok(Self {
-            graph_auth: Arc::new(crate::graph::auth::NativeManager::for_store(db.clone())),
+            graph_mail: Arc::new(crate::graph::mail::Service::new(db.clone(),graph_auth.clone())),
+            graph_auth,
             graph_lifecycle: Mutex::new(()),
             accounts: Mutex::new(accounts),
             db,
@@ -338,8 +342,8 @@ impl Engine {
                 .and_then(|rows| rows.into_iter().find(|(id, _)| id == account));
             if let Some((id, mut creds)) = loaded {
                 if creds.delegate_account_id.is_empty() {
-                    self.host
-                        .apply_secret(&self.db.lock().unwrap(), &id, &mut creds);
+                    if !creds.is_graph() { self.host
+                        .apply_secret(&self.db.lock().unwrap(), &id, &mut creds); }
                     if creds_have_required_secret(&creds) {
                         accounts.insert(id, creds);
                     }
@@ -358,6 +362,7 @@ impl Engine {
             .get_mut(account)
             .ok_or_else(|| anyhow::anyhow!("account needs reconnect: {account}"))?;
 
+        if creds.is_graph() { return Ok(creds.clone()); }
         if creds.is_oauth() {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -543,6 +548,11 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
+        if self.ensure_valid_creds(account).await?.is_graph() {
+            if !retry { return crate::graph::mail::unsupported(); }
+            let mut session=backend::Session::Graph(self.graph_mail.session(account)?);
+            return f(&mut session).await;
+        }
         if let Some(mut session) = self.take_pooled(account) {
             // Retryable (read-only) ops get a bounded reuse attempt so a dead
             // pooled connection fails over to the fresh-connect path below
@@ -638,6 +648,7 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
+        if self.ensure_valid_creds(account).await?.is_graph() { return crate::graph::mail::unsupported(); }
         if let Some(mut session) = self.take_pooled(account) {
             let ready =
                 match tokio::time::timeout(POOLED_READ_TIMEOUT, preflight(&mut session)).await {
@@ -708,6 +719,9 @@ pub async fn sync_folders(
     engine: &Arc<Engine>,
     account: &str,
 ) -> anyhow::Result<Vec<imap::Folder>> {
+    if engine.ensure_valid_creds(account).await?.is_graph() {
+        return engine.graph_mail.session(account)?.sync_tree().await;
+    }
     let folders = engine
         .with_read_session(account, |session| {
             Box::pin(async move { session.list_folders().await })
@@ -1002,6 +1016,10 @@ pub async fn sync_messages(
     folder: &str,
     limit: u32,
 ) -> anyhow::Result<SyncMessagesResult> {
+    if engine.ensure_valid_creds(account).await?.is_graph() {
+        let batch=engine.graph_mail.session(account)?.sync_folder(folder,limit).await?;
+        return Ok(SyncMessagesResult{count:batch.messages.len(),messages:batch.messages});
+    }
     // Read the prior sync position before any network I/O so we can ask the
     // server for only the flag changes since then (CONDSTORE CHANGEDSINCE).
     let (prior_modseq, prior_validity) = {
