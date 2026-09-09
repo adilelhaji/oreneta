@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
-    [Parameter(Mandatory = $true)][string]$OutputDirectory
+    [Parameter(Mandatory = $true)][string]$OutputDirectory,
+    [switch]$RequireGraph
 )
 
 # Native UI verification for the CI-built production executable. Wails disables
@@ -49,6 +50,7 @@ for ($launch = 1; $launch -le 2; $launch++) {
         } while ([DateTime]::UtcNow -lt $deadline)
         $names | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-ui.json")
         if (!$hasEmailInput -or $names -notcontains 'Google' -or $names -notcontains 'Microsoft') { throw "Onboarding did not render on launch $launch" }
+        if ($RequireGraph -and !($names -match '^Microsoft Graph')) { throw "Graph account choice did not render on launch $launch" }
         if ($names -match 'Something went wrong|useSyncExternalStore') { throw 'React startup error in native UI' }
 
         $deadline = [DateTime]::UtcNow.AddSeconds(20)

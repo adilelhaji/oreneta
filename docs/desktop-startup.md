@@ -40,5 +40,9 @@ installer upgrade or provider authentication.
 Native logs remain CI evidence; release publication downloads only the
 `oreneta-*` distributable artifacts.
 
+For non-publishing builds, use the separate
+[Windows validation pipeline](windows-validation-artifacts.md). It additionally
+requires the Graph onboarding choice; provider sign-in remains untested.
+
 References: [React duplicate runtime diagnosis](https://react.dev/warnings/invalid-hook-call-warning#duplicate-react),
 [Vite dependency deduplication](https://vite.dev/config/shared-options.html#resolve-dedupe).

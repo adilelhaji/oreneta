@@ -365,6 +365,24 @@
       "evidence": "Explicit read-only Graph onboarding, durable folder/message delta projection and offline reader implemented with core/bridge/frontend fixtures. See docs/graph-mail-integration.md; real-provider/native Windows acceptance and installable exact-SHA artifacts remain open."
     },
     {
+      "key": "windows-validation-artifacts",
+      "sprint": "S11",
+      "title": "Build exact-SHA Windows validation artifacts without publishing a release",
+      "areas": "CI; Windows packaging; native startup",
+      "architecture": "existing Wails/Rust/NSIS pipeline; no signing or publication policy change",
+      "criteria": [
+        "Exact main green-CI SHA, locked build and native startup/restart including Graph choice.",
+        "Canonical executable and installer hashes, diagnostics on failure, no public release.",
+        "Verify downloaded replacements before recoverably retiring superseded binaries."
+      ],
+      "relatedIssues": ["#114", "#128"],
+      "blockedBy": [],
+      "number": 131,
+      "url": "https://github.com/adilelhaji/oreneta/issues/131",
+      "status": "implemented-unverified",
+      "evidence": "CI workflow and policy tests; native build/artifact acceptance pending. See docs/windows-validation-artifacts.md."
+    },
+    {
       "key": "graph-read-adapter",
       "sprint": "S06",
       "title": "Graph X1: account-scoped native read adapter and safe paging",
