@@ -43,6 +43,15 @@
   --color-secondary: var(--me-text-secondary);
   --color-accent: var(--me-accent);
   --color-accent-hover: var(--me-accent-hover);
+  --color-on-accent: var(--me-accent-text);
+  --color-success: var(--me-success);
+  --color-success-soft: var(--me-success-soft);
+  --color-warning: var(--me-warning);
+  --color-warning-soft: var(--me-warning-soft);
+  --color-danger: var(--me-danger);
+  --color-danger-soft: var(--me-danger-soft);
+  --color-info: var(--me-info);
+  --color-info-soft: var(--me-info-soft);
   --color-bubble-in: var(--me-bubble-in);
   --color-bubble-in-text: var(--me-bubble-in-text);
   --color-bubble-out: var(--me-bubble-out);
@@ -122,33 +131,40 @@
   --font-cjk: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', sans-serif;
 }
 
-/* These two blocks are the default "Indigo" / "Indigo Dark" themes and the no-JS
-   fallback paint. Other themes override the vars inline on <html> (see
-   applyTheme in states/settings.ts). Keep values in sync with the INDIGO_LIGHT /
-   INDIGO_DARK registries in lib/themes.ts. */
+/* Default Oreneta cobalt palettes and no-JS fallback. Keep these tokens in
+   sync with lib/themes.ts; existing choices paint their own inline tokens. */
 :root {
-  --me-bg-app: #f1f5f9;
-  --me-bg-chat: #f8fafc;
-  --me-bg-chat-overlay: rgba(248, 250, 252, 0.94);
-  --me-bg-sidenav: #0f172a;
-  --me-bg-chats: #ffffff;
-  --me-bg-header: #ffffff;
-  --me-bg-hover: #f1f5f9;
-  --me-bg-raised: #f8fafc;
-  --me-bg-active: #e2e8f0;
-  --me-border: #e2e8f0;
-  --me-text-primary: #0f172a;
-  --me-text-secondary: #64748b;
-  --me-accent: #4f46e5;
-  --me-accent-hover: #4338ca;
-  --me-bubble-in: #ffffff;
-  --me-bubble-in-text: #0f172a;
-  --me-bubble-out: #e0e7ff;
-  --me-bubble-out-text: #312e81;
-  --me-composer-bg: #ffffff;
-  --me-composer-border: #e2e8f0;
+  --me-accent-text: #ffffff;
+  --me-info-soft: #e7eefb;
+  --me-info: #2056dd;
+  --me-danger-soft: #fce9ed;
+  --me-danger: #a32032;
+  --me-warning-soft: #fff3d6;
+  --me-warning: #795000;
+  --me-success-soft: #e8f5ec;
+  --me-success: #166534;
+  --me-bg-app: #f1f4fa;
+  --me-bg-chat: #fdfdff;
+  --me-bg-chat-overlay: rgba(253, 253, 255, 0.94);
+  --me-bg-sidenav: #15316e;
+  --me-bg-chats: #fbfcfe;
+  --me-bg-header: #fbfcfe;
+  --me-bg-hover: #edf2fa;
+  --me-bg-raised: #f5f8fd;
+  --me-bg-active: #e7eefb;
+  --me-border: #dce3ef;
+  --me-text-primary: #182840;
+  --me-text-secondary: #52637d;
+  --me-accent: #2056dd;
+  --me-accent-hover: #1946b9;
+  --me-bubble-in: #fbfcfe;
+  --me-bubble-in-text: #182840;
+  --me-bubble-out: #e7eefb;
+  --me-bubble-out-text: #182840;
+  --me-composer-bg: #fbfcfe;
+  --me-composer-border: #dce3ef;
   --me-bubble-shadow-in: 0 2px 8px -2px rgba(15, 23, 42, 0.08), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
-  --me-bubble-shadow-out: 0 2px 8px -2px rgba(79, 70, 229, 0.12), 0 1px 3px -1px rgba(79, 70, 229, 0.06);
+  --me-bubble-shadow-out: 0 2px 8px -2px rgba(15, 23, 42, 0.08), 0 1px 3px -1px rgba(15, 23, 42, 0.04);
   --me-wallpaper-overlay: color-mix(in srgb, var(--me-bg-chat) 50%, transparent);
 
   color-scheme: light;
@@ -157,26 +173,35 @@
 }
 
 .dark {
-  --me-bg-app: #090d16;
-  --me-bg-chat: #090d16;
-  --me-bg-chat-overlay: rgba(9, 13, 22, 0.95);
-  --me-bg-sidenav: #05070c;
-  --me-bg-chats: #0f172a;
-  --me-bg-header: #0f172a;
-  --me-bg-hover: rgba(30, 41, 59, 0.6);
-  --me-bg-raised: rgba(15, 23, 42, 0.4);
-  --me-bg-active: #1e293b;
-  --me-border: #1e293b;
-  --me-text-primary: #f8fafc;
-  --me-text-secondary: #94a3b8;
-  --me-accent: #6366f1;
-  --me-accent-hover: #818cf8;
-  --me-bubble-in: #1e293b;
-  --me-bubble-in-text: #f8fafc;
-  --me-bubble-out: #312e81;
-  --me-bubble-out-text: #e0e7ff;
-  --me-composer-bg: #0f172a;
-  --me-composer-border: #1e293b;
+  --me-accent-text: #101b2e;
+  --me-info-soft: #203554;
+  --me-info: #a0bdff;
+  --me-danger-soft: #411e2a;
+  --me-danger: #ffabb8;
+  --me-warning-soft: #392e18;
+  --me-warning: #ffdc91;
+  --me-success-soft: #163629;
+  --me-success: #8addac;
+  --me-bg-app: #101b2e;
+  --me-bg-chat: #101b2e;
+  --me-bg-chat-overlay: rgba(16, 27, 46, 0.95);
+  --me-bg-sidenav: #0b162b;
+  --me-bg-chats: #152137;
+  --me-bg-header: #152137;
+  --me-bg-hover: #22314c;
+  --me-bg-raised: #1b2a42;
+  --me-bg-active: #293f63;
+  --me-border: #30415b;
+  --me-text-primary: #e6edf9;
+  --me-text-secondary: #a7b8d2;
+  --me-accent: #7ea6ff;
+  --me-accent-hover: #a0bdff;
+  --me-bubble-in: #1b2a42;
+  --me-bubble-in-text: #e6edf9;
+  --me-bubble-out: #293f63;
+  --me-bubble-out-text: #e6edf9;
+  --me-composer-bg: #152137;
+  --me-composer-border: #30415b;
   --me-bubble-shadow-in: 0 4px 12px -3px rgba(0, 0, 0, 0.3), 0 1px 4px -2px rgba(0, 0, 0, 0.2);
   --me-bubble-shadow-out: 0 4px 12px -3px rgba(0, 0, 0, 0.4), 0 1px 4px -2px rgba(0, 0, 0, 0.3);
   --me-wallpaper-overlay: color-mix(in srgb, var(--me-bg-chat) 55%, transparent);
@@ -903,4 +928,11 @@ textarea,
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+/* Filled controls inherit the theme's contrasting foreground without changing
+   saved palette colors. Transparent custom accents are not contrast-certified. */
+.bg-accent.text-white,
+.bg-accent-hover.text-white {
+  color: var(--me-accent-text);
 }

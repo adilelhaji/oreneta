@@ -92,3 +92,18 @@ export function luminance(color: string): number {
 export function isValidColor(input: string): boolean {
   return parseColor(input) !== null
 }
+
+/** Contrast of two opaque sRGB colors; null means a background must be resolved first. */
+export function contrastRatio(first: string, second: string): number | null {
+  const a = parseColor(first)
+  const b = parseColor(second)
+  if (!a || !b || a.a !== 1 || b.a !== 1) return null
+  const relative = (color: Rgba) => {
+    const linear = (value: number) =>
+      value / 255 <= 0.04045 ? value / 255 / 12.92 : ((value / 255 + 0.055) / 1.055) ** 2.4
+    return 0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+  }
+  const one = relative(a)
+  const two = relative(b)
+  return (Math.max(one, two) + 0.05) / (Math.min(one, two) + 0.05)
+}

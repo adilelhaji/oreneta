@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { darken, isValidColor, lighten, mix, withAlpha } from './color'
+import { contrastRatio, darken, isValidColor, lighten, mix, withAlpha } from './color'
 
 // Theme registry and derivation. A theme is a complete set of values for the
 // `--me-*` CSS custom properties in index.css. Built-ins live here; custom
@@ -12,7 +12,7 @@ export type Appearance = 'light' | 'dark'
  * One value per CSS custom property slot. Colors are CSS color strings;
  * the two shadow slots are full box-shadow values.
  */
-export type ThemeTokens = {
+type BaseThemeTokens = {
   bgApp: string
   bgChat: string
   bgChatOverlay: string
@@ -37,7 +37,60 @@ export type ThemeTokens = {
   bubbleShadowOut: string
 }
 
+type SemanticThemeTokens = {
+  success: string
+  successSoft: string
+  warning: string
+  warningSoft: string
+  danger: string
+  dangerSoft: string
+  info: string
+  infoSoft: string
+  accentText: string
+}
+
+export type ThemeTokens = BaseThemeTokens & SemanticThemeTokens
+
+function accentTextFor(accent: string): string {
+  return (contrastRatio(accent, '#ffffff') ?? 21) >= (contrastRatio(accent, '#000000') ?? 0) ? '#ffffff' : '#000000'
+}
+
+function semanticTokens(appearance: Appearance): SemanticThemeTokens {
+  return appearance === 'light'
+    ? {
+        success: '#166534',
+        successSoft: '#e8f5ec',
+        warning: '#795000',
+        warningSoft: '#fff3d6',
+        danger: '#a32032',
+        dangerSoft: '#fce9ed',
+        info: '#2056dd',
+        infoSoft: '#e7eefb',
+        accentText: '#ffffff',
+      }
+    : {
+        success: '#8addac',
+        successSoft: '#163629',
+        warning: '#ffdc91',
+        warningSoft: '#392e18',
+        danger: '#ffabb8',
+        dangerSoft: '#411e2a',
+        info: '#a0bdff',
+        infoSoft: '#203554',
+        accentText: '#ffffff',
+      }
+}
+
 export const TOKEN_CSS_VAR: Record<keyof ThemeTokens, string> = {
+  success: '--me-success',
+  successSoft: '--me-success-soft',
+  warning: '--me-warning',
+  warningSoft: '--me-warning-soft',
+  danger: '--me-danger',
+  dangerSoft: '--me-danger-soft',
+  info: '--me-info',
+  infoSoft: '--me-info-soft',
+  accentText: '--me-accent-text',
   bgApp: '--me-bg-app',
   bgChat: '--me-bg-chat',
   bgChatOverlay: '--me-bg-chat-overlay',
@@ -99,6 +152,8 @@ export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
   const bgChat = light ? lighten(bgApp, 0.5) : bgApp
   const border = mix(surface, text, 0.12)
   return {
+    ...semanticTokens(appearance),
+    accentText: accentTextFor(accent),
     bgApp,
     bgChat,
     bgChatOverlay: withAlpha(bgChat, light ? 0.94 : 0.95),
@@ -128,9 +183,8 @@ export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
   }
 }
 
-// "Oreneta Light" / "Oreneta Dark" lean melon green to match the app icon, over
-// neutrals with a faint green cast.
-const MERON_LIGHT: ThemeTokens = {
+// Legacy green palettes retain their persisted IDs and colors.
+const MERON_LIGHT: BaseThemeTokens = {
   bgApp: '#f0f2f1',
   bgChat: '#f8faf9',
   bgChatOverlay: 'rgba(248, 250, 249, 0.94)',
@@ -155,7 +209,7 @@ const MERON_LIGHT: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(14, 122, 88, 0.12), 0 1px 3px -1px rgba(14, 122, 88, 0.06)',
 }
 
-const MERON_DARK: ThemeTokens = {
+const MERON_DARK: BaseThemeTokens = {
   bgApp: '#0c100e',
   bgChat: '#0c100e',
   bgChatOverlay: 'rgba(12, 16, 14, 0.95)',
@@ -180,10 +234,8 @@ const MERON_DARK: ThemeTokens = {
   bubbleShadowOut: '0 4px 12px -3px rgba(0, 0, 0, 0.4), 0 1px 4px -2px rgba(0, 0, 0, 0.3)',
 }
 
-// "Indigo" / "Indigo Dark" are the defaults and mirror the `:root` / `.dark`
-// blocks in index.css exactly (those blocks are the no-JS fallback paint —
-// keep both sides in sync when tuning).
-const INDIGO_LIGHT: ThemeTokens = {
+// Retained Indigo palettes. New-profile defaults are the cobalt palettes below.
+const INDIGO_LIGHT: BaseThemeTokens = {
   bgApp: '#f1f5f9',
   bgChat: '#f8fafc',
   bgChatOverlay: 'rgba(248, 250, 252, 0.94)',
@@ -208,7 +260,7 @@ const INDIGO_LIGHT: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(79, 70, 229, 0.12), 0 1px 3px -1px rgba(79, 70, 229, 0.06)',
 }
 
-const INDIGO_DARK: ThemeTokens = {
+const INDIGO_DARK: BaseThemeTokens = {
   bgApp: '#090d16',
   bgChat: '#090d16',
   bgChatOverlay: 'rgba(9, 13, 22, 0.95)',
@@ -235,7 +287,7 @@ const INDIGO_DARK: ThemeTokens = {
 
 // The remaining built-ins start from the editor derivation, then pin the roles
 // that need hand-tuning to feel coherent across the full app surface.
-const MIST: ThemeTokens = {
+const MIST: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'light',
     bgApp: '#edf4f7',
@@ -260,7 +312,7 @@ const MIST: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(14, 165, 183, 0.18), 0 1px 3px -1px rgba(14, 165, 183, 0.1)',
 }
 
-const PAPER: ThemeTokens = {
+const PAPER: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'light',
     bgApp: '#f4f1ea',
@@ -285,7 +337,7 @@ const PAPER: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(100, 116, 139, 0.16), 0 1px 3px -1px rgba(100, 116, 139, 0.1)',
 }
 
-const DAWN: ThemeTokens = {
+const DAWN: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'light',
     bgApp: '#f7ede8',
@@ -310,7 +362,7 @@ const DAWN: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(192, 108, 132, 0.18), 0 1px 3px -1px rgba(192, 108, 132, 0.1)',
 }
 
-const GRAPHITE: ThemeTokens = {
+const GRAPHITE: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'dark',
     bgApp: '#181a1f',
@@ -333,7 +385,7 @@ const GRAPHITE: ThemeTokens = {
   composerBorder: '#393e49',
 }
 
-const MIDNIGHT: ThemeTokens = {
+const MIDNIGHT: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'dark',
     bgApp: '#0b1120',
@@ -356,7 +408,7 @@ const MIDNIGHT: ThemeTokens = {
   composerBorder: '#26354d',
 }
 
-const FOREST: ThemeTokens = {
+const FOREST: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'dark',
     bgApp: '#101813',
@@ -379,7 +431,7 @@ const FOREST: ThemeTokens = {
   composerBorder: '#2f4638',
 }
 
-const HONEY: ThemeTokens = {
+const HONEY: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'light',
     bgApp: '#f7f1e6',
@@ -404,7 +456,7 @@ const HONEY: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(176, 124, 16, 0.16), 0 1px 3px -1px rgba(176, 124, 16, 0.1)',
 }
 
-const LILAC: ThemeTokens = {
+const LILAC: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'light',
     bgApp: '#f2f0f8',
@@ -429,7 +481,7 @@ const LILAC: ThemeTokens = {
   bubbleShadowOut: '0 2px 8px -2px rgba(122, 91, 196, 0.16), 0 1px 3px -1px rgba(122, 91, 196, 0.1)',
 }
 
-const PLUM: ThemeTokens = {
+const PLUM: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'dark',
     bgApp: '#151019',
@@ -452,7 +504,7 @@ const PLUM: ThemeTokens = {
   composerBorder: '#3a2f4b',
 }
 
-const EMBER: ThemeTokens = {
+const EMBER: BaseThemeTokens = {
   ...deriveThemeTokens({
     appearance: 'dark',
     bgApp: '#181210',
@@ -475,11 +527,61 @@ const EMBER: ThemeTokens = {
   composerBorder: '#423227',
 }
 
-export const BUILTIN_THEMES: ThemeDef[] = [
+const ORENETA_LIGHT: BaseThemeTokens = {
+  ...INDIGO_LIGHT,
+  bgApp: '#f1f4fa',
+  bgChat: '#fdfdff',
+  bgChatOverlay: 'rgba(253, 253, 255, 0.94)',
+  bgSideNav: '#15316e',
+  bgChats: '#fbfcfe',
+  bgHeader: '#fbfcfe',
+  bgHover: '#edf2fa',
+  bgRaised: '#f5f8fd',
+  bgActive: '#e7eefb',
+  border: '#dce3ef',
+  textPrimary: '#182840',
+  textSecondary: '#52637d',
+  accent: '#2056dd',
+  accentHover: '#1946b9',
+  bubbleIn: '#fbfcfe',
+  bubbleInText: '#182840',
+  bubbleOut: '#e7eefb',
+  bubbleOutText: '#182840',
+  composerBg: '#fbfcfe',
+  composerBorder: '#dce3ef',
+  bubbleShadowOut: INDIGO_LIGHT.bubbleShadowIn,
+}
+const ORENETA_DARK: BaseThemeTokens = {
+  ...INDIGO_DARK,
+  bgApp: '#101b2e',
+  bgChat: '#101b2e',
+  bgChatOverlay: 'rgba(16, 27, 46, 0.95)',
+  bgSideNav: '#0b162b',
+  bgChats: '#152137',
+  bgHeader: '#152137',
+  bgHover: '#22314c',
+  bgRaised: '#1b2a42',
+  bgActive: '#293f63',
+  border: '#30415b',
+  textPrimary: '#e6edf9',
+  textSecondary: '#a7b8d2',
+  accent: '#7ea6ff',
+  accentHover: '#a0bdff',
+  bubbleIn: '#1b2a42',
+  bubbleInText: '#e6edf9',
+  bubbleOut: '#293f63',
+  bubbleOutText: '#e6edf9',
+  composerBg: '#152137',
+  composerBorder: '#30415b',
+}
+
+const BUILTIN_PALETTES: Array<Omit<ThemeDef, 'tokens'> & { tokens: BaseThemeTokens }> = [
+  { id: 'oreneta-light', name: 'Oreneta Light', appearance: 'light', tokens: ORENETA_LIGHT },
+  { id: 'oreneta-dark', name: 'Oreneta Dark', appearance: 'dark', tokens: ORENETA_DARK },
   { id: 'indigo', name: 'Indigo', appearance: 'light', tokens: INDIGO_LIGHT },
   { id: 'indigo-dark', name: 'Indigo Dark', appearance: 'dark', tokens: INDIGO_DARK },
-  { id: 'light', name: 'Oreneta Light', appearance: 'light', tokens: MERON_LIGHT },
-  { id: 'dark', name: 'Oreneta Dark', appearance: 'dark', tokens: MERON_DARK },
+  { id: 'light', name: 'Legacy Green', appearance: 'light', tokens: MERON_LIGHT },
+  { id: 'dark', name: 'Legacy Green Dark', appearance: 'dark', tokens: MERON_DARK },
   { id: 'mist', name: 'Mist', appearance: 'light', tokens: MIST },
   { id: 'paper', name: 'Paper', appearance: 'light', tokens: PAPER },
   { id: 'dawn', name: 'Dawn', appearance: 'light', tokens: DAWN },
@@ -492,8 +594,17 @@ export const BUILTIN_THEMES: ThemeDef[] = [
   { id: 'ember', name: 'Ember', appearance: 'dark', tokens: EMBER },
 ]
 
-export const DEFAULT_LIGHT_ID = 'indigo'
-export const DEFAULT_DARK_ID = 'indigo-dark'
+export const BUILTIN_THEMES: ThemeDef[] = BUILTIN_PALETTES.map((theme) => ({
+  ...theme,
+  tokens: {
+    ...theme.tokens,
+    ...semanticTokens(theme.appearance),
+    accentText: theme.id === 'oreneta-dark' ? '#101b2e' : accentTextFor(theme.tokens.accent),
+  },
+}))
+
+export const DEFAULT_LIGHT_ID = 'oreneta-light'
+export const DEFAULT_DARK_ID = 'oreneta-dark'
 
 export function builtinTheme(id: string): ThemeDef | undefined {
   return BUILTIN_THEMES.find((theme) => theme.id === id)
@@ -506,8 +617,8 @@ export function defaultThemeId(appearance: Appearance): string {
 /** Editor seed for a new custom theme: the default theme's source palette. */
 export function defaultCustomInput(appearance: Appearance): CustomThemeInput {
   return appearance === 'light'
-    ? { appearance, bgApp: '#f1f5f9', surface: '#ffffff', sideNav: '#0f172a', accent: '#4f46e5', text: '#0f172a' }
-    : { appearance, bgApp: '#090d16', surface: '#0f172a', sideNav: '#05070c', accent: '#6366f1', text: '#f8fafc' }
+    ? { appearance, bgApp: '#f1f4fa', surface: '#fbfcfe', sideNav: '#15316e', accent: '#2056dd', text: '#182840' }
+    : { appearance, bgApp: '#101b2e', surface: '#152137', sideNav: '#0b162b', accent: '#7ea6ff', text: '#e6edf9' }
 }
 
 export function newCustomThemeId(): string {
@@ -531,12 +642,17 @@ export function cssVarStyle(tokens: ThemeTokens): CSSProperties {
   return style as CSSProperties
 }
 
-function sanitizeTokens(raw: unknown): ThemeTokens | null {
+function sanitizeTokens(raw: unknown, appearance: Appearance): ThemeTokens | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const obj = raw as Record<string, unknown>
   const out = {} as Record<keyof ThemeTokens, string>
+  const fallback = {
+    ...semanticTokens(appearance),
+    accentText: accentTextFor(typeof obj.accent === 'string' ? obj.accent : ''),
+  }
   for (const key of THEME_TOKEN_KEYS) {
-    const value = obj[key]
+    // Preserve every saved palette value; fill only the newly added slots.
+    const value = obj[key] ?? (fallback as Partial<ThemeTokens>)[key]
     if (typeof value !== 'string' || !value) return null
     out[key] = value
   }
@@ -573,7 +689,7 @@ export function sanitizeCustomThemes(raw: unknown): CustomTheme[] | null {
     const source = sanitizeSource(obj.source)
     if (!source) continue
     const name = typeof obj.name === 'string' && obj.name.trim() ? obj.name.trim() : 'Custom theme'
-    const tokens = sanitizeTokens(obj.tokens) ?? deriveThemeTokens(source)
+    const tokens = sanitizeTokens(obj.tokens, source.appearance) ?? deriveThemeTokens(source)
     seen.add(obj.id)
     out.push({ id: obj.id, name, appearance: source.appearance, tokens, source })
   }

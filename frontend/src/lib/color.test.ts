@@ -1,5 +1,28 @@
 import { describe, expect, it } from 'bun:test'
-import { darken, formatColor, isValidColor, lighten, luminance, mix, parseColor, withAlpha } from './color'
+import {
+  contrastRatio,
+  darken,
+  formatColor,
+  isValidColor,
+  lighten,
+  luminance,
+  mix,
+  parseColor,
+  withAlpha,
+} from './color'
+
+describe('contrastRatio', () => {
+  it('linearizes opaque sRGB and is symmetric', () => {
+    expect(contrastRatio('#000', '#fff')).toBeCloseTo(21)
+    expect(contrastRatio('#fff', '#000')).toBeCloseTo(21)
+    expect(contrastRatio('#777', '#fff')).toBeCloseTo(4.478, 2)
+    expect(contrastRatio('#fff', '#fff')).toBe(1)
+  })
+  it('does not certify invalid or unresolved transparent colors', () => {
+    expect(contrastRatio('invalid', '#fff')).toBeNull()
+    expect(contrastRatio('#fff', 'rgba(0, 0, 0, 0.5)')).toBeNull()
+  })
+})
 
 describe('parseColor', () => {
   it('parses 6-digit hex', () => {

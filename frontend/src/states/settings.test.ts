@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import {
   EMPTY_PROXY,
   hydrateSettings,
+  initialThemeId,
+  resolveThemeDef,
+  selectTheme,
+  deleteCustomTheme,
   isProxyUsable,
   sanitizeKanbanBoards,
   sanitizeListSort,
@@ -9,6 +13,73 @@ import {
   settings$,
   sortParam,
 } from './settings'
+import {
+  BUILTIN_THEMES,
+  DEFAULT_DARK_ID,
+  DEFAULT_LIGHT_ID,
+  builtinTheme,
+  defaultCustomInput,
+  deriveThemeTokens,
+} from '../lib/themes'
+
+describe('theme preference preservation', () => {
+  const originalTheme = settings$.themeId.peek()
+  const originalCustom = settings$.customThemes.peek()
+  afterEach(() => {
+    settings$.customThemes.set(originalCustom)
+    settings$.themeId.set(originalTheme)
+  })
+  it('hydrates every saved builtin without migrating its ID or appearance', () => {
+    for (const theme of BUILTIN_THEMES) {
+      hydrateSettings({ theme_id: theme.id })
+      expect(resolveThemeDef()).toEqual(theme)
+      expect(document.documentElement.classList.contains('dark')).toBe(theme.appearance === 'dark')
+      hydrateSettings({})
+      expect(settings$.themeId.peek()).toBe(theme.id)
+    }
+  })
+  it('only an explicit selection changes an existing theme', () => {
+    hydrateSettings({ theme_id: 'indigo-dark' })
+    selectTheme(builtinTheme(DEFAULT_LIGHT_ID)!)
+    expect(settings$.themeId.peek()).toBe(DEFAULT_LIGHT_ID)
+    expect(JSON.parse(localStorage.getItem('meron-theme-cache')!).themeId).toBe(DEFAULT_LIGHT_ID)
+  })
+  it('preserves custom choices and returns to the same appearance after explicit deletion', () => {
+    const source = defaultCustomInput('dark')
+    const theme = {
+      id: 'custom-parity',
+      name: 'My dark theme',
+      source,
+      appearance: 'dark' as const,
+      tokens: deriveThemeTokens(source),
+    }
+    hydrateSettings({ theme_id: theme.id, custom_themes: [theme] })
+    expect(resolveThemeDef()).toEqual(theme)
+    hydrateSettings({})
+    expect(resolveThemeDef()).toEqual(theme)
+    deleteCustomTheme(theme.id)
+    expect(settings$.themeId.peek()).toBe(DEFAULT_DARK_ID)
+  })
+  it('safely paints a default for unknown IDs without destroying a pending custom ID', () => {
+    hydrateSettings({ theme_id: 'custom-not-loaded-yet' })
+    expect(settings$.themeId.peek()).toBe('custom-not-loaded-yet')
+    expect(resolveThemeDef().id).toBe(DEFAULT_LIGHT_ID)
+  })
+  it('selects the first-launch appearance only from the supported system preference', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
+    try {
+      for (const dark of [false, true]) {
+        Object.defineProperty(globalThis, 'matchMedia', { configurable: true, value: () => ({ matches: dark }) })
+        expect(initialThemeId()).toBe(dark ? DEFAULT_DARK_ID : DEFAULT_LIGHT_ID)
+      }
+      Object.defineProperty(globalThis, 'matchMedia', { configurable: true, value: undefined })
+      expect(initialThemeId()).toBe(DEFAULT_LIGHT_ID)
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, 'matchMedia', descriptor)
+      else Reflect.deleteProperty(globalThis, 'matchMedia')
+    }
+  })
+})
 
 const baseBoard = {
   id: 'kb-1',

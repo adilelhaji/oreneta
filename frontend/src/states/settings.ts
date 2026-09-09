@@ -352,20 +352,25 @@ export function isSendKey(
 // light-on-dark first-paint flash. The DB rows stay authoritative.
 const THEME_CACHE_KEY = 'meron-theme-cache'
 
+/** First launch follows OS appearance; persisted choices remain explicit. */
+export function initialThemeId(): string {
+  return defaultThemeId(typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+}
+
 function bootstrapThemeSelection(): Pick<Settings, 'themeId' | 'customThemes'> {
   try {
     const raw = localStorage.getItem(THEME_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>
       return {
-        themeId: typeof parsed.themeId === 'string' && parsed.themeId ? parsed.themeId : DEFAULT_LIGHT_ID,
+        themeId: typeof parsed.themeId === 'string' && parsed.themeId ? parsed.themeId : initialThemeId(),
         customThemes: sanitizeCustomThemes(parsed.customThemes) ?? [],
       }
     }
   } catch {
     // Corrupt cache: fall through to defaults; the DB hydrate will repair it.
   }
-  return { themeId: DEFAULT_LIGHT_ID, customThemes: [] }
+  return { themeId: initialThemeId(), customThemes: [] }
 }
 
 const themeBootstrap = bootstrapThemeSelection()
@@ -603,7 +608,7 @@ export function deleteCustomTheme(id: string) {
   const theme = current.find((item) => item.id === id)
   if (!theme) return
   settings$.customThemes.set(current.filter((item) => item.id !== id))
-  if (settings$.themeId.peek() === id) settings$.themeId.set(DEFAULT_LIGHT_ID)
+  if (settings$.themeId.peek() === id) settings$.themeId.set(defaultThemeId(theme.appearance))
 }
 
 export function sanitizeKanbanBoards(raw: unknown): KanbanBoard[] | null {
