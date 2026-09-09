@@ -188,14 +188,14 @@ describe('proxy setting', () => {
 
 describe('reading settings', () => {
   afterEach(() => {
-    settings$.listDensity.set('cosy')
+    settings$.listDensity.set('compact')
     settings$.readingWidth.set('comfortable')
     settings$.markReadMode.set('immediately')
     settings$.markReadDelaySeconds.set(3)
   })
 
-  it('leaves a mailbox reading as it always has until asked otherwise', () => {
-    expect(settings$.listDensity.get()).toBe('cosy')
+  it('starts compact without changing reading width or mark-read behavior', () => {
+    expect(settings$.listDensity.get()).toBe('compact')
     expect(settings$.readingWidth.get()).toBe('comfortable')
     // Marking on sight is what Oreneta has always done: nobody's mailbox
     // changes behaviour because a setting appeared.
@@ -227,7 +227,7 @@ describe('reading settings', () => {
       mark_read_delay_seconds: 3600,
     })
 
-    expect(settings$.listDensity.get()).toBe('cosy')
+    expect(settings$.listDensity.get()).toBe('compact')
     expect(settings$.readingWidth.get()).toBe('comfortable')
     expect(settings$.markReadMode.get()).toBe('immediately')
     expect(settings$.markReadDelaySeconds.get()).toBe(3)
@@ -275,12 +275,12 @@ describe('saved searches', () => {
 
 describe('list view and ordering', () => {
   afterEach(() => {
-    settings$.listView.set('cards')
+    settings$.listView.set('table')
     settings$.listSort.set({ key: 'date', dir: 'desc' })
   })
 
-  it('starts as the list has always looked, newest first', () => {
-    expect(settings$.listView.get()).toBe('cards')
+  it('starts with a conventional table, newest first', () => {
+    expect(settings$.listView.get()).toBe('table')
     expect(settings$.listSort.get()).toEqual({ key: 'date', dir: 'desc' })
   })
 
@@ -310,5 +310,32 @@ describe('list view and ordering', () => {
     settings$.listView.set('table')
     hydrateSettings({ list_view: 'mosaic' })
     expect(settings$.listView.get()).toBe('table')
+  })
+})
+
+describe('conventional mail defaults', () => {
+  afterEach(() => {
+    settings$.conversationLayout.set('traditional')
+    settings$.listView.set('table')
+    settings$.listDensity.set('compact')
+  })
+
+  it('starts with stacked messages without changing the supported layout modes', () => {
+    expect(settings$.conversationLayout.peek()).toBe('traditional')
+  })
+
+  it('preserves every explicit combination across missing and invalid preference hydration', () => {
+    for (const layout of ['chat', 'traditional'] as const) {
+      for (const view of ['cards', 'table'] as const) {
+        for (const density of ['compact', 'cosy', 'relaxed'] as const) {
+          hydrateSettings({ conversation_layout: layout, list_view: view, list_density: density })
+          hydrateSettings({})
+          hydrateSettings({ conversation_layout: 'unknown', list_view: null, list_density: 0 })
+          expect(settings$.conversationLayout.peek()).toBe(layout)
+          expect(settings$.listView.peek()).toBe(view)
+          expect(settings$.listDensity.peek()).toBe(density)
+        }
+      }
+    }
   })
 })

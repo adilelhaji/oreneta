@@ -51,7 +51,7 @@ export type ConversationLayout = 'chat' | 'traditional'
 /**
  * How much room a row in the thread list is given.
  * 'compact': one line, for seeing as much of a mailbox at once as possible.
- * 'cosy': sender and subject on two lines, the default.
+ * 'cosy': sender and subject on two lines.
  * 'relaxed': the preview on a line of its own, two lines of it.
  */
 /**
@@ -354,7 +354,9 @@ const THEME_CACHE_KEY = 'meron-theme-cache'
 
 /** First launch follows OS appearance; persisted choices remain explicit. */
 export function initialThemeId(): string {
-  return defaultThemeId(typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  return defaultThemeId(
+    typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  )
 }
 
 function bootstrapThemeSelection(): Pick<Settings, 'themeId' | 'customThemes'> {
@@ -475,14 +477,14 @@ export const settings$ = observable<Settings>({
   showRealAvatars: false,
   showUnreadAccountBadge: false,
   sendShortcut: 'mod_enter',
-  conversationLayout: 'chat',
+  conversationLayout: 'traditional',
   savedSearches: [],
   stickyFilters: false,
   simplifyMessages: false,
-  listView: 'cards',
+  listView: 'table',
   // Newest first, which is what a mailbox means when nobody has said otherwise.
   listSort: { key: 'date', dir: 'desc' },
-  listDensity: 'cosy',
+  listDensity: 'compact',
   readingWidth: 'comfortable',
   // What the app has always done, so nobody's mailbox changes behaviour
   // because a setting appeared.

@@ -3,6 +3,8 @@
 The [mail workflow reference](mail-reference.md) (#32) instantiates this direction
 with synthetic, navigable inbox/reader/composer/table/selection/error scenes.
 It is a comparison target, not a claim that production already uses the redesign.
+Production adopts the existing conventional list/reader modes through
+[mail defaults](mail-defaults.md) (#84); detailed layout polish remains separate.
 
 A written, checkable reference for what the interface should look like —
 the direction every design issue after this one builds against, instead of
