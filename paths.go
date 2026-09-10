@@ -191,9 +191,10 @@ func configHome() string {
 // file is started. A desktop app restarts often enough that open-time rotation is
 // sufficient to keep the log from growing without bound.
 const maxLogBytes = 5 << 20
+const appLogFilename = "oreneta.log"
 
 func openAppLog() (*log.Logger, *os.File) {
-	path := filepath.Join(appConfigDir(), "oreneta.log")
+	path := filepath.Join(appConfigDir(), appLogFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return log.New(os.Stderr, "oreneta: ", log.LstdFlags|log.Lmicroseconds), nil
 	}

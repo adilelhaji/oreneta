@@ -516,6 +516,6 @@ func (a *App) systemCheck() (any, error) {
 		"gmail_oauth_configured":   gmailOAuthConfigured(),
 		"outlook_oauth_configured": outlookOAuthConfigured(),
 		"database_path":            dbPath,
-		"log_path":                 filepath.Join(appConfigDir(), "meron.log"),
+		"log_path":                 filepath.Join(appConfigDir(), appLogFilename),
 	}, nil
 }

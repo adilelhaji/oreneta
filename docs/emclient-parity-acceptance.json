@@ -596,6 +596,39 @@
       }
     },
     {
+      "id": "SET-31",
+      "issue": 54,
+      "section": "Privacy/Diagnostics; Backup; Updates",
+      "outcome": "Local redacted diagnostics, safe configuration recovery and staged integrity-checked updates",
+      "status": "partial",
+      "present": "ADR-0008 selects local-only diagnostics, configuration-only backups with optional encrypted secrets and staged SHA-256 verified updates; native recovery and production delivery evidence remain open",
+      "code": "applog.go",
+      "acceptance": "Logs and exports redact email and credential-like values; backups omit cached mail and require a passphrase for secrets; update downloads enforce size/hash checks and require explicit install; failures remain visible",
+      "platform": "Windows desktop",
+      "provider": "Provider-neutral; no remote telemetry or provider certification",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [
+          {
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
+            "result": "applog_test.go"
+          },
+          {
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
+            "result": "backup_test.go"
+          },
+          {
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
+            "result": "update_test.go"
+          }
+        ],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
       "id": "SET-20",
       "issue": 103,
       "section": "Tasks/General",

@@ -305,8 +305,8 @@
     {
       "number": 54,
       "sprint": "S11",
-      "status": "unassessed",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "status": "partial",
+      "evidence": "ADR-0008 accepted 2026-09-10: local redacted diagnostics, configuration-only backups with optional passphrase-protected secrets, and staged hash-verified updates; native recovery and production-provider evidence remain open"
     },
     {
       "number": 55,
