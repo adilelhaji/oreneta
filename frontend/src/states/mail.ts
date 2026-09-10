@@ -795,6 +795,20 @@ export function threadListViewKey(account: string, folder: string, query: string
   return [account, folder, query, filter, sort].join('\n')
 }
 
+/**
+ * Keep the first occurrence of each conversation identity while preserving the
+ * backend order. Provider refreshes can briefly repeat a row at a page
+ * boundary; the list must never render two selectable cards for one thread.
+ */
+export function dedupeThreadsByIdentity(threads: Message[]): Message[] {
+  const seen = new Set<string>()
+  return threads.filter((thread) => {
+    if (!thread.thread_id || seen.has(thread.thread_id)) return false
+    seen.add(thread.thread_id)
+    return true
+  })
+}
+
 export async function loadThreads(refresh = true, searchStage: ThreadSearchStage = 'auto') {
   // A Kanban card temporarily points selectedFolder at the card's real mailbox
   // so thread actions have the right context. The normal mail list is hidden,
@@ -989,6 +1003,10 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
     return
   }
 
+  // Apply the same identity guard to the first page that loadMoreThreads uses
+  // for later pages. This is a UI safety net; the conversation backend still
+  // owns canonical ordering and cursor semantics.
+  allThreads = dedupeThreadsByIdentity(allThreads)
   const conversationPage = pagination === 'conversation-v1'
   if (
     !conversationPage &&

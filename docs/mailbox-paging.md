@@ -102,6 +102,11 @@ sort headers or add a provider/search snapshot contract. No release is implied.
 
 - Unified Recent (mail-only) uses shared cached conversation paging and no longer
   depends on legacy fan-out merge date ordering.
+- The frontend applies the same first-occurrence identity guard to initial and
+  incremental pages, preserving the backend order when a provider repeats a
+  row at a page boundary. Same-view conversation refreshes request the loaded
+  depth, replace the prefix atomically, and keep a single cursor for the new
+  ordered prefix; regression coverage includes new arrivals and duplicate ids.
 - Search and starred keep date-based contracts; snoozed uses wake-up order and
   RSS has its own listing. Mixed/source-agnostic unified views are still legacy
   unless they follow #30 follow-up scope.
