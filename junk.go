@@ -64,7 +64,12 @@ func (a *App) mailMarkJunk(payload map[string]any) (any, error) {
 
 	// The move itself is what matters; teaching the learned spam filter from
 	// it is secondary and must never turn a move that already succeeded into
-	// a reported failure.
-	_, _ = a.sidecar.Call("mail.recordSpamJudgment", map[string]any{"thread_id": threadID, "spam": junk})
+	// a reported failure. Record against the destination row: the cache refresh
+	// replaces the source row during a server MOVE, so the original folder key
+	// no longer names a message that can be judged.
+	_, _ = a.sidecar.Call("mail.recordSpamJudgment", map[string]any{
+		"thread_id": formatParsedImapThreadIDInFolder(ids, target),
+		"spam":      junk,
+	})
 	return result, nil
 }

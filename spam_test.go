@@ -17,7 +17,7 @@ func TestMailMarkJunkRecordsASpamJudgmentAfterMoving(t *testing.T) {
 		t.Fatalf("sidecar calls = %#v, want three (byRole, move, judgment)", writer.calls)
 	}
 	assertCall(t, writer.calls[2], "mail.recordSpamJudgment", map[string]any{
-		"thread_id": threadID,
+		"thread_id": formatImapThreadID("acc", "Junk", "k1#Todo"),
 		"spam":      true,
 	})
 }
@@ -34,7 +34,7 @@ func TestMailMarkJunkUnmarkingRecordsAHamJudgment(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertCall(t, writer.calls[2], "mail.recordSpamJudgment", map[string]any{
-		"thread_id": threadID,
+		"thread_id": formatImapThreadID("acc", "INBOX", "k1#Todo"),
 		"spam":      false,
 	})
 }

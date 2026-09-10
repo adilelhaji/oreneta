@@ -4762,6 +4762,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     target_batch.uidvalidity,
                     target_batch.uid_next,
                 )?;
+                store::preserve_spam_judgments_for_move(
+                    &db,
+                    &account,
+                    &folder,
+                    &target_folder,
+                    &uids,
+                )?;
                 store::delete_messages_by_uid(&db, &account, &folder, &uids)?;
             }
             // The IMAP MOVE above completed for every resolved UID. A concurrent

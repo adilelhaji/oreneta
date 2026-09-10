@@ -281,8 +281,8 @@
     {
       "number": 50,
       "sprint": "S05",
-      "status": "unassessed",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "status": "partial",
+      "evidence": "ADR-0005 accepted 2026-09-10; local explicit judgments, idempotent corrections, move preservation and migration tests implemented; PR/CI/native and full rules parity remain open"
     },
     {
       "number": 51,
