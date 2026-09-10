@@ -35,6 +35,8 @@ func (sinks logSinks) Write(p []byte) (int, error) {
 
 var logEmailRegexp = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 
+var logSecretRegexp = regexp.MustCompile(`(?i)\b(password|passphrase|token|secret|client[_-]?secret|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)\b(\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)`)
+
 // redactLogEmails masks the local part of every email address so the log keeps
 // the domain for context but never the full address, e.g. "j***@gmail.com".
 // Mirrors the mobile diagnostic log's redaction.
@@ -46,6 +48,17 @@ func redactLogEmails(text string) string {
 		}
 		return email[:1] + "***" + email[at:]
 	})
+}
+
+// redactLogSecrets removes values attached to common credential-like keys,
+// including bearer/basic authorization values. The key and separator remain
+// useful for diagnosing which stage failed without exporting the secret.
+func redactLogSecrets(text string) string {
+	return logSecretRegexp.ReplaceAllString(text, `${1}${2}[REDACTED]`)
+}
+
+func redactDiagnosticText(text string) string {
+	return redactLogEmails(redactLogSecrets(text))
 }
 
 // appLogTail returns the newest maxLogViewLines of meron.log with email
@@ -62,7 +75,7 @@ func appLogTail() (string, error) {
 	if len(lines) > maxLogViewLines {
 		lines = lines[len(lines)-maxLogViewLines:]
 	}
-	return redactLogEmails(strings.Join(lines, "\n")), nil
+	return redactDiagnosticText(strings.Join(lines, "\n")), nil
 }
 
 func (a *App) logRead() (any, error) {
@@ -119,7 +132,7 @@ func (a *App) logExport() (any, error) {
 	if dest == "" {
 		return map[string]any{"saved": false}, nil // user cancelled
 	}
-	disclosure := "Account emails below are masked to only the first letter and domain (e.g. j***@gmail.com).\n" +
+	disclosure := "Account emails below are masked to only the first letter and domain (e.g. j***@gmail.com); credential-like values are replaced with [REDACTED].\n" +
 		"Review before sharing.\n\n"
 	if err := os.WriteFile(dest, []byte(disclosure+tail), 0o644); err != nil {
 		return nil, fmt.Errorf("write log: %w", err)
