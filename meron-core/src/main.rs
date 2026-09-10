@@ -28,7 +28,7 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::{
-    backup, cached_conversations, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
+    assistant, backup, cached_conversations, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
     search, secrets, smtp, spam, store, thread_list, thread_read, unified,
 };
 
@@ -1638,6 +1638,27 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 proxy::set_global(proxy::parse_global(&value));
             }
             Ok(json!({ "ok": true }))
+        }
+
+        "assistant.preview" => {
+            let provider: assistant::ProviderConfig = serde_json::from_value(
+                p.get("provider").cloned().context("missing assistant provider")?,
+            )?;
+            let action = req_str(p, "action")?;
+            let context: Vec<assistant::ContextItem> = serde_json::from_value(
+                p.get("context").cloned().context("missing assistant context")?,
+            )?;
+            Ok(serde_json::to_value(assistant::prepare(provider, &action, &context)?)?)
+        }
+
+        "assistant.execute" => {
+            let request: assistant::ExecuteRequest = serde_json::from_value(p.clone())?;
+            let result = tokio::task::spawn_blocking(move || {
+                let agent = proxy::agent()?;
+                assistant::execute(&agent, request)
+            })
+            .await??;
+            Ok(result)
         }
 
         // Puts a thread aside until a time, and takes it out of the list until

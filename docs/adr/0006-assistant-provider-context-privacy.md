@@ -19,16 +19,20 @@ explicit modes:
    service.
 
 The UI must show a reviewable context manifest before activation. Only the
-messages and attachments explicitly selected for that action may be sent.
+messages and attachments explicitly selected for that action may be sent. A
+preview token binds the reviewed provider, action and context to the later
+execution request; stale or altered previews are rejected.
 Subject, sender and body are treated as untrusted input; instructions found in
 mail never authorize sending, deleting, moving, filing, changing rules or
 calling another tool.
 
-The contract supports cancellation, bounded input size, provider errors and an
-explicit offline failure. Requests and responses are not persisted by the
-assistant layer. Provider credentials remain in the existing secret boundary;
-provider responses are held only for the active action unless the caller saves
-the result as ordinary user-authored content.
+The contract supports bounded input size, provider errors and an explicit
+offline failure. The caller may discard a pending result; transport
+cancellation remains a follow-up concern for issue #52. Requests and
+responses are not persisted by the assistant layer. This slice does not store
+provider credentials; any future credential storage must use the existing
+secret boundary. Provider responses are held only for the active action unless
+the caller saves the result as ordinary user-authored content.
 
 ## Consequences
 
@@ -48,4 +52,3 @@ the result as ordinary user-authored content.
   indexing.
 - No automatic actions derived from message content.
 - No provider-specific SDK or credential flow is selected by this ADR.
-

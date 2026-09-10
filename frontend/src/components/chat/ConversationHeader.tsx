@@ -18,6 +18,7 @@ import {
   Trash2,
   X,
   Printer,
+  Sparkles,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -39,6 +40,7 @@ import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
 import { accountIdentities, accounts$ } from '../../states/accounts'
 import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { AssistantReviewDialog } from './AssistantReviewDialog'
 
 // The conversation header: back/close affordances, sender info, the desktop
 // in-thread search box and the overflow actions menu (view mode, star, archive,
@@ -82,6 +84,7 @@ export function ConversationHeader({
   const summary = summariseThread(activeThread, loadedMessages, !!messagesCursor, ownAddresses)
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -251,6 +254,12 @@ export function ConversationHeader({
               width more than they do. */}
           {!threadSearchOpen && (
             <>
+              <IconButton
+                icon={Sparkles}
+                label={t('assistant.open', { defaultValue: 'Review with assistant' })}
+                onClick={() => setAssistantOpen(true)}
+                className="hidden min-[760px]:flex"
+              />
               {/* The two that give way first when the pane is narrow. They
                   stay in the menu below, so nothing becomes unreachable —
                   only less immediate. */}
@@ -391,6 +400,12 @@ export function ConversationHeader({
           </div>
         </div>
       </header>
+      {assistantOpen && (
+        <AssistantReviewDialog
+          messages={loadedMessages.filter((message) => message.thread_id === activeThread.thread_id)}
+          onClose={() => setAssistantOpen(false)}
+        />
+      )}
       {senderMenu && !isRSS && (
         <FloatingContextMenu
           x={senderMenu.x}

@@ -98,6 +98,7 @@ import { AccountAliasesCard } from './AccountAliasesCard'
 import { AccountTogglesSection } from './AccountTogglesSection'
 import { AccountWallpaperCard } from './AccountWallpaperCard'
 import { AvatarCropDialog } from './AvatarCropDialog'
+import { AssistantSettingsSection } from './AssistantSettingsSection'
 import { BoardPanel } from './BoardSettingsPanel'
 import { pickImageFile } from '../../lib/nativeFilePicker'
 import { invoke } from '../../lib/bridge'
@@ -895,6 +896,7 @@ function GeneralSection() {
       <ContactSourcesSettingsSection />
       <PgpSettingsSection />
       <SmimeSettingsSection />
+      <AssistantSettingsSection />
 
       <SettingsGroup title={t('settings.sections.sideNav')}>
         <ToggleRow
