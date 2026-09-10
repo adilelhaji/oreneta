@@ -35,7 +35,7 @@ func (sinks logSinks) Write(p []byte) (int, error) {
 
 var logEmailRegexp = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 
-var logSecretRegexp = regexp.MustCompile(`(?i)"?\b(password|passphrase|token|secret|client[_-]?secret|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)\b"?(\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)`)
+var logSecretRegexp = regexp.MustCompile(`(?i)"?\b(password|passphrase|token|secret|client[_-]?secret|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)\b"?(\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s]+)`)
 
 // redactLogEmails masks the local part of every email address so the log keeps
 // the domain for context but never the full address, e.g. "j***@gmail.com".

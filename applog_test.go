@@ -53,9 +53,9 @@ func TestRecoverInvokeLeavesSuccessfulCallsAlone(t *testing.T) {
 }
 
 func TestRedactDiagnosticTextRemovesEmailsAndCredentialValues(t *testing.T) {
-	input := `connect user=ana@example.com password=correct-horse token=abc123 Authorization: Bearer xyz789 {"password":"json-secret","accessToken":"camel-secret","ClientSecret":"client-secret"}`
+	input := `connect user=ana@example.com password=correct-horse,with-comma token=abc123 Authorization: Bearer xyz789 {"password":"json-secret","accessToken":"camel-secret","ClientSecret":"client-secret","refreshToken":"abc\"def"}`
 	got := redactDiagnosticText(input)
-	for _, leaked := range []string{"ana@example.com", "correct-horse", "abc123", "xyz789", "json-secret", "camel-secret", "client-secret"} {
+	for _, leaked := range []string{"ana@example.com", "correct-horse", "with-comma", "abc123", "xyz789", "json-secret", "camel-secret", "client-secret", `abc\"def`} {
 		if strings.Contains(got, leaked) {
 		t.Fatalf("redacted log leaked sensitive value: %q", got)
 		}
