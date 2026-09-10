@@ -258,7 +258,7 @@ export function ConversationHeader({
                 icon={Sparkles}
                 label={t('assistant.open', { defaultValue: 'Review with assistant' })}
                 onClick={() => setAssistantOpen(true)}
-                className="hidden min-[760px]:flex"
+                className="hidden min-[1200px]:flex"
               />
               {/* The two that give way first when the pane is narrow. They
                   stay in the menu below, so nothing becomes unreachable —
