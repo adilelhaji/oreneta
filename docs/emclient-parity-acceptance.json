@@ -610,7 +610,20 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "2e598291ade7bb2594fe1a3495abb983777e5aab",
+            "result": "applog_test.go"
+          },
+          {
+            "sha": "2e598291ade7bb2594fe1a3495abb983777e5aab",
+            "result": "backup_test.go"
+          },
+          {
+            "sha": "2e598291ade7bb2594fe1a3495abb983777e5aab",
+            "result": "update_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }
