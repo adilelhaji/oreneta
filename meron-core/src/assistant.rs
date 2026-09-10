@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::io::Read;
+use std::sync::{Mutex, OnceLock};
 use url::Url;
 
 pub const MAX_CONTEXT_ITEMS: usize = 8;
@@ -103,8 +104,60 @@ pub struct ExecuteRequest {
     pub context: Vec<ContextItem>,
     pub confirmed: bool,
     pub preview_token: String,
+    pub execution_id: String,
     #[serde(default)]
     pub authorization: Option<String>,
+}
+
+struct ExecutionState {
+    active: HashSet<String>,
+    cancelled: HashSet<String>,
+}
+
+static EXECUTION_STATE: OnceLock<Mutex<ExecutionState>> = OnceLock::new();
+
+fn execution_state() -> &'static Mutex<ExecutionState> {
+    EXECUTION_STATE.get_or_init(|| {
+        Mutex::new(ExecutionState {
+            active: HashSet::new(),
+            cancelled: HashSet::new(),
+        })
+    })
+}
+
+fn take_cancelled(execution_id: &str) -> bool {
+    execution_state()
+        .lock()
+        .expect("assistant cancellation lock")
+        .cancelled
+        .remove(execution_id)
+}
+
+struct ExecutionGuard(String);
+
+impl Drop for ExecutionGuard {
+    fn drop(&mut self) {
+        let mut state = execution_state()
+            .lock()
+            .expect("assistant execution state lock");
+        state.active.remove(&self.0);
+        state.cancelled.remove(&self.0);
+    }
+}
+
+pub fn cancel(execution_id: &str) -> Result<Value> {
+    ensure!(
+        !execution_id.trim().is_empty(),
+        "assistant execution id is required"
+    );
+    let mut state = execution_state()
+        .lock()
+        .expect("assistant execution state lock");
+    let active = state.active.contains(execution_id);
+    if active {
+        state.cancelled.insert(execution_id.to_string());
+    }
+    Ok(json!({ "cancelled": active, "execution_id": execution_id }))
 }
 
 fn preview_token(
@@ -278,8 +331,25 @@ pub fn prepare(
 
 pub fn execute(agent: &ureq::Agent, request: ExecuteRequest) -> Result<Value> {
     ensure!(
+        !request.execution_id.trim().is_empty(),
+        "assistant execution id is required"
+    );
+    ensure!(
+        execution_state()
+            .lock()
+            .expect("assistant execution state lock")
+            .active
+            .insert(request.execution_id.clone()),
+        "assistant execution id is already active"
+    );
+    let _guard = ExecutionGuard(request.execution_id.clone());
+    ensure!(
         request.confirmed,
         "assistant action requires explicit confirmation"
+    );
+    ensure!(
+        !take_cancelled(&request.execution_id),
+        "assistant action cancelled"
     );
     let prepared = prepare(request.provider.clone(), &request.action, &request.context)?;
     ensure!(
@@ -322,6 +392,10 @@ pub fn execute(agent: &ureq::Agent, request: ExecuteRequest) -> Result<Value> {
     ensure!(
         body.len() <= MAX_RESPONSE_BYTES,
         "assistant provider response is too large"
+    );
+    ensure!(
+        !take_cancelled(&request.execution_id),
+        "assistant action cancelled"
     );
     if !status.is_success() {
         let detail = String::from_utf8_lossy(&body);
@@ -441,6 +515,7 @@ mod tests {
             context: vec![item("m1", "a1")],
             confirmed: false,
             preview_token: "invalid".into(),
+            execution_id: "exec-1".into(),
             authorization: None,
         };
         let agent = ureq::Agent::new_with_defaults();
@@ -454,6 +529,7 @@ mod tests {
         let provider = provider(ProviderMode::Remote, "https://ai.example.test/v1");
         let request = ExecuteRequest {
             preview_token: "stale".into(),
+            execution_id: "exec-2".into(),
             provider,
             action: "summary".into(),
             context,
@@ -463,6 +539,27 @@ mod tests {
         let agent = ureq::Agent::new_with_defaults();
         let error = execute(&agent, request).unwrap_err().to_string();
         assert!(error.contains("preview is stale"));
+    }
+
+    #[test]
+    fn cancellation_is_checked_before_transport() {
+        execution_state()
+            .lock()
+            .expect("assistant execution state lock")
+            .active
+            .insert("exec-cancelled".into());
+        cancel("exec-cancelled").unwrap();
+        execution_state()
+            .lock()
+            .expect("assistant execution state lock")
+            .active
+            .remove("exec-cancelled");
+        assert!(take_cancelled("exec-cancelled"));
+        assert!(
+            !cancel("exec-cancelled").unwrap()["cancelled"]
+                .as_bool()
+                .unwrap()
+        );
     }
 
     #[test]

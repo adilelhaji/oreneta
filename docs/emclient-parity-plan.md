@@ -89,7 +89,7 @@ newly discovered requirements must get an issue before the ledger is accepted.
 | C21: Crypto | Signing/encryption/decryption, key import/export/discovery policy and truthful trust states | [#9](https://github.com/adilelhaji/oreneta/issues/9), [#12](https://github.com/adilelhaji/oreneta/issues/12), [#49](https://github.com/adilelhaji/oreneta/issues/49) | partial |
 | C22: Privacy | Unsafe content isolation, tracker blocking, secrets, consent and diagnostic redaction | [#54](https://github.com/adilelhaji/oreneta/issues/54); [#107](https://github.com/adilelhaji/oreneta/issues/107) | unassessed |
 | C23: Language | Offline grammar and translation, honest language coverage and packaged models | [#105](https://github.com/adilelhaji/oreneta/issues/105); [#106](https://github.com/adilelhaji/oreneta/issues/106) | unassessed |
-| C24: Assistant | Explicit-context generation, revision/tone, summary and reviewed extraction, no autonomous mail actions | [#51](https://github.com/adilelhaji/oreneta/issues/51), [#52](https://github.com/adilelhaji/oreneta/issues/52) | unassessed |
+| C24: Assistant | Explicit-context generation, revision/tone, summary and reviewed extraction, no autonomous mail actions | [#51](https://github.com/adilelhaji/oreneta/issues/51), [#52](https://github.com/adilelhaji/oreneta/issues/52) | partial |
 | C25: Integrations | Cloud sharing and meeting lifecycle across the published provider inventory | [#108](https://github.com/adilelhaji/oreneta/issues/108); [#109](https://github.com/adilelhaji/oreneta/issues/109) | unassessed |
 | C26: Chat | Direct/group/channel chat, supported presence/history/files and account isolation | [#110](https://github.com/adilelhaji/oreneta/issues/110); [#111](https://github.com/adilelhaji/oreneta/issues/111) | unassessed |
 | C27: Portability | Legacy imports, standard exports, local archives/data files, profiles and scheduled complete backups | [#25](https://github.com/adilelhaji/oreneta/issues/25); [#112](https://github.com/adilelhaji/oreneta/issues/112); [#113](https://github.com/adilelhaji/oreneta/issues/113) | unassessed |
@@ -180,7 +180,7 @@ S01 does not close the entire design epic or claim functional parity.
 | tasks-full | Standalone/synced tasks conflict with current local, one-open-task-per-thread contract |
 | notes | Standalone note storage, identity and note-capable provider semantics |
 | chat-design → chat | Native adapter boundary, history/presence/files, scopes and maintenance |
-| #51, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs; #51 provider/context boundary accepted in [ADR-0006](adr/0006-assistant-provider-context-privacy.md) on 2026-09-10 |
+| #51, #52, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs; #51 provider/context boundary and #52 result-review contract accepted in [ADR-0006](adr/0006-assistant-provider-context-privacy.md) and [ADR-0007](adr/0007-assistant-results-review-and-cancellation.md) on 2026-09-10 |
 | migration / backup | New data formats/dependencies, archive model and consistent snapshot/encryption policy |
 | beta-delta / mobile-scope | New sync service, MCP/Matrix or new platform architecture |
 

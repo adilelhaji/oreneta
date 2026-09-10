@@ -1661,6 +1661,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(result)
         }
 
+        "assistant.cancel" => assistant::cancel(&req_str(p, "execution_id")?),
+
         // Puts a thread aside until a time, and takes it out of the list until
         // then. Its folder travels with it: coming back means coming back
         // where it was.
