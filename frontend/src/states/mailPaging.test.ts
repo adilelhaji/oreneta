@@ -85,9 +85,17 @@ describe('mailbox pagination view contract', () => {
     it(`keeps conversation order and replaces background traversal (${account})`, async () => {
       ui$.selectedAccount.set(account)
       settings$.listSort.set({ key: 'sender', dir: 'asc' })
-      respond = () => ({ threads: [{ ...row('a'), date: 1 }], next_cursor: 'conv1:first', pagination: 'conversation-v1' })
+      respond = () => ({
+        threads: [{ ...row('a'), date: 1 }],
+        next_cursor: 'conv1:first',
+        pagination: 'conversation-v1',
+      })
       await loadThreads()
-      respond = () => ({ threads: [{ ...row('b'), date: 999 }], next_cursor: 'conv1:tail', pagination: 'conversation-v1' })
+      respond = () => ({
+        threads: [{ ...row('b'), date: 999 }],
+        next_cursor: 'conv1:tail',
+        pagination: 'conversation-v1',
+      })
       await loadMoreThreads()
       expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['a', 'b'])
       respond = () => ({ threads: [row('fresh'), row('b')], next_cursor: 'conv1:fresh', pagination: 'conversation-v1' })
@@ -98,7 +106,11 @@ describe('mailbox pagination view contract', () => {
   }
 
   it('requests loaded depth and honors the conversation marker on terminal pages', async () => {
-    respond = () => ({ threads: Array.from({ length: 60 }, (_, i) => row(`r${i}`)), next_cursor: 'conv1:tail', pagination: 'conversation-v1' })
+    respond = () => ({
+      threads: Array.from({ length: 60 }, (_, i) => row(`r${i}`)),
+      next_cursor: 'conv1:tail',
+      pagination: 'conversation-v1',
+    })
     await loadThreads()
     respond = () => ({ threads: [], pagination: 'conversation-v1' })
     await loadThreads(false)
@@ -106,6 +118,38 @@ describe('mailbox pagination view contract', () => {
     expect(mail$.threads.get()).toEqual([])
     expect(mail$.threadsCursor.get()).toBe('')
     expect(mail$.threadsPagination.get()).toBe('conversation-v1')
+  })
+
+  it('deduplicates repeated identities on the first page without changing backend order', async () => {
+    respond = () => ({
+      threads: [row('first'), row('duplicate'), row('duplicate'), row('last')],
+      next_cursor: 'conv1:tail',
+      pagination: 'conversation-v1',
+    })
+    await loadThreads()
+    expect(mail$.threads.get().map((thread) => thread.thread_id)).toEqual(['first', 'duplicate', 'last'])
+    expect(mail$.threadsCursor.get()).toBe('conv1:tail')
+  })
+
+  it('keeps a loaded conversation prefix ordered after a same-view refresh with new arrivals', async () => {
+    respond = () => ({
+      threads: Array.from({ length: 60 }, (_, index) => row(`old-${index}`)),
+      next_cursor: 'conv1:old-tail',
+      pagination: 'conversation-v1',
+    })
+    await loadThreads()
+    respond = () => ({
+      threads: [row('new-arrival'), ...Array.from({ length: 59 }, (_, index) => row(`old-${index}`))],
+      next_cursor: 'conv1:new-tail',
+      pagination: 'conversation-v1',
+    })
+    await loadThreads(false)
+    expect(mail$.threads.get().map((thread) => thread.thread_id)).toEqual([
+      'new-arrival',
+      ...Array.from({ length: 59 }, (_, index) => `old-${index}`),
+    ])
+    expect(mail$.threadsCursor.get()).toBe('conv1:new-tail')
+    expect(new Set(mail$.threads.get().map((thread) => thread.thread_id)).size).toBe(60)
   })
 
   it('retains the open reader independently of filtered sorted rows', async () => {
@@ -143,7 +187,9 @@ describe('mailbox pagination view contract', () => {
   it('keeps conversation retry state when a same-view refresh fails', async () => {
     respond = () => ({ threads: [row('old')], next_cursor: 'conv1:old', pagination: 'conversation-v1' })
     await loadThreads()
-    respond = () => { throw new Error('offline') }
+    respond = () => {
+      throw new Error('offline')
+    }
     await loadThreads(false)
     expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['old'])
     expect(mail$.threadsCursor.get()).toBe('conv1:old')
@@ -154,7 +200,10 @@ describe('mailbox pagination view contract', () => {
     respond = () => ({ threads: [row('old')], next_cursor: 'conv1:old', pagination: 'conversation-v1' })
     await loadThreads()
     let reject!: (error: Error) => void
-    respond = () => new Promise((_, fail) => { reject = fail })
+    respond = () =>
+      new Promise((_, fail) => {
+        reject = fail
+      })
     const loading = loadMoreThreads()
     ui$.selectedFolder.set('Sent')
     reject(new Error('conversation cursor invalid for this view; reload the first page'))

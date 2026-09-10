@@ -168,7 +168,7 @@
       "number": 30,
       "sprint": "S03",
       "status": "partial",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "evidence": "Shared conversation paging and stale-view guards are active; the frontend now deduplicates initial/incremental identities and preserves same-view refreshed prefixes. Full provider ordering and live-arrival acceptance remain open; see docs/mailbox-paging.md"
     },
     {
       "number": 31,
