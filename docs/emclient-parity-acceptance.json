@@ -471,6 +471,26 @@
       }
     },
     {
+      "id": "SET-16A",
+      "issue": 51,
+      "section": "Mail/Artificial Intelligence",
+      "outcome": "Explicit provider, context disclosure and privacy boundaries",
+      "status": "partial",
+      "present": "ADR-0006 and the assistant provider contract support local-first or explicit HTTPS providers, bounded reviewed context, preview-bound execution and no automatic mail actions; summaries, drafts and task extraction remain issue #52",
+      "code": "frontend/src/components/chat/AssistantReviewDialog.tsx",
+      "acceptance": "Preview lists the exact selected messages and attachments before activation; a preview token rejects changed provider/action/context; only confirmed bounded context may be transmitted; mail instructions are untrusted and cannot authorize mail mutations; provider credentials are ephemeral and responses are not persisted",
+      "platform": "Windows desktop",
+      "provider": "Provider-neutral contract; no provider certified by this row",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": false,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
       "id": "SET-16",
       "issue": 52,
       "section": "Mail/Artificial Intelligence",

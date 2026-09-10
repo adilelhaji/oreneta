@@ -5,6 +5,7 @@
 //! and wire types live here so desktop, Android, and future FFI bindings share
 //! one source of truth.
 
+pub mod assistant;
 pub mod backend;
 pub mod backup;
 pub mod calendar;

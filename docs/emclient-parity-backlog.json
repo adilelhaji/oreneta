@@ -287,8 +287,8 @@
     {
       "number": 51,
       "sprint": "S10",
-      "status": "unassessed",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "status": "partial",
+      "evidence": "ADR-0006 accepted 2026-09-10; provider-neutral local-first/explicit-remote contract, bounded context manifest, confirmation gate and settings surface implemented with automated validation; concrete provider adapters and issue #52 assistant actions remain open"
     },
     {
       "number": 52,

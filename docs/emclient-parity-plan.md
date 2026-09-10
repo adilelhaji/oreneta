@@ -180,7 +180,7 @@ S01 does not close the entire design epic or claim functional parity.
 | tasks-full | Standalone/synced tasks conflict with current local, one-open-task-per-thread contract |
 | notes | Standalone note storage, identity and note-capable provider semantics |
 | chat-design → chat | Native adapter boundary, history/presence/files, scopes and maintenance |
-| #51, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs |
+| #51, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs; #51 provider/context boundary accepted in [ADR-0006](adr/0006-assistant-provider-context-privacy.md) on 2026-09-10 |
 | migration / backup | New data formats/dependencies, archive model and consistent snapshot/encryption policy |
 | beta-delta / mobile-scope | New sync service, MCP/Matrix or new platform architecture |
 
