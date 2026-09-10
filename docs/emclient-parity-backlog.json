@@ -299,8 +299,8 @@
     {
       "number": 53,
       "sprint": "S11",
-      "status": "unassessed",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "status": "partial",
+      "evidence": "Deterministic 1k/10k/100k dataset generator and reproducible workload report contract added in docs/performance-baseline.md; native UI, network, startup, scrolling and retained-memory measurements remain open"
     },
     {
       "number": 54,

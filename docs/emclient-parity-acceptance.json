@@ -571,6 +571,26 @@
       }
     },
     {
+      "id": "SET-30",
+      "issue": 53,
+      "section": "Performance/Completion",
+      "outcome": "Reproducible staged datasets and separated workload measurements",
+      "status": "partial",
+      "present": "Deterministic dataset/report contract covers generation, stable sort and sender filtering; native UI, network, startup, scrolling and retained-memory evidence remain open",
+      "code": "scripts/perf/mail-dataset.mjs",
+      "acceptance": "Reports identify exact commit, dataset sizes, checksum, runtime, platform and cache state; native p95 and retained-memory thresholds require reference-device evidence",
+      "platform": "Windows desktop",
+      "provider": "Not applicable for synthetic dataset; provider timing remains separate",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
       "id": "SET-20",
       "issue": 103,
       "section": "Tasks/General",
