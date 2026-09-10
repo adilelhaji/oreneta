@@ -228,7 +228,7 @@
       "number": 40,
       "sprint": "S04",
       "status": "partial",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "evidence": "Template insertion and attachment preview paths exist; PDF rendering now rejects stale attachment/page generations, clears the old canvas, and preserves loading-task ownership through rapid switches. Full memory/lifecycle and unsupported-file acceptance remain open."
     },
     {
       "number": 41,
