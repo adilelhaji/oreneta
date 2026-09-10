@@ -16,15 +16,18 @@ then applies the replacement inside one transaction. This keeps learning
 idempotent and makes corrections reversible without inflating evidence.
 
 The identity is the local `messages.id`, qualified by `account`; the account
-foreign scope is enforced by the table key and lookup. A missing conversation
-or message remains a no-op. No automatic move, server/Sieve adapter or new
-provider behavior is introduced by this decision.
+foreign scope is enforced by the table key and lookup. Mail move paths transfer
+the judgment from the source cache row to the refreshed target row using the
+provider-stable Gmail/message-id identity before deleting the source row. A
+missing conversation or message remains a no-op. No automatic move,
+server/Sieve adapter or new provider behavior is introduced by this decision.
 
 ## Consequences
 
 - Aggregate counters can be repaired by replaying the current judgment rows.
 - A judgment survives re-judging and cannot be confused with a derived result.
+- Moving a judged message preserves its current decision and aggregate
+  contribution; deleting a cache row cannot leave orphaned learning evidence.
 - Existing accounts migrate without backfilling invented user decisions.
 - The implementation must update aggregates transactionally and test duplicate,
   replacement, missing-message and account-isolation cases.
-

@@ -4657,6 +4657,135 @@ pub fn delete_folder_messages(conn: &Connection, account: &str, folder: &str) ->
     Ok(deleted)
 }
 
+/// Move explicit spam judgments alongside their cached message rows. A server
+/// MOVE can mint a new local row (and UID), so the judgment must be transferred
+/// before the old row is deleted or its learning would become orphaned. Gmail
+/// ids and RFC Message-IDs are provider-stable across folders; rows without
+/// either identity are intentionally left for the next explicit judgment.
+pub fn preserve_spam_judgments_for_move(
+    conn: &Connection,
+    account: &str,
+    source_folder: &str,
+    target_folder: &str,
+    uids: &[u32],
+) -> Result<usize> {
+    if source_folder == target_folder || uids.is_empty() {
+        return Ok(0);
+    }
+    let tx = conn.unchecked_transaction()?;
+    let mut target_ids: HashMap<String, i64> = HashMap::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT id, json FROM messages WHERE account = ?1 AND folder = ?2",
+        )?;
+        let rows = stmt.query_map(params![account, target_folder], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        for row in rows {
+            let (id, json) = row?;
+            if let Some(identity) = stable_cached_message_identity(&json) {
+                target_ids.insert(identity, id);
+            }
+        }
+    }
+
+    let mut transferred = 0;
+    for uid in uids {
+        let source = tx
+            .query_row(
+                "SELECT id, json FROM messages
+                  WHERE account = ?1 AND folder = ?2 AND uid = ?3",
+                params![account, source_folder, *uid],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?;
+        let Some((source_id, source_json)) = source else {
+            continue;
+        };
+        let Some(identity) = stable_cached_message_identity(&source_json) else {
+            continue;
+        };
+        let Some(target_id) = target_ids.get(&identity).copied() else {
+            continue;
+        };
+        if target_id == source_id {
+            continue;
+        }
+        let source_judgment = tx
+            .query_row(
+                "SELECT spam, from_addr, subject FROM spam_judgments
+                  WHERE account = ?1 AND message_id = ?2",
+                params![account, source_id],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)? != 0,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((_source_spam, _source_from, _source_subject)) = source_judgment else {
+            continue;
+        };
+
+        if let Some((target_spam, target_from, target_subject)) = tx
+            .query_row(
+                "SELECT spam, from_addr, subject FROM spam_judgments
+                  WHERE account = ?1 AND message_id = ?2",
+                params![account, target_id],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)? != 0,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        {
+            adjust_sender_spam(&tx, account, &target_from, target_spam, -1)?;
+            adjust_spam_trigger_words(&tx, account, &target_subject, target_spam, -1)?;
+            tx.execute(
+                "DELETE FROM spam_judgments WHERE account = ?1 AND message_id = ?2",
+                params![account, target_id],
+            )?;
+        }
+        tx.execute(
+            "UPDATE spam_judgments SET message_id = ?3
+              WHERE account = ?1 AND message_id = ?2",
+            params![account, source_id, target_id],
+        )?;
+        // Keep the snapshots and aggregates unchanged: only the cache-row
+        // identity moved.
+        transferred += 1;
+    }
+    tx.commit()?;
+    Ok(transferred)
+}
+
+fn stable_cached_message_identity(json: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(json).ok()?;
+    if let Some(gmail_id) = value.get("gmail_msg_id") {
+        let id = gmail_id.as_u64().map(|n| n.to_string()).or_else(|| {
+            gmail_id
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        });
+        if let Some(id) = id {
+            return Some(format!("gmail:{id}"));
+        }
+    }
+    value
+        .get("message_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(|id| format!("message-id:{}", id.to_lowercase()))
+}
+
 #[allow(dead_code)]
 pub fn move_messages_by_uid(
     conn: &Connection,

@@ -859,6 +859,47 @@ fn replacing_a_judgment_retracts_the_original_envelope_snapshot() {
 }
 
 #[test]
+fn moving_a_cached_message_transfers_its_judgment_before_source_delete() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    let header = |uid: u32, folder_date: i64| MessageHeader {
+        uid,
+        from_addr: "spammer@example.com".into(),
+        subject: "Stable offer".into(),
+        message_id: "stable@example.com".into(),
+        thread_key: "thread".into(),
+        date: folder_date,
+        ..Default::default()
+    };
+    upsert_messages(&conn, "acct", "INBOX", &[header(1, 1)]).unwrap();
+    upsert_messages(&conn, "acct", "Junk", &[header(9, 1)]).unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "thread", true).unwrap();
+
+    assert_eq!(
+        preserve_spam_judgments_for_move(&conn, "acct", "INBOX", "Junk", &[1]).unwrap(),
+        1
+    );
+    delete_messages_by_uid(&conn, "acct", "INBOX", &[1]).unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (1, 0));
+
+    record_spam_judgment(&conn, "acct", "Junk", "thread", false).unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (0, 1));
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM spam_judgments WHERE account = 'acct'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        1
+    );
+}
+
+#[test]
 fn subject_words_seen_repeatedly_in_confirmed_spam_flag_a_later_message() {
     let conn = test_conn();
     conn.execute(
