@@ -585,7 +585,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "b6aa0f0c8c88325a8d895616e20e4d4949adcfe6",
+            "result": "scripts/perf/mail-dataset.test.mjs"
+          }
+        ],
         "native": [],
         "provider": []
       }
