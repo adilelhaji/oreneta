@@ -19,6 +19,9 @@ and shell bounds. The synthetic component baseline now requires visible content
 at 600px instead of accepting the known defect.
 
 A 1440px window at 200% zoom is exercised at its equivalent 720 CSS-pixel layout
-with device scale 2. This automated layout check is not native WebView2 zoom,
-touch, IME or provider certification. Native zoom acceptance remains pending in
-the parity ledger; no mock or screenshot alone closes that certification gap.
+with device scale 2. The Windows validation runner additionally exercises the
+actual WebView2 keyboard path: it resets zoom with Ctrl+0, applies six Ctrl+plus
+steps (the WebView2 100%→200% sequence), and uses Windows UI Automation to verify
+the email editor, provider choices and their bounds remain visible inside the
+native window. This does not certify touch, IME, provider interoperability or
+installer behavior.
