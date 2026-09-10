@@ -7,7 +7,8 @@
 
 ## Decision
 
-1. **Diagnostics are local-only.** Oreneta keeps bounded local logs, redacts
+1. **Diagnostics are local-only.** Oreneta keeps bounded local logs in the
+   canonical `oreneta.log` file, redacts
    email addresses and credential-like values before display/export, and never
    sends telemetry by default. Export is explicit and user-reviewable.
 2. **Backups remain configuration-only.** The existing backup format includes

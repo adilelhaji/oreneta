@@ -12,7 +12,7 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// maxLogViewLines caps how much of meron.log the in-app viewer and the export
+// maxLogViewLines caps how much of oreneta.log the in-app viewer and the export
 // include; the newest lines matter for troubleshooting.
 const maxLogViewLines = 1000
 
@@ -35,7 +35,7 @@ func (sinks logSinks) Write(p []byte) (int, error) {
 
 var logEmailRegexp = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 
-var logSecretRegexp = regexp.MustCompile(`(?i)\b(password|passphrase|token|secret|client[_-]?secret|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)\b(\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)`)
+var logSecretRegexp = regexp.MustCompile(`(?i)"?\b(password|passphrase|token|secret|client[_-]?secret|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)\b"?(\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)`)
 
 // redactLogEmails masks the local part of every email address so the log keeps
 // the domain for context but never the full address, e.g. "j***@gmail.com".
@@ -61,10 +61,10 @@ func redactDiagnosticText(text string) string {
 	return redactLogEmails(redactLogSecrets(text))
 }
 
-// appLogTail returns the newest maxLogViewLines of meron.log with email
+// appLogTail returns the newest maxLogViewLines of oreneta.log with email
 // addresses redacted, ready to show in the Settings log viewer or export.
 func appLogTail() (string, error) {
-	data, err := os.ReadFile(filepath.Join(appConfigDir(), "meron.log"))
+	data, err := os.ReadFile(filepath.Join(appConfigDir(), appLogFilename))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
@@ -86,7 +86,7 @@ func (a *App) logRead() (any, error) {
 	return map[string]any{"log": tail}, nil
 }
 
-// captureCrashes routes Go runtime crash tracebacks into meron.log. The runtime
+// captureCrashes routes Go runtime crash tracebacks into oreneta.log. The runtime
 // writes an unrecovered panic straight to fd 2, which is lost for a windowed
 // app (no terminal attached), so the one thing worth having after a crash would
 // otherwise never reach the log the user can export.
@@ -107,8 +107,9 @@ func (a *App) recoverInvoke(command string, err *error) {
 	if panicked == nil {
 		return
 	}
-	a.logf("invoke %s panicked: %v\n%s", command, panicked, debug.Stack())
-	*err = fmt.Errorf("internal error in %s: %v", command, panicked)
+	safePanic := redactDiagnosticText(fmt.Sprint(panicked))
+	a.logf("invoke %s panicked: %s\n%s", command, safePanic, debug.Stack())
+	*err = fmt.Errorf("internal error in %s: %s", command, safePanic)
 }
 
 // logExport writes the redacted log tail to a user-chosen path via a native

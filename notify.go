@@ -156,7 +156,7 @@ func (a *App) handleSidecarEvent(name string, detail any) {
 	}
 }
 
-// logSidecarError copies engine-side sync/generic failures into meron.log. The
+// logSidecarError copies engine-side sync/generic failures into oreneta.log. The
 // UI shows only a generic "unable to connect" banner, so without this the real
 // cause (TLS, auth, timeout) reached the frontend and was thrown away, leaving
 // nothing on disk to diagnose a failing account from.
