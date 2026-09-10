@@ -33,7 +33,9 @@ comparison target in #32/#33, not silently applied by this baseline.
 Remote font imports are removed in the test-only build. Platform fallback fonts
 can change glyph metrics: screenshots are not pixel-comparable across different
 OS/font installations. Native WebKitGTK/WKWebView/WebView2 rendering, IME and
-Wails window integration are not validated by this Chromium harness.
+Wails window integration are not validated by this Chromium harness. The Windows
+validation workflow has a separate native WebView2 zoom check using the keyboard
+path and UI Automation; its evidence is not interchangeable with these captures.
 
 Local validation host: Windows. Go/WebKitGTK, Rust, Docker/Maddy and mobile
 toolchains are unavailable locally; their CI results are recorded separately.
@@ -62,7 +64,8 @@ Historical defect (#34, corrected by #85): the strict `<600px` visibility rules
 left the reader outside the viewport from 600 through 768px while the list still
 occupied full width. Both 600px reader captures now require positive viewport
 visibility. See [mail boundaries](design/mail-boundaries.md) for the production
-boundary and zoom-equivalent checks; native zoom remains separate evidence.
+boundary and zoom-equivalent checks; native zoom evidence is attached separately
+to the Windows validation run.
 
 ## Capability ledger
 

@@ -476,7 +476,7 @@
       "number": 85,
       "url": "https://github.com/adilelhaji/oreneta/issues/85",
       "status": "partial",
-      "evidence": "docs/baseline.md known 600px limitation"
+      "evidence": "Responsive fix merged in PR #124; production 599/600/601/768/769/1024/1025 and DPR2 checks pass. Native runner verifies focus, injected zoom input, layout change and in-window bounds, but cannot read WebView2 ZoomFactor or certify exact 200%; see docs/design/mail-boundaries.md."
     },
     {
       "key": "sidebar",
