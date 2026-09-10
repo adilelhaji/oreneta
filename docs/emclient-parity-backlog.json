@@ -475,8 +475,8 @@
       "blockedBy": [],
       "number": 85,
       "url": "https://github.com/adilelhaji/oreneta/issues/85",
-      "status": "implemented-unverified",
-      "evidence": "Responsive fix merged in PR #124; production 599/600/601/768/769/1024/1025 and DPR2 checks pass. Native WebView2 200% zoom is covered by the validation runner; rerun exact-SHA evidence remains required. See docs/design/mail-boundaries.md."
+      "status": "partial",
+      "evidence": "Responsive fix merged in PR #124; production 599/600/601/768/769/1024/1025 and DPR2 checks pass. Native runner verifies focus, injected zoom input, layout change and in-window bounds, but cannot read WebView2 ZoomFactor or certify exact 200%; see docs/design/mail-boundaries.md."
     },
     {
       "key": "sidebar",

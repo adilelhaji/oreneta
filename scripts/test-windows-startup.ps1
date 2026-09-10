@@ -20,9 +20,10 @@ public static class OrenetaNativeInput {
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort virtualKey; public ushort scanCode; public uint flags; public uint time; public IntPtr extraInfo; }
     [DllImport("user32.dll")] private static extern uint SendInput(uint count, Input[] inputs, int size);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     private static Input Key(ushort key, uint flags) => new Input { type = 1, data = new InputUnion { keyboard = new KeyboardInput { virtualKey = key, scanCode = 0, flags = flags, time = 0, extraInfo = IntPtr.Zero } } };
-    public static void SendZoomReset() { SendInput(4, new[] { Key(0x11, 0), Key(0x30, 0), Key(0x30, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))); }
-    public static void SendZoomIn() { SendInput(6, new[] { Key(0x11, 0), Key(0x10, 0), Key(0xBB, 0), Key(0xBB, 2), Key(0x10, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))); }
+    public static bool SendZoomReset() { return SendInput(4, new[] { Key(0x11, 0), Key(0x30, 0), Key(0x30, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 4; }
+    public static bool SendZoomIn() { return SendInput(6, new[] { Key(0x11, 0), Key(0x10, 0), Key(0xBB, 0), Key(0xBB, 2), Key(0x10, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 6; }
 }
 "@
 }
@@ -71,12 +72,21 @@ for ($launch = 1; $launch -le 2; $launch++) {
         if ($names -match 'Something went wrong|useSyncExternalStore') { throw 'React startup error in native UI' }
 
         if ($VerifyZoom) {
-            if (![OrenetaNativeInput]::SetForegroundWindow($process.MainWindowHandle)) { throw 'Could not focus native window for zoom validation' }
+            $focusDeadline = [DateTime]::UtcNow.AddSeconds(5)
+            do {
+                [OrenetaNativeInput]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
+                Start-Sleep -Milliseconds 100
+            } while ([OrenetaNativeInput]::GetForegroundWindow() -ne $process.MainWindowHandle -and [DateTime]::UtcNow -lt $focusDeadline)
+            if ([OrenetaNativeInput]::GetForegroundWindow() -ne $process.MainWindowHandle) { throw 'Could not focus native window for zoom validation' }
+            if (![OrenetaNativeInput]::SendZoomReset()) { throw 'Windows rejected Ctrl+0 zoom input' }
             Start-Sleep -Milliseconds 250
-            [OrenetaNativeInput]::SendZoomReset()
-            Start-Sleep -Milliseconds 250
+            $baseWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+            $baseEditors = @($baseWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) | Where-Object {
+                $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
+            })
+            $baseHeight = if ($baseEditors.Count -gt 0) { $baseEditors[0].Current.BoundingRectangle.Height } else { 0 }
             1..6 | ForEach-Object {
-                [OrenetaNativeInput]::SendZoomIn()
+                if (![OrenetaNativeInput]::SendZoomIn()) { throw 'Windows rejected Ctrl+plus zoom input' }
                 Start-Sleep -Milliseconds 100
             }
             Start-Sleep -Milliseconds 500
@@ -89,6 +99,9 @@ for ($launch = 1; $launch -le 2; $launch++) {
                 $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
             })
             if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible at native 200% zoom' }
+            if ($baseHeight -gt 0 -and $zoomEditors[0].Current.BoundingRectangle.Height -le ($baseHeight * 1.1)) {
+                throw 'Native zoom input did not change the editor layout'
+            }
             foreach ($element in @($zoomEditors | Select-Object -First 1)) {
                 $bounds = $element.Current.BoundingRectangle
                 if ($bounds.Width -le 0 -or $bounds.Height -le 0 -or
