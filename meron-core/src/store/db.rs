@@ -637,6 +637,9 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         tx.execute_batch(crate::graph::mail::SCHEMA)?;
         tx.pragma_update(None, "user_version", 33)?;
     }
+    if version < 34 {
+        migrate_v34(&tx)?;
+    }
 
     tx.commit()?;
     Ok(())
@@ -1303,6 +1306,28 @@ fn migrate_v32(conn: &Connection) -> Result<()> {
            ON tasks(account, thread_key) WHERE completed_at IS NULL;",
     )?;
     conn.execute_batch("PRAGMA user_version = 32;")?;
+    Ok(())
+}
+
+/// Keep an explicit reader decision separate from the nullable, recomputed
+/// `messages.spam` verdict. The sender/word snapshots let a correction remove
+/// exactly the evidence that the original decision contributed, even if a
+/// later sync changes the cached envelope.
+fn migrate_v34(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS spam_judgments (
+           account    TEXT NOT NULL,
+           message_id INTEGER NOT NULL,
+           spam       INTEGER NOT NULL CHECK (spam IN (0, 1)),
+           from_addr  TEXT NOT NULL,
+           subject    TEXT NOT NULL,
+           PRIMARY KEY (account, message_id),
+           FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+         );
+         CREATE INDEX IF NOT EXISTS spam_judgments_message_idx
+           ON spam_judgments(message_id);",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 34;")?;
     Ok(())
 }
 

@@ -2024,13 +2024,36 @@ pub fn note_sender_spam(conn: &Connection, account: &str, addr: &str, is_spam: b
     if addr.is_empty() {
         return Ok(());
     }
-    let (spam_delta, ham_delta): (i64, i64) = if is_spam { (1, 0) } else { (0, 1) };
+    adjust_sender_spam(conn, account, &addr, is_spam, 1)
+}
+
+fn adjust_sender_spam(
+    conn: &Connection,
+    account: &str,
+    addr: &str,
+    is_spam: bool,
+    multiplier: i64,
+) -> Result<()> {
+    let addr = addr.trim().to_lowercase();
+    if addr.is_empty() {
+        return Ok(());
+    }
+    let (spam_delta, ham_delta): (i64, i64) = if is_spam {
+        (multiplier, 0)
+    } else {
+        (0, multiplier)
+    };
     conn.execute(
         "INSERT INTO sender_spam(account, addr, spam_count, ham_count) VALUES(?1, ?2, ?3, ?4)
          ON CONFLICT(account, addr) DO UPDATE SET
            spam_count = sender_spam.spam_count + excluded.spam_count,
            ham_count  = sender_spam.ham_count + excluded.ham_count",
         params![account, addr, spam_delta, ham_delta],
+    )?;
+    conn.execute(
+        "DELETE FROM sender_spam
+          WHERE account = ?1 AND addr = ?2 AND spam_count = 0 AND ham_count = 0",
+        params![account, addr],
     )?;
     Ok(())
 }
@@ -2064,7 +2087,21 @@ pub fn spam_trigger_words(conn: &Connection, account: &str, subject: &str) -> Ve
 /// spam or toward not-spam — never toward both, and never more than once
 /// each even if a word repeats in the same subject (see `spam::tokenize`).
 pub fn note_spam_trigger_words(conn: &Connection, account: &str, subject: &str, is_spam: bool) -> Result<()> {
-    let (spam_delta, ham_delta): (i64, i64) = if is_spam { (1, 0) } else { (0, 1) };
+    adjust_spam_trigger_words(conn, account, subject, is_spam, 1)
+}
+
+fn adjust_spam_trigger_words(
+    conn: &Connection,
+    account: &str,
+    subject: &str,
+    is_spam: bool,
+    multiplier: i64,
+) -> Result<()> {
+    let (spam_delta, ham_delta): (i64, i64) = if is_spam {
+        (multiplier, 0)
+    } else {
+        (0, multiplier)
+    };
     for word in crate::spam::tokenize(subject) {
         conn.execute(
             "INSERT INTO spam_triggers(account, word, spam_count, ham_count) VALUES(?1, ?2, ?3, ?4)
@@ -2072,6 +2109,11 @@ pub fn note_spam_trigger_words(conn: &Connection, account: &str, subject: &str, 
                spam_count = spam_triggers.spam_count + excluded.spam_count,
                ham_count  = spam_triggers.ham_count + excluded.ham_count",
             params![account, word, spam_delta, ham_delta],
+        )?;
+        conn.execute(
+            "DELETE FROM spam_triggers
+              WHERE account = ?1 AND word = ?2 AND spam_count = 0 AND ham_count = 0",
+            params![account, word],
         )?;
     }
     Ok(())
@@ -2114,6 +2156,31 @@ fn newest_message_sender_and_subject(
     .map_err(Into::into)
 }
 
+fn newest_message_for_spam_judgment(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+) -> Result<Option<(i64, String, String)>> {
+    conn.query_row(
+        "SELECT id, from_addr, COALESCE(subject, '')
+           FROM messages
+          WHERE account = ?1 AND folder = ?2
+            AND COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) = ?3
+          ORDER BY date DESC, uid DESC LIMIT 1",
+        params![account, folder, thread_key],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                row.get(2)?,
+            ))
+        },
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
 /// The spam signals for the newest message of one conversation.
 pub fn thread_spam_signals(
     conn: &Connection,
@@ -2128,9 +2195,13 @@ pub fn thread_spam_signals(
     Ok(Some((from_addr, signals)))
 }
 
-/// Records the reader's judgement of one conversation's newest message —
-/// spam confirmed, or said not spam — against its sender and subject words,
-/// then re-judges the account so already-cached messages reflect it at once.
+/// Records the reader's judgement of one conversation's newest message.
+///
+/// The explicit decision is stored once per message. Repeating it is a no-op;
+/// replacing it retracts the old sender/subject contribution before applying
+/// the new one, all in one transaction. The visible `messages.spam` value is
+/// still recomputed from the learned signals and is never the source of truth
+/// for whether the reader made a decision.
 pub fn record_spam_judgment(
     conn: &Connection,
     account: &str,
@@ -2138,11 +2209,56 @@ pub fn record_spam_judgment(
     thread_key: &str,
     is_spam: bool,
 ) -> Result<Option<String>> {
-    let Some((from_addr, subject)) = newest_message_sender_and_subject(conn, account, folder, thread_key)? else {
+    let Some((message_id, from_addr, subject)) = newest_message_for_spam_judgment(
+        conn,
+        account,
+        folder,
+        thread_key,
+    )? else {
         return Ok(None);
     };
-    note_sender_spam(conn, account, &from_addr, is_spam)?;
-    note_spam_trigger_words(conn, account, &subject, is_spam)?;
+
+    let tx = conn.unchecked_transaction()?;
+    let previous = tx
+        .query_row(
+            "SELECT spam, from_addr, subject
+               FROM spam_judgments
+              WHERE account = ?1 AND message_id = ?2",
+            params![account, message_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)? != 0,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    if let Some((previous_spam, previous_from, previous_subject)) = previous {
+        if previous_spam == is_spam {
+            tx.commit()?;
+            rejudge_spam(conn, account, false)?;
+            return Ok(Some(from_addr));
+        }
+        adjust_sender_spam(&tx, account, &previous_from, previous_spam, -1)?;
+        adjust_spam_trigger_words(&tx, account, &previous_subject, previous_spam, -1)?;
+        tx.execute(
+            "UPDATE spam_judgments
+                SET spam = ?3, from_addr = ?4, subject = ?5
+              WHERE account = ?1 AND message_id = ?2",
+            params![account, message_id, is_spam as i64, from_addr, subject],
+        )?;
+    } else {
+        tx.execute(
+            "INSERT INTO spam_judgments(account, message_id, spam, from_addr, subject)
+             VALUES(?1, ?2, ?3, ?4, ?5)",
+            params![account, message_id, is_spam as i64, from_addr, subject],
+        )?;
+    }
+    adjust_sender_spam(&tx, account, &from_addr, is_spam, 1)?;
+    adjust_spam_trigger_words(&tx, account, &subject, is_spam, 1)?;
+    tx.commit()?;
     rejudge_spam(conn, account, false)?;
     Ok(Some(from_addr))
 }

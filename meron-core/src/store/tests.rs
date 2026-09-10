@@ -737,16 +737,125 @@ fn a_sender_confirmed_spam_more_than_once_flags_their_next_message() {
     );
     assert_eq!(spam(), Some(0));
 
-    // A second one gives it a clear lead, and the account is re-judged at once.
+    // Repeating the same correction is idempotent: it must not inflate the
+    // sender evidence or create a second explicit judgment.
     record_spam_judgment(&conn, "acct", "INBOX", "t-1", true).unwrap();
-    assert_eq!(spam(), Some(1));
-    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 0));
+    assert_eq!(spam(), Some(0));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (1, 0));
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM spam_judgments WHERE account = 'acct'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        1
+    );
 
-    // Saying "not spam" afterward lifts it again — a correction taken back,
-    // not stuck at whichever way it was last pushed.
+    // Saying "not spam" replaces the contribution instead of adding ham on top
+    // of the prior spam judgment.
     record_spam_judgment(&conn, "acct", "INBOX", "t-1", false).unwrap();
     assert_eq!(spam(), Some(0));
-    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (2, 1));
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (0, 1));
+
+    // A repeated replacement is also a no-op.
+    record_spam_judgment(&conn, "acct", "INBOX", "t-1", false).unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (0, 1));
+}
+
+#[test]
+fn spam_judgments_are_isolated_by_account_and_missing_threads_are_noops() {
+    let conn = test_conn();
+    for account in ["acct", "other"] {
+        conn.execute(
+            "INSERT INTO accounts(id, email) VALUES(?1, ?1)",
+            params![account],
+        )
+        .unwrap();
+        upsert_messages(
+            &conn,
+            account,
+            "INBOX",
+            &[MessageHeader {
+                uid: 1,
+                from_addr: "same@example.com".into(),
+                subject: "Shared subject".into(),
+                thread_key: "thread".into(),
+                ..Default::default()
+            }],
+        )
+        .unwrap();
+    }
+
+    record_spam_judgment(&conn, "acct", "INBOX", "thread", true).unwrap();
+    assert_eq!(sender_spam_counts(&conn, "acct", "same@example.com"), (1, 0));
+    assert_eq!(sender_spam_counts(&conn, "other", "same@example.com"), (0, 0));
+    assert!(record_spam_judgment(&conn, "acct", "INBOX", "missing", true)
+        .unwrap()
+        .is_none());
+    assert_eq!(sender_spam_counts(&conn, "acct", "same@example.com"), (1, 0));
+}
+
+#[test]
+fn replacing_a_judgment_retracts_the_original_envelope_snapshot() {
+    let conn = test_conn();
+    conn.execute(
+        "INSERT INTO accounts(id, email) VALUES('acct', 'me@example.com')",
+        [],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "old@example.com".into(),
+            subject: "Old offer".into(),
+            thread_key: "thread".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "thread", true).unwrap();
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[MessageHeader {
+            uid: 1,
+            from_addr: "new@example.com".into(),
+            subject: "Fresh offer".into(),
+            thread_key: "thread".into(),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    record_spam_judgment(&conn, "acct", "INBOX", "thread", false).unwrap();
+
+    assert_eq!(sender_spam_counts(&conn, "acct", "old@example.com"), (0, 0));
+    assert_eq!(sender_spam_counts(&conn, "acct", "new@example.com"), (0, 1));
+    let trigger_counts = |word: &str| -> (i64, i64) {
+        conn.query_row(
+            "SELECT spam_count, ham_count FROM spam_triggers
+              WHERE account = 'acct' AND word = ?1",
+            params![word],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0, 0))
+    };
+    assert_eq!(trigger_counts("old"), (0, 0));
+    assert_eq!(trigger_counts("fresh"), (0, 1));
+    let judgment: (i64, String, String) = conn
+        .query_row(
+            "SELECT spam, from_addr, subject FROM spam_judgments
+              WHERE account = 'acct'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(judgment, (0, "new@example.com".into(), "Fresh offer".into()));
 }
 
 #[test]
@@ -3114,7 +3223,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 
     for table in [
         "accounts",
@@ -3144,6 +3253,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
         "label_links",
         "sender_spam",
         "spam_triggers",
+        "spam_judgments",
         "tasks",
     ] {
         let exists = conn
@@ -3163,7 +3273,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 }
 
 #[test]
@@ -3191,7 +3301,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3207,6 +3317,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
         "DROP TABLE tasks;
          DROP TABLE sender_spam;
          DROP TABLE spam_triggers;
+         DROP TABLE spam_judgments;
          ALTER TABLE messages DROP COLUMN spam;
          INSERT INTO label_links(label_id, account_id, remote_name)
            VALUES ('work', 'account', 'Work');
@@ -3221,13 +3332,13 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
         [], |row| row.get(0),
     ).unwrap();
     assert_eq!(remote, "Work");
-    for table in ["tasks", "sender_spam", "spam_triggers", "graph_profiles", "graph_items", "graph_delta"] {
+    for table in ["tasks", "sender_spam", "spam_triggers", "spam_judgments", "graph_profiles", "graph_items", "graph_delta"] {
         assert!(conn.prepare(&format!("SELECT * FROM {table}")).is_ok());
     }
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 33);
+    assert_eq!(version, 34);
 }
 
 #[test]
