@@ -4,6 +4,21 @@ import { invoke } from '../lib/bridge'
 export type AssistantMode = 'local' | 'remote'
 export type AssistantAction = 'summary' | 'draft' | 'task_suggestion'
 
+export type AssistantSource = { account_id: string; message_id: string }
+export type AssistantTaskSuggestion = {
+  account_id: string
+  message_id: string
+  title: string
+  note: string
+  due_at: number | null
+}
+export type AssistantResult = {
+  text: string
+  sources: AssistantSource[]
+  tasks: AssistantTaskSuggestion[]
+  warnings: string[]
+}
+
 export type AssistantProviderConfig = {
   mode: AssistantMode
   endpoint: string
@@ -106,6 +121,7 @@ export async function executeAssistantAction(
   context: AssistantContextItem[],
   confirmed: boolean,
   previewToken: string,
+  executionId: string,
   authorization?: string,
   provider: AssistantProviderConfig = assistant$.get(),
 ) {
@@ -115,8 +131,43 @@ export async function executeAssistantAction(
     context,
     confirmed,
     preview_token: previewToken,
+    execution_id: executionId,
     ...(authorization?.trim() ? { authorization: authorization.trim() } : {}),
   })
+}
+
+export async function cancelAssistantExecution(executionId: string) {
+  if (!executionId.trim()) return
+  await invoke('assistant.cancel', { execution_id: executionId })
+}
+
+export function parseAssistantResponse(response: string): AssistantResult {
+  const fallback: AssistantResult = { text: response, sources: [], tasks: [], warnings: [] }
+  try {
+    const value = JSON.parse(response) as Record<string, unknown>
+    if (!value || typeof value !== 'object') return fallback
+    const text = typeof value.text === 'string' ? value.text : response
+    const warnings: string[] = []
+    const sourceValues = Array.isArray(value.sources) ? value.sources : []
+    const sources = sourceValues.filter((source): source is AssistantSource => {
+      const valid = !!source && typeof source === 'object' && typeof (source as AssistantSource).account_id === 'string' && typeof (source as AssistantSource).message_id === 'string'
+      if (!valid) warnings.push('Some provider sources were malformed and were ignored.')
+      return valid
+    })
+    const taskValues = Array.isArray(value.tasks) ? value.tasks : []
+    const tasks = taskValues.flatMap((task) => {
+        if (!task || typeof task !== 'object') return []
+        const candidate = task as Partial<AssistantTaskSuggestion>
+        if (typeof candidate.account_id !== 'string' || typeof candidate.message_id !== 'string' || typeof candidate.title !== 'string') {
+          warnings.push('Some provider task suggestions were malformed and were ignored.')
+          return []
+        }
+        return [{ account_id: candidate.account_id, message_id: candidate.message_id, title: candidate.title, note: typeof candidate.note === 'string' ? candidate.note : candidate.title, due_at: typeof candidate.due_at === 'number' ? candidate.due_at : null }]
+      })
+    return { text, sources, tasks, warnings }
+  } catch {
+    return fallback
+  }
 }
 
 export function resetAssistantProvider() {

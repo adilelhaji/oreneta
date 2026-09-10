@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { Message } from '../../types'
-import { contextFor } from './AssistantReviewDialog'
+import { contextFor } from './assistantContext'
 
 describe('assistant context review', () => {
   it('maps only the selected message content and attachment metadata', () => {
@@ -26,4 +26,3 @@ describe('assistant context review', () => {
     ])
   })
 })
-

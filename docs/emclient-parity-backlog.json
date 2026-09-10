@@ -293,8 +293,8 @@
     {
       "number": 52,
       "sprint": "S10",
-      "status": "unassessed",
-      "evidence": "Open at inventory; historical work does not establish current full acceptance"
+      "status": "partial",
+      "evidence": "ADR-0007 accepted 2026-09-10; result envelope, source-linked summaries, review-only drafts, confirmed local task suggestions and cooperative execution cancellation implemented; provider certification and native evidence remain open"
     },
     {
       "number": 53,
