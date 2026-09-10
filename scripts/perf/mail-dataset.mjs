@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 export const DATASET_VERSION = 1
 export const DEFAULT_SIZES = [1_000, 10_000, 100_000]
+export const MAX_DATASET_SIZE = 100_000
 
 function messageAt(index) {
   const senderIndex = index % 251
@@ -24,7 +25,9 @@ function messageAt(index) {
 }
 
 export function buildDataset(size) {
-  if (!Number.isInteger(size) || size <= 0) throw new RangeError('dataset size must be a positive integer')
+  if (!Number.isInteger(size) || size <= 0 || size > MAX_DATASET_SIZE) {
+    throw new RangeError(`dataset size must be a positive integer no larger than ${MAX_DATASET_SIZE}`)
+  }
   return Array.from({ length: size }, (_, index) => messageAt(index))
 }
 
@@ -40,7 +43,10 @@ function timed(work) {
 
 export function measureDataset(size) {
   const generated = timed(() => buildDataset(size))
-  const sorted = timed(() => [...generated.value].sort((left, right) => right.date - left.date || left.id.localeCompare(right.id)))
+  const sorted = timed(() => [...generated.value].sort((left, right) => {
+    if (right.date !== left.date) return right.date - left.date
+    return left.id === right.id ? 0 : left.id < right.id ? -1 : 1
+  }))
   const filtered = timed(() => sorted.value.filter((message) => message.sender === 'sender-17@example.test'))
   return {
     size,
@@ -74,12 +80,14 @@ export function createReport(sizes = DEFAULT_SIZES, cacheState = 'unknown') {
   }
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const sizesArg = argv.find((value) => value.startsWith('--sizes='))?.slice('--sizes='.length)
   const output = argv.find((value) => value.startsWith('--output='))?.slice('--output='.length)
   const cacheState = argv.find((value) => value.startsWith('--cache-state='))?.slice('--cache-state='.length) ?? 'unknown'
   const sizes = sizesArg ? sizesArg.split(',').map((value) => Number(value.trim())) : DEFAULT_SIZES
-  if (sizes.some((size) => !Number.isInteger(size) || size <= 0)) throw new RangeError('sizes must be positive integers')
+  if (sizes.some((size) => !Number.isInteger(size) || size <= 0 || size > MAX_DATASET_SIZE)) {
+    throw new RangeError(`sizes must be positive integers no larger than ${MAX_DATASET_SIZE}`)
+  }
   return { sizes, output, cacheState }
 }
 

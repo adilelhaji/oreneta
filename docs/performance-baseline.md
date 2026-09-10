@@ -5,7 +5,7 @@ virtualization or benchmark dependency is proposed.
 
 ## Dataset contract
 
-`node scripts/perf/mail-dataset.mjs --sizes 1000,10000,100000` generates the
+`node scripts/perf/mail-dataset.mjs --sizes=1000,10000,100000` generates the
 same message metadata for every run. The generator is side-effect free and
 does not contact a provider. Each report records the requested sizes, SHA-256
 of the canonical dataset, commit, Node/runtime, platform and cache state.
@@ -13,7 +13,8 @@ of the canonical dataset, commit, Node/runtime, platform and cache state.
 ## Measurements
 
 The first slice measures dataset generation, stable sort and sender filtering
-separately. These are deterministic workload indicators, not UI p95 claims.
+separately. Dataset metadata and checksums are deterministic; elapsed timings
+are run-specific workload indicators, not UI p95 claims.
 Cached first-page, downloaded-message opening, startup, scrolling and retained
 memory require the reference Windows device and remain open acceptance work.
 No threshold is committed until repeated native measurements calibrate it.

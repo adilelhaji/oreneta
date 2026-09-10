@@ -1,12 +1,27 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { describe, test } from 'node:test'
-import { buildDataset, checksum, createReport, measureDataset } from './mail-dataset.mjs'
+import { buildDataset, checksum, createReport, measureDataset, parseArgs } from './mail-dataset.mjs'
 
 describe('deterministic performance datasets', () => {
   test('rejects empty or non-integer datasets', () => {
     assert.throws(() => buildDataset(0), /positive integer/)
+    assert.throws(() => buildDataset(100_001), /100000/)
     assert.throws(() => buildDataset(1.5), /positive integer/)
+    assert.throws(() => parseArgs(['--sizes=100001']), /100000/)
     assert.throws(() => createReport([]), /at least one dataset size/)
+  })
+
+  test('parses the documented CLI contract and emits JSON', () => {
+    assert.deepEqual(parseArgs(['--sizes=1000,10000', '--output=report.json', '--cache-state=cold']), {
+      sizes: [1_000, 10_000],
+      output: 'report.json',
+      cacheState: 'cold',
+    })
+    const stdout = execFileSync(process.execPath, ['scripts/perf/mail-dataset.mjs', '--sizes=1000', '--cache-state=warm'], { encoding: 'utf8' })
+    const report = JSON.parse(stdout)
+    assert.deepEqual(report.datasets.map((dataset) => dataset.size), [1_000])
+    assert.equal(report.cacheState, 'warm')
   })
 
   test('builds the same ordered metadata for every run', () => {
