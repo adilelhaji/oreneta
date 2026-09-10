@@ -27,6 +27,29 @@ type PdfDocument = {
  */
 type PdfLoadingTask = { promise: Promise<unknown>; destroy: () => Promise<void> }
 
+type PdfResources = {
+  pdfjs: {
+    GlobalWorkerOptions: { workerSrc: string }
+    getDocument: (options: Record<string, unknown>) => PdfLoadingTask
+  }
+  workerSrc: string
+}
+
+async function loadPdfResources(): Promise<PdfResources> {
+  const [pdfjs, worker] = await Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')])
+  return { pdfjs, workerSrc: worker.default }
+}
+
+/** A render may finish after the attachment or page has changed. */
+export function isCurrentPdfRender(
+  generation: number,
+  currentGeneration: number,
+  document: PdfDocument | null,
+  currentDocument: PdfDocument | null,
+): boolean {
+  return generation === currentGeneration && document !== null && document === currentDocument
+}
+
 /**
  * A PDF, drawn a page at a time.
  *
@@ -42,22 +65,33 @@ type PdfLoadingTask = { promise: Promise<unknown>; destroy: () => Promise<void> 
  * is a megabyte of code most sessions never need, and paying for it at startup
  * would make every launch slower to make one dialog faster.
  */
-export function PdfPreview({ src, onFailed }: { src: string; onFailed: () => void }) {
+export function PdfPreview({
+  src,
+  onFailed,
+  loadPdf = loadPdfResources,
+}: {
+  src: string
+  onFailed: () => void
+  loadPdf?: () => Promise<PdfResources>
+}) {
   const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const documentRef = useRef<PdfDocument | null>(null)
   const taskRef = useRef<PdfLoadingTask | null>(null)
   const renderRef = useRef<{ cancel: () => void } | null>(null)
+  const generationRef = useRef(0)
   const [pages, setPages] = useState(0)
   const [page, setPage] = useState(1)
   const [drawn, setDrawn] = useState(false)
 
-  const draw = useCallback(async (which: number) => {
+  const draw = useCallback(async (which: number, generation: number) => {
     const document = documentRef.current
     const canvas = canvasRef.current
-    if (!document || !canvas) return
+    if (!document || !canvas || !isCurrentPdfRender(generation, generationRef.current, document, documentRef.current))
+      return
 
     const pdfPage = await document.getPage(which)
+    if (!isCurrentPdfRender(generation, generationRef.current, document, documentRef.current)) return
     const context = canvas.getContext('2d')
     if (!context) return
 
@@ -75,25 +109,31 @@ export function PdfPreview({ src, onFailed }: { src: string; onFailed: () => voi
     renderRef.current?.cancel()
     const render = pdfPage.render({ canvas, canvasContext: context, viewport })
     renderRef.current = render
-    await render.promise
-    renderRef.current = null
+    try {
+      await render.promise
+    } finally {
+      if (renderRef.current === render) renderRef.current = null
+    }
+    if (!isCurrentPdfRender(generation, generationRef.current, document, documentRef.current)) return
   }, [])
 
   // Opening the document. Once per file, not once per page.
   useEffect(() => {
+    const generation = ++generationRef.current
     let live = true
     setPages(0)
     setPage(1)
     setDrawn(false)
+    if (canvasRef.current) {
+      canvasRef.current.width = 0
+      canvasRef.current.height = 0
+    }
 
     void (async () => {
       try {
-        const [pdfjs, worker] = await Promise.all([
-          import('pdfjs-dist'),
-          import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-        ])
+        const { pdfjs, workerSrc } = await loadPdf()
         if (!live) return
-        pdfjs.GlobalWorkerOptions.workerSrc = worker.default
+        pdfjs.GlobalWorkerOptions.workerSrc = workerSrc
 
         // Nothing inside a document from a stranger gets to run, and that
         // holds by what is not here rather than by a flag: pdf.js keeps its
@@ -113,13 +153,15 @@ export function PdfPreview({ src, onFailed }: { src: string; onFailed: () => voi
         taskRef.current = loading
         const document = (await loading.promise) as PdfDocument
         if (!live) {
-          void loading.destroy()
-          taskRef.current = null
+          if (taskRef.current === loading) {
+            void loading.destroy()
+            taskRef.current = null
+          }
           return
         }
         documentRef.current = document
         setPages(document.numPages)
-        await draw(1)
+        await draw(1, generation)
         if (live) setDrawn(true)
       } catch {
         // Said plainly by the caller rather than left as an empty frame: a
@@ -130,6 +172,7 @@ export function PdfPreview({ src, onFailed }: { src: string; onFailed: () => voi
 
     return () => {
       live = false
+      generationRef.current += 1
       renderRef.current?.cancel()
       void taskRef.current?.destroy()
       taskRef.current = null
@@ -140,8 +183,9 @@ export function PdfPreview({ src, onFailed }: { src: string; onFailed: () => voi
   // Turning a page redraws into the document already open.
   useEffect(() => {
     if (!documentRef.current || page === 1) return
+    const generation = generationRef.current
     let live = true
-    void draw(page).catch(() => {
+    void draw(page, generation).catch(() => {
       if (live) onFailed()
     })
     return () => {
@@ -167,9 +211,7 @@ export function PdfPreview({ src, onFailed }: { src: string; onFailed: () => voi
           >
             <ChevronLeft size={15} />
           </button>
-          <span className="text-caption tabular-nums text-secondary">
-            {t('attachments.pageOf', { page, pages })}
-          </span>
+          <span className="text-caption tabular-nums text-secondary">{t('attachments.pageOf', { page, pages })}</span>
           <button
             type="button"
             aria-label={t('attachments.nextPage')}
