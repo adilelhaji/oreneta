@@ -612,15 +612,15 @@
       "evidence": {
         "automated": [
           {
-            "sha": "2e598291ade7bb2594fe1a3495abb983777e5aab",
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
             "result": "applog_test.go"
           },
           {
-            "sha": "2e598291ade7bb2594fe1a3495abb983777e5aab",
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
             "result": "backup_test.go"
           },
           {
-            "sha": "2e598291ade7bb2594fe1a3495abb983777e5aab",
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
             "result": "update_test.go"
           }
         ],
