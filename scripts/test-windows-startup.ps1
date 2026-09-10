@@ -85,6 +85,7 @@ for ($launch = 1; $launch -le 2; $launch++) {
                 $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
             })
             $baseHeight = if ($baseEditors.Count -gt 0) { $baseEditors[0].Current.BoundingRectangle.Height } else { 0 }
+            if ($baseHeight -le 0) { throw 'Email editor is not visible before native zoom-layout validation' }
             1..6 | ForEach-Object {
                 if (![OrenetaNativeInput]::SendZoomIn()) { throw 'Windows rejected Ctrl+plus zoom input' }
                 Start-Sleep -Milliseconds 100
@@ -94,12 +95,12 @@ for ($launch = 1; $launch -le 2; $launch++) {
             $zoomBounds = $zoomWindow.Current.BoundingRectangle
             $zoomElements = $zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
             $zoomNames = @($zoomElements | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
-            if ($zoomNames -notcontains 'Google' -or $zoomNames -notcontains 'Microsoft') { throw 'Provider choices disappeared at native 200% zoom' }
+            if ($zoomNames -notcontains 'Google' -or $zoomNames -notcontains 'Microsoft') { throw 'Provider choices disappeared at native zoom-layout validation' }
             $zoomEditors = @($zoomElements | Where-Object {
                 $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
             })
-            if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible at native 200% zoom' }
-            if ($baseHeight -gt 0 -and $zoomEditors[0].Current.BoundingRectangle.Height -le ($baseHeight * 1.1)) {
+            if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible after native zoom-layout validation' }
+            if ($zoomEditors[0].Current.BoundingRectangle.Height -le ($baseHeight * 1.1)) {
                 throw 'Native zoom input did not change the editor layout'
             }
             foreach ($element in @($zoomEditors | Select-Object -First 1)) {
@@ -107,11 +108,11 @@ for ($launch = 1; $launch -le 2; $launch++) {
                 if ($bounds.Width -le 0 -or $bounds.Height -le 0 -or
                     $bounds.Left -lt $zoomBounds.Left -or $bounds.Top -lt $zoomBounds.Top -or
                     $bounds.Right -gt $zoomBounds.Right -or $bounds.Bottom -gt $zoomBounds.Bottom) {
-                    throw 'Email editor bounds escaped the native window at 200% zoom'
+                    throw 'Email editor bounds escaped the native window during zoom-layout validation'
                 }
             }
             $zoomNames | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-zoom-ui.json")
-            Write-Output "PASS native zoom 200% launch $launch : essential controls remain visible"
+            Write-Output "PASS native zoom-layout launch $launch : essential controls remain visible"
         }
 
         $deadline = [DateTime]::UtcNow.AddSeconds(20)
