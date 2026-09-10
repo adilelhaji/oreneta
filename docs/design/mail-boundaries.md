@@ -22,8 +22,9 @@ A 1440px window at 200% zoom is exercised at its equivalent 720 CSS-pixel layout
 with device scale 2. The Windows validation runner additionally exercises the
 actual WebView2 keyboard path: it verifies foreground focus and injected input,
 resets zoom with Ctrl+0, applies the standard Ctrl+plus sequence, and uses
-Windows UI Automation to verify the editor layout changes while provider choices
+Windows UI Automation to verify the onboarding email editor layout changes while provider choices
 and bounds remain visible inside the native window. UI Automation cannot read
 WebView2's private `ZoomFactor`, so this is native zoom-layout evidence, not an
 exact 200% factor certification. Touch, IME, provider interoperability and
-installer behavior remain separate gaps.
+installer behavior remain separate gaps. It does not exercise the mailbox reader,
+message actions or composer; those remain separate native acceptance work.
