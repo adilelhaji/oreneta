@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)][string]$OutputDirectory,
-    [switch]$RequireGraph
+    [switch]$RequireGraph,
+    [switch]$VerifyZoom
 )
 
 # Native UI verification for the CI-built production executable. Wails disables
@@ -9,6 +10,22 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+if ($VerifyZoom) {
+    Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class OrenetaNativeInput {
+    [StructLayout(LayoutKind.Sequential)] private struct Input { public uint type; public InputUnion data; }
+    [StructLayout(LayoutKind.Explicit)] private struct InputUnion { [FieldOffset(0)] public KeyboardInput keyboard; }
+    [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort virtualKey; public ushort scanCode; public uint flags; public uint time; public IntPtr extraInfo; }
+    [DllImport("user32.dll")] private static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
+    private static Input Key(ushort key, uint flags) => new Input { type = 1, data = new InputUnion { keyboard = new KeyboardInput { virtualKey = key, scanCode = 0, flags = flags, time = 0, extraInfo = IntPtr.Zero } } };
+    public static void SendZoomReset() { SendInput(4, new[] { Key(0x11, 0), Key(0x30, 0), Key(0x30, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))); }
+    public static void SendZoomIn() { SendInput(6, new[] { Key(0x11, 0), Key(0x10, 0), Key(0xBB, 0), Key(0xBB, 2), Key(0x10, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))); }
+}
+"@
+}
 $executablePath = (Resolve-Path -LiteralPath $Executable).Path
 $profile = Join-Path ([IO.Path]::GetTempPath()) ('oreneta-native-startup-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $profile, $OutputDirectory -Force | Out-Null
@@ -52,6 +69,37 @@ for ($launch = 1; $launch -le 2; $launch++) {
         if (!$hasEmailInput -or $names -notcontains 'Google' -or $names -notcontains 'Microsoft') { throw "Onboarding did not render on launch $launch" }
         if ($RequireGraph -and !($names -match '^Microsoft Graph')) { throw "Graph account choice did not render on launch $launch" }
         if ($names -match 'Something went wrong|useSyncExternalStore') { throw 'React startup error in native UI' }
+
+        if ($VerifyZoom) {
+            if (![OrenetaNativeInput]::SetForegroundWindow($process.MainWindowHandle)) { throw 'Could not focus native window for zoom validation' }
+            Start-Sleep -Milliseconds 250
+            [OrenetaNativeInput]::SendZoomReset()
+            Start-Sleep -Milliseconds 250
+            1..6 | ForEach-Object {
+                [OrenetaNativeInput]::SendZoomIn()
+                Start-Sleep -Milliseconds 100
+            }
+            Start-Sleep -Milliseconds 500
+            $zoomWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+            $zoomBounds = $zoomWindow.Current.BoundingRectangle
+            $zoomElements = $zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
+            $zoomNames = @($zoomElements | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+            if ($zoomNames -notcontains 'Google' -or $zoomNames -notcontains 'Microsoft') { throw 'Provider choices disappeared at native 200% zoom' }
+            $zoomEditors = @($zoomElements | Where-Object {
+                $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
+            })
+            if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible at native 200% zoom' }
+            foreach ($element in @($zoomEditors | Select-Object -First 1)) {
+                $bounds = $element.Current.BoundingRectangle
+                if ($bounds.Width -le 0 -or $bounds.Height -le 0 -or
+                    $bounds.Left -lt $zoomBounds.Left -or $bounds.Top -lt $zoomBounds.Top -or
+                    $bounds.Right -gt $zoomBounds.Right -or $bounds.Bottom -gt $zoomBounds.Bottom) {
+                    throw 'Email editor bounds escaped the native window at 200% zoom'
+                }
+            }
+            $zoomNames | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-zoom-ui.json")
+            Write-Output "PASS native zoom 200% launch $launch : essential controls remain visible"
+        }
 
         $deadline = [DateTime]::UtcNow.AddSeconds(20)
         do {

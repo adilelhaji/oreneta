@@ -67,7 +67,7 @@ jobs:
       - name: Build executable and installer
         run: wails build -clean -platform windows/amd64 -tags embed_sidecar -nsis
       - name: Validate native startup and Graph choice
-        run: ./scripts/test-windows-startup.ps1 -Executable build/bin/oreneta.exe -OutputDirectory native-startup-results -RequireGraph
+        run: ./scripts/test-windows-startup.ps1 -Executable build/bin/oreneta.exe -OutputDirectory native-startup-results -RequireGraph -VerifyZoom
       - name: Bind canonical artifacts to source SHA
         env:
           VALIDATED_SHA: ${{ github.sha }}
