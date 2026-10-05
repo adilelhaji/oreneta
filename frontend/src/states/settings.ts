@@ -178,6 +178,8 @@ export type Settings = {
   stickyFilters: boolean
   /** Cards or a sortable table. */
   listView: ListView
+  /** Raw JSON retained so a newer version is never silently overwritten. */
+  mailboxViews: Record<string, unknown> | null
   /** What the list is ordered by. */
   listSort: ListSort
   /** How much room a thread-list row is given. */
@@ -300,6 +302,7 @@ const DB_KEY = {
   stickyFilters: 'sticky_filters',
   simplifyMessages: 'simplify_messages',
   listView: 'list_view',
+  mailboxViews: 'mailbox_views',
   listSort: 'list_sort',
   listDensity: 'list_density',
   readingWidth: 'reading_width',
@@ -482,6 +485,7 @@ export const settings$ = observable<Settings>({
   stickyFilters: false,
   simplifyMessages: false,
   listView: 'table',
+  mailboxViews: null,
   // Newest first, which is what a mailbox means when nobody has said otherwise.
   listSort: { key: 'date', dir: 'desc' },
   listDensity: 'compact',
@@ -810,6 +814,10 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     }
 
     const listView = prefs[DB_KEY.listView]
+    if (Object.hasOwn(prefs, DB_KEY.mailboxViews)) {
+      const views = prefs[DB_KEY.mailboxViews]
+      settings$.mailboxViews.set(views && typeof views === 'object' && !Array.isArray(views) ? views as Record<string, unknown> : null)
+    }
     if (listView === 'cards' || listView === 'table') {
       settings$.listView.set(listView)
     }

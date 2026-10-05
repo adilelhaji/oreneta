@@ -64,6 +64,7 @@ import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { ThreadTable } from './ThreadTable'
+import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
 
 type ThreadListProps = {
@@ -492,10 +493,11 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       <SearchUnderstoodBar />
 
       <ScheduledSendsBar />
+      {listView === 'table' && <MailboxColumns accountId={selectedAccount} folderId={selectedFolder} />}
 
       {/* Thread List Items */}
       <div
-        className="flex-1 overflow-y-auto flex flex-col"
+        className="flex-1 min-w-0 overflow-auto flex flex-col"
         onScroll={(event) => {
           if (!canLoadMore || threadsLoadingMore) return
           const el = event.currentTarget
@@ -523,6 +525,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           // the context menu the cards already answer to rather than growing
           // its own copies of them.
           <ThreadTable
+            accountId={selectedAccount}
+            folderId={selectedFolder}
             threads={filteredThreads}
             accounts={accounts}
             selectedThread={selectedThread}
