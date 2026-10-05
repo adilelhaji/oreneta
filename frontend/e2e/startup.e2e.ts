@@ -9,6 +9,7 @@ test.afterEach(async ({ page }) => {
 type SetupOptions = {
   graph?: 'success' | 'pending' | 'late' | 'error'
   graphAccount?: boolean
+  mixedGraphAccount?: boolean
   oauth?: 'waiting' | 'late' | 'success' | 'error'
   discovery?: 'guess' | 'failure'
   saveError?: boolean
@@ -19,7 +20,124 @@ type SetupOptions = {
   hideAccounts?: boolean
   preferences?: Record<string, unknown>
   readerStress?: boolean
+  updatesSupported?: boolean
 }
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [1440, 600]) {
+    test(`localized settings discovery preserves edits and focus: ${theme}, ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme, updatesSupported: true })
+      await page.goto('/')
+      const opener = page.getByRole('textbox').first()
+      await opener.focus()
+      await page.keyboard.press('Control+k')
+      const palette = page.getByRole('dialog', { name: 'Paleta de comandos' })
+      const commands = palette.getByRole('combobox')
+      await expect(commands).toBeFocused()
+      await commands.fill('日本語')
+      await expect(palette.getByRole('option')).toHaveCount(0)
+      await expect(palette.getByRole('status')).toHaveText('No hay comandos coincidentes.')
+      await commands.press('Enter')
+      await expect(palette).toBeVisible()
+      await commands.fill('tipografia')
+      await expect(palette.getByRole('option', { name: 'Tipografía Ajuste', exact: true })).toBeVisible()
+      const initialCommand = await commands.getAttribute('aria-activedescendant')
+      await commands.press('ArrowDown')
+      await expect(commands).not.toHaveAttribute('aria-activedescendant', initialCommand!)
+      await commands.press('ArrowUp')
+      await expect(commands).toHaveAttribute('aria-activedescendant', initialCommand!)
+      await commands.press('Enter')
+      const settings = page.getByRole('dialog', { name: 'Ajustes', exact: true })
+      await expect(settings.locator('[data-settings-section="typography"]')).toBeFocused()
+      const search = settings.getByRole('combobox', { name: 'Buscar ajustes' })
+      await search.fill('firma')
+      const initialSetting = await search.getAttribute('aria-activedescendant')
+      await search.press('ArrowDown')
+      await expect(search).not.toHaveAttribute('aria-activedescendant', initialSetting!)
+      await search.press('ArrowUp')
+      await expect(search).toHaveAttribute('aria-activedescendant', initialSetting!)
+      await search.press('Enter')
+      const signature = settings.locator('[data-settings-section="signature"]')
+      await expect(signature).toBeFocused()
+      const editor = signature.locator('[contenteditable="true"]')
+      await editor.fill('Firma sintética pendiente — no enviar')
+      // Searching and navigating must not discard an editor's pending debounce.
+      await search.fill('actualizaciones')
+      await search.press('Enter')
+      await expect(settings.locator('[data-settings-section="updates"]')).toBeFocused()
+      await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').signature)).toContain('Firma sintética pendiente')
+      await search.fill('privacidad')
+      await search.press('Enter')
+      await expect(settings.locator('[data-settings-section="privacy"]')).toBeFocused()
+      await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await expect(search).toBeInViewport()
+      await page.evaluate(() => { document.documentElement.style.zoom = '' })
+      await info.attach('settings-discovery', { body: await page.screenshot({ path: info.outputPath('settings-discovery.png'), animations: 'disabled' }), contentType: 'image/png' })
+      await page.keyboard.press('Escape')
+      await expect(settings).toHaveCount(0)
+      await expect(opener).toBeFocused()
+      await page.reload()
+      await page.keyboard.press('Control+k')
+      await commands.fill('signature')
+      await commands.press('Enter')
+      await expect(settings.locator('[data-settings-section="signature"] [contenteditable="true"]')).toContainText('Firma sintética pendiente')
+      expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+test('settings discovery keeps exact account context and omits unavailable update controls', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('combobox').fill('updates')
+  await expect(palette.getByRole('option', { name: 'Updates Setting', exact: true })).toHaveCount(0)
+  await palette.getByRole('combobox').fill('second@example.test')
+  await page.keyboard.press('Tab')
+  await expect(palette.getByRole('option', { name: 'Account settings: Second account Setting', exact: true })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(palette.getByRole('option', { name: 'Account signature: Second account Setting', exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  await expect(settings.locator('[data-settings-section="accountSignature"]')).toBeFocused()
+  await expect(settings.locator('[data-settings-section="account"]')).toContainText('second@example.test')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' }).getByRole('button', { name: 'Inbox 3', exact: true })).toHaveAttribute('aria-current', 'page')
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+  expect(errors).toEqual([])
+})
+
+test('Graph command discovery exposes read-only restrictions without running writes', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true, graphAccount: true })
+  await page.goto('/')
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('combobox').fill('compose new')
+  const command = palette.getByRole('option', { name: /^Compose new message No account available for sending/ })
+  await expect(command).toHaveAttribute('aria-disabled', 'true')
+  await palette.getByRole('combobox').press('Enter')
+  await expect(palette).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.filter((command: string) => ['mail.send', 'mail.saveDraft', 'mail.markAllRead'].includes(command)))).toEqual([])
+  expect(errors).toEqual([])
+})
+
+test('Graph command discovery can compose from a different sendable account without sending', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true, graphAccount: true, mixedGraphAccount: true })
+  await page.goto('/')
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('combobox').fill('compose new')
+  await expect(palette.getByRole('option', { name: /^Compose new message Action/ })).not.toHaveAttribute('aria-disabled', 'true')
+  await palette.getByRole('combobox').press('Enter')
+  await expect(palette).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('meron-compose-tabs') ?? '[]')[0]?.compose?.accountId)).toBe('second-account')
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+  expect(errors).toEqual([])
+})
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
   for (const width of [1440, 600]) {
@@ -195,8 +313,8 @@ test('shared dialog focus returns to opener and busy Escape does not close paren
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
   await page.keyboard.press('Control+k')
-  await page.getByRole('dialog').getByRole('textbox').fill('design catalogue')
-  await page.getByRole('button', { name: 'Open design catalogue' }).click()
+  await page.getByRole('dialog').getByRole('combobox').fill('design catalogue')
+  await page.getByRole('option', { name: 'Open design catalogue Action' }).click()
   const parent = page.getByRole('dialog', { name: 'Design catalogue', exact: true })
   await expect(parent).toBeFocused()
   const opener = parent.getByRole('button', { name: 'Open focus example' })
@@ -272,8 +390,8 @@ for (const appearance of ['light', 'dark'] as const) {
       await page.goto('/')
       await expect(page.getByRole('button', { name: 'New message', exact: true })).toBeVisible()
       await page.keyboard.press('Control+k')
-      await page.getByRole('dialog').getByRole('textbox').fill('design catalogue')
-      await page.getByRole('button', { name: 'Open design catalogue' }).click()
+      await page.getByRole('dialog').getByRole('combobox').fill('design catalogue')
+      await page.getByRole('option', { name: 'Open design catalogue Action' }).click()
       const catalogue = page.getByRole('dialog', { name: 'Design catalogue' })
       await expect(catalogue).toBeVisible()
 
@@ -430,7 +548,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'tray.setUnread': { ok: true },
         'update.status': {
           state: 'idle',
-          supported: false,
+          supported: !!options.updatesSupported,
           managed: false,
           channel: 'portable',
           currentVersion: '0.1.0',
@@ -609,7 +727,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
               email: options.existingEmail ?? fixture.account.email,
               conversation_html: true,
             },
-            ...(options.navigation && !options.graphAccount
+            ...(options.navigation && (!options.graphAccount || options.mixedGraphAccount)
               ? [
                   {
                     ...fixture.account,
