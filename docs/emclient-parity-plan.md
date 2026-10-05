@@ -1,5 +1,11 @@
 # eM Client parity delivery plan
 
+**Execution review: 2026-10-05.** The [competitive delivery plan](competitive-delivery-plan.md)
+and [65-issue audit](competitive-backlog-audit.md) supersede the initial scheduling/status
+snapshot below. They retain this full capability scope and all architecture gates.
+Themes/defaults/narrow layout are integrated, Graph remains read-only, and ten bounded
+child issues now cover delivery gaps. Planning is not parity evidence.
+
 Date: 2026-09-09. Created: 13 milestones, 35 new issues; 34 existing issues
 reused including the program; 2 closed without deleting history.
 
@@ -32,7 +38,7 @@ Vendor-specific hosted services need a documented equivalent/decision; omitting
 one does not become "full parity". Architecture refusal or an approved deferral
 means **partial parity**, with the remaining gap visible.
 
-## Starting evidence, not an implementation percentage
+## Historical starting evidence (2026-09-09), not current completion
 
 Baseline for this plan: remote main
 `100976d423258eb302bcc903c9c059838666e40c` (PR #82).
@@ -114,8 +120,9 @@ rows under #22; they cannot disappear behind a broad "other" completion checkbox
 
 ## Sprint roadmap and dependency order
 
-GitHub milestones are the sprint containers. Only **S01** is the active candidate;
-S02–S12 are ordered delivery backlogs, **not promises of one sprint each**.
+GitHub milestones are functional workstream containers. The 2026-10-05 review
+uses R0–R4 delivery gates; S01 implementation slices have landed but full acceptance
+remains open. S02–S12 are ordered backlogs, **not promises of one sprint each**.
 S13 is a separate discovery queue. Use two-week execution timeboxes when capacity
 is known; split a large milestone into bounded iterations rather than rushing
 a multi-provider epic into one PR. No invented assignees, velocity or due dates.
@@ -148,7 +155,7 @@ are scheduled in S06 after delegated/server capability validation, not in S05.
 Every item has an issue URL, sprint, initial status and evidence statement;
 `unassessed` is intentionally not a claim of absence or implementation.
 
-### S01 execution slices
+### Historical S01 execution slices (implementation delivered; full acceptance open)
 
 1. **[#22](https://github.com/adilelhaji/oreneta/issues/22), acceptance ledger** (S): audit current defaults/reference, identify exact
    baseline SHA, screenshots and pending gaps; do not require recruiting a pilot.
@@ -181,7 +188,7 @@ S01 does not close the entire design epic or claim functional parity.
 | notes | Standalone note storage, identity and note-capable provider semantics |
 | chat-design → chat | Native adapter boundary, history/presence/files, scopes and maintenance |
 | #51, #52, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs; #51 provider/context boundary and #52 result-review contract accepted in [ADR-0006](adr/0006-assistant-provider-context-privacy.md) and [ADR-0007](adr/0007-assistant-results-review-and-cancellation.md) on 2026-09-10 |
-| migration / backup | New data formats/dependencies, archive model and consistent snapshot/encryption policy |
+| migration / backup | ADR-0008 currently permits configuration-only backups. Full-profile #113 requires the explicit recovery decision in the competitive plan before any format/snapshot expansion. |
 | beta-delta / mobile-scope | New sync service, MCP/Matrix or new platform architecture |
 
 Discovery can produce options and tests, not silently choose an architecture.

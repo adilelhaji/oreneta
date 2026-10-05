@@ -16,7 +16,7 @@
       "exit": "Active candidate; #22 then theme, mail-default, narrow. Exit: actual mail workflow in light/dark, safe preference preservation and boundary regression fixed.",
       "number": 1,
       "url": "https://github.com/adilelhaji/oreneta/milestone/1",
-      "status": "active-candidate"
+      "status": "implementation-slices-delivered-acceptance-open"
     },
     {
       "key": "S02",
@@ -339,12 +339,18 @@
         "PKCE/cancellation/refresh/revocation/storage failure tests; no existing-grant overwrite.",
         "No working-account claim before X3 read/cache activation."
       ],
-      "relatedIssues": ["#46", "#24", "#25"],
-      "blockedBy": ["#125"],
+      "relatedIssues": [
+        "#46",
+        "#24",
+        "#25"
+      ],
+      "blockedBy": [
+        "#125"
+      ],
       "number": 127,
-        "url": "https://github.com/adilelhaji/oreneta/issues/127",
-        "status": "implemented-unverified",
-        "evidence": "Backend/browser PKCE, pinned OIDC principal, isolated journalled keychain lifecycle and refresh/cancellation fixtures. See docs/graph-authorization.md; native/provider acceptance remains open, active account/read projection belongs to #128."
+      "url": "https://github.com/adilelhaji/oreneta/issues/127",
+      "status": "implemented-unverified",
+      "evidence": "Backend/browser PKCE, pinned OIDC principal, isolated journalled keychain lifecycle and refresh/cancellation fixtures. See docs/graph-authorization.md; native/provider acceptance remains open, active account/read projection belongs to #128."
     },
     {
       "key": "graph-read-integration",
@@ -357,8 +363,15 @@
         "Explicit account activation and honest unsupported write/send states.",
         "Bridge/core/frontend fixtures preserve IMAP/EWS; provider/native acceptance separate."
       ],
-      "relatedIssues": ["#46", "#24", "#25"],
-      "blockedBy": ["#125", "#127"],
+      "relatedIssues": [
+        "#46",
+        "#24",
+        "#25"
+      ],
+      "blockedBy": [
+        "#125",
+        "#127"
+      ],
       "number": 128,
       "url": "https://github.com/adilelhaji/oreneta/issues/128",
       "status": "implemented-unverified",
@@ -375,7 +388,10 @@
         "Canonical executable and installer hashes, diagnostics on failure, no public release.",
         "Verify downloaded replacements before recoverably retiring superseded binaries."
       ],
-      "relatedIssues": ["#114", "#128"],
+      "relatedIssues": [
+        "#114",
+        "#128"
+      ],
       "blockedBy": [],
       "number": 131,
       "url": "https://github.com/adilelhaji/oreneta/issues/131",
@@ -393,7 +409,11 @@
         "Minimal delegated scope checks, immutable IDs, bounded responses and safe HTTP transport.",
         "Fixture/loopback tests, technical/business review and green exact-head CI; no live-provider parity claim."
       ],
-      "relatedIssues": ["#46", "#24", "#25"],
+      "relatedIssues": [
+        "#46",
+        "#24",
+        "#25"
+      ],
       "blockedBy": [],
       "number": 125,
       "url": "https://github.com/adilelhaji/oreneta/issues/125",
@@ -411,7 +431,9 @@
         "Preserve independent push, cache-only result and watcher-stop assertions.",
         "Run full integration and three repeated targeted cases in CI."
       ],
-      "relatedIssues": ["#37"],
+      "relatedIssues": [
+        "#37"
+      ],
       "blockedBy": [],
       "number": 121,
       "url": "https://github.com/adilelhaji/oreneta/issues/121",
@@ -727,17 +749,26 @@
         "Exercise Gmail/Workspace, Outlook/M365, Exchange on-prem, iCloud and generic IMAP/SMTP first; retain all listed remaining services as tracked unverified rows.",
         "Test sync, send, delete/move, permissions, offline/reconnect, quotas and rate limits using independent controlled fixtures; mocks alone cannot mark a provider verified."
       ],
-      "relatedIssues": [],
-      "blockedBy": [
+      "relatedIssues": [
         "setup",
         "pop3",
         "#47",
         "#48"
       ],
+      "blockedBy": [],
       "number": 98,
       "url": "https://github.com/adilelhaji/oreneta/issues/98",
       "status": "unassessed",
-      "evidence": "No full-parity acceptance evidence yet"
+      "evidence": "No full-parity acceptance evidence yet",
+      "previousWholeIssueDependencies": [
+        "setup",
+        "pop3",
+        "#47",
+        "#48"
+      ],
+      "executionPrerequisites": [
+        "The implemented operation and authorized provider access; whole-provider closure still requires every mandatory row."
+      ]
     },
     {
       "key": "pop3",
@@ -1081,15 +1112,20 @@
       ],
       "relatedIssues": [
         "#25",
-        "#54"
-      ],
-      "blockedBy": [
+        "#54",
         "profiles"
       ],
+      "blockedBy": [],
       "number": 113,
       "url": "https://github.com/adilelhaji/oreneta/issues/113",
       "status": "unassessed",
-      "evidence": "No full-parity acceptance evidence yet"
+      "evidence": "No full-parity acceptance evidence yet",
+      "previousWholeIssueDependencies": [
+        "profiles"
+      ],
+      "executionPrerequisites": [
+        "ADR-0008 recovery decision before full-profile backup code; profile-specific integration only when needed."
+      ]
     },
     {
       "key": "windows",
@@ -1102,16 +1138,24 @@
         "Verify install/update/uninstall, DPI/IME, sleep/reconnect, proxy/certificate behavior and recovery on stated Windows versions/architectures.",
         "Tie executable and installer to exact green CI SHA/checksums; retain only latest validated canonical artifacts after replacement verification, never discard locked/unsaved sessions."
       ],
-      "relatedIssues": [],
-      "blockedBy": [
+      "relatedIssues": [
         "#53",
         "#54",
         "backup"
       ],
+      "blockedBy": [],
       "number": 114,
       "url": "https://github.com/adilelhaji/oreneta/issues/114",
       "status": "unassessed",
-      "evidence": "No full-parity acceptance evidence yet"
+      "evidence": "No full-parity acceptance evidence yet",
+      "previousWholeIssueDependencies": [
+        "#53",
+        "#54",
+        "backup"
+      ],
+      "executionPrerequisites": [
+        "Exact-SHA green CI for candidate; complete privacy/performance/chosen recovery evidence before final product acceptance."
+      ]
     },
     {
       "key": "macos",
@@ -1176,6 +1220,309 @@
       "url": "https://github.com/adilelhaji/oreneta/issues/117",
       "status": "unassessed",
       "evidence": "No full-parity acceptance evidence yet"
+    },
+    {
+      "key": "graph-actions",
+      "sprint": "S06",
+      "title": "Graph X4: capability-gated message actions with recoverable outcomes",
+      "areas": "meron-core/src; frontend/src/lib/mailCapabilities.ts; mail action components",
+      "architecture": "ADR-0004 approves incremental Graph. Document exact operation, concurrency and cache reconciliation contracts before code; request approval only for new identity or durable-state architecture.",
+      "criteria": [
+        "Reuse the signed-in global-service mailbox and request Mail.ReadWrite only when the user enables writes. Denied incremental consent preserves existing reads only while the original grant remains valid; revocation reports account-scoped reauthentication/permission state and preserves offline cache without claiming live reads.",
+        "Implement and advertise only supported read/unread, flag, move/copy and delete operations; define soft versus permanent delete explicitly. Freeze reviewed IDs for bulk actions; no action on a newly arrived or different-account message.",
+        "Reconcile moves and sparse deltas using opaque account-qualified IDs; test concurrency, cancellation, 403/404/409/429, partial batches and restart. Do not blindly repeat uncertain mutations.",
+        "Preserve local drafts/labels and IMAP/EWS behavior; offer undo only for a demonstrated inverse. Graph has no implicit SMTP/EWS fallback.",
+        "Attach core/bridge/UI tests and exact-SHA evidence; provider certification remains a separate #98 requirement."
+      ],
+      "relatedIssues": [
+        "#47",
+        "#27",
+        "#48",
+        "#98"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [],
+      "parentIssue": 47,
+      "priority": "P1",
+      "phase": "R1",
+      "number": 141,
+      "url": "https://github.com/adilelhaji/oreneta/issues/141",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "graph-attachments",
+      "sprint": "S06",
+      "title": "Graph X5: bounded attachment reading, inline content and safe previews",
+      "areas": "Graph transport; MIME projection; existing attachment preview and save paths",
+      "architecture": "Stay within ADR-0001/0004 and existing attachment cache/preview contracts. Escalate a new storage or content-indexing model; do not add one implicitly.",
+      "criteria": [
+        "Inventory file, inline, item and reference attachment support; expose unavailable types explicitly rather than silently omitting them.",
+        "Download/open/save supported attachments for the correct account and message using least required read consent; validate URL origins and never forward tokens to an arbitrary reference URL.",
+        "Bound size, streaming/memory and temporary-file lifetime; test cancellation, quota/disk failure, expired authorization and interrupted download.",
+        "Preserve safe MIME names and CID relationships without bypassing HTML sanitization, remote-image preferences or attachment safety boundaries.",
+        "Test rapid message/attachment switching, moved/deleted messages, malformed data and offline availability; prove no stale preview or cross-account content. Record native preview and provider evidence separately."
+      ],
+      "relatedIssues": [
+        "#47",
+        "#40",
+        "#93",
+        "#98"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [],
+      "parentIssue": 47,
+      "priority": "P1",
+      "phase": "R1",
+      "number": 142,
+      "url": "https://github.com/adilelhaji/oreneta/issues/142",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "graph-send",
+      "sprint": "S06",
+      "title": "Graph X6: explicit drafts and sending with durable uncertain-outcome recovery",
+      "areas": "Graph adapter; outgoing-mail state; composer; attachment uploads",
+      "architecture": "ADR-0004 authorizes incremental Mail.ReadWrite and separate Mail.Send. Document exact durable transitions with #29 before code; any new persistence/recovery model needs human approval first.",
+      "criteria": [
+        "Request writing/sending consent incrementally and bind sender, recipients and remote draft to the selected signed-in account; shared/delegated sending stays in #48.",
+        "Preserve text/HTML, recipients, inline and regular attachments across save/reopen/restart; support bounded uploads with explicit unsupported-size/type limits.",
+        "Separate local draft, remote draft, submission accepted, submission unknown and Sent-copy observations. HTTP acceptance is not final delivery confirmation.",
+        "Exercise interruption before/after submission, timeout, throttling, revoked consent, upload failure, duplicate user activation and cancellation. An ambiguous send is never automatically retried.",
+        "Use existing composer validation and document per-operation capability gates; all tests use synthetic or separately authorized dedicated recipients, with independent provider evidence required before certification."
+      ],
+      "relatedIssues": [
+        "#47",
+        "#29",
+        "#39",
+        "#40",
+        "#98"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [
+        "#29 durable send contract and corresponding recovery tests, not unrelated umbrella closure"
+      ],
+      "parentIssue": 47,
+      "priority": "P1",
+      "phase": "R1",
+      "number": 143,
+      "url": "https://github.com/adilelhaji/oreneta/issues/143",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "owned-oauth",
+      "sprint": "S06",
+      "title": "Gate distributable sign-in on Oreneta-owned OAuth configuration",
+      "areas": "Google OAuth configuration; Go/Rust build inputs; account wizard; CI policy; README",
+      "architecture": "Use existing native OAuth and CI configuration. Creating external registrations, verification submissions, paid assessments or changing consent architecture requires separate authorization.",
+      "criteria": [
+        "Inventory Google/Microsoft client ownership and scopes without printing credentials; document allowed internal-development and distributable configurations separately.",
+        "Make distributable configurations fail closed or omit unavailable sign-in when required Oreneta-owned configuration is absent; never silently fall back to inherited Meron registrations.",
+        "Test missing, malformed and configured values across both Go and Rust entry paths; explain unavailable sign-in and supported manual alternatives in the wizard.",
+        "Verify current Google scope/verification requirements from official documentation, including applicable exceptions; do not assume every native app requires a paid assessment. Record external approvals as blocked until obtained.",
+        "Prove build logs/artifacts contain no private credentials and that disabled Google sign-in does not disable generic IMAP/EWS; attach exact-SHA CI evidence. No cloud project or public release is created by this task."
+      ],
+      "relatedIssues": [
+        "#96",
+        "#98",
+        "#114"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [],
+      "parentIssue": 96,
+      "priority": "P1",
+      "phase": "R1",
+      "number": 144,
+      "url": "https://github.com/adilelhaji/oreneta/issues/144",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "provider-pack",
+      "sprint": "S06",
+      "title": "Build a repeatable provider acceptance pack, starting with IMAP/SMTP and Microsoft 365",
+      "areas": "integration fixtures; provider acceptance procedures; CI artifact evidence; parity ledger",
+      "architecture": "Reuse existing provider boundaries and CI. Dedicated accounts, tenant changes, secret provisioning and actual external mail runs require specific authorization; absence of access is a visible blocker, never replaced by mocks.",
+      "criteria": [
+        "Prepare reusable synthetic test data and account-isolated procedures for generic IMAP/SMTP, Gmail/Workspace and Microsoft 365 Graph; start available rows without waiting for POP3 or shared mailboxes.",
+        "For each provider/operation record version, auth mode, scopes, initial state, expected result, cleanup, source SHA and independent evidence; retain unsupported operations as open rows.",
+        "Exercise read/send, flags/moves, paging, offline/reconnect, revocation, rate limits and relevant MIME fixtures using dedicated recipients only; distinguish sent acceptance from receipt and archival.",
+        "Run reproducibly through existing CI where supported, redact secrets and real personal data while preserving synthetic IDs/hashes/correlation, and retain a manual native procedure where automation cannot observe OS integration.",
+        "Keep live credentials outside repository/artifacts and prevent accidental delivery to arbitrary recipients. Deliver harness/procedures first; do not mark provider certification complete until authorized live results exist."
+      ],
+      "relatedIssues": [
+        "#98",
+        "#47",
+        "#96",
+        "#114"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [
+        "Live execution only: authorized dedicated accounts and the particular implemented operation being certified"
+      ],
+      "parentIssue": 98,
+      "priority": "P1",
+      "phase": "R0/R1",
+      "number": 145,
+      "url": "https://github.com/adilelhaji/oreneta/issues/145",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "recovery-decision",
+      "sprint": "S02",
+      "title": "Resolve the full-profile recovery gap against accepted configuration-only backups",
+      "areas": "docs/adr/0008-privacy-diagnostics-recovery-contract.md; backup/data inventory; #113 scope",
+      "architecture": "Decision-only task. Preserve ADR-0008 until the user explicitly accepts a superseding or extending ADR. No new snapshot format, scheduler, migration or encryption code in this slice.",
+      "criteria": [
+        "Inventory local drafts/attachments, linked tasks, labels, settings, keys, accounts and cache; identify which data can actually be reconstructed from each provider and which cannot.",
+        "Reuse existing ADR-0008/#54 tests and evidence for configuration-only restore in a disposable synthetic profile; add only missing corruption, wrong-passphrase and partial-failure coverage. Do not touch user profiles or claim those tests establish full-profile recovery.",
+        "Present options retaining configuration-only recovery versus adding a consistent full-profile snapshot, including cost, privacy, compatibility, encryption, retention and failure handling.",
+        "Record the human decision before implementation follow-ups. If configuration-only remains chosen, keep full-backup parity explicitly unmet rather than closing #113 as delivered.",
+        "After approval, split snapshot/restore from scheduling and multi-profile work; discovery and single-profile recovery must not wait on all of #99."
+      ],
+      "relatedIssues": [
+        "#25",
+        "#54",
+        "#99",
+        "#112",
+        "#113"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [
+        "Final decision: maintainer approval of the concrete recovery options"
+      ],
+      "parentIssue": 25,
+      "priority": "P0 planning",
+      "phase": "R0",
+      "number": 146,
+      "url": "https://github.com/adilelhaji/oreneta/issues/146",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "windows-lifecycle",
+      "sprint": "S11",
+      "title": "Validate Windows install, update and recovery on an exact-SHA candidate",
+      "areas": "Windows validation workflow; NSIS; updater; native test harness; artifact manifest",
+      "architecture": "Keep staged user-confirmed updates and existing packaging under ADR-0008. Signing/authenticity or rollback-policy changes require approval; validation does not publish a release.",
+      "criteria": [
+        "Build through the CI-only validation workflow; bind canonical executable/installer hashes and all evidence to the same source SHA. Do not reuse an old green commit for changed source.",
+        "Use clean disposable Windows environments and synthetic prior-version profiles to test install, startup/restart, upgrade, locked executable/unsaved work and interrupted update recovery.",
+        "Test uninstall behavior explicitly: preserve user data unless deletion was explicitly selected; document supported downgrade limits instead of promising backward-compatible profile opening. Verify whether failed updates leave a usable installation and recoverable profile; record any gap instead of promising an unimplemented rollback.",
+        "Cover native mail reader/composer, DPI/zoom/IME, mailto, notifications and suspend/reconnect where available; onboarding-only screenshots do not certify those workflows.",
+        "Verify artifacts before replacement; retire only superseded binaries under AGENTS.md. Record signing/authenticity and provider gaps separately; final product acceptance still needs #53/#54 and the chosen recovery contract."
+      ],
+      "relatedIssues": [
+        "#114",
+        "#25",
+        "#53",
+        "#54",
+        "#131"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [
+        "Candidate build: seven successful required main CI jobs for its exact SHA"
+      ],
+      "parentIssue": 114,
+      "priority": "P1",
+      "phase": "R0/R1",
+      "number": 147,
+      "url": "https://github.com/adilelhaji/oreneta/issues/147",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "native-perf",
+      "sprint": "S11",
+      "title": "Measure native mailbox responsiveness and memory with the existing 1k/10k/100k datasets",
+      "areas": "scripts/perf; native Windows harness; mailbox/reader/attachment flows; docs/performance-baseline.md",
+      "architecture": "Reuse current datasets/runtime. Review any benchmark dependency under existing policy; request approval only for architecture changes, external services/cost or conflicts with accepted decisions. Do not introduce a new virtualization or storage architecture merely to improve a benchmark.",
+      "criteria": [
+        "Record device, OS, app/engine versions, SHA, dataset hash, cache state and repetitions; isolate local interaction time from provider latency.",
+        "Measure startup, cached first-page, downloaded-message open, search interaction, scrolling and repeated message/PDF memory cycles for 1k/10k/100k datasets.",
+        "Calibrate proposed p95 targets from #53 (100ms local reaction, 500ms cached first page, 300ms downloaded-message open); publish observed results and accepted budgets rather than fabricated promises.",
+        "Compare baseline/candidate using the same visible data and account for warmup/noise; do not hide messages or reduce functionality to pass.",
+        "Record actionable regressions and add suitable repeatable checks; synthetic algorithm results and shared-runner timing alone cannot certify native responsiveness."
+      ],
+      "relatedIssues": [
+        "#53",
+        "#30",
+        "#37",
+        "#40",
+        "#114"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [
+        "Native evidence: available reference Windows device and exact-SHA test build"
+      ],
+      "parentIssue": 53,
+      "priority": "P1",
+      "phase": "R0/R1",
+      "number": 148,
+      "url": "https://github.com/adilelhaji/oreneta/issues/148",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "settings-discovery",
+      "sprint": "S08",
+      "title": "Make settings and command actions discoverable, localized and keyboard-accessible",
+      "areas": "frontend/src/components/dialog/SettingsDialog.tsx; command palette; locales; existing settings state",
+      "architecture": "Reuse existing settings, command actions and components. No new command engine, persistence model or parallel design system.",
+      "criteria": [
+        "Inventory existing sections/commands before changes; provide localized search/navigation to existing appearance, signature, account, privacy and update controls without duplicating their state.",
+        "Initial slice: localized English/Spanish command names, hints and searchable synonyms; preserve existing fallback contracts for other catalogs and leave full localization acceptance under #37. Distinguish commands from settings results. Test accents and non-ASCII queries so unsupported normalization cannot match every command.",
+        "Search and activate using keyboard, restore focus after closing/navigating, preserve unsaved settings and show a clear empty result.",
+        "Keep account context and capability restrictions when invoking actions; finding a command never grants permission or sends a message automatically.",
+        "Cover light/dark, long Spanish labels, narrow panes, 200% zoom, focus return and persistence with automated production-entry tests and applicable native evidence."
+      ],
+      "relatedIssues": [
+        "#38",
+        "#33",
+        "#37",
+        "#96"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [],
+      "parentIssue": 38,
+      "priority": "P2",
+      "phase": "R1",
+      "number": 149,
+      "url": "https://github.com/adilelhaji/oreneta/issues/149",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
+    },
+    {
+      "key": "account-health",
+      "sprint": "S06",
+      "title": "Expose per-account sync health and accessible recovery without losing errors",
+      "areas": "frontend/src/states/connectivity.ts; ConnectivityBanner; account navigation; existing sync events",
+      "architecture": "Present existing signals and reuse existing recovery commands. First inventory backend observability; missing signals must remain unknown. A new sync engine, durable queue or health persistence model needs approval.",
+      "criteria": [
+        "Inventory and display known per-account states: syncing, last successful sync where observable, offline, authentication required, failed and unavailable/unknown; never infer full mailbox freshness from a partial folder sync.",
+        "Two concurrent account errors remain distinguishable; dismissing a notice does not falsely make that account healthy or clear another account's condition. A successful unrelated service/folder cannot clear a known failure; if events lack that scope, retain unknown/degraded rather than claiming complete health. Do not invent a staleness threshold.",
+        "Offer account-scoped retry/reconnect using existing commands; do not retry uncertain sends or start unsupported Graph writes as part of recovery.",
+        "Retain readable actionable copy and accessible announcements without stealing focus or repeatedly interrupting reading; preserve redaction of credentials and diagnostic details.",
+        "Test simultaneous failures, account switching/removal, late responses, retry success/failure and revoked consent with light/dark/narrow/keyboard evidence; disclose limits of session-only state."
+      ],
+      "relatedIssues": [
+        "#96",
+        "#34",
+        "#37",
+        "#54"
+      ],
+      "blockedBy": [],
+      "executionPrerequisites": [],
+      "parentIssue": 96,
+      "priority": "P1",
+      "phase": "R1",
+      "number": 150,
+      "url": "https://github.com/adilelhaji/oreneta/issues/150",
+      "status": "unassessed",
+      "evidence": "Planning only on 2026-10-05; no implementation/native/provider acceptance claimed."
     }
   ],
   "capabilities": [
@@ -1526,5 +1873,554 @@
       "evidence": "Initial roadmap classification against main 100976d423258eb302bcc903c9c059838666e40c; no complete parity acceptance evidence.",
       "acceptance": "v11 beta and mobile separately scoped and tested"
     }
-  ]
+  ],
+  "review": {
+    "date": "2026-10-05",
+    "sourceSha": "c3c562f53ed3331a1fb06dfba128c00f65931629",
+    "stableReference": "10.4.5674.0 Windows",
+    "observedBeta": "11.0.865.0",
+    "plan": "docs/competitive-delivery-plan.md",
+    "audit": "docs/competitive-backlog-audit.md",
+    "originalOpenIssues": 65,
+    "newChildIssues": 10,
+    "issueDisposition": [
+      {
+        "number": 9,
+        "title": "[Parity S09] S/MIME verification: check certificate validity period and CMS contentType attribute",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 12,
+        "title": "[Parity S09] PGP decrypt reports NeedsPassphrase for a real, unprotected GnuPG-generated key",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 22,
+        "title": "[Parity S01] Maintain the versioned eM Client parity acceptance ledger",
+        "phase": "R0",
+        "priority": "P1",
+        "decision": "Completar inventario de flujos/proveedores; conservar distinción fixture/nativo/proveedor y actualizar evidencia por SHA.",
+        "children": []
+      },
+      {
+        "number": 24,
+        "title": "[Parity S02] Specify typed boundaries, message identity, and protocol compatibility",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Reutilizar ADR aprobados; resolver solo contratos concretos necesarios, sin bloquear todos los dominios por el epic.",
+        "children": []
+      },
+      {
+        "number": 25,
+        "title": "[Parity S02] Define recoverable local data and profile migration guarantees",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Resolver conflicto de recuperación con ADR-0008 antes de ampliar el formato; inventariar datos irreemplazables.",
+        "children": [
+          146
+        ]
+      },
+      {
+        "number": 27,
+        "title": "[Parity S02] Execute Sweep only against the reviewed message set",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Mantener alcance exacto revisado y resultados parciales; reproducir en main antes de corregir.",
+        "children": []
+      },
+      {
+        "number": 28,
+        "title": "[Parity S02] Preserve contacts when CardDAV synchronization is incomplete",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Mantener último snapshot válido ante sincronización parcial; verificar destino de credenciales.",
+        "children": []
+      },
+      {
+        "number": 29,
+        "title": "[Parity S02] Recover outgoing mail without blindly retrying uncertain sends",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Prioridad de recuperación durable y envío incierto. Ya es una tarea acotable; no crear duplicado.",
+        "children": []
+      },
+      {
+        "number": 30,
+        "title": "[Parity S03] Preserve sort order and row identity across mailbox pages",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Reconocer paginación y guardas entregadas; falta cerrar orden real/proveedor y llegadas concurrentes.",
+        "children": []
+      },
+      {
+        "number": 31,
+        "title": "[Parity S05] Keep search semantics consistent across cache and providers",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 32,
+        "title": "[Parity S03] Validate the approved visual direction with a complete mail workflow prototype",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Reutilizar fixture existente y contrastar ocho flujos completos; evaluación humana separada de automatización.",
+        "children": []
+      },
+      {
+        "number": 33,
+        "title": "[Parity S03] Apply the design system consistently to shared components and themes",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Completar adopción de tokens, catálogo, contraste y estados; #83 ya entregó tokens/temas.",
+        "children": []
+      },
+      {
+        "number": 34,
+        "title": "[Parity S03] Make navigation, list density, and bulk selection visually unambiguous",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Reconocer navegación y corrección #85; falta selección/densidad y evidencia nativa completa.",
+        "children": []
+      },
+      {
+        "number": 35,
+        "title": "[Parity S03] Improve conversation reading, message actions, and scoped printing",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Priorizar acciones por mensaje, HTML ancho, zoom del cuerpo e impresión con cobertura declarada.",
+        "children": []
+      },
+      {
+        "number": 36,
+        "title": "[Parity S03] Deliver configurable mailbox columns with persistent views",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Completar columnas/persistencia/orden global sin sustituir el contrato de #30.",
+        "children": []
+      },
+      {
+        "number": 37,
+        "title": "[Parity S12] Validate accessibility and localization across critical workflows",
+        "phase": "R0",
+        "priority": "P1",
+        "decision": "Aplicar desde R0 a cada entrega; cerrar localización/accesibilidad global solo con evidencia completa.",
+        "children": []
+      },
+      {
+        "number": 38,
+        "title": "[Parity S08] Extend the approved visual system across secondary application screens",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Entregar por superficie; conservar Kanban/RSS existentes. Slice nueva de descubribilidad de ajustes.",
+        "children": [
+          149
+        ]
+      },
+      {
+        "number": 39,
+        "title": "[Parity S04] Prevent composition errors and recover complete drafts",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Preservar contenido, adjuntos, remitente y destinatarios ante fallos/reinicio; separar del envío #29.",
+        "children": []
+      },
+      {
+        "number": 40,
+        "title": "[Parity S04] Make templates and attachment previews reliable",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Reconocer corrección de PDF obsoleto y trabajo integrado; verificar tipos, errores y memoria restantes.",
+        "children": []
+      },
+      {
+        "number": 41,
+        "title": "[Parity S08] Edit contacts with explicit origin and conflict-safe synchronization",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 42,
+        "title": "[Parity S08] Validate existing message-linked tasks and recovery behavior",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Reconocer tareas locales enlazadas; verificar recuperación actual antes de ampliar modelo en #103.",
+        "children": []
+      },
+      {
+        "number": 43,
+        "title": "[Parity S05] Build equivalent visual searches and live saved views",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 45,
+        "title": "[Parity S04] Track waiting-for-response states with explicit uncertainty",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 46,
+        "title": "[Parity S06] Assess Exchange Online EWS exposure and the Graph migration path",
+        "phase": "R0",
+        "priority": "P0: riesgo/decisión",
+        "decision": "Continuidad de Exchange Online por cuenta/operación ahora; ADR-0004 ya aprueba dirección Graph.",
+        "children": []
+      },
+      {
+        "number": 47,
+        "title": "[Parity S06] Implement Graph capabilities and reconcile affected account profiles",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Reconocer #125/#127/#128; descomponer acciones, lectura de adjuntos y borrador/envío; mantener calendario/contactos/delegación pendientes.",
+        "children": [
+          141,
+          142,
+          143
+        ]
+      },
+      {
+        "number": 48,
+        "title": "[Parity S06] Verify delegated mailboxes and automatic-reply behavior",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 49,
+        "title": "[Parity S09] Validate OpenPGP and S/MIME interoperability and trust states",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 50,
+        "title": "[Parity S05] Keep spam learning and local rules explainable and repeat-safe",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Reconocer juicio de spam idempotente integrado; cerrar reglas/explicación solo con criterios restantes.",
+        "children": []
+      },
+      {
+        "number": 51,
+        "title": "[Parity S10] Specify assistant context, provider choice, and privacy boundaries",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Reutilizar ADR-0006 y proveedor explícito integrado; verificar límites de contexto/retención/errores.",
+        "children": []
+      },
+      {
+        "number": 52,
+        "title": "[Parity S10] Add source-linked summaries, reviewable drafts, and confirmed task extraction",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Reutilizar ADR-0007 y resultados revisables; completar flujos de escritura y evidencia del proveedor.",
+        "children": []
+      },
+      {
+        "number": 53,
+        "title": "[Parity S11] Measure performance and prevent visual regressions on reproducible datasets",
+        "phase": "R0",
+        "priority": "P1",
+        "decision": "Generador/sort/filtro entregados; falta rendimiento de app nativa y memoria, ahora slice propia.",
+        "children": [
+          148
+        ]
+      },
+      {
+        "number": 54,
+        "title": "[Parity S11] Verify privacy, diagnostics, and recovery across pilot workflows",
+        "phase": "R0",
+        "priority": "P1",
+        "decision": "Reconocer redacción de diagnósticos y ADR-0008; verificar flujos integrales sin ampliar backups implícitamente.",
+        "children": []
+      },
+      {
+        "number": 55,
+        "title": "[Parity S12] Run controlled pilot releases with support and exit evidence",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Preparar protocolo de piloto desde R1; participantes/publicación autorizados separadamente; cierre global al final.",
+        "children": []
+      },
+      {
+        "number": 86,
+        "title": "[Parity S03] Deliver a real contextual sidebar for agenda, people and attachment history",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 87,
+        "title": "[Parity S03] Complete folder management, favorites, colors and safe drag/drop",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 88,
+        "title": "[Parity S04] Complete QuickText, templates and account-aware signature libraries",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 89,
+        "title": "[Parity S04] Complete scheduled send, undo-send and snooze lifecycle",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 90,
+        "title": "[Parity S04] Deliver reviewed personalized mass mail with per-recipient outcomes",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 91,
+        "title": "[Parity S05] Add transparent inbox categories with user corrections and complete access",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 92,
+        "title": "[Parity S05] Add configurable Quick Action macros over reviewed message sets",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 93,
+        "title": "[Parity S05] Deliver an all-attachments workspace and bounded content search",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 94,
+        "title": "[Parity S06] Implement provider-backed mail rules and vacation/forwarding capabilities",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 95,
+        "title": "[Parity S05] Certify remote labels, categories and local annotations across workflows",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 96,
+        "title": "[Parity S06] Complete eM-style account onboarding and actionable reconnect diagnostics",
+        "phase": "R1",
+        "priority": "P1",
+        "decision": "Separar onboarding, OAuth distribuible y salud durante uso diario; no pedir registros externos por el mero plan.",
+        "children": [
+          144,
+          150
+        ]
+      },
+      {
+        "number": 97,
+        "title": "[Parity S06] Specify and implement POP3 capability without duplicate downloads or data loss",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 98,
+        "title": "[Parity S06] Certify the stable-target provider matrix with independent account fixtures",
+        "phase": "R0",
+        "priority": "P1",
+        "decision": "Comenzar por operación disponible; no bloquear IMAP/SMTP por todo POP3/Graph/delegación.",
+        "children": [
+          145
+        ]
+      },
+      {
+        "number": 99,
+        "title": "[Parity S06] Deliver account groups and isolated user profiles with safe switching",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Modelo de perfiles requiere decisión; no bloquea inventario de recuperación de un perfil.",
+        "children": []
+      },
+      {
+        "number": 100,
+        "title": "[Parity S07] Complete calendar views, event editing and reminders",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 101,
+        "title": "[Parity S07] Complete CalDAV, Google and Exchange calendar synchronization",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 102,
+        "title": "[Parity S07] Complete invitations, availability and meeting lifecycle",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 103,
+        "title": "[Parity S08] Extend local linked tasks to full task lists and provider synchronization",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Decisión previa para tareas independientes/sincronizadas; preservar contrato local actual.",
+        "children": []
+      },
+      {
+        "number": 104,
+        "title": "[Parity S08] Deliver standalone rich notes with safe local and provider synchronization",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Decisión previa de notas, identidad/almacenamiento y proveedores; no confundir anotaciones con notas completas.",
+        "children": []
+      },
+      {
+        "number": 105,
+        "title": "[Parity S09] Integrate offline grammar checking under ADR-0001",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 106,
+        "title": "[Parity S09] Integrate offline reading and composing translation under ADR-0001",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 107,
+        "title": "[Parity S09] Apply privacy-preserving tracking protection under ADR-0001",
+        "phase": "R3",
+        "priority": "P1",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 108,
+        "title": "[Parity S10] Add cloud attachment providers with explicit sharing permissions",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 109,
+        "title": "[Parity S10] Integrate online meeting creation and updates into calendar workflows",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 110,
+        "title": "[Parity S10] Decide native chat integration boundaries and provider capability contracts",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener como decisión de chat; #111 implementa solo slices aprobadas.",
+        "children": []
+      },
+      {
+        "number": 111,
+        "title": "[Parity S10] Implement approved direct, group and channel chat with attachments",
+        "phase": "R3",
+        "priority": "P2",
+        "decision": "Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente.",
+        "children": []
+      },
+      {
+        "number": 112,
+        "title": "[Parity S11] Deliver guided import/export and local archive data files",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Mantener todos los formatos objetivo; verificar los necesarios antes de migrar un participante.",
+        "children": []
+      },
+      {
+        "number": 113,
+        "title": "[Parity S11] Deliver scheduled complete-profile backups and rehearsed recovery",
+        "phase": "R2",
+        "priority": "P1",
+        "decision": "Objetivo sin aprobar frente a ADR-0008; decisión primero, luego snapshot/restauración y programación por separado.",
+        "children": []
+      },
+      {
+        "number": 114,
+        "title": "[Parity S11] Validate the actual Windows application and reproducible install/update artifacts",
+        "phase": "R0",
+        "priority": "P1",
+        "decision": "#131 entregó pipeline/arranque; falta instalar/actualizar/recuperar y probar flujos nativos; iniciar sin esperar todos los epics.",
+        "children": [
+          147
+        ]
+      },
+      {
+        "number": 115,
+        "title": "[Parity S12] Verify desktop parity on macOS and preserve existing Linux compatibility",
+        "phase": "R4",
+        "priority": "P2",
+        "decision": "Evidencia macOS propia y regresión Linux; Windows no acredita ninguna de ellas.",
+        "children": []
+      },
+      {
+        "number": 116,
+        "title": "[Parity S13] Inventory mobile parity separately and request any new platform architecture",
+        "phase": "R4",
+        "priority": "P2",
+        "decision": "Inventario móvil separado; no iniciar arquitectura/plataforma nueva.",
+        "children": []
+      },
+      {
+        "number": 117,
+        "title": "[Parity S13] Maintain a separately versioned eM Client 11 beta delta backlog",
+        "phase": "R4",
+        "priority": "P2",
+        "decision": "Actualizar delta observado a 11.0.865.0 beta sin mover referencia estable.",
+        "children": []
+      }
+    ]
+  }
 }
