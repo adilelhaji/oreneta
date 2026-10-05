@@ -9,9 +9,9 @@ import type { Account, Message } from '../../types'
 import { LabelChips } from './LabelChips'
 
 const COLUMNS: { key: SortKey; labelKey: string; className: string }[] = [
-  { key: 'sender', labelKey: 'table.sender', className: 'w-[22%]' },
+  { key: 'sender', labelKey: 'table.sender', className: 'w-[27%]' },
   { key: 'subject', labelKey: 'table.subject', className: '' },
-  { key: 'date', labelKey: 'table.date', className: 'w-[7.5rem]' },
+  { key: 'date', labelKey: 'table.date', className: 'w-20' },
 ]
 
 /**
@@ -33,6 +33,8 @@ export function ThreadTable({
   showAccount,
   onSelect,
   onContextMenu,
+  isBulkSelected,
+  onToggleSelect,
 }: {
   threads: Message[]
   accounts: Account[]
@@ -40,6 +42,8 @@ export function ThreadTable({
   showAccount: boolean
   onSelect: (thread: Message, event: MouseEvent<HTMLElement>) => void
   onContextMenu: (thread: Message, event: MouseEvent) => void
+  isBulkSelected?: (thread: Message) => boolean
+  onToggleSelect?: (thread: Message) => void
 }) {
   const { t } = useTranslation()
   const sort = useValue(settings$.listSort)
@@ -58,6 +62,11 @@ export function ThreadTable({
     <table className="w-full table-fixed border-collapse text-ui">
       <thead className="sticky top-0 z-10 bg-chats">
         <tr>
+          {onToggleSelect && (
+            <th scope="col" className="w-8 border-b border-border">
+              <span className="sr-only">{t('threads.actions.selectThread')}</span>
+            </th>
+          )}
           {COLUMNS.map((column) => {
             const active = sort.key === column.key
             const Arrow = sort.dir === 'asc' ? ArrowUp : ArrowDown
@@ -72,12 +81,12 @@ export function ThreadTable({
                   type="button"
                   onClick={() => reorder(column.key)}
                   className={clsx(
-                    'flex w-full items-center gap-1 px-3 py-1.5 text-caption font-bold uppercase tracking-wide transition-colors cursor-pointer hover:bg-hover',
+                    'flex min-h-8 w-full items-center gap-1 px-2 py-1.5 text-caption font-semibold transition-colors cursor-pointer hover:bg-hover',
                     active ? 'text-accent' : 'text-secondary',
                   )}
                 >
                   <span className="min-w-0 truncate">{t(column.labelKey)}</span>
-                  {active && <Arrow size={11} className="shrink-0" />}
+                  {active && <Arrow size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />}
                 </button>
               </th>
             )
@@ -87,28 +96,40 @@ export function ThreadTable({
       <tbody>
         {threads.map((thread) => {
           const active = thread.thread_id === selectedThread
+          const bulkSelected = isBulkSelected?.(thread) ?? false
+          const subject = thread.subject || t('sendLater.noSubject')
           const account = accounts.find((candidate) => candidate.id === thread.account_id)
           return (
             <tr
               key={thread.id}
               onClick={(event) => onSelect(thread, event)}
               onContextMenu={(event) => onContextMenu(thread, event)}
-              // A row of a table is not a button, so it says what it is and
-              // answers the keyboard itself.
-              tabIndex={0}
-              role="button"
-              aria-current={active}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                onSelect(thread, event as unknown as MouseEvent<HTMLElement>)
-              }}
+              data-opened={active || undefined}
+              data-bulk-selected={bulkSelected || undefined}
               className={clsx(
                 'cursor-pointer border-b border-border/50 transition-colors',
-                active ? 'bg-accent/20 dark:bg-accent/30' : thread.unread ? 'bg-accent/[0.07] hover:bg-accent/[0.12]' : 'hover:bg-hover',
+                bulkSelected ? 'bg-accent/15' : active ? 'bg-active' : 'hover:bg-hover',
               )}
             >
-              <td className="max-w-0 truncate px-3 py-1.5">
+              {onToggleSelect && (
+                <td className="p-0 text-center">
+                  <input
+                    type="checkbox"
+                    checked={bulkSelected}
+                    aria-label={`${t('threads.actions.selectThread')}: ${subject}`}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => onToggleSelect(thread)}
+                    className="h-4 w-4 align-middle accent-accent cursor-pointer"
+                  />
+                </td>
+              )}
+              <td
+                title={thread.from_name || thread.from_addr}
+                className={clsx(
+                  'max-w-0 truncate border-l-2 px-2 py-1.5',
+                  active ? 'border-l-accent' : 'border-l-transparent',
+                )}
+              >
                 <span className={clsx('truncate', thread.unread ? 'font-bold text-primary' : 'text-primary/85')}>
                   {thread.from_name || thread.from_addr}
                 </span>
@@ -116,24 +137,51 @@ export function ThreadTable({
                   <span className="ml-1 text-2xs text-secondary">{account.display_name || account.email}</span>
                 )}
               </td>
-              <td className="max-w-0 px-3 py-1.5">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {thread.priority && <Sparkle size={11} className="shrink-0 text-accent" />}
-                  {thread.starred && <Star size={11} className="shrink-0 fill-amber-500 text-amber-500" />}
-                  <LabelChips ids={thread.labels} max={2} />
-                  <span className={clsx('min-w-0 truncate', thread.unread ? 'font-semibold text-primary' : 'text-primary/85')}>
-                    {thread.subject || t('sendLater.noSubject')}
-                  </span>
-                  {thread.preview && (
-                    <span className="min-w-0 truncate text-secondary/75">{thread.preview}</span>
+              <td className="max-w-0 p-0">
+                <button
+                  type="button"
+                  aria-current={active}
+                  title={subject}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onSelect(thread, event)
+                  }}
+                  className="flex min-h-8 w-full min-w-0 items-center gap-1 px-2 py-1.5 text-left cursor-pointer focus-visible:-outline-offset-2"
+                >
+                  {thread.unread && <span className="sr-only">{t('common.unread')}: </span>}
+                  {thread.priority && (
+                    <Sparkle size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent" />
                   )}
-                  {thread.has_attachments && <Paperclip size={11} className="ml-auto shrink-0 text-secondary/70" />}
-                </span>
+                  {thread.starred && (
+                    <Star
+                      size={14}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                      className="shrink-0 fill-warning text-warning"
+                    />
+                  )}
+                  <span
+                    className={clsx(
+                      'min-w-0 flex-1 truncate',
+                      thread.unread ? 'font-semibold text-primary' : 'text-primary/85',
+                    )}
+                  >
+                    {subject}
+                  </span>
+                  {thread.labels?.length ? (
+                    <span className="max-w-[25%] overflow-hidden">
+                      <LabelChips ids={thread.labels} max={1} />
+                    </span>
+                  ) : null}
+                  {thread.has_attachments && (
+                    <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-secondary" />
+                  )}
+                </button>
               </td>
               <td
                 className={clsx(
-                  'px-3 py-1.5 text-right text-caption tabular-nums',
-                  thread.unread ? 'text-accent' : 'text-secondary/65',
+                  'px-2 py-1.5 text-right text-caption tabular-nums',
+                  thread.unread ? 'font-semibold text-primary' : 'text-secondary',
                 )}
               >
                 {formatThreadDate(thread.date)}

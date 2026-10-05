@@ -271,6 +271,33 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
     setBulkSelection(rows.slice(from, to + 1), target.key)
   }
 
+  // Both renderers open drafts, feeds and existing reader tabs the same way.
+  const openListedThread = (thread: Message) => {
+    clearBulkSelection()
+    if (isDraftFolder(thread.folder_id, thread.account_id)) {
+      ui$.selectedThread.set(thread.thread_id)
+      ui$.mobilePane.set('conversation')
+      void openDraftConversationOrCompose(thread)
+      return
+    }
+    if (isStarredView) {
+      // RSS rows carry their full body: open the item directly in
+      // a reader tab. Mail rows are ordinary threads.
+      const account = accounts.find((acc) => acc.id === thread.account_id)
+      if (isRssAccount(account, thread.account_id)) {
+        openMessageTab(thread)
+        ui$.mobilePane.set('conversation')
+        return
+      }
+    }
+    // Leave any open compose/reader/thread tab first so the
+    // selectedThread retarget is recorded as the Current tab's
+    // thread (conversationThread) rather than skipped.
+    compose$.activeTab.set('')
+    ui$.selectedThread.set(thread.thread_id)
+    ui$.mobilePane.set('conversation')
+  }
+
   const startFeedDrag = (event: DragEvent<HTMLDivElement>, thread: (typeof filteredThreads)[number]) => {
     if (!feedRowsDraggable) return
     event.dataTransfer.effectAllowed = 'move'
@@ -500,12 +527,25 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
             accounts={accounts}
             selectedThread={selectedThread}
             showAccount={selectedAccount === 'unified' || isStarredView}
-            onSelect={(thread) => {
-              clearBulkSelection()
-              ui$.selectedThread.set(thread.thread_id)
-              ui$.mobilePane.set('conversation')
+            isBulkSelected={(thread) => !!bulkSelection[bulkItemFor(thread).key]}
+            onToggleSelect={desktopBulk ? (thread) => toggleBulkSelection(bulkItemFor(thread)) : undefined}
+            onSelect={(thread, event) => {
+              if (desktopBulk && (event.metaKey || event.ctrlKey)) {
+                toggleBulkSelection(bulkItemFor(thread))
+              } else if (desktopBulk && event.shiftKey) {
+                selectRangeTo(bulkItemFor(thread))
+              } else {
+                openListedThread(thread)
+              }
             }}
-            onContextMenu={(thread, event) => threadMenu.open(event, thread)}
+            onContextMenu={(thread, event) => {
+              if (bulkInThisList) {
+                event.preventDefault()
+                event.stopPropagation()
+                return
+              }
+              threadMenu.open(event, thread)
+            }}
           />
         ) : (
           <>
@@ -549,29 +589,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                       toggleBulkSelection(bulkItem)
                       return
                     }
-                    clearBulkSelection()
-                    if (isDraftFolder(thread.folder_id, thread.account_id)) {
-                      ui$.selectedThread.set(thread.thread_id)
-                      ui$.mobilePane.set('conversation')
-                      void openDraftConversationOrCompose(thread)
-                      return
-                    }
-                    if (isStarredView) {
-                      // RSS rows carry their full body: open the item directly in
-                      // a reader tab. Mail rows are ordinary threads.
-                      const account = accounts.find((acc) => acc.id === thread.account_id)
-                      if (isRssAccount(account, thread.account_id)) {
-                        openMessageTab(thread)
-                        ui$.mobilePane.set('conversation')
-                        return
-                      }
-                    }
-                    // Leave any open compose/reader/thread tab first so the
-                    // selectedThread retarget is recorded as the Current tab's
-                    // thread (conversationThread) rather than skipped.
-                    compose$.activeTab.set('')
-                    ui$.selectedThread.set(thread.thread_id)
-                    ui$.mobilePane.set('conversation')
+                    openListedThread(thread)
                   }}
                   onContextMenu={(event) => {
                     if (bulkInThisList) {
