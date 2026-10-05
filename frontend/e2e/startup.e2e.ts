@@ -21,6 +21,59 @@ type SetupOptions = {
   preferences?: Record<string, unknown>
   readerStress?: boolean
   updatesSupported?: boolean
+  syncHealth?: boolean
+}
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [1440, 600]) {
+    test(`account sync observations remain honest and reachable: ${theme}, ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme, syncHealth: true })
+      await page.goto('/')
+      const health = page.getByRole('region', { name: 'Sincronización de cuentas' })
+      const toggle = health.getByRole('button', { name: 'Sincronización de cuentas', exact: true })
+      await toggle.focus()
+      await page.evaluate(() => {
+        const probe = (window as any).startupProbe
+        probe.emit('mail.syncError', { account: 'synthetic-account', message: 'synthetic-private-diagnostic' })
+        probe.emit('mail.syncError', { account: 'second-account', message: 'second diagnostic' })
+        probe.emit('mail.synced', { account: 'synthetic-account', folder: 'Sent' })
+        probe.emit('calendar.synced', { account: 'second-account' })
+      })
+      await expect(toggle).toBeFocused()
+      await expect(health.getByRole('status')).toContainText('2 requieren atención')
+      await page.keyboard.press('Enter')
+      const first = health.getByRole('listitem', { name: 'Alex · Demo', exact: true })
+      const second = health.getByRole('listitem', { name: 'Second account', exact: true })
+      await expect(first).toContainText('Problema de sincronización pendiente')
+      await expect(second).toContainText('Problema de sincronización pendiente')
+      await expect(health).not.toContainText('synthetic-private-diagnostic')
+      await first.getByRole('button', { name: 'Cerrar', exact: true }).click()
+      await expect(first).toBeFocused()
+      await toggle.click(); await toggle.click()
+      await expect(first).toContainText('Problema de sincronización pendiente')
+      const before = await page.evaluate(() => (window as any).startupProbe.requests.length)
+      await second.getByRole('button', { name: 'Reintentar', exact: true }).click()
+      await expect(second).toContainText('Solicitud sin confirmar')
+      expect(await page.evaluate((start) => (window as any).startupProbe.requests.slice(start).filter((item: any) => item.command === 'mail.sync'), before)).toEqual([{ command: 'mail.sync', payload: { account_id: 'second-account' } }])
+      await page.evaluate(() => { (window as any).startupProbe.replies['mail.sync'] = { ok: true, online: true } })
+      await second.getByRole('button', { name: 'Reintentar', exact: true }).click()
+      await expect(second).toContainText('Solicitud aceptada; finalización sin verificar')
+      await expect(second).toContainText('Problema de sincronización pendiente')
+      await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.evaluate(() => { document.documentElement.style.zoom = '' })
+      await info.attach('account-sync-health', { body: await page.screenshot({ path: info.outputPath('account-sync-health.png'), animations: 'disabled' }), contentType: 'image/png' })
+      await second.getByRole('button', { name: 'Ajustes de la cuenta', exact: true }).click()
+      const settings = page.getByRole('dialog', { name: 'Ajustes', exact: true })
+      await expect(settings.locator('[data-settings-section="account"]')).toContainText('second@example.test')
+      await page.keyboard.press('Escape')
+      expect(await page.evaluate(() => (window as any).startupProbe.calls.some((command: string) => ['mail.send', 'mail.saveDraft'].includes(command)))).toBe(false)
+      await page.reload()
+      await expect(health.getByRole('status')).toHaveText('Sincronización completa sin verificar')
+      expect(errors).toEqual([])
+    })
+  }
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
@@ -496,6 +549,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       const saves: Array<{ command: string; payload: Record<string, unknown> }> = []
       let graphPolls = 0
       const replies: Record<string, unknown> = {
+        ...(options.syncHealth ? { 'mail.sync': { ok: true, online: false } } : {}),
         'system.check': {
           platform: 'windows',
           mail_engine: 'meron_mail',
@@ -559,7 +613,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'),
       )
       Object.assign(window, {
-        startupProbe: { calls, unexpected, saves, requests },
+        startupProbe: { calls, unexpected, saves, requests, replies },
         go: {
           main: {
             App: {
@@ -717,6 +771,15 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           },
         },
       })
+      if (options.syncHealth) {
+        const listeners = new Map<string, Set<(detail: unknown) => void>>()
+        ;(window as any).startupProbe.emit = (name: string, detail: unknown) => listeners.get(name)?.forEach((listener) => listener(detail))
+        ;(window as any).runtime = { EventsOn: (name: string, callback: (detail: unknown) => void) => {
+          if (!listeners.has(name)) listeners.set(name, new Set())
+          listeners.get(name)!.add(callback)
+          return () => listeners.get(name)?.delete(callback)
+        } }
+      }
     },
     {
       accounts: withAccount
@@ -726,6 +789,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
               ...(options.graphAccount ? { auth_type: 'graph_oauth' as const, provider: 'outlook' } : {}),
               email: options.existingEmail ?? fixture.account.email,
               conversation_html: true,
+              ...(options.syncHealth ? { paused: false } : {}),
             },
             ...(options.navigation && (!options.graphAccount || options.mixedGraphAccount)
               ? [
@@ -735,6 +799,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
                     display_name: 'Second account',
                     email: 'second@example.test',
                     included_in_unified: false,
+                    ...(options.syncHealth ? { paused: false } : {}),
                   },
                 ]
               : []),

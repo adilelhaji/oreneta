@@ -59,6 +59,12 @@ excepciones por carpeta; #160 implementa el contrato y su
 los criterios completos de #33–#37 ni sustituyen aceptación nativa. Los binarios
 locales no se han actualizado con estas mejoras.
 
+Descubrimiento de ajustes: #163/#164 incorpora búsquedas EN/ES, destinos de cuenta,
+teclado y conservación de editores; [contrato y límites](design/settings-discovery.md).
+#165 añade [observaciones de sincronización por cuenta](design/account-sync-health.md)
+sin borrar incidencias al ocultar avisos ni certificar recuperación por respuestas
+parciales. #149/#150 conservan la aceptación completa y nativa pendiente.
+
 | Puerta | Resultado para el usuario | Trabajo principal | Condición de salida |
 |---|---|---|---|
 | **R0 — Confianza y evidencia** | Conservar datos y entender fallos antes de ampliar uso | #9/#12, #27–#29, contratos acotados #24/#25; medir #53, preparar #98/#114 y resolver alcance de recuperación | Reproducciones de riesgos resueltas o capacidad deshabilitada para el alcance; envío incierto sin reintento ciego; inventario de datos y decisión de recuperación; pruebas automatizadas verdes y límites explícitos |

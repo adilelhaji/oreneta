@@ -18,7 +18,7 @@ import {
 import { openMailtoCompose, openThreadTabById } from './states/compose'
 import { accounts$ } from './states/accounts'
 import { kanban$ } from './states/kanban'
-import { setSyncError, clearSyncErrorFor } from './states/connectivity'
+import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
 import { settings$, applyDocumentLanguage } from './states/settings'
 import { applyUpdateStatus, loadUpdateStatus, runUpdateCheck } from './states/update'
 import type { UpdateStatus } from './lib/update'
@@ -55,6 +55,8 @@ export function useAppEffects() {
   const language = useValue(settings$.language)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
   const autoUpdateCheck = useValue(settings$.autoUpdateCheck)
+
+  useEffect(() => { retainSyncAccounts(accounts.map((account) => account.id)) }, [accounts])
 
   // A held send must not be lost to the app closing. The window hides to the
   // tray rather than quitting, so this is the rarer path of an actual quit —
@@ -328,15 +330,14 @@ export function useAppEffects() {
     }
 
     // Mail sync/folder fetch failed (network down, bad creds, timeout) — surface a
-    // persistent banner that clears on the next good sync. Scoped to mail only;
+    // persistent account observation. Partial success cannot prove recovery. Mail only;
     // RSS/store errors use the generic `error` event and don't raise this banner.
     const offError = eventsOn('mail.syncError', (detail: { account?: string; message?: string }) => {
       setSyncError(detail?.account ?? null, detail?.message ?? 'sync failed')
     })
 
     const offNew = eventsOn('mail.newMessages', (detail: { account?: string; folder?: string; count?: number }) => {
-      // A successful fetch proves connectivity is back for this account.
-      clearSyncErrorFor(detail?.account ?? null)
+      recordMailActivity(detail?.account ?? null)
       // New mail arrived somewhere, so the tray should reflect unread immediately —
       // independent of which account/folder is selected. Clearing back to "read" is
       // handled by the reactive tray effect once the folder cache refreshes.
@@ -419,7 +420,7 @@ export function useAppEffects() {
     )
 
     const offSynced = eventsOn('mail.synced', (detail: { account?: string; folders?: boolean }) => {
-      clearSyncErrorFor(detail?.account ?? null)
+      recordMailActivity(detail?.account ?? null)
       // A message-only sync (no folders:true) still changes the true unread count,
       // and get_folders recomputes it live — so refresh the synced account's folder
       // cache regardless, keeping the side navigation's per-account/unified badges in
