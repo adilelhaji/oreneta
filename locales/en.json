@@ -1483,5 +1483,19 @@
   "wallpaper.uploadCustom": "Upload Custom",
   "wallpaper.uploadFailed": "Failed to upload background",
   "wallpaper.uploading": "Uploading...",
-  "commands.noSendableAccount": "No account available for sending"
+  "commands.noSendableAccount": "No account available for sending",
+  "connectivity.health.title": "Account sync",
+  "connectivity.health.attention": "{count} need attention",
+  "connectivity.health.unknown": "Complete sync status unknown",
+  "connectivity.health.session": "Observations from this session only. Partial mail activity does not verify all folders or services.",
+  "connectivity.health.auth": "Sign in again in account settings",
+  "connectivity.health.paused": "Mail checks paused",
+  "connectivity.health.failed": "Unresolved sync issue — recovery not verified",
+  "connectivity.health.partial": "Partial mail activity observed",
+  "connectivity.health.pending": "Requesting a mail check…",
+  "connectivity.health.requested": "Request accepted; completion not verified",
+  "connectivity.health.unconfirmed": "Request not confirmed. Check the connection and account settings.",
+  "connectivity.health.activity": "Mail activity observed at {time}",
+  "connectivity.health.settings": "Account settings",
+  "connectivity.health.unattributed": "An unresolved mail issue has no account information. Review account settings; recovery cannot be targeted."
 }

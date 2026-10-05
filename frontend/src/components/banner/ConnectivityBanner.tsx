@@ -1,87 +1,153 @@
-import { useState } from 'react'
-import { AlertCircle, RefreshCw, X } from 'lucide-react'
+import { useId, useState } from 'react'
+import { ChevronDown, RefreshCw, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { useValue } from '@legendapp/state/react'
-import { invoke } from '../../lib/bridge'
 import { accounts$ } from '../../states/accounts'
-import { connectivity$, clearSyncErrorFor, dismissSyncError } from '../../states/connectivity'
-import { syncMail } from '../../states/mail'
-import { showToast, ui$ } from '../../states/ui'
-import { connectivityAccountLabel, proxyEndpointFromSyncError } from './connectivityBannerHelpers'
+import { connectivity$, dismissSyncError, requestAccountSync, type SyncObservation } from '../../states/connectivity'
+import { focusSettingsSection } from '../../states/ui'
+import { connectivityAccountLabel } from './connectivityBannerHelpers'
+import { Button } from '../button/Button'
+import { IconButton } from '../button/IconButton'
 
-// Thin banner shown across the top when the last sync failed. State is driven by
-// sidecar `error` / `mail.synced` events wired up in useAppEffects; this just
-// reflects connectivity$. Renders nothing while sync is healthy.
 export function ConnectivityBanner() {
   const { t } = useTranslation()
-  const error = useValue(connectivity$.error)
-  const accountId = useValue(connectivity$.account)
+  const observations = useValue(connectivity$.byAccount)
+  const unattributed = useValue(connectivity$.unattributed)
   const accounts = useValue(accounts$)
-  const [retrying, setRetrying] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const id = useId()
+  const entries = accounts.map((account) => ({
+    account,
+    observation: Object.hasOwn(observations, account.id) ? observations[account.id] : undefined,
+  }))
+  const attention =
+    entries.filter(
+      ({ account, observation }) =>
+        account.needs_reconnect || observation?.failure || observation?.request === 'unconfirmed',
+    ).length + (unattributed ? 1 : 0)
+  const prominent =
+    entries.some(
+      ({ account, observation }) => account.needs_reconnect || (observation?.failure && !observation.dismissed),
+    ) ||
+    (unattributed && !unattributed.dismissed)
+  if (!accounts.length && !unattributed) return null
 
-  if (!error) return null
-
-  const accountLabel = connectivityAccountLabel(accountId, accounts)
-  const proxyEndpoint = proxyEndpointFromSyncError(error)
-
-  const retry = async () => {
-    if (retrying) return
-    setRetrying(true)
-    try {
-      if (accountId) {
-        await invoke('mail.sync', { account_id: accountId })
-        clearSyncErrorFor(accountId)
-        showToast(t('connectivity.syncedAccount', { account: accountLabel ?? accountId }))
-      } else {
-        await syncMail()
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : t('connectivity.retryFailed'), 'error')
-    } finally {
-      setRetrying(false)
-    }
-  }
+  const requestText = (observation?: SyncObservation) =>
+    observation && observation.request !== 'idle' ? t(`connectivity.health.${observation.request}`) : null
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-2 border-b border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
-      <AlertCircle size={13} className="shrink-0" />
-      <span className="min-w-0 truncate">
-        {proxyEndpoint && accountLabel
-          ? t('connectivity.proxyFailedAccount', { proxy: proxyEndpoint, account: accountLabel })
-          : accountLabel
-            ? t('connectivity.syncFailedAccount', { account: accountLabel })
-            : t('connectivity.syncFailed')}
-      </span>
-      {proxyEndpoint && (
-        <button
-          type="button"
-          onClick={() => {
-            ui$.accountSettingsId.set('')
-            ui$.settingsOpen.set(true)
-          }}
-          className="inline-flex h-6 shrink-0 items-center rounded-control-sm px-2 font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
+    <section
+      aria-label={t('connectivity.health.title')}
+      className={`shrink-0 border-b border-border text-ui ${prominent ? 'bg-danger-soft' : 'bg-raised'}`}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          rightIcon={ChevronDown}
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => setExpanded(!expanded)}
         >
-          {t('settings.network.proxy')}
-        </button>
+          {t('connectivity.health.title')}
+        </Button>
+        <span
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="min-w-0 text-caption text-secondary wrap-anywhere"
+        >
+          {attention ? t('connectivity.health.attention', { count: attention }) : t('connectivity.health.unknown')}
+        </span>
+      </div>
+      {expanded && (
+        <div id={id} className="max-h-[40vh] overflow-auto border-t border-border px-3 py-2">
+          <p className="mb-2 text-caption text-secondary">{t('connectivity.health.session')}</p>
+          <ul className="space-y-2">
+            {entries.map(({ account, observation }) => {
+              const label = connectivityAccountLabel(account.id, accounts) ?? account.id
+              const state = account.needs_reconnect
+                ? 'auth'
+                : account.paused
+                  ? 'paused'
+                  : observation?.failure
+                    ? 'failed'
+                    : observation?.lastActivityAt
+                      ? 'partial'
+                      : 'unknown'
+              return (
+                <li
+                  key={account.id}
+                  aria-label={label}
+                  tabIndex={-1}
+                  className="flex flex-wrap items-center gap-2 rounded-control border border-border bg-chats p-3"
+                >
+                  <div className="min-w-0 flex-1 basis-52 wrap-anywhere">
+                    <p className="font-semibold">{label}</p>
+                    <p className="text-caption text-secondary">{t(`connectivity.health.${state}`)}</p>
+                    {observation?.failure && state !== 'failed' && (
+                      <p className="text-caption text-danger">{t('connectivity.health.failed')}</p>
+                    )}
+                    {requestText(observation) && (
+                      <p role="status" className="text-caption text-secondary">
+                        {requestText(observation)}
+                      </p>
+                    )}
+                    {observation?.lastActivityAt && (
+                      <p className="text-caption text-secondary">
+                        {t('connectivity.health.activity', {
+                          time: new Date(observation.lastActivityAt).toLocaleTimeString(),
+                        })}
+                      </p>
+                    )}
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={() => focusSettingsSection('account', account.id)}>
+                    {t('connectivity.health.settings')}
+                  </Button>
+                  {!account.paused && !account.needs_reconnect && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={RefreshCw}
+                      disabled={observation?.request === 'pending'}
+                      onClick={() => void requestAccountSync(account.id)}
+                    >
+                      {t('connectivity.retry')}
+                    </Button>
+                  )}
+                  {observation?.failure && !observation.dismissed && (
+                    <IconButton
+                      size="sm"
+                      icon={X}
+                      label={t('connectivity.dismiss')}
+                      onClick={(event) => {
+                        event.currentTarget.closest('li')?.focus()
+                        dismissSyncError(account.id)
+                      }}
+                    />
+                  )}
+                </li>
+              )
+            })}
+            {unattributed && (
+              <li tabIndex={-1} className="flex items-center gap-2 rounded-control border border-border bg-chats p-3">
+                <p className="min-w-0 flex-1 text-caption wrap-anywhere">{t('connectivity.health.unattributed')}</p>
+                {!unattributed.dismissed && (
+                  <IconButton
+                    size="sm"
+                    icon={X}
+                    label={t('connectivity.dismiss')}
+                    onClick={(event) => {
+                      event.currentTarget.closest('li')?.focus()
+                      dismissSyncError(null)
+                    }}
+                  />
+                )}
+              </li>
+            )}
+          </ul>
+        </div>
       )}
-      <button
-        type="button"
-        onClick={retry}
-        disabled={retrying}
-        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-control-sm px-2 font-semibold text-rose-700 hover:bg-rose-500/10 disabled:opacity-60 dark:text-rose-300"
-      >
-        <RefreshCw size={12} className={retrying ? 'animate-spin' : ''} />
-        <span>{t('connectivity.retry')}</span>
-      </button>
-      <button
-        type="button"
-        onClick={dismissSyncError}
-        title={t('connectivity.dismiss')}
-        aria-label={t('connectivity.dismiss')}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
-      >
-        <X size={13} />
-      </button>
-    </div>
+    </section>
   )
 }

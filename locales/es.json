@@ -1483,5 +1483,19 @@
   "wallpaper.uploadCustom": "Subir personalizado",
   "wallpaper.uploadFailed": "Error al subir el fondo",
   "wallpaper.uploading": "Subiendo...",
-  "commands.noSendableAccount": "Ninguna cuenta disponible para enviar"
+  "commands.noSendableAccount": "Ninguna cuenta disponible para enviar",
+  "connectivity.health.title": "Sincronización de cuentas",
+  "connectivity.health.attention": "{count} requieren atención",
+  "connectivity.health.unknown": "Sincronización completa sin verificar",
+  "connectivity.health.session": "Observaciones solo de esta sesión. La actividad parcial del correo no verifica todas las carpetas ni servicios.",
+  "connectivity.health.auth": "Vuelve a iniciar sesión desde los ajustes de la cuenta",
+  "connectivity.health.paused": "Comprobación del correo pausada",
+  "connectivity.health.failed": "Problema de sincronización pendiente; recuperación sin verificar",
+  "connectivity.health.partial": "Se ha observado actividad parcial del correo",
+  "connectivity.health.pending": "Solicitando una comprobación del correo…",
+  "connectivity.health.requested": "Solicitud aceptada; finalización sin verificar",
+  "connectivity.health.unconfirmed": "Solicitud sin confirmar. Revisa la conexión y los ajustes de la cuenta.",
+  "connectivity.health.activity": "Actividad del correo observada a las {time}",
+  "connectivity.health.settings": "Ajustes de la cuenta",
+  "connectivity.health.unattributed": "Hay un problema de correo pendiente sin información de cuenta. Revisa los ajustes; no es posible dirigir la recuperación."
 }
