@@ -39,9 +39,9 @@ export function Switch({
 
 // A settings section: compact heading + one card whose rows are separated by
 // thin dividers. Rows inside should be SettingRow-based.
-export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+export function SettingsGroup({ title, children, section }: { title: string; children: ReactNode; section?: string }) {
   return (
-    <section>
+    <section data-settings-section={section} tabIndex={section ? -1 : undefined} aria-label={section ? title : undefined}>
       <h3 className="mb-2 px-1 text-xs font-semibold text-secondary">{title}</h3>
       <div className="rounded-panel bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
         {children}

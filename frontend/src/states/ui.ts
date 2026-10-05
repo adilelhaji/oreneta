@@ -173,6 +173,7 @@ export const ui$ = observable({
   changelogOpen: false,
   // Account id whose per-account settings panel is open ("" = closed).
   accountSettingsId: '',
+  settingsFocus: { section: '', request: 0 },
   addFeedAccount: '',
   // The record of what the local rules did. A mailbox that changes by itself
   // needs somewhere the reader can find out why.
@@ -217,14 +218,30 @@ let pendingConfirmResolve: ((confirmed: boolean) => void) | null = null
 
 // Open the command palette, resetting the query and selection so it always
 // starts fresh at the top.
+let paletteOpener: Element | null = null
 export function openCommandPalette() {
+  if (!ui$.paletteOpen.peek()) paletteOpener = document.activeElement
   ui$.paletteQuery.set('')
   ui$.paletteIndex.set(0)
   ui$.paletteOpen.set(true)
 }
 
 export function closeCommandPalette() {
+  // Return focus before the selected command opens another surface, allowing
+  // that surface to retain the original opener rather than a disappearing input.
+  if (document.activeElement?.closest('[data-command-palette]') &&
+      paletteOpener instanceof HTMLElement && paletteOpener.isConnected &&
+      !paletteOpener.matches(':disabled') && !paletteOpener.closest('[hidden], [inert], [aria-hidden="true"]')) {
+    paletteOpener.focus({ preventScroll: true })
+  }
+  paletteOpener = null
   ui$.paletteOpen.set(false)
+}
+
+export function focusSettingsSection(section: string, accountId = '') {
+  ui$.accountSettingsId.set(accountId)
+  ui$.settingsFocus.set({ section, request: ui$.settingsFocus.peek().request + 1 })
+  ui$.settingsOpen.set(true)
 }
 
 // Ask the ThreadList to focus (and select) its search box.

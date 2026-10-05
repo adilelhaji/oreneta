@@ -102,6 +102,8 @@ import { AssistantSettingsSection } from './AssistantSettingsSection'
 import { BoardPanel } from './BoardSettingsPanel'
 import { pickImageFile } from '../../lib/nativeFilePicker'
 import { invoke } from '../../lib/bridge'
+import { useDialogFocus } from '../../lib/useDialogFocus'
+import { SettingsSearch } from './SettingsSearch'
 
 // The single non-account section. Account ids never collide with "general", so
 // one `selected` string can address either.
@@ -167,6 +169,16 @@ function accountMeta(account: Account, t: ReturnType<typeof useTranslation>['t']
 
 export function SettingsDialog() {
   const { t } = useTranslation()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogFocus(dialogRef)
+  const settingsFocus = useValue(ui$.settingsFocus)
+  useEffect(() => {
+    if (!settingsFocus.section) return
+    const target = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('[data-settings-section]') ?? [])
+      .find((element) => element.dataset.settingsSection === settingsFocus.section)
+    target?.scrollIntoView?.({ block: 'start' })
+    target?.focus({ preventScroll: true })
+  }, [settingsFocus])
   const accounts = useValue(accounts$)
   const boards = useValue(settings$.kanbanBoards)
   const calendars = useValue(calendar$.calendars)
@@ -196,6 +208,7 @@ export function SettingsDialog() {
   const feedAccounts = accounts.filter(isRssAccount)
 
   const onClose = () => {
+    ui$.settingsFocus.section.set('')
     ui$.accountSettingsId.set('')
     ui$.settingsOpen.set(false)
   }
@@ -224,7 +237,7 @@ export function SettingsDialog() {
       onMouseDown={onBackdropMouseDown}
       className="fixed inset-0 flex items-center justify-center bg-black/35 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in"
     >
-      <div className="bg-chats border border-border/80 text-primary max-w-4xl w-full h-[620px] max-h-[90vh] rounded-dialog shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('settings.label')} tabIndex={-1} className="bg-chats border border-border/80 text-primary max-w-4xl w-full h-[620px] max-h-[90vh] rounded-dialog shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4.5 border-b border-border/60 shrink-0 bg-chats/95">
           <div className="min-w-0">
@@ -233,10 +246,11 @@ export function SettingsDialog() {
           <IconButton icon={X} iconSize={16} label={t('buttons.close')} size="sm" onClick={onClose} />
         </div>
 
+        <SettingsSearch />
         {/* Body: nav rail + content */}
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col min-[700px]:flex-row flex-1 min-h-0">
           {/* Nav rail */}
-          <nav className="w-56 shrink-0 border-r border-border/60 p-3.5 flex flex-col gap-1 bg-raised/70 overflow-y-auto">
+          <nav aria-label={t('settingsSearch.navigation')} className="w-full max-h-28 min-[700px]:max-h-none min-[700px]:w-56 shrink-0 border-b min-[700px]:border-b-0 min-[700px]:border-r border-border/60 p-3.5 flex flex-col gap-1 bg-raised/70 overflow-y-auto">
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <NavItem key={id} active={activeKey === id} onClick={selectGeneral}>
                 <Icon size={15} className="shrink-0" />
@@ -267,7 +281,7 @@ export function SettingsDialog() {
           {/* Content */}
           <div className="flex-1 min-w-0 overflow-y-auto bg-chats p-6">
             {selectedAccount ? (
-              <AccountPanel account={selectedAccount} />
+              <div data-settings-section="account" tabIndex={-1} aria-label={selectedAccount.display_name || selectedAccount.email}><AccountPanel account={selectedAccount} /></div>
             ) : selectedBoard ? (
               <BoardPanel board={selectedBoard} />
             ) : selectedCalendar ? (
@@ -781,7 +795,7 @@ function GeneralSection() {
 
   return (
     <div className="flex flex-col gap-4">
-      <SettingsGroup title={t('settings.pages.appearance')}>
+      <SettingsGroup section="appearance" title={t('settings.pages.appearance')}>
         <ThemeSettingsSection />
         <SegmentedRow
           icon={<MessagesSquare size={15} />}
@@ -807,11 +821,11 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
-      <SettingsGroup title={t('settings.sections.typography')}>
+      <SettingsGroup section="typography" title={t('settings.sections.typography')}>
         <FontSettingsSection />
       </SettingsGroup>
 
-      <SettingsGroup title={t('settings.sections.reading')}>
+      <SettingsGroup section="reading" title={t('settings.sections.reading')}>
         <SegmentedRow
           icon={<Table size={15} />}
           title={t('settings.reading.listView')}
@@ -896,7 +910,7 @@ function GeneralSection() {
       <ContactSourcesSettingsSection />
       <PgpSettingsSection />
       <SmimeSettingsSection />
-      <AssistantSettingsSection />
+      <div data-settings-section="privacy" tabIndex={-1} aria-label={t('settings.assistant.title')}><AssistantSettingsSection /></div>
 
       <SettingsGroup title={t('settings.sections.sideNav')}>
         <ToggleRow
@@ -966,7 +980,7 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
-      <SignatureSettingsSection />
+      <div data-settings-section="signature" tabIndex={-1} aria-label={t('settings.sections.signature')}><SignatureSettingsSection /></div>
 
       <SettingsGroup title={t('shortcuts.title')}>
         <SettingRow
@@ -984,8 +998,8 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
-      <UpdatesGroup />
-      <BackupGroup />
+      <div data-settings-section="updates" tabIndex={-1} aria-label={t('settings.sections.updates')}><UpdatesGroup /></div>
+      <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}><BackupGroup /></div>
       <StorageGroup />
       <LogsGroup />
     </div>
@@ -1453,7 +1467,7 @@ function AccountPanel({ account }: { account: Account }) {
       {!isRSS && <AccountCalendarsGroup account={account} />}
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}
-      {!isRSS && <AccountSignatureCard account={account} />}
+      {!isRSS && <div data-settings-section="accountSignature" tabIndex={-1} aria-label={t('settings.sections.signature')}><AccountSignatureCard account={account} /></div>}
       {!isRSS && <OofSettingsCard account={account} />}
       {!isRSS && (account.provider === 'exchange' || account.ews_url) && !account.delegate_account_id && (
         <SharedMailboxesCard account={account} />
