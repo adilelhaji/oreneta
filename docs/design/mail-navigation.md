@@ -20,8 +20,9 @@ First adoption of the [mail reference](mail-reference.md), authorized by the
   existing cache; the panel adds no provider calls or alternative loading logic.
 - Calendar, contacts, tasks and Kanban retain their existing full-width views.
 
-This slice does not close #34: row density/selection feedback, 200% zoom and the
-known exact-600px reader boundary still require their own acceptance evidence.
+This slice does not close #34: row density/selection feedback and native mailbox
+behavior at 200% zoom still require their own acceptance evidence. The 600px reader
+boundary was corrected by #85; see [mail boundaries](mail-boundaries.md).
 No theme or reader-default migration is included. Tests cover the real production
 entry with synthetic bridge replies; they do not certify provider connectivity.
 

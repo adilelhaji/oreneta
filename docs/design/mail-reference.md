@@ -29,6 +29,10 @@ network transport, credentials, account bootstrap or persistent preferences.
   traditional reader and compact list; migrate only absent preferences, never
   overwrite saved chat/card/theme selections (#33–#35).
 
+The <=600px reference above describes this historical synthetic fixture. Current
+production uses <769 CSS pixels for one-pane mail; see [mail boundaries](mail-boundaries.md).
+Use that production contract for new acceptance, not the old fixture cutoff.
+
 ## Delivery boundaries
 
 Reusable reference responsibilities: workspace navigation, message list/table,

@@ -22,6 +22,8 @@ Meron does, plus:
 
 ## Delivery roadmap
 
+The [competitive delivery plan](docs/competitive-delivery-plan.md) and
+[backlog audit](docs/competitive-backlog-audit.md) record the 2026-10-05 execution review.
 The [eM Client parity plan](docs/emclient-parity-plan.md) tracks the frozen
 reference, sprint backlog, architecture gates and acceptance evidence. It is a
 delivery target, not a claim that Oreneta has already reached parity.
