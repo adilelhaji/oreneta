@@ -6,6 +6,14 @@ Decisión: conservar las 65, reabrir #21 como programa y añadir diez slices hij
 
 [Plan y puertas de entrega](competitive-delivery-plan.md). S01–S13 siguen como agrupación funcional.
 
+Actualización posterior al inventario (2026-10-05): #146 quedó resuelta por la
+aprobación humana de la copia completa local cifrada, registrada en
+[ADR-0010](adr/0010-full-profile-local-recovery.md). #169 entrega el almacén de
+borradores; #170–#173 siguen con integración del editor, captura, restauración y
+programación. Las filas siguientes conservan el diagnóstico del código auditado;
+sus referencias a una decisión de recuperación pendiente quedan sustituidas por
+esta actualización. #113 continúa abierta sin afirmar aceptación completa.
+
 | Issue | Inicio | Prioridad | Disposición y trabajo restante | Nuevas hijas |
 |---|---|---|---|---|
 | [#9](https://github.com/adilelhaji/oreneta/issues/9) — [Parity S09] S/MIME verification: check certificate validity period and CMS contentType attribute | R0 | P0: riesgo/decisión | Mantener: el resultado y la aceptación ya tienen cabida; ejecutar por capacidad/proveedor sin abrir un epic equivalente. | — |

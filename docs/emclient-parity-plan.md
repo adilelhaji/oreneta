@@ -188,7 +188,7 @@ S01 does not close the entire design epic or claim functional parity.
 | notes | Standalone note storage, identity and note-capable provider semantics |
 | chat-design → chat | Native adapter boundary, history/presence/files, scopes and maintenance |
 | #51, #52, cloud, meetings | External destinations, consent, credentials, retention/cost and supported APIs; #51 provider/context boundary and #52 result-review contract accepted in [ADR-0006](adr/0006-assistant-provider-context-privacy.md) and [ADR-0007](adr/0007-assistant-results-review-and-cancellation.md) on 2026-09-10 |
-| migration / backup | ADR-0008 currently permits configuration-only backups. Full-profile #113 requires the explicit recovery decision in the competitive plan before any format/snapshot expansion. |
+| migration / backup | Full local encrypted profile recovery approved on 2026-10-05 in [ADR-0010](adr/0010-full-profile-local-recovery.md), extending only ADR-0008's configuration-only limit. Draft storage #169 is delivered; editor integration #170, capture #171, isolated restore #172 and scheduling #173 remain. #113 stays open; approval is not full-backup or native recovery acceptance. |
 | beta-delta / mobile-scope | New sync service, MCP/Matrix or new platform architecture |
 
 Discovery can produce options and tests, not silently choose an architecture.

@@ -135,7 +135,11 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
 
     const doc = iframe.contentDocument
     const win = iframe.contentWindow
-    if (!doc || !win) return
+    // A srcDoc document can exist before its root is parsed, especially when
+    // a collapsed message remounts. Leave the previous lifecycle intact and
+    // let the native load event retry once the new document is ready.
+    const root = doc?.documentElement
+    if (!doc || !win || !root) return
 
     docRef.current = doc
     winRef.current = win
@@ -155,8 +159,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       activeScrollListenerRef.current = null
     }
 
-    if (!doc.documentElement.dataset.orenetaFrameLinkWired) {
-      doc.documentElement.dataset.orenetaFrameLinkWired = '1'
+    if (!root.dataset.orenetaFrameLinkWired) {
+      root.dataset.orenetaFrameLinkWired = '1'
       const handleClick = (event: MouseEvent) => {
         if (event.button === 2) return
         if (onFrameClickRef.current?.(event, doc)) return
@@ -169,8 +173,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       doc.addEventListener('auxclick', handleClick, true)
     }
 
-    if (!doc.documentElement.dataset.orenetaFrameLinkHoverWired) {
-      doc.documentElement.dataset.orenetaFrameLinkHoverWired = '1'
+    if (!root.dataset.orenetaFrameLinkHoverWired) {
+      root.dataset.orenetaFrameLinkHoverWired = '1'
       const handleLinkEnter = (event: MouseEvent | FocusEvent) => {
         const target = event.target as Element | null
         const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null
@@ -190,8 +194,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       doc.addEventListener('focusout', handleLinkLeave, true)
     }
 
-    if (!doc.documentElement.dataset.orenetaFrameContextWired) {
-      doc.documentElement.dataset.orenetaFrameContextWired = '1'
+    if (!root.dataset.orenetaFrameContextWired) {
+      root.dataset.orenetaFrameContextWired = '1'
       doc.addEventListener('contextmenu', (event) => {
         if (!forwardContextMenuRef.current) return
         if (hasFrameSelection(doc)) return
@@ -232,8 +236,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       })
     }
 
-    if (!doc.documentElement.dataset.orenetaFrameKeyWired) {
-      doc.documentElement.dataset.orenetaFrameKeyWired = '1'
+    if (!root.dataset.orenetaFrameKeyWired) {
+      root.dataset.orenetaFrameKeyWired = '1'
       doc.addEventListener('keydown', (event) => {
         // Forward the chords the app can act on: ⌘/Ctrl (or Alt) shortcuts such
         // as ⌘/Ctrl+F, which the parent's keydown listener never sees while
@@ -263,8 +267,8 @@ export const HtmlFrame = forwardRef(function HtmlFrame(
       activeScrollListenerRef.current = { win, listener }
     }
 
-    if (!doc.documentElement.dataset.orenetaFrameMediaUnloadWired) {
-      doc.documentElement.dataset.orenetaFrameMediaUnloadWired = '1'
+    if (!root.dataset.orenetaFrameMediaUnloadWired) {
+      root.dataset.orenetaFrameMediaUnloadWired = '1'
       win.addEventListener('unload', () => {
         stopFrameMedia(doc)
       })
