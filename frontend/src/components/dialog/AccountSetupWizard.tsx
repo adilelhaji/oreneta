@@ -84,7 +84,7 @@ export function AccountSetupWizard({
               {index + 1}
             </span>
             {label}
-            {index === 0 && <ArrowRight size={14} aria-hidden="true" />}
+            {index === 0 && <ArrowRight size={14} aria-hidden="true" strokeWidth={1.75} />}
           </li>
         ))}
       </ol>
@@ -127,9 +127,9 @@ export function AccountSetupWizard({
                 {t('accounts.wizard.invalidEmail')}
               </p>
             )}
-            <button type="submit" className={`${actionClass} w-full bg-accent text-white hover:bg-accent-hover`}>
+            <button type="submit" className={`${actionClass} w-full bg-accent text-on-accent hover:bg-accent-hover`}>
               {t('accounts.wizard.continue')}
-              <ArrowRight size={16} aria-hidden="true" />
+              <ArrowRight size={16} aria-hidden="true" strokeWidth={1.75} />
             </button>
           </form>
           <div className="border-t border-border pt-4">
@@ -166,7 +166,7 @@ export function AccountSetupWizard({
             onClick={() => connect('custom', address, true)}
             className={`${actionClass} border border-border text-secondary hover:bg-hover`}
           >
-            <Settings2 size={16} aria-hidden="true" />
+            <Settings2 size={16} aria-hidden="true" strokeWidth={1.75} />
             {t('accounts.wizard.manual')}
           </button>
         </div>
@@ -217,7 +217,7 @@ export function AccountSetupWizard({
               onClick={back}
               className={`${actionClass} text-secondary hover:bg-hover`}
             >
-              <ArrowLeft size={16} aria-hidden="true" />
+              <ArrowLeft size={16} aria-hidden="true" strokeWidth={1.75} />
               {t('buttons.back')}
             </button>
             {!manual && (
@@ -235,7 +235,7 @@ export function AccountSetupWizard({
         </div>
       )}
       <p className="flex items-start gap-2 border-t border-border pt-4 text-caption leading-relaxed text-secondary">
-        <ShieldCheck size={16} className="shrink-0 mt-0.5" aria-hidden="true" />
+        <ShieldCheck size={16} className="shrink-0 mt-0.5" aria-hidden="true" strokeWidth={1.75} />
         {t('accounts.wizard.securityHint')}
       </p>
     </>

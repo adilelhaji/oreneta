@@ -85,7 +85,7 @@ export function RulesSettingsSection() {
               onClick={() => void tryRules([editing])}
               className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <FlaskConical size={12} />
+              <FlaskConical size={14} strokeWidth={1.75} />
               {trying ? t('rules.trying') : t('rules.try')}
             </button>
             <button
@@ -99,7 +99,7 @@ export function RulesSettingsSection() {
                 setPreview(null)
                 void persist(next)
               }}
-              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('buttons.save')}
             </button>
@@ -161,7 +161,7 @@ export function RulesSettingsSection() {
                   onClick={() => void persist(reorderRules(stored, index, index - 1))}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  <ChevronUp size={14} />
+                  <ChevronUp size={14} strokeWidth={1.75} />
                 </button>
                 <button
                   type="button"
@@ -171,7 +171,7 @@ export function RulesSettingsSection() {
                   onClick={() => void persist(reorderRules(stored, index, index + 1))}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  <ChevronDown size={14} />
+                  <ChevronDown size={14} strokeWidth={1.75} />
                 </button>
                 <button
                   type="button"
@@ -187,9 +187,9 @@ export function RulesSettingsSection() {
                       if (confirmed) void persist(stored.filter((item) => item.id !== rule.id))
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} strokeWidth={1.75} />
                 </button>
               </li>
             ))}
@@ -203,9 +203,9 @@ export function RulesSettingsSection() {
               setPreview(null)
               setEditing(newRule())
             }}
-            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+            className="flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer"
           >
-            <Plus size={12} />
+            <Plus size={14} strokeWidth={1.75} />
             {t('rules.add')}
           </button>
           {stored.length > 0 && (
@@ -215,7 +215,7 @@ export function RulesSettingsSection() {
               onClick={() => void tryRules(stored)}
               className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
             >
-              <FlaskConical size={12} />
+              <FlaskConical size={14} strokeWidth={1.75} />
               {trying ? t('rules.trying') : t('rules.try')}
             </button>
           )}
@@ -224,7 +224,7 @@ export function RulesSettingsSection() {
             onClick={() => ui$.ruleLogOpen.set(true)}
             className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer"
           >
-            <ScrollText size={12} />
+            <ScrollText size={14} strokeWidth={1.75} />
             {t('rules.log')}
           </button>
         </div>

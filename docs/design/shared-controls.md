@@ -32,3 +32,7 @@ The broader #33/#37 acceptance stays open: remaining screen-specific colors and
 icons, modal focus containment/restoration, native zoom and assistive-technology
 checks still need their own evidence. No executable or installer is replaced by
 this source change.
+
+[#177](screen-consistency.md) extends the tokens, icon scale and restrained effects
+to application call sites and improves the narrow secondary screens. Native and
+complete workflow acceptance remains separate.

@@ -54,14 +54,14 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             type="button"
             disabled={!renamed}
             onClick={() => void run(renameCalendar(calendar.accountId, calendar.id, name.trim()))}
-            className="mb-0.5 shrink-0 rounded-control bg-accent px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            className="mb-0.5 shrink-0 rounded-control bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
           >
             {t('calendar.rename', { defaultValue: 'Rename' })}
           </button>
         </div>
 
         <SettingRow
-          icon={<CalendarDays size={15} style={{ color }} />}
+          icon={<CalendarDays size={16} style={{ color }} strokeWidth={1.75} />}
           title={t('calendar.color', { defaultValue: 'Colour' })}
           hint={t('calendar.colorHint', {
             defaultValue: 'Shown in this copy of Oreneta only.',
@@ -74,7 +74,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
                   type="button"
                   aria-label={swatch}
                   onClick={() => void run(setCalendarColor(calendar.accountId, calendar.id, swatch))}
-                  className={`h-5 w-5 rounded-full transition-transform hover:scale-110 cursor-pointer ${
+                  className={`h-5 w-5 rounded-full transition-transform  cursor-pointer ${
                     swatch === color ? 'ring-2 ring-offset-2 ring-offset-raised ring-primary/40' : ''
                   }`}
                   style={{ backgroundColor: swatch }}
@@ -90,9 +90,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             defaultValue: 'A hidden calendar is not fetched at all.',
           })}
           checked={calendar.enabled}
-          onChange={() =>
-            void run(setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled))
-          }
+          onChange={() => void run(setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled))}
         />
       </SettingsGroup>
 
@@ -101,8 +99,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
           {calendar.is_default ? (
             <p className="text-caption text-secondary">
               {t('calendar.cannotDeleteDefault', {
-                defaultValue:
-                  "The account's main calendar cannot be removed — the server does not allow it.",
+                defaultValue: "The account's main calendar cannot be removed — the server does not allow it.",
               })}
             </p>
           ) : onlyOne ? (
@@ -117,8 +114,7 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
                   screen, and its cost is the events, not the calendar. */}
               <p className="text-caption text-primary">
                 {t('calendar.deleteWarning', {
-                  defaultValue:
-                    'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
+                  defaultValue: 'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
                   name: calendar.name,
                 })}
               </p>
@@ -126,9 +122,9 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
                 <button
                   type="button"
                   onClick={() => void run(deleteCalendar(calendar.accountId, calendar.id))}
-                  className="inline-flex items-center gap-1.5 rounded-control bg-rose-500 px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-control bg-danger-soft px-3 py-2 text-xs font-semibold text-danger transition-opacity hover:opacity-90 cursor-pointer"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={14} strokeWidth={1.75} />
                   {t('calendar.deleteConfirm', { defaultValue: 'Remove it' })}
                 </button>
                 <button
@@ -144,16 +140,16 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} strokeWidth={1.75} />
               {t('calendar.deleteCalendar', { defaultValue: 'Remove calendar' })}
             </button>
           )}
         </div>
       </SettingsGroup>
 
-      {error && <p className="px-1 text-caption text-rose-500">{error}</p>}
+      {error && <p className="px-1 text-caption text-danger">{error}</p>}
     </div>
   )
 }

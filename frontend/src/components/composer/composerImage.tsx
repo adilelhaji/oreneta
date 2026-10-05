@@ -46,7 +46,7 @@ function ImageNodeView({ node, updateAttributes, selected }: any) {
     <NodeViewWrapper className="relative inline-block my-2 max-w-full">
       <div
         className={`relative inline-block rounded-control-sm group overflow-hidden ${
-          selected ? 'ring-2 ring-accent shadow-lg' : ''
+          selected ? 'ring-2 ring-accent shadow-raised' : ''
         }`}
       >
         <img
@@ -61,28 +61,28 @@ function ImageNodeView({ node, updateAttributes, selected }: any) {
         {/* Resize Handles (4 Corners) */}
         <div
           onMouseDown={(e) => handleMouseDown(e, 'tl')}
-          className={`absolute top-1.5 left-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nwse-resize shadow-md transition-all ${
+          className={`absolute top-1.5 left-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nwse-resize shadow-raised transition-all ${
             resizing ? 'scale-110 bg-accent/90' : 'opacity-0 group-hover:opacity-100'
           }`}
           title={t('composer.imageResize.topLeft')}
         />
         <div
           onMouseDown={(e) => handleMouseDown(e, 'tr')}
-          className={`absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nesw-resize shadow-md transition-all ${
+          className={`absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nesw-resize shadow-raised transition-all ${
             resizing ? 'scale-110 bg-accent/90' : 'opacity-0 group-hover:opacity-100'
           }`}
           title={t('composer.imageResize.topRight')}
         />
         <div
           onMouseDown={(e) => handleMouseDown(e, 'bl')}
-          className={`absolute bottom-1.5 left-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nesw-resize shadow-md transition-all ${
+          className={`absolute bottom-1.5 left-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nesw-resize shadow-raised transition-all ${
             resizing ? 'scale-110 bg-accent/90' : 'opacity-0 group-hover:opacity-100'
           }`}
           title={t('composer.imageResize.bottomLeft')}
         />
         <div
           onMouseDown={(e) => handleMouseDown(e, 'br')}
-          className={`absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nwse-resize shadow-md transition-all ${
+          className={`absolute bottom-1.5 right-1.5 h-2.5 w-2.5 rounded bg-accent border border-white cursor-nwse-resize shadow-raised transition-all ${
             resizing ? 'scale-110 bg-accent/90' : 'opacity-0 group-hover:opacity-100'
           }`}
           title={t('composer.imageResize.bottomRight')}

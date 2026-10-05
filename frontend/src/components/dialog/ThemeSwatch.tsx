@@ -86,7 +86,7 @@ export function ThemeSwatch({
         >
           {theme.name}
         </span>
-        {selected && <Check size={large ? 12 : 11} className="shrink-0 text-accent" />}
+        {selected && <Check size={large ? 12 : 11} className="shrink-0 text-accent" strokeWidth={1.75} />}
       </div>
       {(onEdit || onDelete) && (
         <div className="absolute right-1 top-1 hidden gap-0.5 group-hover:flex">

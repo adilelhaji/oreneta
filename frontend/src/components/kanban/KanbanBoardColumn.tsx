@@ -230,7 +230,7 @@ function KanbanColumnContent({
       offset={4}
       onClose={() => setHeaderMenu(null)}
       overlay
-      className="fixed z-50 min-w-[176px] rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
+      className="fixed z-50 min-w-[176px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in text-primary"
       onContextMenu={(event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -293,7 +293,7 @@ function KanbanColumnContent({
     >
       {wrapper.isOver && wrapper.dropRejection && (
         <div className="pointer-events-none absolute inset-x-3 top-1/2 z-20 -translate-y-1/2">
-          <p className="rounded-control border border-red-200 bg-red-50 p-3 text-center text-caption font-medium leading-relaxed text-red-600 shadow-sm dark:border-red-900/50 dark:bg-red-950/90 dark:text-red-400">
+          <p className="rounded-control border border-danger/30 bg-danger-soft p-3 text-center text-caption font-medium leading-relaxed text-danger shadow-sm">
             {wrapper.dropRejection}
           </p>
         </div>
@@ -320,7 +320,7 @@ function KanbanColumnContent({
               email={isRss ? undefined : columnAccount?.email}
               src={columnAccount?.avatar_url}
               size={26}
-              fallback={isRss ? <Rss size={13} /> : undefined}
+              fallback={isRss ? <Rss size={14} strokeWidth={1.75} /> : undefined}
               className={isPaused ? 'grayscale opacity-40' : undefined}
             />
             {isPaused && (
@@ -328,7 +328,7 @@ function KanbanColumnContent({
                 className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-chats"
                 title={t('settings.account.paused', { defaultValue: 'Paused' })}
               >
-                <Pause size={7} className="fill-current" />
+                <Pause size={7} className="fill-current" strokeWidth={1.75} />
               </span>
             )}
           </div>
@@ -358,10 +358,10 @@ function KanbanColumnContent({
               )}
             </h3>
             {((searchActive && loading) || syncing) && (
-              <Loader2 size={13} className="shrink-0 animate-spin text-accent" />
+              <Loader2 size={14} className="shrink-0 animate-spin text-accent" strokeWidth={1.75} />
             )}
             {unreadCount > 0 && (
-              <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+              <span className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-on-accent text-2xs font-bold leading-none shrink-0">
                 {unreadCount}
               </span>
             )}
@@ -377,7 +377,7 @@ function KanbanColumnContent({
           >
             <IconButton
               icon={Minus}
-              iconSize={15}
+              iconSize={16}
               label={t('kanban.actions.minimize')}
               size="sm"
               radius="lg"

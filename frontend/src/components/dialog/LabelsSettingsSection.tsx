@@ -112,9 +112,7 @@ export function LabelsSettingsSection() {
                       placeholder={t('labels.namePlaceholder')}
                       aria-label={t('labels.name')}
                       onChange={(event) =>
-                        setDraft(
-                          labels.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)),
-                        )
+                        setDraft(labels.map((item, i) => (i === index ? { ...item, name: event.target.value } : item)))
                       }
                       onBlur={() => void persist(labels)}
                       className="min-w-0 flex-1"
@@ -160,9 +158,9 @@ export function LabelsSettingsSection() {
                           if (confirmed) void persist(labels.filter((_, i) => i !== index))
                         })
                       }}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={14} strokeWidth={1.75} />
                     </button>
                   </div>
 
@@ -215,7 +213,7 @@ export function LabelsSettingsSection() {
                               void linkLabel(label.id, newLink.accountId, newLink.remoteName)
                               setNewLink({ accountId: '', remoteName: '' })
                             }}
-                            className="shrink-0 rounded-control-sm bg-accent px-2.5 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                            className="shrink-0 rounded-control-sm bg-accent px-2.5 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                           >
                             {t('labels.link')}
                           </button>
@@ -234,9 +232,9 @@ export function LabelsSettingsSection() {
         <button
           type="button"
           onClick={() => setDraft([...labels, newLabel(labels)])}
-          className="flex w-fit items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+          className="flex w-fit items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer"
         >
-          <Plus size={12} />
+          <Plus size={14} strokeWidth={1.75} />
           {t('labels.add')}
         </button>
 

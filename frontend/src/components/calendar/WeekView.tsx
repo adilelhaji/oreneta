@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import i18n, { useTranslation } from '../../lib/i18n'
 import {
   allDayLocalDays,
   calendar$,
@@ -60,9 +60,7 @@ export function WeekView({
       columns.map((date) => {
         const dayStart = date.getTime() / 1000
         const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime() / 1000
-        const timed = events.filter(
-          (event) => !allDay(event) && event.start < dayEnd && event.end > dayStart,
-        )
+        const timed = events.filter((event) => !allDay(event) && event.start < dayEnd && event.end > dayStart)
         return { date, dayStart, dayEnd, lanes: placeInLanes(timed) }
       }),
     [columns, events],
@@ -104,11 +102,11 @@ export function WeekView({
               className="flex items-baseline justify-center gap-1.5 px-1 py-2 cursor-pointer transition-colors hover:bg-hover"
             >
               <span className="text-2xs font-semibold uppercase tracking-wide text-secondary">
-                {date.toLocaleDateString(undefined, { weekday: 'short' })}
+                {date.toLocaleDateString(i18n.language.replace('_', '-'), { weekday: 'short' })}
               </span>
               <span
                 className={`rounded-md px-1 text-ui font-semibold tabular-nums ${
-                  date.getTime() === todayMs ? 'bg-accent text-white' : 'text-primary'
+                  date.getTime() === todayMs ? 'bg-accent text-on-accent' : 'text-primary'
                 }`}
               >
                 {date.getDate()}
@@ -174,8 +172,7 @@ export function WeekView({
               ))}
               {lanes.map(({ event, lane, laneCount }) => {
                 const top = ((Math.max(event.start, dayStart) - dayStart) / 3600) * HOUR_PX
-                const bottom =
-                  ((Math.min(event.end, dayStart + 24 * 3600) - dayStart) / 3600) * HOUR_PX
+                const bottom = ((Math.min(event.end, dayStart + 24 * 3600) - dayStart) / 3600) * HOUR_PX
                 const color = colorOf(event)
                 return (
                   <button
@@ -218,9 +215,7 @@ export function WeekView({
 /// Assigns overlapping events to side-by-side lanes, greedily: each event
 /// takes the first lane free at its start. Events in one overlap cluster share
 /// the column width evenly.
-function placeInLanes(
-  events: CalendarEvent[],
-): { event: CalendarEvent; lane: number; laneCount: number }[] {
+function placeInLanes(events: CalendarEvent[]): { event: CalendarEvent; lane: number; laneCount: number }[] {
   const sorted = [...events].sort((a, b) => a.start - b.start || b.end - a.end)
   const placed: { event: CalendarEvent; lane: number; laneCount: number }[] = []
   let cluster: { event: CalendarEvent; lane: number; laneCount: number }[] = []

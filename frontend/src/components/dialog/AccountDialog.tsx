@@ -83,7 +83,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
   const active = PROVIDERS.find((p) => p.isActive(mode))
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in">
-      <div className="bg-chats border border-border text-primary w-full max-w-[760px] max-h-[92vh] rounded-dialog shadow-2xl animate-slide-up flex flex-col overflow-hidden">
+      <div className="bg-chats border border-border text-primary w-full max-w-[760px] max-h-[92vh] rounded-dialog shadow-overlay animate-slide-up flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border/70 shrink-0">
           <h2 className="text-title font-bold tracking-tight leading-tight">
@@ -91,7 +91,7 @@ export function AccountDialog({ variant = 'dialog' }: AccountDialogProps) {
               ? t('accounts.actions.editAccountTitle', { defaultValue: 'Account server settings' })
               : t('accounts.actions.reconnectAccountTitle', { defaultValue: 'Reconnect account' })}
           </h2>
-          <IconButton icon={X} iconSize={15} label={t('buttons.close')} size="sm" onClick={onClose} />
+          <IconButton icon={X} iconSize={16} label={t('buttons.close')} size="sm" onClick={onClose} />
         </div>
 
         {/* Reconnect/edit already knows the provider. */}
@@ -177,7 +177,7 @@ function AccountDialogError({ error }: { error: string }) {
   return (
     <p
       role="alert"
-      className="rounded-control bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-3 text-caption leading-relaxed text-red-600 dark:text-red-400 font-medium"
+      className="rounded-control bg-danger-soft border border-danger/30 p-3 text-caption leading-relaxed text-danger font-medium"
     >
       {error}
     </p>
@@ -197,11 +197,11 @@ function SaveButton({ ctl, isSetup }: { ctl: AccountDialogController; isSetup: b
             ? 'bg-hover text-secondary/70 cursor-not-allowed border border-transparent shadow-none'
             : 'bg-hover text-secondary/70 cursor-not-allowed shadow-none border border-transparent'
           : isSetup
-            ? 'border border-accent bg-accent text-white hover:bg-accent-hover hover:border-accent-hover active:scale-[0.99] shadow-md shadow-accent/15'
-            : 'bg-accent hover:bg-accent-hover text-white shadow-md shadow-accent/15 hover:shadow-lg hover:shadow-accent/20 active:scale-98'
+            ? 'border border-accent bg-accent text-on-accent hover:bg-accent-hover hover:border-accent-hover  '
+            : 'bg-accent hover:bg-accent-hover text-on-accent   '
       }`}
     >
-      {loading && <RefreshCw size={11} className="animate-spin" />}
+      {loading && <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />}
       <span>
         {editing
           ? t('buttons.save')

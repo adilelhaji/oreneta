@@ -62,7 +62,11 @@ export function FolderTreeRow({
           onClick={() => setExpanded((open) => !open)}
           tabIndex={hasChildren ? 0 : -1}
         >
-          <ChevronRight size={14} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          <ChevronRight
+            size={14}
+            className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+            strokeWidth={1.75}
+          />
         </button>
         <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
           <Checkbox

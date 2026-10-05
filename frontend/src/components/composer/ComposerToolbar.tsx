@@ -47,28 +47,28 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
         onClick={() => editor.chain().focus().toggleBold().run()}
         title={t('composer.toolbar.bold')}
       >
-        <Bold size={15} />
+        <Bold size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton
         active={editor.isActive('italic')}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         title={t('composer.toolbar.italic')}
       >
-        <Italic size={15} />
+        <Italic size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton
         active={editor.isActive('underline')}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         title={t('composer.toolbar.underline')}
       >
-        <UnderlineIcon size={15} />
+        <UnderlineIcon size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton
         active={editor.isActive('strike')}
         onClick={() => editor.chain().focus().toggleStrike().run()}
         title={t('composer.toolbar.strikethrough')}
       >
-        <Strikethrough size={15} />
+        <Strikethrough size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <span className="mx-1 h-4 w-px bg-border" />
       <ToolbarButton
@@ -76,31 +76,31 @@ export function ComposerToolbar({ editor, onSetLink }: { editor: Editor; onSetLi
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         title={t('composer.toolbar.heading')}
       >
-        <Heading2 size={15} />
+        <Heading2 size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton
         active={editor.isActive('bulletList')}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         title={t('composer.toolbar.bulletList')}
       >
-        <List size={15} />
+        <List size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton
         active={editor.isActive('orderedList')}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         title={t('composer.toolbar.numberedList')}
       >
-        <ListOrdered size={15} />
+        <ListOrdered size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton
         active={editor.isActive('blockquote')}
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
         title={t('composer.toolbar.quote')}
       >
-        <Quote size={15} />
+        <Quote size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <ToolbarButton active={editor.isActive('link')} onClick={onSetLink} title={t('composer.toolbar.link')}>
-        <Link2 size={15} />
+        <Link2 size={16} strokeWidth={1.75} />
       </ToolbarButton>
       <span
         className="ml-auto hidden items-center gap-1 pr-1 text-2xs font-medium text-secondary/70 select-none min-[900px]:flex"

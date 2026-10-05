@@ -294,13 +294,13 @@ export function ThreadContextMenu({
       <FloatingContextMenu
         x={menu.x}
         y={menu.y}
-        className="fixed z-50 min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+        className="fixed z-50 min-w-[160px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
         dataAttribute="data-thread-context-menu"
         onClick={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.preventDefault()}
       >
         <MenuItem
-          icon={<MessageSquare size={13} className="text-secondary" />}
+          icon={<MessageSquare size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('threads.actions.openInNewTab')}
           onClick={() => {
             const threadId = menu.threadId
@@ -312,9 +312,9 @@ export function ThreadContextMenu({
         <MenuItem
           icon={
             menu.unread ? (
-              <MailOpen size={13} className="text-secondary" />
+              <MailOpen size={14} className="text-secondary" strokeWidth={1.75} />
             ) : (
-              <Mail size={13} className="text-secondary" />
+              <Mail size={14} className="text-secondary" strokeWidth={1.75} />
             )
           }
           label={menu.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
@@ -327,7 +327,7 @@ export function ThreadContextMenu({
           }}
         />
         <MenuItem
-          icon={<Pencil size={13} className="text-secondary" />}
+          icon={<Pencil size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('buttons.edit')}
           onClick={() => {
             openFeedEdit({ threadId: menu.threadId, name: menu.name, url: menu.url })
@@ -338,22 +338,22 @@ export function ThreadContextMenu({
         {targetAccounts.length > 0 && (
           <div ref={moveAnchorRef} onMouseEnter={() => setMoveOpen(true)} onMouseLeave={() => setMoveOpen(false)}>
             <MenuItem
-              icon={<FolderInput size={13} className="text-secondary" />}
+              icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
               label={t('threads.actions.moveTo')}
-              trailing={<ChevronRight size={13} className="text-secondary" />}
+              trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
               onClick={() => setMoveOpen((open) => !open)}
             />
             {moveOpen && moveFlyoutPosition && (
               <FloatingContextMenu
                 x={moveFlyoutPosition.x}
                 y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
                 dataAttribute="data-thread-context-menu"
               >
                 {targetAccounts.map((account) => (
                   <MenuItem
                     key={account.id}
-                    icon={<FolderInput size={13} className="shrink-0 text-secondary" />}
+                    icon={<FolderInput size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />}
                     label={
                       <span className="min-w-0 truncate">{account.display_name || account.email || account.id}</span>
                     }
@@ -390,7 +390,7 @@ export function ThreadContextMenu({
     <FloatingContextMenu
       x={menu.x}
       y={menu.y}
-      className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+      className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
       dataAttribute="data-thread-context-menu"
       onClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
@@ -399,9 +399,9 @@ export function ThreadContextMenu({
         disabled={readOnly}
         icon={
           menu.unread ? (
-            <MailOpen size={13} className="text-secondary" />
+            <MailOpen size={14} className="text-secondary" strokeWidth={1.75} />
           ) : (
-            <Mail size={13} className="text-secondary" />
+            <Mail size={14} className="text-secondary" strokeWidth={1.75} />
           )
         }
         label={menu.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
@@ -415,7 +415,13 @@ export function ThreadContextMenu({
       />
       <MenuItem
         disabled={readOnly}
-        icon={<Star size={13} className={menu.starred ? 'fill-amber-500 text-amber-500' : 'text-secondary'} />}
+        icon={
+          <Star
+            size={14}
+            className={menu.starred ? 'fill-warning text-warning' : 'text-secondary'}
+            strokeWidth={1.75}
+          />
+        }
         label={menu.starred ? t('threads.actions.unstarThread') : t('threads.actions.starThread')}
         onClick={() => {
           const action = menu.starred ? 'unstar' : 'star'
@@ -426,7 +432,7 @@ export function ThreadContextMenu({
         }}
       />
       <MenuItem
-        icon={<MessageSquare size={13} className="text-secondary" />}
+        icon={<MessageSquare size={14} className="text-secondary" strokeWidth={1.75} />}
         label={t('threads.actions.openInNewTab')}
         onClick={() => {
           const threadId = menu.threadId
@@ -437,7 +443,7 @@ export function ThreadContextMenu({
       />
       {onSelectThread && (
         <MenuItem
-          icon={<CheckSquare size={13} className="text-secondary" />}
+          icon={<CheckSquare size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('buttons.select', { defaultValue: 'Select' })}
           onClick={() => {
             const threadId = menu.threadId
@@ -454,7 +460,7 @@ export function ThreadContextMenu({
           putting it away again. */}
       {filters.includes('snoozed') ? (
         <MenuItem
-          icon={<Clock size={13} className="text-secondary" />}
+          icon={<Clock size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('threads.snooze.bringBack', { defaultValue: 'Bring back now' })}
           onClick={() => {
             const threadId = menu.threadId
@@ -466,7 +472,7 @@ export function ThreadContextMenu({
         snoozeChoices().map((choice) => (
           <MenuItem
             key={choice.key}
-            icon={<Clock size={13} className="text-secondary" />}
+            icon={<Clock size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t(`threads.snooze.${choice.key}`, {
               defaultValue: choice.key,
               when: formatDeferredWhen(choice.at),
@@ -482,7 +488,7 @@ export function ThreadContextMenu({
       <div className="my-1 border-t border-border" />
       <MenuItem
         disabled={readOnly}
-        icon={<Archive size={13} className="text-secondary" />}
+        icon={<Archive size={14} className="text-secondary" strokeWidth={1.75} />}
         label={t('threads.actions.archiveThread')}
         onClick={() => {
           const threadId = menu.threadId
@@ -495,7 +501,7 @@ export function ThreadContextMenu({
           and a feed has no junk folder to file into. */}
       <MenuItem
         disabled={readOnly}
-        icon={<Ban size={13} className="text-secondary" />}
+        icon={<Ban size={14} className="text-secondary" strokeWidth={1.75} />}
         label={inJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')}
         onClick={() => {
           const threadId = menu.threadId
@@ -504,7 +510,7 @@ export function ThreadContextMenu({
         }}
       />
       <MenuItem
-        icon={<ListTodo size={13} className="text-secondary" />}
+        icon={<ListTodo size={14} className="text-secondary" strokeWidth={1.75} />}
         label={menu.task ? t('tasks.editAction') : t('tasks.addAction')}
         onClick={() => {
           const editorState = {
@@ -528,16 +534,16 @@ export function ThreadContextMenu({
           onMouseLeave={() => setMoveOpen(false)}
         >
           <MenuItem
-            icon={<FolderInput size={13} className="text-secondary" />}
+            icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.moveTo')}
-            trailing={<ChevronRight size={13} className="text-secondary" />}
+            trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
             onClick={() => setMoveOpen((open) => !open)}
           />
           {moveOpen && moveFlyoutPosition && (
             <FloatingContextMenu
               x={moveFlyoutPosition.x}
               y={moveFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
               dataAttribute="data-thread-context-menu"
             >
               <FolderMenuTree
@@ -572,9 +578,9 @@ export function ThreadContextMenu({
           onMouseLeave={() => setCopyOpen(false)}
         >
           <MenuItem
-            icon={<Copy size={13} className="text-secondary" />}
+            icon={<Copy size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.copyTo')}
-            trailing={<ChevronRight size={13} className="text-secondary" />}
+            trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
             onClick={() => {
               setCopyOpen((open) => !open)
               void loadCopyTargetFolders()
@@ -584,7 +590,7 @@ export function ThreadContextMenu({
             <FloatingContextMenu
               x={copyFlyoutPosition.x}
               y={copyFlyoutPosition.y}
-              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+              className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
               dataAttribute="data-thread-context-menu"
             >
               {copyAccountGroups.map(({ account, folders, excluded }) => (
@@ -620,7 +626,7 @@ export function ThreadContextMenu({
       <MenuItem
         danger
         disabled={readOnly}
-        icon={<Trash2 size={13} />}
+        icon={<Trash2 size={14} strokeWidth={1.75} />}
         label={
           inTrash
             ? t('threads.actions.deleteForever')

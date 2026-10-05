@@ -55,7 +55,7 @@ export function AddFeedDialog() {
             {t('buttons.cancel')}
           </Button>
           <Button variant="primary" onClick={submit} disabled={loading || !url.trim()}>
-            {loading && <RefreshCw size={11} className="animate-spin" />}
+            {loading && <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />}
             <span>{t('feeds.actions.addFeed')}</span>
           </Button>
         </>
@@ -80,7 +80,7 @@ export function AddFeedDialog() {
         />
         <p className="px-1 text-caption font-medium leading-relaxed text-secondary">{t('feeds.urlHint')}</p>
         {error && (
-          <p role="alert" className="px-1 text-caption font-medium text-rose-500">
+          <p role="alert" className="px-1 text-caption font-medium text-danger">
             {error}
           </p>
         )}

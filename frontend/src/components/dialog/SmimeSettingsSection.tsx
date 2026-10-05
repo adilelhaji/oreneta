@@ -105,14 +105,12 @@ export function SmimeSettingsSection() {
                   key={identity.fingerprint}
                   className="flex items-center gap-2 rounded-control-sm border border-border bg-app px-2.5 py-1.5"
                 >
-                  <KeyRound size={14} className="shrink-0 text-secondary" />
+                  <KeyRound size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
                   <div className="min-w-0 flex-1">
                     <span className="block truncate text-ui font-semibold">
                       {identity.subject || identity.addresses[0] || t('crypto.unnamedKey')}
                     </span>
-                    <span className="block truncate text-2xs text-secondary">
-                      {identity.addresses.join(', ')}
-                    </span>
+                    <span className="block truncate text-2xs text-secondary">{identity.addresses.join(', ')}</span>
                   </div>
                   <button
                     type="button"
@@ -131,9 +129,9 @@ export function SmimeSettingsSection() {
                         if (yes) void removeSmimeIdentity(identity.fingerprint)
                       })
                     }}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={14} strokeWidth={1.75} />
                   </button>
                 </li>
               ))}
@@ -162,7 +160,7 @@ export function SmimeSettingsSection() {
               <button
                 type="submit"
                 disabled={identityBusy || !identityPassword}
-                className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
+                className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
               >
                 {identityBusy ? t('common.loading') : t('crypto.openIt')}
               </button>
@@ -179,13 +177,13 @@ export function SmimeSettingsSection() {
               <button
                 type="button"
                 onClick={() => void pickIdentityFile()}
-                className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+                className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer"
               >
                 {t('crypto.smime.importIdentity')}
               </button>
             </div>
           )}
-          {identityError && <span className="text-caption text-rose-600 dark:text-rose-400">{identityError}</span>}
+          {identityError && <span className="text-caption text-danger">{identityError}</span>}
         </div>
 
         {certs.length > 0 && (
@@ -195,7 +193,7 @@ export function SmimeSettingsSection() {
                 key={cert.fingerprint}
                 className="flex items-center gap-2 rounded-control border border-border bg-panel px-3 py-2"
               >
-                <FileBadge size={15} className="shrink-0 text-secondary" />
+                <FileBadge size={16} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-ui font-semibold">
                     {cert.subject || cert.addresses[0] || t('crypto.unnamedKey')}
@@ -223,9 +221,9 @@ export function SmimeSettingsSection() {
                       if (yes) void removeSmimeCert(cert.fingerprint)
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} strokeWidth={1.75} />
                 </button>
               </li>
             ))}
@@ -237,7 +235,7 @@ export function SmimeSettingsSection() {
             type="button"
             disabled={busy}
             onClick={() => void add()}
-            className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('crypto.smime.importCert')}
           </button>

@@ -157,8 +157,8 @@ export function SideNav() {
               <button
                 className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
                   isUnifiedActive
-                    ? 'bg-accent text-white shadow-lg shadow-accent/25'
-                    : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
+                    ? 'bg-accent text-on-accent '
+                    : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
                 }`}
                 onClick={() => selectAccount('unified')}
                 onContextMenu={(event) => {
@@ -168,7 +168,7 @@ export function SideNav() {
                 }}
                 title={t('settings.sideNav.showUnifiedInbox')}
               >
-                <Mail size={19} />
+                <Mail size={20} strokeWidth={1.75} />
               </button>
               <UnreadCountBadge count={unifiedUnread} />
             </div>
@@ -187,8 +187,8 @@ export function SideNav() {
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
                 calendarOpen
-                  ? 'bg-accent text-white shadow-lg shadow-accent/25'
-                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
               onClick={() => {
                 ui$.peopleOpen.set(false)
@@ -197,7 +197,7 @@ export function SideNav() {
               }}
               title={t('calendar.title', { defaultValue: 'Calendar' })}
             >
-              <CalendarDays size={19} />
+              <CalendarDays size={20} strokeWidth={1.75} />
             </button>
           </div>
         )}
@@ -214,8 +214,8 @@ export function SideNav() {
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
                 peopleOpen
-                  ? 'bg-accent text-white shadow-lg shadow-accent/25'
-                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
               onClick={() => {
                 ui$.calendarOpen.set(false)
@@ -224,7 +224,7 @@ export function SideNav() {
               }}
               title={t('people.title')}
             >
-              <BookUser size={19} />
+              <BookUser size={20} strokeWidth={1.75} />
             </button>
           </div>
         )}
@@ -242,8 +242,8 @@ export function SideNav() {
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
                 tasksOpen
-                  ? 'bg-accent text-white shadow-lg shadow-accent/25'
-                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
               onClick={() => {
                 ui$.calendarOpen.set(false)
@@ -252,7 +252,7 @@ export function SideNav() {
               }}
               title={t('tasks.title')}
             >
-              <ListTodo size={19} />
+              <ListTodo size={20} strokeWidth={1.75} />
             </button>
           </div>
         )}
@@ -329,7 +329,7 @@ export function SideNav() {
       {/* Utilities */}
       <div className="flex flex-col gap-3 items-center">
         <button
-          className={`flex h-10 w-10 items-center justify-center rounded-control transition-all duration-150 cursor-pointer ${
+          className={`flex h-10 w-10 items-center justify-center rounded-control transition-all duration-120 cursor-pointer ${
             moreMenu ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'
           }`}
           onClick={(e) => {
@@ -338,7 +338,7 @@ export function SideNav() {
           }}
           title={t('common.more')}
         >
-          <MoreHorizontal size={18} />
+          <MoreHorizontal size={20} strokeWidth={1.75} />
         </button>
       </div>
 
@@ -354,7 +354,7 @@ export function SideNav() {
       {unifiedMenu && (
         <RailContextMenu x={unifiedMenu.x} y={unifiedMenu.y} onClose={() => setUnifiedMenu(null)}>
           <RailMenuItem
-            icon={<EyeOff size={13} className="text-secondary" />}
+            icon={<EyeOff size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('sidenav.actions.hideFromSideNav')}
             onClick={() => {
               setUnifiedInboxSideNavVisible(false)

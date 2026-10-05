@@ -59,6 +59,14 @@ excepciones por carpeta; #160 implementa el contrato y su
 los criterios completos de #33–#37 ni sustituyen aceptación nativa. Los binarios
 locales no se han actualizado con estas mejoras.
 
+#177 extiende el [acabado visual](design/screen-consistency.md) a las pantallas
+existentes: estados semánticos, iconos, sombras y movimiento coherentes; Personas,
+Tareas y Calendario adaptados a ventanas estrechas y menú de acceso común. Incluye
+lectura completa de textos largos, apertura por teclado y fechas del calendario
+según el idioma de la app. #33/#38 conservan la aceptación funcional y nativa
+restante; esta entrega no añade sincronización de contactos/tareas ni funciones
+pendientes de calendario.
+
 Descubrimiento de ajustes: #163/#164 incorpora búsquedas EN/ES, destinos de cuenta,
 teclado y conservación de editores; [contrato y límites](design/settings-discovery.md).
 #165 añade [observaciones de sincronización por cuenta](design/account-sync-health.md)

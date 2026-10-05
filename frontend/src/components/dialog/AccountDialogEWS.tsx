@@ -93,7 +93,7 @@ export function AccountDialogEWS({
                 : t('accounts.actions.showPassword', { defaultValue: 'Show password' })
             }
           >
-            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showPassword ? <EyeOff size={14} strokeWidth={1.75} /> : <Eye size={14} strokeWidth={1.75} />}
           </button>
         </span>
       </label>

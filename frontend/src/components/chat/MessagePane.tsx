@@ -245,7 +245,7 @@ export function MessagePane() {
             className="flex items-center gap-1 font-semibold text-accent hover:underline cursor-pointer"
           >
             <span>{t('chat.viewOriginalTopic')}</span>
-            <ArrowRight size={13} />
+            <ArrowRight size={14} strokeWidth={1.75} />
           </button>
         </div>
       )}

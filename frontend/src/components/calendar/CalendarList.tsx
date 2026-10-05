@@ -37,7 +37,10 @@ export function CalendarList() {
   const key = (calendar: Calendar) => `${calendar.accountId}:${calendar.id}`
 
   return (
-    <aside className="hidden w-56 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-raised/40 px-3 py-4 md:flex">
+    <aside
+      aria-label={t('calendar.title')}
+      className="flex max-h-40 w-full shrink-0 flex-col gap-3 overflow-y-auto border-b border-border bg-raised px-3 py-3 min-[769px]:max-h-none min-[769px]:w-48 min-[769px]:border-b-0 min-[769px]:border-r"
+    >
       {groups.map(({ account, calendars }) => (
         <div key={account.id}>
           <p className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
@@ -54,13 +57,7 @@ export function CalendarList() {
                         "is it shown" and "which one is it" at a glance. */}
                     <button
                       type="button"
-                      onClick={() =>
-                        void setCalendarEnabled(
-                          calendar.accountId,
-                          calendar.id,
-                          !calendar.enabled,
-                        )
-                      }
+                      onClick={() => void setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled)}
                       aria-label={calendar.name}
                       aria-pressed={calendar.enabled}
                       className="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors cursor-pointer"
@@ -69,7 +66,7 @@ export function CalendarList() {
                         border: `1.5px solid ${color}`,
                       }}
                     >
-                      {calendar.enabled && <Check size={11} className="text-white" strokeWidth={3} />}
+                      {calendar.enabled && <Check size={14} className="text-white" strokeWidth={1.75} />}
                     </button>
                     <button
                       type="button"
@@ -81,15 +78,13 @@ export function CalendarList() {
                     >
                       {calendar.name}
                     </button>
-                    {calendar.read_only && (
-                      <Lock size={10} className="shrink-0 text-secondary/70" />
-                    )}
+                    {calendar.read_only && <Lock size={14} className="shrink-0 text-secondary/70" strokeWidth={1.75} />}
                   </div>
 
                   {open && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setPicking(null)} />
-                      <div className="absolute left-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-xl">
+                      <div className="absolute left-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-overlay">
                         {CALENDAR_COLORS.map((swatch) => (
                           <button
                             key={swatch}
@@ -99,7 +94,7 @@ export function CalendarList() {
                               void setCalendarColor(calendar.accountId, calendar.id, swatch)
                               setPicking(null)
                             }}
-                            className={`h-5 w-5 rounded-full transition-transform hover:scale-110 cursor-pointer ${
+                            className={`h-5 w-5 rounded-full transition-transform  cursor-pointer ${
                               swatch === color ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-app' : ''
                             }`}
                             style={{ backgroundColor: swatch }}

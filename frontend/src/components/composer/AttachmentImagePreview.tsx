@@ -33,7 +33,7 @@ export function AttachmentImagePreview({
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-white/15 cursor-pointer transition-colors"
           title={t('common.close')}
         >
-          <X size={20} />
+          <X size={20} strokeWidth={1.75} />
         </button>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-4">

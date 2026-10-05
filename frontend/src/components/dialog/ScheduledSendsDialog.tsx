@@ -4,12 +4,7 @@ import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { formatDeferredWhen } from '../../lib/date'
 import { ui$ } from '../../states/ui'
-import {
-  scheduled$,
-  cancelAndReopen,
-  refreshScheduledSends,
-  sendScheduledNow,
-} from '../../states/scheduledSends'
+import { scheduled$, cancelAndReopen, refreshScheduledSends, sendScheduledNow } from '../../states/scheduledSends'
 import { Button } from '../button/Button'
 import { Dialog } from './Dialog'
 
@@ -39,14 +34,17 @@ export function ScheduledSendsDialog() {
       ) : (
         <ul className="flex max-h-[24rem] flex-col gap-2 overflow-y-auto">
           {messages.map((message) => (
-            <li key={message.id} className="flex flex-col gap-2 rounded-panel border border-border bg-raised px-3.5 py-3">
+            <li
+              key={message.id}
+              className="flex flex-col gap-2 rounded-panel border border-border bg-raised px-3.5 py-3"
+            >
               <div className="min-w-0">
                 <p className="truncate text-ui font-semibold">{message.subject || t('sendLater.noSubject')}</p>
                 <p className="mt-0.5 truncate text-caption text-secondary">{message.to}</p>
               </div>
               {message.gaveUp ? (
-                <p className="flex items-start gap-1.5 text-caption font-medium text-rose-500">
-                  <AlertTriangle size={12} className="mt-px shrink-0" />
+                <p className="flex items-start gap-1.5 text-caption font-medium text-danger">
+                  <AlertTriangle size={14} className="mt-px shrink-0" strokeWidth={1.75} />
                   <span className="min-w-0">{t('sendLater.failedReason', { reason: message.lastError })}</span>
                 </p>
               ) : (

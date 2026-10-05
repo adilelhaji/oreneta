@@ -182,10 +182,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
   // overflow-clipped ancestor (e.g. a chat bubble's slide-up animation), which
   // would otherwise mis-position the overlay and clip its controls.
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm animate-fade-in select-none"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/90 animate-fade-in select-none" onClick={onClose}>
       {/* Top bar: counter + close */}
       <div className="flex shrink-0 items-center justify-between px-4 py-3 text-white/90">
         <span className="text-xs font-semibold tabular-nums">{total > 1 ? `${index + 1} / ${total}` : ''}</span>
@@ -197,7 +194,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
           className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/15 cursor-pointer transition-colors"
           title={t('chat.closeEsc')}
         >
-          <X size={20} />
+          <X size={20} strokeWidth={1.75} />
         </button>
       </div>
 
@@ -212,7 +209,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             className="absolute left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 hover:bg-black/70 cursor-pointer transition-colors"
             title={t('chat.previousImage')}
           >
-            <ChevronLeft size={26} />
+            <ChevronLeft size={26} strokeWidth={1.75} />
           </button>
         )}
 
@@ -230,8 +227,8 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
               externalUrl={current.url ?? current.src}
               externalLabel={t('chat.openExternalPlayer')}
               className="group relative w-full"
-              videoClassName="w-full max-h-[78vh] rounded-md bg-black shadow-2xl"
-              posterClassName="flex aspect-video w-full items-center justify-center rounded-md bg-black text-white/90 transition-colors hover:text-white cursor-pointer shadow-2xl"
+              videoClassName="w-full max-h-[78vh] rounded-md bg-black shadow-overlay"
+              posterClassName="flex aspect-video w-full items-center justify-center rounded-md bg-black text-white/90 transition-colors hover:text-white cursor-pointer shadow-overlay"
             />
           </div>
         ) : (
@@ -258,7 +255,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
               cursor: zoomed ? (isPanning ? 'grabbing' : 'grab') : 'default',
               transition: isPanning ? 'none' : 'transform 0.12s ease-out',
             }}
-            className="max-h-full max-w-full object-contain rounded-md shadow-2xl will-change-transform"
+            className="max-h-full max-w-full object-contain rounded-md shadow-overlay will-change-transform"
           />
         )}
 
@@ -271,7 +268,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             className="absolute right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 hover:bg-black/70 cursor-pointer transition-colors"
             title={t('chat.nextImage')}
           >
-            <ChevronRight size={26} />
+            <ChevronRight size={26} strokeWidth={1.75} />
           </button>
         )}
       </div>
@@ -291,17 +288,17 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
             }}
           />
           <div
-            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-xl"
+            className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-overlay"
             style={{ top: menu.y, left: menu.x }}
             onClick={(event) => event.stopPropagation()}
           >
             <MenuItem
-              icon={<Download size={13} className="text-accent" />}
+              icon={<Download size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.saveImage')}
               onClick={saveCurrent}
             />
             <MenuItem
-              icon={<Copy size={13} className="text-accent" />}
+              icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.copyImage')}
               onClick={copyCurrent}
             />

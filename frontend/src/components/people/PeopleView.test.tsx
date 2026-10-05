@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { PeopleView } from './PeopleView'
 import { people$ } from '../../states/people'
 import type { Person } from '../../types'
@@ -99,6 +99,33 @@ describe('the address book as a place', () => {
     const view = render(<PeopleView />)
     fireEvent.click(view.getByText('Marc Roca'))
     expect(people$.selectedId.peek()).toBe(marc.id)
+  })
+
+  it('returns focus to the selected person without clearing the search', () => {
+    people$.query.set('Ana')
+    const view = render(<PeopleView />)
+    const option = view.getByRole('option', { name: /Ana Prat/ })
+    fireEvent.click(option)
+    expect(document.activeElement).toBe(view.getByRole('region', { name: 'Ana Prat' }))
+    fireEvent.click(view.getByRole('button', { name: 'Back' }))
+    expect(people$.query.peek()).toBe('Ana')
+    expect(document.activeElement).toBe(option)
+  })
+
+  it('keeps focus in search when a selected person disappears and reappears in results', () => {
+    const view = render(<PeopleView />)
+    fireEvent.click(view.getByRole('option', { name: /Ana Prat/ }))
+    fireEvent.click(view.getByRole('option', { name: /Ana Prat/ }))
+    const search = view.getByRole('textbox', { name: 'Search people' })
+    search.focus()
+    act(() => {
+      people$.people.set([marc])
+    })
+    expect(document.activeElement).toBe(search)
+    act(() => {
+      people$.people.set([ana, marc])
+    })
+    expect(document.activeElement).toBe(search)
   })
 
   it('says the book is empty differently from a search that found nobody', () => {

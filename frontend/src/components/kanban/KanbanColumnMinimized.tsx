@@ -109,7 +109,7 @@ export function KanbanColumnMinimized({
           email={isRss ? undefined : columnAccount?.email}
           src={columnAccount?.avatar_url}
           size={26}
-          fallback={isRss ? <Rss size={13} /> : undefined}
+          fallback={isRss ? <Rss size={14} strokeWidth={1.75} /> : undefined}
           className={isPaused ? 'grayscale opacity-40' : undefined}
         />
         {isPaused && (
@@ -117,7 +117,7 @@ export function KanbanColumnMinimized({
             className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-chats"
             title={t('settings.account.paused', { defaultValue: 'Paused' })}
           >
-            <Pause size={7} className="fill-current" />
+            <Pause size={7} className="fill-current" strokeWidth={1.75} />
           </span>
         )}
       </div>
@@ -142,11 +142,11 @@ export function KanbanColumnMinimized({
         </span>
       </div>
       {columnUnreadCount > 0 && (
-        <div className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+        <div className="h-4.5 min-w-4.5 px-1.5 flex items-center justify-center rounded-full bg-accent text-on-accent text-2xs font-bold leading-none shrink-0">
           {columnUnreadCount}
         </div>
       )}
-      {searchActive && loading && <Loader2 size={14} className="animate-spin text-accent" />}
+      {searchActive && loading && <Loader2 size={14} className="animate-spin text-accent" strokeWidth={1.75} />}
     </section>
   )
 }

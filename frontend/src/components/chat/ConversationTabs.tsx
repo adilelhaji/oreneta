@@ -21,7 +21,7 @@ export function ConversationTabs() {
         }`}
         title={t('chat.currentConversation')}
       >
-        <MessageSquare size={13} />
+        <MessageSquare size={14} strokeWidth={1.75} />
         {t('chat.current')}
       </button>
       {tabs.map((tab) => (
@@ -38,8 +38,8 @@ export function ConversationTabs() {
           }`}
           title={tab.subject}
         >
-          {tab.kind === 'thread' && <MessageSquare size={12} className="shrink-0" />}
-          {tab.kind === 'compose' && <SquarePen size={12} className="shrink-0" />}
+          {tab.kind === 'thread' && <MessageSquare size={14} className="shrink-0" strokeWidth={1.75} />}
+          {tab.kind === 'compose' && <SquarePen size={14} className="shrink-0" strokeWidth={1.75} />}
           <span className="truncate">{tab.subject}</span>
           <button
             onClick={(event) => {
@@ -49,7 +49,7 @@ export function ConversationTabs() {
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-secondary hover:bg-active hover:text-primary"
             title={t('chat.closeTab')}
           >
-            <X size={11} />
+            <X size={14} strokeWidth={1.75} />
           </button>
         </div>
       ))}

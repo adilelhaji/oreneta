@@ -69,8 +69,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
 
   if (!protection || protection === 'none') return null
 
-  const encrypted =
-    protection === 'pgpEncrypted' || protection === 'pgpInline' || protection === 'smimeEnveloped'
+  const encrypted = protection === 'pgpEncrypted' || protection === 'pgpInline' || protection === 'smimeEnveloped'
   const isSmimeEncrypted = protection === 'smimeEnveloped'
 
   if (encrypted) {
@@ -118,7 +117,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
                 type="button"
                 disabled={busy}
                 onClick={open}
-                className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
+                className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
               >
                 {busy ? t('common.loading') : t('crypto.openIt')}
               </button>
@@ -126,7 +125,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
           }
         >
           <span className="flex items-start gap-1.5">
-            <KeyRound size={13} className="mt-0.5 shrink-0" />
+            <KeyRound size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
             <span>{opened ? t('crypto.openedText') : t('crypto.encryptedTextWithKeys')}</span>
           </span>
           {needsPassphrase && !opened && (
@@ -150,13 +149,13 @@ export function ProtectionNotice({ message }: { message: Message }) {
               <button
                 type="submit"
                 disabled={busy || !passphrase}
-                className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
+                className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
               >
                 {t('crypto.openIt')}
               </button>
             </form>
           )}
-          {failure && <span className="mt-1 block text-caption text-rose-600 dark:text-rose-400">{failure}</span>}
+          {failure && <span className="mt-1 block text-caption text-danger">{failure}</span>}
         </Notice>
         {opened && (
           <div className="mb-2 whitespace-pre-wrap rounded-control border border-accent/30 bg-accent/[0.04] px-3 py-2 text-ui leading-relaxed text-primary">
@@ -172,14 +171,11 @@ export function ProtectionNotice({ message }: { message: Message }) {
   // Checked out, but signed by somebody other than the sender: worth more
   // alarm than an unchecked signature, not less — true whether or not the
   // certificate that did it is one already trusted.
-  if (
-    (result?.verdict === 'good' || result?.verdict === 'validUntrusted') &&
-    result.matchesSender === false
-  ) {
+  if ((result?.verdict === 'good' || result?.verdict === 'validUntrusted') && result.matchesSender === false) {
     return (
       <Notice tone="danger" className="mb-2" title={t('crypto.wrongSignerTitle')}>
         <span className="flex items-start gap-1.5">
-          <ShieldAlert size={13} className="mt-0.5 shrink-0" />
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
           <span>{t('crypto.wrongSignerText', { signer: result.addresses[0] ?? '' })}</span>
         </span>
       </Notice>
@@ -190,7 +186,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
     return (
       <Notice tone="success" className="mb-2" title={t('crypto.verifiedTitle')}>
         <span className="flex items-start gap-1.5">
-          <ShieldCheck size={13} className="mt-0.5 shrink-0" />
+          <ShieldCheck size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
           <span>{t('crypto.verifiedText', { signer: result.addresses[0] ?? '' })}</span>
         </span>
       </Notice>
@@ -205,7 +201,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
     return (
       <Notice tone="warning" className="mb-2" title={t('crypto.validUntrustedTitle')}>
         <span className="flex items-start gap-1.5">
-          <ShieldQuestion size={13} className="mt-0.5 shrink-0" />
+          <ShieldQuestion size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
           <span>{t('crypto.validUntrustedText', { signer: result.addresses[0] ?? '' })}</span>
         </span>
       </Notice>
@@ -216,7 +212,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
     return (
       <Notice tone="danger" className="mb-2" title={t('crypto.badTitle')}>
         <span className="flex items-start gap-1.5">
-          <ShieldAlert size={13} className="mt-0.5 shrink-0" />
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
           <span>{t('crypto.badText')}</span>
         </span>
       </Notice>
@@ -227,7 +223,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
     return (
       <Notice tone="warning" className="mb-2" title={t('crypto.noKeyTitle')}>
         <span className="flex items-start gap-1.5">
-          <ShieldQuestion size={13} className="mt-0.5 shrink-0" />
+          <ShieldQuestion size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
           <span>{t('crypto.noKeyText')}</span>
         </span>
       </Notice>
@@ -237,7 +233,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
   return (
     <Notice tone="warning" className="mb-2" title={t('crypto.signedClaimTitle')}>
       <span className="flex items-start gap-1.5">
-        <ShieldQuestion size={13} className="mt-0.5 shrink-0" />
+        <ShieldQuestion size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
         <span>{t('crypto.signedClaimText')}</span>
       </span>
     </Notice>

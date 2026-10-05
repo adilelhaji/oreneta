@@ -363,6 +363,8 @@
   "calendar.tentative": "Tentative",
   "calendar.times": "times",
   "calendar.title": "Calendar",
+  "calendar.previousPeriod": "الفترة السابقة",
+  "calendar.nextPeriod": "الفترة التالية",
   "calendar.today": "Today",
   "calendar.tomorrow": "Tomorrow",
   "calendar.unitDayMany": "days",

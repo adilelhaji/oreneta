@@ -363,6 +363,8 @@
   "calendar.tentative": "Tentative",
   "calendar.times": "times",
   "calendar.title": "Calendar",
+  "calendar.previousPeriod": "Önceki dönem",
+  "calendar.nextPeriod": "Sonraki dönem",
   "calendar.today": "Today",
   "calendar.tomorrow": "Tomorrow",
   "calendar.unitDayMany": "days",

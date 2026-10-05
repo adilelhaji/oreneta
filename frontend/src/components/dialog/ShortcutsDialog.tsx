@@ -185,7 +185,14 @@ function ShortcutRow({
         <span>{SHORTCUT_LABELS[id]}</span>
         <div className="flex shrink-0 items-center gap-1">
           {customized && (
-            <IconButton icon={RotateCcw} iconSize={13} label={t('shortcuts.resetOne')} size="sm" radius="lg" onClick={onReset} />
+            <IconButton
+              icon={RotateCcw}
+              iconSize={14}
+              label={t('shortcuts.resetOne')}
+              size="sm"
+              radius="lg"
+              onClick={onReset}
+            />
           )}
           <button
             type="button"
@@ -203,7 +210,7 @@ function ShortcutRow({
         </div>
       </div>
       {conflict && (
-        <p role="alert" className="mt-1 text-right text-caption text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mt-1 text-right text-caption text-danger">
           {t('shortcuts.conflict', { name: SHORTCUT_LABELS[conflict] })}
         </p>
       )}

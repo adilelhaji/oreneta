@@ -57,12 +57,13 @@ export function SearchScopeDropdown({
       >
         <span className="truncate max-w-[130px]">{selectedLabel}</span>
         <ChevronDown
-          size={12}
+          size={14}
           className={`text-secondary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          strokeWidth={1.75}
         />
       </button>
       {isOpen && (
-        <div className="absolute right-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-xl shadow-black/10 dark:shadow-black/35 animate-slide-up">
+        <div className="absolute right-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-overlay shadow-black/10 dark:shadow-black/35 animate-slide-up">
           <button
             type="button"
             onClick={() => {
@@ -73,7 +74,7 @@ export function SearchScopeDropdown({
               value === 'all' ? 'bg-accent/10 text-accent font-bold' : 'text-primary hover:bg-hover'
             }`}
           >
-            <Columns3 size={13} className={value === 'all' ? 'text-accent' : 'text-secondary'} />
+            <Columns3 size={14} className={value === 'all' ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
             <span className="font-semibold">{t('kanban.searchScope.allColumns')}</span>
           </button>
 
@@ -106,7 +107,7 @@ export function SearchScopeDropdown({
                   email={columnIsRss ? undefined : columnAccount?.email}
                   src={columnAccount?.avatar_url}
                   size={18}
-                  fallback={columnIsRss ? <Rss size={10} /> : undefined}
+                  fallback={columnIsRss ? <Rss size={14} strokeWidth={1.75} /> : undefined}
                 />
                 <div className="min-w-0 flex-1 text-left">
                   <div className="truncate font-semibold">{folderLabel(column, folders, accounts, t)}</div>

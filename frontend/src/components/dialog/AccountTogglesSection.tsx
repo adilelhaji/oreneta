@@ -62,14 +62,14 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
     <>
       <SettingsGroup title={t('settings.account.visibility')}>
         <ToggleRow
-          icon={<Inbox size={15} />}
+          icon={<Inbox size={16} strokeWidth={1.75} />}
           title={t('settings.account.showInUnifiedInbox')}
           hint={t('settings.account.showInUnifiedInboxHint')}
           checked={inUnified}
           onChange={() => setAccountUnified(account.id, !inUnified)}
         />
         <ToggleRow
-          icon={<Eye size={15} />}
+          icon={<Eye size={16} strokeWidth={1.75} />}
           title={t('settings.account.showInSideNav')}
           hint={t('settings.account.showInSideNavHint')}
           checked={inSideNav}
@@ -79,14 +79,14 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
 
       <SettingsGroup title={t('settings.account.notificationsSync')}>
         <ToggleRow
-          icon={<BellOff size={15} />}
+          icon={<BellOff size={16} strokeWidth={1.75} />}
           title={t('settings.account.muteNotifications')}
           hint={t('settings.account.muteNotificationsHint')}
           checked={muted}
           onChange={() => setAccountMuted(account.id, !muted)}
         />
         <ToggleRow
-          icon={<Pause size={15} />}
+          icon={<Pause size={16} strokeWidth={1.75} />}
           title={t('settings.account.pauseAccount')}
           hint={t('settings.account.pauseAccountHint')}
           checked={paused}
@@ -94,7 +94,7 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
         />
         {isRSS && (
           <NumberRow
-            icon={<Clock size={15} />}
+            icon={<Clock size={16} strokeWidth={1.75} />}
             title={t('settings.account.syncInterval')}
             value={rssIntervalVal}
             min={5}
@@ -108,14 +108,14 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
 
       <SettingsGroup title={t('settings.account.content')}>
         <ToggleRow
-          icon={<ImageIcon size={15} />}
+          icon={<ImageIcon size={16} strokeWidth={1.75} />}
           title={t('settings.account.loadRemoteImages')}
           hint={t('settings.account.loadRemoteImagesHint')}
           checked={loadImages}
           onChange={() => setAccountImages(account.id, !loadImages)}
         />
         <SegmentedRow
-          icon={<Code size={15} />}
+          icon={<Code size={16} strokeWidth={1.75} />}
           title={t('settings.account.conversationView')}
           value={conversationHtml ? 'html' : 'plain'}
           options={[
@@ -126,7 +126,7 @@ export function AccountTogglesSection({ account, isRSS }: { account: Account; is
         />
         {!isRSS && (
           <ToggleRow
-            icon={<Send size={15} />}
+            icon={<Send size={16} strokeWidth={1.75} />}
             title={t('settings.account.saveSentCopies')}
             hint={t('settings.account.saveSentCopiesHint')}
             checked={saveSentCopy}

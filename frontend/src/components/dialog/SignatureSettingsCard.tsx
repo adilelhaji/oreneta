@@ -177,7 +177,7 @@ export function AccountSignatureCard({ account }: { account: Account }) {
   return (
     <SettingsGroup title={t('settings.sections.signature')}>
       <SelectRow
-        icon={<PenLine size={15} />}
+        icon={<PenLine size={16} strokeWidth={1.75} />}
         title={t('settings.signature.label')}
         hint={t('settings.signature.accountHint')}
         value={mode}

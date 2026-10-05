@@ -37,7 +37,7 @@ export function UpdateSection() {
     <div className="mt-5 w-full rounded-panel border border-border/70 bg-raised/70 px-4 py-3">
       {status.state === 'checking' && (
         <div className="flex items-center justify-center gap-2 text-xs font-semibold text-secondary">
-          <Loader2 size={14} className="animate-spin" />
+          <Loader2 size={14} className="animate-spin" strokeWidth={1.75} />
           <span>{t('updates.checking')}</span>
         </div>
       )}
@@ -45,7 +45,7 @@ export function UpdateSection() {
       {status.state === 'idle' && (
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 text-xs font-semibold text-secondary">
-            <CheckCircle2 size={14} className="text-emerald-500" />
+            <CheckCircle2 size={14} className="text-success" strokeWidth={1.75} />
             {t('updates.upToDate')}
           </span>
           <Button variant="secondary" size="sm" leftIcon={RefreshCw} onClick={() => void runUpdateCheck()}>
@@ -57,7 +57,7 @@ export function UpdateSection() {
       {status.state === 'available' && (
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-primary">
-            <Sparkles size={14} className="text-accent" />
+            <Sparkles size={14} className="text-accent" strokeWidth={1.75} />
             <span className="truncate">{t('updates.available', { version: status.latestVersion })}</span>
           </span>
           <Button variant="primary" size="sm" leftIcon={Download} onClick={() => void startUpdateDownload()}>
@@ -85,13 +85,13 @@ export function UpdateSection() {
           <div className="flex items-center justify-between gap-2">
             <span
               className={`flex min-w-0 items-center gap-2 text-xs font-semibold ${
-                status.error ? 'text-rose-600 dark:text-rose-400' : 'text-primary'
+                status.error ? 'text-danger ' : 'text-primary'
               }`}
             >
               {status.error ? (
-                <AlertCircle size={14} className="shrink-0" />
+                <AlertCircle size={14} className="shrink-0" strokeWidth={1.75} />
               ) : (
-                <Download size={14} className="text-accent" />
+                <Download size={14} className="text-accent" strokeWidth={1.75} />
               )}
               <span className="truncate">
                 {status.error ? t('updates.failed') : t('updates.ready', { version: status.latestVersion })}
@@ -106,18 +106,14 @@ export function UpdateSection() {
               {status.state === 'installing' ? t('updates.installing') : t('updates.restartAndInstall')}
             </Button>
           </div>
-          {status.error && (
-            <p className="mt-2 break-words text-caption leading-4 text-rose-600 dark:text-rose-400">
-              {status.error}
-            </p>
-          )}
+          {status.error && <p className="mt-2 break-words text-caption leading-4 text-danger">{status.error}</p>}
         </div>
       )}
 
       {status.state === 'error' && (
         <div className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-rose-600 dark:text-rose-400">
-            <AlertCircle size={14} className="shrink-0" />
+          <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-danger">
+            <AlertCircle size={14} className="shrink-0" strokeWidth={1.75} />
             <span className="truncate" title={status.error}>
               {t('updates.failed')}
             </span>
@@ -138,7 +134,7 @@ export function UpdateSection() {
             onClick={() => openExternal(status.releasesUrl)}
           >
             {t('updates.downloadManually')}
-            <ExternalLink size={11} />
+            <ExternalLink size={14} strokeWidth={1.75} />
           </button>
         )}
 

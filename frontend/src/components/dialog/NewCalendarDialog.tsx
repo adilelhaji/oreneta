@@ -94,19 +94,19 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
       <div className="grid grid-cols-3 gap-1 rounded-panel border border-border/80 bg-raised p-1" role="radiogroup">
         <KindTab
           active={kind === 'account'}
-          icon={<Cloud size={16} />}
+          icon={<Cloud size={16} strokeWidth={1.75} />}
           label={t('calendar.kindAccount', { defaultValue: 'In an account' })}
           onClick={() => setKind('account')}
         />
         <KindTab
           active={kind === 'local'}
-          icon={<HardDrive size={16} />}
+          icon={<HardDrive size={16} strokeWidth={1.75} />}
           label={t('calendar.kindLocal', { defaultValue: 'On this computer' })}
           onClick={() => setKind('local')}
         />
         <KindTab
           active={kind === 'subscribed'}
-          icon={<Link2 size={16} />}
+          icon={<Link2 size={16} strokeWidth={1.75} />}
           label={t('calendar.kindSubscribed', { defaultValue: 'From a link' })}
           onClick={() => setKind('subscribed')}
         />
@@ -171,7 +171,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
           )}
 
           {error && (
-            <p role="alert" className="text-caption text-rose-500">
+            <p role="alert" className="text-caption text-danger">
               {error}
             </p>
           )}

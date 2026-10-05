@@ -23,11 +23,11 @@ export function InfoTip({ hint }: { hint?: string }) {
       onFocus={(e) => show(e.currentTarget)}
       onBlur={() => setPos(null)}
     >
-      <Info size={12} />
+      <Info size={14} strokeWidth={1.75} />
       {pos && (
         <span
           role="tooltip"
-          className="fixed z-[60] w-max max-w-[280px] -translate-x-1/2 -translate-y-full whitespace-normal rounded-control border border-border bg-raised px-3 py-2 text-caption font-normal leading-snug text-primary shadow-lg pointer-events-none"
+          className="fixed z-[60] w-max max-w-[280px] -translate-x-1/2 -translate-y-full whitespace-normal rounded-control border border-border bg-raised px-3 py-2 text-caption font-normal leading-snug text-primary shadow-raised pointer-events-none"
           style={{ left: pos.x, top: pos.y - 6 }}
         >
           {hint}

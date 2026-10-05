@@ -36,7 +36,7 @@ function FolderMenuRow({
         style={{ paddingLeft: depth * 14 + 8 }}
         onClick={() => folder && onPick(folder)}
       >
-        <Icon size={13} className="shrink-0 text-secondary" />
+        <Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />
         <span className="min-w-0 truncate">{node.name}</span>
       </button>
       {node.children.map((child) =>

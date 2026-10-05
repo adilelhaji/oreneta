@@ -206,12 +206,12 @@ export function BulkActionBar({
           y={menu.y}
           overlay
           onClose={() => setMenu(null)}
-          className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+          className="fixed z-50 min-w-[190px] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
           <MenuItem
-            icon={<MailOpen size={13} className="text-secondary" />}
+            icon={<MailOpen size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.markAsRead')}
             disabled={readOnly || mailItems.length === 0}
             onClick={() => {
@@ -220,7 +220,7 @@ export function BulkActionBar({
             }}
           />
           <MenuItem
-            icon={<Mail size={13} className="text-secondary" />}
+            icon={<Mail size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.markAsUnread')}
             disabled={readOnly || mailItems.length === 0}
             onClick={() => {
@@ -229,7 +229,7 @@ export function BulkActionBar({
             }}
           />
           <MenuItem
-            icon={<Star size={13} className="text-secondary" />}
+            icon={<Star size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.starThread')}
             disabled={readOnly || mailItems.length === 0}
             onClick={() => {
@@ -238,7 +238,7 @@ export function BulkActionBar({
             }}
           />
           <MenuItem
-            icon={<Star size={13} className="fill-amber-500 text-amber-500" />}
+            icon={<Star size={14} className="fill-warning text-warning" strokeWidth={1.75} />}
             label={t('threads.actions.unstarThread')}
             disabled={readOnly || mailItems.length === 0}
             onClick={() => {
@@ -248,7 +248,7 @@ export function BulkActionBar({
           />
           <div className="my-1 border-t border-border" />
           <MenuItem
-            icon={<Archive size={13} className="text-secondary" />}
+            icon={<Archive size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.archiveThread')}
             disabled={readOnly || !canArchive}
             onClick={() => {
@@ -266,9 +266,9 @@ export function BulkActionBar({
             onMouseLeave={() => setMoveOpen(false)}
           >
             <MenuItem
-              icon={<FolderInput size={13} className="text-secondary" />}
+              icon={<FolderInput size={14} className="text-secondary" strokeWidth={1.75} />}
               label={t('threads.actions.moveTo')}
-              trailing={<ChevronRight size={13} className="text-secondary" />}
+              trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
               disabled={readOnly || !canMove}
               onClick={() => {
                 if (!canMove) return
@@ -279,7 +279,7 @@ export function BulkActionBar({
               <FloatingContextMenu
                 x={moveFlyoutPosition.x}
                 y={moveFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[190px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
               >
                 {!hasMoveTarget && (
                   <div className="px-3 py-2 text-xs font-semibold text-secondary">{t('folders.noneAvailable')}</div>
@@ -307,9 +307,9 @@ export function BulkActionBar({
             onMouseLeave={() => setCopyOpen(false)}
           >
             <MenuItem
-              icon={<Copy size={13} className="text-secondary" />}
+              icon={<Copy size={14} className="text-secondary" strokeWidth={1.75} />}
               label={t('threads.actions.copyTo')}
-              trailing={<ChevronRight size={13} className="text-secondary" />}
+              trailing={<ChevronRight size={14} className="text-secondary" strokeWidth={1.75} />}
               disabled={readOnly || !canCopy}
               onClick={() => {
                 if (!canCopy) return
@@ -321,7 +321,7 @@ export function BulkActionBar({
               <FloatingContextMenu
                 x={copyFlyoutPosition.x}
                 y={copyFlyoutPosition.y}
-                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+                className="fixed z-[51] max-h-[calc(100vh-1rem)] min-w-[230px] overflow-y-auto rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
               >
                 {copyAccountGroups.map(({ account, folders }) => (
                   <div key={account.id}>
@@ -348,7 +348,7 @@ export function BulkActionBar({
           </div>
           <div className="my-1 border-t border-border" />
           <MenuItem
-            icon={<Trash2 size={13} />}
+            icon={<Trash2 size={14} strokeWidth={1.75} />}
             label={t('buttons.delete')}
             danger
             disabled={readOnly || mailItems.length === 0}

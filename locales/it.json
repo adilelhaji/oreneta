@@ -363,6 +363,8 @@
   "calendar.tentative": "Provvisorio",
   "calendar.times": "volte",
   "calendar.title": "Calendario",
+  "calendar.previousPeriod": "Periodo precedente",
+  "calendar.nextPeriod": "Periodo successivo",
   "calendar.today": "Oggi",
   "calendar.tomorrow": "Domani",
   "calendar.unitDayMany": "giorni",

@@ -88,7 +88,11 @@ export function AccountSection({
           onClick={() => setExpanded((open) => !open)}
           title={expanded ? t('accounts.actions.collapseAccount') : t('accounts.actions.expandAccount')}
         >
-          <ChevronRight size={13} className={`shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          <ChevronRight
+            size={14}
+            className={`shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            strokeWidth={1.75}
+          />
           <Avatar name={group.label} email={group.email} src={group.avatarUrl} size={18} />
           <span className="truncate">{group.label}</span>
         </button>
@@ -136,7 +140,7 @@ export function AccountSection({
                   disabled={creating}
                   type="submit"
                 >
-                  {creating && <Loader2 size={14} className="animate-spin" />}
+                  {creating && <Loader2 size={14} className="animate-spin" strokeWidth={1.75} />}
                 </IconButton>
                 <IconButton
                   icon={X}
@@ -148,10 +152,10 @@ export function AccountSection({
                 />
               </div>
               {error ? (
-                <div className="mt-1.5 px-1 text-caption font-medium text-rose-500">{error}</div>
+                <div className="mt-1.5 px-1 text-caption font-medium text-danger">{error}</div>
               ) : (
                 <div className="mx-1 flex items-center gap-1.5 rounded-md bg-hover/60 px-2 py-1 text-2xs font-medium leading-4 text-secondary/75">
-                  <CornerDownRight size={11} strokeWidth={1.75} className="shrink-0 text-accent/70" aria-hidden />
+                  <CornerDownRight size={14} strokeWidth={1.75} className="shrink-0 text-accent/70" aria-hidden />
                   <span>{t('folders.subfolderHint', { delimiter })}</span>
                 </div>
               )}

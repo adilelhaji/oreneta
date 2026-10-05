@@ -29,7 +29,7 @@ export function QuickReplyComposer() {
 
   return (
     <footer className="p-3.5 bg-header border-t border-border z-10 flex flex-col items-center justify-center">
-      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent focus-within:bg-chats transition-all duration-150">
+      <div className="flex flex-col gap-2 w-full bg-hover p-2 rounded-panel border border-border/50 shadow-sm focus-within:ring-1 focus-within:ring-accent focus-within:bg-chats transition-all duration-120">
         <QuickReplyFrom />
         <QuickReplyAttachments attachments={composerAttachments} />
 
@@ -39,14 +39,14 @@ export function QuickReplyComposer() {
             className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-control text-secondary hover:bg-active transition-colors cursor-pointer"
             title={t('composer.actions.attachFiles')}
           >
-            <Paperclip size={16} />
+            <Paperclip size={16} strokeWidth={1.75} />
           </button>
           <button
             onClick={openReplyInFullEditor}
             className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-control text-secondary hover:bg-active transition-colors cursor-pointer"
             title={t('composer.actions.openFullEditor')}
           >
-            <Maximize2 size={15} />
+            <Maximize2 size={16} strokeWidth={1.75} />
           </button>
 
           <textarea
@@ -66,9 +66,9 @@ export function QuickReplyComposer() {
             disabled={!canSend}
             className={`flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full shadow transition-all ${
               sendingReply
-                ? 'bg-accent text-white cursor-wait'
+                ? 'bg-accent text-on-accent cursor-wait'
                 : canSend
-                  ? 'bg-accent text-white hover:scale-105 cursor-pointer'
+                  ? 'bg-accent text-on-accent  cursor-pointer'
                   : 'bg-active text-secondary/70 cursor-not-allowed'
             }`}
             title={
@@ -78,9 +78,9 @@ export function QuickReplyComposer() {
             }
           >
             {sendingReply ? (
-              <Loader2 size={13} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin" strokeWidth={1.75} />
             ) : (
-              <Send size={13} className="relative left-[0.5px]" />
+              <Send size={14} className="relative left-[0.5px]" strokeWidth={1.75} />
             )}
           </button>
         </div>

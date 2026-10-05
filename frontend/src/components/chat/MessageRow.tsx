@@ -93,11 +93,11 @@ export function MessageRow({
           }}
           className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
         >
-          <Undo2 size={12} />
+          <Undo2 size={14} strokeWidth={1.75} />
           <span className="text-2xs font-semibold">{t('chat.undoSend', { defaultValue: 'Undo' })}</span>
         </button>
       ) : message.send_status === 'sending' ? (
-        <Loader2 size={12} className="text-secondary/70 animate-spin" />
+        <Loader2 size={14} className="text-secondary/70 animate-spin" strokeWidth={1.75} />
       ) : message.send_status === 'failed' ? (
         <button
           type="button"
@@ -106,9 +106,9 @@ export function MessageRow({
             event.stopPropagation()
             void retrySend(message.id)
           }}
-          className="flex items-center gap-0.5 text-red-500 hover:text-red-600 cursor-pointer"
+          className="flex items-center gap-0.5 text-danger hover:text-danger cursor-pointer"
         >
-          <AlertCircle size={12} />
+          <AlertCircle size={14} strokeWidth={1.75} />
           <span className="text-2xs font-semibold">{t('chat.retry')}</span>
         </button>
       ) : null
@@ -214,7 +214,7 @@ export function MessageRow({
         {metaOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
-            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-control-sm border border-border bg-chats p-3 text-secondary shadow-xl select-text">
+            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-control-sm border border-border bg-chats p-3 text-secondary shadow-overlay select-text">
               <AddressRow label={t('composer.fields.from')} rawList={fromRaw} />
               {toRaw && <AddressRow label={t('composer.fields.to')} rawList={toRaw} />}
               {ccRaw && <AddressRow label={t('composer.fields.cc')} rawList={ccRaw} />}

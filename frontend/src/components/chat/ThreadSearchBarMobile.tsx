@@ -24,7 +24,7 @@ export function ThreadSearchBarMobile({
   return (
     <div className="min-[900px]:hidden flex h-11 shrink-0 items-center gap-1 border-b border-border bg-header px-3 z-10">
       <div className="flex flex-1 items-center gap-2 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
-        <Search size={14} className="text-secondary shrink-0" />
+        <Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />
         <input
           ref={inputRef}
           value={threadSearch}
@@ -50,7 +50,7 @@ export function ThreadSearchBarMobile({
           className="flex h-5 w-5 items-center justify-center rounded-full text-secondary hover:text-primary cursor-pointer"
           title={t('chat.closeThreadSearch')}
         >
-          <X size={12} />
+          <X size={14} strokeWidth={1.75} />
         </button>
         <span className="w-12 text-center text-2xs font-semibold text-secondary">
           {normalizedThreadSearch ? `${searchMatches.length ? activeSearchIndex + 1 : 0}/${searchMatches.length}` : ''}
@@ -62,7 +62,7 @@ export function ThreadSearchBarMobile({
         className="flex h-8 w-8 items-center justify-center rounded-control-sm text-secondary hover:bg-hover disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
         title={t('chat.previousMatch')}
       >
-        <ChevronUp size={15} />
+        <ChevronUp size={16} strokeWidth={1.75} />
       </button>
       <button
         onClick={() => goToSearchMatch(1)}
@@ -70,7 +70,7 @@ export function ThreadSearchBarMobile({
         className="flex h-8 w-8 items-center justify-center rounded-control-sm text-secondary hover:bg-hover disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
         title={t('chat.nextMatch')}
       >
-        <ChevronDown size={15} />
+        <ChevronDown size={16} strokeWidth={1.75} />
       </button>
     </div>
   )

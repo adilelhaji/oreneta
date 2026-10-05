@@ -88,9 +88,7 @@ export function TemplatesSettingsSection() {
                     />
                     <SelectInput
                       value={template.kind}
-                      onChange={(event) =>
-                        change(template.id, { kind: event.target.value as TemplateKind })
-                      }
+                      onChange={(event) => change(template.id, { kind: event.target.value as TemplateKind })}
                       className="w-32 shrink-0"
                       aria-label={t('templates.kindLabel')}
                     >
@@ -105,7 +103,7 @@ export function TemplatesSettingsSection() {
                       onClick={() => setDrafts(reorder(list, index, index - 1))}
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      <ChevronUp size={14} />
+                      <ChevronUp size={14} strokeWidth={1.75} />
                     </button>
                     <button
                       type="button"
@@ -115,16 +113,16 @@ export function TemplatesSettingsSection() {
                       onClick={() => setDrafts(reorder(list, index, index + 1))}
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      <ChevronDown size={14} />
+                      <ChevronDown size={14} strokeWidth={1.75} />
                     </button>
                     <button
                       type="button"
                       title={t('templates.remove')}
                       aria-label={t('templates.remove')}
                       onClick={() => setDrafts(list.filter((item) => item.id !== template.id))}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={14} strokeWidth={1.75} />
                     </button>
                   </div>
 
@@ -146,11 +144,7 @@ export function TemplatesSettingsSection() {
                     className="w-full resize-y rounded-control border border-border bg-app px-2.5 py-1.5 text-ui text-primary placeholder-secondary outline-none focus:border-accent/50"
                   />
 
-                  {problem && (
-                    <p className="text-caption text-rose-600 dark:text-rose-400">
-                      {t(`templates.problem.${problem}`)}
-                    </p>
-                  )}
+                  {problem && <p className="text-caption text-danger">{t(`templates.problem.${problem}`)}</p>}
                 </li>
               )
             })}
@@ -163,14 +157,14 @@ export function TemplatesSettingsSection() {
             onClick={() => setDrafts([...list, newTemplate()])}
             className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
           >
-            <Plus size={14} /> {t('templates.add')}
+            <Plus size={14} strokeWidth={1.75} /> {t('templates.add')}
           </button>
           {dirty && (
             <>
               <button
                 type="button"
                 onClick={() => void persist(list)}
-                className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer"
+                className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer"
               >
                 {t('buttons.save')}
               </button>

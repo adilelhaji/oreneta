@@ -9,15 +9,7 @@ import { SelectInput, TextInput } from '../field/Field'
 // text of its own, and one that reads as "switch, on" says nothing about what
 // is on. Asking the caller — who has the wording right there — is the only
 // place the answer exists.
-export function Switch({
-  checked,
-  label,
-  onChange,
-}: {
-  checked: boolean
-  label: string
-  onChange: () => void
-}) {
+export function Switch({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
   return (
     <button
       role="switch"
@@ -41,7 +33,11 @@ export function Switch({
 // thin dividers. Rows inside should be SettingRow-based.
 export function SettingsGroup({ title, children, section }: { title: string; children: ReactNode; section?: string }) {
   return (
-    <section data-settings-section={section} tabIndex={section ? -1 : undefined} aria-label={section ? title : undefined}>
+    <section
+      data-settings-section={section}
+      tabIndex={section ? -1 : undefined}
+      aria-label={section ? title : undefined}
+    >
       <h3 className="mb-2 px-1 text-xs font-semibold text-secondary">{title}</h3>
       <div className="rounded-panel bg-raised/80 border border-border/60 divide-y divide-border/40 overflow-hidden shadow-sm shadow-black/[0.03] dark:shadow-black/10">
         {children}
@@ -86,7 +82,14 @@ export function ToggleRow({
   checked: boolean
   onChange: () => void
 }) {
-  return <SettingRow icon={icon} title={title} hint={hint} control={<Switch checked={checked} label={title} onChange={onChange} />} />
+  return (
+    <SettingRow
+      icon={icon}
+      title={title}
+      hint={hint}
+      control={<Switch checked={checked} label={title} onChange={onChange} />}
+    />
+  )
 }
 
 export function SegmentedRow<T extends string>({
@@ -172,9 +175,7 @@ export function NumberRow({
       control={
         <div className="flex items-center gap-2">
           {note && (
-            <span className={`text-caption font-semibold ${invalid ? 'text-rose-500' : 'text-secondary'}`}>
-              {note}
-            </span>
+            <span className={`text-caption font-semibold ${invalid ? 'text-danger' : 'text-secondary'}`}>{note}</span>
           )}
           {reset && (
             <button
@@ -184,7 +185,7 @@ export function NumberRow({
               aria-label={reset.title}
               className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active hover:text-primary cursor-pointer transition-colors"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={14} strokeWidth={1.75} />
             </button>
           )}
           <label className="flex items-center gap-1.5">

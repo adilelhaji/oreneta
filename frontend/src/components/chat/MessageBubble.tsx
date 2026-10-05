@@ -2,16 +2,7 @@ import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
-import {
-  AlertCircle,
-  Check,
-  ChevronDown,
-  ExternalLink,
-  Loader2,
-  MoreHorizontal,
-  Star,
-  Undo2,
-} from 'lucide-react'
+import { AlertCircle, Check, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Star, Undo2 } from 'lucide-react'
 
 import { openDraftCompose, openMessageTab, retrySend, undoSend } from '../../states/compose'
 import type { Message } from '../../types'
@@ -109,7 +100,11 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                 title={metaOpen ? t('chat.hideDetails') : t('chat.showDetails')}
                 className="flex items-center justify-center w-4 h-4 rounded text-secondary hover:text-primary hover:bg-black/[0.05] dark:hover:bg-white/[0.08] cursor-pointer transition-colors"
               >
-                <ChevronDown size={12} className={`transition-transform ${metaOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform ${metaOpen ? 'rotate-180' : ''}`}
+                  strokeWidth={1.75}
+                />
               </button>
             )}
           </div>
@@ -119,7 +114,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                 {t('chat.draft')}
               </span>
             )}
-            {message.starred && <Star size={11} className="fill-amber-500 text-amber-500" />}
+            {message.starred && <Star size={14} className="fill-warning text-warning" strokeWidth={1.75} />}
             <span title={formatFullTimestamp(message.date)}>
               {formatMessageStamp(message.date, view.showOriginalDate)}
             </span>
@@ -133,25 +128,23 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                   onClick={() => undoSend(message.id)}
                   className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
                 >
-                  <Undo2 size={12} />
-                  <span className="text-2xs font-semibold">
-                    {t('chat.undoSend', { defaultValue: 'Undo' })}
-                  </span>
+                  <Undo2 size={14} strokeWidth={1.75} />
+                  <span className="text-2xs font-semibold">{t('chat.undoSend', { defaultValue: 'Undo' })}</span>
                 </button>
               ) : message.send_status === 'sending' ? (
-                <Loader2 size={12} className="text-secondary/70 animate-spin" />
+                <Loader2 size={14} className="text-secondary/70 animate-spin" strokeWidth={1.75} />
               ) : message.send_status === 'failed' ? (
                 <button
                   type="button"
                   title={t('chat.failedToSendRetry')}
                   onClick={() => void retrySend(message.id)}
-                  className="flex items-center gap-0.5 text-red-500 hover:text-red-600 cursor-pointer"
+                  className="flex items-center gap-0.5 text-danger hover:text-danger cursor-pointer"
                 >
-                  <AlertCircle size={12} />
+                  <AlertCircle size={14} strokeWidth={1.75} />
                   <span className="text-2xs font-semibold">{t('chat.retry')}</span>
                 </button>
               ) : (
-                <Check size={12} className="text-accent opacity-90" />
+                <Check size={14} className="text-accent opacity-90" strokeWidth={1.75} />
               ))}
           </div>
           {/* Anchored to the bubble edge, not the chevron: an outgoing bubble
@@ -165,7 +158,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
               <div
-                className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-control-sm border border-border bg-chats p-3 shadow-xl text-secondary select-text ${
+                className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-control-sm border border-border bg-chats p-3 shadow-overlay text-secondary select-text ${
                   outgoing ? (useHtmlBody ? 'right-0 max-w-full' : 'right-0') : 'left-0'
                 }`}
               >

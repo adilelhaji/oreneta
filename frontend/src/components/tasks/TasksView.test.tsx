@@ -12,6 +12,7 @@ afterEach(() => {
   ui$.selectedFolder.set('inbox')
   ui$.selectedThread.set('')
   ui$.tasksOpen.set(false)
+  ui$.mobilePane.set('threads')
   delete (window as any).go
 })
 
@@ -73,6 +74,19 @@ describe('the tasks view', () => {
     expect(ui$.selectedAccount.get()).toBe('acct')
     expect(ui$.selectedFolder.get()).toBe('INBOX')
     expect(ui$.selectedThread.get()).toBe('acct#INBOX#t1')
+    expect(ui$.mobilePane.get()).toBe('conversation')
+  })
+
+  it('exposes opening as an independent button alongside the task actions', async () => {
+    stubBridge({ 'tasks.list': { tasks: [task()] } })
+    const view = render(<TasksView />)
+    const open = await view.findByRole('button', { name: /Renew the contract/ })
+    open.focus()
+    expect(document.activeElement).toBe(open)
+    expect(open.querySelector('button')).toBeNull()
+    expect(open.contains(view.getByLabelText('Edit task'))).toBe(false)
+    expect(open.contains(view.getByLabelText('Mark done'))).toBe(false)
+    expect(open.contains(view.getByLabelText('Remove task'))).toBe(false)
   })
 
   it('the edit button opens the edit dialog without navigating away', async () => {

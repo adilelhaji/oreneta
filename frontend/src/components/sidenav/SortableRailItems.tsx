@@ -71,11 +71,11 @@ export function SortableBoard({ board, active, onSelect, onContextMenu }: Sortab
         <div
           className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 ${
             active
-              ? 'bg-accent text-white shadow-lg shadow-accent/25 scale-105'
+              ? 'bg-accent text-on-accent  scale-105'
               : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:scale-105'
           }`}
         >
-          <Columns3 size={19} />
+          <Columns3 size={20} strokeWidth={1.75} />
         </div>
       )}
     </div>
@@ -146,7 +146,7 @@ export function SortableAccount({
             name={accountLabel(account)}
             src={account.avatar_url}
             size={44}
-            fallback={isRSS ? <Rss size={20} /> : undefined}
+            fallback={isRSS ? <Rss size={20} strokeWidth={1.75} /> : undefined}
             className={`!rounded-panel pointer-events-none transition-all ${
               isPaused || needsReconnect ? 'grayscale opacity-40' : ''
             }`}
@@ -154,17 +154,17 @@ export function SortableAccount({
         </div>
         {(needsReconnect || isPaused || isMuted) && (
           <span
-            className={`absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full text-white/90 ring-2 ring-sidenav ${
-              needsReconnect ? 'bg-amber-600' : 'bg-black/60 text-white/80'
+            className={`absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full ring-2 ring-sidenav ${
+              needsReconnect ? 'bg-warning-soft text-warning' : 'bg-black/60 text-white/80'
             }`}
             title={needsReconnect ? 'Needs reconnect' : isPaused ? 'Paused' : 'Muted'}
           >
             {needsReconnect ? (
-              <KeyRound size={10} />
+              <KeyRound size={14} strokeWidth={1.75} />
             ) : isPaused ? (
-              <Pause size={9} className="fill-current" />
+              <Pause size={14} className="fill-current" strokeWidth={1.75} />
             ) : (
-              <BellOff size={9} />
+              <BellOff size={14} strokeWidth={1.75} />
             )}
           </span>
         )}

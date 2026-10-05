@@ -152,7 +152,7 @@ export function FontSettingsSection() {
   return (
     <>
       <SelectRow
-        icon={<CaseSensitive size={15} />}
+        icon={<CaseSensitive size={16} strokeWidth={1.75} />}
         title={t('settings.appearance.uiFont')}
         hint={t('settings.appearance.uiFontHint')}
         value={uiCustom ? CUSTOM_VALUE : fontFamily}
@@ -161,7 +161,7 @@ export function FontSettingsSection() {
       />
       {uiCustom && <CustomFontRow value={fontFamily} onChange={(value) => settings$.fontFamily.set(value)} />}
       <ScaleRow
-        icon={<ALargeSmall size={15} />}
+        icon={<ALargeSmall size={16} strokeWidth={1.75} />}
         title={t('settings.appearance.textSize')}
         hint={t('settings.appearance.textSizeHint')}
         value={fontScale}
@@ -169,7 +169,7 @@ export function FontSettingsSection() {
         onChange={(value) => settings$.fontScale.set(value)}
       />
       <SelectRow
-        icon={<MessagesSquare size={15} />}
+        icon={<MessagesSquare size={16} strokeWidth={1.75} />}
         title={t('settings.appearance.messageFont')}
         hint={t('settings.appearance.messageFontHint')}
         value={messageCustom ? CUSTOM_VALUE : messageFontFamily}
@@ -180,7 +180,7 @@ export function FontSettingsSection() {
         <CustomFontRow value={messageFontFamily} onChange={(value) => settings$.messageFontFamily.set(value)} />
       )}
       <ScaleRow
-        icon={<ALargeSmall size={15} />}
+        icon={<ALargeSmall size={16} strokeWidth={1.75} />}
         title={t('settings.appearance.messageTextSize')}
         hint={t('settings.appearance.messageTextSizeHint')}
         value={messageFontScale}

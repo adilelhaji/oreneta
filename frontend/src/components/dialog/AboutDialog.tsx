@@ -63,7 +63,7 @@ export function AboutDialog() {
 
         <div className="mt-6 w-full rounded-panel border border-border/70 bg-raised/70 p-4">
           <div className="flex items-center justify-center gap-2 text-xs font-bold text-primary">
-            <Heart size={14} className="text-accent" />
+            <Heart size={14} className="text-accent" strokeWidth={1.75} />
             <span>{t('about.supportDevelopment')}</span>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">

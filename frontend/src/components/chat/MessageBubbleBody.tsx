@@ -63,7 +63,7 @@ export function MessageBubbleBody({
         <mark
           key={`${keyPrefix}-match-${index}`}
           className={`rounded px-0.5 ${
-            activeSearchMatch ? 'bg-amber-300 text-black' : 'bg-amber-200/70 text-inherit dark:bg-amber-400/35'
+            activeSearchMatch ? 'bg-warning-soft text-warning ring-2 ring-warning' : 'bg-warning-soft text-warning'
           }`}
         >
           {chunk}
@@ -119,7 +119,7 @@ export function MessageBubbleBody({
                 className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-chats/90 text-secondary opacity-0 shadow-sm transition-opacity hover:text-primary group-hover:opacity-100"
                 title={t('chat.copyCode')}
               >
-                <Copy size={13} />
+                <Copy size={14} strokeWidth={1.75} />
               </button>
               <pre className="m-0 max-w-full overflow-x-auto rounded-control-sm border border-border/60 bg-black/5 px-3 py-2.5 pr-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
                 <code className="block min-w-max whitespace-pre">{block.content}</code>

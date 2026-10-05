@@ -63,7 +63,7 @@ export function SpamNotice({ message }: { message: Message }) {
             type="button"
             disabled={busy}
             onClick={moveToJunk}
-            className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
+            className="shrink-0 rounded-control bg-accent px-3 py-1 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
           >
             {t('spam.moveToJunk')}
           </button>
@@ -79,7 +79,7 @@ export function SpamNotice({ message }: { message: Message }) {
       }
     >
       <span className="flex items-start gap-1.5">
-        <ShieldAlert size={13} className="mt-0.5 shrink-0" />
+        <ShieldAlert size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
         <span>{because}</span>
       </span>
     </Notice>

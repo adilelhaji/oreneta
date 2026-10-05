@@ -88,7 +88,7 @@ export function PgpSettingsSection() {
                 key={key.fingerprint}
                 className="flex items-center gap-2 rounded-control border border-accent/30 bg-accent/[0.05] px-3 py-2"
               >
-                <KeyRound size={15} className="shrink-0 text-accent" />
+                <KeyRound size={16} className="shrink-0 text-accent" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-ui font-semibold">
                     {key.userIds[0] || key.addresses[0] || t('crypto.unnamedKey')}
@@ -116,9 +116,9 @@ export function PgpSettingsSection() {
                       if (yes) void removeSecretKey(key.fingerprint)
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} strokeWidth={1.75} />
                 </button>
               </li>
             ))}
@@ -142,7 +142,7 @@ export function PgpSettingsSection() {
               type="button"
               disabled={busy || !secretArmoured.trim()}
               onClick={() => void addSecret()}
-              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('crypto.importSecretKey')}
             </button>
@@ -156,14 +156,12 @@ export function PgpSettingsSection() {
                 key={cert.fingerprint}
                 className="flex items-center gap-2 rounded-control border border-border bg-panel px-3 py-2"
               >
-                <KeyRound size={15} className="shrink-0 text-secondary" />
+                <KeyRound size={16} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-ui font-semibold">
                     {cert.userIds[0] || cert.addresses[0] || t('crypto.unnamedKey')}
                   </span>
-                  <span className="block truncate font-mono text-2xs text-secondary">
-                    {grouped(cert.fingerprint)}
-                  </span>
+                  <span className="block truncate font-mono text-2xs text-secondary">{grouped(cert.fingerprint)}</span>
                 </div>
                 <button
                   type="button"
@@ -182,9 +180,9 @@ export function PgpSettingsSection() {
                       if (yes) void removeCert(cert.fingerprint)
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} strokeWidth={1.75} />
                 </button>
               </li>
             ))}
@@ -207,7 +205,7 @@ export function PgpSettingsSection() {
               type="button"
               disabled={busy || !armoured.trim()}
               onClick={() => void add()}
-              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('crypto.importKey')}
             </button>

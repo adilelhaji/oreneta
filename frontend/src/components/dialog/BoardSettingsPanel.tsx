@@ -33,7 +33,7 @@ function BoardTile({ board, size, className = '' }: { board: KanbanBoard; size: 
       style={{ width: size, height: size }}
       className={`flex shrink-0 items-center justify-center rounded-panel bg-accent/10 text-accent border border-accent/10 ${className}`}
     >
-      <Columns3 size={Math.round(size * 0.45)} />
+      <Columns3 size={Math.round(size * 0.45)} strokeWidth={1.75} />
     </div>
   )
 }
@@ -107,7 +107,7 @@ function BoardWallpaperCard({ board }: { board: KanbanBoard }) {
 
   return (
     <SettingRow
-      icon={<ImageIcon size={15} />}
+      icon={<ImageIcon size={16} strokeWidth={1.75} />}
       title={t('kanban.board.background')}
       control={
         <div className="flex items-center gap-3 select-none">
@@ -176,7 +176,7 @@ export function BoardPanel({ board }: { board: KanbanBoard }) {
         >
           <BoardTile board={board} size={40} />
           <span className="absolute inset-0 flex items-center justify-center rounded-panel bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera size={15} className="text-white" />
+            <Camera size={16} className="text-white" strokeWidth={1.75} />
           </span>
         </button>
         {image.pendingFile && (
@@ -203,9 +203,9 @@ export function BoardPanel({ board }: { board: KanbanBoard }) {
       <button
         type="button"
         onClick={() => void onDelete()}
-        className="mt-1 self-start flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-xs font-semibold text-secondary hover:text-rose-500 transition-colors cursor-pointer"
+        className="mt-1 self-start flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-xs font-semibold text-secondary hover:text-danger transition-colors cursor-pointer"
       >
-        <Trash2 size={12} />
+        <Trash2 size={14} strokeWidth={1.75} />
         {t('kanban.board.delete')}
       </button>
     </div>

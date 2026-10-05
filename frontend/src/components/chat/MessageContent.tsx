@@ -63,7 +63,9 @@ export function MessageContent({
           }
 
           return (
-            <div className={`mb-2 grid gap-1.5 rounded-control-sm overflow-hidden border border-border/20 ${gridClass}`}>
+            <div
+              className={`mb-2 grid gap-1.5 rounded-control-sm overflow-hidden border border-border/20 ${gridClass}`}
+            >
               {bubbleAttachmentImages.map((image, idx) => (
                 <button
                   key={idx}
@@ -107,7 +109,7 @@ export function MessageContent({
           onClick={() => revealRemote(message.id)}
           className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-control-sm border border-dashed border-border/50 bg-black/[0.02] dark:bg-white/[0.02] py-2 text-caption font-semibold text-secondary hover:text-accent hover:border-accent/40 cursor-pointer transition-colors"
         >
-          <Image size={13} />
+          <Image size={14} strokeWidth={1.75} />
           {t('chat.showImages', { count: hiddenRemoteCount })}
         </button>
       )}
@@ -147,32 +149,30 @@ export function MessageContent({
               downloadable ? 'hover:bg-black/[0.06] dark:hover:bg-white/[0.06] cursor-pointer' : 'cursor-default'
             }`}
           >
-            <FileIcon size={15} className="text-accent shrink-0" />
+            <FileIcon size={16} className="text-accent shrink-0" />
             <span className="truncate">{file.filename}</span>
-            <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">
-              {formatFileSize(file.size)}
-            </span>
+            <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">{formatFileSize(file.size)}</span>
             {downloadable &&
               // The icon says which of the two clicking does, so nobody is
               // surprised by a save dialog they did not ask for.
               (previewKind(file) ? (
                 <Eye
-                  size={13}
+                  size={14}
                   className="text-secondary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  strokeWidth={1.75}
                 />
               ) : (
                 <Download
-                  size={13}
+                  size={14}
                   className="text-secondary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  strokeWidth={1.75}
                 />
               ))}
           </button>
         )
       })}
 
-      {previewing && (
-        <AttachmentPreviewDialog attachment={previewing} onClose={() => setPreviewing(null)} />
-      )}
+      {previewing && <AttachmentPreviewDialog attachment={previewing} onClose={() => setPreviewing(null)} />}
     </>
   )
 }

@@ -25,7 +25,7 @@ export function AccountWallpaperCard({ account }: { account: Account }) {
 
   return (
     <SettingRow
-      icon={<ImageIcon size={15} />}
+      icon={<ImageIcon size={16} strokeWidth={1.75} />}
       title={t('settings.account.chatBackground')}
       control={
         <div className="flex items-center gap-3 select-none">

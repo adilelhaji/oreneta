@@ -62,7 +62,7 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
             {t('buttons.cancel')}
           </Button>
           <Button variant="primary" onClick={submit} disabled={!canSubmit}>
-            {busy && <RefreshCw size={11} className="animate-spin" />}
+            {busy && <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />}
             <span>{exporting ? t('common.export') : t('settings.backup.restoreAction')}</span>
           </Button>
         </>
@@ -70,7 +70,11 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
     >
       {exporting && (
         <label className="flex cursor-pointer items-start gap-2.5 px-1">
-          <Checkbox checked={includeSecrets} onChange={(event) => setIncludeSecrets(event.target.checked)} className="mt-0.5" />
+          <Checkbox
+            checked={includeSecrets}
+            onChange={(event) => setIncludeSecrets(event.target.checked)}
+            className="mt-0.5"
+          />
           <span className="min-w-0">
             <span className="block text-xs font-semibold">{t('settings.backup.includeSecrets')}</span>
             <span className="mt-0.5 block text-caption font-medium leading-relaxed text-secondary">
@@ -119,12 +123,12 @@ export function BackupPassphraseDialog({ mode, busy = false, error, onCancel, on
         {exporting ? t('settings.backup.passphraseHint') : t('settings.backup.restoreHint')}
       </p>
       {mismatched && confirmation.length > 0 && (
-        <p role="alert" className="px-1 text-caption font-medium text-rose-500">
+        <p role="alert" className="px-1 text-caption font-medium text-danger">
           {t('settings.backup.passphraseMismatch')}
         </p>
       )}
       {error && (
-        <p role="alert" className="px-1 text-caption font-medium text-rose-500">
+        <p role="alert" className="px-1 text-caption font-medium text-danger">
           {error}
         </p>
       )}

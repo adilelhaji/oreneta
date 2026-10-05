@@ -68,7 +68,7 @@ export function VideoAttachment({
           className={posterClassName}
         >
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50">
-            <Play size={22} fill="currentColor" />
+            <Play size={20} fill="currentColor" strokeWidth={1.75} />
           </span>
         </button>
       )}
@@ -79,7 +79,7 @@ export function VideoAttachment({
           title={externalLabel}
           className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white/90 opacity-0 group-hover:opacity-100 hover:bg-black/70 transition-opacity cursor-pointer"
         >
-          <ExternalLink size={13} />
+          <ExternalLink size={14} strokeWidth={1.75} />
         </button>
       )}
     </div>

@@ -28,7 +28,7 @@ export function AccountContextMenu({
   return (
     <RailContextMenu x={x} y={y} onClose={onClose}>
       <RailMenuItem
-        icon={<SlidersHorizontal size={13} className={secondary} />}
+        icon={<SlidersHorizontal size={14} className={secondary} strokeWidth={1.75} />}
         label={t('settings.account.accountSettings')}
         onClick={() => {
           ui$.accountSettingsId.set(account.id)
@@ -39,7 +39,7 @@ export function AccountContextMenu({
       <RailMenuItem
         className="disabled:cursor-not-allowed disabled:opacity-50"
         disabled={!hasUnread || account.auth_type === 'graph_oauth'}
-        icon={<CheckCheck size={13} className={secondary} />}
+        icon={<CheckCheck size={14} className={secondary} strokeWidth={1.75} />}
         label={t('threads.actions.markAllAsRead')}
         onClick={() => {
           void markAccountInboxRead(account.id)
@@ -47,7 +47,13 @@ export function AccountContextMenu({
         }}
       />
       <RailMenuItem
-        icon={account.muted ? <Bell size={13} className={secondary} /> : <BellOff size={13} className={secondary} />}
+        icon={
+          account.muted ? (
+            <Bell size={14} className={secondary} strokeWidth={1.75} />
+          ) : (
+            <BellOff size={14} className={secondary} strokeWidth={1.75} />
+          )
+        }
         label={account.muted ? t('settings.account.unmuteNotifications') : t('settings.account.muteNotifications')}
         onClick={() => {
           void setAccountMuted(account.id, !(account.muted ?? false))
@@ -55,7 +61,13 @@ export function AccountContextMenu({
         }}
       />
       <RailMenuItem
-        icon={account.paused ? <Play size={13} className={secondary} /> : <Pause size={13} className={secondary} />}
+        icon={
+          account.paused ? (
+            <Play size={14} className={secondary} strokeWidth={1.75} />
+          ) : (
+            <Pause size={14} className={secondary} strokeWidth={1.75} />
+          )
+        }
         label={account.paused ? t('settings.account.resumeChecking') : t('settings.account.pauseAccount')}
         onClick={() => {
           void setAccountPaused(account.id, !(account.paused ?? false))
@@ -63,7 +75,7 @@ export function AccountContextMenu({
         }}
       />
       <RailMenuItem
-        icon={<EyeOff size={13} className={secondary} />}
+        icon={<EyeOff size={14} className={secondary} strokeWidth={1.75} />}
         label={t('sidenav.actions.hideFromSideNav')}
         onClick={() => {
           setAccountSideNavHidden(account.id, true)

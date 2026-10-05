@@ -193,7 +193,7 @@ export function AvatarCropDialog({
         >
           {!imageSize && (
             <div className="absolute inset-0 flex items-center justify-center text-secondary">
-              <ImageIcon size={22} />
+              <ImageIcon size={20} strokeWidth={1.75} />
             </div>
           )}
           {imageUrl && (

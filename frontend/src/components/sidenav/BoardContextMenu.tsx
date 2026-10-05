@@ -20,7 +20,7 @@ export function BoardContextMenu({
   return (
     <RailContextMenu x={x} y={y} onClose={onClose}>
       <RailMenuItem
-        icon={<Settings size={13} className="text-secondary" />}
+        icon={<Settings size={14} className="text-secondary" strokeWidth={1.75} />}
         label={t('kanban.board.settings')}
         onClick={() => {
           ui$.accountSettingsId.set(board.id)
@@ -29,7 +29,7 @@ export function BoardContextMenu({
         }}
       />
       <RailMenuItem
-        icon={<Trash2 size={13} />}
+        icon={<Trash2 size={14} strokeWidth={1.75} />}
         label={t('kanban.board.delete')}
         danger
         onClick={() => {

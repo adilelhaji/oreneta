@@ -41,19 +41,17 @@ export function SendLaterMenu({
         title={title ?? t('sendLater.action')}
         aria-label={title ?? t('sendLater.action')}
         className={`flex h-9 w-9 items-center justify-center rounded-control transition-colors ${
-          disabled
-            ? 'cursor-not-allowed text-secondary/50'
-            : 'text-secondary hover:bg-hover cursor-pointer'
+          disabled ? 'cursor-not-allowed text-secondary/50' : 'text-secondary hover:bg-hover cursor-pointer'
         }`}
       >
-        <Clock size={15} />
+        <Clock size={16} strokeWidth={1.75} />
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-lg">
+        <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-raised">
           {sendLaterChoices().map((choice) => (
             <MenuItem
               key={choice.key}
-              icon={<Clock size={13} className="text-secondary" />}
+              icon={<Clock size={14} className="text-secondary" strokeWidth={1.75} />}
               label={t(`sendLater.${choice.key}`, {
                 defaultValue: choice.key,
                 when: formatDeferredWhen(choice.at),
