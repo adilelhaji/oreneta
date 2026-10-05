@@ -20,6 +20,46 @@ type SetupOptions = {
   preferences?: Record<string, unknown>
 }
 
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [1440, 720]) {
+    test(`table reviewed selection: ${theme}, ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, theme })
+      await page.goto('/')
+      const table = page.getByRole('table')
+      const pilot = table.getByRole('button', { name: /Pilot checklist/ })
+      const check = table.getByRole('checkbox', { name: /Budget review/ })
+      await expect(table).toBeVisible()
+      await check.focus()
+      await page.keyboard.press('Space')
+      await expect(check).toBeChecked()
+      await expect(check).toHaveCSS('outline-width', '2px')
+      await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
+      expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.threadRead'))).toBe(false)
+      await pilot.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      if (width < 769) await page.getByTitle('Back to Chats', { exact: true }).click()
+      await expect(pilot).toHaveAttribute('aria-current', 'true')
+      await expect(check).not.toBeChecked()
+      await check.focus()
+      await page.keyboard.press('Space')
+      await expect(check).toBeChecked()
+      await expect(pilot).toHaveAttribute('aria-current', 'true')
+      await expect(table.getByRole('button', { name: /Unread: Budget review/ })).toBeVisible()
+      expect(await table.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await info.attach('table-selection', {
+        body: await page.screenshot({ path: info.outputPath('table-selection.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+      await page.keyboard.press('Space')
+      await expect(check).not.toBeChecked()
+      expect(errors).toEqual([])
+    })
+  }
+}
+
 for (const appearance of ['light', 'dark'] as const) {
   for (const width of [1440, 600]) {
     test(`shared design catalogue: ${appearance}, ${width}px, focus, controls and wrapping`, async ({ page }, info) => {

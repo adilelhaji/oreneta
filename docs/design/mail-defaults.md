@@ -15,6 +15,8 @@ Conversation layout = Traditional; List view = Table; List density = Compact.
 The same controls restore Chat, Cards or another density. This does not reset
 theme, sorting, accounts, reading width, read-marking policy, drafts or signatures.
 The table already has compact rows; density controls the alternative card list.
+The [table selection delivery](table-selection.md) (#154) adds separate selection
+checkboxes and opening controls to that default table; broader #34 acceptance remains open.
 
 Verification uses the production entry with synthetic bridge responses, not the
 reference page: both cobalt themes, inbox/open/reply draft/selection/navigation,
