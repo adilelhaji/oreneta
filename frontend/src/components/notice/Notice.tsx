@@ -11,10 +11,10 @@ export type NoticeTone = 'info' | 'success' | 'warning' | 'danger'
  * same ink whatever the tone so it reads at the same contrast in every theme.
  */
 const TONES: Record<NoticeTone, { icon: LucideIcon; ring: string; iconColor: string }> = {
-  info: { icon: Info, ring: 'border-border', iconColor: 'text-accent' },
-  success: { icon: CheckCircle2, ring: 'border-emerald-500/40', iconColor: 'text-emerald-600 dark:text-emerald-400' },
-  warning: { icon: AlertTriangle, ring: 'border-amber-500/45', iconColor: 'text-amber-600 dark:text-amber-400' },
-  danger: { icon: XCircle, ring: 'border-rose-500/45', iconColor: 'text-rose-600 dark:text-rose-400' },
+  info: { icon: Info, ring: 'border-info/40', iconColor: 'text-info' },
+  success: { icon: CheckCircle2, ring: 'border-success/40', iconColor: 'text-success' },
+  warning: { icon: AlertTriangle, ring: 'border-warning/40', iconColor: 'text-warning' },
+  danger: { icon: XCircle, ring: 'border-danger/40', iconColor: 'text-danger' },
 }
 
 /**
@@ -45,17 +45,17 @@ export function Notice({
     <div
       role={tone === 'danger' || tone === 'warning' ? 'alert' : 'status'}
       className={clsx(
-        'flex items-start gap-2.5 rounded-control border bg-raised px-3.5 py-2.5 text-ui text-primary',
+        'flex flex-wrap items-start gap-2.5 rounded-control border bg-raised px-3.5 py-2.5 text-ui text-primary',
         ring,
         className,
       )}
     >
-      <Icon size={15} className={clsx('mt-0.5 shrink-0', iconColor)} />
-      <div className="min-w-0 flex-1">
+      <Icon size={16} strokeWidth={1.75} aria-hidden="true" className={clsx('mt-0.5 shrink-0', iconColor)} />
+      <div className="min-w-0 flex-1 basis-32 wrap-anywhere">
         {title && <p className="font-semibold">{title}</p>}
         <div className={clsx('text-secondary', title && 'mt-0.5')}>{children}</div>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="ml-auto max-w-full shrink-0">{action}</div>}
     </div>
   )
 }

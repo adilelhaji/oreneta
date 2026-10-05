@@ -36,8 +36,8 @@ export function MenuItem({
       className={`${base}${className ? ` ${className}` : ''}`}
     >
       {icon}
-      {trailing ? <span className="min-w-0 flex-1 truncate text-left">{label}</span> : label}
-      {trailing}
+      <span className="min-w-0 flex-1 wrap-anywhere text-left">{label}</span>
+      {trailing && <span className="shrink-0">{trailing}</span>}
     </button>
   )
 }

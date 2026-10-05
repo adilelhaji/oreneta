@@ -14,7 +14,7 @@ import { Button } from '../button/Button'
  * look alike: an empty folder that is only empty because it has not arrived
  * yet is the wrong thing to tell someone.
  */
-function StateFrame({
+export function StateFrame({
   icon: Icon,
   iconClassName,
   title,
@@ -30,19 +30,18 @@ function StateFrame({
   spinning?: boolean
 }) {
   return (
-    <div className="flex h-full w-full items-center justify-center p-8 text-center animate-fade-in select-none">
+    <div className="flex min-h-full w-full items-center justify-center p-6 text-center animate-fade-in">
       <div className="flex max-w-xs flex-col items-center">
         <div
           className={clsx(
-            'relative flex h-16 w-16 items-center justify-center rounded-panel border bg-raised shadow-raised',
-            iconClassName ?? 'border-accent/10 text-accent',
+            'flex h-12 w-12 shrink-0 items-center justify-center rounded-control border',
+            iconClassName ?? 'border-border bg-raised text-accent',
           )}
         >
-          <div className="absolute inset-0 rounded-panel bg-current opacity-[0.04] blur-lg" />
-          <Icon size={24} strokeWidth={1.8} className={clsx('relative z-10', spinning && 'animate-spin')} />
+          <Icon size={20} strokeWidth={1.75} aria-hidden="true" className={clsx(spinning && 'animate-spin')} />
         </div>
-        <h3 className="mt-5 text-sm font-bold tracking-tight text-primary">{title}</h3>
-        {text && <p className="mt-2 px-2 text-xs leading-relaxed text-secondary">{text}</p>}
+        <h3 className="mt-4 text-sm font-semibold wrap-anywhere text-primary">{title}</h3>
+        {text && <p className="mt-2 text-ui leading-relaxed wrap-anywhere text-secondary">{text}</p>}
         {action && <div className="mt-4">{action}</div>}
       </div>
     </div>
@@ -77,7 +76,7 @@ export function ErrorState({
     <div role="alert" className="h-full w-full">
       <StateFrame
         icon={AlertTriangle}
-        iconClassName="border-rose-500/20 text-rose-600 dark:text-rose-400"
+        iconClassName="border-danger/30 bg-danger-soft text-danger"
         title={title}
         text={text}
         action={

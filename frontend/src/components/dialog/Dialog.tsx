@@ -25,7 +25,7 @@ type DialogIconTone = 'accent' | 'danger'
 
 const ICON_TONES: Record<DialogIconTone, string> = {
   accent: 'bg-accent/10 text-accent',
-  danger: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+  danger: 'bg-danger-soft text-danger',
 }
 
 /**
@@ -113,15 +113,20 @@ export function Dialog({
         <header className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             {Icon && (
-              <div className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-panel', ICON_TONES[iconTone])}>
-                <Icon size={17} />
+              <div
+                className={clsx(
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-panel',
+                  ICON_TONES[iconTone],
+                )}
+              >
+                <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
               </div>
             )}
             <div className="min-w-0">
               <h2 id={titleId} className="text-title font-bold leading-tight tracking-tight">
                 {title}
               </h2>
-              {subtitle && <p className="mt-1 truncate text-caption font-medium text-secondary">{subtitle}</p>}
+              {subtitle && <p className="mt-1 text-caption font-medium wrap-anywhere text-secondary">{subtitle}</p>}
             </div>
           </div>
           <IconButton

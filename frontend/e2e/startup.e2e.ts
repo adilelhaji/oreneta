@@ -19,6 +19,95 @@ type SetupOptions = {
   hideAccounts?: boolean
   preferences?: Record<string, unknown>
 }
+
+for (const appearance of ['light', 'dark'] as const) {
+  for (const width of [1440, 600]) {
+    test(`shared design catalogue: ${appearance}, ${width}px, focus, controls and wrapping`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      await page.emulateMedia({ colorScheme: appearance, reducedMotion: 'reduce' })
+      const errors = await prepareStartup(page, true, { navigation: true, theme: 'default' })
+      await page.goto('/')
+      await expect(page.getByRole('button', { name: 'New message', exact: true })).toBeVisible()
+      await page.keyboard.press('Control+k')
+      await page.getByRole('dialog').getByRole('textbox').fill('design catalogue')
+      await page.getByRole('button', { name: 'Open design catalogue' }).click()
+      const catalogue = page.getByRole('dialog', { name: 'Design catalogue' })
+      await expect(catalogue).toBeVisible()
+
+      const primary = catalogue.getByRole('button', { name: 'Primary', exact: true })
+      await primary.focus()
+      await page.keyboard.press('Shift+Tab')
+      await page.keyboard.press('Tab')
+      await expect(primary).toBeFocused()
+      await expect(primary).toHaveCSS('outline-style', 'solid')
+      await expect(primary).toHaveCSS('outline-width', '2px')
+      await expect(primary).toHaveCSS('color', appearance === 'light' ? 'rgb(255, 255, 255)' : 'rgb(16, 27, 46)')
+      await primary.hover()
+      await page.mouse.down()
+      await expect(primary).toHaveCSS('scale', 'none')
+      await expect(primary).toHaveCSS('box-shadow', 'none')
+      await page.mouse.up()
+      await expect(catalogue.getByRole('button', { name: 'Disabled danger', exact: true })).toBeDisabled()
+      await expect(catalogue.getByRole('button', { name: 'Icon button, disabled', exact: true })).toBeDisabled()
+
+      const invalid = catalogue.getByRole('textbox', { name: 'Invalid field' })
+      await invalid.focus()
+      await expect(invalid).toHaveAttribute('aria-invalid', 'true')
+      await expect(invalid).toHaveCSS('outline-width', '2px')
+
+      const select = catalogue.getByRole('button', { name: 'Selectable and removable', exact: true })
+      await select.scrollIntoViewIfNeeded()
+      const box = await select.boundingBox()
+      expect(box!.height).toBeGreaterThanOrEqual(20)
+      // Hit the visible side edge of the pill, outside the text but inside its rounded boundary.
+      await select.click({ position: { x: 2, y: box!.height / 2 } })
+      await expect(select).toHaveAttribute('aria-pressed', 'false')
+      await select.focus()
+      await page.keyboard.press('Space')
+      await expect(select).toHaveAttribute('aria-pressed', 'true')
+      await page.keyboard.press('Tab')
+      const remove = catalogue.getByRole('button', { name: 'Remove selectable chip' })
+      await expect(remove).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(remove).toHaveCount(0)
+      await expect(catalogue.getByRole('button', { name: 'Toggle · on' })).toHaveAttribute('aria-pressed', 'true')
+
+      const longMenu = catalogue.getByRole('button', { name: /Archivar los mensajes seleccionados/ })
+      await longMenu.scrollIntoViewIfNeeded()
+      expect(await longMenu.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+      const longAction = catalogue.getByRole('button', { name: 'Volver a comprobar la conexión' })
+      await longAction.scrollIntoViewIfNeeded()
+      expect(await catalogue.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+      expect(await longAction.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+      await info.attach('catalogue-feedback', {
+        body: await page.screenshot({ path: info.outputPath('catalogue-feedback.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+
+      await page.evaluate(() => {
+        ;(window as any).runtime = {
+          ...(window as any).runtime,
+          BrowserOpenURL: (url: string) => {
+            ;(window as any).designLink = url
+          },
+        }
+      })
+      const docs = catalogue.getByRole('button', { name: 'Art direction' })
+      await docs.focus()
+      await page.keyboard.press('Enter')
+      expect(await page.evaluate(() => (window as any).designLink)).toBe(
+        'https://github.com/adilelhaji/oreneta/blob/main/docs/design/art-direction.md',
+      )
+      await primary.focus()
+      await info.attach('catalogue-controls', {
+        body: await page.screenshot({ path: info.outputPath('catalogue-controls.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+      expect(errors).toEqual([])
+    })
+  }
+}
+
 async function prepareStartup(page: Page, withAccount = false, options: SetupOptions = {}) {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
