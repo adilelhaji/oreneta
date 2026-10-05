@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
@@ -85,8 +85,35 @@ export function Dialog({
   className?: string
 }) {
   const { t } = useTranslation()
-  const titleId = `dialog-${title.replace(/\s+/g, '-').toLowerCase()}`
-  useEscapeKey(onClose, !closeDisabled)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLElement>(null)
+  // Capture before children mount: a child's autoFocus must not become the
+  // element to return to when the dialog closes.
+  const openerRef = useRef(typeof document === 'undefined' ? null : document.activeElement)
+  useEscapeKey(() => {
+    if (!closeDisabled) onClose()
+  })
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.contains(document.activeElement)) dialog.focus()
+    return () => {
+      const ownedFocus = dialog.contains(document.activeElement)
+      const opener = openerRef.current
+      queueMicrotask(() => {
+        // StrictMode replays effect cleanup while the section remains mounted.
+        if (dialog.isConnected) return
+        // A newly opened surface may already own focus by the time cleanup
+        // settles. Never steal it, or focus a removed/disabled opener.
+        if (!ownedFocus || (document.activeElement !== document.body && !dialog.contains(document.activeElement)))
+          return
+        if (!(opener instanceof HTMLElement) || !opener.isConnected || opener.matches(':disabled')) return
+        if (opener.closest('[hidden], [inert], [aria-hidden="true"]')) return
+        opener.focus({ preventScroll: true })
+      })
+    }
+  }, [])
 
   return (
     <div
@@ -101,6 +128,8 @@ export function Dialog({
       }}
     >
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         role={role}
         aria-modal="true"
         aria-labelledby={titleId}
