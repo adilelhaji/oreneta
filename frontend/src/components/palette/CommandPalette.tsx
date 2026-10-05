@@ -80,7 +80,7 @@ export function CommandPalette() {
     >
       <div
         data-command-palette
-        className="w-full max-w-[560px] overflow-hidden rounded-control border border-border bg-chats shadow-2xl animate-fade-in"
+        className="w-full max-w-[560px] overflow-hidden rounded-control border border-border bg-chats shadow-overlay animate-fade-in"
         role="dialog"
         aria-modal="true"
         aria-label={t('palette.label')}
@@ -144,7 +144,7 @@ export function CommandPalette() {
                     <span className="block">{command.label}</span>
                     <span className="block text-caption text-secondary">{command.hint}</span>
                   </span>
-                  {command.active && <Check size={14} className="shrink-0 text-accent" />}
+                  {command.active && <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />}
                   {command.shortcut && (
                     <kbd className="shrink-0 rounded border border-border bg-app px-1.5 py-0.5 text-2xs font-medium text-secondary">
                       {formatShortcut(command.shortcut).join(isMac ? '' : '+')}

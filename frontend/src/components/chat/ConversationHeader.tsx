@@ -133,7 +133,7 @@ export function ConversationHeader({
           onClick={() => ui$.mobilePane.set('threads')}
           title={t('chat.backToChats')}
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={20} strokeWidth={1.75} />
         </button>
 
         {inKanban && (
@@ -142,7 +142,7 @@ export function ConversationHeader({
             onClick={closeKanbanPane}
             title={t('chat.closeConversationEsc')}
           >
-            <X size={18} />
+            <X size={20} strokeWidth={1.75} />
           </button>
         )}
 
@@ -196,7 +196,7 @@ export function ConversationHeader({
             <IconButton icon={Search} label={t('chat.searchThread')} onClick={() => thread$.searchOpen.set(true)} />
           ) : (
             <div className="hidden min-[900px]:flex w-[286px] items-center gap-1 rounded-control bg-hover px-2 py-1.5 border border-transparent focus-within:border-accent/40 focus-within:bg-chats">
-              <Search size={14} className="text-secondary shrink-0" />
+              <Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />
               <input
                 ref={desktopSearchInputRef}
                 value={threadSearch}
@@ -222,7 +222,7 @@ export function ConversationHeader({
                 className="flex h-5 w-5 items-center justify-center rounded-full text-secondary hover:text-primary cursor-pointer"
                 title={t('chat.closeThreadSearch')}
               >
-                <X size={12} />
+                <X size={14} strokeWidth={1.75} />
               </button>
               <span className="w-10 text-center text-2xs font-semibold text-secondary">
                 {normalizedThreadSearch
@@ -235,7 +235,7 @@ export function ConversationHeader({
                 className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
                 title={t('chat.previousMatch')}
               >
-                <ChevronUp size={14} />
+                <ChevronUp size={14} strokeWidth={1.75} />
               </button>
               <button
                 onClick={() => goToSearchMatch(1)}
@@ -243,7 +243,7 @@ export function ConversationHeader({
                 className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:bg-active disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
                 title={t('chat.nextMatch')}
               >
-                <ChevronDown size={14} />
+                <ChevronDown size={14} strokeWidth={1.75} />
               </button>
             </div>
           )}
@@ -267,7 +267,7 @@ export function ConversationHeader({
                 icon={Star}
                 disabled={readOnly}
                 label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
-                className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-amber-500')}
+                className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-warning')}
                 onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
               />
               <IconButton
@@ -314,7 +314,7 @@ export function ConversationHeader({
               onClick={() => setActionsMenuOpen((open) => !open)}
             />
             {actionsMenuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-xl">
+              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay">
                 <button
                   onClick={() => {
                     setQuickConversationMode('html')
@@ -324,7 +324,7 @@ export function ConversationHeader({
                     conversationMode === 'html' ? 'font-semibold text-accent' : 'font-medium text-primary'
                   }`}
                 >
-                  <Code size={15} className="shrink-0" /> {t('chat.viewAsHtml')}
+                  <Code size={16} className="shrink-0" strokeWidth={1.75} /> {t('chat.viewAsHtml')}
                 </button>
                 <button
                   onClick={() => {
@@ -335,7 +335,7 @@ export function ConversationHeader({
                     conversationMode === 'plain' ? 'font-semibold text-accent' : 'font-medium text-primary'
                   }`}
                 >
-                  <FileText size={15} className="shrink-0" /> {t('chat.viewAsPlainText')}
+                  <FileText size={16} className="shrink-0" strokeWidth={1.75} /> {t('chat.viewAsPlainText')}
                 </button>
                 <div className="my-1 h-px bg-border" />
                 <button
@@ -355,7 +355,7 @@ export function ConversationHeader({
                   }}
                   className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                 >
-                  <Printer size={15} className="shrink-0" /> {t('print.action')}
+                  <Printer size={16} className="shrink-0" strokeWidth={1.75} /> {t('print.action')}
                 </button>
                 <button
                   disabled={readOnly}
@@ -366,8 +366,9 @@ export function ConversationHeader({
                   className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                 >
                   <Star
-                    size={15}
-                    className={`shrink-0 ${activeThread.starred ? 'fill-amber-500 text-amber-500' : ''}`}
+                    size={16}
+                    className={`shrink-0 ${activeThread.starred ? 'fill-warning text-warning' : ''}`}
+                    strokeWidth={1.75}
                   />
                   {activeThread.starred ? t('chat.unstar') : t('chat.star')}
                 </button>
@@ -381,7 +382,7 @@ export function ConversationHeader({
                       }}
                       className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                     >
-                      <Archive size={15} className="shrink-0" /> {t('threads.actions.archiveThread')}
+                      <Archive size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.archiveThread')}
                     </button>
                     <button
                       disabled={readOnly}
@@ -389,9 +390,9 @@ export function ConversationHeader({
                         void deleteThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
                       }}
-                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-950/25"
+                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-danger cursor-pointer hover:bg-danger-soft"
                     >
-                      <Trash2 size={15} className="shrink-0" /> {t('threads.actions.moveToTrash')}
+                      <Trash2 size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.moveToTrash')}
                     </button>
                   </>
                 )}
@@ -413,11 +414,11 @@ export function ConversationHeader({
           onClose={() => setSenderMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[60]"
-          className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-xl"
+          className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
           onContextMenu={(event) => event.preventDefault()}
         >
           <MenuItem
-            icon={<Copy size={13} className="text-accent" />}
+            icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.copyName', { defaultValue: 'Copy name' })}
             disabled={!senderDisplayName}
             onClick={() => {
@@ -426,7 +427,7 @@ export function ConversationHeader({
             }}
           />
           <MenuItem
-            icon={<Mail size={13} className="text-accent" />}
+            icon={<Mail size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.copyEmailAddress')}
             disabled={!senderEmail}
             onClick={() => {
@@ -435,7 +436,7 @@ export function ConversationHeader({
             }}
           />
           <MenuItem
-            icon={<Search size={13} className="text-accent" />}
+            icon={<Search size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.viewMessagesWith', { name: senderDisplayName })}
             disabled={!senderEmail}
             onClick={() => {
@@ -444,7 +445,7 @@ export function ConversationHeader({
             }}
           />
           <MenuItem
-            icon={<SquarePen size={13} className="text-accent" />}
+            icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.newMessageTo', { email: senderEmail })}
             disabled={!senderEmail || readOnly}
             onClick={() => {

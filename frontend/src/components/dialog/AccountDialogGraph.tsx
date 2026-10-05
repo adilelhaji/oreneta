@@ -59,7 +59,7 @@ export function AccountDialogGraph({ ctl }: { ctl: AccountDialogController }) {
         </p>
       )}
       {progress.state === 'failed' && (
-        <p role="alert" className="text-caption text-red-600">
+        <p role="alert" className="text-caption text-danger">
           {label('failed', 'Setup did not finish. You can sign in again to retry.')} ({progress.error})
           {progress.retry_after_seconds
             ? ` ${label('retryAfter', 'Retry after seconds:')} ${progress.retry_after_seconds}`

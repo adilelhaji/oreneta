@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import i18n, { useTranslation } from '../../lib/i18n'
 import {
   allDayLocalDays,
   calendar$,
@@ -23,11 +23,7 @@ const CELL_EVENTS = 3
 /// seeing the shape of the month, and the day and week views are one click
 /// away for anything it cannot fit. Clicking a day number opens that day;
 /// double-clicking a cell's empty space starts an event that morning.
-export function MonthView({
-  onEventMenu,
-}: {
-  onEventMenu: (x: number, y: number, event: CalendarEvent) => void
-}) {
+export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number, event: CalendarEvent) => void }) {
   const { t } = useTranslation()
   const anchorMs = useValue(calendar$.anchor)
   const events = useValue(calendar$.events)
@@ -43,7 +39,7 @@ export function MonthView({
         const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i)
         return date
       }),
-    [gridStart.getTime()],
+    [gridStart.getTime(), i18n.language],
   )
 
   const byDay = useMemo(() => {
@@ -77,9 +73,9 @@ export function MonthView({
     () =>
       Array.from({ length: 7 }, (_, i) => {
         const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i)
-        return date.toLocaleDateString(undefined, { weekday: 'short' })
+        return date.toLocaleDateString(i18n.language.replace('_', '-'), { weekday: 'short' })
       }),
-    [gridStart.getTime()],
+    [gridStart.getTime(), i18n.language],
   )
 
   return (
@@ -117,7 +113,7 @@ export function MonthView({
                 onClick={() => openDay(date)}
                 className={`self-start rounded-md px-1.5 py-0.5 text-caption font-semibold tabular-nums cursor-pointer transition-colors ${
                   isToday
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent text-on-accent'
                     : inMonth
                       ? 'text-primary hover:bg-hover'
                       : 'text-secondary/60 hover:bg-hover'
@@ -138,14 +134,9 @@ export function MonthView({
                     event.is_cancelled ? 'line-through opacity-55' : ''
                   }`}
                 >
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: colorOf(event) }}
-                  />
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: colorOf(event) }} />
                   {!event.all_day && (
-                    <span className="shrink-0 tabular-nums text-secondary">
-                      {formatTime(event.start)}
-                    </span>
+                    <span className="shrink-0 tabular-nums text-secondary">{formatTime(event.start)}</span>
                   )}
                   <span className="truncate">
                     {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}

@@ -93,7 +93,7 @@ export function ThreadListItem({
           <LabelChips ids={thread.labels} max={density.singleLine ? 1 : 2} />
         </span>
       )}
-      {hasDraft && <span className="mr-1 font-normal text-rose-500">{t('chat.draft')}</span>}
+      {hasDraft && <span className="mr-1 font-normal text-danger">{t('chat.draft')}</span>}
       <span className={clsx(unread ? 'text-primary' : 'text-primary/85')}>{threadTitle}</span>
       {/* The preview trails the subject unless it has been given its own line,
           where repeating it here would show it twice. */}
@@ -110,7 +110,7 @@ export function ThreadListItem({
     unread && bulkSelectable ? (
       <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
     ) : unread ? (
-      <span className="h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-white text-2xs font-bold shadow-sm shadow-accent/20 leading-none shrink-0">
+      <span className="h-4 min-w-4 px-1 flex items-center justify-center rounded-full bg-accent text-on-accent text-2xs font-bold leading-none shrink-0">
         {thread.unread_count ?? 1}
       </span>
     ) : null
@@ -129,7 +129,7 @@ export function ThreadListItem({
     >
       <button
         className={clsx(
-          'relative w-full px-2 transition-all duration-150 flex items-center gap-2 cursor-pointer select-none text-left',
+          'relative w-full px-2 transition-all duration-120 flex items-center gap-2 cursor-pointer select-none text-left',
           density.rowPadding,
           bulkSelectable
             ? bulkSelected
@@ -157,12 +157,10 @@ export function ThreadListItem({
             <span
               className={clsx(
                 'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                bulkSelected
-                  ? 'bg-accent text-white shadow-sm shadow-accent/20'
-                  : 'border border-secondary/30 text-secondary/35',
+                bulkSelected ? 'bg-accent text-on-accent ' : 'border border-secondary/30 text-secondary/35',
               )}
             >
-              <Check size={17} strokeWidth={2.6} />
+              <Check size={20} strokeWidth={1.75} />
             </span>
           </span>
         ) : (
@@ -193,7 +191,7 @@ export function ThreadListItem({
                 className="absolute inset-0 z-10 hidden items-center justify-center rounded-full bg-chats cursor-pointer group-hover/avatar:flex focus-visible:flex"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary/40 text-secondary/50 transition-colors hover:border-accent hover:text-accent">
-                  <Check size={17} strokeWidth={2.6} />
+                  <Check size={20} strokeWidth={1.75} />
                 </span>
               </span>
             )}
@@ -214,9 +212,7 @@ export function ThreadListItem({
         <div className={clsx('flex-1 min-w-0 flex flex-col justify-center', density.rowGap)}>
           <div className="flex items-center gap-2 min-w-0">
             <div className={clsx('flex min-w-0 items-center gap-1', density.singleLine && 'max-w-[40%] shrink-0')}>
-              <span
-                className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}
-              >
+              <span className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}>
                 {thread.from_name || thread.from_addr.split('@')[0]}
                 {!!thread.recipient_overflow && (
                   <span className="ml-1 font-normal text-secondary/80">+{thread.recipient_overflow}</span>
@@ -235,14 +231,14 @@ export function ThreadListItem({
                 thread is the whole point of it. The star comes with it — a
                 thread does not stop being starred because the list is tight. */}
             {density.singleLine && !bulkSelectable && thread.starred && (
-              <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />
+              <Star size={14} className="fill-warning text-warning shrink-0" strokeWidth={1.75} />
             )}
             {density.singleLine && subjectLine}
             {/* Only shown when the server has actually said so. A message
                 nobody has asked about carries no clip rather than a doubtful
                 one. */}
             {thread.has_attachments && (
-              <Paperclip size={11} className="ml-auto shrink-0 text-secondary/70" />
+              <Paperclip size={14} className="ml-auto shrink-0 text-secondary/70" strokeWidth={1.75} />
             )}
             <time
               className={clsx(
@@ -259,7 +255,7 @@ export function ThreadListItem({
           {!density.singleLine && (
             <div className="flex items-center gap-1.5 min-w-0">
               {!bulkSelectable && thread.starred && (
-                <Star size={11} className="fill-amber-500 text-amber-500 shrink-0" />
+                <Star size={14} className="fill-warning text-warning shrink-0" strokeWidth={1.75} />
               )}
               {subjectLine}
               {unreadBadge}
@@ -299,7 +295,7 @@ export function ThreadListItem({
               className={clsx(
                 'flex h-7 w-7 items-center justify-center rounded-md transition-colors cursor-pointer',
                 danger
-                  ? 'text-secondary hover:bg-rose-500/10 hover:text-rose-500'
+                  ? 'text-secondary hover:bg-danger-soft hover:text-danger'
                   : 'text-secondary hover:bg-hover hover:text-primary',
               )}
             >

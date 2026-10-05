@@ -12,6 +12,10 @@ Discard and draft status remain reachable even in a narrow desktop split pane.
 The full folder navigation
 retains its independent >1024px boundary. No resize listener or new state is added.
 
+The compact app menu also links to People, Tasks and Calendar (#177). Those
+surfaces retain the menu and a return to the current mail workspace while the
+rail is hidden; their changes are detailed in [screen consistency](screen-consistency.md).
+
 The previous full-width-list boundary (769px) disagreed with visibility (600px),
 leaving the reader clipped at 600–768px. Production tests cover 599/600/601,
 768/769 and 1024/1025, both themes, reader/back/selection/folder/composer context,

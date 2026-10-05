@@ -31,9 +31,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
             {tab.subject}
           </h2>
           {tab.date && (
-            <p className="truncate text-caption text-secondary mt-0.5 font-medium">
-              {formatFullTimestamp(tab.date)}
-            </p>
+            <p className="truncate text-caption text-secondary mt-0.5 font-medium">{formatFullTimestamp(tab.date)}</p>
           )}
         </div>
         <div className="flex items-center gap-1 rounded-control-sm bg-hover p-0.5">
@@ -44,7 +42,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
             }`}
             title={t('chat.htmlView')}
           >
-            <Code size={13} /> HTML
+            <Code size={14} strokeWidth={1.75} /> HTML
           </button>
           <button
             onClick={() => setTabViewMode(tab.id, 'plain')}
@@ -53,7 +51,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
             }`}
             title={t('chat.plainView')}
           >
-            <FileText size={13} /> {t('settings.account.conversationPlain')}
+            <FileText size={14} strokeWidth={1.75} /> {t('settings.account.conversationPlain')}
           </button>
         </div>
         <button
@@ -61,7 +59,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
           className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-hover text-secondary cursor-pointer"
           title={t('chat.closeTab')}
         >
-          <X size={16} />
+          <X size={16} strokeWidth={1.75} />
         </button>
       </header>
       {hasAddresses && (

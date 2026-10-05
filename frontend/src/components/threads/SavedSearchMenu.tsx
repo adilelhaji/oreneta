@@ -50,15 +50,22 @@ export function SavedSearchMenu({ query }: { query: string }) {
         aria-label={saved.length > 0 ? t('search.saved') : t('search.save')}
         className="flex h-9 w-9 items-center justify-center rounded-control text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
       >
-        {saved.length > 0 ? <Bookmark size={15} /> : <BookmarkPlus size={15} />}
+        {saved.length > 0 ? <Bookmark size={16} strokeWidth={1.75} /> : <BookmarkPlus size={16} strokeWidth={1.75} />}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-lg">
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-raised">
           {trimmed && !alreadySaved && (
             <>
-              <button type="button" onClick={() => { save(); setOpen(false) }} className={menuItemClass}>
-                <BookmarkPlus size={13} className="text-secondary" />
+              <button
+                type="button"
+                onClick={() => {
+                  save()
+                  setOpen(false)
+                }}
+                className={menuItemClass}
+              >
+                <BookmarkPlus size={14} className="text-secondary" strokeWidth={1.75} />
                 <span className="min-w-0 truncate">{t('search.save')}</span>
               </button>
               <div className="my-1 border-t border-border" />
@@ -74,19 +81,17 @@ export function SavedSearchMenu({ query }: { query: string }) {
                 }}
                 className={`${menuItemClass} min-w-0 flex-1`}
               >
-                <Bookmark size={13} className="text-secondary" />
+                <Bookmark size={14} className="text-secondary" strokeWidth={1.75} />
                 <span className="min-w-0 flex-1 truncate text-left">{search.name}</span>
               </button>
               <button
                 type="button"
                 title={t('search.forget')}
                 aria-label={t('search.forget')}
-                onClick={() =>
-                  settings$.savedSearches.set(saved.filter((item) => item.id !== search.id))
-                }
+                onClick={() => settings$.savedSearches.set(saved.filter((item) => item.id !== search.id))}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
               >
-                <X size={13} />
+                <X size={14} strokeWidth={1.75} />
               </button>
             </div>
           ))}

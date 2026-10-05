@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { Building2, Copy, Mail, Phone, Search, SquarePen } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { ArrowLeft, BookUser, Building2, Copy, Mail, Phone, Search, SquarePen } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
@@ -12,6 +12,7 @@ import { Avatar } from '../avatar/Avatar'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
+import { CompactNavigation } from '../sidenav/CompactNavigation'
 
 /**
  * The address book, as a place rather than as a dropdown.
@@ -33,6 +34,9 @@ export function PeopleView() {
   const query = useValue(people$.query)
   const selectedId = useValue(people$.selectedId)
   const accounts = useValue(accounts$)
+  const lastSelection = useRef<HTMLButtonElement | null>(null)
+  const detailRef = useRef<HTMLElement | null>(null)
+  const focusNavigation = useRef(false)
 
   useEffect(() => {
     if (!loaded) void loadPeople()
@@ -46,6 +50,12 @@ export function PeopleView() {
   }, [query])
 
   const selected = people.find((person) => person.id === selectedId) ?? null
+  useEffect(() => {
+    if (!focusNavigation.current || !lastSelection.current) return
+    focusNavigation.current = false
+    if (selected) detailRef.current?.focus()
+    else lastSelection.current.focus()
+  }, [selected?.id])
 
   const writeTo = (person: Person, addr: string) => {
     // A book that belongs to an account writes from that account; one that
@@ -62,11 +72,21 @@ export function PeopleView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 bg-app">
-      <section className="flex w-80 shrink-0 flex-col border-r border-border bg-chats">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-3">
-          <div className="flex flex-1 items-center gap-2 rounded-control bg-hover px-2.5 py-1.5 focus-within:bg-app">
-            <Search size={14} className="shrink-0 text-secondary" />
+    <div className="flex min-h-0 min-w-0 flex-1 bg-app">
+      <section
+        className={clsx(
+          'min-w-0 w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:flex min-[769px]:w-72',
+          selected ? 'hidden' : 'flex',
+        )}
+      >
+        <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-header px-4 py-3">
+          <CompactNavigation />
+          <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
+            <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
+            {t('people.title')}
+          </h1>
+          <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent">
+            <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
             <input
               value={query}
               onChange={(event) => people$.query.set(event.target.value)}
@@ -94,7 +114,15 @@ export function PeopleView() {
                       type="button"
                       role="option"
                       aria-selected={active}
-                      onClick={() => people$.selectedId.set(person.id)}
+                      onClick={(event) => {
+                        lastSelection.current = event.currentTarget
+                        focusNavigation.current = true
+                        people$.selectedId.set(person.id)
+                        if (selected?.id === person.id) {
+                          focusNavigation.current = false
+                          detailRef.current?.focus()
+                        }
+                      }}
                       className={clsx(
                         'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-left transition-colors cursor-pointer',
                         active ? 'bg-accent/20 dark:bg-accent/30' : 'hover:bg-hover',
@@ -121,9 +149,32 @@ export function PeopleView() {
         </div>
       </section>
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section
+        ref={detailRef}
+        tabIndex={-1}
+        aria-label={selected?.name}
+        className={clsx(
+          'min-h-0 min-w-0 flex-1 flex-col overflow-y-auto min-[769px]:flex',
+          selected ? 'flex' : 'hidden',
+        )}
+      >
         {selected ? (
-          <PersonCard person={selected} onWrite={(addr) => writeTo(selected, addr)} onCopy={copy} />
+          <>
+            <div className="shrink-0 border-b border-border bg-header px-4 py-3 min-[769px]:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  focusNavigation.current = true
+                  people$.selectedId.set('')
+                }}
+                className="inline-flex min-h-8 items-center gap-2 rounded-control-sm px-2 text-ui font-semibold text-secondary hover:bg-hover cursor-pointer"
+              >
+                <ArrowLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+                {t('buttons.back')}
+              </button>
+            </div>
+            <PersonCard person={selected} onWrite={(addr) => writeTo(selected, addr)} onCopy={copy} />
+          </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <EmptyState title={t('people.pickSomeone')} text={t('people.pickSomeoneText')} />
@@ -147,19 +198,19 @@ function PersonCard({
   const source = sourceLabel(person.source)
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-8 py-10">
-      <header className="flex items-center gap-5">
+    <div className="mx-auto w-full max-w-2xl p-4 min-[769px]:p-6">
+      <header className="flex flex-wrap items-center gap-4 rounded-panel border border-border bg-chats p-4">
         <Avatar
           name={person.name}
           email={person.emails[0]?.addr}
           src={person.photo ? `/media/${person.photo}` : undefined}
           size={72}
         />
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold text-primary">{person.name}</h1>
+        <div className="min-w-0 flex-1 basis-40">
+          <h2 className="wrap-anywhere text-heading font-bold text-primary">{person.name}</h2>
           {person.organisation && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-ui text-secondary">
-              <Building2 size={14} /> {person.organisation}
+            <p className="mt-1 flex items-start gap-1.5 wrap-anywhere text-ui text-secondary">
+              <Building2 size={14} strokeWidth={1.75} /> {person.organisation}
             </p>
           )}
           {/* Where they came from, as a fact rather than an icon. */}
@@ -174,15 +225,23 @@ function PersonCard({
             {person.emails.map((email) => (
               <li
                 key={email.addr}
-                className="flex items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                className="flex flex-wrap items-center gap-2 border-b border-border bg-chats px-3 py-3 last:border-b-0"
               >
-                <Mail size={14} className="shrink-0 text-secondary" />
-                <span className="min-w-0 flex-1 truncate text-ui text-primary">{email.addr}</span>
-                {email.label && <span className="shrink-0 text-caption text-secondary">{email.label}</span>}
-                <IconButton icon={Copy} iconSize={13} size="sm" label={t('people.copy')} onClick={() => onCopy(email.addr)} />
+                <Mail size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
+                <span className="min-w-0 flex-1 basis-40 wrap-anywhere text-ui text-primary">{email.addr}</span>
+                {email.label && (
+                  <span className="max-w-full wrap-anywhere text-caption text-secondary">{email.label}</span>
+                )}
+                <IconButton
+                  icon={Copy}
+                  iconSize={14}
+                  size="sm"
+                  label={t('people.copy')}
+                  onClick={() => onCopy(email.addr)}
+                />
                 <IconButton
                   icon={SquarePen}
-                  iconSize={13}
+                  iconSize={14}
                   size="sm"
                   label={t('people.writeTo', { addr: email.addr })}
                   onClick={() => onWrite(email.addr)}
@@ -200,12 +259,22 @@ function PersonCard({
             {person.phones.map((phone) => (
               <li
                 key={phone.number}
-                className="flex items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                className="flex flex-wrap items-center gap-2 border-b border-border bg-chats px-3 py-3 last:border-b-0"
               >
-                <Phone size={14} className="shrink-0 text-secondary" />
-                <span className="min-w-0 flex-1 truncate text-ui text-primary tabular-nums">{phone.number}</span>
-                {phone.label && <span className="shrink-0 text-caption text-secondary">{phone.label}</span>}
-                <IconButton icon={Copy} iconSize={13} size="sm" label={t('people.copy')} onClick={() => onCopy(phone.number)} />
+                <Phone size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
+                <span className="min-w-0 flex-1 basis-40 wrap-anywhere text-ui text-primary tabular-nums">
+                  {phone.number}
+                </span>
+                {phone.label && (
+                  <span className="max-w-full wrap-anywhere text-caption text-secondary">{phone.label}</span>
+                )}
+                <IconButton
+                  icon={Copy}
+                  iconSize={14}
+                  size="sm"
+                  label={t('people.copy')}
+                  onClick={() => onCopy(phone.number)}
+                />
               </li>
             ))}
           </ul>
@@ -215,7 +284,7 @@ function PersonCard({
       {person.note && (
         <section className="mt-6">
           <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">{t('people.note')}</h2>
-          <p className="whitespace-pre-wrap text-ui leading-relaxed text-primary">{person.note}</p>
+          <p className="whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary">{person.note}</p>
         </section>
       )}
     </div>

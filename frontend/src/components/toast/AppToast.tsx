@@ -15,22 +15,22 @@ export function AppToast() {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 animate-slide-up flex w-max max-w-[calc(100%-2rem)] items-center gap-2 rounded-control bg-black/80 py-2 pl-4 text-xs font-semibold text-white shadow-xl z-50 ${
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 animate-slide-up flex w-max max-w-[calc(100%-2rem)] items-center gap-2 rounded-control border border-border bg-chats py-2 pl-4 text-xs font-semibold text-primary shadow-overlay z-50 ${
         toastUndo ? 'pr-2' : 'pr-4'
       }`}
     >
       {toastTone === 'error' ? (
-        <AlertCircle size={14} aria-hidden="true" className="shrink-0 text-rose-400" />
+        <AlertCircle size={14} aria-hidden="true" className="shrink-0 text-danger" strokeWidth={1.75} />
       ) : toastTone === 'info' ? (
-        <Info size={14} aria-hidden="true" className="shrink-0 text-white" />
+        <Info size={14} aria-hidden="true" className="shrink-0 text-info" strokeWidth={1.75} />
       ) : (
-        <Check size={14} aria-hidden="true" className="shrink-0 text-emerald-400" />
+        <Check size={14} aria-hidden="true" className="shrink-0 text-success" strokeWidth={1.75} />
       )}
       <span className="min-w-0 wrap-anywhere">{toast}</span>
       {toastUndo && (
         <button
           onClick={runToastUndo}
-          className="ml-1 shrink-0 rounded-full bg-white/15 px-2.5 py-1 font-bold text-white hover:bg-white/25 transition-colors cursor-pointer"
+          className="ml-1 shrink-0 rounded-control-sm bg-hover px-2.5 py-1 font-bold text-primary hover:bg-active transition-colors cursor-pointer"
         >
           Undo
         </button>

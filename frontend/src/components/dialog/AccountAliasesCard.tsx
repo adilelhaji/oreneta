@@ -36,7 +36,7 @@ export function AccountAliasesCard({ account }: { account: Account }) {
             onClick={() => updateAliases([...aliasesVal, { email: '', name: '' }])}
             className="flex items-center gap-1 text-xs font-semibold text-accent hover:underline cursor-pointer"
           >
-            <Plus size={12} /> {t('settings.account.addAlias')}
+            <Plus size={14} strokeWidth={1.75} /> {t('settings.account.addAlias')}
           </button>
         }
       />
@@ -61,7 +61,7 @@ export function AccountAliasesCard({ account }: { account: Account }) {
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-active text-secondary transition-colors cursor-pointer"
             aria-label={t('settings.account.removeAlias')}
           >
-            <Trash2 size={13} />
+            <Trash2 size={14} strokeWidth={1.75} />
           </button>
         </div>
       ))}

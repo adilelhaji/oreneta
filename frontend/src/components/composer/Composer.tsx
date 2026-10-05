@@ -72,7 +72,11 @@ export function Composer({ tabId }: { tabId: string }) {
     }
 
     if (draft.rich && editor) {
-      editor.chain().focus().insertContent(template.bodyHtml || template.bodyText).run()
+      editor
+        .chain()
+        .focus()
+        .insertContent(template.bodyHtml || template.bodyText)
+        .run()
       return
     }
 
@@ -134,7 +138,7 @@ export function Composer({ tabId }: { tabId: string }) {
         onRemove={(id) => update({ attachments: draft.attachments.filter((a) => a.id !== id) })}
       />
 
-      {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-rose-500">{error}</p>}
+      {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-danger">{error}</p>}
 
       <ComposerFooter
         rich={draft.rich}

@@ -207,7 +207,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
 
   return (
     <section className="flex flex-1 min-w-0 flex-col border-r border-border bg-chats max-[600px]:w-full">
-      <div className="@container relative z-30 flex min-h-16 shrink-0 items-center gap-3 border-b border-border/50 bg-white/70 backdrop-blur-md px-4 py-3 dark:bg-[#0f172a]/70">
+      <div className="@container relative z-30 flex min-h-16 shrink-0 items-center gap-3 border-b border-border/50 bg-header px-4 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {board?.avatarUrl ? (
             <img
@@ -217,7 +217,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
             />
           ) : (
             <div className="flex h-9 w-9 items-center justify-center rounded-control bg-accent/10 text-accent shrink-0 border border-accent/10">
-              <Columns3 size={16} />
+              <Columns3 size={16} strokeWidth={1.75} />
             </div>
           )}
           <h2 className="truncate text-sm font-bold text-primary">{board?.name || t('kanban.board.defaultName')}</h2>
@@ -228,7 +228,11 @@ export function KanbanView({ boardId }: { boardId: string }) {
             className="flex h-9 min-w-0 basis-72 shrink items-center overflow-visible rounded-control border border-transparent bg-hover focus-within:border-accent/40 focus-within:bg-chats"
           >
             <div className="relative h-full min-w-0 flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={14} />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary"
+                size={14}
+                strokeWidth={1.75}
+              />
               <input
                 ref={searchInputRef}
                 value={searchQuery}
@@ -250,7 +254,7 @@ export function KanbanView({ boardId }: { boardId: string }) {
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer transition-colors"
                   title={t('common.clearSearch')}
                 >
-                  <X size={14} />
+                  <X size={14} strokeWidth={1.75} />
                 </button>
               )}
             </div>
@@ -337,13 +341,13 @@ export function KanbanView({ boardId }: { boardId: string }) {
             )}
             <button
               type="button"
-              className="group flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-control-sm border border-dashed border-border/80 bg-chats/45 text-secondary backdrop-blur-sm transition-colors hover:border-accent/50 hover:bg-chats/75 hover:text-accent focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
+              className="group flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-control-sm border border-dashed border-border/80 bg-chats/45 text-secondary transition-colors hover:border-accent/50 hover:bg-chats/75 hover:text-accent focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
               title={t('kanban.actions.addColumn')}
               aria-label={t('kanban.actions.addColumn')}
               onClick={() => void openDialog()}
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-chats/80 shadow-sm transition-colors group-hover:bg-accent/10">
-                <Plus size={16} />
+                <Plus size={16} strokeWidth={1.75} />
               </span>
             </button>
           </div>

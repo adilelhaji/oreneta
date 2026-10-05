@@ -37,8 +37,7 @@ export function ContactSourcesSettingsSection() {
   // Google accounts whose contacts have not been brought in yet. Once one has,
   // it appears in the list above with the others and is re-read from there.
   const googleWithout = accounts.filter(
-    (account) =>
-      account.auth_type === 'gmail_oauth' && !sources.some((source) => source.id === `google-${account.id}`),
+    (account) => account.auth_type === 'gmail_oauth' && !sources.some((source) => source.id === `google-${account.id}`),
   )
 
   const [server, setServer] = useState('')
@@ -96,13 +95,13 @@ export function ContactSourcesSettingsSection() {
                 key={source.id}
                 className="flex items-center gap-2 rounded-control border border-border bg-panel px-3 py-2"
               >
-                <BookUser size={15} className="shrink-0 text-secondary" />
+                <BookUser size={16} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-ui font-semibold">{source.name || source.url}</span>
                   {/* What went wrong, where it went wrong, rather than a red
                       dot somewhere else. */}
                   <span
-                    className={`block truncate text-caption ${source.lastError ? 'text-rose-600 dark:text-rose-400' : 'text-secondary'}`}
+                    className={`block truncate text-caption ${source.lastError ? 'text-danger ' : 'text-secondary'}`}
                   >
                     {source.lastError
                       ? source.lastError
@@ -126,7 +125,7 @@ export function ContactSourcesSettingsSection() {
                   }}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:opacity-40"
                 >
-                  <RefreshCw size={14} />
+                  <RefreshCw size={14} strokeWidth={1.75} />
                 </button>
                 <button
                   type="button"
@@ -144,9 +143,9 @@ export function ContactSourcesSettingsSection() {
                       if (yes) void removeSource(source.id)
                     })
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer disabled:opacity-40"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer disabled:opacity-40"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} strokeWidth={1.75} />
                 </button>
               </li>
             ))}
@@ -169,7 +168,9 @@ export function ContactSourcesSettingsSection() {
                     if (problem) showToast(problem, 'error')
                     else showToast(t('contacts.added', { name: account.email }))
                   })
-                  .catch((error) => showToast(error instanceof Error ? error.message : t('contacts.addFailed'), 'error'))
+                  .catch((error) =>
+                    showToast(error instanceof Error ? error.message : t('contacts.addFailed'), 'error'),
+                  )
                   .finally(() => setBusy(false))
               }}
               className="shrink-0 rounded-control px-3 py-1.5 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer disabled:opacity-50"
@@ -215,7 +216,7 @@ export function ContactSourcesSettingsSection() {
               <button
                 type="submit"
                 disabled={busy || !server.trim()}
-                className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-white transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-control bg-accent px-4 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy ? t('common.loading') : t('contacts.findBooks')}
               </button>

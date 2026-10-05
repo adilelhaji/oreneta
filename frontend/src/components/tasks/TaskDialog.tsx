@@ -87,7 +87,7 @@ export function TaskDialog() {
         <>
           {editing && (
             <Button variant="danger" size="sm" onClick={() => void remove()} disabled={busy} className="mr-auto">
-              <Trash2 size={13} />
+              <Trash2 size={14} strokeWidth={1.75} />
               {t('buttons.delete')}
             </Button>
           )}

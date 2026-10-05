@@ -90,26 +90,27 @@ export function ComposerFooter({
           }`}
           title={rich ? t('composer.actions.switchToPlainText') : t('composer.actions.switchToRichText')}
         >
-          <Type size={15} />
+          <Type size={16} strokeWidth={1.75} />
           {rich ? t('composer.modes.richText') : t('composer.modes.plainText')}
         </button>
       </div>
       <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-3">
         {saveStatus === 'saving' && (
           <span className="flex items-center gap-1.5 text-caption text-secondary">
-            <RefreshCw size={11} className="animate-spin" />
+            <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />
             <span>{t('composer.status.savingDraft')}</span>
           </span>
         )}
         {saveStatus === 'saved' && (
-          <span className="flex items-center gap-1.5 text-caption text-emerald-500 font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="flex items-center gap-1.5 text-caption text-success font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
             <span>{t('composer.status.savedToServer')}</span>
           </span>
         )}
         {saveStatus === 'error' && (
           <span
-            className="max-w-[360px] truncate text-caption text-rose-500 font-medium"
+            role="alert"
+            className="max-w-full wrap-anywhere text-caption text-danger font-medium"
             title={saveError || draftAutosaveFailed}
           >
             {saveError || draftAutosaveFailed}
@@ -134,10 +135,14 @@ export function ComposerFooter({
           className={`flex items-center justify-center gap-1.5 rounded-control px-5 py-2 text-xs font-bold transition-all ${
             !canSend
               ? 'cursor-not-allowed bg-hover text-secondary/70 shadow-none'
-              : 'bg-accent text-white shadow-md shadow-accent/15 hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-98 cursor-pointer'
+              : 'bg-accent text-on-accent  hover:bg-accent-hover   cursor-pointer'
           }`}
         >
-          {sending ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
+          {sending ? (
+            <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />
+          ) : (
+            <Send size={14} strokeWidth={1.75} />
+          )}
           <span>{t('buttons.send')}</span>
         </button>
       </div>

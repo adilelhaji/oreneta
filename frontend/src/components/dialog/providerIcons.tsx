@@ -66,7 +66,7 @@ export const PROVIDERS: ProviderDef[] = [
     defaultDescription: 'Provider sign-in',
     mode: 'gmail',
     isActive: (mode) => mode === 'gmail' || mode === 'outlook',
-    icon: (s) => <KeyRound size={s} className="text-accent" />,
+    icon: (s) => <KeyRound size={s} className="text-accent" strokeWidth={1.75} />,
   },
   {
     id: 'custom',
@@ -74,7 +74,7 @@ export const PROVIDERS: ProviderDef[] = [
     descriptionKey: 'accounts.providers.customDescription',
     mode: 'custom',
     isActive: (mode) => mode === 'custom',
-    icon: (s) => <Mail size={s} className="text-accent" />,
+    icon: (s) => <Mail size={s} className="text-accent" strokeWidth={1.75} />,
   },
   {
     id: 'ews',
@@ -83,7 +83,7 @@ export const PROVIDERS: ProviderDef[] = [
     defaultDescription: 'Exchange mail and calendar',
     mode: 'ews',
     isActive: (mode) => mode === 'ews',
-    icon: (s) => <Server size={s} className="text-accent" />,
+    icon: (s) => <Server size={s} className="text-accent" strokeWidth={1.75} />,
   },
   {
     id: 'rss',
@@ -91,6 +91,6 @@ export const PROVIDERS: ProviderDef[] = [
     descriptionKey: 'accounts.providers.rssDescription',
     mode: 'rss',
     isActive: (mode) => mode === 'rss',
-    icon: (s) => <Rss size={s} className="text-orange-500" />,
+    icon: (s) => <Rss size={s} className="text-orange-500" strokeWidth={1.75} />,
   },
 ]

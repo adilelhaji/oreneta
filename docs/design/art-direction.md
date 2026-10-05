@@ -27,6 +27,10 @@ identity decisions that were never written down anywhere.
 
 ## Palette
 
+Application adoption: [#177 screen consistency](screen-consistency.md) applies
+the existing tokens, icon scale, elevation and motion to screen call sites.
+The counts above describe the historical audit, not the remaining backlog.
+
 The app icon (`assets/oreneta.svg`) is a cobalt swallow on navy — `#2E63F0`
 and `#15316E` — and the marketing page uses the same blue. The
 [cobalt defaults](cobalt-themes.md) implement this palette for new profiles.

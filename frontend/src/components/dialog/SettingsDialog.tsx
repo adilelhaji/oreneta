@@ -174,8 +174,9 @@ export function SettingsDialog() {
   const settingsFocus = useValue(ui$.settingsFocus)
   useEffect(() => {
     if (!settingsFocus.section) return
-    const target = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('[data-settings-section]') ?? [])
-      .find((element) => element.dataset.settingsSection === settingsFocus.section)
+    const target = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('[data-settings-section]') ?? []).find(
+      (element) => element.dataset.settingsSection === settingsFocus.section,
+    )
     target?.scrollIntoView?.({ block: 'start' })
     target?.focus({ preventScroll: true })
   }, [settingsFocus])
@@ -237,7 +238,14 @@ export function SettingsDialog() {
       onMouseDown={onBackdropMouseDown}
       className="fixed inset-0 flex items-center justify-center bg-black/35 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in"
     >
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t('settings.label')} tabIndex={-1} className="bg-chats border border-border/80 text-primary max-w-4xl w-full h-[620px] max-h-[90vh] rounded-dialog shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('settings.label')}
+        tabIndex={-1}
+        className="bg-chats border border-border/80 text-primary max-w-4xl w-full h-[620px] max-h-[90vh] rounded-dialog shadow-overlay shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden"
+      >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 px-6 py-4.5 border-b border-border/60 shrink-0 bg-chats/95">
           <div className="min-w-0">
@@ -250,10 +258,13 @@ export function SettingsDialog() {
         {/* Body: nav rail + content */}
         <div className="flex flex-col min-[700px]:flex-row flex-1 min-h-0">
           {/* Nav rail */}
-          <nav aria-label={t('settingsSearch.navigation')} className="w-full max-h-28 min-[700px]:max-h-none min-[700px]:w-56 shrink-0 border-b min-[700px]:border-b-0 min-[700px]:border-r border-border/60 p-3.5 flex flex-col gap-1 bg-raised/70 overflow-y-auto">
+          <nav
+            aria-label={t('settingsSearch.navigation')}
+            className="w-full max-h-28 min-[700px]:max-h-none min-[700px]:w-56 shrink-0 border-b min-[700px]:border-b-0 min-[700px]:border-r border-border/60 p-3.5 flex flex-col gap-1 bg-raised/70 overflow-y-auto"
+          >
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <NavItem key={id} active={activeKey === id} onClick={selectGeneral}>
-                <Icon size={15} className="shrink-0" />
+                <Icon size={16} strokeWidth={1.75} className="shrink-0" />
                 <span className="truncate">{id === 'general' ? t('settings.sections.general') : label}</span>
               </NavItem>
             ))}
@@ -281,7 +292,13 @@ export function SettingsDialog() {
           {/* Content */}
           <div className="flex-1 min-w-0 overflow-y-auto bg-chats p-6">
             {selectedAccount ? (
-              <div data-settings-section="account" tabIndex={-1} aria-label={selectedAccount.display_name || selectedAccount.email}><AccountPanel account={selectedAccount} /></div>
+              <div
+                data-settings-section="account"
+                tabIndex={-1}
+                aria-label={selectedAccount.display_name || selectedAccount.email}
+              >
+                <AccountPanel account={selectedAccount} />
+              </div>
             ) : selectedBoard ? (
               <BoardPanel board={selectedBoard} />
             ) : selectedCalendar ? (
@@ -348,7 +365,7 @@ function AccountGroup({
           title={t('accounts.actions.addAccount')}
           className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
         >
-          <Plus size={13} />
+          <Plus size={14} strokeWidth={1.75} />
         </button>
       </div>
       {accounts.length === 0 ? (
@@ -387,7 +404,11 @@ function AccountNavAvatar({ account, displayName }: { account: Account; displayN
       />
       {(isPaused || isMuted) && (
         <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-raised">
-          {isPaused ? <Pause size={7} className="fill-current" /> : <BellOff size={7} />}
+          {isPaused ? (
+            <Pause size={7} className="fill-current" strokeWidth={1.75} />
+          ) : (
+            <BellOff size={7} strokeWidth={1.75} />
+          )}
         </span>
       )}
     </span>
@@ -518,7 +539,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
                 style={{ backgroundColor: `${color}1a` }}
               >
-                <CalendarDays size={13} style={{ color }} />
+                <CalendarDays size={14} style={{ color }} strokeWidth={1.75} />
               </span>
               <button
                 type="button"
@@ -537,7 +558,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
                     : lastSyncedLabel(calendar.synced_at, t)}
                 </span>
               </button>
-              {calendar.read_only && <Lock size={11} className="shrink-0 text-secondary/70" />}
+              {calendar.read_only && <Lock size={14} className="shrink-0 text-secondary/70" strokeWidth={1.75} />}
               <Switch
                 checked={calendar.enabled}
                 label={calendar.name}
@@ -553,7 +574,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
             onClick={() => void runImport()}
             className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50 disabled:cursor-default cursor-pointer"
           >
-            <RefreshCw size={13} className={importing ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={importing ? 'animate-spin' : ''} strokeWidth={1.75} />
             {t('calendar.importFromAccount', { defaultValue: "Import the account's calendars" })}
           </button>
           <button
@@ -561,7 +582,7 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
             onClick={() => setAdding(true)}
             className="flex items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10 cursor-pointer"
           >
-            <Plus size={13} />
+            <Plus size={14} strokeWidth={1.75} />
             {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
           </button>
         </div>
@@ -580,12 +601,12 @@ function CalendarPropertiesDialog({ calendar, onClose }: { calendar: CalendarMod
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-app p-5 shadow-xl"
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-panel border border-border bg-app p-5 shadow-overlay"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <CalendarDays size={15} className="text-accent" />
+            <CalendarDays size={16} className="text-accent" strokeWidth={1.75} />
             {t('calendar.properties', { defaultValue: 'Calendar properties' })}
           </h2>
           <button
@@ -594,7 +615,7 @@ function CalendarPropertiesDialog({ calendar, onClose }: { calendar: CalendarMod
             className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
           >
-            <X size={15} />
+            <X size={16} strokeWidth={1.75} />
           </button>
         </div>
         <CalendarPanel calendar={calendar} />
@@ -626,11 +647,11 @@ function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; o
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-xl"
+        className="w-full max-w-sm rounded-panel border border-border bg-app p-5 shadow-overlay"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-primary">
-          <CalendarDays size={15} className="text-accent" />
+          <CalendarDays size={16} className="text-accent" strokeWidth={1.75} />
           {t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
         </h2>
         <label className="flex w-full flex-col gap-1.5">
@@ -647,7 +668,7 @@ function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; o
             className="w-full rounded-control border border-border bg-raised px-3 py-2 text-xs text-primary outline-none transition-all focus:border-transparent focus:bg-chats focus:ring-1 focus:ring-accent"
           />
         </label>
-        {error && <p className="mt-2 text-caption text-rose-500">{error}</p>}
+        {error && <p className="mt-2 text-caption text-danger">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
@@ -660,7 +681,7 @@ function AddAccountCalendarDialog({ accountId, onClose }: { accountId: string; o
             type="button"
             disabled={!name.trim() || busy}
             onClick={() => void submit()}
-            className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+            className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
           >
             {t('calendar.add', { defaultValue: 'Add' })}
           </button>
@@ -693,7 +714,7 @@ function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (
           title={t('calendar.addCalendar', { defaultValue: 'Add calendar' })}
           className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
         >
-          <Plus size={13} />
+          <Plus size={14} strokeWidth={1.75} />
         </button>
       </div>
       {adding && <NewCalendarDialog onClose={() => setAdding(false)} />}
@@ -719,10 +740,16 @@ function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (
                       backgroundColor: `${calendar.color || accountColor(calendar.accountId)}1a`,
                     }}
                   >
-                    <CalendarDays size={12} style={{ color: calendar.color || accountColor(calendar.accountId) }} />
+                    <CalendarDays
+                      size={14}
+                      style={{ color: calendar.color || accountColor(calendar.accountId) }}
+                      strokeWidth={1.75}
+                    />
                   </span>
                   <span className="truncate">{calendar.name}</span>
-                  {calendar.read_only && <Lock size={11} className="ml-auto shrink-0 text-secondary/70" />}
+                  {calendar.read_only && (
+                    <Lock size={14} className="ml-auto shrink-0 text-secondary/70" strokeWidth={1.75} />
+                  )}
                 </NavItem>
               )
             })}
@@ -752,7 +779,7 @@ function BoardGroup({
           title={t('kanban.actions.addBoard')}
           className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary hover:text-accent hover:bg-accent/10 cursor-pointer transition-colors"
         >
-          <Plus size={13} />
+          <Plus size={14} strokeWidth={1.75} />
         </button>
       </div>
       {boards.length === 0 ? (
@@ -764,7 +791,7 @@ function BoardGroup({
               <img src={board.avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-md object-cover" />
             ) : (
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
-                <Columns3 size={12} />
+                <Columns3 size={14} strokeWidth={1.75} />
               </span>
             )}
             <span className="truncate">{board.name}</span>
@@ -798,7 +825,7 @@ function GeneralSection() {
       <SettingsGroup section="appearance" title={t('settings.pages.appearance')}>
         <ThemeSettingsSection />
         <SegmentedRow
-          icon={<MessagesSquare size={15} />}
+          icon={<MessagesSquare size={16} strokeWidth={1.75} />}
           title={t('settings.appearance.conversationLayout')}
           hint={t('settings.appearance.conversationLayoutHint')}
           value={conversationLayout}
@@ -806,14 +833,14 @@ function GeneralSection() {
           onChange={(value) => settings$.conversationLayout.set(value)}
         />
         <ToggleRow
-          icon={<ImageIcon size={15} />}
+          icon={<ImageIcon size={16} strokeWidth={1.75} />}
           title={t('settings.appearance.showSenderImages')}
           hint={t('settings.appearance.showSenderImagesHint')}
           checked={showRealAvatars}
           onChange={() => settings$.showRealAvatars.set(!showRealAvatars)}
         />
         <ToggleRow
-          icon={<Inbox size={15} />}
+          icon={<Inbox size={16} strokeWidth={1.75} />}
           title={t('settings.appearance.showUnreadAccountBadge')}
           hint={t('settings.appearance.showUnreadAccountBadgeHint')}
           checked={showUnreadAccountBadge}
@@ -827,7 +854,7 @@ function GeneralSection() {
 
       <SettingsGroup section="reading" title={t('settings.sections.reading')}>
         <SegmentedRow
-          icon={<Table size={15} />}
+          icon={<Table size={16} strokeWidth={1.75} />}
           title={t('settings.reading.listView')}
           hint={t('settings.reading.listViewHint')}
           value={listView}
@@ -838,7 +865,7 @@ function GeneralSection() {
           onChange={(value) => settings$.listView.set(value)}
         />
         <SegmentedRow
-          icon={<Rows3 size={15} />}
+          icon={<Rows3 size={16} strokeWidth={1.75} />}
           title={t('settings.reading.density')}
           hint={t('settings.reading.densityHint')}
           value={listDensity}
@@ -846,7 +873,7 @@ function GeneralSection() {
           onChange={(value) => settings$.listDensity.set(value)}
         />
         <SegmentedRow
-          icon={<AlignLeft size={15} />}
+          icon={<AlignLeft size={16} strokeWidth={1.75} />}
           title={t('settings.reading.width')}
           hint={t('settings.reading.widthHint')}
           value={readingWidth}
@@ -854,14 +881,14 @@ function GeneralSection() {
           onChange={(value) => settings$.readingWidth.set(value)}
         />
         <ToggleRow
-          icon={<WrapText size={15} />}
+          icon={<WrapText size={16} strokeWidth={1.75} />}
           title={t('settings.reading.simplify')}
           hint={t('settings.reading.simplifyHint')}
           checked={simplifyMessages}
           onChange={() => settings$.simplifyMessages.set(!simplifyMessages)}
         />
         <SegmentedRow
-          icon={<Eye size={15} />}
+          icon={<Eye size={16} strokeWidth={1.75} />}
           title={t('settings.reading.markRead')}
           hint={t('settings.reading.markReadHint')}
           value={markReadMode}
@@ -871,7 +898,7 @@ function GeneralSection() {
         {/* Only worth asking about once the answer can matter. */}
         {markReadMode === 'delayed' && (
           <SelectRow
-            icon={<Timer size={15} />}
+            icon={<Timer size={16} strokeWidth={1.75} />}
             title={t('settings.reading.markReadDelay')}
             hint={t('settings.reading.markReadDelayHint')}
             value={String(markReadDelaySeconds)}
@@ -886,7 +913,7 @@ function GeneralSection() {
 
       <SettingsGroup title={t('settings.language.label')}>
         <SelectRow
-          icon={<Globe size={15} />}
+          icon={<Globe size={16} strokeWidth={1.75} />}
           title={t('settings.language.label')}
           hint={t('settings.language.hint')}
           value={language || ''}
@@ -910,11 +937,13 @@ function GeneralSection() {
       <ContactSourcesSettingsSection />
       <PgpSettingsSection />
       <SmimeSettingsSection />
-      <div data-settings-section="privacy" tabIndex={-1} aria-label={t('settings.assistant.title')}><AssistantSettingsSection /></div>
+      <div data-settings-section="privacy" tabIndex={-1} aria-label={t('settings.assistant.title')}>
+        <AssistantSettingsSection />
+      </div>
 
       <SettingsGroup title={t('settings.sections.sideNav')}>
         <ToggleRow
-          icon={<Inbox size={15} />}
+          icon={<Inbox size={16} strokeWidth={1.75} />}
           title={t('settings.sideNav.showUnifiedInbox')}
           checked={showUnifiedInbox}
           onChange={() => setUnifiedInboxSideNavVisible(!showUnifiedInbox)}
@@ -925,7 +954,7 @@ function GeneralSection() {
 
       <SettingsGroup title={t('settings.sections.kanban')}>
         <NumberRow
-          icon={<Columns3 size={15} />}
+          icon={<Columns3 size={16} strokeWidth={1.75} />}
           title={t('settings.kanban.columnWidth')}
           value={String(kanbanColumnWidth)}
           min={KANBAN_COLUMN_MIN_WIDTH}
@@ -941,14 +970,14 @@ function GeneralSection() {
 
       <SettingsGroup title={t('settings.sections.composer')}>
         <ToggleRow
-          icon={<SpellCheck size={15} />}
+          icon={<SpellCheck size={16} strokeWidth={1.75} />}
           title={t('settings.composer.spellCheck')}
           hint={t('settings.composer.spellCheckHint')}
           checked={spellCheck}
           onChange={() => settings$.spellCheck.set(!spellCheck)}
         />
         <SegmentedRow
-          icon={<Send size={15} />}
+          icon={<Send size={16} strokeWidth={1.75} />}
           title={t('settings.composer.sendMessageWith')}
           hint={
             sendShortcut === 'enter'
@@ -960,7 +989,7 @@ function GeneralSection() {
           onChange={(value) => settings$.sendShortcut.set(value)}
         />
         <SelectRow
-          icon={<Undo2 size={15} />}
+          icon={<Undo2 size={16} strokeWidth={1.75} />}
           title={t('settings.composer.undoSend', { defaultValue: 'Undo send' })}
           hint={t('settings.composer.undoSendHint', {
             defaultValue: 'How long a sent message waits, so it can be taken back.',
@@ -980,7 +1009,9 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
-      <div data-settings-section="signature" tabIndex={-1} aria-label={t('settings.sections.signature')}><SignatureSettingsSection /></div>
+      <div data-settings-section="signature" tabIndex={-1} aria-label={t('settings.sections.signature')}>
+        <SignatureSettingsSection />
+      </div>
 
       <SettingsGroup title={t('shortcuts.title')}>
         <SettingRow
@@ -991,15 +1022,19 @@ function GeneralSection() {
               onClick={() => ui$.shortcutsOpen.set(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
-              <Keyboard size={12} />
+              <Keyboard size={14} strokeWidth={1.75} />
               {t('shortcuts.customize')}
             </button>
           }
         />
       </SettingsGroup>
 
-      <div data-settings-section="updates" tabIndex={-1} aria-label={t('settings.sections.updates')}><UpdatesGroup /></div>
-      <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}><BackupGroup /></div>
+      <div data-settings-section="updates" tabIndex={-1} aria-label={t('settings.sections.updates')}>
+        <UpdatesGroup />
+      </div>
+      <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}>
+        <BackupGroup />
+      </div>
       <StorageGroup />
       <LogsGroup />
     </div>
@@ -1091,7 +1126,7 @@ function BackupGroup() {
                 disabled={busy}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Upload size={12} />
+                <Upload size={14} strokeWidth={1.75} />
                 {t('settings.backup.restoreAction')}
               </button>
               <button
@@ -1102,7 +1137,7 @@ function BackupGroup() {
                 disabled={busy}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Archive size={12} />
+                <Archive size={14} strokeWidth={1.75} />
                 {t('common.export')}
               </button>
             </div>
@@ -1137,7 +1172,7 @@ function UpdatesGroup() {
   return (
     <SettingsGroup title={t('settings.sections.updates')}>
       <ToggleRow
-        icon={<RefreshCw size={15} />}
+        icon={<RefreshCw size={16} strokeWidth={1.75} />}
         title={t('settings.updates.autoCheck')}
         hint={t('settings.updates.autoCheckHint')}
         checked={autoUpdateCheck}
@@ -1222,10 +1257,12 @@ function StorageGroup() {
             onClick={clearCache}
             disabled={clearing || (usage?.cacheBytes ?? 0) === 0}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-control font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-              confirming ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-hover hover:bg-active text-primary'
+              confirming
+                ? 'border border-danger/30 bg-danger-soft hover:border-danger text-danger'
+                : 'bg-hover hover:bg-active text-primary'
             }`}
           >
-            <Trash2 size={12} />
+            <Trash2 size={14} strokeWidth={1.75} />
             {confirming ? t('settings.storage.clearConfirm') : t('settings.storage.clearButton')}
           </button>
         }
@@ -1247,7 +1284,7 @@ function LogsGroup() {
             onClick={() => setViewerOpen(true)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
           >
-            <ScrollText size={12} />
+            <ScrollText size={14} strokeWidth={1.75} />
             {t('settings.viewSyncLog')}
           </button>
         }
@@ -1305,7 +1342,7 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
       }}
       className="fixed inset-0 flex items-center justify-center bg-black/35 dark:bg-black/60 backdrop-blur-[3px] z-50 p-4 select-none animate-fade-in"
     >
-      <div className="bg-chats border border-border/80 text-primary max-w-3xl w-full h-[560px] max-h-[85vh] rounded-dialog shadow-2xl shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
+      <div className="bg-chats border border-border/80 text-primary max-w-3xl w-full h-[560px] max-h-[85vh] rounded-dialog shadow-overlay shadow-black/20 dark:shadow-black/45 animate-slide-up flex flex-col overflow-hidden">
         <div className="flex items-center justify-between gap-4 px-6 py-4.5 border-b border-border/60 shrink-0 bg-chats/95">
           <h2 className="text-base font-bold tracking-tight leading-tight">{t('settings.viewSyncLog')}</h2>
           <div className="flex items-center gap-2">
@@ -1314,7 +1351,7 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
               disabled={!log}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Download size={12} />
+              <Download size={14} strokeWidth={1.75} />
               {t('common.export')}
             </button>
             <IconButton icon={X} iconSize={16} label={t('buttons.close')} size="sm" onClick={onClose} />
@@ -1347,14 +1384,14 @@ function OpmlGroup({ account }: { account: string }) {
               onClick={() => importOpml(account)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
-              <Upload size={12} />
+              <Upload size={14} strokeWidth={1.75} />
               {t('common.import')}
             </button>
             <button
               onClick={() => exportOpml(account)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors"
             >
-              <Download size={12} />
+              <Download size={14} strokeWidth={1.75} />
               {t('common.export')}
             </button>
           </div>
@@ -1402,7 +1439,7 @@ function AccountPanel({ account }: { account: Account }) {
         >
           <Avatar name={displayName} src={account.avatar_url} size={40} className="!rounded-panel" />
           <span className="absolute inset-0 flex items-center justify-center rounded-panel bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera size={15} className="text-white" />
+            <Camera size={16} className="text-white" strokeWidth={1.75} />
           </span>
         </button>
         {avatarFile && (
@@ -1430,7 +1467,7 @@ function AccountPanel({ account }: { account: Account }) {
                 onClick={reconnectAccount}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
               >
-                <Server size={12} />
+                <Server size={14} strokeWidth={1.75} />
                 {t('settings.account.serverEdit', { defaultValue: 'Edit' })}
               </button>
             }
@@ -1449,9 +1486,9 @@ function AccountPanel({ account }: { account: Account }) {
               <button
                 type="button"
                 onClick={reconnectAccount}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-white font-bold text-2xs cursor-pointer transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-on-accent font-bold text-2xs cursor-pointer transition-colors"
               >
-                <KeyRound size={12} />
+                <KeyRound size={14} strokeWidth={1.75} />
                 {t('settings.account.reconnectButton', { defaultValue: 'Reconnect' })}
               </button>
             }
@@ -1467,7 +1504,11 @@ function AccountPanel({ account }: { account: Account }) {
       {!isRSS && <AccountCalendarsGroup account={account} />}
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}
-      {!isRSS && <div data-settings-section="accountSignature" tabIndex={-1} aria-label={t('settings.sections.signature')}><AccountSignatureCard account={account} /></div>}
+      {!isRSS && (
+        <div data-settings-section="accountSignature" tabIndex={-1} aria-label={t('settings.sections.signature')}>
+          <AccountSignatureCard account={account} />
+        </div>
+      )}
       {!isRSS && <OofSettingsCard account={account} />}
       {!isRSS && (account.provider === 'exchange' || account.ews_url) && !account.delegate_account_id && (
         <SharedMailboxesCard account={account} />
@@ -1477,9 +1518,9 @@ function AccountPanel({ account }: { account: Account }) {
       <button
         type="button"
         onClick={() => void deleteAccount(account.id)}
-        className="mt-1 self-start flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-xs font-semibold text-secondary hover:text-rose-500 transition-colors cursor-pointer"
+        className="mt-1 self-start flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-xs font-semibold text-secondary hover:text-danger transition-colors cursor-pointer"
       >
-        <Trash2 size={12} />
+        <Trash2 size={14} strokeWidth={1.75} />
         {t('settings.account.removeAccount')}
       </button>
     </div>

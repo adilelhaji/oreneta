@@ -1,14 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  RefreshCw,
-  TriangleAlert,
-} from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, TriangleAlert } from 'lucide-react'
+import i18n, { useTranslation } from '../../lib/i18n'
 import {
   calendar$,
   loadCalendars,
@@ -27,6 +20,7 @@ import { WeekView } from './WeekView'
 import { EventEditor } from './EventEditor'
 import { EventDetails } from './EventDetails'
 import { CalendarList } from './CalendarList'
+import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 
 /// The calendar surface: one header — period, navigation, view switcher — over
@@ -55,22 +49,21 @@ export function CalendarView() {
   ]
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-app">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <EventEditor />
       <EventDetails />
       {menu && <EventContextMenu state={menu} onClose={() => setMenu(null)} />}
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-border px-5 py-3">
-        <CalendarDays size={17} className="shrink-0 text-accent" />
-        <h1 className="min-w-0 truncate text-sm font-semibold text-primary">
-          {periodLabel(view, anchor, t)}
-        </h1>
-        {loading && <RefreshCw size={13} className="shrink-0 animate-spin text-secondary" />}
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-3">
+        <CompactNavigation />
+        <CalendarDays size={20} className="shrink-0 text-accent" strokeWidth={1.75} />
+        <h1 className="min-w-0 wrap-anywhere text-heading-sm font-bold text-primary">{periodLabel(view, anchor, t)}</h1>
+        {loading && <RefreshCw size={14} className="shrink-0 animate-spin text-secondary" strokeWidth={1.75} />}
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {view !== 'agenda' && (
             <div className="flex items-center gap-0.5">
-              <NavButton label="‹" onClick={() => navigateCalendar(-1)}>
-                <ChevronLeft size={14} />
+              <NavButton label={t('calendar.previousPeriod')} onClick={() => navigateCalendar(-1)}>
+                <ChevronLeft size={14} strokeWidth={1.75} />
               </NavButton>
               <button
                 type="button"
@@ -79,19 +72,20 @@ export function CalendarView() {
               >
                 {t('calendar.today', { defaultValue: 'Today' })}
               </button>
-              <NavButton label="›" onClick={() => navigateCalendar(1)}>
-                <ChevronRight size={14} />
+              <NavButton label={t('calendar.nextPeriod')} onClick={() => navigateCalendar(1)}>
+                <ChevronRight size={14} strokeWidth={1.75} />
               </NavButton>
             </div>
           )}
 
-          <div className="flex items-center gap-0.5 rounded-control border border-border/80 bg-raised p-0.5">
+          <div className="flex max-w-full flex-wrap items-center gap-0.5 rounded-control border border-border bg-raised p-0.5">
             {views.map(({ mode, label }) => (
               <button
                 key={mode}
                 type="button"
+                aria-pressed={view === mode}
                 onClick={() => setCalendarView(mode)}
-                className={`rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
+                className={`min-h-8 rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
                   view === mode
                     ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
                     : 'text-secondary hover:text-primary'
@@ -105,12 +99,11 @@ export function CalendarView() {
           <button
             type="button"
             onClick={() => newEvent()}
-            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+            aria-label={t('calendar.newEvent', { defaultValue: 'New event' })}
+            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-caption font-semibold text-on-accent transition-opacity hover:opacity-90 cursor-pointer"
           >
-            <Plus size={13} />
-            <span className="hidden sm:inline">
-              {t('calendar.newEvent', { defaultValue: 'New event' })}
-            </span>
+            <Plus size={14} strokeWidth={1.75} />
+            <span>{t('calendar.newEvent', { defaultValue: 'New event' })}</span>
           </button>
         </div>
       </header>
@@ -119,9 +112,12 @@ export function CalendarView() {
           wrong is the agenda: it still shows what it last knew, which looks
           exactly like being current. */}
       {syncError && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-5 py-2">
-          <TriangleAlert size={13} className="shrink-0 text-amber-600" />
-          <p className="min-w-0 flex-1 truncate text-caption text-primary">
+        <div
+          role="status"
+          className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/30 bg-warning-soft px-4 py-2"
+        >
+          <TriangleAlert size={14} className="shrink-0 text-warning" strokeWidth={1.75} />
+          <p className="min-w-0 flex-1 basis-40 wrap-anywhere text-caption text-warning">
             {t('calendar.staleWarning', {
               defaultValue: 'Could not reach the server; what you see may be out of date.',
             })}
@@ -136,7 +132,7 @@ export function CalendarView() {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
         <CalendarList />
         {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
         {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
@@ -147,21 +143,13 @@ export function CalendarView() {
   )
 }
 
-function NavButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}) {
+function NavButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="flex h-6 w-6 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+      className="flex h-8 w-8 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
     >
       {children}
     </button>
@@ -169,25 +157,21 @@ function NavButton({
 }
 
 /// What the header calls the period on screen.
-function periodLabel(
-  view: CalendarViewMode,
-  anchorMs: number,
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
+function periodLabel(view: CalendarViewMode, anchorMs: number, t: ReturnType<typeof useTranslation>['t']): string {
   const anchor = new Date(anchorMs)
   if (view === 'month') {
-    const label = anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    const label = anchor.toLocaleDateString(i18n.language.replace('_', '-'), { month: 'long', year: 'numeric' })
     return label.charAt(0).toUpperCase() + label.slice(1)
   }
   if (view === 'week') {
     const monday = startOfWeek(anchor)
     const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
     const sameMonth = monday.getMonth() === sunday.getMonth()
-    const from = monday.toLocaleDateString(undefined, {
+    const from = monday.toLocaleDateString(i18n.language.replace('_', '-'), {
       day: 'numeric',
       month: sameMonth ? undefined : 'short',
     })
-    const to = sunday.toLocaleDateString(undefined, {
+    const to = sunday.toLocaleDateString(i18n.language.replace('_', '-'), {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -195,7 +179,7 @@ function periodLabel(
     return `${from} – ${to}`
   }
   if (view === 'day') {
-    const label = anchor.toLocaleDateString(undefined, {
+    const label = anchor.toLocaleDateString(i18n.language.replace('_', '-'), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',

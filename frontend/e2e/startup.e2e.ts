@@ -27,6 +27,105 @@ type SetupOptions = {
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
   for (const width of [1440, 600]) {
+    test(`secondary screen design: ${theme}, ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme })
+      await page.goto('/')
+      await expect(page.getByRole('textbox').first()).toBeVisible()
+      const openArea = async (name: string) => {
+        if (width < 769) await page.getByRole('button', { name: 'Más', exact: true }).click()
+        await page.getByRole('button', { name, exact: true }).click()
+      }
+      const bounds = async () => {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+        for (const button of await page.getByRole('button').all()) {
+          if (await button.isVisible()) expect(await button.evaluate((element) => {
+            const box = element.getBoundingClientRect(); return box.left >= -1 && box.right <= innerWidth + 1
+          })).toBe(true)
+        }
+      }
+      await page.evaluate(() => {
+        const replies = (window as any).startupProbe.replies
+        replies['people.list'] = { people: [{ id: 'synthetic-person', source: 'local', account: 'synthetic-account', book: '', name: 'Alejandra Martínez — Coordinación internacional de proyectos', organisation: 'Departamento de investigación y atención al cliente', note: 'Contacto sintético para comprobar texto largo y navegación.', photo: '', emails: [{ addr: 'coordinacion.internacional.proyectos@example.test', label: 'Trabajo' }], phones: [{ number: '+34 600 000 000', label: 'Móvil' }] }] }
+        replies['tasks.list'] = { tasks: [{ id: 1, thread_id: 'thread-1', account_id: 'synthetic-account', folder_id: 'INBOX', subject: 'Revisar la propuesta de coordinación internacional y confirmar los próximos pasos', from_name: 'Alejandra Martínez', from_addr: 'alejandra@example.test', note: 'Revisión pendiente con información detallada', due_at: Math.floor(Date.now() / 1000) - 86400, completed_at: null, created_at: 0 }] }
+        replies['calendar.events'] = { events: [] }
+        replies['calendar.list'] = { calendars: [{ id: 'local-test', name: 'Planificación del equipo internacional', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }] }
+        replies['calendar.setEnabled'] = { ok: true }
+      })
+      await openArea('Personas')
+      const person = page.getByRole('option', { name: /Alejandra Martínez/ })
+      await person.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.getByRole('heading', { name: /Alejandra Martínez/ })).toBeVisible()
+      await bounds()
+      await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+      await bounds()
+      await page.evaluate(() => { document.documentElement.style.zoom = '' })
+      await page.setViewportSize({ width, height: 1000 })
+      await info.attach('people', { body: await page.screenshot({ path: info.outputPath('people.png'), animations: 'disabled' }), contentType: 'image/png' })
+      if (width < 769) {
+        await page.getByRole('button', { name: 'Atrás', exact: true }).click()
+        await expect(person).toBeFocused()
+      }
+      await openArea('Tareas')
+      const task = page.getByRole('button', { name: /Revisar la propuesta de coordinación internacional/ })
+      await expect(task).toBeVisible()
+      await task.focus()
+      await expect(task).toBeFocused()
+      await bounds()
+      await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+      await bounds()
+      await page.evaluate(() => { document.documentElement.style.zoom = '' })
+      await page.setViewportSize({ width, height: 1000 })
+      await info.attach('tasks', { body: await page.screenshot({ path: info.outputPath('tasks.png'), animations: 'disabled' }), contentType: 'image/png' })
+      await task.focus()
+      await page.keyboard.press('Enter')
+      await expect(task).toHaveCount(0)
+      // Return to the list before opening its compact menu.
+      if (width < 769) await page.getByRole('button', { name: 'Volver a los chats', exact: true }).click()
+      await openArea('Calendario')
+      const month = page.getByRole('button', { name: 'Mes', exact: true })
+      await month.click()
+      await expect(month).toHaveAttribute('aria-pressed', 'true')
+      const monthName = await page.evaluate(() => new Date().toLocaleDateString('es', { month: 'long', year: 'numeric' }))
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(monthName, 'i'))
+      await expect(page.getByText('lun', { exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Periodo siguiente' })).toBeVisible()
+      await page.getByRole('button', { name: 'Periodo siguiente' }).click()
+      await page.getByRole('button', { name: 'Periodo anterior' }).click()
+      await expect(page.getByRole('button', { name: 'Planificación del equipo internacional', exact: true }).first()).toBeVisible()
+      await bounds()
+      await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+      await bounds()
+      await expect(page.getByRole('button', { name: 'Nuevo evento', exact: true })).toBeVisible()
+      if (width < 769) {
+        const more = page.getByRole('button', { name: 'Más', exact: true })
+        await more.click()
+        const settings = page.getByRole('button', { name: /Ajustes/ })
+        await settings.scrollIntoViewIfNeeded()
+        await expect(settings).toBeInViewport({ ratio: 1 })
+        expect(await settings.evaluate((element) => {
+          const box = element.parentElement!.getBoundingClientRect()
+          return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight
+        })).toBe(true)
+        const lastItem = page.getByRole('button', { name: 'Acerca de Oreneta', exact: true })
+        await lastItem.scrollIntoViewIfNeeded()
+        await expect(lastItem).toBeInViewport({ ratio: 1 })
+        await bounds()
+        await page.keyboard.press('Escape')
+        await expect(more).toBeFocused()
+      }
+      await page.evaluate(() => { document.documentElement.style.zoom = '' })
+      await page.setViewportSize({ width, height: 1000 })
+      await info.attach('calendar', { body: await page.screenshot({ path: info.outputPath('calendar.png'), animations: 'disabled' }), contentType: 'image/png' })
+      expect(await page.evaluate(() => (window as any).startupProbe.calls.some((command: string) => ['mail.send', 'calendar.create', 'calendar.update', 'calendar.delete', 'calendar.respond'].includes(command)))).toBe(false)
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [1440, 600]) {
     test(`manual refresh reports mixed requests without false completion: ${theme}, ${width}px`, async ({ page }, info) => {
       await page.setViewportSize({ width, height: 1000 })
       const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme, syncHealth: true, manualRefresh: true, preferences: { session_account: 'unified' } })
@@ -1248,7 +1347,7 @@ test('manual discovery, rejected credentials and retry use the existing account 
   await expect(page.getByLabel('Password', { exact: true })).toHaveValue('synthetic-password')
   await expect(page.getByLabel('IMAP Host', { exact: true })).toHaveValue('imap.example.test')
   await page.getByRole('button', { name: 'Save Account', exact: true }).click()
-  await expect(page.getByTitle('More', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
   const saves = await page.evaluate(() => (window as any).startupProbe.saves)
   expect(saves).toHaveLength(2)
   expect(saves[1].payload).toMatchObject({
@@ -1282,7 +1381,7 @@ for (const discovery of ['guess', 'failure'] as const) {
 test('manual options allow RSS without an email and the same wizard opens inside the app', async ({ page }) => {
   await prepareStartup(page, true)
   await page.goto('/')
-  await page.getByTitle('More', { exact: true }).click()
+  await page.getByRole('button', { name: 'More', exact: true }).click()
   await page.getByText('Add account', { exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Add Account' })
   await expect(dialog.getByRole('textbox', { name: 'Email Address', exact: true })).toBeVisible()
@@ -1315,7 +1414,7 @@ test('OAuth uses the browser-authorized identity, not the initially entered addr
   await page.getByRole('textbox', { name: 'Email Address', exact: true }).fill('suggested@outlook.com')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('button', { name: 'Sign in with Outlook' }).click()
-  await expect(page.getByTitle('More', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
   const saves = await page.evaluate(() => (window as any).startupProbe.saves)
   expect(saves).toHaveLength(1)
   expect(saves[0]).toMatchObject({ command: 'account.addOutlookOAuth', payload: { email: 'authorized@example.test' } })
@@ -1325,7 +1424,7 @@ test('OAuth uses the browser-authorized identity, not the initially entered addr
 test('closing Add account invalidates an OAuth poll already in flight', async ({ page }) => {
   const errors = await prepareStartup(page, true, { oauth: 'late' })
   await page.goto('/')
-  await page.getByTitle('More', { exact: true }).click()
+  await page.getByRole('button', { name: 'More', exact: true }).click()
   await page.getByText('Add account', { exact: true }).click()
   await page.getByRole('button', { name: 'Microsoft', exact: true }).click()
   await page.getByRole('button', { name: 'Sign in with Outlook' }).click()
@@ -1360,7 +1459,7 @@ test('Spanish onboarding fits a narrow window without horizontal overflow', asyn
 test('editing an existing account preserves its identity and stored password', async ({ page }) => {
   const errors = await prepareStartup(page, true, { existingEmail: 'alex@intranet' })
   await page.goto('/')
-  await expect(page.getByTitle('More', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
   await page.keyboard.press('Control+,')
   await page
     .getByRole('navigation')
@@ -1388,7 +1487,7 @@ test('editing an existing account preserves its identity and stored password', a
 test('production shell navigates settings, people, tasks and composer without hook errors', async ({ page }) => {
   const errors = await prepareStartup(page, true)
   await page.goto('/')
-  await expect(page.getByTitle('More', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
   await page.keyboard.press('Control+,')
   await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Close', exact: true }).click()

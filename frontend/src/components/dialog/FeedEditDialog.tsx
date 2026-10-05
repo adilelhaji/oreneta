@@ -64,14 +64,16 @@ export function FeedEditDialog() {
         <div className="flex flex-col gap-2">
           <span className="px-1 text-caption font-semibold text-secondary">{t('feeds.url')}</span>
           <div className="flex items-center gap-2 rounded-control bg-hover px-3 py-2">
-            <span className="min-w-0 flex-1 truncate text-caption font-medium text-primary select-text">{feed.url}</span>
+            <span className="min-w-0 flex-1 truncate text-caption font-medium text-primary select-text">
+              {feed.url}
+            </span>
             <IconButton
               icon={copied ? Check : Copy}
               iconSize={14}
               size="sm"
               radius="lg"
               label={copied ? t('common.copied') : t('feeds.copyUrl')}
-              className={copied ? 'text-emerald-500' : undefined}
+              className={copied ? 'text-success' : undefined}
               onClick={() => void onCopy()}
             />
           </div>

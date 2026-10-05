@@ -64,18 +64,18 @@ export function PriorityMenuSection({
           control: it is what the two controls below are about. */}
       <div className="px-2 pb-1 pt-0.5">
         <p className="flex items-center gap-1.5 text-caption font-semibold text-primary">
-          <Sparkle size={11} className={verdict.priority ? 'text-accent' : 'text-secondary'} />
+          <Sparkle size={14} className={verdict.priority ? 'text-accent' : 'text-secondary'} strokeWidth={1.75} />
           {verdict.priority ? t('priority.isPriority') : t('priority.notPriority')}
         </p>
         <p className="mt-0.5 text-2xs leading-snug text-secondary">{because}</p>
       </div>
       <MenuItem
-        icon={<Sparkle size={13} className="text-secondary" />}
+        icon={<Sparkle size={14} className="text-secondary" strokeWidth={1.75} />}
         label={verdict.override === true ? t('priority.forget') : t('priority.always')}
         onClick={() => choose(verdict.override === true ? null : true)}
       />
       <MenuItem
-        icon={<Sparkle size={13} className="text-secondary" />}
+        icon={<Sparkle size={14} className="text-secondary" strokeWidth={1.75} />}
         label={verdict.override === false ? t('priority.forget') : t('priority.never')}
         onClick={() => choose(verdict.override === false ? null : false)}
       />
@@ -83,7 +83,7 @@ export function PriorityMenuSection({
           things one says about a sender. */}
       {verdict.sender && (
         <MenuItem
-          icon={<Wind size={13} className="text-secondary" />}
+          icon={<Wind size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('sweep.action')}
           onClick={() => {
             onAct()

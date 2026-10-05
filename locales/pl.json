@@ -363,6 +363,8 @@
   "calendar.tentative": "Tentative",
   "calendar.times": "times",
   "calendar.title": "Calendar",
+  "calendar.previousPeriod": "Poprzedni okres",
+  "calendar.nextPeriod": "Następny okres",
   "calendar.today": "Today",
   "calendar.tomorrow": "Tomorrow",
   "calendar.unitDayMany": "days",

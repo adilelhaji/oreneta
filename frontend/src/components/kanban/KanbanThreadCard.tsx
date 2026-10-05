@@ -144,14 +144,14 @@ export function KanbanDragPreview({ thread, column }: { thread: Message; column:
   const accounts = useValue(accounts$)
 
   return (
-    <div className="w-[310px] max-w-[calc(100vw-32px)] cursor-grabbing opacity-95 shadow-2xl">
+    <div className="w-[310px] max-w-[calc(100vw-32px)] cursor-grabbing opacity-95 shadow-overlay">
       <ThreadListItem
         thread={thread}
         accounts={accounts}
         selectedAccount={column.accountId}
         selectedThread=""
         showAccountBadge={column.accountId === 'unified'}
-        className="rounded-control-sm border border-border bg-chats shadow-lg overflow-hidden"
+        className="rounded-control-sm border border-border bg-chats shadow-raised overflow-hidden"
         onSelect={() => undefined}
       />
     </div>

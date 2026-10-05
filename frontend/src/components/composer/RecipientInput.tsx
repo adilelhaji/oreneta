@@ -4,13 +4,7 @@ import { useTranslation } from '../../lib/i18n'
 import { formatContact, searchDirectory, suggestContacts } from '../../lib/contacts'
 import { useValue } from '@legendapp/state/react'
 import { accounts$ } from '../../states/accounts'
-import {
-  commitPending,
-  editAt,
-  fieldParts,
-  removeAt,
-  setPending,
-} from '../../lib/recipientField'
+import { commitPending, editAt, fieldParts, removeAt, setPending } from '../../lib/recipientField'
 import type { Contact } from '../../types'
 import { Chip } from '../chip/Chip'
 
@@ -22,8 +16,7 @@ type RecipientInputProps = {
   autoFocus?: boolean
 }
 
-const inputClass =
-  'min-w-[8rem] flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
+const inputClass = 'min-w-[8rem] flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none'
 
 /**
  * A recipient field whose entries are things rather than text.
@@ -203,7 +196,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
         />
       </div>
       {open && suggestions.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-xl">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-overlay">
           {suggestions.map((contact, index) => (
             <li
               key={contact.addr}

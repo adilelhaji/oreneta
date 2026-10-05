@@ -49,7 +49,11 @@ function FolderNodeRow({
           tabIndex={hasChildren ? 0 : -1}
           onClick={() => setExpanded((open) => !open)}
         >
-          <ChevronRight size={13} className={clsx('transition-transform', expanded && 'rotate-90')} />
+          <ChevronRight
+            size={14}
+            className={clsx('transition-transform', expanded && 'rotate-90')}
+            strokeWidth={1.75}
+          />
         </button>
         <button
           type="button"
@@ -65,9 +69,9 @@ function FolderNodeRow({
           onClick={() => node.folder && onPick(node.folder.id)}
         >
           {current ? (
-            <Check size={13} className="shrink-0 text-accent" />
+            <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
           ) : (
-            <Icon size={13} className="shrink-0 text-secondary" />
+            <Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />
           )}
           <span className="min-w-0 truncate">{node.name}</span>
         </button>
@@ -185,7 +189,7 @@ export function FolderSwitcher({
         onContextMenu={(event) => event.stopPropagation()}
       >
         <span className="min-w-0 truncate">{label}</span>
-        <ChevronDown size={12} className="shrink-0 text-secondary" />
+        <ChevronDown size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
       </button>
       {menu && (
         <FloatingContextMenu
@@ -194,7 +198,7 @@ export function FolderSwitcher({
           offset={2}
           onClose={close}
           overlay
-          className="fixed z-50 flex max-h-[min(420px,calc(100vh-1rem))] w-60 flex-col rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in text-primary"
+          className="fixed z-50 flex max-h-[min(420px,calc(100vh-1rem))] w-60 flex-col rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in text-primary"
           onContextMenu={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -235,7 +239,7 @@ export function FolderSwitcher({
                     }}
                     className={clsx(menuItemClass, 'w-full')}
                   >
-                    <Bookmark size={13} className="shrink-0 text-secondary" />
+                    <Bookmark size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
                     <span className="min-w-0 flex-1 truncate text-left">{search.name}</span>
                   </button>
                 ))}

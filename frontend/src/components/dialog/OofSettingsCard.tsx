@@ -81,7 +81,7 @@ function ImapOofCard({ account }: { account: Account }) {
   return (
     <SettingsGroup title={t('oof.title')}>
       <ToggleRow
-        icon={<PlaneTakeoff size={15} />}
+        icon={<PlaneTakeoff size={16} strokeWidth={1.75} />}
         title={t('oof.enable')}
         checked={settings.enabled}
         onChange={() => void commit({ ...settings, enabled: !settings.enabled })}
@@ -153,7 +153,7 @@ function ImapOofCard({ account }: { account: Account }) {
               />
             </div>
           </div>
-          {failed && <p className="px-3.5 pb-2 text-caption text-rose-600 dark:text-rose-400">{t('oof.loadFailed')}</p>}
+          {failed && <p className="px-3.5 pb-2 text-caption text-danger">{t('oof.loadFailed')}</p>}
         </>
       )}
     </SettingsGroup>
@@ -192,7 +192,7 @@ function EwsOofCard({ account }: { account: Account }) {
   return (
     <SettingsGroup title={t('oof.title')}>
       <SegmentedRow
-        icon={<PlaneTakeoff size={15} />}
+        icon={<PlaneTakeoff size={16} strokeWidth={1.75} />}
         title={t('oof.enable')}
         value={settings.state}
         options={[
@@ -276,7 +276,7 @@ function EwsOofCard({ account }: { account: Account }) {
               </div>
             )}
           </div>
-          {failed && <p className="px-3.5 pb-2 text-caption text-rose-600 dark:text-rose-400">{t('oof.loadFailed')}</p>}
+          {failed && <p className="px-3.5 pb-2 text-caption text-danger">{t('oof.loadFailed')}</p>}
         </>
       )}
     </SettingsGroup>

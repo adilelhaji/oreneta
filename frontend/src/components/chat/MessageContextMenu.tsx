@@ -55,12 +55,12 @@ export function MessageContextMenu({
       onClose={onClose}
       overlay
       overlayClassName="fixed inset-0 z-[60]"
-      className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-xl"
+      className="fixed z-[61] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
     >
       {state.linkUrl ? (
         <>
           <MenuItem
-            icon={<ExternalLink size={13} className="text-accent" />}
+            icon={<ExternalLink size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.actions.openLink')}
             onClick={() => {
               openExternal(state.linkUrl!)
@@ -68,7 +68,7 @@ export function MessageContextMenu({
             }}
           />
           <MenuItem
-            icon={<Link2 size={13} className="text-accent" />}
+            icon={<Link2 size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.actions.copyLinkAddress')}
             onClick={() => {
               navigator.clipboard?.writeText(state.linkUrl!).catch(() => undefined)
@@ -82,9 +82,9 @@ export function MessageContextMenu({
             <MenuItem
               icon={
                 isDraft ? (
-                  <SquarePen size={13} className="text-accent" />
+                  <SquarePen size={14} className="text-accent" strokeWidth={1.75} />
                 ) : (
-                  <ExternalLink size={13} className="text-accent" />
+                  <ExternalLink size={14} className="text-accent" strokeWidth={1.75} />
                 )
               }
               label={isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab')}
@@ -101,7 +101,7 @@ export function MessageContextMenu({
           )}
           {onSelectMessage && (
             <MenuItem
-              icon={<CheckSquare size={13} className="text-accent" />}
+              icon={<CheckSquare size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('buttons.select', { defaultValue: 'Select' })}
               onClick={() => {
                 onSelectMessage(state.message)
@@ -112,9 +112,9 @@ export function MessageContextMenu({
           <MenuItem
             icon={
               state.message.unread ? (
-                <MailOpen size={13} className="text-accent" />
+                <MailOpen size={14} className="text-accent" strokeWidth={1.75} />
               ) : (
-                <Mail size={13} className="text-accent" />
+                <Mail size={14} className="text-accent" strokeWidth={1.75} />
               )
             }
             label={state.message.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
@@ -127,7 +127,11 @@ export function MessageContextMenu({
           />
           <MenuItem
             icon={
-              <Star size={13} className={state.message.starred ? 'fill-amber-500 text-amber-500' : 'text-accent'} />
+              <Star
+                size={14}
+                className={state.message.starred ? 'fill-warning text-warning' : 'text-accent'}
+                strokeWidth={1.75}
+              />
             }
             label={state.message.starred ? t('chat.unstar') : t('chat.star')}
             disabled={readOnly}
@@ -139,7 +143,7 @@ export function MessageContextMenu({
           />
           {!isDraft && !isRSS && !headerOnly && (
             <MenuItem
-              icon={<Forward size={13} className="text-accent" />}
+              icon={<Forward size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.forward')}
               disabled={readOnly}
               onClick={() => {
@@ -151,7 +155,7 @@ export function MessageContextMenu({
           )}
           {!isDraft && !isRSS && !headerOnly && (
             <MenuItem
-              icon={<Copy size={13} className="text-accent" />}
+              icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.editAsNewMessage')}
               disabled={readOnly}
               onClick={() => {
@@ -163,7 +167,7 @@ export function MessageContextMenu({
           )}
           {!isDraft && !isRSS && (
             <MenuItem
-              icon={<Download size={13} className="text-accent" />}
+              icon={<Download size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.saveAsEml')}
               disabled={readOnly}
               onClick={() => {
@@ -176,7 +180,7 @@ export function MessageContextMenu({
           {!isRSS && (
             <MenuItem
               danger
-              icon={<Trash2 size={13} />}
+              icon={<Trash2 size={14} strokeWidth={1.75} />}
               label={isDraft ? t('chat.actions.discardDraft') : t('chat.actions.deleteMessage')}
               disabled={readOnly}
               onClick={() => {

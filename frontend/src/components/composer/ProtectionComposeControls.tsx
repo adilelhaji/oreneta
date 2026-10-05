@@ -72,7 +72,7 @@ export function ProtectionComposeControls({
           sign ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
         }`}
       >
-        <ShieldCheck size={15} />
+        <ShieldCheck size={16} strokeWidth={1.75} />
       </button>
       <button
         type="button"
@@ -84,7 +84,7 @@ export function ProtectionComposeControls({
           encrypt ? 'bg-accent/15 text-accent' : 'text-secondary hover:bg-hover'
         }`}
       >
-        <KeyRound size={15} />
+        <KeyRound size={16} strokeWidth={1.75} />
       </button>
       {signingKeyLocked && (
         <input

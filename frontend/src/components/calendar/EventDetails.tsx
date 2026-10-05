@@ -1,18 +1,6 @@
 import { useValue } from '@legendapp/state/react'
-import {
-  AlignLeft,
-  Bell,
-  CalendarDays,
-  Clock,
-  MapPin,
-  Repeat,
-  SquarePen,
-  Trash2,
-  User,
-  Users,
-  X,
-} from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2, User, Users, X } from 'lucide-react'
+import i18n, { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { useEffect, useState } from 'react'
 import {
@@ -69,11 +57,8 @@ export function EventDetails() {
   const series = seriesInWindow(event, events)
   // What the window knew, completed by what was fetched: the window's copy is
   // never wrong, only incomplete.
-  const attendees = extra?.id === event.id && extra.attendees.length > 0
-    ? extra.attendees
-    : event.attendees
-  const description =
-    extra?.id === event.id && extra.description ? extra.description : event.description
+  const attendees = extra?.id === event.id && extra.attendees.length > 0 ? extra.attendees : event.attendees
+  const description = extra?.id === event.id && extra.description ? extra.description : event.description
   // An invitation to answer: someone else convened it and this account is on
   // the list. An event of one's own has nobody to answer to.
   const invitation = attendees.length > 0 && Boolean(event.my_response)
@@ -91,7 +76,7 @@ export function EventDetails() {
         if (mouse.target === mouse.currentTarget) closeDetails()
       }}
     >
-      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-xl">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col rounded-panel border border-border bg-app shadow-overlay">
         {/* A band in the calendar's colour, so which calendar this belongs to
             is answered before the text is read. */}
         <div className="h-1.5 rounded-t-2xl" style={{ backgroundColor: color }} />
@@ -110,12 +95,12 @@ export function EventDetails() {
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
           >
-            <X size={15} />
+            <X size={16} strokeWidth={1.75} />
           </button>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pb-4">
-          <Row icon={<Clock size={14} />}>
+          <Row icon={<Clock size={14} strokeWidth={1.75} />}>
             <span className="text-primary">{formatRange(event)}</span>
             {/* How far off and how long: the two questions asked of a date
                 that the date itself does not answer. */}
@@ -124,7 +109,7 @@ export function EventDetails() {
             </span>
             {event.is_recurring && (
               <span className="mt-0.5 flex items-center gap-1 text-secondary">
-                <Repeat size={11} />
+                <Repeat size={14} strokeWidth={1.75} />
                 {t('calendar.recurring', { defaultValue: 'Repeats' })}
               </span>
             )}
@@ -151,34 +136,27 @@ export function EventDetails() {
           </Row>
 
           {event.location && (
-            <Row icon={<MapPin size={14} />}>
+            <Row icon={<MapPin size={14} strokeWidth={1.75} />}>
               <span className="text-primary">{event.location}</span>
             </Row>
           )}
 
-          <Row icon={<CalendarDays size={14} />}>
+          <Row icon={<CalendarDays size={14} strokeWidth={1.75} />}>
             <span className="flex items-center gap-1.5 text-primary">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: color }}
-              />
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
               {calendar?.name ?? t('calendar.calendar', { defaultValue: 'Calendar' })}
             </span>
           </Row>
 
           {event.organizer && (
-            <Row icon={<User size={14} />}>
-              <span className="text-primary">
-                {event.organizer.name || event.organizer.addr}
-              </span>
-              <span className="text-secondary">
-                {t('calendar.organizer', { defaultValue: 'Organiser' })}
-              </span>
+            <Row icon={<User size={14} strokeWidth={1.75} />}>
+              <span className="text-primary">{event.organizer.name || event.organizer.addr}</span>
+              <span className="text-secondary">{t('calendar.organizer', { defaultValue: 'Organiser' })}</span>
             </Row>
           )}
 
           {typeof event.reminder_minutes === 'number' && (
-            <Row icon={<Bell size={14} />}>
+            <Row icon={<Bell size={14} strokeWidth={1.75} />}>
               <span className="text-primary">
                 {event.reminder_minutes === 0
                   ? t('calendar.reminderAtStart', { defaultValue: 'At the start' })
@@ -191,29 +169,23 @@ export function EventDetails() {
           )}
 
           {description && (
-            <Row icon={<AlignLeft size={14} />}>
+            <Row icon={<AlignLeft size={14} strokeWidth={1.75} />}>
               {/* Kept as the plain text it arrived as, with the author's own
                   line breaks: notes are read, not rendered. */}
-              <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-primary">
-                {description}
-              </p>
+              <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-primary">{description}</p>
             </Row>
           )}
 
           {attendees.length > 0 && (
-            <Row icon={<Users size={14} />}>
+            <Row icon={<Users size={14} strokeWidth={1.75} />}>
               <ul className="flex flex-col gap-1">
                 {attendees.map((person, index) => (
                   <li key={`${person.addr}:${index}`} className="flex items-baseline gap-2">
                     {/* The name is what identifies someone here: an internal
                         directory often gives no address the server will share. */}
-                    <span className="min-w-0 truncate text-primary">
-                      {person.name || person.addr}
-                    </span>
+                    <span className="min-w-0 truncate text-primary">{person.name || person.addr}</span>
                     {person.response && (
-                      <span className="shrink-0 text-2xs text-secondary">
-                        {responseLabel(person.response, t)}
-                      </span>
+                      <span className="shrink-0 text-2xs text-secondary">{responseLabel(person.response, t)}</span>
                     )}
                   </li>
                 ))}
@@ -258,7 +230,7 @@ export function EventDetails() {
                   }}
                   className={`flex-1 rounded-control border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer ${
                     answeredAs(event.my_response, choice)
-                      ? 'border-accent bg-accent text-white'
+                      ? 'border-accent bg-accent text-on-accent'
                       : 'border-border bg-raised text-primary hover:bg-hover'
                   }`}
                 >
@@ -283,14 +255,10 @@ export function EventDetails() {
           ) : (
             <button
               type="button"
-              onClick={() =>
-                event.is_recurring && event.series_id
-                  ? setAsking(true)
-                  : void deleteEvent(event)
-              }
-              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              onClick={() => (event.is_recurring && event.series_id ? setAsking(true) : void deleteEvent(event))}
+              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} strokeWidth={1.75} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
             </button>
           )}
@@ -305,9 +273,9 @@ export function EventDetails() {
             <button
               type="button"
               onClick={() => editEvent(event)}
-              className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition-opacity hover:opacity-90 cursor-pointer"
             >
-              <SquarePen size={13} />
+              <SquarePen size={14} strokeWidth={1.75} />
               {t('calendar.editEvent', { defaultValue: 'Edit event' })}
             </button>
           )}
@@ -331,14 +299,14 @@ function formatRange(event: CalendarEvent): string {
   const start = new Date(event.start * 1000)
   const end = new Date(event.end * 1000)
   const day = (date: Date) =>
-    date.toLocaleDateString(undefined, {
+    date.toLocaleDateString(i18n.language.replace('_', '-'), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     })
   const time = (date: Date) =>
-    date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    date.toLocaleTimeString(i18n.language.replace('_', '-'), { hour: '2-digit', minute: '2-digit' })
 
   if (event.all_day) {
     // Dates, read as dates. The stored instants are midnight UTC because a
@@ -358,22 +326,19 @@ function formatRange(event: CalendarEvent): string {
 /// One occurrence's date, short enough to sit on a line with other facts.
 function formatOccurrence(event: CalendarEvent): string {
   const date = new Date(event.start * 1000)
-  const day = date.toLocaleDateString(undefined, {
+  const day = date.toLocaleDateString(i18n.language.replace('_', '-'), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   })
   if (event.all_day) return day
-  return `${day}, ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+  return `${day}, ${date.toLocaleTimeString(i18n.language.replace('_', '-'), { hour: '2-digit', minute: '2-digit' })}`
 }
 
 /// How far off it is, in the coarsest unit that still says something: days
 /// once it is a day away, hours below that, and nothing at all for something
 /// happening now.
-function relativeWhen(
-  event: CalendarEvent,
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
+function relativeWhen(event: CalendarEvent, t: ReturnType<typeof useTranslation>['t']): string {
   const now = Date.now() / 1000
   if (event.end < now) {
     const days = Math.round((now - event.end) / 86400)
@@ -396,10 +361,7 @@ function relativeWhen(
 
 /// How long it lasts. An all-day event is counted in days, since hours are not
 /// what it was written in.
-function formatDuration(
-  event: CalendarEvent,
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
+function formatDuration(event: CalendarEvent, t: ReturnType<typeof useTranslation>['t']): string {
   const seconds = Math.max(0, event.end - event.start)
   if (event.all_day || seconds >= 86400) {
     const days = Math.max(1, Math.round(seconds / 86400))

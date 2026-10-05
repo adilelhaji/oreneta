@@ -12,9 +12,9 @@ import { menuItemBase } from '../menu/menuStyles'
 export function FilterSwitch({ value, onChange }: { value: FilterMode; onChange: (mode: FilterMode) => void }) {
   const { t } = useTranslation()
   const options: { mode: FilterMode; label: string; icon: React.ReactNode }[] = [
-    { mode: 'all', label: t('filters.all'), icon: <Inbox size={13} /> },
-    { mode: 'unread', label: t('filters.unread'), icon: <Mail size={13} /> },
-    { mode: 'starred', label: t('filters.starred'), icon: <Star size={13} /> },
+    { mode: 'all', label: t('filters.all'), icon: <Inbox size={14} strokeWidth={1.75} /> },
+    { mode: 'unread', label: t('filters.unread'), icon: <Mail size={14} strokeWidth={1.75} /> },
+    { mode: 'starred', label: t('filters.starred'), icon: <Star size={14} strokeWidth={1.75} /> },
   ]
   return (
     <div className="hidden @min-[640px]:flex h-9 shrink-0 items-center gap-0.5 rounded-control bg-active/70 p-[3px]">
@@ -88,21 +88,33 @@ export function BoardMenu({
       />
       {open && (
         <div
-          className="absolute right-0 mt-1.5 z-50 min-w-[180px] w-max rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
+          className="absolute right-0 mt-1.5 z-50 min-w-[180px] w-max rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in select-none"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="@min-[640px]:hidden">
             <div className="px-3 pb-1 pt-1.5 text-2xs font-bold uppercase tracking-wider text-secondary">
               {t('filters.label')}
             </div>
-            {filterItem('all', t('filters.all'), <Inbox size={13} className="text-secondary shrink-0" />)}
-            {filterItem('unread', t('filters.unread'), <Mail size={13} className="text-secondary shrink-0" />)}
-            {filterItem('starred', t('filters.starred'), <Star size={13} className="text-secondary shrink-0" />)}
+            {filterItem(
+              'all',
+              t('filters.all'),
+              <Inbox size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+            )}
+            {filterItem(
+              'unread',
+              t('filters.unread'),
+              <Mail size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+            )}
+            {filterItem(
+              'starred',
+              t('filters.starred'),
+              <Star size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+            )}
             <div className="my-1 border-t border-border" />
           </div>
           <MenuItem
             className="flex-nowrap"
-            icon={<Plus size={13} className="text-secondary shrink-0" />}
+            icon={<Plus size={14} className="text-secondary shrink-0" strokeWidth={1.75} />}
             label={<span className="whitespace-nowrap shrink-0">{t('kanban.actions.addColumn')}</span>}
             onClick={() => {
               onAddColumn()

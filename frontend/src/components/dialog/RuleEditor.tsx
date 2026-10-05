@@ -2,14 +2,7 @@ import { Plus, X } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { SelectInput, TextInput } from '../field/Field'
-import {
-  RULE_FIELDS,
-  RULE_OPS,
-  ruleProblem,
-  type Rule,
-  type RuleAction,
-  type RuleCondition,
-} from '../../states/rules'
+import { RULE_FIELDS, RULE_OPS, ruleProblem, type Rule, type RuleAction, type RuleCondition } from '../../states/rules'
 import type { Account } from '../../types'
 import { labels$ } from '../../states/labels'
 
@@ -59,9 +52,7 @@ export function RuleEditor({
           aria-label={t('rules.name')}
         />
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-caption font-semibold text-secondary">
-            {t('rules.appliesTo')}
-          </span>
+          <span className="shrink-0 text-caption font-semibold text-secondary">{t('rules.appliesTo')}</span>
           <SelectInput
             value={rule.account}
             onChange={(event) => onChange({ ...rule, account: event.target.value })}
@@ -79,9 +70,7 @@ export function RuleEditor({
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-caption font-bold uppercase tracking-wide text-secondary">
-            {t('rules.when')}
-          </span>
+          <span className="text-caption font-bold uppercase tracking-wide text-secondary">{t('rules.when')}</span>
           <SelectInput
             value={rule.matchMode}
             onChange={(event) => onChange({ ...rule, matchMode: event.target.value as Rule['matchMode'] })}
@@ -109,9 +98,7 @@ export function RuleEditor({
             </SelectInput>
             <SelectInput
               value={condition.op}
-              onChange={(event) =>
-                setCondition(index, { ...condition, op: event.target.value as RuleCondition['op'] })
-              }
+              onChange={(event) => setCondition(index, { ...condition, op: event.target.value as RuleCondition['op'] })}
               className="w-36 shrink-0 rounded-control py-1.5 pl-2.5 text-xs"
             >
               {RULE_OPS.map((op) => (
@@ -130,12 +117,10 @@ export function RuleEditor({
               type="button"
               title={t('rules.remove')}
               aria-label={t('rules.remove')}
-              onClick={() =>
-                onChange({ ...rule, conditions: rule.conditions.filter((_, i) => i !== index) })
-              }
+              onClick={() => onChange({ ...rule, conditions: rule.conditions.filter((_, i) => i !== index) })}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             >
-              <X size={14} />
+              <X size={14} strokeWidth={1.75} />
             </button>
           </div>
         ))}
@@ -149,15 +134,13 @@ export function RuleEditor({
           }
           className="flex w-fit items-center gap-1 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
         >
-          <Plus size={12} />
+          <Plus size={14} strokeWidth={1.75} />
           {t('rules.addCondition')}
         </button>
       </section>
 
       <section className="flex flex-col gap-2">
-        <span className="text-caption font-bold uppercase tracking-wide text-secondary">
-          {t('rules.then')}
-        </span>
+        <span className="text-caption font-bold uppercase tracking-wide text-secondary">{t('rules.then')}</span>
         {rule.actions.map((action, index) => (
           <div key={index} className="flex items-center gap-1.5">
             <SelectInput
@@ -205,7 +188,7 @@ export function RuleEditor({
               onClick={() => onChange({ ...rule, actions: rule.actions.filter((_, i) => i !== index) })}
               className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             >
-              <X size={14} />
+              <X size={14} strokeWidth={1.75} />
             </button>
           </div>
         ))}
@@ -214,15 +197,13 @@ export function RuleEditor({
           onClick={() => onChange({ ...rule, actions: [...rule.actions, blankAction('markRead', '')] })}
           className="flex w-fit items-center gap-1 rounded-control-sm px-2 py-1 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer"
         >
-          <Plus size={12} />
+          <Plus size={14} strokeWidth={1.75} />
           {t('rules.addAction')}
         </button>
         <p className="text-caption text-secondary">{t('rules.noDelete')}</p>
       </section>
 
-      {problem && (
-        <p className="text-caption font-medium text-rose-500">{t(`rules.problem.${problem}`)}</p>
-      )}
+      {problem && <p className="text-caption font-medium text-danger">{t(`rules.problem.${problem}`)}</p>}
     </div>
   )
 }

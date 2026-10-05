@@ -29,14 +29,14 @@ export function CertificateTrustPanel({
     [t('accounts.certificate.expires', { defaultValue: 'Expires' }), cert.not_after],
   ]
   return (
-    <div className="rounded-control bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-3 flex flex-col gap-2.5">
+    <div className="rounded-control bg-warning-soft border border-warning/30 p-3 flex flex-col gap-2.5">
       <div className="flex items-start gap-2">
-        <ShieldAlert size={14} className="shrink-0 mt-px text-amber-600 dark:text-amber-400" />
+        <ShieldAlert size={14} className="shrink-0 mt-px text-warning" strokeWidth={1.75} />
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-bold leading-tight text-amber-700 dark:text-amber-300">
+          <p className="text-xs font-bold leading-tight text-warning">
             {t('accounts.certificate.title', { defaultValue: "Can't verify this server's certificate" })}
           </p>
-          <p className="text-caption leading-relaxed text-amber-700/90 dark:text-amber-300/90">
+          <p className="text-caption leading-relaxed text-warning">
             {t('accounts.certificate.body', {
               defaultValue:
                 'Check the fingerprint below against the one {server} is supposed to have. Only continue if they match.',
@@ -45,7 +45,7 @@ export function CertificateTrustPanel({
           </p>
         </div>
       </div>
-      <dl className="flex flex-col gap-1 text-caption text-amber-700/90 dark:text-amber-300/90">
+      <dl className="flex flex-col gap-1 text-caption text-warning">
         {rows.map(([label, value]) =>
           value ? (
             <div key={label} className="flex gap-2">

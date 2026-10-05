@@ -1,25 +1,15 @@
 import { useMemo } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { MapPin, Repeat } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
-import {
-  calendar$,
-  eventColor,
-  openEvent,
-  groupByDay,
-  type CalendarEvent,
-} from '../../states/calendar'
+import i18n, { useTranslation } from '../../lib/i18n'
+import { calendar$, eventColor, openEvent, groupByDay, type CalendarEvent } from '../../states/calendar'
 
 /// A list of what is coming, grouped by day.
 ///
 /// Deliberately not a grid: a grid answers "what does my month look like",
 /// which the month view now does; this one answers "what is next", which is
 /// the question a mail client's user asks most.
-export function AgendaList({
-  onEventMenu,
-}: {
-  onEventMenu: (x: number, y: number, event: CalendarEvent) => void
-}) {
+export function AgendaList({ onEventMenu }: { onEventMenu: (x: number, y: number, event: CalendarEvent) => void }) {
   const { t } = useTranslation()
   const events = useValue(calendar$.events)
   const loading = useValue(calendar$.loading)
@@ -43,7 +33,7 @@ export function AgendaList({
       )}
       {days.map(({ day, events }) => (
         <section key={day} className="mb-6">
-          <h2 className="sticky top-0 z-10 -mx-5 bg-app/95 px-5 pb-2 pt-1 text-caption font-semibold uppercase tracking-wide text-secondary backdrop-blur">
+          <h2 className="sticky top-0 z-10 -mx-5 bg-app/95 px-5 pb-2 pt-1 text-caption font-semibold uppercase tracking-wide text-secondary">
             {formatDayHeading(day, t)}
           </h2>
           <ul className="flex flex-col gap-1.5">
@@ -105,18 +95,12 @@ function EventRow({
             {/* Ends on another day: without saying so, an event running until
                 the same clock time tomorrow reads as one lasting no time at
                 all. */}
-            {!sameDay(event) && (
-              <span className="block text-secondary/80">{formatEndDay(event)}</span>
-            )}
+            {!sameDay(event) && <span className="block text-secondary/80">{formatEndDay(event)}</span>}
           </>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p
-          className={`truncate text-ui font-medium text-primary ${
-            event.is_cancelled ? 'line-through' : ''
-          }`}
-        >
+        <p className={`truncate text-ui font-medium text-primary ${event.is_cancelled ? 'line-through' : ''}`}>
           {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
           {continues && (
             <span className="ml-1.5 font-normal text-secondary">
@@ -127,13 +111,13 @@ function EventRow({
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-secondary">
           {event.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
-              <MapPin size={10} className="shrink-0" />
+              <MapPin size={14} className="shrink-0" strokeWidth={1.75} />
               <span className="truncate">{event.location}</span>
             </span>
           )}
           {event.is_recurring && (
             <span className="inline-flex items-center gap-1">
-              <Repeat size={10} />
+              <Repeat size={14} strokeWidth={1.75} />
               {t('calendar.recurring', { defaultValue: 'Repeats' })}
             </span>
           )}
@@ -155,7 +139,7 @@ function sameDay(event: CalendarEvent): boolean {
 
 /// The day an event ends on, short enough for the agenda's time column.
 function formatEndDay(event: CalendarEvent): string {
-  return `→ ${new Date(event.end * 1000).toLocaleDateString(undefined, {
+  return `→ ${new Date(event.end * 1000).toLocaleDateString(i18n.language.replace('_', '-'), {
     day: 'numeric',
     month: 'short',
   })}`
@@ -168,7 +152,7 @@ function spanInDays(event: CalendarEvent): number {
 }
 
 export function formatTime(epochSeconds: number): string {
-  return new Date(epochSeconds * 1000).toLocaleTimeString(undefined, {
+  return new Date(epochSeconds * 1000).toLocaleTimeString(i18n.language.replace('_', '-'), {
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -180,7 +164,7 @@ function formatDayHeading(day: number, t: ReturnType<typeof useTranslation>['t']
   const today = new Date()
   const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
   const dayDiff = Math.round((day - midnight(today)) / (24 * 3600 * 1000))
-  const formatted = date.toLocaleDateString(undefined, {
+  const formatted = date.toLocaleDateString(i18n.language.replace('_', '-'), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',

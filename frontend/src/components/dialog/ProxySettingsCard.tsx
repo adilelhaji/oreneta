@@ -69,7 +69,7 @@ export function ProxySettingsSection() {
   return (
     <SettingsGroup title={t('settings.sections.network')}>
       <SelectRow
-        icon={<Network size={15} />}
+        icon={<Network size={16} strokeWidth={1.75} />}
         title={t('settings.network.proxy')}
         hint={t('settings.network.proxyHint')}
         value={proxy.mode}
@@ -132,7 +132,7 @@ export function AccountProxyCard({ account }: { account: Account }) {
   return (
     <SettingsGroup title={t('settings.sections.network')}>
       <SelectRow
-        icon={<Network size={15} />}
+        icon={<Network size={16} strokeWidth={1.75} />}
         title={t('settings.network.proxy')}
         hint={t('settings.network.accountProxyHint')}
         value={mode}

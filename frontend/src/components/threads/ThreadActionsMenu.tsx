@@ -1,6 +1,18 @@
 import { useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { MoreVertical, Inbox, Mail, Star, CheckCheck, EyeOff, FolderX, RefreshCw, Search, Trash2 , Clock} from 'lucide-react'
+import {
+  MoreVertical,
+  Inbox,
+  Mail,
+  Star,
+  CheckCheck,
+  EyeOff,
+  FolderX,
+  RefreshCw,
+  Search,
+  Trash2,
+  Clock,
+} from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import type { FilterMode } from '../../states/ui'
 import { useDismissOnOutside } from '../menu/useDismissOnOutside'
@@ -73,16 +85,28 @@ export function ThreadActionsMenuItems({
     <>
       {!hideFilters && (
         <>
-          {filterItem('all', allLabel ?? t('filters.all'), <Inbox size={13} className="text-secondary shrink-0" />)}
-          {filterItem('unread', t('filters.unread'), <Mail size={13} className="text-secondary shrink-0" />)}
-          {filterItem('starred', t('filters.starred'), <Star size={13} className="text-secondary shrink-0" />)}
+          {filterItem(
+            'all',
+            allLabel ?? t('filters.all'),
+            <Inbox size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+          )}
+          {filterItem(
+            'unread',
+            t('filters.unread'),
+            <Mail size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+          )}
+          {filterItem(
+            'starred',
+            t('filters.starred'),
+            <Star size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
+          )}
           {/* Where what was set aside can be found. Without it, putting a
               thread away is trusting that it comes back. */}
           {!hideSnoozed &&
             filterItem(
               'snoozed',
               t('filters.snoozed', { defaultValue: 'Snoozed' }),
-              <Clock size={13} className="text-secondary shrink-0" />,
+              <Clock size={14} className="text-secondary shrink-0" strokeWidth={1.75} />,
             )}
           <div className="my-1 border-t border-border" />
         </>
@@ -90,7 +114,7 @@ export function ThreadActionsMenuItems({
       <MenuItem
         className="flex-nowrap disabled:cursor-not-allowed disabled:opacity-50"
         disabled={!hasUnread}
-        icon={<CheckCheck size={13} className="text-secondary shrink-0" />}
+        icon={<CheckCheck size={14} className="text-secondary shrink-0" strokeWidth={1.75} />}
         label={<span className="whitespace-nowrap shrink-0">{t('threads.actions.markAllAsRead')}</span>}
         onClick={() => {
           onMarkAllRead()
@@ -99,8 +123,8 @@ export function ThreadActionsMenuItems({
       />
       {onEmptyFolder && (
         <MenuItem
-          className="flex-nowrap text-rose-600 dark:text-rose-400"
-          icon={<Trash2 size={13} className="shrink-0" />}
+          className="flex-nowrap text-danger"
+          icon={<Trash2 size={14} className="shrink-0" strokeWidth={1.75} />}
           label={
             <span className="whitespace-nowrap shrink-0">{emptyFolderLabel ?? t('threads.actions.emptyTrash')}</span>
           }
@@ -113,7 +137,7 @@ export function ThreadActionsMenuItems({
       {onSearch && (
         <MenuItem
           className="flex-nowrap"
-          icon={<Search size={13} className="text-secondary shrink-0" />}
+          icon={<Search size={14} className="text-secondary shrink-0" strokeWidth={1.75} />}
           label={
             <span className="whitespace-nowrap shrink-0">
               {searchLabel ?? t('kanban.actions.search', { defaultValue: 'Search' })}
@@ -133,8 +157,9 @@ export function ThreadActionsMenuItems({
               className="flex-nowrap"
               icon={
                 <RefreshCw
-                  size={13}
+                  size={14}
                   className={`text-secondary shrink-0 ${syncing ? 'animate-spin text-accent' : ''}`}
+                  strokeWidth={1.75}
                 />
               }
               label={
@@ -153,7 +178,7 @@ export function ThreadActionsMenuItems({
           {onRemove && (
             <MenuItem
               className="flex-nowrap"
-              icon={<EyeOff size={13} className="text-secondary shrink-0" />}
+              icon={<EyeOff size={14} className="text-secondary shrink-0" strokeWidth={1.75} />}
               label={<span className="whitespace-nowrap shrink-0">{t('kanban.actions.hideColumn')}</span>}
               onClick={() => {
                 onRemove()
@@ -163,8 +188,8 @@ export function ThreadActionsMenuItems({
           )}
           {onDeleteFolder && (
             <MenuItem
-              className="flex-nowrap text-rose-600 dark:text-rose-400"
-              icon={<FolderX size={13} className="shrink-0" />}
+              className="flex-nowrap text-danger"
+              icon={<FolderX size={14} className="shrink-0" strokeWidth={1.75} />}
               label={<span className="whitespace-nowrap shrink-0">{t('folders.delete.action')}</span>}
               onClick={() => {
                 onDeleteFolder()
@@ -239,7 +264,7 @@ export function ThreadActionsMenu({
     <div ref={rootRef} className="relative">
       <button
         className={`flex ${triggerClassName} shrink-0 items-center justify-center rounded-control-sm cursor-pointer transition-all ${
-          filterActive ? 'bg-accent text-white shadow-sm shadow-accent/20' : 'hover:bg-hover text-secondary'
+          filterActive ? 'bg-accent text-on-accent ' : 'hover:bg-hover text-secondary'
         }`}
         onClick={(event) => {
           event.stopPropagation()
@@ -247,11 +272,11 @@ export function ThreadActionsMenu({
         }}
         title={t('threads.actions.title')}
       >
-        <MoreVertical size={size} />
+        <MoreVertical size={size} strokeWidth={1.75} />
       </button>
       {open && (
         <div
-          className="absolute right-0 mt-1.5 z-50 min-w-[160px] w-max rounded-control border border-border bg-chats p-1 shadow-2xl animate-fade-in select-none"
+          className="absolute right-0 mt-1.5 z-50 min-w-[160px] w-max rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in select-none"
           onClick={(event) => event.stopPropagation()}
         >
           <ThreadActionsMenuItems

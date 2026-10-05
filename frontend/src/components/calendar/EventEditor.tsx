@@ -92,7 +92,7 @@ export function EventEditor() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeEditor}>
       <div
-        className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-panel border border-border bg-app shadow-xl"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-panel border border-border bg-app shadow-overlay"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
@@ -107,17 +107,26 @@ export function EventEditor() {
             className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={t('calendar.close', { defaultValue: 'Close' })}
           >
-            <X size={15} />
+            <X size={16} strokeWidth={1.75} />
           </button>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pb-1">
           <Labelled label={t('calendar.subject', { defaultValue: 'Title' })}>
-            <input value={event.subject} onChange={(e) => set({ subject: e.target.value })} autoFocus className={inputClass} />
+            <input
+              value={event.subject}
+              onChange={(e) => set({ subject: e.target.value })}
+              autoFocus
+              className={inputClass}
+            />
           </Labelled>
 
           <Labelled label={t('calendar.location', { defaultValue: 'Location' })}>
-            <input value={event.location ?? ''} onChange={(e) => set({ location: e.target.value })} className={inputClass} />
+            <input
+              value={event.location ?? ''}
+              onChange={(e) => set({ location: e.target.value })}
+              className={inputClass}
+            />
           </Labelled>
 
           <Labelled label={t('calendar.attendees', { defaultValue: 'Invite' })}>
@@ -134,9 +143,7 @@ export function EventEditor() {
           <Labelled label={t('calendar.reminder', { defaultValue: 'Reminder' })}>
             <select
               value={event.reminder_minutes ?? ''}
-              onChange={(e) =>
-                set({ reminder_minutes: e.target.value === '' ? null : Number(e.target.value) })
-              }
+              onChange={(e) => set({ reminder_minutes: e.target.value === '' ? null : Number(e.target.value) })}
               className={inputClass}
             >
               <option value="">{t('calendar.reminderNone', { defaultValue: 'None' })}</option>
@@ -170,20 +177,12 @@ export function EventEditor() {
               />
             </Labelled>
             <Labelled label={t('calendar.ends', { defaultValue: 'Ends' })}>
-              <DateAndTime
-                value={event.end}
-                allDay={event.all_day}
-                onChange={(end) => set({ end })}
-              />
+              <DateAndTime value={event.end} allDay={event.all_day} onChange={(end) => set({ end })} />
             </Labelled>
           </div>
 
           <label className="flex items-center gap-2 text-xs text-primary">
-            <input
-              type="checkbox"
-              checked={event.all_day}
-              onChange={(e) => set(asAllDay(event, e.target.checked))}
-            />
+            <input type="checkbox" checked={event.all_day} onChange={(e) => set(asAllDay(event, e.target.checked))} />
             {t('calendar.allDay', { defaultValue: 'All day' })}
           </label>
 
@@ -242,15 +241,13 @@ export function EventEditor() {
           )}
 
           {event.end < event.start && (
-            <p className="text-caption text-rose-500">
+            <p className="text-caption text-danger">
               {t('calendar.endsBeforeStart', { defaultValue: 'It ends before it starts.' })}
             </p>
           )}
         </div>
 
-        {error && (
-          <p className="shrink-0 px-5 pt-2 text-caption text-rose-500">{error}</p>
-        )}
+        {error && <p className="shrink-0 px-5 pt-2 text-caption text-danger">{error}</p>}
 
         {asking && (
           <ScopeAsk
@@ -284,9 +281,9 @@ export function EventEditor() {
             <button
               type="button"
               onClick={() => begin('delete')}
-              className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-rose-500 transition-colors hover:bg-rose-500/10 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} strokeWidth={1.75} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
             </button>
           ) : (
@@ -304,7 +301,7 @@ export function EventEditor() {
               type="button"
               disabled={invalid || saving}
               onClick={() => begin('save')}
-              className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              className="rounded-control bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               {t('calendar.save', { defaultValue: 'Save' })}
             </button>
@@ -333,8 +330,7 @@ function reminderLabel(minutes: number, t: ReturnType<typeof useTranslation>['t'
       defaultValue: '{count} days before',
       count: minutes / (24 * 60),
     })
-  if (minutes % 60 === 0)
-    return t('calendar.reminderHours', { defaultValue: '{count} h before', count: minutes / 60 })
+  if (minutes % 60 === 0) return t('calendar.reminderHours', { defaultValue: '{count} h before', count: minutes / 60 })
   return t('calendar.reminderMinutes', { defaultValue: '{count} min before', count: minutes })
 }
 
@@ -503,9 +499,7 @@ function RepeatFields({
                   onClick={() => toggleDay(day)}
                   aria-pressed={days.includes(day)}
                   className={`h-7 w-7 rounded-full text-2xs font-semibold transition-colors cursor-pointer ${
-                    days.includes(day)
-                      ? 'bg-accent text-white'
-                      : 'bg-raised text-secondary hover:text-primary'
+                    days.includes(day) ? 'bg-accent text-on-accent' : 'bg-raised text-secondary hover:text-primary'
                   }`}
                 >
                   {initial}
@@ -535,8 +529,7 @@ function RepeatFields({
               onChange={(e) => {
                 const choice = e.target.value
                 if (choice === 'never') onChange({ ...rule, until: null, count: null })
-                else if (choice === 'on')
-                  onChange({ ...rule, until: start + 30 * 24 * 3600, count: null })
+                else if (choice === 'on') onChange({ ...rule, until: start + 30 * 24 * 3600, count: null })
                 else onChange({ ...rule, until: null, count: 10 })
               }}
               className={`${inputClass} w-auto`}
@@ -564,9 +557,7 @@ function RepeatFields({
                   onChange={(e) => onChange({ ...rule, count: Math.max(1, Number(e.target.value)) })}
                   className={`${inputClass} w-20`}
                 />
-                <span className="text-caption text-secondary">
-                  {t('calendar.times', { defaultValue: 'times' })}
-                </span>
+                <span className="text-caption text-secondary">{t('calendar.times', { defaultValue: 'times' })}</span>
               </div>
             )}
           </div>
@@ -645,9 +636,9 @@ function Attendees({
                 type="button"
                 onClick={() => onChange(people.filter((other) => other.addr !== person.addr))}
                 aria-label={person.addr}
-                className="text-secondary hover:text-rose-500 cursor-pointer"
+                className="text-secondary hover:text-danger cursor-pointer"
               >
-                <X size={11} />
+                <X size={14} strokeWidth={1.75} />
               </button>
             </li>
           ))}
@@ -677,12 +668,8 @@ function Attendees({
                 onClick={() => addPerson(person)}
                 className="flex w-full flex-col items-start px-3 py-1.5 text-left transition-colors hover:bg-hover cursor-pointer"
               >
-                <span className="text-caption font-medium text-primary">
-                  {person.name || person.addr}
-                </span>
-                {person.name && (
-                  <span className="text-2xs text-secondary">{person.addr}</span>
-                )}
+                <span className="text-caption font-medium text-primary">{person.name || person.addr}</span>
+                {person.name && <span className="text-2xs text-secondary">{person.addr}</span>}
               </button>
             </li>
           ))}
@@ -707,15 +694,7 @@ function asAllDay(event: EventDraft, allDay: boolean): Partial<EventDraft> {
   }
   // Back to a timed event: the date it covered, at a working hour.
   const date = new Date(event.start * 1000)
-  const start = new Date(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate(),
-    9,
-    0,
-    0,
-    0,
-  )
+  const start = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 9, 0, 0, 0)
   const seconds = Math.floor(start.getTime() / 1000)
   return { all_day: false, start: seconds, end: seconds + 3600 }
 }
@@ -727,8 +706,7 @@ const WEEKDAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 /// rather than one plural rule: the catalogue reads a lone word in braces as a
 /// placeholder, and a word is all these are.
 function intervalUnit(freq: Frequency, count: number, t: ReturnType<typeof useTranslation>['t']): string {
-  const unit =
-    freq === 'daily' ? 'Day' : freq === 'weekly' ? 'Week' : freq === 'monthly' ? 'Month' : 'Year'
+  const unit = freq === 'daily' ? 'Day' : freq === 'weekly' ? 'Week' : freq === 'monthly' ? 'Month' : 'Year'
   const single = count === 1
   return t(`calendar.unit${unit}${single ? 'One' : 'Many'}`, {
     defaultValue: single ? unit.toLowerCase() : `${unit.toLowerCase()}s`,
@@ -755,9 +733,5 @@ const MINUTE_STEPS = Array.from({ length: 12 }, (_, index) => index * 5)
 /// The steps, plus the event's own minute when it falls between them — an
 /// invitation at 14:37 must survive being looked at.
 function minuteChoices(current: number): number[] {
-  return MINUTE_STEPS.includes(current)
-    ? MINUTE_STEPS
-    : [...MINUTE_STEPS, current].sort((a, b) => a - b)
+  return MINUTE_STEPS.includes(current) ? MINUTE_STEPS : [...MINUTE_STEPS, current].sort((a, b) => a - b)
 }
-
-

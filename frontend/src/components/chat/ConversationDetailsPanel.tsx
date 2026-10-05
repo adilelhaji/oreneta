@@ -103,7 +103,7 @@ export function ConversationDetailsPanel({
 
       <aside
         className="
-          absolute inset-y-0 right-0 z-30 w-[340px] max-w-[85vw] shadow-2xl
+          absolute inset-y-0 right-0 z-30 w-[340px] max-w-[85vw] shadow-overlay
           min-[1100px]:relative min-[1100px]:inset-auto min-[1100px]:z-auto min-[1100px]:shadow-none min-[1100px]:max-w-none
           flex shrink-0 flex-col border-l border-border bg-header
           animate-slide-in-right
@@ -112,7 +112,7 @@ export function ConversationDetailsPanel({
         {/* Header */}
         {view === 'overview' ? (
           <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
-            <IconButton icon={X} iconSize={18} label={t('chat.closeEsc')} onClick={onClose} />
+            <IconButton icon={X} iconSize={20} label={t('chat.closeEsc')} onClick={onClose} />
           </div>
         ) : (
           <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -132,11 +132,11 @@ export function ConversationDetailsPanel({
             <div className="flex shrink-0 items-center gap-1">
               <IconButton
                 icon={ChevronLeft}
-                iconSize={18}
+                iconSize={20}
                 label={t('buttons.back')}
                 onClick={() => setView('overview')}
               />
-              <IconButton icon={X} iconSize={18} label={t('chat.closeEsc')} onClick={onClose} />
+              <IconButton icon={X} iconSize={20} label={t('chat.closeEsc')} onClick={onClose} />
             </div>
           </div>
         )}
@@ -145,7 +145,7 @@ export function ConversationDetailsPanel({
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 size={20} className="animate-spin text-secondary" />
+              <Loader2 size={20} className="animate-spin text-secondary" strokeWidth={1.75} />
             </div>
           ) : view === 'overview' ? (
             <Overview
@@ -192,7 +192,7 @@ export function ConversationDetailsPanel({
                         // GStreamer pipeline in WebKitGTK; a grid of them freezes the
                         // webview. Click opens the lightbox, which mounts one player.
                         <span className="flex h-full w-full items-center justify-center bg-black/75 text-white/90">
-                          <Play size={22} fill="currentColor" />
+                          <Play size={20} fill="currentColor" strokeWidth={1.75} />
                         </span>
                       )}
                     </button>
@@ -201,9 +201,9 @@ export function ConversationDetailsPanel({
                       onClick={() => onShowInConversation(item.messageId)}
                       title={t('chat.showInConversation')}
                       aria-label={t('chat.showInConversation')}
-                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-sm transition-colors hover:bg-accent cursor-pointer"
+                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-sm transition-colors hover:bg-accent hover:text-on-accent cursor-pointer"
                     >
-                      <MessageSquare size={14} />
+                      <MessageSquare size={14} strokeWidth={1.75} />
                     </button>
                   </div>
                 ))}
@@ -241,8 +241,9 @@ export function ConversationDetailsPanel({
                       </div>
                       {downloadable && (
                         <Download
-                          size={15}
+                          size={16}
                           className="shrink-0 text-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+                          strokeWidth={1.75}
                         />
                       )}
                     </button>
@@ -253,7 +254,7 @@ export function ConversationDetailsPanel({
                       aria-label={t('chat.showInConversation')}
                       className="mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-black/[0.06] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer"
                     >
-                      <MessageSquare size={15} />
+                      <MessageSquare size={16} strokeWidth={1.75} />
                     </button>
                   </div>
                 )
@@ -269,11 +270,11 @@ export function ConversationDetailsPanel({
           onClose={() => setPersonMenu(null)}
           overlay
           overlayClassName="fixed inset-0 z-[80]"
-          className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-xl"
+          className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
           onContextMenu={(event) => event.preventDefault()}
         >
           <MenuItem
-            icon={<Search size={13} className="text-accent" />}
+            icon={<Search size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.viewMessagesWith', { name: personMenu.person.name || personMenu.person.email })}
             onClick={() => {
               onViewMessagesWith(personMenu.person)
@@ -281,7 +282,7 @@ export function ConversationDetailsPanel({
             }}
           />
           <MenuItem
-            icon={<Copy size={13} className="text-accent" />}
+            icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.copyEmailAddress')}
             onClick={() => {
               navigator.clipboard?.writeText(personMenu.person.email).catch(() => undefined)
@@ -326,7 +327,7 @@ function Overview({
       )}
       <div className="p-3">
         <div className="mb-2 flex items-center gap-2 px-2 text-caption font-bold uppercase tracking-wide text-secondary">
-          <Users size={15} />
+          <Users size={16} strokeWidth={1.75} />
           <span>{t('chat.people', { count: participants.length })}</span>
         </div>
         <PeopleList participants={participants} onComposeTo={onComposeTo} onOpenPersonMenu={onOpenPersonMenu} />
@@ -396,7 +397,7 @@ function PeopleList({
             title={t('chat.newMessageTo', { email: person.email })}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary opacity-0 transition-all hover:bg-black/[0.06] hover:text-primary group-hover:opacity-100 dark:hover:bg-white/[0.08] cursor-pointer"
           >
-            <SquarePen size={15} />
+            <SquarePen size={16} strokeWidth={1.75} />
           </button>
         </div>
       ))}

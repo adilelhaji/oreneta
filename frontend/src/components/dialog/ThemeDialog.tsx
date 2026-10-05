@@ -56,7 +56,7 @@ function ThemeSection({
           onClick={() => onEdit({ appearance: newTileAppearance, theme: null })}
           className="flex min-h-[112px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-control border border-dashed border-border text-secondary transition-colors hover:border-accent/50 hover:text-accent"
         >
-          <Plus size={16} />
+          <Plus size={16} strokeWidth={1.75} />
           <span className="text-caption font-bold">{t('theme.custom')}</span>
         </button>
       </div>
@@ -95,7 +95,14 @@ export function ThemeDialog({ onClose }: { onClose: () => void }) {
   return (
     <>
       {/* Raised: it opens over the settings dialog and the editor opens over it. */}
-      <Dialog title={t('common.theme')} icon={Palette} width="xl" layer="raised" onClose={onClose} className="h-[620px]">
+      <Dialog
+        title={t('common.theme')}
+        icon={Palette}
+        width="xl"
+        layer="raised"
+        onClose={onClose}
+        className="h-[620px]"
+      >
         <div className="flex flex-col gap-6">
           <ThemeSection
             label={t('theme.light')}

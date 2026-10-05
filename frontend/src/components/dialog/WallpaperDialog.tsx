@@ -76,7 +76,7 @@ export function WallpaperDialog({
                 />
               )}
               <span className="relative flex flex-col items-center gap-1 rounded-control-sm border border-border/30 bg-chats/90 px-3 py-2 shadow-xs">
-                <Upload size={15} />
+                <Upload size={16} strokeWidth={1.75} />
                 <span className="text-2xs font-bold leading-none">
                   {busy ? t('wallpaper.uploading') : t('wallpaper.uploadCustom')}
                 </span>
@@ -94,7 +94,7 @@ export function WallpaperDialog({
                   aria-pressed={selected}
                   onClick={() => void onSelect({ kind: 'preset', presetId: preset.id })}
                   className={`relative aspect-[16/10] cursor-pointer overflow-hidden rounded-control border transition-all ${
-                    selected ? 'border-accent ring-2 ring-accent/20' : 'border-border hover:scale-[1.01] hover:border-secondary/40'
+                    selected ? 'border-accent ring-2 ring-accent/20' : 'border-border  hover:border-secondary/40'
                   }`}
                 >
                   <span className={`absolute inset-0 ${preset.previewClass}`} />
@@ -107,14 +107,17 @@ export function WallpaperDialog({
 
         <div className="flex w-full shrink-0 flex-col border-t border-border/70 bg-raised p-5 select-none md:w-[320px] md:border-t-0 md:border-l">
           <div className="relative flex min-h-[280px] flex-1 flex-col overflow-hidden rounded-panel border border-border bg-chat shadow-inner">
-            <div className={`absolute inset-0 transition-all duration-300 ${previewInfo.className}`} style={previewInfo.style} />
+            <div
+              className={`absolute inset-0 transition-all duration-200 ${previewInfo.className}`}
+              style={previewInfo.style}
+            />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/5 to-transparent" />
             <div className="relative z-10 flex flex-1 flex-col justify-end gap-3 p-3.5">
               <div className="mx-auto rounded-full border border-border/30 bg-active px-2.5 py-0.5 text-center text-2xs font-bold text-secondary/80">
                 Today
               </div>
               <div className="flex max-w-[85%] items-end gap-1.5 self-start">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/80 text-[0.53125rem] font-bold text-white shadow-xs">
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/80 text-[0.53125rem] font-bold text-on-accent shadow-xs">
                   {previewName ? previewName.slice(0, 1) : 'U'}
                 </div>
                 <div className="rounded-panel rounded-bl-sm border border-border bg-chats p-2.5 text-caption leading-normal text-primary shadow-xs">
@@ -122,7 +125,7 @@ export function WallpaperDialog({
                 </div>
               </div>
               <div className="flex max-w-[80%] flex-col self-end">
-                <div className="rounded-panel rounded-br-sm border border-accent/20 bg-accent p-2.5 text-caption leading-normal text-white shadow-xs">
+                <div className="rounded-panel rounded-br-sm border border-accent/20 bg-accent p-2.5 text-caption leading-normal text-on-accent shadow-xs">
                   Looks fantastic! The text contrast and background pattern are perfectly balanced.
                 </div>
               </div>
@@ -136,8 +139,8 @@ export function WallpaperDialog({
 
 function SelectedMark() {
   return (
-    <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-xs">
-      <Check size={11} />
+    <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent shadow-xs">
+      <Check size={14} strokeWidth={1.75} />
     </span>
   )
 }

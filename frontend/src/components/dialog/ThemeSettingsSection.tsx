@@ -24,7 +24,7 @@ export function ThemeSettingsSection() {
 
   return (
     <SettingRow
-      icon={<Palette size={15} />}
+      icon={<Palette size={16} strokeWidth={1.75} />}
       title={translate('common.theme')}
       control={
         <div className="flex items-center gap-3 select-none">

@@ -363,6 +363,8 @@
   "calendar.tentative": "Tentative",
   "calendar.times": "times",
   "calendar.title": "Calendar",
+  "calendar.previousPeriod": "上一时段",
+  "calendar.nextPeriod": "下一时段",
   "calendar.today": "Today",
   "calendar.tomorrow": "Tomorrow",
   "calendar.unitDayMany": "days",

@@ -39,7 +39,7 @@ export function QuickReplyFrom() {
       >
         <span className="font-semibold">{t('composer.fields.from')}</span>
         <span className="truncate">{label}</span>
-        <ChevronDown size={11} className="shrink-0" />
+        <ChevronDown size={14} className="shrink-0" strokeWidth={1.75} />
       </button>
 
       {menu && (
@@ -48,7 +48,7 @@ export function QuickReplyFrom() {
           y={menu.y}
           overlay
           onClose={() => setMenu(null)}
-          className="fixed z-50 min-w-[220px] max-w-[min(420px,90vw)] rounded-control border border-border bg-chats p-1 shadow-xl animate-fade-in"
+          className="fixed z-50 min-w-[220px] max-w-[min(420px,90vw)] rounded-control border border-border bg-chats p-1 shadow-overlay animate-fade-in"
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
@@ -57,7 +57,7 @@ export function QuickReplyFrom() {
               key={identity.email}
               icon={
                 identity.email === selected.email ? (
-                  <Check size={13} className="shrink-0 text-accent" />
+                  <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
                 ) : (
                   <span className="w-[13px] shrink-0" />
                 )

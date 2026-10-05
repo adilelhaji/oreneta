@@ -95,9 +95,9 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // true from the first paint of a navigation, which is a frame or more before
   // the effect that starts the load.
   const threadsLoadedKey = useValue(mail$.threadsLoadedKey)
-  const threadsLoading = threadsLoadedKey !== threadListViewKey(
-    selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort),
-  )
+  const threadsLoading =
+    threadsLoadedKey !==
+    threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort))
   const threadMenu = useThreadContextMenu(accounts)
   // Starred is a folder of the unified view whose rows span every account. It
   // lists ordinary threads, so it shares this list's selection, context menu and
@@ -349,7 +349,11 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
               />
             )}
             <div className="relative min-w-0 flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary" size={15} />
+              <Search
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary"
+                size={16}
+                strokeWidth={1.75}
+              />
               <input
                 ref={searchInputRef}
                 value={query}
@@ -367,7 +371,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 // whether this search can do more than words.
                 title={isRSSAccount ? undefined : t('search.operatorsHint')}
                 className={clsx(
-                  'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-150',
+                  'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
                   // The right padding only has to clear the clear button while there is one.
                   query ? 'pr-8' : 'pr-3',
                 )}
@@ -379,7 +383,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   onClick={() => ui$.query.set('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
                 >
-                  <X size={15} />
+                  <X size={16} strokeWidth={1.75} />
                 </button>
               )}
             </div>
@@ -391,7 +395,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 {/* Add account: only reachable here when the side navigation is hidden (narrow). */}
                 <IconButton
                   icon={Plus}
-                  iconSize={18}
+                  iconSize={20}
                   label={t('accounts.actions.addAccount')}
                   size="md"
                   radius="lg"
@@ -464,8 +468,8 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 {/* View + theme: only reachable here when the side navigation is hidden (narrow). */}
                 <IconButton
                   icon={MoreHorizontal}
-                  iconSize={18}
-                  label={t('sidenav.actions.viewAndTheme')}
+                  iconSize={20}
+                  label={t('common.more')}
                   size="md"
                   radius="lg"
                   className="min-[769px]:hidden"
@@ -559,50 +563,50 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                     other ordering these headings would repeat down the page
                     and mean nothing. */}
                 {groupByDates && (
-                  <div className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary backdrop-blur-sm">
+                  <div className="sticky top-0 z-10 border-b border-border bg-chats/95 px-3 py-1 text-2xs font-bold uppercase tracking-wide text-secondary">
                     {t(`dateGroup.${group.group}`)}
                   </div>
                 )}
                 {group.items.map((thread) => {
                   const bulkItem = bulkItemFor(thread)
-              return (
-                <ThreadListItem
-                  key={thread.id}
-                  thread={thread}
-                  accounts={accounts}
-                  selectedAccount={selectedAccount}
-                  selectedThread={selectedThread}
-                  rootRef={thread.thread_id === selectedThread ? selectedItemRef : undefined}
-                  showAccountBadge={isStarredView ? true : undefined}
-                  draggable={feedRowsDraggable}
-                  onDragStart={(event) => startFeedDrag(event, thread)}
-                  bulkSelectable={desktopBulk && bulkInThisList}
-                  bulkSelected={!!bulkSelection[bulkItem.key]}
-                  onQuickAction={(action) => runQuickAction(action, thread)}
-                  onToggleSelect={desktopBulk ? () => toggleBulkSelection(bulkItem) : undefined}
-                  onSelect={(event) => {
-                    if (desktopBulk && (event.metaKey || event.ctrlKey)) {
-                      toggleBulkSelection(bulkItem)
-                      return
-                    }
-                    if (desktopBulk && event.shiftKey) {
-                      selectRangeTo(bulkItem)
-                      return
-                    }
-                    if (bulkInThisList) {
-                      toggleBulkSelection(bulkItem)
-                      return
-                    }
-                    openListedThread(thread)
-                  }}
-                  onContextMenu={(event) => {
-                    if (bulkInThisList) {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      return
-                    }
-                    threadMenu.open(event, thread)
-                  }}
+                  return (
+                    <ThreadListItem
+                      key={thread.id}
+                      thread={thread}
+                      accounts={accounts}
+                      selectedAccount={selectedAccount}
+                      selectedThread={selectedThread}
+                      rootRef={thread.thread_id === selectedThread ? selectedItemRef : undefined}
+                      showAccountBadge={isStarredView ? true : undefined}
+                      draggable={feedRowsDraggable}
+                      onDragStart={(event) => startFeedDrag(event, thread)}
+                      bulkSelectable={desktopBulk && bulkInThisList}
+                      bulkSelected={!!bulkSelection[bulkItem.key]}
+                      onQuickAction={(action) => runQuickAction(action, thread)}
+                      onToggleSelect={desktopBulk ? () => toggleBulkSelection(bulkItem) : undefined}
+                      onSelect={(event) => {
+                        if (desktopBulk && (event.metaKey || event.ctrlKey)) {
+                          toggleBulkSelection(bulkItem)
+                          return
+                        }
+                        if (desktopBulk && event.shiftKey) {
+                          selectRangeTo(bulkItem)
+                          return
+                        }
+                        if (bulkInThisList) {
+                          toggleBulkSelection(bulkItem)
+                          return
+                        }
+                        openListedThread(thread)
+                      }}
+                      onContextMenu={(event) => {
+                        if (bulkInThisList) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          return
+                        }
+                        threadMenu.open(event, thread)
+                      }}
                     />
                   )
                 })}

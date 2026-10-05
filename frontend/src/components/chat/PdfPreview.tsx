@@ -197,7 +197,7 @@ export function PdfPreview({
     <div className="flex min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-auto bg-app p-4">
         {!drawn && <p className="p-6 text-center text-ui text-secondary">{t('attachments.previewLoading')}</p>}
-        <canvas ref={canvasRef} className="mx-auto block shadow-lg" />
+        <canvas ref={canvasRef} className="mx-auto block shadow-raised" />
       </div>
       {pages > 1 && (
         <div className="flex shrink-0 items-center justify-center gap-3 border-t border-border px-3 py-1.5">
@@ -209,7 +209,7 @@ export function PdfPreview({
             onClick={() => setPage((current) => Math.max(1, current - 1))}
             className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <ChevronLeft size={15} />
+            <ChevronLeft size={16} strokeWidth={1.75} />
           </button>
           <span className="text-caption tabular-nums text-secondary">{t('attachments.pageOf', { page, pages })}</span>
           <button
@@ -220,7 +220,7 @@ export function PdfPreview({
             onClick={() => setPage((current) => Math.min(pages, current + 1))}
             className="flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <ChevronRight size={15} />
+            <ChevronRight size={16} strokeWidth={1.75} />
           </button>
         </div>
       )}

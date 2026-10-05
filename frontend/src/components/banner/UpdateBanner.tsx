@@ -26,7 +26,7 @@ export function UpdateBanner() {
 
   return (
     <div className="flex shrink-0 items-center justify-center gap-2 border-b border-accent/20 bg-accent/10 px-3 py-1.5 text-xs font-medium text-primary">
-      <Sparkles size={13} className="shrink-0 text-accent" />
+      <Sparkles size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
       <span className="min-w-0 truncate">
         {ready
           ? t('updates.ready', { version: status.latestVersion })
@@ -37,7 +37,7 @@ export function UpdateBanner() {
         onClick={() => void (ready ? applyDownloadedUpdate() : startUpdateDownload())}
         className="inline-flex h-6 shrink-0 items-center gap-1 rounded-control-sm px-2 font-semibold text-accent hover:bg-accent/10"
       >
-        <Download size={12} />
+        <Download size={14} strokeWidth={1.75} />
         <span>{ready ? t('updates.restartAndInstall') : t('updates.download')}</span>
       </button>
       <button
@@ -54,7 +54,7 @@ export function UpdateBanner() {
         aria-label={t('connectivity.dismiss')}
         className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary"
       >
-        <X size={13} />
+        <X size={14} strokeWidth={1.75} />
       </button>
     </div>
   )

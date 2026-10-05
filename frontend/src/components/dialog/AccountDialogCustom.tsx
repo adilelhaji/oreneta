@@ -57,7 +57,7 @@ export function AccountDialogCustom({
       )}
       {(discovering || discoverNote) && (
         <p role="status" className="flex items-center gap-1.5 px-1 text-caption font-medium text-secondary">
-          {discovering && <RefreshCw size={11} className="animate-spin" />}
+          {discovering && <RefreshCw size={14} className="animate-spin" strokeWidth={1.75} />}
           {discovering ? t('accounts.discovery.lookingUp') : discoverNote}
         </p>
       )}
@@ -96,7 +96,7 @@ export function AccountDialogCustom({
                 : t('accounts.actions.showPassword', { defaultValue: 'Show password' })
             }
           >
-            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
           </button>
         </span>
       </label>
@@ -105,7 +105,7 @@ export function AccountDialogCustom({
         <div
           className={`${isSetup ? 'rounded-panel p-4 text-sm gap-3' : 'rounded-control p-3 text-caption gap-2'} flex items-start bg-accent/[0.06] border border-accent/15 leading-relaxed text-secondary -mt-1`}
         >
-          <Info size={isSetup ? 16 : 14} className="shrink-0 mt-0.5 text-accent" />
+          <Info size={isSetup ? 16 : 14} className="shrink-0 mt-0.5 text-accent" strokeWidth={1.75} />
           <p className="flex-1 font-medium">{t('accounts.appPasswordHint', { provider: appPasswordHint.provider })}</p>
         </div>
       )}
@@ -115,7 +115,11 @@ export function AccountDialogCustom({
         onClick={() => setAdvancedOpen((v) => !v)}
         className="flex items-center gap-1 self-start px-1 text-caption font-semibold text-secondary hover:text-primary transition-colors cursor-pointer"
       >
-        <ChevronRight size={12} className={`transition-transform ${advancedOpen ? 'rotate-90' : ''}`} />
+        <ChevronRight
+          size={14}
+          className={`transition-transform ${advancedOpen ? 'rotate-90' : ''}`}
+          strokeWidth={1.75}
+        />
         {t('accounts.advancedServerSettings')}
       </button>
 
@@ -234,7 +238,12 @@ function SecurityField({
           <option value="starttls">STARTTLS</option>
           <option value="none">{noneLabel}</option>
         </select>
-        <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-3 text-secondary" />
+        <ChevronDown
+          size={14}
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 text-secondary"
+          strokeWidth={1.75}
+        />
       </span>
     </label>
   )

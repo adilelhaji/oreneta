@@ -60,7 +60,11 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
               on ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
             )}
           >
-            <Icon size={12} className={clsx('shrink-0', on && facet === 'starred' && 'fill-current')} />
+            <Icon
+              size={14}
+              strokeWidth={1.75}
+              className={clsx('shrink-0', on && facet === 'starred' && 'fill-current')}
+            />
             {t(labelKey)}
           </button>
         )
@@ -115,7 +119,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
           sticky ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
         )}
       >
-        <Pin size={12} className={clsx(sticky && 'fill-current')} />
+        <Pin size={14} className={clsx(sticky && 'fill-current')} strokeWidth={1.75} />
       </button>
     </div>
   )

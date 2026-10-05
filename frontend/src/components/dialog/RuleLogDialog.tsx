@@ -46,7 +46,10 @@ export function RuleLogDialog() {
           {entries.map((entry, index) => {
             const failed = entry.outcome !== 'done'
             return (
-              <li key={`${entry.at}-${entry.uid}-${index}`} className="rounded-control border border-border bg-raised px-3 py-2">
+              <li
+                key={`${entry.at}-${entry.uid}-${index}`}
+                className="rounded-control border border-border bg-raised px-3 py-2"
+              >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="min-w-0 truncate text-xs font-semibold">{entry.subject}</span>
                   <time className="shrink-0 text-2xs text-secondary tabular-nums">
@@ -56,10 +59,10 @@ export function RuleLogDialog() {
                 <p className="truncate text-caption text-secondary">{entry.from}</p>
                 <p
                   className={`mt-0.5 flex items-center gap-1 text-caption font-medium ${
-                    failed ? 'text-rose-500' : 'text-secondary'
+                    failed ? 'text-danger' : 'text-secondary'
                   }`}
                 >
-                  {failed && <AlertTriangle size={11} className="shrink-0" />}
+                  {failed && <AlertTriangle size={14} className="shrink-0" strokeWidth={1.75} />}
                   <span className="min-w-0 truncate">
                     {entry.ruleName} · {entry.action}
                     {failed ? ` · ${t('rules.logFailed')}: ${entry.outcome}` : ''}
