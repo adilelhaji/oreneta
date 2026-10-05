@@ -83,6 +83,38 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   }
 }
 
+test('shared dialog focus returns to opener and busy Escape does not close parent', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await page.keyboard.press('Control+k')
+  await page.getByRole('dialog').getByRole('textbox').fill('design catalogue')
+  await page.getByRole('button', { name: 'Open design catalogue' }).click()
+  const parent = page.getByRole('dialog', { name: 'Design catalogue', exact: true })
+  await expect(parent).toBeFocused()
+  const opener = parent.getByRole('button', { name: 'Open focus example' })
+  await opener.focus()
+  await page.keyboard.press('Enter')
+  const child = page.getByRole('dialog', { name: 'Focus example', exact: true })
+  await expect(child).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(child.getByRole('button', { name: 'Close' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  const busy = child.getByRole('checkbox', { name: 'Keep this dialog open' })
+  await expect(busy).toBeFocused()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Escape')
+  await expect(child).toBeVisible()
+  await expect(parent).toBeVisible()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Escape')
+  await expect(child).toHaveCount(0)
+  await expect(opener).toBeFocused()
+  await page.keyboard.press('Enter')
+  await child.getByRole('button', { name: 'Close' }).click()
+  await expect(opener).toBeFocused()
+  expect(errors).toEqual([])
+})
+
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
   for (const width of [1440, 720]) {
     test(`table reviewed selection: ${theme}, ${width}px`, async ({ page }, info) => {
