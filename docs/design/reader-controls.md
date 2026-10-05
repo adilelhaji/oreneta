@@ -24,3 +24,17 @@ synthetic; native/provider acceptance is separate.
 No received content or sanitization/sandbox policy changes. No new printing API,
 fit-to-width policy or quote/signature folding. These and complete #35 acceptance
 remain open; no executable or installer is replaced by this source change.
+
+## HTML frame readiness (#175)
+
+Post-merge CI on `8543671f` exposed a real conversation crash while reopening an
+HTML message: an iframe document was present while its root element was still
+absent. Frame wiring now waits for both document and root before setting listener
+markers or invoking readiness callbacks; the native load event retries normally.
+The previous cleanup lifecycle remains intact until a replacement is ready.
+
+Deterministic component tests reproduce the former crash on mount and srcDoc
+replacement, then verify recovery, one click handler and cleanup after load.
+Absent document/window cases stay unready. Existing production reader tests
+remain unchanged and exercise both themes and narrow/desktop windows. This does
+not alter the message sandbox or sanitize received HTML differently.

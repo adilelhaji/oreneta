@@ -86,7 +86,8 @@ antes de su piloto, aunque la cobertura completa de formatos pertenezca a R2/R3.
    convertir cada riesgo en una reproducción automatizada y resolverlo en su issue.
    Abrir solo las decisiones concretas de #24/#25 que impidan la solución.
 2. **Evidencia y continuidad:** preparar [#145](https://github.com/adilelhaji/oreneta/issues/145) y [#148](https://github.com/adilelhaji/oreneta/issues/148);
-   iniciar [#146](https://github.com/adilelhaji/oreneta/issues/146) y [#147](https://github.com/adilelhaji/oreneta/issues/147). Actualizar exposición #46
+   continuar #170–#173 conforme ADR-0010 tras resolver #146 e iniciar
+   [#147](https://github.com/adilelhaji/oreneta/issues/147). Actualizar exposición #46
    por cuenta/operación; no posponer Graph hasta terminar el rediseño.
 3. **Correo completo:** ejecutar [#142](https://github.com/adilelhaji/oreneta/issues/142) y [#141](https://github.com/adilelhaji/oreneta/issues/141) como slices
    independientes; [#143](https://github.com/adilelhaji/oreneta/issues/143) después del contrato durable de #29. Completar
@@ -152,8 +153,13 @@ según el contrato vigente y evidencia nativa para las afirmaciones de soporte.
 
 ## Decisiones y dependencias que no pueden ocultarse
 
-- **Recuperación:** ADR-0008 mantiene copia de configuración. [#146](https://github.com/adilelhaji/oreneta/issues/146)
-  presenta las opciones antes de #113; crear esta tarea no aprueba snapshots completos.
+- **Recuperación:** opción B aprobada el 2026-10-05 y registrada en
+  [ADR-0010](adr/0010-full-profile-local-recovery.md) mediante #146. Se conserva la
+  exportación de configuración y se añade recuperación completa local cifrada.
+  Almacén de borradores #169 entregado en PR #174; integración del editor #170,
+  captura #171, restauración aislada #172 y programación/retención #173 siguen
+  pendientes. #113 permanece abierta; aprobación y almacenamiento no acreditan
+  todavía una copia completa ni recuperación nativa.
 - **Graph:** dirección aprobada en ADR-0004; las acciones conservan consentimiento
   incremental e identidad aislada. La revocación puede invalidar lectura y escritura.
   #46 verifica exposición real a la retirada de EWS Online; on-premises es distinto.
