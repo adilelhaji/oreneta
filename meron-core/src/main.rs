@@ -179,6 +179,29 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn local_draft_rpc_is_local_and_preserves_conflicts() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let mut compose = json!({"attachments": []});
+        for field in ["accountId", "fromEmail", "to", "cc", "bcc", "replyTo", "subject", "html", "text", "inReplyTo", "references", "draftMessageId"] {
+            compose[field] = json!("");
+        }
+        for field in ["rich", "showCcBcc", "pgpSign", "pgpEncrypt"] { compose[field] = json!(false); }
+        compose["accountId"] = json!("removed-or-offline-account");
+        let doc = json!({"version": 1, "compose": compose});
+        let save = request("localDrafts.save", json!({"id":"draft-1", "expected_revision":0, "document":doc}));
+        assert_eq!(dispatch(&engine, &save, &writer).await.unwrap()["applied"], true);
+        assert_eq!(dispatch(&engine, &save, &writer).await.unwrap()["applied"], false);
+        let read = dispatch(&engine, &request("localDrafts.get", json!({"id":"draft-1"})), &writer).await.unwrap();
+        assert_eq!(read["draft"]["document"], doc);
+        let list = dispatch(&engine, &request("localDrafts.list", json!({})), &writer).await.unwrap();
+        assert_eq!(list["drafts"].as_array().unwrap().len(), 1);
+        assert_eq!(dispatch(&engine, &request("localDrafts.delete", json!({"id":"draft-1","expected_revision":1})), &writer).await.unwrap()["deleted"], true);
+        assert!(engine.accounts.lock().await.is_empty());
+    }
+    #[tokio::test]
     async fn graph_activation_rpc_rejects_unauthorized_and_remote_mutations() {
         use super::*;
         let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -1611,6 +1634,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(releases)
         }
 
+        "localDrafts.save" | "localDrafts.delete" | "localDrafts.get" | "localDrafts.list" => {
+            store::local_drafts::dispatch(&engine.db.lock().unwrap(), &req.method, p)
+        }
         "app.prefsGet" => {
             let keys = p
                 .get("keys")

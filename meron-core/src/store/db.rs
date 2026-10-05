@@ -640,6 +640,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 34 {
         migrate_v34(&tx)?;
     }
+    if version < 35 {
+        tx.execute_batch(super::local_drafts::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 35)?;
+    }
 
     tx.commit()?;
     Ok(())

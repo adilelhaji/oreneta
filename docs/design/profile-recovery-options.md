@@ -1,12 +1,15 @@
-# Recuperación del perfil: decisión pendiente (#146)
+# Recuperación del perfil: opción B aprobada (#146)
 
-Estado: propuesta, **no aprobada**. Fecha: 2026-10-05. Base de recuperación
+Estado: **opción B aprobada** el 2026-10-05: «Sí, implementar copia completa local
+cifrada». Contrato: [ADR-0010](../adr/0010-full-profile-local-recovery.md), registrado
+antes de implementar. El inventario siguiente describe la base previa, no una
+capacidad ya entregada. Base de recuperación
 inspeccionada: `c40ea260f65b350bc1b5db7ddebb5f514fa0bcbb`; las columnas posteriores
 usan la tabla de ajustes existente y no cambian el formato de copia.
 
 ADR 0008 autoriza copias de configuración. #113 pide copia completa programada;
-no son la misma capacidad. Se necesita una decisión humana antes de ampliar
-formato, captura o restauración. Ninguna opción autoriza publicación ni servicios
+no son la misma capacidad. La aprobación permite implementar el alcance B por
+entregas verificadas. Ninguna opción autoriza publicación ni servicios
 externos. La revisión se limita a código y datos sintéticos, sin abrir perfiles
 del usuario.
 
@@ -39,7 +42,7 @@ para ningún proveedor en esta tarea; esa evidencia corresponde a #145/#98.
 La afirmación general del comentario de `backup.rs` de que los mensajes son
 reproducibles no cubre los casos locales, eliminados o no confirmados anteriores.
 
-## Opciones para aprobar
+## Opciones presentadas y decisión
 
 **A. Mantener exclusivamente la copia de configuración.** Conservar ADR 0008 y
 mejorar los avisos sobre exclusiones. Menor coste de implementación y archivos
@@ -105,9 +108,9 @@ El intento local focal de esos tests en Windows no llegó a ejecutarlos:
 compilación E0463 por dependencias no encontradas en el entorno Rust local.
 No se sustituye esa limitación por una afirmación de recuperación nativa.
 
-Si se elige B, registrar primero el ADR que extiende solo el punto de backups de
+Se eligió B y se registró ADR-0010, que extiende solo el punto de backups de
 ADR 0008. Separar: (1) durabilidad de borradores/archivos, (2) captura y verificación,
 (3) restauración aislada/recuperación de interrupciones, (4) programación/retención.
 Cada entrega necesita contrato concreto, tests sintéticos de éxito/errores/límites,
 revisión y CI. La aceptación nativa y los ensayos por proveedor son posteriores.
-Si se elige A, registrar la decisión y mantener explícitamente #113 incumplida.
+#113 sigue pendiente de implementación y aceptación; aprobar B no la completa.

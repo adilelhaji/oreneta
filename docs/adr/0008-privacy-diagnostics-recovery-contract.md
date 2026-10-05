@@ -4,6 +4,9 @@
 - Date: 2026-09-10
 - Scope: issue #54 / capabilities C22 and C29
 - Approval: user selected options 1-A, 2-A and 3-A on 2026-09-10
+- Amendment: on 2026-10-05, [ADR-0010](0010-full-profile-local-recovery.md)
+  supersedes only the configuration-only limit in decision 2. The existing
+  configuration export remains available; decisions 1 and 3 are unchanged.
 
 ## Decision
 
@@ -11,7 +14,7 @@
    canonical `oreneta.log` file, redacts
    email addresses and credential-like values before display/export, and never
    sends telemetry by default. Export is explicit and user-reviewable.
-2. **Backups remain configuration-only.** The existing backup format includes
+2. **Original configuration-only limit (extended by ADR-0010).** The existing backup format includes
    accounts, settings and feeds, omits cached mail, and includes secrets only
    when the user supplies a passphrase. Import must report failures instead of
    silently claiming recovery.
