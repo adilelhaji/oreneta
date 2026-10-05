@@ -109,7 +109,7 @@ export function parseFilters(raw: unknown): FilterFacet[] | undefined {
 }
 export type SetupMode = 'gmail' | 'outlook' | 'graph' | 'custom' | 'ews' | 'rss'
 export type MobilePane = 'threads' | 'conversation'
-export type ToastTone = 'success' | 'error'
+export type ToastTone = 'success' | 'error' | 'info'
 export type EditFeed = { threadId: string; name: string; url?: string }
 export type ConfirmTone = 'default' | 'danger'
 export type ConfirmState = {

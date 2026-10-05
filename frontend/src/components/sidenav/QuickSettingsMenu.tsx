@@ -83,7 +83,8 @@ export function QuickSettingsMenu({
         )}
         <MenuItem
           icon={<RefreshCw size={13} className={busy ? 'animate-spin text-accent' : 'text-secondary'} />}
-          label={busy ? t('threads.actions.syncing') : t('threads.actions.syncMailbox')}
+          label={busy ? t('connectivity.health.pending') : t('threads.actions.syncMailbox')}
+          disabled={busy}
           trailing={<Hint id="mail.sync" />}
           onClick={() => syncMail()}
         />

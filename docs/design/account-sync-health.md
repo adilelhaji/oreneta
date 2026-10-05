@@ -59,7 +59,29 @@ diagnostic omission. Production-entry cases cover Spanish, light/dark, 600/1440p
 keyboard, 200% zoom, session reset and no send invocation. Lightweight technical
 and product reviews are resolved; exact-commit CI is the merge gate.
 
-This slice changes the account recovery panel and its event observations. Other
-refresh affordances and calendar error presentation retain their existing contracts;
-they are not certified by this panel's acceptance. No native executable, installer,
+The initial slice changes the account recovery panel and its event observations.
+Calendar error presentation retains its existing contract and is not certified by
+this panel's acceptance. No native executable, installer,
 provider session or production release is changed here.
+
+## Manual refresh follow-through (#167)
+
+Mailbox menus, quick settings, keyboard shortcuts and the command palette share
+`syncMail`. That action previously ignored `online`, swallowed unified-account
+failures and announced completion immediately. It now uses the same account request
+helper as the recovery panel. Unified refresh targets only included accounts;
+paused or authentication-required accounts are skipped. Graph remains read-only.
+Repeated manual refreshes do not duplicate an in-flight request.
+
+Feedback reports accepted, unconfirmed, already pending and skipped requests,
+including mixed outcomes. Acceptance is never synchronization completion and never
+clears a known failure. Raw errors are not displayed or logged by this action.
+The scoped list refresh is retained after an accepted request: `mail.sync` defaults
+to Inbox, while the list request refreshes the selected folder, unified role or live
+search. Existing background events update the rows when later data arrives. Neither
+request implies complete freshness. List-load diagnostics omit raw server errors.
+Informational feedback uses a neutral icon, including accepted/pending/skipped
+requests, and long notices wrap within the viewport without shrinking their icon.
+A response for
+a view the user has left cannot display a completion toast in the new view.
+The pending indicator describes sending the request, not background synchronization.

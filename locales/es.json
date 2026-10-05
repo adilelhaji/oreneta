@@ -1497,5 +1497,7 @@
   "connectivity.health.unconfirmed": "Solicitud sin confirmar. Revisa la conexión y los ajustes de la cuenta.",
   "connectivity.health.activity": "Actividad del correo observada a las {time}",
   "connectivity.health.settings": "Ajustes de la cuenta",
-  "connectivity.health.unattributed": "Hay un problema de correo pendiente sin información de cuenta. Revisa los ajustes; no es posible dirigir la recuperación."
+  "connectivity.health.unattributed": "Hay un problema de correo pendiente sin información de cuenta. Revisa los ajustes; no es posible dirigir la recuperación.",
+  "mail.refresh.skipped": "No se solicitó ninguna comprobación. Revisa las cuentas pausadas o pendientes de inicio de sesión.",
+  "mail.refresh.summary": "Comprobaciones de correo: {requested} aceptadas, {unconfirmed} sin confirmar, {pending} ya en curso y {skipped} omitidas. La finalización no está verificada; consulta Sincronización de cuentas."
 }
