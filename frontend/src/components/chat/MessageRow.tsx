@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
-import { AlertCircle, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Paperclip, Star , Undo2} from 'lucide-react'
+import { AlertCircle, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Paperclip, Star, Undo2 } from 'lucide-react'
 
-import { openDraftCompose, openMessageTab, retrySend , undoSend} from '../../states/compose'
+import { openDraftCompose, openMessageTab, retrySend, undoSend } from '../../states/compose'
 import type { Message } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { AddressRow } from './AddressList'
@@ -94,9 +94,7 @@ export function MessageRow({
           className="flex items-center gap-0.5 text-accent hover:opacity-80 cursor-pointer"
         >
           <Undo2 size={12} />
-          <span className="text-2xs font-semibold">
-            {t('chat.undoSend', { defaultValue: 'Undo' })}
-          </span>
+          <span className="text-2xs font-semibold">{t('chat.undoSend', { defaultValue: 'Undo' })}</span>
         </button>
       ) : message.send_status === 'sending' ? (
         <Loader2 size={12} className="text-secondary/70 animate-spin" />
@@ -124,16 +122,10 @@ export function MessageRow({
 
   if (!expanded) {
     return (
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
+        aria-expanded={false}
         onClick={onToggleExpanded}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            onToggleExpanded()
-          }
-        }}
         title={t('chat.expandMessage')}
         // Held to the same measure as an expanded message, so a collapsed row
         // does not sit wider than the one it opens into.
@@ -149,18 +141,20 @@ export function MessageRow({
         <span className="min-w-0 flex-1 truncate text-ui text-secondary/80">{collapsedPreview(message)}</span>
         <div className="flex shrink-0 items-center gap-1.5 text-caption text-secondary/80">
           {draftBadge}
-          {message.has_attachments && <Paperclip size={12} />}
-          {message.starred && <Star size={12} className="fill-amber-500 text-amber-500" />}
+          {message.has_attachments && <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />}
+          {message.starred && (
+            <Star size={14} strokeWidth={1.75} aria-hidden="true" className="fill-warning text-warning" />
+          )}
           <span title={fullStamp}>{stamp}</span>
         </div>
-      </div>
+      </button>
     )
   }
 
   return (
     <div
       style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
-      className="group/message-row mx-auto w-full rounded-control border border-border/40 bg-chats px-4 py-3 shadow-sm"
+      className="group/message-row mx-auto min-w-0 w-full rounded-control border border-border bg-chats px-4 py-3"
     >
       <div className="relative flex items-start gap-2.5">
         <Avatar
@@ -171,30 +165,21 @@ export function MessageRow({
           className="mt-0.5 shrink-0"
         />
         <div className="min-w-0 flex-1">
-          <div
-            role="button"
-            tabIndex={0}
+          <button
+            type="button"
+            aria-expanded={true}
             onClick={onToggleExpanded}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                onToggleExpanded()
-              }
-            }}
             title={t('chat.collapseMessage')}
-            className="flex cursor-pointer items-baseline gap-1.5"
+            className="flex w-full min-w-0 flex-col items-start text-left cursor-pointer"
           >
-            <span className="truncate text-sm font-semibold text-primary">{senderName}</span>
-            <span className="truncate text-xs text-secondary/80">{message.from_addr}</span>
-          </div>
+            <span className="max-w-full wrap-anywhere text-sm font-semibold text-primary">{senderName}</span>
+            <span className="max-w-full wrap-anywhere text-caption text-secondary">{message.from_addr}</span>
+          </button>
           {/* The details toggle trails the recipients, the way the chat bubble
               puts it right after the header line it expands. */}
           <div className="flex min-w-0 items-center gap-1">
             {allRecipientSummary && (
-              <span
-                className="truncate text-xs text-secondary/80"
-                title={[toRaw, ccRaw].filter(Boolean).join(', ')}
-              >
+              <span className="truncate text-xs text-secondary/80" title={[toRaw, ccRaw].filter(Boolean).join(', ')}>
                 {t('chat.toRecipients', { recipients: allRecipientSummary })}
               </span>
             )}
@@ -205,26 +190,26 @@ export function MessageRow({
                 type="button"
                 onClick={() => setMetaOpen((open) => !open)}
                 title={metaOpen ? t('chat.hideDetails') : t('chat.showDetails')}
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-secondary hover:bg-black/[0.05] hover:text-primary dark:hover:bg-white/[0.08] cursor-pointer transition-colors"
+                aria-expanded={metaOpen}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm text-secondary hover:bg-hover hover:text-primary cursor-pointer transition-colors"
               >
-                <ChevronDown size={12} className={`transition-transform ${metaOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={14}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                  className={`transition-transform ${metaOpen ? 'rotate-180' : ''}`}
+                />
               </button>
             )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-caption text-secondary/80">
           {draftBadge}
-          {message.starred && <Star size={12} className="fill-amber-500 text-amber-500" />}
+          {message.starred && (
+            <Star size={14} strokeWidth={1.75} aria-hidden="true" className="fill-warning text-warning" />
+          )}
           <span title={fullStamp}>{stamp}</span>
           {statusIcon}
-          <MessageActions
-            message={message}
-            isDraft={isDraft}
-            isRSS={view.isRSS}
-            onOpen={openMessageOrDraftTab}
-            onMore={openActionsMenu}
-            variant="inline"
-          />
         </div>
         {metaOpen && (
           <>
@@ -240,6 +225,16 @@ export function MessageRow({
         )}
       </div>
 
+      <div className="mt-2 border-t border-border pt-1">
+        <MessageActions
+          message={message}
+          isDraft={isDraft}
+          isRSS={view.isRSS}
+          onOpen={openMessageOrDraftTab}
+          onMore={openActionsMenu}
+          variant="inline"
+        />
+      </div>
       <div className="mt-2.5">
         <MessageContent
           message={message}
