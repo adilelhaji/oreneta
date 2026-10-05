@@ -178,18 +178,20 @@ function ColumnEditor({ accountId, folderId, onClose }: MailboxScope & { onClose
                     {t('mailboxColumns.auto')}
                   </label>
                 )}
-                <IconButton
-                  icon={ArrowUp}
-                  label={`${t('mailboxColumns.moveUp')}: ${label(column.id)}`}
-                  disabled={index === 0}
-                  onClick={() => move(index, -1)}
-                />
-                <IconButton
-                  icon={ArrowDown}
-                  label={`${t('mailboxColumns.moveDown')}: ${label(column.id)}`}
-                  disabled={index === columns.length - 1}
-                  onClick={() => move(index, 1)}
-                />
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <IconButton
+                    icon={ArrowUp}
+                    label={`${t('mailboxColumns.moveUp')}: ${label(column.id)}`}
+                    disabled={index === 0}
+                    onClick={() => move(index, -1)}
+                  />
+                  <IconButton
+                    icon={ArrowDown}
+                    label={`${t('mailboxColumns.moveDown')}: ${label(column.id)}`}
+                    disabled={index === columns.length - 1}
+                    onClick={() => move(index, 1)}
+                  />
+                </div>
               </div>
             ))}
           </div>
