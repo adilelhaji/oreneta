@@ -22,6 +22,45 @@ type SetupOptions = {
   readerStress?: boolean
   updatesSupported?: boolean
   syncHealth?: boolean
+  manualRefresh?: boolean
+}
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [1440, 600]) {
+    test(`manual refresh reports mixed requests without false completion: ${theme}, ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'es', theme, syncHealth: true, manualRefresh: true, preferences: { session_account: 'unified' } })
+      await page.goto('/')
+      await expect(page.getByRole('region', { name: 'Sincronización de cuentas' })).toBeVisible()
+      await page.evaluate(() => {
+        const probe = (window as any).startupProbe
+        probe.syncReply = (payload: any) => ({ ok: true, online: payload.account_id === 'synthetic-account' })
+        probe.refreshStart = probe.requests.length
+      })
+      await page.keyboard.press('Control+Shift+r')
+      const summary = page.getByRole('status').filter({ hasText: 'Comprobaciones de correo:' })
+      await expect(summary).toContainText('1 aceptadas, 1 sin confirmar, 0 ya en curso y 0 omitidas')
+      await expect(summary).toContainText('La finalización no está verificada')
+      expect(await page.evaluate(() => { const probe = (window as any).startupProbe; return probe.requests.slice(probe.refreshStart).filter((item: any) => item.command === 'mail.sync').map((item: any) => item.payload.account_id) })).toEqual(['synthetic-account', 'second-account'])
+      expect(await summary.evaluate((element) => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth && element.scrollWidth <= element.clientWidth })).toBe(true)
+      expect(await summary.locator('svg').evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(14)
+      await page.evaluate(() => { document.documentElement.style.zoom = '2' })
+      expect(await summary.evaluate((element) => { const box = element.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth })).toBe(true)
+      await page.evaluate(() => { document.documentElement.style.zoom = '' })
+      await info.attach('manual-refresh', { body: await page.screenshot({ path: info.outputPath('manual-refresh.png'), animations: 'disabled' }), contentType: 'image/png' })
+      await page.evaluate(() => {
+        const probe = (window as any).startupProbe
+        probe.syncReply = () => ({ ok: true, online: true })
+      })
+      await page.keyboard.press('Control+k')
+      const palette = page.getByRole('dialog', { name: 'Paleta de comandos' })
+      await palette.getByRole('combobox').fill('sync')
+      await palette.getByRole('option', { name: /^Sincronizar/ }).click()
+      await expect(summary).toContainText('2 aceptadas, 0 sin confirmar')
+      expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+      expect(errors).toEqual([])
+    })
+  }
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
@@ -620,6 +659,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
               Invoke: async (command: string, payload: Record<string, unknown>) => {
                 calls.push(command)
                 requests.push({ command, payload: structuredClone(payload) })
+                if (command === 'mail.sync' && options.manualRefresh && (window as any).startupProbe.syncReply) return (window as any).startupProbe.syncReply(payload)
                 if (command === 'oauth.graphBegin') return { attempt: 'graph-attempt' }
                 if (command === 'oauth.graphPoll')
                   return { state: 'authorized', account: 'graph-account', mail_backend_ready: false }
@@ -798,7 +838,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
                     id: 'second-account',
                     display_name: 'Second account',
                     email: 'second@example.test',
-                    included_in_unified: false,
+                    included_in_unified: !!options.manualRefresh,
                     ...(options.syncHealth ? { paused: false } : {}),
                   },
                 ]

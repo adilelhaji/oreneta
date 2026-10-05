@@ -20,6 +20,7 @@ import { isLocalSendId, discardPendingSend } from './pendingSends'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { bareAddr, splitAddressList } from '../lib/address'
 import { settings$, sortParam } from './settings'
+import { requestAccountSync, type SyncRequestOutcome } from './connectivity'
 
 function readOnlyTarget(accounts: Account[], id: string): boolean {
   return matchesReadOnlyTarget(accounts, id) || matchesReadOnlyTarget(accounts, findLocalThread(id)?.account_id ?? '')
@@ -913,7 +914,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       mail$.threadAccountCursors.set({})
     } catch (err) {
       if (superseded()) return
-      console.error('Failed to load starred items:', err)
+      console.error('Failed to load starred items')
       loadFailed = true
       mail$.threadsCursor.set('')
       mail$.threadAccountCursors.set({})
@@ -948,15 +949,13 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
           updateCachedFolderUnread(accountId, 'inbox', unread)
         }
       }
-      for (const failure of result.failures ?? []) {
-        console.error(`Failed to load threads for ${failure.account_id}: ${failure.message}`)
-      }
+      if (result.failures?.length) console.error('Some accounts could not load their threads')
       mail$.threadAccountCursors.set({})
       mail$.threadsCursor.set(result.next_cursor ?? '')
       mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
-      console.error('Failed to load unified threads:', err)
+      console.error('Failed to load unified threads')
       loadFailed = true
       mail$.threadAccountCursors.set({})
       mail$.threadsCursor.set('')
@@ -989,7 +988,7 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
       mail$.searchUnderstood.set(result.search ?? null)
     } catch (err) {
       if (superseded()) return
-      console.error('Failed to load threads:', err)
+      console.error('Failed to load threads')
       loadFailed = true
       mail$.threadsCursor.set('')
       mail$.threadAccountCursors.set({})
@@ -2550,28 +2549,38 @@ export async function starMessage(message: Message, starred: boolean) {
 }
 
 export async function syncMail() {
-  mail$.readThreads.set({})
-  const selectedAcc = ui$.selectedAccount.get()
+  if (ui$.busy.peek()) return
+  const selectedAcc = ui$.selectedAccount.peek()
   if (!selectedAcc) return
+  const targets = selectedAcc === 'unified' ? unifiedAccounts().map((account) => account.id) : [selectedAcc]
+  const contextKey = () => JSON.stringify([
+    ui$.selectedAccount.peek(), ui$.selectedFolder.peek(), ui$.query.peek(),
+    filterKey(ui$.filters.peek()), sortParam(settings$.listSort.peek()), kanban$.activeBoardId.peek(),
+    accounts$.peek().filter((account) => selectedAcc === 'unified' ? account.included_in_unified !== false : account.id === selectedAcc).map((account) => account.id),
+  ])
+  const initialContext = contextKey()
 
   ui$.busy.set(true)
   try {
-    if (selectedAcc === 'unified') {
-      const accounts = unifiedAccounts()
-      await Promise.all(
-        accounts.map((acc) =>
-          invoke('mail.sync', { account_id: acc.id }).catch((err) =>
-            console.error(`Sync failed for ${acc.email}:`, err),
-          ),
-        ),
-      )
-    } else {
-      await invoke('mail.sync', { account_id: selectedAcc })
+    const outcomes = await Promise.all(targets.map(requestAccountSync))
+    if (contextKey() !== initialContext) return
+    // mail.sync defaults to Inbox. Preserve the scoped folder/unified-role/live
+    // search refresh as well; acceptance of either request is not completion.
+    if (outcomes.includes('requested')) {
+      mail$.readThreads.set({})
+      await loadThreads()
+      if (contextKey() !== initialContext) return
     }
-    await loadThreads()
-    showToast(t('mail.toast.synced'))
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : t('mail.toast.syncFailed'), 'error')
+    const counts: Record<SyncRequestOutcome, number> = { requested: 0, unconfirmed: 0, pending: 0, skipped: 0 }
+    for (const outcome of outcomes) counts[outcome] += 1
+    const message = !outcomes.length || counts.skipped === outcomes.length
+      ? t('mail.refresh.skipped')
+      : outcomes.length === 1
+        ? t(`connectivity.health.${outcomes[0]}`)
+        : t('mail.refresh.summary', counts)
+    showToast(message, counts.unconfirmed ? 'error' : 'info')
+  } catch {
+    if (contextKey() === initialContext) showToast(t('connectivity.health.unconfirmed'), 'error')
   } finally {
     ui$.busy.set(false)
   }

@@ -72,10 +72,13 @@ export function retainSyncAccounts(accountIds: string[]) {
   }
 }
 
-export async function requestAccountSync(accountId: string) {
+export type SyncRequestOutcome = 'requested' | 'unconfirmed' | 'pending' | 'skipped'
+
+export async function requestAccountSync(accountId: string): Promise<SyncRequestOutcome> {
   const account = accounts$.peek().find((item) => item.id === accountId)
   const previous = syncObservation(accountId)
-  if (!account || account.paused || account.needs_reconnect || previous?.request === 'pending') return
+  if (!account || account.paused || account.needs_reconnect) return 'skipped'
+  if (previous?.request === 'pending') return 'pending'
   const requestRevision = ++revision
   store(accountId, { ...(previous ?? emptyObservation()), request: 'pending', revision: requestRevision })
   let accepted = false
@@ -87,6 +90,8 @@ export async function requestAccountSync(accountId: string) {
     // Keep raw diagnostics out of UI/toasts; the record describes the uncertainty.
   }
   const latest = syncObservation(accountId)
-  if (!knownAccount(accountId) || !latest || latest.revision !== requestRevision) return
-  store(accountId, { ...latest, request: accepted ? 'requested' : 'unconfirmed' })
+  if (!knownAccount(accountId) || !latest || latest.revision !== requestRevision) return 'unconfirmed'
+  const outcome = accepted ? 'requested' : 'unconfirmed'
+  store(accountId, { ...latest, request: outcome })
+  return outcome
 }

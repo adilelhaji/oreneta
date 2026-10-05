@@ -1497,5 +1497,7 @@
   "connectivity.health.unconfirmed": "Request not confirmed. Check the connection and account settings.",
   "connectivity.health.activity": "Mail activity observed at {time}",
   "connectivity.health.settings": "Account settings",
-  "connectivity.health.unattributed": "An unresolved mail issue has no account information. Review account settings; recovery cannot be targeted."
+  "connectivity.health.unattributed": "An unresolved mail issue has no account information. Review account settings; recovery cannot be targeted.",
+  "mail.refresh.skipped": "No mail check requested. Review paused accounts or accounts that need sign-in.",
+  "mail.refresh.summary": "Mail check requests: {requested} accepted, {unconfirmed} unconfirmed, {pending} already pending, {skipped} skipped. Completion is not verified; review Account sync."
 }
