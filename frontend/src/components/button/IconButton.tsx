@@ -9,7 +9,7 @@ type IconButtonRadius = 'full' | 'lg' | 'xl'
 
 const SIZES: Record<IconButtonSize, { box: string; icon: number }> = {
   sm: { box: 'h-7 w-7', icon: 14 },
-  md: { box: 'h-8 w-8', icon: 15 },
+  md: { box: 'h-8 w-8', icon: 16 },
   lg: { box: 'h-9 w-9', icon: 16 },
 }
 
@@ -22,14 +22,14 @@ const RADII: Record<IconButtonRadius, string> = {
 function variantClasses(variant: IconButtonVariant, active: boolean): string {
   switch (variant) {
     case 'accent':
-      return 'bg-accent text-white shadow-sm shadow-accent/20 hover:bg-accent-hover'
+      return 'bg-accent text-on-accent enabled:hover:bg-accent-hover'
     case 'accentSoft':
-      return 'bg-accent/10 text-accent hover:bg-accent/15'
+      return 'bg-active text-accent enabled:hover:bg-hover'
     case 'danger':
-      return 'text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30'
+      return 'text-danger enabled:hover:bg-danger-soft'
     case 'ghost':
     default:
-      return active ? 'bg-active text-primary' : 'text-secondary hover:bg-hover hover:text-primary'
+      return active ? 'bg-active text-accent' : 'text-secondary enabled:hover:bg-hover enabled:hover:text-primary'
   }
 }
 
@@ -74,7 +74,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       aria-label={label}
       className={clsx(
-        'flex shrink-0 items-center justify-center cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        'flex shrink-0 items-center justify-center cursor-pointer transition-colors duration-(--duration-fast) disabled:cursor-not-allowed disabled:opacity-50',
         sizing.box,
         RADII[radius],
         variantClasses(variant, active),
@@ -82,7 +82,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       )}
       {...rest}
     >
-      {Icon ? <Icon size={iconSize ?? sizing.icon} /> : children}
+      {Icon ? <Icon size={iconSize ?? sizing.icon} strokeWidth={1.75} aria-hidden="true" /> : children}
     </button>
   )
 })

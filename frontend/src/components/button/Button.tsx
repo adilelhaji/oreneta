@@ -7,16 +7,15 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md'
 
 const SIZES: Record<ButtonSize, { box: string; icon: number }> = {
-  sm: { box: 'h-8 px-3 text-caption', icon: 13 },
-  md: { box: 'h-9 px-3.5 text-xs', icon: 14 },
+  sm: { box: 'min-h-8 px-3 py-1 text-caption', icon: 14 },
+  md: { box: 'min-h-9 px-3.5 py-1.5 text-ui', icon: 16 },
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-accent text-white shadow-md shadow-accent/15 hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/20 active:scale-98',
-  secondary: 'border border-border/70 bg-chats text-primary shadow-sm hover:bg-hover active:scale-95',
-  ghost: 'text-secondary hover:bg-hover hover:text-primary',
-  danger: 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/40',
+  primary: 'border border-transparent bg-accent text-on-accent enabled:hover:bg-accent-hover',
+  secondary: 'border border-border bg-chats text-primary enabled:hover:bg-hover',
+  ghost: 'border border-transparent text-secondary enabled:hover:bg-hover enabled:hover:text-primary',
+  danger: 'border border-danger/30 bg-danger-soft text-danger enabled:hover:border-danger',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -40,16 +39,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type ?? 'button'}
       className={clsx(
-        'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-control font-semibold whitespace-nowrap cursor-pointer transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex max-w-full shrink-0 items-center justify-center gap-1.5 rounded-control font-semibold text-center whitespace-normal wrap-anywhere cursor-pointer transition-colors duration-(--duration-fast) disabled:cursor-not-allowed disabled:opacity-50',
         sizing.box,
         VARIANTS[variant],
         className,
       )}
       {...rest}
     >
-      {Left && <Left size={sizing.icon} className="stroke-[2.5]" />}
+      {Left && <Left size={sizing.icon} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />}
       {children}
-      {Right && <Right size={sizing.icon} className="stroke-[2.5]" />}
+      {Right && <Right size={sizing.icon} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />}
     </button>
   )
 })

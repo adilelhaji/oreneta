@@ -47,13 +47,14 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
     <input
       ref={ref}
       className={clsx(
-        'min-w-0 border text-primary placeholder-secondary outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+        'min-w-0 border text-primary placeholder-secondary transition-colors disabled:cursor-not-allowed disabled:opacity-60',
         INPUT_SIZES[fieldSize],
         INPUT_SURFACES[surface],
-        invalid ? 'border-rose-400 focus:border-rose-500' : 'border-border focus:border-accent',
+        invalid ? 'border-danger focus:border-danger' : 'border-border focus:border-accent',
         className,
       )}
       {...rest}
+      aria-invalid={invalid || rest['aria-invalid'] || undefined}
     />
   )
 })
@@ -73,7 +74,7 @@ export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(funct
       <select
         ref={ref}
         className={clsx(
-          'w-full min-w-0 appearance-none border border-border text-primary outline-none transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus:border-accent',
+          'w-full min-w-0 appearance-none border border-border text-primary transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus:border-accent',
           INPUT_SIZES[fieldSize],
           INPUT_SURFACES[surface],
           'pr-8',
@@ -84,7 +85,7 @@ export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(funct
         {children}
       </select>
       <div className="pointer-events-none absolute right-2.5 flex items-center text-secondary">
-        <ChevronDown size={12} />
+        <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
       </div>
     </div>
   )

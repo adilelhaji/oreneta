@@ -79,6 +79,13 @@
   --text-title: 0.9375rem;       /* 15px — dialog and section titles */
   --text-title--line-height: 1.35;
 
+  --text-heading-sm: 1.125rem; /* 18px — panel section headings */
+  --text-heading-sm--line-height: 1.4;
+  --text-heading: 1.375rem; /* 22px — screen titles */
+  --text-heading--line-height: 1.3;
+  --text-heading-lg: 1.75rem; /* 28px — prominent screen headings */
+  --text-heading-lg--line-height: 1.25;
+
   /* Radii, by what the shape is. Values match what the interface already
      looked like, so nothing moves; the names are what stop them drifting. */
   --radius-control-sm: 0.5rem;   /* small buttons, inputs, menu items */
