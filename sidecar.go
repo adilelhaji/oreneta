@@ -14,22 +14,24 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type Sidecar struct {
-	path    string
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	started bool
-	mu      sync.Mutex
-	nextID  uint64
-	pending map[uint64]chan sidecarResponse
-	cancel  context.CancelFunc
-	stderr  io.Writer
-	onEvent func(name string, detail any)
+	path       string
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	started    bool
+	readFailed atomic.Bool
+	mu         sync.Mutex
+	nextID     uint64
+	pending    map[uint64]chan sidecarResponse
+	cancel     context.CancelFunc
+	stderr     io.Writer
+	onEvent    func(name string, detail any)
 }
 
 type sidecarResponse struct {
@@ -47,12 +49,15 @@ func NewSidecar(path string, stderr io.Writer) *Sidecar {
 func (s *Sidecar) Started() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.started
+	return s.started && !s.readFailed.Load()
 }
 
 func (s *Sidecar) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.readFailed.Load() {
+		return errors.New("sidecar transport failed; restart the application")
+	}
 	if s.started {
 		return nil
 	}
@@ -79,7 +84,7 @@ func (s *Sidecar) Start(ctx context.Context) error {
 	s.stdin = stdin
 	s.cancel = cancel
 	s.started = true
-	go s.readLoop(ctx, stdout)
+	go s.readLoop(ctx, stdout, cancel)
 	go func() {
 		_ = cmd.Wait()
 		s.mu.Lock()
@@ -131,7 +136,7 @@ func (s *Sidecar) Close() {
 func (s *Sidecar) Call(method string, params any) (any, error) {
 	timeout := sidecarCallTimeout(method)
 	s.mu.Lock()
-	if !s.started {
+	if !s.started || s.readFailed.Load() {
 		s.mu.Unlock()
 		return nil, errors.New("sidecar not started")
 	}
@@ -167,9 +172,12 @@ func (s *Sidecar) Call(method string, params any) (any, error) {
 	}
 }
 
-func (s *Sidecar) readLoop(ctx context.Context, stdout io.Reader) {
+// A local recovery document is capped at 64 MiB; allow its response envelope.
+const maxSidecarResponseBytes = 65 * 1024 * 1024
+
+func (s *Sidecar) readLoop(ctx context.Context, stdout io.Reader, cancel context.CancelFunc) {
 	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSidecarResponseBytes)
 	for scanner.Scan() {
 		var object map[string]any
 		if err := json.Unmarshal(scanner.Bytes(), &object); err != nil {
@@ -200,6 +208,23 @@ func (s *Sidecar) readLoop(ctx context.Context, stdout io.Reader) {
 			ch <- sidecarResponse{Error: errValue}
 		} else {
 			ch <- sidecarResponse{Result: object["result"]}
+		}
+	}
+	if scanner.Err() != nil {
+		// Invalidate before cancellation/locking: a Call may be blocked writing
+		// while holding mu. Cancellation releases that pipe without allowing
+		// another request or a new process to reuse this failed transport.
+		s.readFailed.Store(true)
+		if cancel != nil {
+			cancel()
+		}
+		s.mu.Lock()
+		s.started = false
+		pending := s.pending
+		s.pending = make(map[uint64]chan sidecarResponse)
+		s.mu.Unlock()
+		for _, ch := range pending {
+			ch <- sidecarResponse{Error: "sidecar response exceeded the size limit or could not be read"}
 		}
 	}
 }

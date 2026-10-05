@@ -456,6 +456,11 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.writeChatWallpaperFile(payload)
 	case "composer.pruneMedia":
 		return a.pruneComposerMedia(payload)
+	case "localDrafts.save", "localDrafts.delete", "localDrafts.get", "localDrafts.list":
+		if a.sidecar == nil || !a.sidecar.Started() {
+			return nil, a.engineUnavailable()
+		}
+		return a.sidecar.Call(command, payload)
 	case "mail.sweepPreview":
 		return a.mailSweepPreview(payload)
 	case "mail.sweep":
