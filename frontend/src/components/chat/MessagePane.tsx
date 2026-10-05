@@ -12,6 +12,7 @@ import { EmptyState } from '../empty-state/EmptyState'
 import { QuickReplyComposer } from './QuickReplyComposer'
 import { ConversationTabs } from './ConversationTabs'
 import { ReaderTabView } from './ReaderTabView'
+import { ReaderTextSize } from './ReaderTextSize'
 import { ConversationHeader } from './ConversationHeader'
 import { ThreadSearchBarMobile } from './ThreadSearchBarMobile'
 import { ConversationMessageList } from './ConversationMessageList'
@@ -258,6 +259,7 @@ export function MessagePane() {
         />
       )}
 
+      <ReaderTextSize />
       <ConversationMessageList
         messages={displayMessages}
         showThreadLoading={showThreadLoading}

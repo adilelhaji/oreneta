@@ -1,9 +1,12 @@
-import { Archive, ExternalLink, Mail, MailOpen, MoreHorizontal, Star, Trash2 } from 'lucide-react'
+import { Archive, ExternalLink, Forward, Mail, MailOpen, MoreHorizontal, Star, Trash2 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { archiveMessage, deleteMessage, markMessageReadState, starMessage } from '../../states/mail'
 import type { Message } from '../../types'
 import { useReadOnlyMail } from '../../lib/useReadOnlyMail'
+import { forwardMessage } from '../../states/compose'
+import { formatFullTimestamp } from './messageHelpers'
+import { Button } from '../button/Button'
 
 /**
  * What can be done to one message, above the message itself.
@@ -54,27 +57,41 @@ export function MessageActions({
       aria-label={label}
       onClick={onClick}
       className={clsx(
-        'flex h-6 w-6 items-center justify-center rounded-full transition-colors cursor-pointer',
+        'flex shrink-0 items-center justify-center rounded-control-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+        variant === 'inline' ? 'h-8 w-8' : 'h-6 w-6',
         tone === 'danger'
-          ? 'hover:bg-rose-500/10 hover:text-rose-500'
+          ? 'enabled:hover:bg-danger-soft enabled:hover:text-danger'
           : tone === 'on'
-            ? 'text-amber-500 hover:bg-hover'
-            : 'hover:bg-hover hover:text-primary',
+            ? 'text-warning enabled:hover:bg-hover'
+            : 'enabled:hover:bg-hover enabled:hover:text-primary',
       )}
     >
-      <Icon size={13} className={clsx(tone === 'on' && 'fill-current')} />
+      <Icon size={14} strokeWidth={1.75} aria-hidden="true" className={clsx(tone === 'on' && 'fill-current')} />
     </button>
   )
 
   return (
     <div
+      role="group"
+      aria-label={`${t('chat.moreMessageActions')} — ${message.from_name || message.from_addr} — ${formatFullTimestamp(message.date)}`}
       className={clsx(
         'flex items-center gap-0.5 text-secondary',
         variant === 'floating'
           ? 'absolute right-2 -top-3.5 z-20 rounded-full border border-border/40 bg-header/95 p-0.5 shadow-sm'
-          : 'shrink-0',
+          : 'min-w-0 flex-wrap',
       )}
     >
+      {variant === 'inline' && !isDraft && !isRSS && (
+        <Button
+          size="sm"
+          variant="ghost"
+          leftIcon={Forward}
+          disabled={readOnly}
+          onClick={() => void forwardMessage(message)}
+        >
+          {t('chat.actions.forward')}
+        </Button>
+      )}
       {button('open', ExternalLink, isDraft ? t('chat.actions.openDraft') : t('threads.actions.openInNewTab'), onOpen)}
       {/* A feed item is not mail: it cannot be starred on a server, marked
           read for anyone else, or filed anywhere. */}

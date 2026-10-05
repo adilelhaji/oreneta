@@ -4,6 +4,7 @@ import { closeMessageTab, setTabViewMode } from '../../states/compose'
 import type { MessageTab } from '../../types'
 import { Composer } from '../composer/Composer'
 import { HtmlMessageView } from './HtmlMessageView'
+import { ReaderTextSize } from './ReaderTextSize'
 import { AddressRow } from './AddressList'
 import { extractAddr, formatFullTimestamp } from './messageHelpers'
 
@@ -72,6 +73,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
           {replyToDiffers && <AddressRow label={t('chat.replyTo')} rawList={tab.replyTo!} />}
         </div>
       )}
+      <ReaderTextSize />
       <HtmlMessageView
         scrollKey={tab.id}
         title={tab.subject}

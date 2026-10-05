@@ -18,6 +18,69 @@ type SetupOptions = {
   theme?: string
   hideAccounts?: boolean
   preferences?: Record<string, unknown>
+  readerStress?: boolean
+}
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [1440, 600]) {
+    test(`reader body size and scoped controls: ${theme}, ${width}px`, async ({ page }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, theme, readerStress: true })
+      await page.goto('/')
+      await page
+        .getByRole('table')
+        .getByRole('button', { name: /Pilot checklist/ })
+        .click()
+      const size = page.getByRole('combobox', { name: 'Message text size' })
+      const collapse = page.getByTitle('Collapse message', { exact: true }).first()
+      await expect(collapse).toHaveAttribute('aria-expanded', 'true')
+      const headerFont = await collapse.evaluate((el) => getComputedStyle(el).fontSize)
+      const plain = page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })
+      const plainFont = await plain.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+      const html = page.frameLocator('iframe[title="Message HTML"]').first()
+      await expect(html.getByText('Wide synthetic invoice')).toBeVisible()
+      await size.selectOption('200')
+      await expect(html.locator('body')).toHaveCSS('zoom', '2')
+      await expect(collapse).toHaveCSS('font-size', headerFont)
+      await expect(plain).toHaveCSS('font-size', `${plainFont * 2}px`)
+      await expect(html.locator('table')).toHaveAttribute('width', '1800')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      const groups = page.getByRole('group', { name: /More message actions —/ })
+      const firstGroup = groups.first()
+      await expect(firstGroup.getByRole('button', { name: 'Forward', exact: true })).toBeInViewport()
+      expect(await firstGroup.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+      await size.selectOption('100')
+      await collapse.focus()
+      await page.keyboard.press('Space')
+      const expand = page.getByTitle('Expand message', { exact: true }).first()
+      await expect(expand).toHaveAttribute('aria-expanded', 'false')
+      await expand.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.getByTitle('Collapse message', { exact: true }).first()).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      )
+      await info.attach('reader-controls', {
+        body: await page.screenshot({ path: info.outputPath('reader-controls.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+      await firstGroup.getByRole('button', { name: 'Open in new tab', exact: true }).click()
+      await expect(size).toHaveValue('100')
+      await size.selectOption('150')
+      await expect(size).toHaveValue('150')
+      await expect(page.frameLocator('iframe[title^="Pilot checklist"]').locator('body')).toHaveCSS('zoom', '1.5')
+      await page.getByTitle('Plain view', { exact: true }).click()
+      const standaloneBody = page
+        .locator('.font-message')
+        .filter({ hasText: 'Please review the pilot checklist' })
+        .last()
+      await expect(standaloneBody).toHaveCSS('font-size', '22.5px')
+      await page.getByRole('button', { name: 'Reset to default', exact: true }).click()
+      await expect(size).toHaveValue('100')
+      expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+      expect(errors).toEqual([])
+    })
+  }
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
@@ -160,6 +223,13 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       : route.abort(),
   )
   const fixture = createFixture()
+  if (options.readerStress) {
+    fixture.account.conversation_html = true
+    fixture.messages[0].from_name = 'Morgan Alexandra Rivera — Customer Success and International Operations'
+    fixture.messages[0].from_addr = 'customer-success-and-international-operations@example.test'
+    fixture.messages[0].body_html =
+      '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
+  }
   await page.addInitScript(
     ({ accounts, folders, template, options, threads, messages }) => {
       const calls: string[] = []
