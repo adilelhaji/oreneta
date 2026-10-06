@@ -31,9 +31,15 @@ public static class OrenetaNativeInput {
     [DllImport("user32.dll")] private static extern uint SendInput(uint count, Input[] inputs, int size);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [StructLayout(LayoutKind.Sequential)] public struct Point { public int x; public int y; }
+    [DllImport("user32.dll")] public static extern bool GetCursorPos(out Point point);
+    public static bool ReleaseControl() { return SendInput(1, new[] { Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 1; }
     private static Input Key(ushort key, uint flags) { return new Input { type = 1, data = new InputUnion { keyboard = new KeyboardInput { virtualKey = key, scanCode = 0, flags = flags, time = 0, extraInfo = IntPtr.Zero } } }; }
-    public static bool SendZoomReset() { return SendInput(4, new[] { Key(0x11, 0), Key(0x30, 0), Key(0x30, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 4; }
-    public static bool SendZoomIn() { return SendInput(6, new[] { Key(0x11, 0), Key(0x10, 0), Key(0xBB, 0), Key(0xBB, 2), Key(0x10, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 6; }
+    public static bool SendZoomWheel(int delta) {
+        var wheel = new Input { type = 0, data = new InputUnion { mouse = new MouseInput { mouseData = unchecked((uint)delta), flags = 0x0800 } } };
+        return SendInput(3, new[] { Key(0x11, 0), wheel, Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 3;
+    }
 }
 "@
     $expectedSize = if ([IntPtr]::Size -eq 8) { 40 } else { 28 }
@@ -51,6 +57,7 @@ Add-Type -AssemblyName UIAutomationTypes
 $executablePath = (Resolve-Path -LiteralPath $Executable).Path
 $profile = Join-Path ([IO.Path]::GetTempPath()) ('oreneta-native-startup-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $profile, $OutputDirectory -Force | Out-Null
+$initialEditorHeight = $null
 
 for ($launch = 1; $launch -le 2; $launch++) {
     $log = Join-Path $profile 'Roaming/oreneta-dev/oreneta.log'
@@ -93,47 +100,80 @@ for ($launch = 1; $launch -le 2; $launch++) {
         if ($names -match 'Something went wrong|useSyncExternalStore') { throw 'React startup error in native UI' }
 
         if ($VerifyZoom) {
-            $focusDeadline = [DateTime]::UtcNow.AddSeconds(5)
-            do {
-                [OrenetaNativeInput]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
-                Start-Sleep -Milliseconds 100
-            } while ([OrenetaNativeInput]::GetForegroundWindow() -ne $process.MainWindowHandle -and [DateTime]::UtcNow -lt $focusDeadline)
-            if ([OrenetaNativeInput]::GetForegroundWindow() -ne $process.MainWindowHandle) { throw 'Could not focus native window for zoom validation' }
-            if (![OrenetaNativeInput]::SendZoomReset()) { throw 'Windows rejected Ctrl+0 zoom input' }
-            Start-Sleep -Milliseconds 250
-            $baseWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
-            $baseEditors = @($baseWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) | Where-Object {
-                $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
-            })
-            $baseHeight = if ($baseEditors.Count -gt 0) { $baseEditors[0].Current.BoundingRectangle.Height } else { 0 }
-            if ($baseHeight -le 0) { throw 'Email editor is not visible before native zoom-layout validation' }
-            1..6 | ForEach-Object {
-                if (![OrenetaNativeInput]::SendZoomIn()) { throw 'Windows rejected Ctrl+plus zoom input' }
-                Start-Sleep -Milliseconds 100
-            }
-            Start-Sleep -Milliseconds 500
-            $zoomWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
-            $zoomBounds = $zoomWindow.Current.BoundingRectangle
-            $zoomElements = $zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
-            $zoomNames = @($zoomElements | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
-            if ($zoomNames -notcontains 'Google' -or $zoomNames -notcontains 'Microsoft') { throw 'Provider choices disappeared at native zoom-layout validation' }
-            $zoomEditors = @($zoomElements | Where-Object {
-                $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
-            })
-            if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible after native zoom-layout validation' }
-            if ($zoomEditors[0].Current.BoundingRectangle.Height -le ($baseHeight * 1.1)) {
-                throw 'Native zoom input did not change the editor layout'
-            }
-            foreach ($element in @($zoomEditors | Select-Object -First 1)) {
-                $bounds = $element.Current.BoundingRectangle
-                if ($bounds.Width -le 0 -or $bounds.Height -le 0 -or
-                    $bounds.Left -lt $zoomBounds.Left -or $bounds.Top -lt $zoomBounds.Top -or
-                    $bounds.Right -gt $zoomBounds.Right -or $bounds.Bottom -gt $zoomBounds.Bottom) {
-                    throw 'Email editor bounds escaped the native window during zoom-layout validation'
+            $originalCursor = New-Object OrenetaNativeInput+Point
+            if (![OrenetaNativeInput]::GetCursorPos([ref]$originalCursor)) { throw 'Could not capture cursor position' }
+            try {
+                $focusDeadline = [DateTime]::UtcNow.AddSeconds(5)
+                do {
+                    [OrenetaNativeInput]::SetForegroundWindow($process.MainWindowHandle) | Out-Null
+                    Start-Sleep -Milliseconds 100
+                } while ([OrenetaNativeInput]::GetForegroundWindow() -ne $process.MainWindowHandle -and [DateTime]::UtcNow -lt $focusDeadline)
+                if ([OrenetaNativeInput]::GetForegroundWindow() -ne $process.MainWindowHandle) { throw 'Could not focus native window for zoom validation' }
+                $baseWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+                $baseEditors = @($baseWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) | Where-Object {
+                    $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
+                })
+                $baseHeight = if ($baseEditors.Count -gt 0) { $baseEditors[0].Current.BoundingRectangle.Height } else { 0 }
+                if ($baseHeight -le 0) { throw 'Email editor is not visible before native zoom-layout validation' }
+                if ($null -ne $initialEditorHeight -and [Math]::Abs($baseHeight - $initialEditorHeight) -gt 2) {
+                    throw 'Native restart did not preserve the initial editor scale'
                 }
+                $initialEditorHeight = $baseHeight
+                $baseEditors[0].SetFocus()
+                $editorBounds = $baseEditors[0].Current.BoundingRectangle
+                if (![OrenetaNativeInput]::SetCursorPos([int]($editorBounds.Left + $editorBounds.Width / 2), [int]($editorBounds.Top + $editorBounds.Height / 2))) {
+                    throw 'Could not position pointer over the native editor for Ctrl+wheel'
+                }
+                1..6 | ForEach-Object {
+                    if (![OrenetaNativeInput]::SendZoomWheel(120)) { throw 'Windows rejected Ctrl+wheel zoom input' }
+                    Start-Sleep -Milliseconds 100
+                }
+                Start-Sleep -Milliseconds 500
+                $zoomWindow = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
+                $zoomBounds = $zoomWindow.Current.BoundingRectangle
+                $zoomElements = $zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
+                $zoomNames = @($zoomElements | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+                if ($zoomNames -notcontains 'Google' -or $zoomNames -notcontains 'Microsoft') { throw 'Provider choices disappeared at native zoom-layout validation' }
+                $zoomEditors = @($zoomElements | Where-Object {
+                    $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
+                })
+                if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible after native zoom-layout validation' }
+                if ($zoomEditors[0].Current.BoundingRectangle.Height -le ($baseHeight * 1.1)) {
+                    throw 'Native zoom input did not change the editor layout'
+                }
+                foreach ($element in @($zoomEditors | Select-Object -First 1)) {
+                    $bounds = $element.Current.BoundingRectangle
+                    if ($bounds.Width -le 0 -or $bounds.Height -le 0 -or
+                        $bounds.Left -lt $zoomBounds.Left -or $bounds.Top -lt $zoomBounds.Top -or
+                        $bounds.Right -gt $zoomBounds.Right -or $bounds.Bottom -gt $zoomBounds.Bottom) {
+                        throw 'Email editor bounds escaped the native window during zoom-layout validation'
+                    }
+                }
+                $zoomNames | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-zoom-ui.json")
+                $enlargedHeight = $zoomEditors[0].Current.BoundingRectangle.Height
+                $editorBounds = $zoomEditors[0].Current.BoundingRectangle
+                if (![OrenetaNativeInput]::SetCursorPos([int]($editorBounds.Left + $editorBounds.Width / 2), [int]($editorBounds.Top + $editorBounds.Height / 2))) {
+                    throw 'Could not position pointer for zoom restoration'
+                }
+                1..6 | ForEach-Object {
+                    if (![OrenetaNativeInput]::SendZoomWheel(-120)) { throw 'Windows rejected zoom restoration input' }
+                    Start-Sleep -Milliseconds 100
+                }
+                Start-Sleep -Milliseconds 500
+                $restoredEditors = @($zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) | Where-Object {
+                    $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
+                })
+                if ($restoredEditors.Count -eq 0 -or [Math]::Abs($restoredEditors[0].Current.BoundingRectangle.Height - $baseHeight) -gt 2) {
+                    throw 'Native zoom-out did not restore the original editor layout'
+                }
+                @{ before = $baseHeight; enlarged = $enlargedHeight; restored = $restoredEditors[0].Current.BoundingRectangle.Height } |
+                    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-zoom-measurements.json")
+                Write-Output "PASS native zoom-layout launch $launch : editor visible, provider choices present, original size restored"
+            } finally {
+                $released = [OrenetaNativeInput]::ReleaseControl()
+                $cursorRestored = [OrenetaNativeInput]::SetCursorPos($originalCursor.x, $originalCursor.y)
+                if (!$released -or !$cursorRestored) { throw 'Could not restore native input state after zoom validation' }
             }
-            $zoomNames | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-zoom-ui.json")
-            Write-Output "PASS native zoom-layout launch $launch : essential controls remain visible"
         }
 
         $deadline = [DateTime]::UtcNow.AddSeconds(20)
