@@ -38,3 +38,10 @@ union omitted MOUSEINPUT, producing a 32-byte structure instead of Win64's
 size and union offset without launching an app or sending input. The packaged
 startup/restart and actual zoom checks remain mandatory.
 See Microsoft's [INPUT definition](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-input).
+
+Run 37429870187 subsequently confirmed that Wails disables browser keyboard
+accelerators. Native zoom acceptance uses Ctrl+wheel, with enlargement and
+restoration measured on both launches; see [mail boundaries](design/mail-boundaries.md).
+Rust dependency caches are retained if a later native check fails, avoiding a
+full dependency rebuild during diagnosis. This does not upload failed application
+binaries or relax the exact-source CI/native artifact gate.

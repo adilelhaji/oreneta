@@ -49,6 +49,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: meron-core
+          cache-on-failure: true
       - name: Install locked localization dependencies
         run: bun install --frozen-lockfile
       - name: Install build tools

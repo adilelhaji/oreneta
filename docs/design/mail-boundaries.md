@@ -24,11 +24,23 @@ at 600px instead of accepting the known defect.
 
 A 1440px window at 200% zoom is exercised at its equivalent 720 CSS-pixel layout
 with device scale 2. The Windows validation runner additionally exercises the
-actual WebView2 keyboard path: it verifies foreground focus and injected input,
-resets zoom with Ctrl+0, applies the standard Ctrl+plus sequence, and uses
-Windows UI Automation to verify the onboarding email editor layout changes while provider choices
-and bounds remain visible inside the native window. UI Automation cannot read
+actual WebView2 Ctrl+mouse-wheel path: it verifies foreground focus and injected input,
+starts at the configured 100% factor, applies wheel zoom in/out, and uses
+Windows UI Automation to verify the onboarding email editor layout changes and
+remains visible within the native window, while provider choices remain present
+in the accessibility tree. UI Automation cannot read
 WebView2's private `ZoomFactor`, so this is native zoom-layout evidence, not an
 exact 200% factor certification. Touch, IME, provider interoperability and
 installer behavior remain separate gaps. It does not exercise the mailbox reader,
 message actions or composer; those remain separate native acceptance work.
+
+The 2026-10-06 native run 37429870187 exposed a mismatch in the earlier test:
+Wails disables browser keyboard accelerators, including Ctrl+plus/minus/zero.
+Those shortcuts remain unsupported ([#181](https://github.com/adilelhaji/oreneta/issues/181));
+CSS zoom is not substituted for native zoom.
+The validation uses the supported Ctrl+wheel gesture, verifies real growth,
+reduction and restoration, and repeats after restart. Each launch explicitly
+starts at 100%. The keyboard shortcut gap remains separate from installation
+acceptance, as do reader/composer and assistive-technology checks.
+See [WebView2 zoom](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2settings#get_iszoomcontrolenabled)
+and [browser accelerator behavior](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2settings3#put_arebrowseracceleratorkeysenabled).

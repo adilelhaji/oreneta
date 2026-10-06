@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -48,6 +49,10 @@ func main() {
 		WindowStartState:         options.Maximised,
 		HideWindowOnClose:        true,
 		EnableDefaultContextMenu: true,
+		Windows: &windows.Options{
+			IsZoomControlEnabled: true,
+			ZoomFactor:           1,
+		},
 		AssetServer: &assetserver.Options{
 			Assets:     assets,
 			Handler:    mediaHandler(),
