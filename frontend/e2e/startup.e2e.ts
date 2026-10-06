@@ -25,6 +25,28 @@ type SetupOptions = {
   manualRefresh?: boolean
 }
 
+test('onboarding remains keyboard reachable in a short zoom-equivalent viewport', async ({ page }) => {
+  const errors = await prepareStartup(page)
+  await page.goto('/')
+  const email = page.getByRole('textbox', { name: 'Email Address', exact: true })
+  await email.focus()
+  // 1024x700 desktop content at 250% native zoom is about 410x280 CSS px.
+  await page.setViewportSize({ width: 410, height: 280 })
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  await expect(email).toBeFocused()
+  await expect(email).toBeInViewport()
+  const box = (await email.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(410)
+  for (const name of ['Continue', 'Google', 'Microsoft', 'Microsoft Graph — Read-only', 'Manual setup']) {
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name, exact: true })).toBeFocused()
+    await expect(page.getByRole('button', { name, exact: true })).toBeInViewport()
+  }
+  expect(errors).toEqual([])
+})
+
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
   for (const width of [1440, 600]) {
     test(`secondary screen design: ${theme}, ${width}px`, async ({ page }, info) => {

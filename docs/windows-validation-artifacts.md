@@ -45,3 +45,10 @@ restoration measured on both launches; see [mail boundaries](design/mail-boundar
 Rust dependency caches are retained if a later native check fails, avoiding a
 full dependency rebuild during diagnosis. This does not upload failed application
 binaries or relax the exact-source CI/native artifact gate.
+
+Run 37434499697 reached native zoom but found the editor outside the visible
+portion of the scrollable form. The check now exercises Tab/Shift+Tab reachability
+before asserting focus, full editor bounds, growth and restoration. It records
+pre-scroll accessibility geometry even on failure. A 410x280 CSS-pixel browser
+regression covers the same keyboard route and all provider choices; it does not
+replace the required native candidate run.

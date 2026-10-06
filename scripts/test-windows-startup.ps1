@@ -34,11 +34,15 @@ public static class OrenetaNativeInput {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [StructLayout(LayoutKind.Sequential)] public struct Point { public int x; public int y; }
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out Point point);
-    public static bool ReleaseControl() { return SendInput(1, new[] { Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 1; }
+    public static bool ReleaseModifiers() { return SendInput(2, new[] { Key(0x11, 2), Key(0x10, 2) }, Marshal.SizeOf(typeof(Input))) == 2; }
     private static Input Key(ushort key, uint flags) { return new Input { type = 1, data = new InputUnion { keyboard = new KeyboardInput { virtualKey = key, scanCode = 0, flags = flags, time = 0, extraInfo = IntPtr.Zero } } }; }
     public static bool SendZoomWheel(int delta) {
         var wheel = new Input { type = 0, data = new InputUnion { mouse = new MouseInput { mouseData = unchecked((uint)delta), flags = 0x0800 } } };
         return SendInput(3, new[] { Key(0x11, 0), wheel, Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 3;
+    }
+    public static bool SendTab(bool reverse) {
+        var inputs = reverse ? new[] { Key(0x10, 0), Key(0x09, 0), Key(0x09, 2), Key(0x10, 2) } : new[] { Key(0x09, 0), Key(0x09, 2) };
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Input))) == inputs.Length;
     }
 }
 "@
@@ -133,11 +137,23 @@ for ($launch = 1; $launch -le 2; $launch++) {
                 $zoomBounds = $zoomWindow.Current.BoundingRectangle
                 $zoomElements = $zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
                 $zoomNames = @($zoomElements | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
+                @($zoomElements | Where-Object { $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit } | ForEach-Object {
+                    @{ name = $_.Current.Name; offscreen = $_.Current.IsOffscreen; focused = $_.Current.HasKeyboardFocus; bounds = $_.Current.BoundingRectangle.ToString() }
+                }) | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-before-scroll.json")
                 if ($zoomNames -notcontains 'Google' -or $zoomNames -notcontains 'Microsoft') { throw 'Provider choices disappeared at native zoom-layout validation' }
+                # Reflow is allowed to scroll vertically at high zoom. Exercise
+                # actual keyboard reachability instead of requiring the whole
+                # form to fit above the fold. No button is activated.
+                if (![OrenetaNativeInput]::SendTab($false)) { throw 'Windows rejected forward focus navigation' }
+                Start-Sleep -Milliseconds 200
+                if (![OrenetaNativeInput]::SendTab($true)) { throw 'Windows rejected backward focus navigation' }
+                Start-Sleep -Milliseconds 200
+                $zoomElements = $zoomWindow.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
                 $zoomEditors = @($zoomElements | Where-Object {
                     $_.Current.ControlType -eq [Windows.Automation.ControlType]::Edit -and !$_.Current.IsOffscreen
                 })
                 if ($zoomEditors.Count -eq 0) { throw 'Email editor is not visible after native zoom-layout validation' }
+                if (!$zoomEditors[0].Current.HasKeyboardFocus) { throw 'Keyboard navigation did not return to the email editor after zoom' }
                 if ($zoomEditors[0].Current.BoundingRectangle.Height -le ($baseHeight * 1.1)) {
                     throw 'Native zoom input did not change the editor layout'
                 }
@@ -170,7 +186,7 @@ for ($launch = 1; $launch -le 2; $launch++) {
                     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory "launch-$launch-zoom-measurements.json")
                 Write-Output "PASS native zoom-layout launch $launch : editor visible, provider choices present, original size restored"
             } finally {
-                $released = [OrenetaNativeInput]::ReleaseControl()
+                $released = [OrenetaNativeInput]::ReleaseModifiers()
                 $cursorRestored = [OrenetaNativeInput]::SetCursorPos($originalCursor.x, $originalCursor.y)
                 if (!$released -or !$cursorRestored) { throw 'Could not restore native input state after zoom validation' }
             }
