@@ -5,6 +5,11 @@
 This is not a completed provider matrix or an assertion of full settings coverage.
 #22 remains open for the remaining actual-workflow/provider/detail audit.
 
+The [provider acceptance pack](provider-acceptance.md) (#145/#184) adds a
+per-operation report for the existing isolated IMAP/SMTP integration suite and
+dedicated live-account procedures. A passing fixture report does not promote
+any native/provider ledger row to verified.
+
 ## Provenance and states
 
 The snapshot identifies current main, source page/version, platform, owning issue,

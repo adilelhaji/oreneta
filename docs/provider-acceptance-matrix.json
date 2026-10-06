@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "issue": 145,
+  "slice": 184,
+  "rows": [
+    { "id": "MAIL-01", "outcome": "Discover folders and resolve archive destination", "tests": ["folders", "archive_folder_resolves"] },
+    { "id": "MAIL-02", "outcome": "Submit, receive and reconcile sent copies", "tests": ["send_and_receive", "sent_copy_honors_the_account_override", "sent_from_another_client_surfaces_via_inbox_sync"] },
+    { "id": "MAIL-03", "outcome": "Thread, search and group messages", "tests": ["threading", "search_and_starred_items", "grouped_thread_cards", "message_without_a_message-id_still_threads"] },
+    { "id": "MAIL-04", "outcome": "Apply flags and moves; do not claim a failed write succeeded", "tests": ["move_and_flags", "failed_imap_write_does_not_falsely_mark_read_locally", "mark_all_read"] },
+    { "id": "MAIL-05", "outcome": "Save and remove remote full-editor and quick-reply drafts", "tests": ["draft_lifecycle", "quick_reply_draft_lifecycle"] },
+    { "id": "MAIL-06", "outcome": "Transfer attachments and refetch cleared cached bytes", "tests": ["attachments", "clearing_the_attachment_cache_refetches_the_bytes"] },
+    { "id": "MAIL-07", "outcome": "Copy, trash and empty designated folders", "tests": ["delete_moves_to_trash", "empty_trash", "copy_keeps_original", "empty_junk"] },
+    { "id": "MAIL-08", "outcome": "Reconcile external changes, UIDVALIDITY and cold cache", "tests": ["external_expunge_prunes_the_local_row", "external_flag_changes_reconcile_locally", "uidvalidity_change_clears_the_cached_folder", "cold_sync_from_an_empty_profile_sees_server_state", "idle_pushes_folder_updates_while_watched"] },
+    { "id": "MAIL-09", "outcome": "Keep accounts and paging independent; expose partial failure", "tests": ["unified_inbox_merges_and_writes_across_accounts", "unified_mark-all-read_reports_a_partial_failure", "unified_cursors_advance_each_account_independently"] },
+    { "id": "MAIL-10", "outcome": "Decode MIME text, alternatives and nested attachments", "tests": ["encoded_subject_and_quoted-printable_body_decode", "multipart_alternative_keeps_both_text_and_html", "nested_multipart_keeps_inline_and_downloadable_attachments"] },
+    { "id": "MAIL-11", "outcome": "Reject invalid credentials and recover interrupted connections", "tests": ["connect_rejects_bad_credentials", "sync_recovers_after_a_server_restart", "flag_writes_recover_from_a_stale_pooled_connection"] },
+    { "id": "MAIL-12", "outcome": "Suggest contacts from observed mail history", "tests": ["contacts_suggest_from_history"] }
+  ],
+  "liveProviders": [
+    { "id": "generic-imap-smtp", "status": "not-tested", "reason": "Dedicated external accounts, TLS/auth and recipient authorization required; maddy is not provider certification." },
+    { "id": "gmail", "status": "not-tested", "reason": "Dedicated account, application-owned OAuth or authorized app password, scopes and delivery observations required." },
+    { "id": "google-workspace", "status": "not-tested", "reason": "Tenant and dedicated accounts required; Gmail consumer evidence cannot substitute Workspace policy validation." },
+    { "id": "microsoft-365-graph", "status": "not-tested", "reason": "Authorized tenant and delegated read-only scopes required. Sending, remote drafts, mutations and attachments are unsupported in the approved current slice." }
+  ]
+}
