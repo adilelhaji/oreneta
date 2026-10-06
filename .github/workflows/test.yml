@@ -35,6 +35,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify native input ABI without sending input
+        shell: pwsh
+        run: ./scripts/test-windows-startup.ps1 -ValidateInputLayout
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

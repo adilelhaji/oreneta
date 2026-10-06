@@ -4,6 +4,16 @@ const fs = require('node:fs')
 const path = require('node:path')
 const source = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/windows-validation.yml'), 'utf8')
 const native = fs.readFileSync(path.resolve(__dirname, '../test-windows-startup.ps1'), 'utf8')
+const ci = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/test.yml'), 'utf8')
+
+test('Windows CI checks the input ABI before packaging without desktop input', () => {
+  const windows = ci.split('  go-windows:')[1].split('  rust:')[0]
+  assert.match(windows, /test-windows-startup.ps1 -ValidateInputLayout/)
+  const layoutOnly = native.indexOf('if ($ValidateInputLayout) {')
+  const startup = native.indexOf('$executablePath =')
+  assert.ok(layoutOnly > 0 && startup > layoutOnly)
+  assert.match(native.slice(layoutOnly, startup), /return/)
+})
 
 test('Windows validation is explicit, read-only and never publishes', () => {
   assert.match(source, /on:\r?\n  workflow_dispatch:/)
