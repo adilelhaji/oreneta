@@ -1,32 +1,53 @@
+[CmdletBinding(DefaultParameterSetName = 'Startup')]
 param(
-    [Parameter(Mandatory = $true)][string]$Executable,
-    [Parameter(Mandatory = $true)][string]$OutputDirectory,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Startup')][string]$Executable,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Startup')][string]$OutputDirectory,
     [switch]$RequireGraph,
-    [switch]$VerifyZoom
+    [switch]$VerifyZoom,
+    [Parameter(Mandatory = $true, ParameterSetName = 'InputLayout')][switch]$ValidateInputLayout
 )
 
 # Native UI verification for the CI-built production executable. Wails disables
 # external WebView2 debugger overrides; use Windows accessibility instead.
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName UIAutomationClient
-Add-Type -AssemblyName UIAutomationTypes
-if ($VerifyZoom) {
+if ($VerifyZoom -or $ValidateInputLayout) {
     Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public static class OrenetaNativeInput {
     [StructLayout(LayoutKind.Sequential)] private struct Input { public uint type; public InputUnion data; }
-    [StructLayout(LayoutKind.Explicit)] private struct InputUnion { [FieldOffset(0)] public KeyboardInput keyboard; }
+    // INPUT includes the largest union member even when sending keyboard input.
+    // A keyboard-only union is too short (32 instead of 40 bytes on Win64).
+    [StructLayout(LayoutKind.Explicit)] private struct InputUnion {
+        [FieldOffset(0)] public KeyboardInput keyboard;
+        [FieldOffset(0)] public MouseInput mouse;
+        [FieldOffset(0)] public HardwareInput hardware;
+    }
     [StructLayout(LayoutKind.Sequential)] private struct KeyboardInput { public ushort virtualKey; public ushort scanCode; public uint flags; public uint time; public IntPtr extraInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct MouseInput { public int dx; public int dy; public uint mouseData; public uint flags; public uint time; public UIntPtr extraInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct HardwareInput { public uint message; public ushort paramLow; public ushort paramHigh; }
+    public static int InputSize { get { return Marshal.SizeOf(typeof(Input)); } }
+    public static int DataOffset { get { return Marshal.OffsetOf(typeof(Input), "data").ToInt32(); } }
     [DllImport("user32.dll")] private static extern uint SendInput(uint count, Input[] inputs, int size);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    private static Input Key(ushort key, uint flags) => new Input { type = 1, data = new InputUnion { keyboard = new KeyboardInput { virtualKey = key, scanCode = 0, flags = flags, time = 0, extraInfo = IntPtr.Zero } } };
+    private static Input Key(ushort key, uint flags) { return new Input { type = 1, data = new InputUnion { keyboard = new KeyboardInput { virtualKey = key, scanCode = 0, flags = flags, time = 0, extraInfo = IntPtr.Zero } } }; }
     public static bool SendZoomReset() { return SendInput(4, new[] { Key(0x11, 0), Key(0x30, 0), Key(0x30, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 4; }
     public static bool SendZoomIn() { return SendInput(6, new[] { Key(0x11, 0), Key(0x10, 0), Key(0xBB, 0), Key(0xBB, 2), Key(0x10, 2), Key(0x11, 2) }, Marshal.SizeOf(typeof(Input))) == 6; }
 }
 "@
+    $expectedSize = if ([IntPtr]::Size -eq 8) { 40 } else { 28 }
+    $expectedOffset = if ([IntPtr]::Size -eq 8) { 8 } else { 4 }
+    if ([OrenetaNativeInput]::InputSize -ne $expectedSize -or [OrenetaNativeInput]::DataOffset -ne $expectedOffset) {
+        throw "Invalid Win32 INPUT layout: size=$([OrenetaNativeInput]::InputSize), offset=$([OrenetaNativeInput]::DataOffset)"
+    }
 }
+if ($ValidateInputLayout) {
+    Write-Output "PASS Win32 INPUT layout: size=$expectedSize, union offset=$expectedOffset (no input sent)"
+    return
+}
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
 $executablePath = (Resolve-Path -LiteralPath $Executable).Path
 $profile = Join-Path ([IO.Path]::GetTempPath()) ('oreneta-native-startup-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $profile, $OutputDirectory -Force | Out-Null

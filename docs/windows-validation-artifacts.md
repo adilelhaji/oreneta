@@ -29,3 +29,12 @@ read-only permissions, locked builds, native-before-artifact ordering,
 failure evidence and absence of publication. CI plus the dispatched native
 build are separate required evidence; a workflow definition alone is not a
 validated executable.
+
+The 2026-10-06 candidate (run 37426555798) rendered onboarding and started the
+embedded engine but failed the zoom check before sending Ctrl+0. Its C# INPUT
+union omitted MOUSEINPUT, producing a 32-byte structure instead of Win64's
+40-byte ABI. Keep all three Win32 union members. Main Windows CI runs
+`scripts/test-windows-startup.ps1 -ValidateInputLayout` to assert the marshalled
+size and union offset without launching an app or sending input. The packaged
+startup/restart and actual zoom checks remain mandatory.
+See Microsoft's [INPUT definition](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-input).
