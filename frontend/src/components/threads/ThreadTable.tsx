@@ -79,14 +79,14 @@ export function ThreadTable({
   }
 
   return (
-    <table style={{ minWidth: minimumWidth }} className="w-full table-fixed border-collapse text-ui">
+    <table style={{ minWidth: minimumWidth }} className="mailbox-table w-full table-fixed border-collapse text-ui">
       <colgroup>
         {onToggleSelect && <col style={{ width: 32 }} />}
         {columns.map((column) => (
           <col key={column.key} style={{ width: column.width }} className={column.className} />
         ))}
       </colgroup>
-      <thead className="sticky top-0 z-10 bg-chats">
+      <thead className="sticky top-0 z-10 bg-header">
         <tr>
           {onToggleSelect && (
             <th scope="col" className="w-8 border-b border-border">
@@ -146,9 +146,16 @@ export function ThreadTable({
               onContextMenu={(event) => onContextMenu(thread, event)}
               data-opened={active || undefined}
               data-bulk-selected={bulkSelected || undefined}
+              data-unread={thread.unread || undefined}
               className={clsx(
-                'cursor-pointer border-b border-border/50 transition-colors',
-                bulkSelected ? 'bg-accent/15' : active ? 'bg-active' : 'hover:bg-hover',
+                'h-9 cursor-pointer border-b border-border/50 transition-colors duration-120',
+                bulkSelected
+                  ? 'bg-accent/15'
+                  : active
+                    ? 'bg-active'
+                    : thread.unread
+                      ? 'bg-accent/[0.04] hover:bg-hover'
+                      : 'hover:bg-hover',
               )}
             >
               {onToggleSelect && (
@@ -187,12 +194,17 @@ export function ThreadTable({
                         event.stopPropagation()
                         onSelect(thread, event)
                       }}
-                      className={clsx(
-                        'flex min-h-8 w-full min-w-0 items-center gap-1 border-l-2 px-2 py-1.5 text-left cursor-pointer focus-visible:-outline-offset-2',
-                        active ? 'border-l-accent' : 'border-l-transparent',
-                      )}
+                      className="flex min-h-9 w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left cursor-pointer focus-visible:-outline-offset-2"
                     >
                       {thread.unread && <span className="sr-only">{t('common.unread')}: </span>}
+                      <span
+                        aria-hidden="true"
+                        data-unread-marker
+                        className={clsx(
+                          'h-1.5 w-1.5 shrink-0 rounded-full',
+                          thread.unread ? 'bg-accent' : 'bg-transparent',
+                        )}
+                      />
                       {thread.priority && (
                         <Sparkle size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-accent" />
                       )}
