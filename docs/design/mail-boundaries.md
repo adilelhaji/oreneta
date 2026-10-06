@@ -39,7 +39,12 @@ Wails disables browser keyboard accelerators, including Ctrl+plus/minus/zero.
 Those shortcuts remain unsupported ([#181](https://github.com/adilelhaji/oreneta/issues/181));
 CSS zoom is not substituted for native zoom.
 The validation uses the supported Ctrl+wheel gesture, verifies real growth,
-reduction and restoration, and repeats after restart. Each launch explicitly
+keyboard reachability through vertical scrolling, reduction and restoration,
+and repeats after restart. It advances focus once and returns to the email field
+before requiring its full bounds inside the window. High zoom need not fit the
+entire onboarding form above the fold; a clipped or unreachable editor still
+fails. Browser coverage also checks keyboard reachability at 410x280 CSS pixels.
+Each launch explicitly
 starts at 100%. The keyboard shortcut gap remains separate from installation
 acceptance, as do reader/composer and assistive-technology checks.
 See [WebView2 zoom](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2settings#get_iszoomcontrolenabled)
