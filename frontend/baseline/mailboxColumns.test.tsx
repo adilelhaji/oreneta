@@ -130,8 +130,8 @@ describe('mailbox columns integration', () => {
     )
     const opened = view.container.querySelector('[data-opened="true"]')!
     expect(opened.getAttribute('data-bulk-selected')).toBe('true')
-    expect(opened.querySelector('button[aria-current="true"]')?.classList.contains('border-l-accent')).toBe(true)
-    expect(view.getByRole('button', { name: /Another conversation/ }).classList.contains('border-l-accent')).toBe(false)
+    expect(opened.querySelector('button[aria-current="true"]')).not.toBeNull()
+    expect(view.getByRole('button', { name: /Another conversation/ }).closest('tr')?.hasAttribute('data-opened')).toBe(false)
     expect(view.queryByRole('columnheader', { name: 'From' })).toBeNull()
   })
 })

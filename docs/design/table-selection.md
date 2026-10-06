@@ -17,6 +17,9 @@ existing bulk operation contracts.
 - A left accent line identifies the open conversation, bold text identifies unread
   mail, checkboxes and tint identify bulk selection, and the focus outline identifies
   the keyboard target. These states can coexist. Rows retain table semantics.
+  The [visual hierarchy refinement](mailbox-visual-hierarchy.md) adds a reserved
+  unread dot, 36px row rhythm and moves the opened edge to the start of the row,
+  including when columns are reordered.
 - The compact table gives dates 80px and sender 27%; subject text takes the rest.
   Preview text no longer competes with the subject in the same line. Subject and
   sender tooltips preserve their full text, with at most one visible label and the
