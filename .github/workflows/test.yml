@@ -131,6 +131,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -147,10 +150,27 @@ jobs:
         run: mkdir -p frontend/dist && touch frontend/dist/placeholder
       - run: docker pull foxcpp/maddy:0.8
       - run: cargo build --manifest-path meron-core/Cargo.toml
-      - run: go test -tags 'integration webkit2_41' -v -timeout 10m .
+      - name: Run isolated mail flows with machine-readable results
+        run: |
+          mkdir -p integration-results
+          go test -tags 'integration webkit2_41' -json -count=1 -timeout 10m . > integration-results/events.jsonl
         env:
           # No Secret Service on CI runners; the sidecar's keyring no-op mode.
           MERON_KEYRING: 'off'
+      - name: Summarize isolated mail acceptance
+        if: always()
+        env:
+          EVIDENCE_SHA: ${{ github.sha }}
+          EVIDENCE_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVIDENCE_ATTEMPT: ${{ github.run_attempt }}
+        run: node scripts/ci/provider-acceptance.cjs integration-results/events.jsonl integration-results/report.json "$EVIDENCE_SHA" "$EVIDENCE_RUN" "$EVIDENCE_ATTEMPT"
+      - name: Upload isolated mail acceptance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-mail-acceptance-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: integration-results/report.json
+          if-no-files-found: error
       - name: Repeat IDLE readiness and push acceptance
         run: go test -tags 'integration webkit2_41' -run 'TestIntegrationMailFlow/idle_pushes_folder_updates_while_watched' -count=3 -timeout 5m .
         env:
