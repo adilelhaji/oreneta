@@ -47,6 +47,7 @@ type = owner_only
 type radicaleServer struct {
 	port      int
 	container string
+	stopped   bool
 }
 
 // startRadicale launches the container and waits until it answers an
@@ -57,15 +58,7 @@ func startRadicale(t *testing.T) *radicaleServer {
 
 	root := t.TempDir()
 	configDir := filepath.Join(root, "config")
-	dataDir := filepath.Join(root, "data")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// The container runs as its own unprivileged user and must write here.
-	if err := os.MkdirAll(dataDir, 0o777); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(dataDir, 0o777); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(configDir, "config"), []byte(radicaleConf), 0o644); err != nil {
@@ -77,20 +70,25 @@ func startRadicale(t *testing.T) *radicaleServer {
 	}
 
 	server := &radicaleServer{port: freePort(t)}
+	// Storage lives in an anonymous volume the image's entrypoint hands to
+	// its own user, removed with the container. A bind mount would leave
+	// files owned by that user in the test's temporary directory, which the
+	// test process cannot delete on a runner where it is not root.
 	server.container = runCmd(t, docker, "run", "-d", "--rm",
 		"-v", configDir+":/config:ro,Z",
-		"-v", dataDir+":/data:Z",
+		"-v", "/data",
+		"-e", "TAKE_FILE_OWNERSHIP=true",
 		"-p", fmt.Sprintf("127.0.0.1:%d:5232", server.port),
 		radicaleImage)
 	t.Cleanup(func() {
+		if server.stopped {
+			return
+		}
 		logs, err := exec.Command(docker, "logs", server.container).CombinedOutput()
 		if err == nil {
 			t.Logf("--- RADICALE CONTAINER LOGS ---\n%s\n--- END RADICALE LOGS ---", string(logs))
 		}
-		out, err := exec.Command(docker, "stop", server.container).CombinedOutput()
-		if err != nil {
-			t.Logf("docker stop %s: %v\n%s", server.container, err, out)
-		}
+		server.stop(t)
 	})
 
 	deadline := time.Now().Add(30 * time.Second)
@@ -110,6 +108,10 @@ func startRadicale(t *testing.T) *radicaleServer {
 // server that is unreachable for a while.
 func (s *radicaleServer) stop(t *testing.T) {
 	t.Helper()
+	if s.stopped {
+		return
+	}
+	s.stopped = true
 	runCmd(t, dockerBin(t), "stop", "-t", "2", s.container)
 }
 
