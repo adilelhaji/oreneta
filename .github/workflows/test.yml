@@ -194,6 +194,30 @@ jobs:
         env:
           # No Secret Service on CI runners; the sidecar's keyring no-op mode.
           MERON_KEYRING: 'off'
+      # The raw events stay on the runner by design (see provider-acceptance.md);
+      # what a failing test printed is shown here, in the job log, so a red job
+      # can be diagnosed without re-running it blind.
+      - name: Show failing integration tests
+        if: failure()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const output = new Map();
+            const failed = [];
+            for (const line of fs.readFileSync("integration-results/events.jsonl", "utf8").split("\n")) {
+              if (!line.trim()) continue;
+              let event; try { event = JSON.parse(line); } catch { continue; }
+              const key = event.Test || "(package)";
+              if (event.Action === "output") output.set(key, (output.get(key) || "") + event.Output);
+              if (event.Action === "fail" || event.Action === "build-fail") failed.push(key);
+            }
+            if (failed.length === 0) console.log("no failing test recorded; see the step above for the process error");
+            for (const name of failed) {
+              console.log("::group::FAIL " + name);
+              console.log(output.get(name) || "(no output)");
+              console.log("::endgroup::");
+            }
+          '
       - name: Summarize isolated mail acceptance
         if: always()
         env:
