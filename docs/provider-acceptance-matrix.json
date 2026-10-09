@@ -14,7 +14,8 @@
     { "id": "MAIL-09", "outcome": "Keep accounts and paging independent; expose partial failure", "tests": ["unified_inbox_merges_and_writes_across_accounts", "unified_mark-all-read_reports_a_partial_failure", "unified_cursors_advance_each_account_independently"] },
     { "id": "MAIL-10", "outcome": "Decode MIME text, alternatives and nested attachments", "tests": ["encoded_subject_and_quoted-printable_body_decode", "multipart_alternative_keeps_both_text_and_html", "nested_multipart_keeps_inline_and_downloadable_attachments"] },
     { "id": "MAIL-11", "outcome": "Reject invalid credentials and recover interrupted connections", "tests": ["connect_rejects_bad_credentials", "sync_recovers_after_a_server_restart", "flag_writes_recover_from_a_stale_pooled_connection"] },
-    { "id": "MAIL-12", "outcome": "Suggest contacts from observed mail history", "tests": ["contacts_suggest_from_history"] }
+    { "id": "MAIL-12", "outcome": "Suggest contacts from observed mail history", "tests": ["contacts_suggest_from_history"] },
+    { "id": "MAIL-13", "outcome": "Sweep acts on the reviewed set only, once, with an item-by-item outcome", "tests": ["sweep_moves_only_the_reviewed_messages_and_only_once"] }
   ],
   "liveProviders": [
     { "id": "generic-imap-smtp", "status": "not-tested", "reason": "Dedicated external accounts, TLS/auth and recipient authorization required; maddy is not provider certification." },

@@ -71,12 +71,19 @@ export function SweepDialog({
             leftIcon={Trash2}
             disabled={busy || count === 0}
             onClick={() => {
+              if (!preview || busy) return
+              // Busy until the dialog closes: the preview is single-use, so
+              // a second click could only be refused, and the button says
+              // so by not being there to click.
               setBusy(true)
-              void sweep({ accountId, folder, from: sender, keepNewest })
+              void sweep({ accountId, reviewId: preview.reviewId })
                 .then(onClose)
                 .catch((error) => {
                   showToast(error instanceof Error ? error.message : t('sweep.failed'), 'error')
-                  setBusy(false)
+                  // The review is spent either way; what is shown is no
+                  // longer what would move, so the dialog closes and a fresh
+                  // preview is one click away.
+                  onClose()
                 })
             }}
           >
@@ -111,7 +118,7 @@ export function SweepDialog({
           {/* Named, not counted. The reader is about to move these and should
               see which they are before it happens. */}
           <Notice tone="warning" title={t('sweep.willMove', { count })}>
-            {t('sweep.recount')}
+            {t('sweep.reviewed')}
           </Notice>
           <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-control border border-border bg-raised px-3 py-2">
             {preview.messages.map((message) => (

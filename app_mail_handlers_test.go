@@ -446,6 +446,37 @@ func TestOutgoingAttemptsAndResolveMapToTheCore(t *testing.T) {
 	}
 }
 
+// #27: confirming a sweep hands the core the review it previewed, nothing
+// recomputed; the core's item-by-item answer comes back whole.
+func TestMailSweepConfirmsTheReviewedPreview(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"ok": false, "swept": 2, "unresolved": []any{float64(7)}, "folder": "Trash", "complete": false, "error": "move failed",
+	}})
+
+	out, err := app.mailSweep(map[string]any{"account_id": "acc", "review_id": "sweep-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(writer.calls) != 1 {
+		t.Fatalf("sidecar calls = %#v, want one sweepExecute and no preview", writer.calls)
+	}
+	assertCall(t, writer.calls[0], "mail.sweepExecute", map[string]any{"account": "acc", "review_id": "sweep-1"})
+	result := out.(map[string]any)
+	if result["complete"] != false || result["swept"] != 2 {
+		t.Fatalf("sweep result = %#v, want the partial outcome handed through", result)
+	}
+}
+
+func TestMailSweepRefusesToActWithoutAReview(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t)
+	if _, err := app.mailSweep(map[string]any{"account_id": "acc", "from": "x@example.com"}); err == nil {
+		t.Fatal("a sweep without a review id should be refused")
+	}
+	if len(writer.calls) != 0 {
+		t.Fatalf("nothing should reach the core: %#v", writer.calls)
+	}
+}
+
 func TestEmlFilenameSanitizesSubject(t *testing.T) {
 	cases := map[string]string{
 		"Quarterly report":     "Quarterly report.eml",

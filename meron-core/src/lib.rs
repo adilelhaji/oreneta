@@ -36,6 +36,7 @@ mod secrets_portal;
 pub mod smtp;
 pub mod spam;
 pub mod store;
+pub mod sweep_review;
 pub mod templates;
 pub mod thread_list;
 pub mod thread_read;

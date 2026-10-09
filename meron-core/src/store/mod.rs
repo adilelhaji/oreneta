@@ -4633,6 +4633,27 @@ pub fn delete_quick_reply_drafts_in_thread(
     Ok(deleted)
 }
 
+/// Which of `uids` the cache still holds in `folder`, in the order given.
+/// What a confirmed sweep checks after its move, to say item by item what
+/// went and what did not.
+pub fn existing_message_uids(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    uids: &[u32],
+) -> Result<Vec<u32>> {
+    let mut stmt = conn.prepare(
+        "SELECT 1 FROM messages WHERE account = ?1 AND folder = ?2 AND uid = ?3 LIMIT 1",
+    )?;
+    let mut present = Vec::new();
+    for uid in uids {
+        if stmt.exists(params![account, folder, *uid])? {
+            present.push(*uid);
+        }
+    }
+    Ok(present)
+}
+
 pub fn delete_messages_by_uid(
     conn: &Connection,
     account: &str,

@@ -28,6 +28,7 @@ use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::store::outgoing;
+use meron_core::sweep_review;
 use meron_core::{
     assistant, backup, cached_conversations, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
     search, secrets, smtp, spam, store, thread_list, thread_read, unified,
@@ -959,6 +960,13 @@ fn spawn_calendar_sync(
 /// not to pay for it.
 /// Now, as epoch seconds. A clock that cannot be read is treated as the epoch,
 /// which shows as "never synced" rather than as a plausible wrong time.
+/// Sweeps previewed and not yet confirmed. Process-wide: a review is a thing
+/// the interface was shown, not a thing the store knows.
+fn sweep_reviews() -> &'static sweep_review::Registry {
+    static REVIEWS: std::sync::OnceLock<sweep_review::Registry> = std::sync::OnceLock::new();
+    REVIEWS.get_or_init(sweep_review::Registry::new)
+}
+
 fn now_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1836,14 +1844,29 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
             let from_addr = req_str(p, "from")?;
             let keep = p.get("keep_newest").and_then(Value::as_u64).unwrap_or(1) as u32;
-            let candidates = {
+            let (candidates, uidvalidity) = {
                 let db = engine.db.lock().unwrap();
-                store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?
+                (
+                    store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?,
+                    store::get_folder_state(&db, &account, &folder)?.map(|(validity, _)| validity).unwrap_or(0),
+                )
             };
+            // The list is what gets confirmed, not the question that produced
+            // it: the review names these messages, in this folder as it is now,
+            // and confirming it later acts on them and nothing that arrived since.
+            let review_id = sweep_reviews().issue(
+                &account,
+                &folder,
+                uidvalidity,
+                candidates.iter().map(|candidate| candidate.uid).collect(),
+                now_seconds(),
+            );
             Ok(json!({
                 "from": from_addr,
                 "folder": folder,
                 "keepNewest": keep,
+                "reviewId": review_id,
+                "uidvalidity": uidvalidity,
                 "messages": candidates
                     .iter()
                     .map(|candidate| json!({
@@ -1852,6 +1875,78 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "date": candidate.date,
                     }))
                     .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Does the sweep that was previewed: those messages, once, and only
+        // while the folder is still the folder they were previewed in.
+        //
+        // The answer is item by item. A move that fails part-way, or a
+        // message another client took first, leaves reviewed messages behind,
+        // and the reader is told which rather than shown a count that says
+        // everything went.
+        "mail.sweepExecute" => {
+            let account = req_str(p, "account")?;
+            let review_id = req_str(p, "review_id")?;
+            let review = sweep_reviews().take(&review_id, &account, now_seconds())?;
+            {
+                let db = engine.db.lock().unwrap();
+                let current = store::get_folder_state(&db, &account, &review.folder)?.map(|(validity, _)| validity);
+                sweep_review::check_folder_unchanged(&review, current)?;
+            }
+            if review.uids.is_empty() {
+                return Ok(json!({
+                    "ok": true,
+                    "swept": 0,
+                    "unresolved": [],
+                    "folder": review.folder,
+                    "complete": true,
+                }));
+            }
+            // The trash as the cache knows it, or as the server names it when
+            // the folder list has not been read yet — the same lookup a
+            // delete makes, so a sweep never goes to a different place.
+            let cached_trash = store::folder_for_role(&engine.db.lock().unwrap(), &account, "trash")?;
+            let target = match cached_trash {
+                Some(trash) => trash,
+                None => engine
+                    .with_write_session(&account, |session| {
+                        Box::pin(async move {
+                            let trash = session.find_trash_folder().await?;
+                            anyhow::Ok(trash)
+                        })
+                    })
+                    .await?
+                    .context("this account has no trash folder")?,
+            };
+            // The move itself is the ordinary one, with the reviewed UIDs and
+            // nothing recomputed; its own failure is reported after the
+            // per-item check below, which is what the reader needs to see.
+            let move_request = Request {
+                id: req.id,
+                method: "messages.move".to_string(),
+                params: json!({
+                    "account": account,
+                    "folder": review.folder,
+                    "target_folder": target,
+                    "uids": review.uids,
+                }),
+            };
+            let moved = Box::pin(dispatch(engine, &move_request, out)).await;
+            let remaining = {
+                let db = engine.db.lock().unwrap();
+                store::existing_message_uids(&db, &account, &review.folder, &review.uids)?
+            };
+            let outcome = sweep_review::SweepOutcome::from_remaining(&review.uids, &remaining);
+            let error = moved.err().map(|err| format!("{err:#}"));
+            Ok(json!({
+                "ok": error.is_none(),
+                "swept": outcome.swept.len(),
+                "sweptUids": outcome.swept,
+                "unresolved": outcome.unresolved,
+                "folder": target,
+                "complete": outcome.complete() && error.is_none(),
+                "error": error,
             }))
         }
 
