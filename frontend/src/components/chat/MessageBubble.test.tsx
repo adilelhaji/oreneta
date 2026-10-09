@@ -61,6 +61,21 @@ describe('MessageBubble details', () => {
     expect(openDetails(sent)?.classList.contains('max-w-full')).toBe(false)
   })
 
+  it('a send of unknown outcome offers the waiting list, not a retry', () => {
+    ui$.scheduledSendsOpen.set(false)
+    const view = render(
+      <MessageBubble
+        message={{ ...sent, id: 'sent-1', send_status: 'uncertain' }}
+        galleryOffset={0}
+        onOpenContextMenu={() => undefined}
+      />,
+    )
+    expect(view.queryByTitle('Failed to send - click to retry')).toBeNull()
+    fireEvent.click(view.getByTitle('Outcome unknown · open Waiting to go'))
+    expect(ui$.scheduledSendsOpen.peek()).toBe(true)
+    ui$.scheduledSendsOpen.set(false)
+  })
+
   it('constrains an outgoing details popup to an html bubble, which is a fixed share of the pane', () => {
     mail$.threads.set([sent])
     ui$.selectedThread.set('thread-1')

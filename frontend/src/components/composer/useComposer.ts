@@ -10,6 +10,7 @@ import {
   compose$,
   newDraftMessageId,
   sendComposed,
+  allocateMessageIdentity,
   appendSentMessage,
   saveComposedDraft,
   updateComposeDraft,
@@ -614,8 +615,13 @@ export function useComposer(tabId: string) {
         finishClosingMessageTab(tabId)
         return
       }
+      // One identity per tab, allocated the first time Send is pressed and
+      // kept after an unanswered send: pressing Send again then names the
+      // same message, which is how the core knows not to deliver it twice.
+      session.messageId ??= await allocateMessageIdentity(current.accountId, false)
       await sendComposed({
         ...message,
+        messageId: session.messageId,
         protection:
           current.pgpSign || current.pgpEncrypt
             ? { sign: current.pgpSign, encrypt: current.pgpEncrypt, passphrase: pgpPassphrase || undefined }

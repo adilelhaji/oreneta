@@ -77,6 +77,19 @@ func assertNoMessageInFolder(t *testing.T, sidecar *Sidecar, account, folder str
 	t.Fatalf("message still present in %s %s after deadline", account, folder)
 }
 
+// countSubject counts the messages in a messages.recent result with the given
+// subject, so a test can tell one delivered copy from two.
+func countSubject(result map[string]any, subject string) int {
+	rows, _ := result["messages"].([]any)
+	n := 0
+	for _, row := range rows {
+		if message, ok := row.(map[string]any); ok && str(message, "subject") == subject {
+			n++
+		}
+	}
+	return n
+}
+
 func str(message map[string]any, key string) string {
 	value, _ := message[key].(string)
 	return value
@@ -1813,6 +1826,78 @@ func TestIntegrationMailFlow(t *testing.T) {
 		}
 		if body := str(message, "body"); !strings.Contains(body, "move me to the integration folder") {
 			t.Fatalf("cold-synced body = %q", body)
+		}
+	})
+
+	// #29: the same message handed to the core twice goes once. A second
+	// `send` with the Message-ID of one the server already took is refused
+	// as already attempted, not sent again on a hunch; only a deliberate
+	// resend goes, and then the recipient does get a second copy.
+	t.Run("a message already accepted is not sent again without saying so", func(t *testing.T) {
+		twiceSubject := "Oreneta integration once " + nonce
+		messageID := fmt.Sprintf("itest-once-%s@maddy.test", nonce)
+		params := map[string]any{
+			"account":    "alice",
+			"to":         "bob@maddy.test",
+			"subject":    twiceSubject,
+			"body":       "should arrive exactly once unless resent on purpose",
+			"message_id": messageID,
+		}
+		first := callMap(t, sidecar, "send", params)
+		if first["ok"] != true || (first["outcome"] != "archived" && first["outcome"] != "accepted") {
+			t.Fatalf("first send = %#v, want an accepted outcome", first)
+		}
+		if first["attempt_id"] != messageID {
+			t.Fatalf("attempt_id = %#v, want the Message-ID", first["attempt_id"])
+		}
+		pollInbox(t, sidecar, "bob", func(m map[string]any) bool {
+			return str(m, "subject") == twiceSubject
+		})
+
+		second := callMap(t, sidecar, "send", params)
+		if second["ok"] != false || second["outcome"] != "already_attempted" {
+			t.Fatalf("second send = %#v, want already_attempted", second)
+		}
+		if state := second["state"]; state != "archived" && state != "accepted" {
+			t.Fatalf("second send state = %#v, want the earlier attempt's accepted state", state)
+		}
+		// Settled, so nothing is listed for a person to decide about it.
+		listed := callMap(t, sidecar, "mail.outgoingAttempts", map[string]any{"account": "alice"})
+		for _, row := range listed["attempts"].([]any) {
+			if str(row.(map[string]any), "id") == messageID {
+				t.Fatalf("an accepted send is listed as unsettled: %#v", row)
+			}
+		}
+		// Still exactly one copy at bob's.
+		time.Sleep(time.Second)
+		recent := callMap(t, sidecar, "messages.recent", map[string]any{
+			"account": "bob", "folder": "INBOX", "refresh": true, "limit": 50,
+		})
+		if n := countSubject(recent, twiceSubject); n != 1 {
+			t.Fatalf("bob has %d copies after the refused second send, want 1", n)
+		}
+
+		resend := map[string]any{}
+		for key, value := range params {
+			resend[key] = value
+		}
+		resend["resend"] = true
+		third := callMap(t, sidecar, "send", resend)
+		if third["ok"] != true {
+			t.Fatalf("deliberate resend = %#v, want accepted", third)
+		}
+		deadline := time.Now().Add(15 * time.Second)
+		for {
+			recent = callMap(t, sidecar, "messages.recent", map[string]any{
+				"account": "bob", "folder": "INBOX", "refresh": true, "limit": 50,
+			})
+			if countSubject(recent, twiceSubject) == 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("bob has %d copies after a deliberate resend, want 2", countSubject(recent, twiceSubject))
+			}
+			time.Sleep(500 * time.Millisecond)
 		}
 	})
 

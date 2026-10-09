@@ -6,8 +6,22 @@ import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { ui$, showToast } from './ui'
 import { accounts$, isSendableAccount, accountIdentities } from './accounts'
 import { mail$, getActiveThread, isDraftFolder, isInboxFolder, loadThread, discardSavedDraftCopy } from './mail'
-import { LOCAL_SEND_PREFIX, type PendingSend, setPendingSend, getPendingSend, discardPendingSend } from './pendingSends'
+import {
+  LOCAL_SEND_PREFIX,
+  type PendingSend,
+  setPendingSend,
+  getPendingSend,
+  discardPendingSend,
+  isLocalSendId,
+} from './pendingSends'
 import { queueSend, undoQueuedSend } from './sendQueue'
+import {
+  type SendResult,
+  isUnsettledOutcome,
+  onOutgoingAttemptSettled,
+  refreshOutgoingAttempts,
+  unsettledOutcomeMessage,
+} from './outgoingAttempts'
 import { htmlToText, resolveInlineCids } from '../lib/html'
 import { parseMailto } from '../lib/mailto'
 import { splitAddressList, bareAddr } from '../lib/address'
@@ -47,7 +61,7 @@ const COMPOSE_TABS_KEY = 'meron-compose-tabs'
  */
 export const newDraftMessageId = () => `local-draft-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
-async function allocateMessageIdentity(accountId: string, draft: boolean): Promise<string> {
+export async function allocateMessageIdentity(accountId: string, draft: boolean): Promise<string> {
   const result = await invoke<{ message_id: string }>('mail.allocateIdentity', { account_id: accountId, draft })
   if (!result.message_id) throw new Error('Core did not allocate a message identity')
   return result.message_id
@@ -1254,6 +1268,12 @@ export type ComposedMessage = {
   references?: string
   attachments: ComposerAttachment[]
   /**
+   * The Message-ID to send under, when the caller allocated one up front.
+   * The core names the send attempt by it, so a message sent again under
+   * the same id is recognised as the same message rather than a second one.
+   */
+  messageId?: string
+  /**
    * OpenPGP protection for an immediate send. Deliberately absent from a
    * scheduled one: a scheduled message sits in the store as plain fields
    * until its hour comes, and a passphrase has no business waiting there in
@@ -1264,8 +1284,31 @@ export type ComposedMessage = {
   protection?: { sign: boolean; encrypt: boolean; passphrase?: string }
 }
 
+/**
+ * A send the server took in full and never answered for, or one whose
+ * earlier try may already have gone. Not a failure: the message may be
+ * with the recipient, and the composer must not offer to send it again
+ * as if nothing had happened.
+ */
+export class UncertainSendError extends Error {
+  constructor(
+    message: string,
+    readonly attemptId: string,
+  ) {
+    super(message)
+    this.name = 'UncertainSendError'
+  }
+}
+
 export async function sendComposed(args: ComposedMessage) {
-  await invoke('mail.send', composedPayload(args))
+  const res = await invoke<SendResult>('mail.send', composedPayload(args))
+  if (isUnsettledOutcome(res)) {
+    // The attempt is in the core's list for the reader to settle; the
+    // composer stays open with its words, saying what it knows.
+    void refreshOutgoingAttempts()
+    throw new UncertainSendError(unsettledOutcomeMessage(res), res?.attempt_id ?? '')
+  }
+  if (res && res.ok === false) throw new Error(res.error || t('compose.toast.sendFailed'))
 }
 
 /// The bridge payload for a composed message.
@@ -1289,6 +1332,7 @@ export function composedPayload(args: ComposedMessage) {
     html,
     in_reply_to: args.inReplyTo ?? '',
     references: args.references ?? '',
+    ...(args.messageId ? { message_id: args.messageId } : {}),
     attachments: args.attachments.map((a) => ({
       filename: a.filename,
       mime: a.mime,
@@ -1764,7 +1808,11 @@ function setSendStatus(tempId: string, status: Message['send_status']) {
 // Fire the `mail.send` bridge call for a pending message and reconcile its
 // status. On success the payload is dropped; on failure it's kept so the user
 // can retry. Shared by the initial send and retrySend().
-async function dispatchSend(tempId: string) {
+//
+// A third answer is possible: the core may not know whether the message
+// went. Then the bubble says so and keeps its payload, but nothing here
+// retries it — only the reader, from the waiting list, decides that.
+async function dispatchSend(tempId: string, resend = false) {
   const payload = getPendingSend(tempId)
   if (!payload) return
   const guard = quickReplySendHydrationGuards.get(tempId)
@@ -1774,7 +1822,15 @@ async function dispatchSend(tempId: string) {
   }
   setSendStatus(tempId, 'sending')
   try {
-    await invoke('mail.send', payload)
+    const res = await invoke<SendResult>('mail.send', resend ? { ...payload, resend: true } : payload)
+    if (isUnsettledOutcome(res)) {
+      settleFailedQuickReplySendGuard(tempId)
+      setSendStatus(tempId, 'uncertain')
+      void refreshOutgoingAttempts()
+      showToast(unsettledOutcomeMessage(res), 'error')
+      return
+    }
+    if (res && res.ok === false) throw new Error(res.error || t('compose.toast.sendFailed'))
     discardPendingSend(tempId)
     setSendStatus(tempId, 'sent')
     void finishQuickReplySendLifecycle(tempId)
@@ -1822,7 +1878,42 @@ function settleFailedQuickReplySendGuard(tempId: string) {
 }
 
 // Re-attempt a previously failed send, triggered by clicking the failed bubble.
+//
+// Only a *failed* send: the server refused it or was never reached, so
+// trying again is safe. A send of unknown outcome is not retried from here
+// — the reader settles it from the waiting list, where the choice is put
+// plainly — and asking anyway is answered with nothing.
 export async function retrySend(messageId: string) {
   if (!getPendingSend(messageId)) return
+  const bubble = mail$.messages.peek().find((message) => message.id === messageId)
+  if (bubble?.send_status === 'uncertain') return
   await dispatchSend(messageId)
 }
+
+// Sends a bubble of unknown outcome again, on purpose. The reader has been
+// told the first try may have gone; this is them deciding anyway.
+export async function resendUncertainSend(messageId: string) {
+  const bubble = mail$.messages.peek().find((message) => message.id === messageId)
+  if (bubble?.send_status !== 'uncertain' || !getPendingSend(messageId)) return
+  await dispatchSend(messageId, true)
+}
+
+// The attempt a bubble of unknown outcome stands for, so the waiting list
+// and the bubble can be about the same thing: for an immediate send the core
+// names the attempt by the message's own Message-ID.
+export function uncertainSendAttemptId(messageId: string): string {
+  return getPendingSend(messageId)?.message_id ?? ''
+}
+
+// The waiting list settled an attempt — sent again and accepted, or marked
+// settled by the reader. The bubble drawn for it, if it is still on screen,
+// stops saying the outcome is unknown.
+onOutgoingAttemptSettled((attemptId) => {
+  for (const message of mail$.messages.peek()) {
+    if (!isLocalSendId(message.id) || message.send_status !== 'uncertain') continue
+    if (getPendingSend(message.id)?.message_id !== attemptId) continue
+    discardPendingSend(message.id)
+    setSendStatus(message.id, 'sent')
+    void finishQuickReplySendLifecycle(message.id)
+  }
+})

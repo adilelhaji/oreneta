@@ -2,9 +2,20 @@ import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
-import { AlertCircle, Check, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Star, Undo2 } from 'lucide-react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Star,
+  Undo2,
+} from 'lucide-react'
 
 import { openDraftCompose, openMessageTab, retrySend, undoSend } from '../../states/compose'
+import { ui$ } from '../../states/ui'
 import type { Message } from '../../types'
 import { formatFullTimestamp, formatMessageStamp } from './messageHelpers'
 import { AddressRow } from './AddressList'
@@ -142,6 +153,19 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
                 >
                   <AlertCircle size={14} strokeWidth={1.75} />
                   <span className="text-2xs font-semibold">{t('chat.retry')}</span>
+                </button>
+              ) : message.send_status === 'uncertain' ? (
+                // Handed over without an answer. Not offered as a retry: the
+                // waiting list puts the choice — send again, or settle — with
+                // what it could mean, which a one-word button cannot.
+                <button
+                  type="button"
+                  title={t('chat.outcomeUnknown')}
+                  onClick={() => ui$.scheduledSendsOpen.set(true)}
+                  className="flex items-center gap-0.5 text-warning hover:opacity-80 cursor-pointer"
+                >
+                  <AlertTriangle size={14} strokeWidth={1.75} />
+                  <span className="text-2xs font-semibold">{t('outgoing.title')}</span>
                 </button>
               ) : (
                 <Check size={14} className="text-accent opacity-90" strokeWidth={1.75} />

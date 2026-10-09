@@ -48,6 +48,7 @@ pub const DEFAULT_RSS_SYNC_INTERVAL_MINUTES: u64 = 60;
 mod accounts;
 mod settings;
 pub mod local_drafts;
+pub mod outgoing;
 
 pub use accounts::*;
 pub use settings::*;

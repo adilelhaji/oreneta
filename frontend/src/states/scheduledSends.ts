@@ -25,6 +25,9 @@ export type ScheduledSend = {
   lastError: string
   /** True once the core has stopped trying, so this is failed and not merely late. */
   gaveUp: boolean
+  /** True when it stopped because nobody knows whether the message went:
+   * the one failure "send now" must not paper over. */
+  uncertain?: boolean
 }
 
 export const scheduled$ = observable({
@@ -110,10 +113,24 @@ export async function cancelScheduledSend(id: string): Promise<Record<string, un
   return res?.message ?? null
 }
 
-/** Lets a scheduled message go now, rather than at its hour. */
-export async function sendScheduledNow(id: string) {
+/**
+ * Lets a scheduled message go now, rather than at its hour.
+ *
+ * `resend` is for a message whose earlier try may already have gone: the
+ * core will not send it again on its own, and only sends it now because
+ * the reader, told what it could mean, asked.
+ */
+export async function sendScheduledNow(id: string, resend = false) {
   try {
-    await invoke('mail.sendScheduledNow', { id })
+    const res = await invoke<{ ok?: boolean; outcome?: string; error?: string } | null>('mail.sendScheduledNow', {
+      id,
+      ...(resend ? { resend: true } : {}),
+    })
+    if (res && res.ok === false && res.outcome === 'uncertain') {
+      markScheduledSendFailed(id, res.error ?? '', true)
+      showToast(t('outgoing.toast.uncertain'), 'error')
+      return
+    }
     scheduled$.messages.set(scheduled$.messages.peek().filter((message) => message.id !== id))
     showToast(t('sendLater.toast.sent'), 'success')
   } catch (error) {
@@ -130,14 +147,17 @@ export function forgetScheduledSend(id: string) {
   scheduled$.messages.set(scheduled$.messages.peek().filter((message) => message.id !== id))
 }
 
-/** Records that the core has given up on a message, so the view can say so. */
-export function markScheduledSendFailed(id: string, error: string) {
+/** Records that the core has given up on a message, so the view can say so —
+ * and whether it gave up because the outcome is unknown rather than refused. */
+export function markScheduledSendFailed(id: string, error: string, uncertain = false) {
   scheduled$.messages.set(
-    scheduled$.messages.peek().map((message) =>
-      message.id === id
-        ? { ...message, gaveUp: true, lastError: error, attempts: message.attempts + 1 }
-        : message,
-    ),
+    scheduled$.messages
+      .peek()
+      .map((message) =>
+        message.id === id
+          ? { ...message, gaveUp: true, uncertain, lastError: error, attempts: message.attempts + 1 }
+          : message,
+      ),
   )
 }
 
@@ -181,15 +201,17 @@ export async function cancelAndReopen(id: string) {
     text: rich ? '' : (raw.body ?? ''),
     inReplyTo: raw.in_reply_to ?? '',
     references: raw.references ?? '',
-    attachments: (raw.attachments ?? []).map((file, index): ComposerAttachment => ({
-      id: `${id}-${index}`,
-      filename: file.filename ?? '',
-      mime: file.mime ?? 'application/octet-stream',
-      // The bytes are what was about to be sent; their length is the size.
-      size: Math.floor(((file.data ?? '').length * 3) / 4),
-      data: file.data ?? '',
-      inlineId: file.inline_id || undefined,
-    })),
+    attachments: (raw.attachments ?? []).map(
+      (file, index): ComposerAttachment => ({
+        id: `${id}-${index}`,
+        filename: file.filename ?? '',
+        mime: file.mime ?? 'application/octet-stream',
+        // The bytes are what was about to be sent; their length is the size.
+        size: Math.floor(((file.data ?? '').length * 3) / 4),
+        data: file.data ?? '',
+        inlineId: file.inline_id || undefined,
+      }),
+    ),
     // It already carries whatever signature it was written with, and a second
     // copy is not wanted.
     noSignature: true,

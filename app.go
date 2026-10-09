@@ -424,6 +424,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailCancelScheduledSend(payload)
 	case "mail.sendScheduledNow":
 		return a.mailSendScheduledNow(payload)
+	case "mail.outgoingAttempts":
+		return a.mailOutgoingAttempts(payload)
+	case "mail.resolveOutgoing":
+		return a.mailResolveOutgoing(payload)
 	case "mail.markStarred":
 		return a.markStarred(payload)
 	case "mail.markAllRead":

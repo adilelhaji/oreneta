@@ -25,7 +25,12 @@ import {
   sendReply,
   withoutHydratedQuickReplyDraft,
   undoSend,
+  retrySend,
+  resendUncertainSend,
+  sendComposed,
+  UncertainSendError,
 } from './compose'
+import { outgoing$, settleOutgoingAttempt } from './outgoingAttempts'
 import { accounts$ } from './accounts'
 import { settings$ } from './settings'
 import { ui$ } from './ui'
@@ -704,6 +709,128 @@ describe('quick reply draft sharing', () => {
     expect(compose$.composer.get()).toBe('')
     expect(compose$.quickReplyDraftId.get()).toBe('')
     expect(compose$.quickReplyDraftSaved.get()).toBe(false)
+  })
+
+  /// Acceptance for #29: an ambiguous outcome is persisted and is not
+  /// automatically retried as a confirmed rejection. The bubble says the
+  /// outcome is unknown, keeps what it would need to send again, and the
+  /// only way to send again is on purpose.
+  it('a send the server never answered for is neither sent nor failed, and is not retried on its own', async () => {
+    const thread = message({
+      id: 'root',
+      account_id: 'acc-1',
+      thread_id: 't-1',
+      folder_id: 'INBOX',
+      from_addr: 'them@example.com',
+      message_id: 'root@example.com',
+      date: 1000,
+    })
+    mail$.threads.set([thread])
+    mail$.messages.set([thread])
+    ui$.selectedThread.set('t-1')
+    compose$.composer.set('Did this go?')
+    settings$.signature.set('')
+    outgoing$.attempts.set([])
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+      calls.push({ command, payload })
+      if (command === 'mail.allocateIdentity') return { message_id: 'sent@example.com' }
+      if (command === 'mail.send') {
+        return payload.resend
+          ? { ok: true, outcome: 'archived', attempt_id: 'sent@example.com' }
+          : { ok: false, outcome: 'uncertain', attempt_id: 'sent@example.com', error: 'connection reset' }
+      }
+      if (command === 'mail.outgoingAttempts') return { attempts: [] }
+      return {}
+    }
+
+    await sendReply()
+
+    const bubble = () => mail$.messages.peek().find((m) => m.id.startsWith('sent-'))!
+    expect(bubble().send_status).toBe('uncertain')
+    expect(calls.filter((c) => c.command === 'mail.send')).toHaveLength(1)
+    expect(ui$.toastTone.peek()).toBe('error')
+
+    // Clicking retry, as on a failed bubble, does nothing: this is not failed.
+    await retrySend(bubble().id)
+    expect(calls.filter((c) => c.command === 'mail.send')).toHaveLength(1)
+    expect(bubble().send_status).toBe('uncertain')
+
+    // Sending again on purpose says so to the core, with the same message.
+    await resendUncertainSend(bubble().id)
+    const sends = calls.filter((c) => c.command === 'mail.send')
+    expect(sends).toHaveLength(2)
+    const second = sends[1].payload as { resend?: boolean; message_id?: string; body?: string }
+    expect(second.resend).toBe(true)
+    expect(second.message_id).toBe('sent@example.com')
+    expect(second.body).toBe('Did this go?')
+    expect(bubble().send_status).toBe('sent')
+  })
+
+  it('a bubble of unknown outcome is settled from the waiting list by the attempt it stands for', async () => {
+    const thread = message({
+      id: 'root',
+      account_id: 'acc-1',
+      thread_id: 't-1',
+      folder_id: 'INBOX',
+      from_addr: 'them@example.com',
+      message_id: 'root@example.com',
+      date: 1000,
+    })
+    mail$.threads.set([thread])
+    mail$.messages.set([thread])
+    ui$.selectedThread.set('t-1')
+    compose$.composer.set('Did this go?')
+    settings$.signature.set('')
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+      calls.push({ command, payload })
+      if (command === 'mail.allocateIdentity') return { message_id: 'sent@example.com' }
+      if (command === 'mail.send') return { ok: false, outcome: 'already_attempted', attempt_id: 'sent@example.com' }
+      if (command === 'mail.outgoingAttempts') return { attempts: [] }
+      return {}
+    }
+    await sendReply()
+    const bubble = () => mail$.messages.peek().find((m) => m.id.startsWith('sent-'))!
+    expect(bubble().send_status).toBe('uncertain')
+
+    // The reader marks it settled in the list; the bubble follows.
+    await settleOutgoingAttempt('sent@example.com')
+    expect(bubble().send_status).toBe('sent')
+    expect(calls.some((c) => c.command === 'mail.resolveOutgoing')).toBe(true)
+    // And nothing was sent again on anyone's behalf.
+    expect(calls.filter((c) => c.command === 'mail.send')).toHaveLength(1)
+  })
+
+  it('the full composer is told an unsettled outcome apart from a refusal', async () => {
+    const composed = {
+      accountId: 'acc-1',
+      to: 'bob@example.com',
+      subject: 'Hello',
+      rich: false,
+      content: 'hi',
+      attachments: [],
+    }
+    ;(window as any).go.main.App.Invoke = async (command: string) => {
+      calls.push({ command, payload: {} })
+      if (command === 'mail.send')
+        return { ok: false, outcome: 'uncertain', attempt_id: '<x@example.com>', error: 'reset' }
+      return { attempts: [] }
+    }
+    let caught: unknown
+    try {
+      await sendComposed(composed)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(UncertainSendError)
+    expect((caught as UncertainSendError).attemptId).toBe('<x@example.com>')
+    ;(window as any).go.main.App.Invoke = async (command: string) => {
+      calls.push({ command, payload: {} })
+      if (command === 'mail.send') return { ok: false, outcome: 'rejected', error: '550 no such user' }
+      return {}
+    }
+    await expect(sendComposed(composed)).rejects.toThrow('550 no such user')
+    ;(window as any).go.main.App.Invoke = async () => ({ ok: true, outcome: 'archived' })
+    await expect(sendComposed(composed)).resolves.toBeUndefined()
   })
 
   it('undoing a held send keeps one draft, not two', async () => {

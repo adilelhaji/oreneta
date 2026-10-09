@@ -2,9 +2,20 @@ import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import type { MouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
-import { AlertCircle, ChevronDown, ExternalLink, Loader2, MoreHorizontal, Paperclip, Star, Undo2 } from 'lucide-react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  ChevronDown,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Paperclip,
+  Star,
+  Undo2,
+} from 'lucide-react'
 
 import { openDraftCompose, openMessageTab, retrySend, undoSend } from '../../states/compose'
+import { ui$ } from '../../states/ui'
 import type { Message } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { AddressRow } from './AddressList'
@@ -110,6 +121,20 @@ export function MessageRow({
         >
           <AlertCircle size={14} strokeWidth={1.75} />
           <span className="text-2xs font-semibold">{t('chat.retry')}</span>
+        </button>
+      ) : message.send_status === 'uncertain' ? (
+        // Handed over without an answer: the waiting list has the choice.
+        <button
+          type="button"
+          title={t('chat.outcomeUnknown')}
+          onClick={(event) => {
+            event.stopPropagation()
+            ui$.scheduledSendsOpen.set(true)
+          }}
+          className="flex items-center gap-0.5 text-warning hover:opacity-80 cursor-pointer"
+        >
+          <AlertTriangle size={14} strokeWidth={1.75} />
+          <span className="text-2xs font-semibold">{t('outgoing.title')}</span>
         </button>
       ) : null
     ) : null

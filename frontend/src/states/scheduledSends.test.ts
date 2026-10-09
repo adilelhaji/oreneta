@@ -163,5 +163,35 @@ describe('messages written now to go later', () => {
     const [message] = scheduled$.messages.peek()
     expect(message.gaveUp).toBe(true)
     expect(message.lastError).toBe('no route to host')
+    expect(message.uncertain).toBe(false)
+  })
+
+  it('tells a message of unknown outcome from one that was refused', () => {
+    scheduled$.messages.set([waiting()])
+    markScheduledSendFailed('s-1', 'connection reset after the message was sent', true)
+
+    const [message] = scheduled$.messages.peek()
+    expect(message.gaveUp).toBe(true)
+    expect(message.uncertain).toBe(true)
+  })
+
+  it('keeps a message whose send-now went unanswered, marked as such, and sends again only on purpose', async () => {
+    scheduled$.messages.set([waiting()])
+    answer = (command) => {
+      if (command === 'mail.sendScheduledNow') return { ok: false, outcome: 'uncertain', id: 's-1', error: 'reset' }
+      return { messages: [] }
+    }
+
+    await sendScheduledNow('s-1')
+
+    const [message] = scheduled$.messages.peek()
+    expect(message.uncertain).toBe(true)
+    expect(message.lastError).toBe('reset')
+    expect(calls[0].payload).toEqual({ id: 's-1' })
+
+    answer = () => ({ ok: true, outcome: 'sent' })
+    await sendScheduledNow('s-1', true)
+    expect(calls[1].payload).toEqual({ id: 's-1', resend: true })
+    expect(scheduled$.messages.peek()).toEqual([])
   })
 })
