@@ -88,6 +88,9 @@ describe('cobalt defaults', () => {
       }
       expect(contrastRatio(t.accentText, t.accent)!).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(t.accentText, t.accentHover)!).toBeGreaterThanOrEqual(4.5)
+      // The selected folder and account are accent text on the active
+      // background; the automated audit flagged the dark pair at 4.42:1.
+      expect(contrastRatio(t.accent, t.bgActive)!).toBeGreaterThanOrEqual(4.5)
       for (const [fg, bg] of [
         [t.success, t.successSoft],
         [t.warning, t.warningSoft],

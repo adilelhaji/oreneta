@@ -29,7 +29,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: Create frontend/dist placeholder
         run: mkdir -p frontend/dist && touch frontend/dist/placeholder
-      - run: go test -tags webkit2_41 ./...
+      - name: Test with statement coverage
+        run: |
+          mkdir -p coverage
+          go test -tags webkit2_41 -coverprofile=coverage/go.out ./...
+          go tool cover -func=coverage/go.out | tail -1 | tee coverage/go-summary.txt
+      - name: Upload Go coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-go-${{ github.sha }}
+          path: coverage/
+          if-no-files-found: error
 
   go-windows:
     runs-on: windows-latest
@@ -58,12 +69,28 @@ jobs:
         # needs core modules like FindBin, IPC::Cmd and Time::Piece.
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config perl
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: meron-core
       - name: Test vendored IMAP parser compatibility
         run: cargo test --manifest-path third_party/imap-proto/Cargo.toml
-      - run: cargo test --manifest-path meron-core/Cargo.toml
+      # The engine's tests run under llvm-cov, which executes the same suite
+      # with instrumented binaries; a failing test fails this step as before.
+      - name: Test the engine with line coverage
+        run: |
+          mkdir -p coverage
+          cargo llvm-cov --manifest-path meron-core/Cargo.toml --lcov --output-path coverage/rust.lcov
+          cargo llvm-cov report --manifest-path meron-core/Cargo.toml --summary-only | tee coverage/rust-summary.txt
+      - name: Upload Rust coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-rust-${{ github.sha }}
+          path: coverage/
+          if-no-files-found: error
 
   frontend:
     runs-on: ubuntu-latest
@@ -87,8 +114,16 @@ jobs:
           bun test scripts/i18n/catalog.test.ts
       - run: bun run typecheck
         working-directory: frontend
-      - run: bun test
+      - name: Test with line coverage
+        run: bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage
         working-directory: frontend
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend-${{ github.sha }}
+          path: frontend/coverage/
+          if-no-files-found: error
       - name: Verify production React runtime resolution
         run: bun run test:bundler
         working-directory: frontend
@@ -149,6 +184,8 @@ jobs:
       - name: Create frontend/dist placeholder
         run: mkdir -p frontend/dist && touch frontend/dist/placeholder
       - run: docker pull foxcpp/maddy:0.8
+      # CardDAV/CalDAV route: Radicale with htpasswd auth, see radicale_harness_test.go.
+      - run: docker pull tomsquest/docker-radicale:3.5.4.0
       - run: cargo build --manifest-path meron-core/Cargo.toml
       - name: Run isolated mail flows with machine-readable results
         run: |

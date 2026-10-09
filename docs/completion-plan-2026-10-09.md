@@ -168,6 +168,14 @@ Criterio de salida: las ocho suites existentes siguen verdes, el informe de
 cobertura aparece en cada PR y la validación Windows incluye al menos un flujo
 de correo completo.
 
+Estado (2026-10-09): cobertura en CI, auditoría axe (con una violación seria real
+corregida en el tema oscuro) y Radicale con cinco casos CardDAV entregados; el
+simulador Graph se difiere a la iteración 3 sobre los servidores falsos ya
+existentes, las grabaciones EWS esperan la dependencia 6 y el script de flujos
+nativos queda diseñado sin ejecutar. Detalle y límites en
+[verification-infrastructure.md](verification-infrastructure.md). La iteración 1
+empezó por #29 ([contrato](design/outgoing-mail-recovery.md)).
+
 ### C-A: correo Windows (R0/R1)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Salida comprobable |
