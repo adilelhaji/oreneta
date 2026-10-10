@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "Bu görünüm her zaman en yeniden eskiye gösterilir; seçilen sütun klasörlere uygulanır.",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "Görev ekle",

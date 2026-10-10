@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "이 보기는 항상 최신순으로 표시됩니다. 선택한 열은 폴더에 적용됩니다.",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "할 일로 추가",

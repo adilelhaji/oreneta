@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "Den här vyn visas alltid med det senaste först; den valda kolumnen gäller för mappar.",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "Lägg till uppgift",

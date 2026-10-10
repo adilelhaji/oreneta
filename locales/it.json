@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Data",
+  "table.fixedOrder": "Questa vista è sempre ordinata dal più recente; la colonna scelta vale per le cartelle.",
   "table.sender": "Da",
   "table.subject": "Oggetto",
   "tasks.addAction": "Aggiungi attività",

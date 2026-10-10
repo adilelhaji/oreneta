@@ -56,7 +56,8 @@ beforeEach(() => {
   mail$.threadsLoadedKey.set('')
   mail$.threadsCursor.set('')
   calls.length = 0
-  reply = () => ({ threads: [], next_cursor: '' })
+  // A folder view, which the core pages (and sorts) by conversation.
+  reply = () => ({ threads: [], next_cursor: '', pagination: 'conversation-v1' })
   ;(window as any).go = {
     main: {
       App: {

@@ -1404,6 +1404,7 @@
   "sweep.title": "Barrer correo antiguo",
   "sweep.willMove": "{count, plural, one {se movería # mensaje a la papelera} other {se moverían # mensajes a la papelera}}",
   "table.date": "Fecha",
+  "table.fixedOrder": "Esta vista se muestra siempre de más reciente a más antiguo; la columna elegida se aplica a las carpetas.",
   "table.sender": "De",
   "table.subject": "Asunto",
   "tasks.addAction": "Convertir en tarea",

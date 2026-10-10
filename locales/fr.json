@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "Cette vue est toujours affichée du plus récent au plus ancien ; la colonne choisie s’applique aux dossiers.",
   "table.sender": "De",
   "table.subject": "Objet",
   "tasks.addAction": "Ajouter une tâche",

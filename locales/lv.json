@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "Šis skats vienmēr tiek rādīts no jaunākā; izvēlētā kolonna attiecas uz mapēm.",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "Pievienot uzdevumu",

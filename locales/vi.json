@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "Chế độ xem này luôn hiển thị mới nhất trước; cột đã chọn áp dụng cho các thư mục.",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "Thêm việc cần làm",

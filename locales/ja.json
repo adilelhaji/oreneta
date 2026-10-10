@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "この表示は常に新しい順です。選んだ列はフォルダーに適用されます。",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "タスクを追加",

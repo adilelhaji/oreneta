@@ -1404,6 +1404,7 @@
   "sweep.title": "Sweep older mail",
   "sweep.willMove": "{count, plural, one {# message would move to Trash} other {# messages would move to Trash}}",
   "table.date": "Date",
+  "table.fixedOrder": "此檢視一律以最新優先顯示；所選欄位適用於資料夾。",
   "table.sender": "From",
   "table.subject": "Subject",
   "tasks.addAction": "新增待辦事項",

@@ -64,7 +64,7 @@ import { SearchUnderstoodBar } from './SearchUnderstoodBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
-import { ThreadTable } from './ThreadTable'
+import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
 
@@ -89,6 +89,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const filters = useValue(ui$.filters)
   const listView = useValue(settings$.listView)
   const listSort = useValue(settings$.listSort)
+  const threadsPagination = useValue(mail$.threadsPagination)
   const threadsCursor = useValue(mail$.threadsCursor)
   const threadsLoadingMore = useValue(mail$.threadsLoadingMore)
   // The rows on hand belong to the view they were loaded for. Until that is the
@@ -107,7 +108,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // Headings only where they mean something. Under any other ordering they
   // would repeat down the page saying nothing, and a search is its own kind of
   // list — the reader asked for relevance, not for a calendar.
-  const groupByDates = listSort.key === 'date' && !query.trim() && !isStarredView
+  const groupByDates = appliedListSort(listSort, threadsPagination).key === 'date' && !query.trim() && !isStarredView
   const dateGroups = useMemo(
     () =>
       groupByDates
