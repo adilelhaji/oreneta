@@ -1122,6 +1122,29 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   }
 }
 
+// A thread list widened on a large screen is remembered in pixels. On a
+// narrower window it must give way before the reader does: at 769 and 1025
+// pixels a remembered 560-pixel list left the reader 150 to 185 pixels.
+for (const width of [769, 1024, 1025, 1440]) {
+  test(`a remembered wide thread list leaves the reader room at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, preferences: { thread_list_width: 560 } })
+    await page.goto('/')
+    const list = page.locator('[data-thread-list]')
+    const reader = page.locator('[data-message-pane]')
+    await expect(list).toBeVisible()
+    await expect(reader).toBeVisible()
+    const listBox = (await list.boundingBox())!
+    const readerBox = (await reader.boundingBox())!
+    expect(listBox.width).toBeGreaterThanOrEqual(280 - 1)
+    expect(readerBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(width + 1)
+    // Where there is room, the remembered width is kept.
+    if (width >= 1440) expect(Math.round(listBox.width)).toBe(560)
+    expect(errors).toEqual([])
+  })
+}
+
 test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 720, height: 900 },

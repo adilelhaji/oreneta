@@ -306,7 +306,8 @@ export function MessagePane() {
 
   return (
     <div
-      className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${
+      data-message-pane
+      className={`relative flex min-w-0 flex-1 flex-col overflow-hidden min-[769px]:min-w-[360px] ${
         mobilePane === 'conversation' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
     >
