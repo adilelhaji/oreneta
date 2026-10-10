@@ -34,6 +34,13 @@ jobs:
           mkdir -p coverage
           go test -tags webkit2_41 -coverprofile=coverage/go.out ./...
           go tool cover -func=coverage/go.out | tail -1 | tee coverage/go-summary.txt
+      # A distributable build must not carry Meron's OAuth registrations and
+      # must refuse sign-in without Oreneta-owned ones (#144).
+      - name: Distributable build fails closed without owned OAuth
+        run: |
+          go test -tags "webkit2_41 distributable" -run 'OAuth|Distributable' -count=1 .
+          go build -tags "webkit2_41 distributable" -o "$RUNNER_TEMP/oreneta-distributable" .
+          node scripts/ci/inherited-oauth.cjs "$RUNNER_TEMP/oreneta-distributable"
       - name: Upload Go coverage
         if: always()
         uses: actions/upload-artifact@v4

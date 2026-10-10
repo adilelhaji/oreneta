@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -101,12 +102,16 @@ func (s *Sidecar) Start(ctx context.Context) error {
 func sidecarEnv() []string {
 	// Pass storage/media paths explicitly so the Go bridge and Rust sidecar use
 	// the same dev or production profile.
-	env := append(os.Environ(),
+	env := append(withoutOAuthEnv(os.Environ()),
 		"MERON_CORE_DB="+filepath.Join(appConfigDir(), "meron.db"),
 		"MERON_MEDIA_DIR="+mediaDir(),
 	)
-	// Pass the baked OAuth credentials down so the sidecar's refresh path can
-	// read them from the environment without its own deobfuscation.
+	// Pass the OAuth credentials this build accepts down so the sidecar's
+	// refresh path can read them from the environment without its own
+	// deobfuscation. Only these: the process environment's own values are
+	// dropped above, so the sidecar never refreshes with a client that sign-in
+	// refused as malformed, or that this build does not take from the
+	// environment at all (Outlook).
 	if id := googleClientID(); id != "" {
 		env = append(env, "MERON_GOOGLE_CLIENT_ID="+id)
 	}
@@ -117,6 +122,21 @@ func sidecarEnv() []string {
 		env = append(env, "MERON_OUTLOOK_CLIENT_ID="+id)
 	}
 	return env
+}
+
+// withoutOAuthEnv drops the OAuth client variables from an inherited
+// environment; sidecarEnv adds back the validated ones.
+func withoutOAuthEnv(environ []string) []string {
+	kept := make([]string, 0, len(environ))
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		switch name {
+		case "MERON_GOOGLE_CLIENT_ID", "MERON_GOOGLE_CLIENT_SECRET", "MERON_OUTLOOK_CLIENT_ID":
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }
 
 func (s *Sidecar) Close() {

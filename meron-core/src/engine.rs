@@ -3,7 +3,6 @@
 //! mobile FFI host. Platform differences (where the SQLite DB lives, where
 //! per-account secrets are stored) are injected via the [`EngineHost`] trait.
 
-use anyhow::Context as _;
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -41,6 +40,35 @@ fn oauth_defaults() -> OAuthDefaults {
         .read()
         .map(|defaults| defaults.clone())
         .unwrap_or_default()
+}
+
+/// The OAuth client a token refresh must use: the account's own, else the one
+/// the host configured, else the one the desktop shell passed in the
+/// environment. An empty value is no client: a build without its own
+/// registration (see the Go `distributable` build) passes none, and the refresh
+/// stops here with a reason the person can act on instead of asking the
+/// provider with an empty client.
+pub(crate) fn refresh_client_id(
+    auth_type: &str,
+    stored: &str,
+    defaults: &OAuthDefaults,
+    from_env: Option<String>,
+) -> anyhow::Result<String> {
+    let configured = match auth_type {
+        "outlook_oauth" => defaults.outlook_client_id.trim(),
+        _ => defaults.google_client_id.trim(),
+    };
+    let from_env = from_env.unwrap_or_default();
+    let candidate = [stored.trim(), configured, from_env.trim()]
+        .into_iter()
+        .find(|value| !value.is_empty());
+    match candidate {
+        Some(value) => Ok(value.to_string()),
+        None => anyhow::bail!(
+            "{} sign-in is not available in this build of Oreneta, so this account cannot renew its access. Add the mailbox with a password (IMAP/SMTP or Exchange) instead.",
+            if auth_type == "outlook_oauth" { "Microsoft" } else { "Google" }
+        ),
+    }
 }
 
 /// Engine state: per-account credentials plus the on-disk store.
@@ -410,26 +438,12 @@ impl Engine {
                 } else {
                     default_token_url.to_string()
                 };
-                let client_id = if creds.oauth_client_id.trim().is_empty() {
-                    let configured = match creds.auth_type.as_str() {
-                        "outlook_oauth" => oauth_defaults.outlook_client_id.trim(),
-                        _ => oauth_defaults.google_client_id.trim(),
-                    };
-                    if configured.is_empty() {
-                        std::env::var(default_client_id_env).with_context(|| {
-                            match creds.auth_type.as_str() {
-                                "outlook_oauth" => {
-                                    "MERON_OUTLOOK_CLIENT_ID is required for Outlook OAuth refresh"
-                                }
-                                _ => "MERON_GOOGLE_CLIENT_ID is required for Gmail OAuth refresh",
-                            }
-                        })?
-                    } else {
-                        configured.to_string()
-                    }
-                } else {
-                    creds.oauth_client_id.trim().to_string()
-                };
+                let client_id = refresh_client_id(
+                    &creds.auth_type,
+                    &creds.oauth_client_id,
+                    &oauth_defaults,
+                    std::env::var(default_client_id_env).ok(),
+                )?;
                 let client_secret = if creds.oauth_client_secret.trim().is_empty() {
                     let configured = oauth_defaults.google_client_secret.trim();
                     if !configured.is_empty() {
@@ -2321,6 +2335,27 @@ mod tests {
         fn store_secret(&self, _conn: &Connection, _account: &str, _secrets: &secrets::Secrets) -> anyhow::Result<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn refresh_fails_closed_without_an_oauth_client() {
+        use super::{OAuthDefaults, refresh_client_id};
+        let none = OAuthDefaults::default();
+        for (auth, provider) in [("gmail_oauth", "Google"), ("outlook_oauth", "Microsoft")] {
+            for env in [None, Some(String::new()), Some("  ".to_string())] {
+                let error = refresh_client_id(auth, "", &none, env).unwrap_err().to_string();
+                assert!(error.starts_with(&format!("{provider} sign-in is not available")), "{error}");
+            }
+        }
+        // In order: the account's own client, the host's, the environment's.
+        let host = OAuthDefaults {
+            google_client_id: "host-google".into(),
+            outlook_client_id: "host-outlook".into(),
+            ..OAuthDefaults::default()
+        };
+        assert_eq!(refresh_client_id("gmail_oauth", " own ", &host, Some("env".into())).unwrap(), "own");
+        assert_eq!(refresh_client_id("outlook_oauth", "", &host, Some("env".into())).unwrap(), "host-outlook");
+        assert_eq!(refresh_client_id("gmail_oauth", "", &none, Some(" env ".into())).unwrap(), "env");
     }
 
     const MAX_IDLE: Duration = Duration::from_secs(120);
