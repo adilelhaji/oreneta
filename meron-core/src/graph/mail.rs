@@ -65,6 +65,15 @@ pub trait Source: Send + Sync {
     fn well_known(&self, alias: &str) -> Result<Folder>;
     fn delta(&self, folder: &ResourceId, checkpoint: Option<&Checkpoint>) -> Result<Page<Message>>;
     fn message(&self, id: &ResourceId) -> Result<Message>;
+    /// The whole message as MIME (#142). A source without it cannot show
+    /// attachments, and says so rather than returning an empty message.
+    fn message_mime(&self, _id: &ResourceId) -> Result<Vec<u8>> {
+        Err(Error::new(ErrorKind::InvalidInput))
+    }
+    /// The message's attachments as listed, without bytes.
+    fn attachments(&self, _id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        Ok(Vec::new())
+    }
     // Writes (#141). A source that cannot write refuses before sending.
     fn set_read(&self, _id: &ResourceId, _read: bool) -> Result<()> {
         Err(Error::new(ErrorKind::ConsentRequired))
@@ -94,6 +103,12 @@ impl Source for Client {
     }
     fn message(&self, id: &ResourceId) -> Result<Message> {
         self.message(id)
+    }
+    fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
+        Client::message_mime(self, id)
+    }
+    fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        Client::attachments(self, id)
     }
     fn set_read(&self, id: &ResourceId, read: bool) -> Result<()> {
         Client::set_read(self, id, read)
@@ -140,6 +155,12 @@ impl Source for NativeSource {
     }
     fn message(&self, id: &ResourceId) -> Result<Message> {
         self.client()?.message(id)
+    }
+    fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
+        self.client()?.message_mime(id)
+    }
+    fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        self.client()?.attachments(id)
     }
     fn set_read(&self, id: &ResourceId, read: bool) -> Result<()> {
         self.client()?.set_read(id, read)
@@ -1076,29 +1097,97 @@ impl Session {
             )?,
         })
     }
+    /// One message's body. With attachments, the whole message is read as
+    /// MIME through the IMAP parser, which writes the files to the media cache
+    /// for this account, folder and UID and points `cid:` images at them; cloud
+    /// links are named as unavailable (#142). Without, the JSON body is enough.
     pub async fn read_message(
         &self,
         folder: &str,
         uid: u32,
+        media: Option<crate::parse::MediaCtx>,
     ) -> anyhow::Result<crate::parse::Message> {
         let folder = folder.to_owned();
         self.work(move|s|{
             (||->anyhow::Result<crate::parse::Message>{
                 let account=&s.lease.account;
-                let id={let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
-                    if let Some(cached)=crate::store::get_cached_message(&conn,account,&folder,uid)? {return Ok(cached);}
-                    conn.query_row("SELECT i.remote_id FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id JOIN graph_folders f ON f.account=m.account AND f.remote_id=m.folder_id WHERE i.account=?1 AND i.uid=?2 AND f.local_name=?3 AND f.active=1",params![account,uid,folder],|r|r.get::<_,String>(0))?
+                let (id,has_attachments)={let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
+                    let located:Option<(String,bool)>=conn.query_row("SELECT i.remote_id,COALESCE(json_extract(i.fields,'$.hasAttachments'),0) FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id JOIN graph_folders f ON f.account=m.account AND f.remote_id=m.folder_id WHERE i.account=?1 AND i.uid=?2 AND f.local_name=?3 AND f.active=1",params![account,uid,folder],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+                    let cached=crate::store::get_cached_message(&conn,account,&folder,uid)?;
+                    let Some((id,has_attachments))=located else {
+                        return cached.ok_or_else(||Error::new(ErrorKind::NotFound).into());
+                    };
+                    if let Some(cached)=cached {
+                        // A copy cached without its files (before #142, or read
+                        // without a media cache) is read again, not trusted.
+                        let complete=!has_attachments || media.is_none() || (!cached.attachments.is_empty() && media.as_ref().is_some_and(|m|crate::parse::cached_media_available(&m.root,&cached)));
+                        if complete {return Ok(cached);}
+                    }
+                    (id,has_attachments)
                 };
                 let id=ResourceId::new(account,ResourceKind::Message,&id)?;
-                let message=s.source.message(&id)?;
-                if message.id!=id {return Err(Error::new(ErrorKind::InvalidResponse).into());}
-                let body=parsed_body(&message.fields,uid)?;
+                let body=match media.as_ref().filter(|_|has_attachments) {
+                    Some(media)=>s.read_with_attachments(&id,uid,media)?,
+                    None=>s.read_json(&id,uid)?,
+                };
                 let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
                 crate::store::save_cached_message(&conn,account,&folder,uid,&body)?;
                 Ok(body)
             })().map_err(clean_error)
         }).await
     }
+    fn read_json(&self, id: &ResourceId, uid: u32) -> anyhow::Result<crate::parse::Message> {
+        let message=self.source.message(id)?;
+        if &message.id!=id {return Err(Error::new(ErrorKind::InvalidResponse).into());}
+        Ok(parsed_body(&message.fields,uid)?)
+    }
+    fn read_with_attachments(&self, id: &ResourceId, uid: u32, media: &crate::parse::MediaCtx) -> anyhow::Result<crate::parse::Message> {
+        let mut parsed=match self.source.message_mime(id) {
+            Ok(raw)=>crate::parse::parse_message(&raw,Some(media)),
+            // Too big to read here: the text still shows, and the files are
+            // said to be missing rather than silently absent.
+            Err(e) if e.kind==ErrorKind::TooLarge=>{
+                let mut body=self.read_json(id,uid)?;
+                body.attachments.push(crate::parse::Attachment{filename:String::new(),mime:String::new(),size:0,key:None,unavailable:"tooLarge".into()});
+                return Ok(body);
+            }
+            Err(e)=>return Err(e.into()),
+        };
+        // Cloud attachments are links, not parts of the MIME message. Named so
+        // they are not mistaken for missing; their link is never followed. A
+        // failed listing does not hide the files that did arrive.
+        if let Ok(listed)=self.source.attachments(id) {
+            for link in listed.iter().filter(|a|a.is_link()) {
+                parsed.attachments.push(crate::parse::Attachment{
+                    filename:link.name.clone().unwrap_or_default(),
+                    mime:link.content_type.clone().unwrap_or_default(),
+                    size:link.size.unwrap_or(0) as usize,
+                    key:None,
+                    unavailable:"link".into(),
+                });
+            }
+        }
+        Ok(parsed)
+    }
+    pub async fn fetch_bodies(
+        &self,
+        folder: &str,
+        uids: &[u32],
+        media_root: std::path::PathBuf,
+    ) -> anyhow::Result<Vec<(u32, crate::parse::Message)>> {
+        let mut result = Vec::with_capacity(uids.len());
+        for uid in uids {
+            let media = crate::parse::MediaCtx {
+                root: media_root.clone(),
+                account: self.lease.account.clone(),
+                folder: folder.to_owned(),
+                uid: *uid,
+            };
+            result.push((*uid, self.read_message(folder, *uid, Some(media)).await?));
+        }
+        Ok(result)
+    }
+
     /// Mark messages read or unread (#141). See docs/design/graph-message-actions.md.
     pub async fn set_seen(&self, uids: &[u32], seen: bool) -> anyhow::Result<()> {
         self.change_flags(uids, Change::Read(seen)).await
@@ -1261,15 +1350,4 @@ impl Session {
         }
     }
 
-    pub async fn fetch_bodies(
-        &self,
-        folder: &str,
-        uids: &[u32],
-    ) -> anyhow::Result<Vec<(u32, crate::parse::Message)>> {
-        let mut result = Vec::with_capacity(uids.len());
-        for uid in uids {
-            result.push((*uid, self.read_message(folder, *uid).await?));
-        }
-        Ok(result)
-    }
 }

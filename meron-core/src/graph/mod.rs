@@ -8,6 +8,9 @@ use url::Url;
 
 const API: &str = "https://graph.microsoft.com/v1.0/";
 const MAX_BODY: u64 = 4 * 1024 * 1024;
+/// The largest whole message (MIME) read to show its attachments (#142).
+/// Bigger ones are reported as too large rather than read without bound.
+pub const MAX_MIME: u64 = 64 * 1024 * 1024;
 const MAX_ITEMS: usize = 1000;
 const TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -34,6 +37,8 @@ pub enum ErrorKind {
     /// A write whose request may have reached the server without an answer
     /// coming back. Never repeated automatically (#141).
     Uncertain,
+    /// Over the bound this client reads (#142); nothing was kept.
+    TooLarge,
 }
 
 /// Only locally generated categories; never provider text, URLs or tokens.
@@ -280,6 +285,25 @@ struct WireItem<T> {
     #[serde(flatten)]
     fields: T,
 }
+/// One attachment as listed, without its bytes (#142).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInfo {
+    /// `#microsoft.graph.fileAttachment`, `itemAttachment` or `referenceAttachment`.
+    #[serde(rename = "@odata.type")]
+    pub kind: Option<String>,
+    pub name: Option<String>,
+    pub content_type: Option<String>,
+    pub size: Option<u64>,
+    pub is_inline: Option<bool>,
+}
+impl AttachmentInfo {
+    /// A cloud attachment: a link to a file elsewhere, not a file in the mail.
+    pub fn is_link(&self) -> bool {
+        self.kind.as_deref() == Some("#microsoft.graph.referenceAttachment")
+    }
+}
+
 /// What a write's confirmation carries that the caller checks.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -567,6 +591,31 @@ impl Client {
         })
     }
 
+    /// The whole message as MIME, to show its attachments and inline images
+    /// through the same parser as IMAP. Bounded by `MAX_MIME`. Reading it does
+    /// not mark the message read.
+    pub fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
+        self.grant.authorize(true)?;
+        self.require_id(id, ResourceKind::Message)?;
+        let url = self.route(&["me", "messages", &id.opaque, "$value"]);
+        self.get_bytes(&url, "message/rfc822, text/plain;q=0.9, */*;q=0.1", MAX_MIME)
+    }
+    /// What the message's attachments are, without their bytes: used to name
+    /// the ones MIME cannot carry (cloud links). Their link is never followed
+    /// and no token goes to it.
+    pub fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        self.grant.authorize(true)?;
+        self.require_id(id, ResourceKind::Message)?;
+        let mut url = self.route(&["me", "messages", &id.opaque, "attachments"]);
+        url.query_pairs_mut()
+            .append_pair("$select", "name,contentType,size,isInline");
+        let page: WirePage<AttachmentInfo> = self.get(&url)?;
+        if page.value.len() > MAX_ITEMS {
+            return Err(Error::new(ErrorKind::InvalidResponse));
+        }
+        Ok(page.value)
+    }
+
     fn route(&self, segments: &[&str]) -> Url {
         let mut url = self.base.clone();
         url.path_segments_mut()
@@ -664,11 +713,22 @@ impl Client {
         Ok(url)
     }
     fn get<T: DeserializeOwned>(&self, url: &Url) -> Result<T> {
+        // An oversized JSON page is a malformed answer, as it always was;
+        // only a whole message (MIME) is "too large" to read here.
+        let bytes = self
+            .get_bytes(url, "application/json", MAX_BODY)
+            .map_err(|e| match e.kind {
+                ErrorKind::TooLarge => Error::new(ErrorKind::InvalidResponse),
+                _ => e,
+            })?;
+        serde_json::from_slice(&bytes).map_err(|_| Error::new(ErrorKind::InvalidResponse))
+    }
+    fn get_bytes(&self, url: &Url, accept: &str, limit: u64) -> Result<Vec<u8>> {
         let agent = self.agent()?;
         let mut response = agent
             .get(url.as_str())
             .header("Authorization", &format!("Bearer {}", self.grant.token))
-            .header("Accept", "application/json")
+            .header("Accept", accept)
             .header("Prefer", "IdType=\"ImmutableId\", odata.maxpagesize=100")
             .config()
             .max_redirects(0)
@@ -687,13 +747,25 @@ impl Client {
                 .and_then(|v| retry_after(v, chrono::Utc::now().timestamp()));
             return Err(status_error(status, retry));
         }
-        let bytes = response
+        // Refused before reading when the server says it is too big; cut off
+        // while reading when it does not say.
+        let declared = response
+            .headers()
+            .get("Content-Length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok());
+        if declared.is_some_and(|length| length > limit) {
+            return Err(Error::new(ErrorKind::TooLarge));
+        }
+        response
             .body_mut()
             .with_config()
-            .limit(MAX_BODY)
+            .limit(limit)
             .read_to_vec()
-            .map_err(|_| Error::new(ErrorKind::InvalidResponse))?;
-        serde_json::from_slice(&bytes).map_err(|_| Error::new(ErrorKind::InvalidResponse))
+            .map_err(|e| match e {
+                ureq::Error::BodyExceedsLimit(_) => Error::new(ErrorKind::TooLarge),
+                _ => Error::new(ErrorKind::InvalidResponse),
+            })
     }
 }
 

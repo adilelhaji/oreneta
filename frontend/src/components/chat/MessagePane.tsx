@@ -287,7 +287,8 @@ export function MessagePane() {
           {activeAccount.graph_writes
             ? t('accounts.graph.changesNotice')
             : t('accounts.graph.readerNotice', {
-                defaultValue: 'Microsoft Graph — read-only. Sending, editing and attachments are not available yet.',
+                defaultValue:
+                  'Microsoft Graph — read-only. Sending is not available; changes can be allowed in the account settings.',
               })}
         </p>
       ) : (

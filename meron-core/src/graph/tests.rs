@@ -737,3 +737,41 @@ fn a_write_for_another_account_is_refused_before_sending() {
     assert_eq!(error.kind, ErrorKind::InvalidInput);
     assert!(fixture.requests().is_empty());
 }
+
+// ---- #142: attachments ----
+
+#[test]
+fn the_whole_message_is_read_as_mime_with_a_read_grant() {
+    let raw = "Subject: Report\r\n\r\nbody";
+    let fixture = Fixture::new(|_| vec![(200, String::new(), raw.to_string())]);
+    let client = writer(&fixture, "Mail.Read");
+    assert_eq!(client.message_mime(&message("M/1")).unwrap(), raw.as_bytes());
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("GET /v1.0/me/messages/M%2F1/$value "), "{request}");
+}
+
+#[test]
+fn a_message_over_the_bound_is_too_large_and_nothing_is_kept() {
+    let fixture = Fixture::new(|_| vec![(200, String::new(), "x".repeat(64))]);
+    let client = writer(&fixture, "Mail.Read");
+    let url = client.route(&["me", "messages", "M1", "$value"]);
+    let error = client.get_bytes(&url, "*/*", 16).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::TooLarge);
+}
+
+#[test]
+fn attachments_are_listed_without_bytes_and_links_are_recognised() {
+    let fixture = Fixture::new(|_| {
+        vec![ok(json!({"value":[
+            {"@odata.type":"#microsoft.graph.fileAttachment","name":"q3.pdf","contentType":"application/pdf","size":10,"isInline":false},
+            {"@odata.type":"#microsoft.graph.referenceAttachment","name":"Plan.xlsx","contentType":null,"size":0,"isInline":false,"sourceUrl":"https://contoso.sharepoint.com/secret"}
+        ]}))]
+    });
+    let listed = writer(&fixture, "Mail.Read").attachments(&message("M1")).unwrap();
+    assert_eq!(listed.iter().map(|a| a.is_link()).collect::<Vec<_>>(), vec![false, true]);
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("GET /v1.0/me/messages/M1/attachments?"), "{request}");
+    assert!(request.contains("%24select=name%2CcontentType%2Csize%2CisInline"), "{request}");
+    // Only the one request: a link is never followed.
+    assert_eq!(fixture.requests().len(), 1);
+}

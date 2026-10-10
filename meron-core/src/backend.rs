@@ -217,7 +217,7 @@ impl Session {
         media: &parse::MediaCtx,
     ) -> Result<parse::Message> {
         match self {
-            Session::Graph(session) => session.read_message(folder, uid).await,
+            Session::Graph(session) => session.read_message(folder, uid, Some(media.clone())).await,
             Session::Imap(session) => imap::read_message(session, folder, uid, media).await,
             Session::Ews(session) => session.read_message(folder, uid, media).await,
         }
@@ -591,7 +591,7 @@ impl Session {
         account: &str,
     ) -> Result<Vec<(u32, parse::Message)>> {
         match self {
-            Session::Graph(session) => session.fetch_bodies(folder, uids).await,
+            Session::Graph(session) => session.fetch_bodies(folder, uids, media_root).await,
             Session::Imap(session) => {
                 imap::fetch_bodies(session, folder, uids, media_root, account).await
             }

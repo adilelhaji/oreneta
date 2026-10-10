@@ -24,7 +24,9 @@ global-service, signed-in mailbox only. No automatic IMAP/EWS conversion.
 - Read state, flags, move, copy within the account and delete are available
   once the reader allows changes and Microsoft grants `Mail.ReadWrite`; see
   [design/graph-message-actions.md](design/graph-message-actions.md) (#141).
-  Sending, remote drafts, attachments, folder management, calendars, contacts,
+  Attachments and inline images are read through MIME; see
+  [design/graph-attachments.md](design/graph-attachments.md) (#142).
+  Sending, remote drafts, folder management, calendars, contacts,
   shared mailboxes and national clouds remain unsupported. Disable their UI
   affordances and reject their backend commands before any mutation, SMTP,
   IMAP or delegated fallback. Local labels and existing local drafts are

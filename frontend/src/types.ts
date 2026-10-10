@@ -145,6 +145,9 @@ export type Attachment = {
   key: string | null
   /** Remote image URL (RSS inline images); null/absent for local attachments. */
   url?: string | null
+  /** Why there are no bytes to open (#142): 'link' for a cloud attachment,
+   * 'tooLarge' when the message is over the size read. Absent otherwise. */
+  unavailable?: string
 }
 
 export type ComposerAttachment = {

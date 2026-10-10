@@ -136,7 +136,9 @@ export function getVisibleMedia(message: Message, account: Account | undefined, 
   const remoteImages = attachments.filter((a) => !isInline(a) && a.url && isImage(a))
   const localVideos = attachments.filter((a) => isInline(a) && isVideo(a))
   const remoteVideos = attachments.filter((a) => !isInline(a) && a.url && isVideo(a))
-  const files = attachments.filter((a) => !isImage(a) && !isVideo(a))
+  // One the provider could not hand over is always listed, whatever its type,
+  // so it is said to be missing rather than silently left out (#142).
+  const files = attachments.filter((a) => !!a.unavailable || (!isImage(a) && !isVideo(a)))
   const remoteVisible = (account?.load_remote_images ?? false) || revealed
   const attachmentImages = remoteVisible ? [...localImages, ...remoteImages] : localImages
   const videos = remoteVisible ? [...localVideos, ...remoteVideos] : localVideos

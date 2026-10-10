@@ -15,6 +15,7 @@ const MEDIA_CAP_BYTES: u64 = 1024 * 1024 * 1024;
 /// their on-disk path / served key (`account/folder/uid/index.ext`). The desktop
 /// bridge serves these files at `/media/<key>`, so image bytes never travel back
 /// through the JSON sidecar protocol. Built per `parse_message` call.
+#[derive(Clone)]
 pub struct MediaCtx {
     pub root: PathBuf,
     pub account: String,
@@ -124,7 +125,7 @@ pub struct Message {
     pub protection: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Attachment {
     pub filename: String,
     pub mime: String,
@@ -133,6 +134,12 @@ pub struct Attachment {
     /// to disk and served at `/media/<key>`; null only when no media context was
     /// provided (tests, previews) or the write failed.
     pub key: Option<String>,
+    /// Why there are no bytes to open, when the provider cannot hand them
+    /// over: "link" (a cloud attachment, which is a link, not a file) or
+    /// "tooLarge" (the message is over the bound read here). Said rather than
+    /// silently left out (#142). Empty for an ordinary attachment.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub unavailable: String,
 }
 
 /// Decode a bare RFC 2047 header fragment — one that arrives without its field
@@ -542,6 +549,7 @@ fn collect_attachments(
         mime,
         size,
         key,
+        unavailable: String::new(),
     });
 }
 
@@ -592,7 +600,8 @@ pub fn cached_media_available(root: &Path, message: &Message) -> bool {
         .iter()
         .all(|att| match att.key.as_deref() {
             Some(key) => root.join(key).is_file(),
-            None => false,
+            // Nothing to fetch for one the provider cannot hand over.
+            None => !att.unavailable.is_empty(),
         })
 }
 
@@ -1474,6 +1483,7 @@ AQID\r\n\
             mime: "image/png".to_string(),
             size: 3,
             key: Some("acct/inbox/1/0.png".to_string()),
+            unavailable: String::new(),
         });
         assert!(cached_media_available(&root, &msg));
 
@@ -1493,8 +1503,12 @@ AQID\r\n\
             mime: "text/calendar".to_string(),
             size: 3072,
             key: None,
+            unavailable: String::new(),
         });
         assert!(!cached_media_available(&root, &msg));
+        // One the provider cannot hand over is not refetched forever.
+        msg.attachments[0].unavailable = "link".into();
+        assert!(cached_media_available(&root, &msg));
     }
 
     #[test]

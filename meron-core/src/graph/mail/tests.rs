@@ -597,7 +597,7 @@ async fn session_body_reads_cache_without_writes_or_network_on_second_read() {
         source: source.clone(),
         lock: Arc::new(Mutex::new(())),
     };
-    let body = session.read_message("INBOX", 1).await.unwrap();
+    let body = session.read_message("INBOX", 1, None).await.unwrap();
     assert!(body.body.contains("Safe text"));
     let html = crate::parse::prepare_html(body.body_html.as_deref().unwrap(), false);
     assert!(!html.contains("<script>"));
@@ -605,7 +605,7 @@ async fn session_body_reads_cache_without_writes_or_network_on_second_read() {
     source.full.lock().unwrap().clear();
     assert!(
         session
-            .read_message("INBOX", 1)
+            .read_message("INBOX", 1, None)
             .await
             .unwrap()
             .body
@@ -976,4 +976,140 @@ async fn a_read_only_grant_changes_nothing_anywhere() {
     let error = session.set_seen(&[1], true).await.unwrap_err();
     assert!(error.to_string().contains("allow them in its settings"), "{error}");
     assert_eq!(seen(&db)[0], (1, false));
+}
+
+// ---- #142: attachments ----
+
+struct Reader {
+    inner: Writer,
+    mime: Mutex<Option<Result<Vec<u8>>>>,
+    listed: Mutex<Vec<AttachmentInfo>>,
+    mime_calls: std::sync::atomic::AtomicUsize,
+}
+impl Source for Reader {
+    fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
+        self.inner.folders(p, c)
+    }
+    fn well_known(&self, a: &str) -> Result<Folder> {
+        self.inner.well_known(a)
+    }
+    fn delta(&self, f: &ResourceId, c: Option<&Checkpoint>) -> Result<Page<Message>> {
+        self.inner.delta(f, c)
+    }
+    fn message(&self, id: &ResourceId) -> Result<Message> {
+        self.inner.message(id)
+    }
+    fn message_mime(&self, _: &ResourceId) -> Result<Vec<u8>> {
+        self.mime_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.mime.lock().unwrap().clone().expect("unexpected MIME request")
+    }
+    fn attachments(&self, _: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        Ok(self.listed.lock().unwrap().clone())
+    }
+}
+
+const MIME: &str = "From: a@example.com\r\nTo: b@example.com\r\nSubject: Report\r\nMessage-ID: <m1@example.com>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"b1\"\r\n\r\n--b1\r\nContent-Type: multipart/related; boundary=\"b2\"\r\n\r\n--b2\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>See <img src=\"cid:logo@example.com\"></p>\r\n--b2\r\nContent-Type: image/png\r\nContent-ID: <logo@example.com>\r\nContent-Transfer-Encoding: base64\r\n\r\niVBORw0KGgo=\r\n--b2--\r\n--b1\r\nContent-Type: application/pdf; name=\"q3.pdf\"\r\nContent-Disposition: attachment; filename=\"q3.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\nJVBERi0xLjQ=\r\n--b1--\r\n";
+
+fn reading_session(tag: &str) -> (Db, Arc<Reader>, Session, crate::parse::MediaCtx) {
+    let (db, writer, _) = writable_session();
+    let writer = Arc::into_inner(writer).unwrap();
+    // m1 has attachments.
+    db.lock()
+        .unwrap()
+        .execute("UPDATE graph_items SET fields=json_set(fields,'$.hasAttachments',json('true')) WHERE account=?1 AND uid=1", [ACCOUNT])
+        .unwrap();
+    let reader = Arc::new(Reader {
+        inner: writer,
+        mime: Mutex::new(None),
+        listed: Mutex::new(vec![]),
+        mime_calls: Default::default(),
+    });
+    let lease = Lease {
+        account: ACCOUNT.into(),
+        generation: db.lock().unwrap().query_row("SELECT generation FROM graph_profiles WHERE account=?1", [ACCOUNT], |r| r.get(0)).unwrap(),
+    };
+    let session = Session { db: db.clone(), lease, source: reader.clone(), lock: Arc::new(Mutex::new(())) };
+    let root = std::env::temp_dir().join(format!("oreneta-graph-media-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let media = crate::parse::MediaCtx { root, account: ACCOUNT.into(), folder: "INBOX".into(), uid: 1 };
+    (db, reader, session, media)
+}
+
+#[tokio::test]
+async fn attachments_and_inline_images_arrive_through_the_mime_parser() {
+    let (_, reader, session, media) = reading_session("parts");
+    *reader.mime.lock().unwrap() = Some(Ok(MIME.as_bytes().to_vec()));
+    *reader.listed.lock().unwrap() = vec![serde_json::from_value(json!({
+        "@odata.type":"#microsoft.graph.referenceAttachment","name":"Plan.xlsx","contentType":"application/vnd.ms-excel","size":0
+    })).unwrap()];
+    let body = session.read_message("INBOX", 1, Some(media.clone())).await.unwrap();
+
+    let files: Vec<(&str, bool, &str)> = body
+        .attachments
+        .iter()
+        .map(|a| (a.filename.as_str(), a.key.as_deref().is_some_and(|k| media.root.join(k).is_file()), a.unavailable.as_str()))
+        .collect();
+    assert!(files.contains(&("q3.pdf", true, "")), "{files:?}");
+    // The cloud link is named, with no bytes and no link followed.
+    assert!(files.contains(&("Plan.xlsx", false, "link")), "{files:?}");
+    // The inline image points at the media cache, not at a cid: URL.
+    let html = body.body_html.as_deref().unwrap();
+    assert!(!html.contains("cid:"), "{html}");
+    assert!(html.contains("/media/"), "{html}");
+
+    // Cached with its files: read again without asking the server.
+    session.read_message("INBOX", 1, Some(media.clone())).await.unwrap();
+    assert_eq!(reader.mime_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+    // A file gone from the media cache is fetched again.
+    for a in &body.attachments {
+        if let Some(key) = &a.key {
+            let _ = std::fs::remove_file(media.root.join(key));
+        }
+    }
+    session.read_message("INBOX", 1, Some(media.clone())).await.unwrap();
+    assert_eq!(reader.mime_calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    let _ = std::fs::remove_dir_all(&media.root);
+}
+
+#[tokio::test]
+async fn a_message_too_large_to_read_shows_its_text_and_says_the_files_are_missing() {
+    let (_, reader, session, media) = reading_session("large");
+    *reader.mime.lock().unwrap() = Some(Err(Error::new(ErrorKind::TooLarge)));
+    reader.inner.inner.full.lock().unwrap().insert(
+        "m1".into(),
+        message("m1", {
+            let mut v = envelope("in", "m1");
+            v["body"] = json!({"contentType":"text","content":"The text still shows"});
+            v
+        }),
+    );
+    let body = session.read_message("INBOX", 1, Some(media.clone())).await.unwrap();
+    assert!(body.body.contains("The text still shows"));
+    assert_eq!(body.attachments.len(), 1);
+    assert_eq!(body.attachments[0].unavailable, "tooLarge");
+}
+
+#[tokio::test]
+async fn a_message_without_attachments_does_not_read_mime() {
+    let (_, reader, session, mut media) = reading_session("plain");
+    reader.inner.inner.full.lock().unwrap().insert(
+        "m2".into(),
+        message("m2", {
+            let mut v = envelope("in", "m2");
+            v["body"] = json!({"contentType":"text","content":"Just text"});
+            v
+        }),
+    );
+    media.uid = 2;
+    let body = session.read_message("INBOX", 2, Some(media)).await.unwrap();
+    assert!(body.body.contains("Just text"));
+    assert_eq!(reader.mime_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_failed_read_is_an_error_not_an_empty_message() {
+    let (_, reader, session, media) = reading_session("fail");
+    *reader.mime.lock().unwrap() = Some(Err(Error::new(ErrorKind::NotFound)));
+    assert!(session.read_message("INBOX", 1, Some(media)).await.is_err());
 }
