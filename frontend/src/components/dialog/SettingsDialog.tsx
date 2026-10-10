@@ -102,6 +102,7 @@ import { AssistantSettingsSection } from './AssistantSettingsSection'
 import { BoardPanel } from './BoardSettingsPanel'
 import { pickImageFile } from '../../lib/nativeFilePicker'
 import { invoke } from '../../lib/bridge'
+import { GraphChangesFlow, type GraphChangesState } from '../../lib/graphSetup'
 import { useDialogFocus } from '../../lib/useDialogFocus'
 import { SettingsSearch } from './SettingsSearch'
 
@@ -141,7 +142,11 @@ function isRssAccount(account: Account) {
 // form offers (TLS / STARTTLS / None).
 function serverSummary(account: Account, t: ReturnType<typeof useTranslation>['t']) {
   if (account.auth_type === 'graph_oauth')
-    return `Microsoft Graph — ${t('accounts.graph.readOnly', { defaultValue: 'Read-only' })}`
+    return `Microsoft Graph — ${
+      account.graph_writes
+        ? t('accounts.graph.changesAllowed')
+        : t('accounts.graph.readOnly', { defaultValue: 'Read-only' })
+    }`
   // TLS/STARTTLS are protocol names and stay verbatim; only "none" is prose.
   const security = (tls?: boolean, starttls?: boolean) =>
     starttls ? 'STARTTLS' : tls === false ? t('accounts.security.none') : 'TLS'
@@ -1401,6 +1406,68 @@ function OpmlGroup({ account }: { account: string }) {
   )
 }
 
+/**
+ * Whether a Microsoft Graph account may change messages, and the way to allow
+ * it (#141). Reading never depends on this; sending is not part of it.
+ */
+function GraphChangesGroup({ account }: { account: Account }) {
+  const { t } = useTranslation()
+  const [progress, setProgress] = useState<GraphChangesState>({ state: 'idle' })
+  const [flow] = useState(
+    () =>
+      new GraphChangesFlow(invoke, setProgress, (id, writes) =>
+        accounts$.set(accounts$.peek().map((item) => (item.id === id ? { ...item, graph_writes: writes } : item))),
+      ),
+  )
+  useEffect(
+    () => () => {
+      void flow.cancel().catch(console.error)
+    },
+    [flow],
+  )
+  const waiting = progress.state === 'authorizing'
+  const hint =
+    progress.state === 'notGranted'
+      ? t('settings.account.graphChanges.notGranted')
+      : progress.state === 'failed'
+        ? t('settings.account.graphChanges.failed')
+        : account.graph_writes
+          ? t('settings.account.graphChanges.allowedHint')
+          : t('settings.account.graphChanges.readOnlyHint')
+  return (
+    <SettingsGroup title={t('settings.account.graphChanges.title')}>
+      <SettingRow
+        title={
+          account.graph_writes
+            ? t('accounts.graph.changesAllowed')
+            : t('accounts.graph.readOnly', { defaultValue: 'Read-only' })
+        }
+        hint={waiting ? t('settings.account.graphChanges.waiting') : hint}
+        control={
+          account.graph_writes ? null : waiting ? (
+            <button
+              type="button"
+              onClick={() => void flow.cancel().then(() => setProgress({ state: 'idle' }))}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
+            >
+              {t('buttons.cancel')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void flow.begin(account.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-on-accent font-bold text-2xs cursor-pointer transition-colors"
+            >
+              <KeyRound size={14} strokeWidth={1.75} />
+              {t('settings.account.graphChanges.allow')}
+            </button>
+          )
+        }
+      />
+    </SettingsGroup>
+  )
+}
+
 function AccountPanel({ account }: { account: Account }) {
   const { t } = useTranslation()
   const { isRSS, displayName, subtitle } = accountMeta(account, t)
@@ -1495,6 +1562,8 @@ function AccountPanel({ account }: { account: Account }) {
           />
         </SettingsGroup>
       )}
+
+      {account.auth_type === 'graph_oauth' && !account.needs_reconnect && <GraphChangesGroup account={account} />}
 
       <AccountProfileGroup account={account} isRSS={isRSS} />
       <SettingsGroup title={t('settings.pages.appearance')}>

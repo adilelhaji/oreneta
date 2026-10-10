@@ -549,7 +549,9 @@ impl Engine {
         T: Send,
     {
         if self.ensure_valid_creds(account).await?.is_graph() {
-            if !retry { return crate::graph::mail::unsupported(); }
+            if !retry && !crate::graph::mail::writes_enabled(&self.db.lock().unwrap(), account) {
+                return crate::graph::mail::unsupported();
+            }
             let mut session=backend::Session::Graph(self.graph_mail.session(account)?);
             return f(&mut session).await;
         }
@@ -648,7 +650,16 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
-        if self.ensure_valid_creds(account).await?.is_graph() { return crate::graph::mail::unsupported(); }
+        if self.ensure_valid_creds(account).await?.is_graph() {
+            if !crate::graph::mail::writes_enabled(&self.db.lock().unwrap(), account) {
+                return crate::graph::mail::unsupported();
+            }
+            // Graph has no connection to warm up: the preflight runs on the
+            // same per-account session, and the change is never retried.
+            let mut session = backend::Session::Graph(self.graph_mail.session(account)?);
+            preflight(&mut session).await?;
+            return f(&mut session).await;
+        }
         if let Some(mut session) = self.take_pooled(account) {
             let ready =
                 match tokio::time::timeout(POOLED_READ_TIMEOUT, preflight(&mut session)).await {

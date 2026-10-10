@@ -18,7 +18,7 @@ import { openExternal } from '../../lib/native'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import type { Message } from '../../types'
-import { useReadOnlyMail } from '../../lib/useReadOnlyMail'
+import { useMessageChangesBlocked, useReadOnlyMail } from '../../lib/useReadOnlyMail'
 
 export type MessageContextMenuState = {
   x: number
@@ -47,6 +47,9 @@ export function MessageContextMenu({
 }) {
   const { t } = useTranslation()
   const readOnly = useReadOnlyMail(state.message.account_id)
+  // Read state, star and delete change the message (#141); forwarding, editing
+  // as new, .eml and discarding a server draft stay unsupported on Graph.
+  const changesBlocked = useMessageChangesBlocked(state.message.account_id)
   const isDraft = isDraftFolder(state.message.folder_id, state.message.account_id)
   return (
     <FloatingContextMenu
@@ -118,7 +121,7 @@ export function MessageContextMenu({
               )
             }
             label={state.message.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
-            disabled={readOnly}
+            disabled={changesBlocked}
             onClick={() => {
               const message = state.message
               onClose()
@@ -134,7 +137,7 @@ export function MessageContextMenu({
               />
             }
             label={state.message.starred ? t('chat.unstar') : t('chat.star')}
-            disabled={readOnly}
+            disabled={changesBlocked}
             onClick={() => {
               const message = state.message
               onClose()
@@ -182,7 +185,7 @@ export function MessageContextMenu({
               danger
               icon={<Trash2 size={14} strokeWidth={1.75} />}
               label={isDraft ? t('chat.actions.discardDraft') : t('chat.actions.deleteMessage')}
-              disabled={readOnly}
+              disabled={isDraft ? readOnly : changesBlocked}
               onClick={() => {
                 const message = state.message
                 onClose()

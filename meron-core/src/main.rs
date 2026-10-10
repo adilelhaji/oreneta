@@ -278,6 +278,39 @@ mod tests {
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
     }
+    #[tokio::test]
+    async fn graph_writes_pass_the_guard_only_where_granted_and_supported() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let (account,other)=("graph@example.test","other@example.test");
+        for id in [account,other] {
+            engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[id]).unwrap();
+        }
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true})).unwrap();
+        // Supported and granted: past the guard (they fail later, with no
+        // Graph profile in this test, but not as "read-only").
+        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account,"uid":1,"target_folder":"INBOX.x"})),&writer).await.unwrap_err();
+            assert!(!error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
+        assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
+        // Still unsupported, granted or not.
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
+            assert!(error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        // Not to another account, and not for an account without the grant.
+        let error=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":other,"target_folder":"x","uid":1})),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        let error=dispatch(&engine,&request("messages.markRead",json!({"account":other,"uid":1})),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
+        let writes:Vec<(String,bool)>=list["accounts"].as_array().unwrap().iter().map(|a|(a["id"].as_str().unwrap().to_owned(),a["graph_writes"].as_bool().unwrap())).collect();
+        assert!(writes.contains(&(account.to_owned(),true)) && writes.contains(&(other.to_owned(),false)));
+    }
     #[test]
     fn graph_failures_do_not_enter_imap_retry_policy() {
         for kind in [meron_core::graph::ErrorKind::Throttled,meron_core::graph::ErrorKind::Transport,meron_core::graph::ErrorKind::Unavailable,meron_core::graph::ErrorKind::Reauthenticate] {
@@ -1649,7 +1682,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let manager = engine.graph_auth.clone();
             let client = req_str(p, "client_id")?;
             let redirect = req_str(p, "redirect_uri")?;
-            let begin = tokio::task::spawn_blocking(move || manager.begin(selected, &client, &redirect, route)).await??;
+            // `writes` asks for message changes on an existing account (#141).
+            let writes = p.get("writes").and_then(Value::as_bool).unwrap_or(false);
+            let begin = tokio::task::spawn_blocking(move || manager.begin_with(selected, &client, &redirect, route, writes)).await??;
             Ok(serde_json::to_value(begin)?)
         }
         "graph.authPoll" => {
@@ -3255,6 +3290,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         let status=meron_core::graph::mail::status(&engine.db.lock().unwrap(),&id);
                         let reconnect=status.as_ref().map_or(true,|s|matches!(s.error.as_deref(),Some("reauthenticate"|"consent_required"|"access_denied")));
                         obj.insert("needs_reconnect".into(),json!(reconnect));
+                        // Whether its grant allows message changes (#141).
+                        obj.insert("graph_writes".into(),json!(meron_core::graph::mail::writes_enabled(&engine.db.lock().unwrap(),&id)));
                         continue;
                     }
                     let needs_reconnect = live_accounts
@@ -5092,6 +5129,30 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     "target_account": target_account,
                     "target_folder": target_folder
                 }));
+            }
+
+            // Within one account, a server that can copy on its own does so
+            // (Microsoft Graph, #141): the bytes never travel through here,
+            // and its session has already brought both folders up to date.
+            let graph_account = store::load_account(&engine.db.lock().unwrap(), &account)?
+                .is_some_and(|creds| creds.is_graph());
+            if graph_account && account == target_account {
+                let native = engine
+                    .with_write_session(&account, |session| {
+                        let (folder, target_folder, uids) =
+                            (folder.clone(), target_folder.clone(), uids.clone());
+                        Box::pin(async move { session.copy_within(&folder, &target_folder, &uids).await })
+                    })
+                    .await?;
+                if let Some(copied) = native {
+                    return Ok(json!({
+                        "ok": true,
+                        "copied": copied,
+                        "source_folder": folder,
+                        "target_account": target_account,
+                        "target_folder": target_folder
+                    }));
+                }
             }
 
             let raw_messages = engine

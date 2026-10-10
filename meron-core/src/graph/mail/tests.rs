@@ -772,3 +772,208 @@ fn page_returning_after_cancellation_cannot_commit() {
     assert_eq!(worker.join().unwrap().unwrap_err().kind,ErrorKind::Cancelled);
     for table in ["accounts","messages","graph_items","graph_staged_items","graph_delta"] {assert_eq!(count(&db,table),0);}
 }
+
+// ---- #141: writes ----
+
+/// Reads from the scripted fixture; records each write and fails the one at
+/// a given position.
+struct Writer {
+    inner: Fixture,
+    writes: Mutex<Vec<String>>,
+    fail: Mutex<HashMap<usize, Error>>,
+}
+impl Writer {
+    fn attempt(&self, what: String) -> Result<()> {
+        let mut writes = self.writes.lock().unwrap();
+        let index = writes.len();
+        writes.push(what);
+        match self.fail.lock().unwrap().remove(&index) {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+}
+impl Source for Writer {
+    fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
+        self.inner.folders(p, c)
+    }
+    fn well_known(&self, a: &str) -> Result<Folder> {
+        self.inner.well_known(a)
+    }
+    fn delta(&self, f: &ResourceId, c: Option<&Checkpoint>) -> Result<Page<Message>> {
+        self.inner.delta(f, c)
+    }
+    fn message(&self, id: &ResourceId) -> Result<Message> {
+        self.inner.message(id)
+    }
+    fn set_read(&self, id: &ResourceId, read: bool) -> Result<()> {
+        self.attempt(format!("read:{}:{read}", id.opaque()))
+    }
+    fn set_flag(&self, id: &ResourceId, flagged: bool) -> Result<()> {
+        self.attempt(format!("flag:{}:{flagged}", id.opaque()))
+    }
+    fn move_message(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        self.attempt(format!("move:{}:{}", id.opaque(), to.opaque()))?;
+        Ok(id.clone())
+    }
+    fn copy_message(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        self.attempt(format!("copy:{}:{}", id.opaque(), to.opaque()))?;
+        Ok(ResourceId::new(ACCOUNT, ResourceKind::Message, "copy")?)
+    }
+    fn delete_message(&self, id: &ResourceId) -> Result<()> {
+        self.attempt(format!("delete:{}", id.opaque()))
+    }
+}
+
+fn archive() -> String {
+    local_folder("arc", "folder")
+}
+/// Inbox with m1..m3 and an archive folder holding a1, both fully synced.
+fn writable_session() -> (Db, Arc<Writer>, Session) {
+    let db = Arc::new(Mutex::new(crate::store::open_at(":memory:").unwrap()));
+    let lease = begin_profile(
+        &db.lock().unwrap(),
+        ACCOUNT,
+        &auth::Principal { tenant: "tenant".into(), object: "person".into(), email: ACCOUNT.into() },
+        "Reader",
+    )
+    .unwrap();
+    let inner = Fixture {
+        tree: vec![folder("in", "Inbox", "root", 0), folder("arc", "Archive", "root", 0)],
+        pages: Mutex::new(VecDeque::new()),
+        full: Mutex::new(HashMap::new()),
+        seen: Mutex::new(vec![]),
+    };
+    sync_tree(&inner, &db, &lease).unwrap();
+    enqueue(
+        &inner,
+        page("in", "base", true, ["m1", "m2", "m3"].iter().map(|id| message(id, envelope("in", id))).collect()),
+    );
+    sync_page(&inner, &db, &lease, "INBOX").unwrap();
+    enqueue(&inner, page("arc", "base", true, vec![message("a1", envelope("arc", "a1"))]));
+    sync_page(&inner, &db, &lease, &archive()).unwrap();
+    publish(&db.lock().unwrap(), &lease).unwrap();
+    let writer = Arc::new(Writer { inner, writes: Mutex::new(vec![]), fail: Mutex::new(HashMap::new()) });
+    let session = Session { db: db.clone(), lease, source: writer.clone(), lock: Arc::new(Mutex::new(())) };
+    (db, writer, session)
+}
+fn uids_in(db: &Db, folder: &str) -> Vec<u32> {
+    let mut uids: Vec<u32> = crate::store::recent_headers(&db.lock().unwrap(), ACCOUNT, folder, 100)
+        .unwrap()
+        .into_iter()
+        .map(|h| h.uid)
+        .collect();
+    uids.sort();
+    uids
+}
+fn seen(db: &Db) -> Vec<(u32, bool)> {
+    let mut all: Vec<(u32, bool)> = headers(db).into_iter().map(|h| (h.uid, h.seen)).collect();
+    all.sort();
+    all
+}
+fn writes(writer: &Writer) -> Vec<String> {
+    writer.writes.lock().unwrap().clone()
+}
+fn throttled(seconds: u64) -> Error {
+    Error { kind: ErrorKind::Throttled, status: Some(429), retry_after_seconds: Some(seconds) }
+}
+
+#[tokio::test]
+async fn read_state_stops_at_the_first_failure_and_keeps_what_was_confirmed() {
+    let (db, writer, session) = writable_session();
+    writer.fail.lock().unwrap().insert(1, throttled(30));
+    let error = session.set_seen(&[1, 2, 3], true).await.unwrap_err();
+    let batch = error.downcast_ref::<BatchError>().unwrap();
+    assert_eq!((batch.done, batch.total), (1, 3));
+    assert!(error.to_string().contains("1 of 3 changed"), "{error}");
+    assert!(error.to_string().contains("30s"), "{error}");
+    // The throttled server is not asked again for the third.
+    assert_eq!(writes(&writer), vec!["read:m1:true", "read:m2:true"]);
+    assert_eq!(seen(&db), vec![(1, true), (2, false), (3, false)]);
+    // A throttled write is the action's problem, not the account's health.
+    let health: Option<String> = db.lock().unwrap().query_row("SELECT error FROM graph_profiles WHERE account=?1", [ACCOUNT], |r| r.get(0)).unwrap();
+    assert_eq!(health, None);
+}
+
+#[tokio::test]
+async fn flags_change_locally_only_once_confirmed() {
+    let (db, writer, session) = writable_session();
+    session.set_flagged(&[2], true).await.unwrap();
+    assert_eq!(writes(&writer), vec!["flag:m2:true"]);
+    let starred: Vec<u32> = headers(&db).into_iter().filter(|h| h.starred).map(|h| h.uid).collect();
+    assert_eq!(starred, vec![2]);
+    writer.fail.lock().unwrap().insert(1, Error { kind: ErrorKind::AccessDenied, status: Some(403), retry_after_seconds: None });
+    assert!(session.set_flagged(&[3], true).await.is_err());
+    assert!(!headers(&db).into_iter().any(|h| h.uid == 3 && h.starred));
+}
+
+#[tokio::test]
+async fn the_reviewed_set_is_resolved_before_anything_is_sent() {
+    let (_, writer, session) = writable_session();
+    // 99 does not exist; nothing is changed, not even the first.
+    assert!(session.set_seen(&[1, 99], true).await.is_err());
+    // a1 lives in the archive: it cannot be moved "from the inbox".
+    let a1 = 4;
+    assert!(session.move_uids("INBOX", &archive(), &[a1]).await.is_err());
+    // An unknown destination is refused before the first move.
+    assert!(session.move_uids("INBOX", "graph.unknown", &[1]).await.is_err());
+    assert!(writes(&writer).is_empty());
+}
+
+#[tokio::test]
+async fn a_move_brings_both_folders_to_what_the_server_holds() {
+    let (db, writer, session) = writable_session();
+    enqueue(&writer.inner, page("in", "after-move", true, vec![message("m1", json!({"@removed":{"reason":"deleted"}}))]));
+    enqueue(&writer.inner, page("arc", "after-move", true, vec![message("m1", envelope("arc", "m1"))]));
+    session.move_uids("INBOX", &archive(), &[1]).await.unwrap();
+    assert_eq!(writes(&writer), vec!["move:m1:arc"]);
+    assert_eq!(uids_in(&db, "INBOX"), vec![2, 3]);
+    // Immutable ids: the moved message keeps its local UID.
+    assert_eq!(uids_in(&db, &archive()), vec![1, 4]);
+}
+
+#[tokio::test]
+async fn an_uncertain_move_is_not_repeated_and_the_cache_follows_the_server() {
+    let (db, writer, session) = writable_session();
+    writer.fail.lock().unwrap().insert(0, Error::new(ErrorKind::Uncertain));
+    // The server did apply it; only the answer was lost.
+    enqueue(&writer.inner, page("in", "after", true, vec![message("m1", json!({"@removed":{"reason":"deleted"}}))]));
+    enqueue(&writer.inner, page("arc", "after", true, vec![message("m1", envelope("arc", "m1"))]));
+    let error = session.move_uids("INBOX", &archive(), &[1, 2]).await.unwrap_err();
+    assert!(error.to_string().contains("unknown"), "{error}");
+    assert_eq!(writes(&writer), vec!["move:m1:arc"]);
+    assert_eq!(uids_in(&db, "INBOX"), vec![2, 3]);
+    assert_eq!(uids_in(&db, &archive()), vec![1, 4]);
+}
+
+#[tokio::test]
+async fn a_failed_refresh_after_a_move_does_not_turn_it_into_an_error() {
+    let (_, writer, session) = writable_session();
+    enqueue(&writer.inner, Err(throttled(5)));
+    enqueue(&writer.inner, Err(throttled(5)));
+    session.move_uids("INBOX", &archive(), &[1]).await.unwrap();
+}
+
+#[tokio::test]
+async fn copy_and_delete_go_one_by_one_and_reconcile() {
+    let (db, writer, session) = writable_session();
+    enqueue(&writer.inner, page("in", "c", true, vec![]));
+    enqueue(&writer.inner, page("arc", "c", true, vec![message("copy", envelope("arc", "copy"))]));
+    assert_eq!(session.copy_uids("INBOX", &archive(), &[2]).await.unwrap(), 1);
+    assert_eq!(uids_in(&db, "INBOX"), vec![1, 2, 3]);
+    assert_eq!(uids_in(&db, &archive()).len(), 2);
+
+    enqueue(&writer.inner, page("arc", "d", true, vec![message("a1", json!({"@removed":{"reason":"deleted"}}))]));
+    session.delete_uids(&archive(), &[4]).await.unwrap();
+    assert_eq!(writes(&writer), vec!["copy:m2:arc", "delete:a1"]);
+    assert!(!uids_in(&db, &archive()).contains(&4));
+}
+
+#[tokio::test]
+async fn a_read_only_grant_changes_nothing_anywhere() {
+    let (db, writer, session) = writable_session();
+    writer.fail.lock().unwrap().insert(0, Error::new(ErrorKind::ConsentRequired));
+    let error = session.set_seen(&[1], true).await.unwrap_err();
+    assert!(error.to_string().contains("allow them in its settings"), "{error}");
+    assert_eq!(seen(&db)[0], (1, false));
+}

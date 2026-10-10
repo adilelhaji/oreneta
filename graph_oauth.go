@@ -50,6 +50,13 @@ func (a *App) graphBrowser() *graphBrowser {
 }
 
 func (g *graphBrowser) begin(account, clientID string) (any, error) {
+	return g.beginWith(account, clientID, false)
+}
+
+// beginWith asks for message changes when writes is set (#141). The core
+// accepts that only for an account already chosen, and records the level
+// Microsoft actually grants.
+func (g *graphBrowser) beginWith(account, clientID string, writes bool) (any, error) {
 	if clientID == "" {
 		return nil, errors.New("Microsoft client ID missing")
 	}
@@ -74,7 +81,7 @@ func (g *graphBrowser) begin(account, clientID string) (any, error) {
 		return nil, errors.New("Graph authorization: callback unavailable")
 	}
 	redirect := "http://" + listener.Addr().String() + "/"
-	answer, err := g.call("graph.authBegin", map[string]any{"account": account, "client_id": clientID, "redirect_uri": redirect})
+	answer, err := g.call("graph.authBegin", map[string]any{"account": account, "client_id": clientID, "redirect_uri": redirect, "writes": writes})
 	if err != nil {
 		_ = listener.Close()
 		return nil, errors.New("Graph authorization: could not start")

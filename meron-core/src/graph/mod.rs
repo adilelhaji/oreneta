@@ -31,6 +31,9 @@ pub enum ErrorKind {
     Storage,
     Cancelled,
     AccountConflict,
+    /// A write whose request may have reached the server without an answer
+    /// coming back. Never repeated automatically (#141).
+    Uncertain,
 }
 
 /// Only locally generated categories; never provider text, URLs or tokens.
@@ -134,6 +137,19 @@ impl Grant {
             scopes,
             expires_at,
         })
+    }
+    /// Whether Microsoft granted message changes (`Mail.ReadWrite`). The
+    /// granted scopes decide, never the requested ones.
+    pub fn can_write(&self) -> bool {
+        self.scopes.contains("Mail.ReadWrite")
+    }
+    fn authorize_write(&self) -> Result<()> {
+        self.authorize(true)?;
+        if self.can_write() {
+            Ok(())
+        } else {
+            Err(Error::new(ErrorKind::ConsentRequired))
+        }
     }
     fn authorize(&self, full_mail: bool) -> Result<()> {
         if self.expires_at <= chrono::Utc::now().timestamp() {
@@ -264,6 +280,13 @@ struct WireItem<T> {
     #[serde(flatten)]
     fields: T,
 }
+/// What a write's confirmation carries that the caller checks.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WriteFields {
+    parent_folder_id: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct WirePage<T> {
     value: Vec<T>,
@@ -400,6 +423,150 @@ impl Client {
         })
     }
 
+    /// Mark one message read or unread. Absolute, so repeating it on purpose
+    /// is safe; it is still never repeated automatically.
+    pub fn set_read(&self, id: &ResourceId, read: bool) -> Result<()> {
+        self.patch_message(id, serde_json::json!({ "isRead": read }))
+    }
+    /// Flag or unflag one message.
+    pub fn set_flag(&self, id: &ResourceId, flagged: bool) -> Result<()> {
+        let status = if flagged { "flagged" } else { "notFlagged" };
+        self.patch_message(id, serde_json::json!({ "flag": { "flagStatus": status } }))
+    }
+    /// Move one message. Returns the id Graph reports for it afterwards; with
+    /// immutable ids that is normally the same one.
+    pub fn move_message(&self, id: &ResourceId, destination: &ResourceId) -> Result<ResourceId> {
+        self.relocate(id, destination, "move")
+    }
+    /// Copy one message within this mailbox. Returns the new copy's id.
+    pub fn copy_message(&self, id: &ResourceId, destination: &ResourceId) -> Result<ResourceId> {
+        self.relocate(id, destination, "copy")
+    }
+    /// Remove one message from the mailbox's view. Graph keeps it among the
+    /// recoverable items; callers use this only from Deleted Items or Drafts.
+    pub fn delete_message(&self, id: &ResourceId) -> Result<()> {
+        self.grant.authorize_write()?;
+        self.require_id(id, ResourceKind::Message)?;
+        let url = self.route(&["me", "messages", &id.opaque]);
+        self.write("DELETE", &url, None, &[204]).map(|_| ())
+    }
+    fn patch_message(&self, id: &ResourceId, body: serde_json::Value) -> Result<()> {
+        self.grant.authorize_write()?;
+        self.require_id(id, ResourceKind::Message)?;
+        let url = self.route(&["me", "messages", &id.opaque]);
+        let reply = self.write("PATCH", &url, Some(&body), &[200, 204])?;
+        // A body naming another message is not a confirmation of this one.
+        if let Some(item) = reply {
+            if item.id != id.opaque {
+                return Err(Error::new(ErrorKind::InvalidResponse));
+            }
+        }
+        Ok(())
+    }
+    fn relocate(&self, id: &ResourceId, destination: &ResourceId, action: &str) -> Result<ResourceId> {
+        self.grant.authorize_write()?;
+        self.require_id(id, ResourceKind::Message)?;
+        self.require_id(destination, ResourceKind::Folder)?;
+        let url = self.route(&["me", "messages", &id.opaque, action]);
+        let body = serde_json::json!({ "destinationId": destination.opaque });
+        let item = self
+            .write("POST", &url, Some(&body), &[200, 201])?
+            .ok_or_else(|| Error::new(ErrorKind::InvalidResponse))?;
+        if item.fields.parent_folder_id.as_deref().is_some_and(|parent| parent != destination.opaque) {
+            return Err(Error::new(ErrorKind::InvalidResponse));
+        }
+        self.response_id(ResourceKind::Message, &item.id)
+    }
+
+    /// One write. No redirects, no retry, and an error body is never read.
+    /// A transport failure is `Uncertain`: the request may have been applied.
+    fn write(
+        &self,
+        method: &str,
+        url: &Url,
+        body: Option<&serde_json::Value>,
+        success: &[u16],
+    ) -> Result<Option<WireItem<WriteFields>>> {
+        let agent = self.agent()?;
+        let request = match method {
+            "PATCH" => agent.patch(url.as_str()),
+            "POST" => agent.post(url.as_str()),
+            "DELETE" => {
+                let response = agent
+                    .delete(url.as_str())
+                    .header("Authorization", &format!("Bearer {}", self.grant.token))
+                    .header("Accept", "application/json")
+                    .header("Prefer", "IdType=\"ImmutableId\"")
+                    .config()
+                    .max_redirects(0)
+                    .http_status_as_error(false)
+                    .timeout_global(Some(TIMEOUT))
+                    .build()
+                    .call()
+                    .map_err(|_| Error::new(ErrorKind::Uncertain))?;
+                return self.write_reply(response, success);
+            }
+            _ => return Err(Error::new(ErrorKind::InvalidInput)),
+        };
+        let payload = serde_json::to_vec(body.unwrap_or(&serde_json::Value::Null))
+            .map_err(|_| Error::new(ErrorKind::InvalidInput))?;
+        let response = request
+            .header("Authorization", &format!("Bearer {}", self.grant.token))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("Prefer", "IdType=\"ImmutableId\"")
+            .config()
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .timeout_global(Some(TIMEOUT))
+            .build()
+            .send(&payload[..])
+            .map_err(|_| Error::new(ErrorKind::Uncertain))?;
+        self.write_reply(response, success)
+    }
+    fn write_reply(
+        &self,
+        mut response: ureq::http::Response<ureq::Body>,
+        success: &[u16],
+    ) -> Result<Option<WireItem<WriteFields>>> {
+        let status = response.status().as_u16();
+        if !success.contains(&status) {
+            let retry = response
+                .headers()
+                .get("Retry-After")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| retry_after(v, chrono::Utc::now().timestamp()));
+            return Err(status_error(status, retry));
+        }
+        if status == 204 {
+            return Ok(None);
+        }
+        // Applied, but the confirmation could not be read: not a failure to
+        // retry, and not a success to build on either.
+        let bytes = response
+            .body_mut()
+            .with_config()
+            .limit(MAX_BODY)
+            .read_to_vec()
+            .map_err(|_| Error::new(ErrorKind::Uncertain))?;
+        if bytes.is_empty() {
+            return Ok(None);
+        }
+        serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|_| Error::new(ErrorKind::InvalidResponse))
+    }
+    fn agent(&self) -> Result<ureq::Agent> {
+        // Explicit per-account route, resolved per call so proxy changes apply.
+        Ok(match self.proxy.resolve() {
+            Some(proxy) => crate::proxy::agent_for(Some(&proxy))
+                .map_err(|_| Error::new(ErrorKind::Transport))?,
+            // ureq's defaults read HTTP_PROXY. An explicitly resolved direct
+            // route must not silently inherit a process-environment proxy.
+            None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),
+        })
+    }
+
     fn route(&self, segments: &[&str]) -> Url {
         let mut url = self.base.clone();
         url.path_segments_mut()
@@ -497,14 +664,7 @@ impl Client {
         Ok(url)
     }
     fn get<T: DeserializeOwned>(&self, url: &Url) -> Result<T> {
-        // Explicit per-account route, resolved per call so proxy changes apply.
-        let agent = match self.proxy.resolve() {
-            Some(proxy) => crate::proxy::agent_for(Some(&proxy))
-                .map_err(|_| Error::new(ErrorKind::Transport))?,
-            // ureq's defaults read HTTP_PROXY. An explicitly resolved direct
-            // route must not silently inherit a process-environment proxy.
-            None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),
-        };
+        let agent = self.agent()?;
         let mut response = agent
             .get(url.as_str())
             .header("Authorization", &format!("Bearer {}", self.grant.token))

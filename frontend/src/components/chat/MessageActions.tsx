@@ -3,7 +3,7 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { archiveMessage, deleteMessage, markMessageReadState, starMessage } from '../../states/mail'
 import type { Message } from '../../types'
-import { useReadOnlyMail } from '../../lib/useReadOnlyMail'
+import { useMessageChangesBlocked, useReadOnlyMail } from '../../lib/useReadOnlyMail'
 import { forwardMessage } from '../../states/compose'
 import { formatFullTimestamp } from './messageHelpers'
 import { Button } from '../button/Button'
@@ -41,6 +41,11 @@ export function MessageActions({
 }) {
   const { t } = useTranslation()
   const readOnly = useReadOnlyMail(message.account_id)
+  const changesBlocked = useMessageChangesBlocked(message.account_id)
+  // Star, read state, archive and delete change the message (#141). Opening or
+  // discarding a server draft, and forwarding, stay unsupported on Graph.
+  const blocked = (key: string) =>
+    key === 'more' ? false : key === 'open' || (key === 'delete' && isDraft) ? isDraft && readOnly : changesBlocked
 
   const button = (
     key: string,
@@ -52,7 +57,7 @@ export function MessageActions({
     <button
       key={key}
       type="button"
-      disabled={readOnly && ((key !== 'open' && key !== 'more') || (key === 'open' && isDraft))}
+      disabled={blocked(key)}
       title={label}
       aria-label={label}
       onClick={onClick}

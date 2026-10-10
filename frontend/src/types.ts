@@ -53,6 +53,9 @@ export type Account = {
   paused?: boolean
   /** True when account metadata was restored but the OS keychain secret is missing. */
   needs_reconnect?: boolean
+  /** Microsoft Graph only: whether the grant Microsoft returned allows
+   * message changes (read, flag, move, delete; #141). */
+  graph_writes?: boolean
   /** RSS automatic sync interval in minutes (default 60). */
   rss_sync_interval_minutes?: number
   feed_url?: string

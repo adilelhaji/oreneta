@@ -39,7 +39,7 @@ import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
 import { accountIdentities, accounts$ } from '../../states/accounts'
-import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { messageChangesBlocked, readOnlyTarget } from '../../lib/mailCapabilities'
 import { AssistantReviewDialog } from './AssistantReviewDialog'
 
 // The conversation header: back/close affordances, sender info, the desktop
@@ -78,6 +78,9 @@ export function ConversationHeader({
   const messagesCursor = useValue(mail$.messagesCursor)
   const accounts = useValue(accounts$)
   const readOnly = readOnlyTarget(accounts, activeThread.account_id)
+  // Star, read state, archive and trash change messages: on Graph they need
+  // the change permission (#141). Writing to the sender is sending.
+  const changesBlocked = messageChangesBlocked(accounts, activeThread.account_id)
   const ownAddresses = accounts
     .filter((account) => account.id === activeThread.account_id)
     .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
@@ -265,14 +268,14 @@ export function ConversationHeader({
                   only less immediate. */}
               <IconButton
                 icon={Star}
-                disabled={readOnly}
+                disabled={changesBlocked}
                 label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
                 className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-warning')}
                 onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
               />
               <IconButton
                 icon={activeThread.unread ? MailOpen : Mail}
-                disabled={readOnly}
+                disabled={changesBlocked}
                 label={activeThread.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
                 className="hidden min-[860px]:flex"
                 onClick={() =>
@@ -286,13 +289,13 @@ export function ConversationHeader({
                   <LabelPicker threadId={activeThread.thread_id} applied={activeThread.labels ?? []} />
                   <IconButton
                     icon={Archive}
-                    disabled={readOnly}
+                    disabled={changesBlocked}
                     label={t('threads.actions.archiveThread')}
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   <IconButton
                     icon={Trash2}
-                    disabled={readOnly}
+                    disabled={changesBlocked}
                     label={t('threads.actions.moveToTrash')}
                     onClick={() => void deleteThread(activeThread.thread_id)}
                   />
@@ -358,7 +361,7 @@ export function ConversationHeader({
                   <Printer size={16} className="shrink-0" strokeWidth={1.75} /> {t('print.action')}
                 </button>
                 <button
-                  disabled={readOnly}
+                  disabled={changesBlocked}
                   onClick={() => {
                     void starThread(activeThread.thread_id, !activeThread.starred)
                     setActionsMenuOpen(false)
@@ -375,7 +378,7 @@ export function ConversationHeader({
                 {!isRSS && (
                   <>
                     <button
-                      disabled={readOnly}
+                      disabled={changesBlocked}
                       onClick={() => {
                         void archiveThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
@@ -385,7 +388,7 @@ export function ConversationHeader({
                       <Archive size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.archiveThread')}
                     </button>
                     <button
-                      disabled={readOnly}
+                      disabled={changesBlocked}
                       onClick={() => {
                         void deleteThread(activeThread.thread_id)
                         setActionsMenuOpen(false)

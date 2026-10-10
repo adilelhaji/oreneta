@@ -20,6 +20,7 @@ type graphCoreFixture struct {
 	states   map[string]string
 	codes    []string
 	calls    []string
+	writes   []any
 }
 
 func (f *graphCoreFixture) call(method string, p map[string]any) (any, error) {
@@ -32,6 +33,7 @@ func (f *graphCoreFixture) call(method string, p map[string]any) (any, error) {
 		f.attempt++
 		a = fmt.Sprintf("state-%d", f.attempt)
 		f.redirect = p["redirect_uri"].(string)
+		f.writes = append(f.writes, p["writes"])
 		f.states[a] = "pending"
 		q := url.Values{"state": {a}, "redirect_uri": {f.redirect}}
 		return map[string]any{"attempt": a, "url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" + q.Encode()}, nil
@@ -226,5 +228,18 @@ func TestGraphBrowserRejectsProviderURLInjectionAndFrontendCompletion(t *testing
 	}
 	if sidecarCallTimeout("graph.authComplete") < 70*time.Second {
 		t.Fatal("exchange cannot fit RPC timeout")
+	}
+}
+
+func TestGraphBeginForwardsTheChangesRequest(t *testing.T) {
+	g, f, _ := setupGraphBrowser(t)
+	if _, err := g.begin("reader@example.test", "client"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := g.beginWith("reader@example.test", "client", true); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.writes) != 2 || f.writes[0] != false || f.writes[1] != true {
+		t.Fatalf("writes forwarded as %v", f.writes)
 	}
 }

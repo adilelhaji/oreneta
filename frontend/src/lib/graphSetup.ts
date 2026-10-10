@@ -104,3 +104,76 @@ export class GraphSetupFlow {
     }
   }
 }
+
+export type GraphChangesState = {
+  state: 'idle' | 'authorizing' | 'allowed' | 'notGranted' | 'failed'
+  error?: string
+}
+type PollStatus = { state: string; writes?: boolean; error?: string }
+
+/**
+ * Ask Microsoft for message changes on an account that already reads (#141).
+ *
+ * The level shown afterwards is the one Microsoft granted, which a tenant can
+ * keep below what was asked; refusing or cancelling leaves reading as it was.
+ */
+export class GraphChangesFlow {
+  private generation = 0
+  private attempt = ''
+  private timer: ReturnType<typeof setTimeout> | null = null
+  constructor(
+    private call: Call,
+    private update: (state: GraphChangesState) => void,
+    private granted: (account: string, writes: boolean) => void,
+    private intervalMs = 1000,
+  ) {}
+
+  async cancel() {
+    this.generation++
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    const attempt = this.attempt
+    this.attempt = ''
+    if (attempt) await this.call('oauth.graphCancel', { attempt })
+  }
+
+  async begin(account: string) {
+    await this.cancel().catch(() => {})
+    const generation = this.generation
+    this.update({ state: 'authorizing' })
+    try {
+      const { attempt } = await this.call<{ attempt: string }>('oauth.graphBegin', { account, writes: true })
+      if (generation !== this.generation) {
+        await this.call('oauth.graphCancel', { attempt })
+        return
+      }
+      this.attempt = attempt
+      await this.poll(generation, account)
+    } catch {
+      if (generation === this.generation) this.update({ state: 'failed', error: 'authorization_failed' })
+    }
+  }
+
+  private async poll(generation: number, account: string) {
+    if (generation !== this.generation) return
+    try {
+      const status = await this.call<PollStatus>('oauth.graphPoll', { attempt: this.attempt })
+      if (generation !== this.generation) return
+      if (status.state === 'authorized') {
+        this.attempt = ''
+        const writes = status.writes === true
+        this.granted(account, writes)
+        this.update({ state: writes ? 'allowed' : 'notGranted' })
+        return
+      }
+      if (['failed', 'cancelled', 'expired'].includes(status.state)) {
+        this.attempt = ''
+        this.update({ state: 'failed', error: status.error ?? status.state })
+        return
+      }
+      this.timer = setTimeout(() => void this.poll(generation, account), this.intervalMs)
+    } catch {
+      if (generation === this.generation) this.update({ state: 'failed', error: 'authorization_failed' })
+    }
+  }
+}

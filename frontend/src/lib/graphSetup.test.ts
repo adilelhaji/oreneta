@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { GraphSetupFlow, type GraphProgress } from './graphSetup'
+import { GraphChangesFlow, GraphSetupFlow, type GraphChangesState, type GraphProgress } from './graphSetup'
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 function deferred<T>() {
@@ -148,4 +148,64 @@ test('successful activation supplies a generation check to asynchronous UI refre
   expect(check?.()).toBe(true)
   await flow.cancel()
   expect(check?.()).toBe(false)
+})
+
+test('allowing changes asks for writes on that account and reports the level granted (#141)', async () => {
+  for (const writes of [true, false]) {
+    const calls: { command: string; payload: any }[] = []
+    const states: string[] = []
+    const granted: [string, boolean][] = []
+    let polls = 0
+    const flow = new GraphChangesFlow(
+      async <T>(command: string, payload?: unknown) => {
+        calls.push({ command, payload })
+        if (command === 'oauth.graphBegin') return { attempt: 'a1' } as T
+        if (command === 'oauth.graphPoll')
+          return (++polls < 2 ? { state: 'pending' } : { state: 'authorized', writes }) as T
+        return {} as T
+      },
+      (s) => states.push(s.state),
+      (account, w) => granted.push([account, w]),
+      0,
+    )
+    await flow.begin('reader@example.test')
+    for (let i = 0; i < 5; i++) await tick()
+    expect(calls[0]).toEqual({ command: 'oauth.graphBegin', payload: { account: 'reader@example.test', writes: true } })
+    expect(granted).toEqual([['reader@example.test', writes]])
+    expect(states).toEqual(['authorizing', writes ? 'allowed' : 'notGranted'])
+  }
+})
+
+test('a refused or cancelled request for changes leaves the account as it was', async () => {
+  const states: GraphChangesState[] = []
+  const granted: unknown[] = []
+  const flow = new GraphChangesFlow(
+    async <T>(command: string) => {
+      if (command === 'oauth.graphBegin') return { attempt: 'a1' } as T
+      if (command === 'oauth.graphPoll') return { state: 'failed', error: 'denied' } as T
+      return {} as T
+    },
+    (s) => states.push(s),
+    (...args) => granted.push(args),
+    0,
+  )
+  await flow.begin('reader@example.test')
+  expect(states.at(-1)).toEqual({ state: 'failed', error: 'denied' })
+  expect(granted).toEqual([])
+
+  const cancelled: string[] = []
+  const pending = new GraphChangesFlow(
+    async <T>(command: string) => {
+      cancelled.push(command)
+      if (command === 'oauth.graphBegin') return { attempt: 'a2' } as T
+      return { state: 'pending' } as T
+    },
+    () => {},
+    (...args) => granted.push(args),
+    10_000,
+  )
+  await pending.begin('reader@example.test')
+  await pending.cancel()
+  expect(cancelled).toContain('oauth.graphCancel')
+  expect(granted).toEqual([])
 })

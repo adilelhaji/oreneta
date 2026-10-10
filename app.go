@@ -261,7 +261,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.gmailBegin()
 	case "oauth.graphBegin":
 		account, _ := payload["account"].(string)
-		return a.graphBrowser().begin(account, outlookClientID())
+		writes, _ := payload["writes"].(bool)
+		return a.graphBrowser().beginWith(account, outlookClientID(), writes)
 	case "oauth.graphPoll":
 		attempt, _ := payload["attempt"].(string)
 		return a.graphBrowser().poll(attempt)

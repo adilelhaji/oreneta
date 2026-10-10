@@ -42,7 +42,7 @@ import {
 } from '../../states/mail'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
-import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { copyBlocked, messageChangesBlocked, readOnlyTarget } from '../../lib/mailCapabilities'
 import { formatDeferredWhen } from '../../lib/date'
 import type { Account, Message } from '../../types'
 import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
@@ -191,6 +191,15 @@ export function ThreadContextMenu({
   const foldersByAccount = useValue(mail$.foldersByAccount)
   const accounts = useValue(accounts$)
   const mailAccounts = accounts.filter(isSendableAccount)
+  // Where this thread can be copied: any working mail account for IMAP/EWS;
+  // for Microsoft Graph only its own account, with the change permission.
+  const copyTargets = accounts.filter(
+    (account) =>
+      account.auth_type !== 'rss' &&
+      account.provider !== 'rss' &&
+      account.needs_reconnect !== true &&
+      !copyBlocked(accounts, menu?.accountId ?? '', account.id),
+  )
   const rssAccounts = accounts.filter((account) => isRssAccount(account, account.id))
   const [moveOpen, setMoveOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
@@ -208,7 +217,7 @@ export function ThreadContextMenu({
     setCopyLoading(true)
     try {
       await Promise.all(
-        mailAccounts.map((account) =>
+        copyTargets.map((account) =>
           ensureAccountFolders(account.id, { refreshIfBootstrapOnly: true, waitForRefresh: true }),
         ),
       )
@@ -375,8 +384,10 @@ export function ThreadContextMenu({
 
   const accountFolders = foldersByAccount[menu.accountId] ?? []
   const readOnly = readOnlyTarget(accounts, menu.accountId)
-  const canMove = !readOnly && accountFolders.some((folder) => folder.id !== menu.folderId)
-  const copyAccountGroups = mailAccounts.map((account) => ({
+  // Read state, star, archive, move, copy and delete change messages (#141).
+  const changesBlocked = messageChangesBlocked(accounts, menu.accountId)
+  const canMove = !changesBlocked && accountFolders.some((folder) => folder.id !== menu.folderId)
+  const copyAccountGroups = copyTargets.map((account) => ({
     account,
     folders: foldersByAccount[account.id] ?? [],
     // The thread's own folder stays in the tree as a parent, just not pickable.
@@ -396,7 +407,7 @@ export function ThreadContextMenu({
       onContextMenu={(event) => event.preventDefault()}
     >
       <MenuItem
-        disabled={readOnly}
+        disabled={changesBlocked}
         icon={
           menu.unread ? (
             <MailOpen size={14} className="text-secondary" strokeWidth={1.75} />
@@ -414,7 +425,7 @@ export function ThreadContextMenu({
         }}
       />
       <MenuItem
-        disabled={readOnly}
+        disabled={changesBlocked}
         icon={
           <Star
             size={14}
@@ -487,7 +498,7 @@ export function ThreadContextMenu({
       )}
       <div className="my-1 border-t border-border" />
       <MenuItem
-        disabled={readOnly}
+        disabled={changesBlocked}
         icon={<Archive size={14} className="text-secondary" strokeWidth={1.75} />}
         label={t('threads.actions.archiveThread')}
         onClick={() => {
@@ -567,7 +578,7 @@ export function ThreadContextMenu({
           )}
         </div>
       )}
-      {!readOnly && mailAccounts.length > 0 && (
+      {!changesBlocked && copyTargets.length > 0 && (
         <div
           ref={copyAnchorRef}
           onMouseEnter={() => {
@@ -625,7 +636,7 @@ export function ThreadContextMenu({
       <div className="my-1 border-t border-border" />
       <MenuItem
         danger
-        disabled={readOnly}
+        disabled={changesBlocked}
         icon={<Trash2 size={14} strokeWidth={1.75} />}
         label={
           inTrash
