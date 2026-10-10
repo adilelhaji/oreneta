@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Allowing sending asks Microsoft for permission to send mail as this account.",
   "settings.account.graphSend.allowedHint": "Messages up to 4 MB, attachments included, are sent through Microsoft. Scheduled sending is not available.",
   "settings.account.graphSend.allow": "Allow sending",
+  "settings.account.ewsOnline.notice": "Exchange Online is retiring EWS (completely on 1 April 2027) and already refuses this app's password sign-in for it. To keep this mailbox, remove it here and add it again as Microsoft Graph.",
   "composer.cannotScheduleGraph": "Scheduled sending is not available for Microsoft Graph accounts",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

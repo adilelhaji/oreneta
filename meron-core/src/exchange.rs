@@ -2380,6 +2380,32 @@ fn scoped_item_id(reference: &EwsId, whole_series: bool) -> BaseItemId {
     }
 }
 
+/// Whether an EWS endpoint is Exchange Online (worldwide or a national cloud)
+/// rather than an Exchange server run on premises (#46).
+///
+/// This client signs in to EWS with Basic authentication, which Exchange
+/// Online turned off for EWS in October 2022; and Exchange Online retires EWS
+/// itself, tenant by tenant from October 2026 and completely on 1 April 2027.
+/// An account pointed there cannot keep working through EWS and is told so;
+/// an on-premises server is not affected by either.
+pub fn is_exchange_online(url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(url.trim()) else {
+        return false;
+    };
+    let Some(host) = parsed.host_str().map(str::to_ascii_lowercase) else {
+        return false;
+    };
+    [
+        "outlook.office365.com",
+        "outlook.office.com",
+        "outlook.office365.us",
+        "outlook.office365.de",
+        "partner.outlook.cn",
+    ]
+    .iter()
+    .any(|cloud| host == *cloud || host.ends_with(&format!(".{cloud}")))
+}
+
 fn basic_auth(username: &str, password: &str) -> String {
     let credentials =
         base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"));
@@ -2714,6 +2740,28 @@ mod tests {
         // Unknown parentage must not hide a calendar the user still has.
         assert!(!is_discarded(Some(bin), None));
         assert!(!is_discarded(None, Some(&folder(bin))));
+    }
+
+    #[test]
+    fn exchange_online_endpoints_are_told_apart_from_on_premises_servers() {
+        for online in [
+            "https://outlook.office365.com/EWS/Exchange.asmx",
+            "https://OUTLOOK.OFFICE365.COM/ews/exchange.asmx",
+            "https://outlook.office.com/EWS/Exchange.asmx",
+            "https://outlook.office365.us/EWS/Exchange.asmx",
+            "https://partner.outlook.cn/EWS/Exchange.asmx",
+        ] {
+            assert!(super::is_exchange_online(online), "{online}");
+        }
+        for on_premises in [
+            "https://mail.corp.example.com/EWS/Exchange.asmx",
+            "https://outlook.office365.com.evil.example/EWS/Exchange.asmx",
+            "https://notoutlook.office365.com.example/EWS",
+            "",
+            "not a url",
+        ] {
+            assert!(!super::is_exchange_online(on_premises), "{on_premises}");
+        }
     }
 
     #[test]

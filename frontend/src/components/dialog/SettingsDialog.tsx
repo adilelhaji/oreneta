@@ -103,6 +103,7 @@ import { BoardPanel } from './BoardSettingsPanel'
 import { pickImageFile } from '../../lib/nativeFilePicker'
 import { invoke } from '../../lib/bridge'
 import { GraphChangesFlow, type GraphChangesState } from '../../lib/graphSetup'
+import { Notice } from '../notice/Notice'
 import { useDialogFocus } from '../../lib/useDialogFocus'
 import { SettingsSearch } from './SettingsSearch'
 
@@ -1591,6 +1592,12 @@ function AccountPanel({ account }: { account: Account }) {
             }
           />
         </SettingsGroup>
+      )}
+
+      {account.ews_exchange_online && (
+        // Exchange Online retires EWS and already refuses this app's password
+        // sign-in for it (#46): said here, with the way that keeps working.
+        <Notice tone="warning">{t('settings.account.ewsOnline.notice')}</Notice>
       )}
 
       {account.auth_type === 'graph_oauth' && !account.needs_reconnect && <GraphChangesGroup account={account} />}

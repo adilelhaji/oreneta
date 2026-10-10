@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "允許傳送會向 Microsoft 要求以此帳戶傳送郵件的權限。",
   "settings.account.graphSend.allowedHint": "不超過 4 MB（含附件）的郵件會透過 Microsoft 傳送。暫不支援排程傳送。",
   "settings.account.graphSend.allow": "允許傳送",
+  "settings.account.ewsOnline.notice": "Exchange Online 正在停用 EWS（2027 年 4 月 1 日完全停用），並已拒絕此應用程式的密碼登入。若要保留此信箱，請在此移除，再以 Microsoft Graph 方式重新新增。",
   "composer.cannotScheduleGraph": "Microsoft Graph 帳戶暫不支援排程傳送",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

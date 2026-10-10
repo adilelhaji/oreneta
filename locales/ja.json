@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "送信を許可すると、このアカウントとしてメールを送信する権限を Microsoft に求めます。",
   "settings.account.graphSend.allowedHint": "添付ファイルを含めて 4 MB までのメッセージは Microsoft 経由で送信されます。予約送信は利用できません。",
   "settings.account.graphSend.allow": "送信を許可",
+  "settings.account.ewsOnline.notice": "Exchange Online は EWS を廃止しており（2027 年 4 月 1 日に完全終了）、このアプリのパスワードによるサインインを既に拒否しています。このメールボックスを使い続けるには、ここで削除し、Microsoft Graph として追加し直してください。",
   "composer.cannotScheduleGraph": "Microsoft Graph アカウントでは予約送信を利用できません",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

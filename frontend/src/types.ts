@@ -58,6 +58,8 @@ export type Account = {
   graph_writes?: boolean
   /** Microsoft Graph only: whether the grant allows sending (Mail.Send; #143). */
   graph_send?: boolean
+  /** An EWS account pointed at Exchange Online, where EWS is retired (#46). */
+  ews_exchange_online?: boolean
   /** RSS automatic sync interval in minutes (default 60). */
   rss_sync_interval_minutes?: number
   feed_url?: string

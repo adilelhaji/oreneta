@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Saatmise lubamine küsib Microsoftilt luba saata kirju selle kontona.",
   "settings.account.graphSend.allowedHint": "Kuni 4 MB kirjad koos manustega saadetakse Microsofti kaudu. Ajastatud saatmine pole saadaval.",
   "settings.account.graphSend.allow": "Luba saatmine",
+  "settings.account.ewsOnline.notice": "Exchange Online lõpetab EWS-i (täielikult 1. aprillil 2027) ja keeldub juba selle rakenduse paroolisisselogimisest. Postkasti säilitamiseks eemaldage see siin ja lisage uuesti Microsoft Graphina.",
   "composer.cannotScheduleGraph": "Ajastatud saatmine pole Microsoft Graphi kontodel saadaval",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

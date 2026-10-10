@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Zezwolenie na wysyłanie prosi Microsoft o uprawnienie do wysyłania poczty jako to konto.",
   "settings.account.graphSend.allowedHint": "Wiadomości do 4 MB, z załącznikami, są wysyłane przez Microsoft. Planowane wysyłanie nie jest dostępne.",
   "settings.account.graphSend.allow": "Zezwól na wysyłanie",
+  "settings.account.ewsOnline.notice": "Exchange Online wycofuje EWS (całkowicie 1 kwietnia 2027) i już odrzuca logowanie hasłem tej aplikacji. Aby zachować tę skrzynkę, usuń ją tutaj i dodaj ponownie jako Microsoft Graph.",
   "composer.cannotScheduleGraph": "Planowane wysyłanie nie jest dostępne dla kont Microsoft Graph",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

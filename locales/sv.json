@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Att tillåta skicka ber Microsoft om behörighet att skicka e-post som det här kontot.",
   "settings.account.graphSend.allowedHint": "Meddelanden upp till 4 MB, inklusive bilagor, skickas via Microsoft. Schemalagd sändning är inte tillgänglig.",
   "settings.account.graphSend.allow": "Tillåt skicka",
+  "settings.account.ewsOnline.notice": "Exchange Online avvecklar EWS (helt den 1 april 2027) och nekar redan appens lösenordsinloggning för det. Behåll postlådan genom att ta bort den här och lägga till den igen som Microsoft Graph.",
   "composer.cannotScheduleGraph": "Schemalagd sändning är inte tillgänglig för Microsoft Graph-konton",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

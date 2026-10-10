@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Autoriser l’envoi demande à Microsoft l’autorisation d’envoyer des e-mails au nom de ce compte.",
   "settings.account.graphSend.allowedHint": "Les messages jusqu’à 4 Mo, pièces jointes comprises, sont envoyés via Microsoft. L’envoi programmé n’est pas disponible.",
   "settings.account.graphSend.allow": "Autoriser l’envoi",
+  "settings.account.ewsOnline.notice": "Exchange Online retire EWS (entièrement le 1er avril 2027) et refuse déjà la connexion par mot de passe de cette app. Pour garder cette boîte, supprimez-la ici et ajoutez-la de nouveau en tant que Microsoft Graph.",
   "composer.cannotScheduleGraph": "L’envoi programmé n’est pas disponible pour les comptes Microsoft Graph",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

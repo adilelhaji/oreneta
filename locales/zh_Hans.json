@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "允许发送会向 Microsoft 请求以此帐户发送邮件的权限。",
   "settings.account.graphSend.allowedHint": "不超过 4 MB（含附件）的邮件将通过 Microsoft 发送。暂不支持定时发送。",
   "settings.account.graphSend.allow": "允许发送",
+  "settings.account.ewsOnline.notice": "Exchange Online 正在停用 EWS（2027 年 4 月 1 日完全停用），并已拒绝此应用的密码登录。要保留此邮箱，请在此移除，然后以 Microsoft Graph 方式重新添加。",
   "composer.cannotScheduleGraph": "Microsoft Graph 帐户暂不支持定时发送",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

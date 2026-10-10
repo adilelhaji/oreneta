@@ -3348,6 +3348,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         .get(&id)
                         .is_none_or(|creds| !creds_have_required_secret(creds));
                     obj.insert("needs_reconnect".to_string(), json!(needs_reconnect));
+                    // An EWS account pointed at Exchange Online (#46): EWS is
+                    // retired there, and this client's Basic sign-in already
+                    // was. Said in settings with the way forward.
+                    if let Some(url) = obj.get("ews_url").and_then(Value::as_str) {
+                        if meron_core::exchange::is_exchange_online(url) {
+                            obj.insert("ews_exchange_online".to_string(), json!(true));
+                        }
+                    }
                 }
             }
             Ok(json!({ "accounts": accounts }))

@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Sūtīšanas atļaušana lūdz Microsoft atļauju sūtīt pastu šī konta vārdā.",
   "settings.account.graphSend.allowedHint": "Ziņojumi līdz 4 MB, ieskaitot pielikumus, tiek sūtīti caur Microsoft. Ieplānota sūtīšana nav pieejama.",
   "settings.account.graphSend.allow": "Atļaut sūtīšanu",
+  "settings.account.ewsOnline.notice": "Exchange Online pārtrauc EWS (pilnībā 2027. gada 1. aprīlī) un jau noraida šīs lietotnes pieteikšanos ar paroli. Lai saglabātu šo pastkasti, noņemiet to šeit un pievienojiet vēlreiz kā Microsoft Graph.",
   "composer.cannotScheduleGraph": "Ieplānota sūtīšana nav pieejama Microsoft Graph kontiem",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

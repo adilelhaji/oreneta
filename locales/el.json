@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Η άδεια αποστολής ζητά από τη Microsoft δικαίωμα να στέλνει μηνύματα ως αυτός ο λογαριασμός.",
   "settings.account.graphSend.allowedHint": "Μηνύματα έως 4 MB, μαζί με τα συνημμένα, αποστέλλονται μέσω της Microsoft. Η προγραμματισμένη αποστολή δεν είναι διαθέσιμη.",
   "settings.account.graphSend.allow": "Να επιτρέπεται η αποστολή",
+  "settings.account.ewsOnline.notice": "Το Exchange Online καταργεί το EWS (πλήρως την 1η Απριλίου 2027) και ήδη απορρίπτει τη σύνδεση με κωδικό αυτής της εφαρμογής. Για να κρατήσετε αυτό το γραμματοκιβώτιο, αφαιρέστε το εδώ και προσθέστε το ξανά ως Microsoft Graph.",
   "composer.cannotScheduleGraph": "Η προγραμματισμένη αποστολή δεν είναι διαθέσιμη για λογαριασμούς Microsoft Graph",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

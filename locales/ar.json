@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "السماح بالإرسال يطلب من Microsoft إذنًا بإرسال البريد باسم هذا الحساب.",
   "settings.account.graphSend.allowedHint": "تُرسل الرسائل حتى 4 ميغابايت، مع المرفقات، عبر Microsoft. الإرسال المجدول غير متاح.",
   "settings.account.graphSend.allow": "السماح بالإرسال",
+  "settings.account.ewsOnline.notice": "يوقف Exchange Online خدمة EWS (بالكامل في 1 أبريل 2027) ويرفض بالفعل تسجيل الدخول بكلمة مرور هذا التطبيق. للاحتفاظ بصندوق البريد هذا، أزله هنا ثم أضفه مجددًا باستخدام Microsoft Graph.",
   "composer.cannotScheduleGraph": "الإرسال المجدول غير متاح لحسابات Microsoft Graph",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

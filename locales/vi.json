@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Cho phép gửi sẽ xin Microsoft quyền gửi thư bằng tài khoản này.",
   "settings.account.graphSend.allowedHint": "Thư tối đa 4 MB, gồm cả tệp đính kèm, được gửi qua Microsoft. Chưa thể hẹn giờ gửi.",
   "settings.account.graphSend.allow": "Cho phép gửi",
+  "settings.account.ewsOnline.notice": "Exchange Online đang ngừng EWS (hoàn toàn vào ngày 1/4/2027) và đã từ chối đăng nhập bằng mật khẩu của ứng dụng này. Để giữ hộp thư, hãy xóa ở đây rồi thêm lại dưới dạng Microsoft Graph.",
   "composer.cannotScheduleGraph": "Tài khoản Microsoft Graph chưa hỗ trợ hẹn giờ gửi",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

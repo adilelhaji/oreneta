@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Permitir el envío pide a Microsoft permiso para enviar correo como esta cuenta.",
   "settings.account.graphSend.allowedHint": "Los mensajes de hasta 4 MB, adjuntos incluidos, se envían a través de Microsoft. El envío programado no está disponible.",
   "settings.account.graphSend.allow": "Permitir el envío",
+  "settings.account.ewsOnline.notice": "Exchange Online está retirando EWS (por completo el 1 de abril de 2027) y ya rechaza el inicio de sesión con contraseña de esta app. Para conservar este buzón, quítalo aquí y vuelve a añadirlo como Microsoft Graph.",
   "composer.cannotScheduleGraph": "El envío programado no está disponible en las cuentas de Microsoft Graph",
   "accounts.graph.scope": "Lee carpetas y correo, con acceso sin conexión a los mensajes almacenados. El envío, la edición, los adjuntos, los calendarios y los contactos aún no están disponibles.",
   "accounts.graph.unconfigured": "Esta compilación no incluye un identificador de cliente Microsoft. El inicio de sesión Graph no está disponible.",

@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Göndermeye izin vermek, bu hesap adına posta göndermek için Microsoft'tan izin ister.",
   "settings.account.graphSend.allowedHint": "Ekler dahil 4 MB'a kadar iletiler Microsoft üzerinden gönderilir. Zamanlanmış gönderme kullanılamaz.",
   "settings.account.graphSend.allow": "Göndermeye izin ver",
+  "settings.account.ewsOnline.notice": "Exchange Online EWS'yi kullanımdan kaldırıyor (tamamen 1 Nisan 2027'de) ve bu uygulamanın parola ile oturum açmasını zaten reddediyor. Bu posta kutusunu korumak için buradan kaldırıp Microsoft Graph olarak yeniden ekleyin.",
   "composer.cannotScheduleGraph": "Microsoft Graph hesaplarında zamanlanmış gönderme kullanılamaz",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

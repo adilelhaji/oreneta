@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Consentire l’invio chiede a Microsoft il permesso di inviare posta come questo account.",
   "settings.account.graphSend.allowedHint": "I messaggi fino a 4 MB, allegati inclusi, vengono inviati tramite Microsoft. L’invio programmato non è disponibile.",
   "settings.account.graphSend.allow": "Consenti invio",
+  "settings.account.ewsOnline.notice": "Exchange Online sta dismettendo EWS (del tutto il 1° aprile 2027) e rifiuta già l’accesso con password di questa app. Per mantenere questa casella, rimuovila qui e aggiungila di nuovo come Microsoft Graph.",
   "composer.cannotScheduleGraph": "L’invio programmato non è disponibile per gli account Microsoft Graph",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",

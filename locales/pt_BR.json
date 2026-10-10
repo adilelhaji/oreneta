@@ -96,6 +96,7 @@
   "settings.account.graphSend.hint": "Permitir o envio pede à Microsoft permissão para enviar e-mail como esta conta.",
   "settings.account.graphSend.allowedHint": "Mensagens de até 4 MB, com anexos, são enviadas pela Microsoft. O envio agendado não está disponível.",
   "settings.account.graphSend.allow": "Permitir envio",
+  "settings.account.ewsOnline.notice": "O Exchange Online está desativando o EWS (por completo em 1º de abril de 2027) e já recusa o login com senha deste app. Para manter esta caixa, remova-a aqui e adicione-a novamente como Microsoft Graph.",
   "composer.cannotScheduleGraph": "O envio agendado não está disponível para contas Microsoft Graph",
   "accounts.graph.scope": "Read folders and email, with offline access to cached messages. Sending, editing, attachments, calendars and contacts are not available yet.",
   "accounts.graph.unconfigured": "This build has no Microsoft client ID. Graph sign-in is unavailable.",
