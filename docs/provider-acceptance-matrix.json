@@ -21,6 +21,6 @@
     { "id": "generic-imap-smtp", "status": "not-tested", "reason": "Dedicated external accounts, TLS/auth and recipient authorization required; maddy is not provider certification." },
     { "id": "gmail", "status": "not-tested", "reason": "Dedicated account, application-owned OAuth or authorized app password, scopes and delivery observations required." },
     { "id": "google-workspace", "status": "not-tested", "reason": "Tenant and dedicated accounts required; Gmail consumer evidence cannot substitute Workspace policy validation." },
-    { "id": "microsoft-365-graph", "status": "not-tested", "reason": "Authorized tenant and delegated read-only scopes required. Sending, remote drafts, mutations and attachments are unsupported in the approved current slice." }
+    { "id": "microsoft-365-graph", "status": "not-tested", "reason": "Authorized tenant and dedicated mailbox required, with Mail.Read and, for those rows, separately granted Mail.ReadWrite and Mail.Send. Remote drafts, sends over 4 MB, calendars, contacts and shared mailboxes are unsupported." }
   ]
 }

@@ -90,16 +90,28 @@ across two accounts to expose scoping mistakes. Do not reuse real mail as fixtur
 - **Gmail consumer and Google Workspace:** separate executions; record OAuth or
   app-password mode and applicable policy. Reconcile Gmail labels with IMAP
   folders, Sent and Trash in the authorized account. Consumer results cannot
-  certify Workspace tenant restrictions. Do not use Meron's bundled OAuth client.
-- **Microsoft 365 Graph:** current [contract](graph-mail-integration.md) is
-  delegated read-only for the signed-in mailbox. Record granted scopes and
-  pinned principal, activate Inbox, open other folders, page, read cached bodies,
-  reconnect and check invalidation. Existing Rust fixtures cover rate-limit,
-  scope, continuation, cancellation and cache rollback; they are not live runs.
-  Sending, remote drafts, flags/moves/deletion, attachments, calendars, contacts
-  and shared mailboxes remain **unsupported**, not failed or passed tests.
+  certify Workspace tenant restrictions. Do not use Meron's bundled OAuth
+  client: run a `-tags distributable` build with an application-owned client
+  ([registrations](oauth-registrations.md)).
+- **Microsoft 365 Graph:** delegated access to the signed-in mailbox only
+  ([adapter](graph-mail-integration.md)). Reading is `Mail.Read`; message
+  changes (read state, flags, move, copy within the account, delete) need
+  `Mail.ReadWrite` and sending needs `Mail.Send`, each requested separately
+  when the person enables it (ADR-0004;
+  [changes](design/graph-message-actions.md),
+  [attachments](design/graph-attachments.md),
+  [sending](design/graph-sending.md)). A live row records the granted scopes
+  and pinned principal; activates Inbox, opens other folders, pages and reads
+  cached bodies and attachments; enables changes and checks each one against
+  Outlook on the web; sends to an authorized recipient and checks Sent Items;
+  then reconnects and checks invalidation. Rust loopback fixtures cover
+  rate-limit with Retry-After, revoked grants, scope, continuation,
+  cancellation, partial batch failure, uncertain sends and cache rollback; they
+  are not live runs. Remote drafts, sends over 4 MB, scheduled send,
+  calendars, contacts and shared mailboxes remain **unsupported**, not failed
+  or passed tests.
 
-Graph writes wait for their owning implementation issues. Gmail/Workspace/Graph
+Gmail/Workspace/Graph
 live rows remain `not-tested` until authorized independent evidence exists.
 Native installation remains blocked locally by Application Control pending the
 separate signing process. Windows startup/zoom CI evidence does not certify mail
