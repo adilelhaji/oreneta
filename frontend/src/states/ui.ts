@@ -59,6 +59,18 @@ export function filterKey(filters: FilterFacet[]): string {
 export const hasFilter = (filters: FilterFacet[], facet: FilterFacet) => filters.includes(facet)
 
 /**
+ * Whether the list can show a next page (#30, #34).
+ *
+ * A filtered view pages on the cursor the core mints for that same filter, so
+ * a filter is no reason to stop at the first page — only the starred view,
+ * which is one unpaginated page, is.
+ */
+export function canLoadMoreThreads(cursor: string, query: string, filters: FilterFacet[]): boolean {
+  if (!cursor) return false
+  return !!query.trim() || filterKey(filters) !== 'starred'
+}
+
+/**
  * Turns one facet on or off.
  *
  * Choosing what has been set aside puts the others down, and choosing any of

@@ -21,6 +21,7 @@ import {
   toggleBulkSelection,
   ui$,
   type BulkSelectionItem,
+  canLoadMoreThreads,
 } from '../../states/ui'
 import { thread$ } from '../../states/thread'
 import { settings$, sortParam } from '../../states/settings'
@@ -172,10 +173,9 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const hasUnread = isRSSAccount
     ? filteredThreads.some((thread) => thread.unread)
     : folderUnread(folders, selectedFolder) > 0 || filteredThreads.some((thread) => thread.unread)
-  // A search pages on the cursor the core mints for it, whatever the filter chip
-  // says — a query is answered by a search, not by a filtered listing. Without a
-  // cursor (feeds, starred) there is nothing more to load.
-  const canLoadMore = !!threadsCursor && (!!query.trim() || filters.length === 0)
+  // A search pages on the cursor the core mints for it, and so does a filtered
+  // listing. Without a cursor (feeds, starred) there is nothing more to load.
+  const canLoadMore = canLoadMoreThreads(threadsCursor, query, filters)
   const feedRowsDraggable = !isStarredView && isRSSAccount
   // The folder switcher needs a folder list to offer. That is an account's real
   // folders, or — in the unified view — the synthetic per-role list, where each
