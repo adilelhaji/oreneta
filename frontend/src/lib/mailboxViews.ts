@@ -39,8 +39,9 @@ export function sanitizeMailboxColumns(raw: unknown): MailboxColumn[] | null {
 
 export function parseMailboxViews(raw: unknown): ParsedMailboxViews {
   if (!record(raw)) return { kind: 'legacy' }
-  if (typeof raw.version === 'number' && Number.isInteger(raw.version) && raw.version > 1)
-    return { kind: 'unsupported' }
+  // Any later version, a minor one such as 1.5 included, is not ours to read
+  // or to overwrite with a version 1 layout.
+  if (typeof raw.version === 'number' && raw.version > 1) return { kind: 'unsupported' }
   if (raw.version !== 1) return { kind: 'legacy' }
   const defaultColumns = sanitizeMailboxColumns(raw.defaultColumns)
   if (!defaultColumns || !Array.isArray(raw.folders)) return { kind: 'legacy' }
