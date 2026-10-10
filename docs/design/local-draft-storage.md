@@ -66,4 +66,5 @@ Migración idempotente sin pérdida; reapertura de texto, identidad y adjuntos;
 conflictos entre conexiones; descarte frente a primera escritura tardía;
 cambio/ausencia de cuenta; límites, formato futuro, corrupción; rollback ante
 fallo y base de solo lectura. Revisión técnica/producto y CI del commit exacto.
-La activación de este almacén en el editor y aceptación nativa siguen pendientes.
+La activación en el editor está en [editor-draft-recovery.md](editor-draft-recovery.md) (#170);
+la aceptación nativa sigue pendiente.

@@ -15,7 +15,7 @@ import {
   refreshAccountFoldersCache,
   inboxUnread,
 } from './states/mail'
-import { openMailtoCompose, openThreadTabById } from './states/compose'
+import { flushComposeDrafts, openMailtoCompose, openThreadTabById, restoreLocalDrafts } from './states/compose'
 import { accounts$ } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
@@ -61,7 +61,11 @@ export function useAppEffects() {
   // tray rather than quitting, so this is the rarer path of an actual quit —
   // best effort, and the reason the grace periods on offer are short.
   useEffect(() => {
-    const flush = () => flushQueuedSends()
+    const flush = () => {
+      flushQueuedSends()
+      // Likewise a draft typed in the last moment before quitting.
+      void flushComposeDrafts()
+    }
     window.addEventListener('beforeunload', flush)
     window.addEventListener('pagehide', flush)
     return () => {
@@ -235,6 +239,8 @@ export function useAppEffects() {
     // And what the core could not settle on its own: sends it never got an
     // answer for, including any the last run was in the middle of.
     void refreshOutgoingAttempts()
+    // Drafts written in the full editor, with their files, as they were left.
+    void restoreLocalDrafts()
     // The label set, once: every chip in the list is painted from it, so a
     // list that arrives before the labels do would show conversations with
     // labels it cannot name.

@@ -7,6 +7,7 @@ import { ComposerHeaderFields } from './ComposerHeaderFields'
 import { ComposerToolbar } from './ComposerToolbar'
 import { ComposerAttachments } from './ComposerAttachments'
 import { ComposerFooter } from './ComposerFooter'
+import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
 import { confirmAction } from '../../states/ui'
 import type { Template } from '../../states/templates'
@@ -139,6 +140,8 @@ export function Composer({ tabId }: { tabId: string }) {
       />
 
       {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-danger">{error}</p>}
+
+      <LocalDraftStatus tabId={tabId} />
 
       <ComposerFooter
         rich={draft.rich}

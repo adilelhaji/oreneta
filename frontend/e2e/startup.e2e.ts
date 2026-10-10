@@ -868,6 +868,10 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'labels.list': { labels: [] },
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
+        'localDrafts.list': { drafts: [] },
+        'localDrafts.get': { draft: null },
+        'localDrafts.save': { applied: true, revision: 1, deleted: false },
+        'localDrafts.delete': { applied: true, revision: 2, deleted: true },
         'tray.setUnread': { ok: true },
         'update.status': {
           state: 'idle',

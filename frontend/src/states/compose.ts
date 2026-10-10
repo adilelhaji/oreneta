@@ -40,6 +40,7 @@ import { settings$ } from './settings'
 import { formatFullTimestamp } from '../components/chat/messageHelpers'
 import { closeComposeSession, forgetComposeSession, pruneComposeSessions } from './composeSessions'
 import { offerCertificateTrust } from './certificateTrust'
+import { discardLocalDraft, flushLocalDrafts, hydrateLocalDrafts, scheduleLocalDraftSave } from './localDraftSync'
 
 // Compose/reader-tab + draft state. Reader tabs open using the account's
 // conversation view preference; compose tabs hold a full-editor draft. The
@@ -271,6 +272,8 @@ function popToPreviousTab(closedId: string, remaining: MessageTab[]): string {
 // reclaims them, so a discarded or sent draft leaks its images. On boot we
 // collect the `/media/<key>` keys still referenced by the rehydrated compose
 // tabs and let the backend remove every other loose file. Fire-and-forget.
+// Called only after restoreLocalDrafts has brought back the stored drafts; if
+// the store cannot be read, nothing is pruned.
 export function pruneComposerMedia() {
   const keys = new Set<string>()
   // Match a root-level media key (no slash) — exactly writeMediaFile's output.
@@ -289,8 +292,17 @@ export function pruneComposerMedia() {
 // text portion of each compose draft — attachments are dropped because their
 // base64 payloads can blow past localStorage's quota. On boot the tabs come
 // back; the user reattaches files if needed.
+// The whole draft, files included, also goes to the core's local store
+// (localDraftSync, #170); the text-only copy below stays as the fallback for
+// a store that cannot be reached.
+let shownComposeTabs = new Set(initialComposeTabs.map((tab) => tab.id))
 compose$.tabs.onChange(({ value: tabs }) => {
   pruneComposeSessions(new Set(tabs.map((tab) => tab.id)))
+  const composeTabs = tabs.filter((tab) => tab.kind === 'compose' && tab.compose)
+  const nowShown = new Set(composeTabs.map((tab) => tab.id))
+  for (const id of shownComposeTabs) if (!nowShown.has(id)) discardLocalDraft(id)
+  shownComposeTabs = nowShown
+  for (const tab of composeTabs) scheduleLocalDraftSave(tab)
   const persisted: PersistedComposeTab[] = tabs
     .filter((t) => t.kind === 'compose' && t.compose)
     .map((t) => ({
@@ -304,6 +316,35 @@ compose$.tabs.onChange(({ value: tabs }) => {
     // localStorage quota exceeded — drop silently.
   }
 })
+
+/**
+ * Bring back the drafts kept in the local store at startup, with their files.
+ * The core may still be starting, so a failed read is tried again a few times;
+ * until one succeeds nothing is written to the store, and the text-only copy
+ * from localStorage is what the composer shows.
+ */
+export async function restoreLocalDrafts(retries = 5, delayMs = 1000): Promise<boolean> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const tabs = await hydrateLocalDrafts(() => compose$.tabs.peek())
+      compose$.tabs.set(tabs)
+      // Only now is every draft's set of inline images known.
+      pruneComposerMedia()
+      return true
+    } catch (error) {
+      if (attempt >= retries) {
+        console.error('Local drafts could not be read:', error)
+        return false
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs * 2 ** attempt))
+    }
+  }
+}
+
+/** Write every draft still waiting out its pause — the app is closing. */
+export function flushComposeDrafts() {
+  return flushLocalDrafts(compose$.tabs.peek())
+}
 
 /**
  * Seed the quick reply with the replying account's signature, as the box the
