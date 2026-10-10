@@ -83,6 +83,11 @@ export function PdfPreview({
   const [pages, setPages] = useState(0)
   const [page, setPage] = useState(1)
   const [drawn, setDrawn] = useState(false)
+  // Held in a ref so a parent passing a new callback on every render does not
+  // count as a new document: that used to close and reopen the file, and send
+  // the reader back to page 1, on any re-render of the dialog.
+  const onFailedRef = useRef(onFailed)
+  onFailedRef.current = onFailed
 
   const draw = useCallback(async (which: number, generation: number) => {
     const document = documentRef.current
@@ -166,7 +171,7 @@ export function PdfPreview({
       } catch {
         // Said plainly by the caller rather than left as an empty frame: a
         // blank box reads as an empty file, which is a lie about the file.
-        if (live) onFailed()
+        if (live) onFailedRef.current()
       }
     })()
 
@@ -178,20 +183,22 @@ export function PdfPreview({
       taskRef.current = null
       documentRef.current = null
     }
-  }, [src, draw, onFailed])
+  }, [src, draw, loadPdf])
 
-  // Turning a page redraws into the document already open.
+  // Turning a page redraws into the document already open — including back to
+  // page 1. Opening draws the first page itself, and this does not run then:
+  // the document is not open yet when the page is set back to 1.
   useEffect(() => {
-    if (!documentRef.current || page === 1) return
+    if (!documentRef.current) return
     const generation = generationRef.current
     let live = true
     void draw(page, generation).catch(() => {
-      if (live) onFailed()
+      if (live) onFailedRef.current()
     })
     return () => {
       live = false
     }
-  }, [page, draw, onFailed])
+  }, [page, draw])
 
   return (
     <div className="flex min-h-0 flex-col">

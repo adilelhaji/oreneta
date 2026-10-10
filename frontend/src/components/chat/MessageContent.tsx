@@ -172,7 +172,15 @@ export function MessageContent({
         )
       })}
 
-      {previewing && <AttachmentPreviewDialog attachment={previewing} onClose={() => setPreviewing(null)} />}
+      {previewing && (
+        // Keyed by the file, so a failure shown for one attachment is never
+        // carried over to the next one opened.
+        <AttachmentPreviewDialog
+          key={previewing.key || previewing.filename}
+          attachment={previewing}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
     </>
   )
 }

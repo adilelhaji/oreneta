@@ -11,7 +11,13 @@ import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
 import { confirmAction } from '../../states/ui'
 import type { Template } from '../../states/templates'
-import { insertAtCaret, messageTemplateFields, messageTemplateOverwrites } from './applyTemplate'
+import {
+  insertAtCaret,
+  messageTemplateFields,
+  messageTemplateOverwrites,
+  templateInsertHtml,
+  templateInsertText,
+} from './applyTemplate'
 
 export function Composer({ tabId }: { tabId: string }) {
   const { t } = useTranslation()
@@ -76,13 +82,13 @@ export function Composer({ tabId }: { tabId: string }) {
       editor
         .chain()
         .focus()
-        .insertContent(template.bodyHtml || template.bodyText)
+        .insertContent(templateInsertHtml(template))
         .run()
       return
     }
 
     const area = textRef.current
-    const insert = template.bodyText || template.bodyHtml.replace(/<[^>]*>/g, '')
+    const insert = templateInsertText(template)
     const { text, caret } = insertAtCaret(
       draft.text,
       insert,

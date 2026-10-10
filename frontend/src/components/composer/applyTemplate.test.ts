@@ -4,6 +4,8 @@ import {
   insertAtCaret,
   messageTemplateFields,
   messageTemplateOverwrites,
+  templateInsertHtml,
+  templateInsertText,
 } from './applyTemplate'
 import type { Template } from '../../states/templates'
 
@@ -107,6 +109,49 @@ describe('the fields a message template states', () => {
     const htmlOnly: Template = { ...message, bodyText: '' }
     expect(messageTemplateFields(htmlOnly, false).text).toBe('Here it is.')
     const textOnly: Template = { ...message, bodyHtml: '' }
-    expect(messageTemplateFields(textOnly, true).html).toBe('Here it is.')
+    expect(messageTemplateFields(textOnly, true).html).toBe('<p>Here it is.</p>')
+  })
+})
+
+// #40: a template kept only as plain text is text, not markup. Put into the
+// rich editor as it is, "a < b" breaks the body and "<b>" turns bold.
+describe('a plain-text template in the rich editor (#40)', () => {
+  const plain: Template = {
+    id: 't3',
+    kind: 'message',
+    name: 'Comparison',
+    subject: 'Q & A',
+    bodyHtml: '',
+    bodyText: 'If a < b & c > d,\nuse <b>tags</b> literally.\n\nThanks',
+  }
+
+  it('is escaped, and its line breaks kept, when a message template fills the editor', () => {
+    const { html } = messageTemplateFields(plain, true)
+    expect(html).not.toContain('<b>')
+    expect(html).toContain('a &lt; b &amp; c &gt; d,')
+    expect(html).toContain('&lt;b&gt;tags&lt;/b&gt;')
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    expect(doc.body.querySelectorAll('p')).toHaveLength(2)
+    expect(doc.body.querySelector('br')).not.toBeNull()
+    expect(doc.body.textContent).toContain('If a < b & c > d,')
+  })
+
+  it('is escaped when a snippet is inserted at the cursor', () => {
+    const html = templateInsertHtml({ ...plain, kind: 'snippet' })
+    expect(html).not.toContain('<b>')
+    expect(new DOMParser().parseFromString(html, 'text/html').body.textContent).toContain('use <b>tags</b> literally.')
+  })
+
+  it('keeps an HTML template as HTML', () => {
+    expect(templateInsertHtml(snippet)).toBe('<p>Second floor.</p>')
+  })
+
+  it('reads an HTML-only template into plain text with its entities decoded', () => {
+    const htmlOnly: Template = { ...plain, bodyText: '', bodyHtml: '<p>Fish &amp; chips</p><p>Tuesday</p>' }
+    const { text } = messageTemplateFields(htmlOnly, false)
+    expect(text).toContain('Fish & chips')
+    expect(text).not.toContain('&amp;')
+    expect(text).toMatch(/Fish & chips\s+Tuesday/)
+    expect(templateInsertText(htmlOnly)).toContain('Fish & chips')
   })
 })
