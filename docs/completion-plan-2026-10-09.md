@@ -193,6 +193,17 @@ ninguna fila obligatoria de correo en `partial`, cobertura de `mail.go`,
 `oauth.go`, `sidecar.go`, `imap.rs`, `smtp.rs`, `exchange.rs` y `graph/` no
 inferior a la de la iteración 0 y sin ficheros Go de lógica de correo sin test.
 
+Estado de la iteración 1 (2026-10-10): las cinco issues tienen su slice
+entregada en la rama con pruebas y documento de contrato. #29 resultado incierto
+durable ([contrato](design/outgoing-mail-recovery.md)); #27 barrido sobre la
+revisión ([contrato](design/sweep-review.md)); #28 CardDAV completo o nada
+([contrato](design/carddav-complete-sync.md)); #12 claves y mensajes de GnuPG
+([análisis](design/pgp-gnupg-interop.md)); #9 validez y `contentType` S/MIME
+([contrato](design/smime-validity.md)). Quedan abiertos en cada issue los
+criterios que exigen proveedor real, evidencia nativa o decisiones de
+arquitectura (diario durable de barridos, cadena y revocación S/MIME, AEAD de
+LibrePGP), registrados en cada documento.
+
 ### C-B: agenda e información personal (R2)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
