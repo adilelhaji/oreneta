@@ -204,6 +204,19 @@ criterios que exigen proveedor real, evidencia nativa o decisiones de
 arquitectura (diario durable de barridos, cadena y revocación S/MIME, AEAD de
 LibrePGP), registrados en cada documento.
 
+Estado de la iteración 2 (2026-10-10): #170 lleva el editor completo al
+almacén local, con adjuntos, revisiones, conflicto visible, tombstone al cerrar
+y migración desde localStorage
+([contrato](design/editor-draft-recovery.md)). De #39 se entregan los
+destinatarios con coma en el nombre en respuestas y contactos, y el aviso de
+adjunto olvidado ([contrato](design/composition-safety.md)). De #40, el escape
+de plantillas de texto y la vista previa de PDF que no redibujaba la página 1
+ni conservaba el documento al re-renderizar
+([contrato](design/template-preview-safety.md)). Siguen abiertos el flujo
+nativo «escribir, cerrar y reabrir» (N4), la durabilidad de la respuesta
+rápida, la correspondencia de imágenes insertadas con sus bytes y la medición
+de memoria de vistas previas en el dispositivo de referencia (N6).
+
 ### C-B: agenda e información personal (R2)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
