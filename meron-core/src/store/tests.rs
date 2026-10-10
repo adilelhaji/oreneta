@@ -131,6 +131,62 @@ fn delete_folder_drops_the_row_its_messages_and_its_sync_state() {
 }
 
 #[test]
+fn a_folder_created_here_takes_the_account_delimiter_into_the_tree() {
+    let conn = test_conn();
+    assert_eq!(account_delimiter(&conn, "acct").unwrap(), None);
+    upsert_folders(
+        &conn,
+        "acct",
+        &[
+            Folder {
+                name: "INBOX".to_string(),
+                delimiter: Some(".".to_string()),
+                ..Default::default()
+            },
+            Folder {
+                name: "INBOX.Work".to_string(),
+                delimiter: Some(".".to_string()),
+                ..Default::default()
+            },
+            Folder {
+                name: "Odd".to_string(),
+                delimiter: Some("/".to_string()),
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+    upsert_folders(
+        &conn,
+        "other",
+        &[Folder {
+            name: "INBOX".to_string(),
+            delimiter: Some("/".to_string()),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    // The most common delimiter of this account, not another account's.
+    assert_eq!(account_delimiter(&conn, "acct").unwrap().as_deref(), Some("."));
+
+    // As folders.create stores a new parent and child before the next sync:
+    // with the delimiter, the child is part of the parent's delete subtree.
+    let delimiter = account_delimiter(&conn, "acct").unwrap();
+    for name in ["INBOX.Work.2026", "INBOX.Work.2026.Q1"] {
+        upsert_folders(
+            &conn,
+            "acct",
+            &[Folder { name: name.to_string(), delimiter: delimiter.clone(), ..Default::default() }],
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        child_folders(&conn, "acct", "INBOX.Work.2026").unwrap(),
+        vec!["INBOX.Work.2026.Q1".to_string()]
+    );
+}
+
+#[test]
 fn delimiterless_folder_names_do_not_form_a_delete_subtree() {
     let conn = test_conn();
     upsert_folders(

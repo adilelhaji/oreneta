@@ -126,6 +126,22 @@ pub fn delete_folder(conn: &Connection, account: &str, name: &str) -> Result<usi
 /// server-reported delimiter. A NULL/empty delimiter means the server exposed
 /// no hierarchy for this mailbox; punctuation in another mailbox's name must
 /// not turn it into a destructive delete target.
+/// The hierarchy delimiter the server reported for this account's folders, the
+/// most common one if they disagree. A folder created here is not listed until
+/// the next sync, and storing it without a delimiter would leave it outside the
+/// tree until then: its children would not count as its subtree on delete.
+pub fn account_delimiter(conn: &Connection, account: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT delimiter FROM folders
+             WHERE account = ?1 AND delimiter IS NOT NULL AND delimiter <> ''
+             GROUP BY delimiter ORDER BY COUNT(*) DESC, delimiter LIMIT 1",
+            params![account],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 pub fn child_folders(conn: &Connection, account: &str, name: &str) -> Result<Vec<String>> {
     let delimiter: Option<String> = conn
         .query_row(

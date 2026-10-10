@@ -4099,16 +4099,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 })
                 .await?;
 
-            let folder = imap::Folder {
-                name,
-                display_name,
-                delimiter: None,
-                ..Default::default()
-            };
-            {
+            let folder = {
                 let db = engine.db.lock().unwrap();
+                let folder = imap::Folder {
+                    name,
+                    display_name,
+                    delimiter: store::account_delimiter(&db, &account)?,
+                    ..Default::default()
+                };
                 store::upsert_folders(&db, &account, std::slice::from_ref(&folder))?;
-            }
+                folder
+            };
             Ok(json!({ "folders": serde_json::to_value(vec![folder])? }))
         }
 
