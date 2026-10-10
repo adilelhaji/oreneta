@@ -235,7 +235,7 @@ pub enum Protection {
 }
 
 impl Protection {
-    fn apply(&self, raw: &[u8]) -> Result<Vec<u8>> {
+    pub fn apply(&self, raw: &[u8]) -> Result<Vec<u8>> {
         match self {
             Protection::Pgp { what, signing_key, passphrase, recipients, recipient_addresses } => {
                 crate::crypto::pgp::protect_message(
@@ -275,6 +275,38 @@ impl Protection {
                     })
             }
         }
+    }
+}
+
+/// The MIME for a server that submits the message itself (Exchange, Microsoft
+/// Graph). Blind recipients stay in the headers, because that is the only
+/// place such a server reads them from (it strips them before delivery), and
+/// signing or encryption is applied exactly as on the SMTP path: a message
+/// meant to be protected never goes out in the clear.
+#[allow(clippy::too_many_arguments)]
+pub fn build_submission(
+    sender_name: &str,
+    from: &str,
+    to: &str,
+    cc: &str,
+    bcc: &str,
+    subject: &str,
+    body: &str,
+    html: &str,
+    attachments: &[AttachmentInput],
+    in_reply_to: &str,
+    references: &str,
+    reply_to: &str,
+    message_id: &str,
+    protect: Option<&Protection>,
+) -> Result<Vec<u8>> {
+    let raw = build_message(
+        sender_name, from, to, cc, bcc, true, subject, body, html, attachments, in_reply_to, references, reply_to,
+        message_id,
+    )?;
+    match protect {
+        Some(protection) => protection.apply(&raw),
+        None => Ok(raw),
     }
 }
 
@@ -858,6 +890,44 @@ fn bare_id(token: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_server_submission_asked_to_encrypt_is_encrypted_not_sent_in_the_clear() {
+        use super::{Protection, build_submission};
+        let certs = crate::crypto::pgp::certs_from_armoured(&[include_str!(
+            "crypto/testdata/gnupg/fixture_secret.asc"
+        )
+        .to_string()]);
+        let addresses: Vec<String> = certs
+            .iter()
+            .flat_map(|cert| cert.userids().filter_map(|u| u.userid().email().ok().flatten().map(|e| e.to_lowercase())))
+            .collect();
+        assert!(!addresses.is_empty());
+        let protection = Protection::Pgp {
+            what: crate::crypto::pgp::Protect { sign: false, encrypt: true },
+            signing_key: None,
+            passphrase: None,
+            recipients: certs,
+            recipient_addresses: addresses.clone(),
+        };
+        let raw = build_submission(
+            "Ana", "ana@example.com", &addresses[0], "", "hidden@example.com", "Plan", "the secret body", "", &[], "",
+            "", "", "<m@example.com>", Some(&protection),
+        )
+        .unwrap();
+        let text = String::from_utf8_lossy(&raw);
+        assert!(text.contains("-----BEGIN PGP MESSAGE-----"), "{text}");
+        assert!(!text.contains("the secret body"), "{text}");
+        // The server still reads the blind copy from the headers.
+        assert!(text.contains("hidden@example.com"));
+
+        let plain = build_submission(
+            "Ana", "ana@example.com", "b@example.com", "", "", "Plan", "plain body", "", &[], "", "", "",
+            "<m2@example.com>", None,
+        )
+        .unwrap();
+        assert!(String::from_utf8_lossy(&plain).contains("plain body"));
+    }
+
     use super::{
         as_smtp_cert_error, bare_addr, bare_id, build_message, build_oof_reply, parse_addrs, split_name_addr,
     };

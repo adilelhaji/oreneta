@@ -6569,13 +6569,16 @@ async fn perform_send_transaction(
             // while Exchange has only the MIME to read them from. It
             // strips the header before delivering, so recipients still do
             // not see the list.
-            let raw = smtp::build_message(
+            //
+            // Signing and encryption are applied here too. Before, this branch
+            // built the MIME without them, so a message the sender asked to
+            // encrypt went to Exchange in the clear.
+            let raw = smtp::build_submission(
                 &sender_name,
                 &from_addr,
                 &to,
                 &cc,
                 &bcc,
-                true,
                 &subject,
                 &body,
                 &html,
@@ -6584,6 +6587,7 @@ async fn perform_send_transaction(
                 &references,
                 &reply_to,
                 &message_id,
+                protection.as_ref(),
             )?;
             engine
                 .with_write_session(&account, |session| {
@@ -6597,10 +6601,9 @@ async fn perform_send_transaction(
             // Exchange in `should_append_sent_copy`.
             return Ok(SendTransaction { raw, archived_by_server: true });
         }
-        // What the sender asked for, with the keys it needs. Built before the
-        // Exchange branch above would have returned, so a request to protect a
-        // message on an account that cannot do it fails loudly rather than
-        // sending it in the clear.
+        // What the sender asked for, with the keys it needs: built before
+        // either branch, and applied by both, so no path sends in the clear
+        // what was meant to be protected.
         let raw = smtp::send(
             &creds,
             &from_addr,
