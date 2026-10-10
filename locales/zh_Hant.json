@@ -1469,6 +1469,8 @@
   "theme.fields.text": "文字",
   "theme.fields.textHint": "主要文字顏色",
   "theme.light": "淺色",
+  "theme.lowContrast.accent": "強調色作為面板和選取列上的文字難以閱讀（{ratio}:1；至少需要 4.5:1）。",
+  "theme.lowContrast.text": "文字在這些背景上難以閱讀（{ratio}:1；至少需要 4.5:1）。",
   "theme.namePlaceholder": "主題名稱",
   "theme.new": "新主題",
   "theme.pickColor": "選取 {label} 顏色",

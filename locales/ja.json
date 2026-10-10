@@ -1469,6 +1469,8 @@
   "theme.fields.text": "テキスト",
   "theme.fields.textHint": "プライマリテキストの色",
   "theme.light": "ライト",
+  "theme.lowContrast.accent": "アクセント色はパネルや選択行の文字として読みにくくなります（{ratio}:1。4.5:1 以上が必要です）。",
+  "theme.lowContrast.text": "この背景では文字が読みにくくなります（{ratio}:1。4.5:1 以上が必要です）。",
   "theme.namePlaceholder": "テーマ名",
   "theme.new": "新規テーマ",
   "theme.pickColor": "{label}の色を選択",

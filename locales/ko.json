@@ -1469,6 +1469,8 @@
   "theme.fields.text": "텍스트",
   "theme.fields.textHint": "기본 텍스트 색상",
   "theme.light": "라이트",
+  "theme.lowContrast.accent": "강조 색은 패널과 선택된 행에서 텍스트로 읽기 어렵습니다({ratio}:1, 최소 4.5:1 필요).",
+  "theme.lowContrast.text": "이 배경에서는 텍스트를 읽기 어렵습니다({ratio}:1, 최소 4.5:1 필요).",
   "theme.namePlaceholder": "테마 이름",
   "theme.new": "새 테마",
   "theme.pickColor": "{label} 색상 선택",

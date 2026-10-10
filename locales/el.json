@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Κείμενο",
   "theme.fields.textHint": "Κύριο χρώμα κειμένου",
   "theme.light": "Φωτεινό",
+  "theme.lowContrast.accent": "Το χρώμα έμφασης διαβάζεται δύσκολα ως κείμενο σε πλαίσια και επιλεγμένες γραμμές ({ratio}:1· απαιτείται τουλάχιστον 4,5:1).",
+  "theme.lowContrast.text": "Το κείμενο διαβάζεται δύσκολα σε αυτά τα φόντα ({ratio}:1· απαιτείται τουλάχιστον 4,5:1).",
   "theme.namePlaceholder": "Όνομα θέματος",
   "theme.new": "Νέο θέμα",
   "theme.pickColor": "Επιλογή χρώματος {label}",

@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Text",
   "theme.fields.textHint": "Primary text color",
   "theme.light": "Light",
+  "theme.lowContrast.accent": "The accent is hard to read as text on panels and selected rows ({ratio}:1; at least 4.5:1 is needed).",
+  "theme.lowContrast.text": "The text is hard to read on these backgrounds ({ratio}:1; at least 4.5:1 is needed).",
   "theme.namePlaceholder": "Theme name",
   "theme.new": "New theme",
   "theme.pickColor": "Pick {label} color",

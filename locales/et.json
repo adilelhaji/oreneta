@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Tekst",
   "theme.fields.textHint": "Peamine teksti värv",
   "theme.light": "Hele",
+  "theme.lowContrast.accent": "Rõhuvärvi on paneelidel ja valitud ridadel tekstina raske lugeda ({ratio}:1; vaja on vähemalt 4,5:1).",
+  "theme.lowContrast.text": "Teksti on neil taustadel raske lugeda ({ratio}:1; vaja on vähemalt 4,5:1).",
   "theme.namePlaceholder": "Kujunduse nimi",
   "theme.new": "Uus kujundus",
   "theme.pickColor": "Vali värv: {label}",

@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Testo",
   "theme.fields.textHint": "Colore del testo principale",
   "theme.light": "Chiaro",
+  "theme.lowContrast.accent": "L’accento è difficile da leggere come testo su pannelli e righe selezionate ({ratio}:1; serve almeno 4,5:1).",
+  "theme.lowContrast.text": "Il testo è difficile da leggere su questi sfondi ({ratio}:1; serve almeno 4,5:1).",
   "theme.namePlaceholder": "Nome tema",
   "theme.new": "Nuovo tema",
   "theme.pickColor": "Scegli colore {label}",

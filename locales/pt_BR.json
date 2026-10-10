@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Texto",
   "theme.fields.textHint": "Cor primária do texto",
   "theme.light": "Claro",
+  "theme.lowContrast.accent": "O destaque fica difícil de ler como texto nos painéis e nas linhas selecionadas ({ratio}:1; é preciso pelo menos 4,5:1).",
+  "theme.lowContrast.text": "O texto fica difícil de ler nesses fundos ({ratio}:1; é preciso pelo menos 4,5:1).",
   "theme.namePlaceholder": "Nome do tema",
   "theme.new": "Novo tema",
   "theme.pickColor": "Escolher cor para {label}",

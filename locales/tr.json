@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Metin",
   "theme.fields.textHint": "Birincil metin rengi",
   "theme.light": "Açık",
+  "theme.lowContrast.accent": "Vurgu rengi paneller ve seçili satırlarda metin olarak zor okunuyor ({ratio}:1; en az 4,5:1 gerekir).",
+  "theme.lowContrast.text": "Metin bu arka planlarda zor okunuyor ({ratio}:1; en az 4,5:1 gerekir).",
   "theme.namePlaceholder": "Tema adı",
   "theme.new": "Yeni tema",
   "theme.pickColor": "{label} rengini seç",

@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Texto",
   "theme.fields.textHint": "Color de texto principal",
   "theme.light": "Claro",
+  "theme.lowContrast.accent": "El acento se lee mal como texto sobre los paneles y las filas seleccionadas ({ratio}:1; hace falta al menos 4,5:1).",
+  "theme.lowContrast.text": "El texto se lee mal sobre estos fondos ({ratio}:1; hace falta al menos 4,5:1).",
   "theme.namePlaceholder": "Nombre del tema",
   "theme.new": "Nuevo tema",
   "theme.pickColor": "Elegir color de {label}",

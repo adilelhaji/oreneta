@@ -1469,6 +1469,8 @@
   "theme.fields.text": "النص",
   "theme.fields.textHint": "لون النص الأساسي",
   "theme.light": "فاتح",
+  "theme.lowContrast.accent": "يصعب قراءة لون التمييز كنص على اللوحات والصفوف المحددة ({ratio}:1؛ يلزم 4.5:1 على الأقل).",
+  "theme.lowContrast.text": "يصعب قراءة النص على هذه الخلفيات ({ratio}:1؛ يلزم 4.5:1 على الأقل).",
   "theme.namePlaceholder": "اسم السمة",
   "theme.new": "سمة جديدة",
   "theme.pickColor": "اختر لون {label}",

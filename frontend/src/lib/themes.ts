@@ -141,6 +141,40 @@ export type CustomThemeInput = {
 
 export type CustomTheme = ThemeDef & { source: CustomThemeInput }
 
+/** WCAG AA for body-size text. */
+export const READABLE_CONTRAST = 4.5
+
+/**
+ * Secondary text: the primary text faded toward the background, but only as
+ * far as it stays readable on every opaque surface it is drawn on. A fixed
+ * blend left an unedited custom theme at 2.9:1 on a selected row.
+ */
+function readableSecondary(text: string, toward: string, backgrounds: string[]): string {
+  for (let weight = 0.45; weight > 0; weight -= 0.01) {
+    const candidate = mix(text, toward, weight)
+    if (backgrounds.every((bg) => (contrastRatio(candidate, bg) ?? 0) >= READABLE_CONTRAST)) return candidate
+  }
+  return text
+}
+
+/**
+ * Where a custom palette cannot be made readable by derivation alone, because
+ * the chosen colors themselves are too close. The editor names these so the
+ * person choosing can see it; it does not stop them saving.
+ */
+export type ContrastShortfall = { pair: 'text' | 'accent'; ratio: number }
+
+export function contrastShortfalls(tokens: ThemeTokens): ContrastShortfall[] {
+  const worst = (fg: string, backgrounds: string[]) => Math.min(...backgrounds.map((bg) => contrastRatio(fg, bg) ?? 0))
+  const text = worst(tokens.textPrimary, [tokens.bgApp, tokens.bgChat, tokens.bgChats, tokens.bgActive])
+  // Accent is drawn as text on the selected folder, account and sort header.
+  const accent = worst(tokens.accent, [tokens.bgChats, tokens.bgActive])
+  const shortfalls: ContrastShortfall[] = []
+  if (text < READABLE_CONTRAST) shortfalls.push({ pair: 'text', ratio: text })
+  if (accent < READABLE_CONTRAST) shortfalls.push({ pair: 'accent', ratio: accent })
+  return shortfalls
+}
+
 /**
  * Expand the 6 editor inputs into a full token map. Formulas are tuned so the
  * Oreneta Light/Dark inputs reproduce (closely) the hand-picked index.css values.
@@ -151,6 +185,7 @@ export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
 
   const bgChat = light ? lighten(bgApp, 0.5) : bgApp
   const border = mix(surface, text, 0.12)
+  const bgActive = light ? mix(surface, text, 0.12) : lighten(surface, 0.1)
   return {
     ...semanticTokens(appearance),
     accentText: accentTextFor(accent),
@@ -162,10 +197,10 @@ export function deriveThemeTokens(input: CustomThemeInput): ThemeTokens {
     bgHeader: surface,
     bgHover: light ? mix(surface, text, 0.06) : withAlpha(lighten(surface, 0.08), 0.6),
     bgRaised: light ? mix(surface, bgApp, 0.5) : withAlpha(surface, 0.4),
-    bgActive: light ? mix(surface, text, 0.12) : lighten(surface, 0.1),
+    bgActive,
     border,
     textPrimary: text,
-    textSecondary: mix(text, bgApp, 0.45),
+    textSecondary: readableSecondary(text, bgApp, [bgApp, bgChat, surface, bgActive]),
     accent,
     accentHover: light ? darken(accent, 0.1) : lighten(accent, 0.12),
     bubbleIn: light ? surface : lighten(surface, 0.08),

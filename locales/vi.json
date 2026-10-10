@@ -1469,6 +1469,8 @@
   "theme.fields.text": "Màu văn bản",
   "theme.fields.textHint": "Màu văn bản chính",
   "theme.light": "Sáng",
+  "theme.lowContrast.accent": "Màu nhấn khó đọc khi làm chữ trên bảng và hàng được chọn ({ratio}:1; cần ít nhất 4,5:1).",
+  "theme.lowContrast.text": "Văn bản khó đọc trên các nền này ({ratio}:1; cần ít nhất 4,5:1).",
   "theme.namePlaceholder": "Tên giao diện",
   "theme.new": "Giao diện mới",
   "theme.pickColor": "Chọn màu {label}",

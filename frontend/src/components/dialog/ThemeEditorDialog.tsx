@@ -3,6 +3,7 @@ import { Palette } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { isValidColor, luminance } from '../../lib/color'
 import {
+  contrastShortfalls,
   cssVarStyle,
   defaultCustomInput,
   deriveThemeTokens,
@@ -14,6 +15,7 @@ import {
 import { upsertCustomTheme } from '../../states/settings'
 import { Button } from '../button/Button'
 import { TextInput } from '../field/Field'
+import { Notice } from '../notice/Notice'
 import { Dialog } from './Dialog'
 
 // Custom theme editor, layered over Settings (same pattern as
@@ -132,6 +134,15 @@ export function ThemeEditorDialog({
             />
           ))}
         </div>
+
+        {tokens &&
+          contrastShortfalls(tokens).map(({ pair, ratio }) => (
+            <Notice key={pair} tone="warning">
+              {t(pair === 'text' ? 'theme.lowContrast.text' : 'theme.lowContrast.accent', {
+                ratio: ratio.toFixed(1),
+              })}
+            </Notice>
+          ))}
 
         {tokens && <ThemePreview tokens={tokens} />}
       </div>
