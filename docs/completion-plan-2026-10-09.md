@@ -228,6 +228,21 @@ los adjuntos de nube como no disponibles
 servidor de bucle local con respuestas en línea. La certificación con un
 inquilino real (#98) y la evidencia nativa siguen pendientes.
 
+Estado de la iteración 4 (2026-10-10): #143 envía desde cuentas Graph con
+`Mail.Send` pedido aparte, con el MIME de Exchange, intento durable de #29,
+límite de 4 MB y resultado incierto sin repetición
+([contrato](design/graph-sending.md)). Al revisarlo apareció que la rama EWS
+enviaba en claro un mensaje marcado para cifrar o firmar; corregido. De #48 se
+verificó que un buzón compartido no guarda la contraseña del delegado, y se
+corrigieron las respuestas automáticas locales: no contestan a rebotes,
+respetan `X-Auto-Response-Suppress` e incluyen el día final completo
+([verificación](design/delegation-and-automatic-replies.md)). #46 queda como
+estudio con calendario verificado, matriz EWS/Graph y marca de las cuentas EWS
+que apuntan a Exchange Online ([estudio](design/ews-online-exposure.md)). El
+cliente EWS solo usa Basic, así que ya no funcionaba contra Exchange Online.
+Calendario, contactos, directorio y buzones compartidos por Graph quedan como
+rebanadas propuestas pendientes de decisión.
+
 ### C-B: agenda e información personal (R2)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
