@@ -137,6 +137,25 @@ describe('what a message says was done to it', () => {
     await waitFor(() => expect(view.container.textContent).toContain('Signature does not check out'))
   })
 
+  // #9: an expired signing certificate never reads as a valid signature,
+  // held or not.
+  it('says an expired certificate is expired and never calls the signature valid', async () => {
+    stubVerify('smime.verify', {
+      verdict: 'certificateNotValid',
+      fingerprint: 'AB',
+      addresses: ['oriol@example.test'],
+      reason: 'expired',
+      notBefore: 1577836800,
+      notAfter: 1609459200,
+      trusted: true,
+      matchesSender: true,
+    })
+    const view = render(<ProtectionNotice message={checkable('smimeSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('certificate that made it expired'))
+    expect(view.container.textContent).not.toContain('Signature checked out')
+    expect(view.container.textContent).not.toContain('Valid signature')
+  })
+
   it('opens an S/MIME-encrypted message through smime.decrypt, not pgp.decrypt', async () => {
     const calls = stubDecrypt('smime.decrypt', { ok: true, body: 'The figures are attached.' })
     const view = render(<ProtectionNotice message={checkable('smimeEnveloped')} />)

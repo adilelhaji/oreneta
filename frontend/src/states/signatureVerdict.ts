@@ -13,6 +13,18 @@ export type SignatureResult =
   | { verdict: 'none' }
   | { verdict: 'good'; fingerprint: string; addresses: string[]; matchesSender?: boolean }
   | { verdict: 'validUntrusted'; fingerprint: string; addresses: string[]; matchesSender?: boolean }
+  | {
+      // S/MIME: the signature checked out and the certificate that made it is
+      // expired or not valid yet. Never shown as a valid signature (#9).
+      verdict: 'certificateNotValid'
+      fingerprint: string
+      addresses: string[]
+      reason: 'expired' | 'notYetValid'
+      notBefore: number
+      notAfter: number
+      trusted: boolean
+      matchesSender?: boolean
+    }
   | { verdict: 'bad'; matchesSender?: boolean }
   | { verdict: 'noKey'; matchesSender?: boolean }
   | { verdict: 'malformed'; matchesSender?: boolean }
