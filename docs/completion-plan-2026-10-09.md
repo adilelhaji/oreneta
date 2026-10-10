@@ -257,6 +257,26 @@ el flujo nativo (N4), y favoritos, colores y arrastre de #87. El orden por
 columna en búsqueda, destacados, pospuestos y unificada con feeds queda como
 decisión del núcleo (ADR-0003).
 
+Estado de la iteración 6 (2026-10-10): solo avanza lo que no necesita Windows
+nativo, registros propios ni decisiones del responsable. #144: una compilación
+con `-tags distributable` no compila ningún registro OAuth heredado y desactiva
+cada inicio de sesión sin cliente propio inyectado. Los valores mal formados
+cuentan como ausentes y el núcleo recibe solo los aceptados. CI comprueba que
+el binario no lleva los valores heredados
+([inventario y contrato](oauth-registrations.md)). #147: el paquete de
+actualización se verifica otra vez antes de instalarlo, y la sustitución del
+ejecutable portable rechaza archivos dañados o ajenos y vuelve atrás si falla
+([contrato](design/update-install-safety.md)). #145: la guía de aceptación ya
+describe lo que Graph hace desde las iteraciones 3 y 4. Queda para el
+responsable:
+- crear registros propios y decidir la verificación de Google;
+- compilar las versiones publicadas con `distributable`;
+- firma, identidad de Partner Center y evidencia nativa (#147, #188, #148);
+- el mecanismo de zoom (#181);
+- la política de privacy.html: dice que nada sale salvo hacia los servidores
+  de correo, pero el asistente puede enviar contenido a un proveedor remoto que
+  configura el usuario.
+
 ### C-B: agenda e información personal (R2)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
