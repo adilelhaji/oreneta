@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -143,20 +144,49 @@ func jsonInt(value any) int {
 	return int(n)
 }
 
-// writePrivateFile writes data to path with owner-only permissions.
+// writePrivateFile replaces path with data, owner-only and all at once.
 //
 // 0600 matters here: even a backup without secrets lists every address the user
 // reads mail for, and an encrypted one is only as private as its passphrase.
-// os.WriteFile's mode argument applies *only when it creates the file*, so
-// overwriting an existing world-readable file would silently keep mode 0644 —
-// the save dialog happily offers existing paths. Removing it first guarantees
-// we are the one creating it. A umask can only tighten 0600 further, never
-// loosen it.
+// The data goes to a new file beside the target (os.CreateTemp creates it 0600,
+// which a umask can only tighten), is flushed to disk, and only then renamed
+// over the target. The rename is what replaces the previous file, so an
+// interruption, a full disk or a failed write leaves the previous backup as it
+// was instead of deleted or half-written, and an existing world-readable file
+// never keeps its mode because it is never written to.
 func writePrivateFile(path string, data []byte) error {
-	// A missing file (the common case) is exactly what we want; any other
-	// failure surfaces from the write below with a better message.
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	dir, name := filepath.Split(path)
+	if dir == "" {
+		dir = "."
+	}
+	temp, err := os.CreateTemp(dir, "."+name+".tmp-*")
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	tempPath := temp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	if _, err := temp.Write(data); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := syncFile(temp); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
+
+// syncFile is (*os.File).Sync, replaceable in tests to fail a write late.
+var syncFile = (*os.File).Sync
