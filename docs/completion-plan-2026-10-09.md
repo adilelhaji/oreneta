@@ -243,6 +243,20 @@ cliente EWS solo usa Basic, así que ya no funcionaba contra Exchange Online.
 Calendario, contactos, directorio y buzones compartidos por Graph quedan como
 rebanadas propuestas pendientes de decisión.
 
+Estado de la iteración 5 (2026-10-10): una auditoría del shell contra la rama
+encontró nueve defectos, cada uno reproducido con una prueba y corregido
+([registro](design/mail-shell-defects.md)). Lote que deshacía lo ya hecho y
+lote concurrente (#34); impresión con imágenes remotas, sin `sandbox` y con
+mensajes omitidos sin aviso (#35); vistas filtradas sin «cargar más» (#30);
+cabecera que prometía un orden no aplicado, pospuestos reordenados, ancho de
+lista que dejaba el lector en 149 px y versión de vistas sobrescrita (#36);
+texto secundario ilegible en temas personalizados (#33); carpeta nueva fuera
+del árbol hasta sincronizar (#87). Siguen abiertos las capturas de referencia
+comparadas (N2), el orden estable con llegadas concurrentes contra maddy (N3),
+el flujo nativo (N4), y favoritos, colores y arrastre de #87. El orden por
+columna en búsqueda, destacados, pospuestos y unificada con feeds queda como
+decisión del núcleo (ADR-0003).
+
 ### C-B: agenda e información personal (R2)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
