@@ -22,15 +22,27 @@ function isEwsAccount(account: Account): boolean {
   return account.provider === 'exchange' || !!account.ews_url
 }
 
-function toDateInput(unixSeconds: number): string {
+/** The local calendar day of a stored instant, as a date field shows it. Read
+ * in local time, like it was written: reading it in UTC showed the day before
+ * east of UTC (#48). */
+export function toDateInput(unixSeconds: number): string {
   if (!unixSeconds) return ''
-  return new Date(unixSeconds * 1000).toISOString().slice(0, 10)
+  const date = new Date(unixSeconds * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-function fromDateInput(value: string): number {
+/** A picked day as the instant it starts, or, for an end date, the last
+ * second of that day in local time — "until the 12th" includes the 12th,
+ * whatever its length on a daylight-saving change. */
+export function fromDateInput(value: string, edge: 'start' | 'end' = 'start'): number {
   if (!value) return 0
-  const ms = Date.parse(`${value}T00:00:00`)
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0
+  const start = Date.parse(`${value}T00:00:00`)
+  if (!Number.isFinite(start)) return 0
+  if (edge === 'start') return Math.floor(start / 1000)
+  const next = new Date(start)
+  next.setDate(next.getDate() + 1)
+  return Math.floor(next.getTime() / 1000) - 1
 }
 
 /**
@@ -107,7 +119,7 @@ function ImapOofCard({ account }: { account: Account }) {
                 <input
                   type="date"
                   value={toDateInput(settings.endAt)}
-                  onChange={(event) => void commit({ ...settings, endAt: fromDateInput(event.target.value) })}
+                  onChange={(event) => void commit({ ...settings, endAt: fromDateInput(event.target.value, 'end') })}
                   aria-label={t('oof.endDate')}
                   className="rounded-control border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent/50"
                 />
@@ -220,7 +232,7 @@ function EwsOofCard({ account }: { account: Account }) {
                   <input
                     type="date"
                     value={toDateInput(settings.endAt)}
-                    onChange={(event) => void commit({ ...settings, endAt: fromDateInput(event.target.value) })}
+                    onChange={(event) => void commit({ ...settings, endAt: fromDateInput(event.target.value, 'end') })}
                     aria-label={t('oof.endDate')}
                     className="rounded-control border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent/50"
                   />
