@@ -38,6 +38,11 @@ estados y la misma recuperación que SMTP y EWS.
 - **Borradores en el servidor.** Las cuentas Graph no guardan borradores en
   el servidor en esta entrega. El compositor no lo intenta y el borrador se
   conserva en el almacén local de #170.
+- **Respuesta rápida.** En IMAP, el texto de una respuesta rápida vuelve al
+  regresar al hilo gracias a su borrador en el servidor. En Graph no hay ese
+  borrador, así que se guarda en memoria por hilo al salir y se repone al
+  volver; sin eso se perdería al cambiar de conversación. Sobrevive mientras
+  la aplicación está abierta, no a un reinicio.
 
 ## Resultados
 

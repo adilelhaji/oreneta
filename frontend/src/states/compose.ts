@@ -564,6 +564,46 @@ type QuickReplySendHydrationGuard = {
 }
 const quickReplySendHydrationGuards = new Map<string, QuickReplySendHydrationGuard>()
 
+// A quick reply on an account that keeps no server drafts (Microsoft Graph,
+// #143) has nowhere to wait while the reader is in another conversation: the
+// thread switch reseeds the box, and the server copy that brings an IMAP
+// reply back does not exist. Kept here, by thread, for this session.
+type LocalQuickReply = {
+  text: string
+  attachments: ComposerAttachment[]
+  signature: ReturnType<typeof compose$.quickReplySignature.peek>
+  from: string
+}
+const localQuickReplies = new Map<string, LocalQuickReply>()
+
+/** Before leaving a thread: keep its unsent quick reply if no server draft will. */
+export function stashQuickReplyForThread(threadId: string, accountId: string) {
+  if (!threadId) return
+  if (keepsServerDrafts(accounts$.peek().find((account) => account.id === accountId))) return
+  if (isQuickReplyBlank()) {
+    localQuickReplies.delete(threadId)
+    return
+  }
+  localQuickReplies.set(threadId, {
+    text: compose$.composer.peek(),
+    attachments: compose$.composerAttachments.peek(),
+    signature: compose$.quickReplySignature.peek(),
+    from: compose$.quickReplyFrom.peek(),
+  })
+}
+
+/** On entering a thread: put back the quick reply left in it. */
+export function restoreQuickReplyForThread(threadId: string): boolean {
+  const saved = localQuickReplies.get(threadId)
+  if (!saved) return false
+  localQuickReplies.delete(threadId)
+  compose$.composer.set(saved.text)
+  compose$.composerAttachments.set(saved.attachments)
+  compose$.quickReplySignature.set(saved.signature)
+  compose$.quickReplyFrom.set(saved.from)
+  return true
+}
+
 /** After the user stops typing, save (or discard, if now empty) the real server draft. */
 export function scheduleQuickReplyDraftSave() {
   if (quickReplyDraftSaveTimer) clearTimeout(quickReplyDraftSaveTimer)

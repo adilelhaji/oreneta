@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
 import type { Message } from '../types'
 import {
+  restoreQuickReplyForThread,
+  stashQuickReplyForThread,
   cancelQuickReplyDraftSave,
   activateConversationTab,
   closeMessageTab,
@@ -1676,5 +1678,40 @@ describe('signature in the quick reply', () => {
     settings$.signature.set('<p>different</p>')
 
     expect(compose$.composer.get()).toBe('t2\n\nfrom u2')
+  })
+})
+
+describe('quick replies where no server draft keeps them (#143)', () => {
+  it('are kept per thread for Graph accounts, and left to server drafts elsewhere', () => {
+    accounts$.set([
+      { id: 'graph@example.test', auth_type: 'graph_oauth', graph_send: true } as any,
+      { id: 'imap@example.test', auth_type: 'password' } as any,
+    ])
+    compose$.composerAttachments.set([])
+    compose$.quickReplySignature.set(null)
+
+    compose$.composer.set('Half-written answer')
+    stashQuickReplyForThread('graph-thread', 'graph@example.test')
+    compose$.composer.set('Something for an IMAP thread')
+    stashQuickReplyForThread('imap-thread', 'imap@example.test')
+
+    compose$.composer.set('')
+    expect(restoreQuickReplyForThread('imap-thread')).toBe(false)
+    expect(restoreQuickReplyForThread('graph-thread')).toBe(true)
+    expect(compose$.composer.peek()).toBe('Half-written answer')
+    // Taken back once: a sent or cleared reply does not come back later.
+    expect(restoreQuickReplyForThread('graph-thread')).toBe(false)
+  })
+
+  it('an emptied box forgets what was kept', () => {
+    accounts$.set([{ id: 'graph@example.test', auth_type: 'graph_oauth', graph_send: true } as any])
+    compose$.quickReplySignature.set(null)
+    compose$.composerAttachments.set([])
+    compose$.composer.set('Draft')
+    stashQuickReplyForThread('t', 'graph@example.test')
+    restoreQuickReplyForThread('t')
+    compose$.composer.set('')
+    stashQuickReplyForThread('t', 'graph@example.test')
+    expect(restoreQuickReplyForThread('t')).toBe(false)
   })
 })
