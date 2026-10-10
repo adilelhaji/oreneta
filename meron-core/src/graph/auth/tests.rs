@@ -59,6 +59,9 @@ struct Fake {
     answer: Mutex<Result<Record>>,
     calls: AtomicUsize,
     gate: Option<Arc<(Mutex<bool>, std::sync::Condvar)>>,
+    /// Refresh answers in order, when set; and the level each refresh asked.
+    refreshes: Mutex<std::collections::VecDeque<Result<Record>>>,
+    refresh_levels: Mutex<Vec<bool>>,
 }
 impl Fake {
     fn new() -> Self {
@@ -66,6 +69,8 @@ impl Fake {
             answer: Mutex::new(Ok(record())),
             calls: AtomicUsize::new(0),
             gate: None,
+            refreshes: Mutex::new(Default::default()),
+            refresh_levels: Mutex::new(Vec::new()),
         }
     }
 }
@@ -80,7 +85,11 @@ impl Provider for Fake {
         }
         self.answer.lock().unwrap().clone()
     }
-    fn refresh(&self, _: &Record, _: &crate::proxy::ProxyChoice) -> Result<Record> {
+    fn refresh(&self, record: &Record, _: &crate::proxy::ProxyChoice) -> Result<Record> {
+        self.refresh_levels.lock().unwrap().push(record.can_write());
+        if let Some(answer) = self.refreshes.lock().unwrap().pop_front() {
+            return answer;
+        }
         self.exchange(&flow(), "refresh")
     }
 }
@@ -94,6 +103,7 @@ fn flow() -> Flow {
         selected: Some(EMAIL.into()),
         deadline: now() + 600,
         proxy: crate::proxy::ProxyChoice::Direct,
+        writes: false,
     }
 }
 fn setup() -> (Manager<Fake, Arc<Memory>>, Arc<Memory>, Begin) {
@@ -659,4 +669,118 @@ fn journal_precedes_secret_write_and_cleanup_preserves_account_on_failure() {
     let saves = memory.saves.load(Ordering::SeqCst);
     assert_eq!(manager.vault.save(&record()), Err(Failure::Storage));
     assert_eq!(memory.saves.load(Ordering::SeqCst), saves);
+}
+
+
+// ---- #141: incremental consent for message changes ----
+
+fn writable() -> Record {
+    Record { scopes: "openid Mail.ReadWrite".into(), ..record() }
+}
+
+#[test]
+fn the_changes_flow_asks_for_mail_read_write_for_a_chosen_account_only() {
+    let memory = Arc::new(Memory::default());
+    let manager = Manager::new(Fake::new(), memory);
+    let begin = manager
+        .begin_with(Some(EMAIL.into()), CLIENT, "http://127.0.0.1:2345", crate::proxy::ProxyChoice::Direct, true)
+        .unwrap();
+    let url = Url::parse(&begin.url).unwrap();
+    let q: HashMap<_, _> = url.query_pairs().collect();
+    assert_eq!(q["scope"], SCOPES_WRITE);
+    assert!(!SCOPES_WRITE.contains("Mail.Send"));
+    // A new account starts read-only; changes are asked for on purpose later.
+    assert_eq!(
+        manager
+            .begin_with(None, CLIENT, "http://127.0.0.1:2345", crate::proxy::ProxyChoice::Direct, true)
+            .err(),
+        Some(Failure::InvalidRequest)
+    );
+}
+
+#[test]
+fn the_level_reported_is_the_one_granted_not_the_one_asked() {
+    for (granted, writes) in [(writable(), true), (record(), false)] {
+        let (manager, memory, _) = setup();
+        let begin = manager
+            .begin_with(Some(EMAIL.into()), CLIENT, "http://127.0.0.1:2345", crate::proxy::ProxyChoice::Direct, true)
+            .unwrap();
+        *manager.provider.answer.lock().unwrap() = Ok(granted);
+        let status = manager.complete(&begin.attempt, &begin.attempt, "code", false).unwrap();
+        assert_eq!(status.writes, writes);
+        assert_eq!(memory.load(EMAIL).unwrap().unwrap().can_write(), writes);
+    }
+}
+
+#[test]
+fn refusing_the_changes_flow_keeps_the_existing_read_grant() {
+    let (manager, memory, _) = setup();
+    memory.save(&record()).unwrap();
+    let begin = manager
+        .begin_with(Some(EMAIL.into()), CLIENT, "http://127.0.0.1:2345", crate::proxy::ProxyChoice::Direct, true)
+        .unwrap();
+    assert_eq!(manager.complete(&begin.attempt, &begin.attempt, "", true).err(), Some(Failure::Denied));
+    let kept = memory.load(EMAIL).unwrap().unwrap();
+    assert_eq!(kept.refresh_token, "refresh-secret");
+    assert!(!kept.can_write());
+}
+
+#[test]
+fn a_refresh_keeps_the_level_it_had() {
+    let (manager, memory, _) = setup();
+    memory.save(&Record { expires_at: 0, ..writable() }).unwrap();
+    manager.provider.refreshes.lock().unwrap().push_back(Ok(writable()));
+    assert!(manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).unwrap().can_write());
+    assert_eq!(*manager.provider.refresh_levels.lock().unwrap(), vec![true]);
+}
+
+#[test]
+fn withdrawn_write_consent_falls_back_to_reading_once() {
+    for refusal in [Failure::Denied, Failure::ConsentRequired, Failure::Reauthenticate] {
+        let (manager, memory, _) = setup();
+        memory.save(&Record { expires_at: 0, ..writable() }).unwrap();
+        manager.provider.refreshes.lock().unwrap().extend([Err(refusal), Ok(record())]);
+        let kept = manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).unwrap();
+        assert!(!kept.can_write(), "{refusal:?}");
+        assert!(!memory.load(EMAIL).unwrap().unwrap().can_write());
+        // Asked at write level first, then at read level, and no more.
+        assert_eq!(*manager.provider.refresh_levels.lock().unwrap(), vec![true, false]);
+    }
+}
+
+#[test]
+fn a_revoked_grant_is_still_a_reauthentication() {
+    let (manager, memory, _) = setup();
+    memory.save(&Record { expires_at: 0, ..writable() }).unwrap();
+    manager
+        .provider
+        .refreshes
+        .lock()
+        .unwrap()
+        .extend([Err(Failure::Reauthenticate), Err(Failure::Reauthenticate)]);
+    assert_eq!(manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).err(), Some(Failure::Reauthenticate));
+    // A read-only grant is not retried at all.
+    let (manager, memory, _) = setup();
+    memory.save(&Record { expires_at: 0, ..record() }).unwrap();
+    manager.provider.refreshes.lock().unwrap().extend([Err(Failure::Denied), Ok(record())]);
+    assert_eq!(manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).err(), Some(Failure::Denied));
+    assert_eq!(manager.provider.refresh_levels.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn the_marker_records_the_level_and_old_markers_read_as_read_only() {
+    let db = Arc::new(Mutex::new(rusqlite::Connection::open_in_memory().unwrap()));
+    db.lock().unwrap().execute_batch("CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT)").unwrap();
+    let vault = Journalled { inner: Arc::new(Memory::default()), db: db.clone() };
+    assert!(!writes_marked(&db.lock().unwrap(), EMAIL));
+    vault.save(&writable()).unwrap();
+    assert!(writes_marked(&db.lock().unwrap(), EMAIL));
+    vault.save(&record()).unwrap();
+    assert!(!writes_marked(&db.lock().unwrap(), EMAIL));
+    // Before #141 the marker was a bare `true`.
+    crate::store::setting_set(&db.lock().unwrap(), &marker(EMAIL), &json!(true)).unwrap();
+    assert!(!writes_marked(&db.lock().unwrap(), EMAIL));
+    assert!(vault.registered(EMAIL).unwrap());
+    vault.delete(EMAIL).unwrap();
+    assert!(!writes_marked(&db.lock().unwrap(), EMAIL));
 }

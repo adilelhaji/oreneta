@@ -284,9 +284,12 @@ export function MessagePane() {
 
       {activeAccount?.auth_type === 'graph_oauth' ? (
         <p role="status" className="border-t border-border px-4 py-3 text-caption text-secondary">
-          {t('accounts.graph.readerNotice', {
-            defaultValue: 'Microsoft Graph — read-only. Sending, editing and attachments are not available yet.',
-          })}
+          {activeAccount.graph_writes
+            ? t('accounts.graph.changesNotice')
+            : t('accounts.graph.readerNotice', {
+                defaultValue:
+                  'Microsoft Graph — read-only. Sending is not available; changes can be allowed in the account settings.',
+              })}
         </p>
       ) : (
         !isRSS && <QuickReplyComposer />

@@ -313,8 +313,11 @@ fn a_server_that_will_not_do_the_report_is_asked_the_long_way() {
     assert_eq!(people[0].name, "Ana Prat");
 }
 
+/// #28: a card that will not come is not silently left out of the book —
+/// the caller would replace the local book with the rest. It is an error
+/// that names what was missed, and the last complete copy stays.
 #[test]
-fn one_card_that_will_not_come_does_not_cost_the_rest_of_the_book() {
+fn one_card_that_will_not_come_keeps_the_last_complete_copy() {
     let server = FakeServer::new(vec![
         ("REPORT", "https://example.com/dav/ana/contacts/", 501, String::new()),
         (
@@ -330,9 +333,137 @@ fn one_card_that_will_not_come_does_not_cost_the_rest_of_the_book() {
         ("GET", "https://example.com/dav/ana/contacts/2.vcf", 200,
          "BEGIN:VCARD\nFN:Marc\nEMAIL:marc@example.com\nEND:VCARD".to_string()),
     ]);
-    let people = fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap();
-    assert_eq!(people.len(), 1);
-    assert_eq!(people[0].name, "Marc");
+    let err = fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap_err().to_string();
+    assert!(err.contains("1 of 2 contacts could not be read"), "{err}");
+    assert!(err.contains("1.vcf"), "{err}");
+    assert!(err.contains("last complete copy is kept"), "{err}");
+}
+
+fn report_book(body: &str) -> FakeServer {
+    FakeServer::new(vec![(
+        "REPORT",
+        "https://example.com/dav/ana/contacts/",
+        207,
+        body.to_string(),
+    )])
+}
+
+#[test]
+fn a_card_the_report_failed_to_send_is_an_error_not_a_smaller_book() {
+    let server = report_book(
+        r#"<multistatus xmlns="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+          <response><href>/dav/ana/contacts/1.vcf</href><propstat><prop><getetag>"a"</getetag>
+            <card:address-data>BEGIN:VCARD
+FN:Ana Prat
+END:VCARD</card:address-data></prop><status>HTTP/1.1 200 OK</status></propstat></response>
+          <response><href>/dav/ana/contacts/2.vcf</href><status>HTTP/1.1 500 Internal Server Error</status></response>
+        </multistatus>"#,
+    );
+    let err = fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap_err().to_string();
+    assert!(err.contains("1 of 2"), "{err}");
+    assert!(err.contains("500"), "{err}");
+}
+
+#[test]
+fn a_card_whose_data_propstat_failed_is_an_error_even_when_another_propstat_is_fine() {
+    // Two propstats for one card: the etag came, the card did not. The good
+    // one coming last must not make the response read as fine.
+    let server = report_book(
+        r#"<multistatus xmlns="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+          <response><href>/dav/ana/contacts/1.vcf</href>
+            <propstat><prop><card:address-data/></prop><status>HTTP/1.1 403 Forbidden</status></propstat>
+            <propstat><prop><getetag>"a"</getetag></prop><status>HTTP/1.1 200 OK</status></propstat>
+          </response>
+        </multistatus>"#,
+    );
+    let err = fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap_err().to_string();
+    assert!(err.contains("403"), "{err}");
+}
+
+#[test]
+fn an_answer_cut_off_mid_way_is_an_error_not_the_cards_before_the_cut() {
+    let cut = &TWO_CARDS[..TWO_CARDS.find("Marc Roca").unwrap()];
+    let err = fetch_book(&report_book(cut), "https://example.com/dav/ana/contacts/")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("cut off"), "{err}");
+}
+
+#[test]
+fn a_card_that_is_not_a_vcard_is_an_error() {
+    let server = report_book(
+        r#"<multistatus xmlns="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">
+          <response><href>/dav/ana/contacts/1.vcf</href><propstat><prop>
+            <card:address-data>this is not a vcard</card:address-data></prop><status>HTTP/1.1 200 OK</status></propstat></response>
+        </multistatus>"#,
+    );
+    assert!(fetch_book(&server, "https://example.com/dav/ana/contacts/").is_err());
+}
+
+#[test]
+fn an_empty_book_needs_no_second_request() {
+    let server = report_book(r#"<multistatus xmlns="DAV:"></multistatus>"#);
+    assert!(fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap().is_empty());
+    assert_eq!(server.seen.borrow().len(), 1, "an empty answer is an answer: {:?}", server.seen.borrow());
+}
+
+#[test]
+fn the_book_listing_itself_in_a_report_is_not_a_missing_card() {
+    let server = report_book(
+        r#"<multistatus xmlns="DAV:"><response><href>/dav/ana/contacts/</href><propstat><prop><getetag>"x"</getetag></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>"#,
+    );
+    assert!(fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap().is_empty());
+}
+
+/// #28: the password goes with every request, so a card href on another
+/// host is not followed.
+#[test]
+fn a_card_on_another_host_is_not_fetched_and_the_copy_is_kept() {
+    let server = FakeServer::new(vec![
+        ("REPORT", "https://example.com/dav/ana/contacts/", 501, String::new()),
+        (
+            "PROPFIND",
+            "https://example.com/dav/ana/contacts/",
+            207,
+            r#"<multistatus xmlns="DAV:">
+              <response><href>https://attacker.example.net/steal.vcf</href><propstat><prop><getetag>"a"</getetag></prop><status>HTTP/1.1 200 OK</status></propstat></response>
+            </multistatus>"#
+                .to_string(),
+        ),
+    ]);
+    let err = fetch_book(&server, "https://example.com/dav/ana/contacts/").unwrap_err().to_string();
+    assert!(err.contains("another server"), "{err}");
+    assert!(
+        !server.seen.borrow().iter().any(|(_, url)| url.contains("attacker")),
+        "nothing may be sent there: {:?}",
+        server.seen.borrow()
+    );
+}
+
+#[test]
+fn credentials_never_go_down_to_plain_http_or_to_another_plain_http_host() {
+    assert!(credentials_may_follow("https://a.example.com/x/", "https://a.example.com/y/"));
+    assert!(credentials_may_follow("https://a.example.com/", "https://p01-contacts.example.com/"));
+    assert!(!credentials_may_follow("https://a.example.com/", "http://a.example.com/"));
+    assert!(credentials_may_follow("http://127.0.0.1:5232/", "http://127.0.0.1:5232/alice/"));
+    assert!(!credentials_may_follow("http://127.0.0.1:5232/", "http://10.0.0.9/"));
+    assert!(!credentials_may_follow("https://a.example.com/", "not a url"));
+}
+
+#[test]
+fn discovery_does_not_follow_a_principal_down_to_plain_http() {
+    let server = FakeServer::new(vec![(
+        "PROPFIND",
+        "https://example.com/dav/",
+        207,
+        principal_answer("http://example.com/dav/principals/ana/"),
+    )]);
+    let _ = discover(&server, "https://example.com/dav/");
+    assert!(
+        !server.seen.borrow().iter().any(|(_, url)| url.starts_with("http://")),
+        "the password went over plain HTTP: {:?}",
+        server.seen.borrow()
+    );
 }
 
 #[test]

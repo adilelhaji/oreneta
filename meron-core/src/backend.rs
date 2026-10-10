@@ -217,7 +217,7 @@ impl Session {
         media: &parse::MediaCtx,
     ) -> Result<parse::Message> {
         match self {
-            Session::Graph(session) => session.read_message(folder, uid).await,
+            Session::Graph(session) => session.read_message(folder, uid, Some(media.clone())).await,
             Session::Imap(session) => imap::read_message(session, folder, uid, media).await,
             Session::Ews(session) => session.read_message(folder, uid, media).await,
         }
@@ -225,7 +225,8 @@ impl Session {
 
     pub async fn prepare_flag_update(&mut self, folder: &str) -> Result<()> {
         match self {
-            Session::Graph(_) => crate::graph::mail::unsupported(),
+            // Nothing to select: each Graph change names its message.
+            Session::Graph(_) => Ok(()),
             Session::Imap(session) => imap::prepare_flag_update(session, folder).await,
             Session::Ews(session) => {
                 session.prepare_flag_update(folder);
@@ -393,7 +394,7 @@ impl Session {
 
     pub async fn store_seen(&mut self, uids: &[u32], seen: bool) -> Result<()> {
         match self {
-            Session::Graph(_) => crate::graph::mail::unsupported(),
+            Session::Graph(session) => session.set_seen(uids, seen).await,
             Session::Imap(session) => imap::store_seen(session, uids, seen).await,
             Session::Ews(session) => session.store_seen(uids, seen).await,
         }
@@ -401,7 +402,7 @@ impl Session {
 
     pub async fn store_starred(&mut self, uids: &[u32], starred: bool) -> Result<()> {
         match self {
-            Session::Graph(_) => crate::graph::mail::unsupported(),
+            Session::Graph(session) => session.set_flagged(uids, starred).await,
             Session::Imap(session) => imap::store_starred(session, uids, starred).await,
             Session::Ews(_) => ews_unsupported("store_starred"),
         }
@@ -425,7 +426,7 @@ impl Session {
         uids: &[u32],
     ) -> Result<()> {
         match self {
-            Session::Graph(_) => crate::graph::mail::unsupported(),
+            Session::Graph(session) => session.move_uids(source_folder, dest_folder, uids).await,
             Session::Imap(session) => {
                 imap::move_to_folder(session, source_folder, dest_folder, uids).await
             }
@@ -463,9 +464,24 @@ impl Session {
 
     pub async fn expunge_uids(&mut self, folder: &str, uids: &[u32]) -> Result<()> {
         match self {
-            Session::Graph(_) => crate::graph::mail::unsupported(),
+            // Reached only from Deleted Items or Drafts (delete_to_trash).
+            Session::Graph(session) => session.delete_uids(folder, uids).await,
             Session::Imap(session) => imap::expunge_uids(session, folder, uids).await,
             Session::Ews(session) => session.expunge_uids(folder, uids).await,
+        }
+    }
+
+    /// Copy within one account on the server, where the protocol can (Graph).
+    /// `None` means use the raw fetch-and-append path instead.
+    pub async fn copy_within(
+        &mut self,
+        source_folder: &str,
+        dest_folder: &str,
+        uids: &[u32],
+    ) -> Result<Option<usize>> {
+        match self {
+            Session::Graph(session) => session.copy_uids(source_folder, dest_folder, uids).await.map(Some),
+            _ => Ok(None),
         }
     }
 
@@ -575,7 +591,7 @@ impl Session {
         account: &str,
     ) -> Result<Vec<(u32, parse::Message)>> {
         match self {
-            Session::Graph(session) => session.fetch_bodies(folder, uids).await,
+            Session::Graph(session) => session.fetch_bodies(folder, uids, media_root).await,
             Session::Imap(session) => {
                 imap::fetch_bodies(session, folder, uids, media_root, account).await
             }

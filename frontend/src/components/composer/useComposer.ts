@@ -10,6 +10,7 @@ import {
   compose$,
   newDraftMessageId,
   sendComposed,
+  allocateMessageIdentity,
   appendSentMessage,
   saveComposedDraft,
   updateComposeDraft,
@@ -36,6 +37,7 @@ import {
   textToHtml,
   type NativeClipboardImage,
 } from './composerHelpers'
+import { shouldRemindAttachment } from '../../lib/attachmentReminder'
 
 // All of the Composer's behaviour: the tiptap editor, attachment handling
 // (paste/drop/file-picker, inline images), rich/plain toggling, autosave, and
@@ -560,9 +562,27 @@ export function useComposer(tabId: string) {
     if (
       !subject &&
       !(await confirmAction({
-        title: 'No subject',
-        message: 'Send this message without a subject?',
-        confirmLabel: 'Send',
+        title: t('composer.noSubject.title'),
+        message: t('composer.noSubject.message'),
+        confirmLabel: t('composer.noSubject.send'),
+        cancelLabel: t('composer.attachmentReminder.goBack'),
+      }))
+    ) {
+      session.savesStopped = false
+      setSending(false)
+      return
+    }
+    // A reminder, not a block: "Send anyway" sends. Read from the latest copy,
+    // since the subject prompt above is another wait with the fields editable.
+    const beforeReminder = latestDraft()
+    if (
+      beforeReminder &&
+      shouldRemindAttachment(beforeReminder, t('composer.attachmentReminder.keywords')) &&
+      !(await confirmAction({
+        title: t('composer.attachmentReminder.title'),
+        message: t('composer.attachmentReminder.message'),
+        confirmLabel: t('composer.attachmentReminder.sendAnyway'),
+        cancelLabel: t('composer.attachmentReminder.goBack'),
       }))
     ) {
       session.savesStopped = false
@@ -614,8 +634,13 @@ export function useComposer(tabId: string) {
         finishClosingMessageTab(tabId)
         return
       }
+      // One identity per tab, allocated the first time Send is pressed and
+      // kept after an unanswered send: pressing Send again then names the
+      // same message, which is how the core knows not to deliver it twice.
+      session.messageId ??= await allocateMessageIdentity(current.accountId, false)
       await sendComposed({
         ...message,
+        messageId: session.messageId,
         protection:
           current.pgpSign || current.pgpEncrypt
             ? { sign: current.pgpSign, encrypt: current.pgpEncrypt, passphrase: pgpPassphrase || undefined }

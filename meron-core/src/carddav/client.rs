@@ -13,7 +13,7 @@
 use anyhow::{anyhow, Context, Result};
 use url::Url;
 
-use super::xml::{parse_multistatus, DavResponse};
+use super::xml::{parse_multistatus, parse_multistatus_complete, DavResponse};
 use crate::contacts::person::{people_from_vcards, Person};
 
 /// One request to a DAV server.
@@ -99,6 +99,68 @@ fn resolve(base: &str, href: &str) -> Result<String> {
     Ok(Url::parse(base)?.join(href.trim())?.to_string())
 }
 
+/// Whether the reader's password may go from `from` to `to`.
+///
+/// Every request carries it, so following a server's href is handing the
+/// password to wherever the href points. Never from HTTPS down to plain
+/// HTTP, where anyone on the way can read it; and to another host only over
+/// HTTPS, which is how providers that split DAV across hosts (iCloud's
+/// numbered partitions) are reached at all. A plain-HTTP server — a local
+/// one, typed in by the reader — keeps its own origin and no other.
+pub fn credentials_may_follow(from: &str, to: &str) -> bool {
+    let (Ok(from), Ok(to)) = (Url::parse(from), Url::parse(to)) else {
+        return false;
+    };
+    if from.scheme() == "https" && to.scheme() != "https" {
+        return false;
+    }
+    if from.origin() == to.origin() {
+        return true;
+    }
+    to.scheme() == "https"
+}
+
+/// Resolve an href and check the password may follow it there.
+fn resolve_trusted(base: &str, href: &str) -> Result<String> {
+    let url = resolve(base, href)?;
+    if !credentials_may_follow(base, &url) {
+        let host = Url::parse(&url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+        return Err(anyhow!(
+            "the server pointed somewhere the password must not go ({host}); nothing was sent there"
+        ));
+    }
+    Ok(url)
+}
+
+/// Whether two URLs name the same origin: scheme, host and port.
+fn same_origin(a: &str, b: &str) -> bool {
+    match (Url::parse(a), Url::parse(b)) {
+        (Ok(a), Ok(b)) => a.origin() == b.origin(),
+        _ => false,
+    }
+}
+
+/// Why a book could not be read in full. The caller keeps the last complete
+/// copy rather than replacing it with part of one.
+fn incomplete(failed: &[String], total: usize) -> anyhow::Error {
+    let first = failed.first().cloned().unwrap_or_default();
+    anyhow!(
+        "{} of {} contacts could not be read (first: {first}); the last complete copy is kept",
+        failed.len(),
+        total
+    )
+}
+
+/// Whether a response is the book itself rather than one of its cards.
+fn is_the_book(response: &DavResponse, book_url: &str) -> bool {
+    let Ok(book) = Url::parse(book_url) else {
+        return false;
+    };
+    let href = response.href.trim();
+    let path = Url::parse(href).map(|url| url.path().to_string()).unwrap_or_else(|_| href.to_string());
+    path.trim_end_matches('/') == book.path().trim_end_matches('/')
+}
+
 /// A name for a book the server did not name.
 fn name_from_url(url: &str) -> String {
     Url::parse(url)
@@ -157,7 +219,12 @@ pub fn discover(transport: &dyn Transport, input: &str) -> Result<Vec<AddressBoo
         Ok((responses, from)) => {
             for response in &responses {
                 if let Some(href) = response.prop_href("current-user-principal") {
-                    principal = resolve(&from, href)?;
+                    // An href the password may not follow is a step that
+                    // found nothing; the reason is kept for the report.
+                    match resolve_trusted(&from, href) {
+                        Ok(url) => principal = url,
+                        Err(error) => remember(error),
+                    }
                     break;
                 }
             }
@@ -176,7 +243,12 @@ pub fn discover(transport: &dyn Transport, input: &str) -> Result<Vec<AddressBoo
             Ok((responses, from)) => {
                 for response in &responses {
                     if let Some(href) = response.prop_href("addressbook-home-set") {
-                        home = resolve(&from, href)?;
+                        // An href the password may not follow is a step that
+                        // found nothing; the reason is kept for the report.
+                        match resolve_trusted(&from, href) {
+                            Ok(url) => home = url,
+                            Err(error) => remember(error),
+                        }
                         break;
                     }
                 }
@@ -197,7 +269,11 @@ pub fn discover(transport: &dyn Transport, input: &str) -> Result<Vec<AddressBoo
             if !response.is_addressbook() {
                 continue;
             }
-            let url = resolve(&from, &response.href)?;
+            // A book the password may not follow to is not offered: adding
+            // it would send the password there on the first read.
+            let Ok(url) = resolve_trusted(&from, &response.href) else {
+                continue;
+            };
             books.push(AddressBook {
                 name: response
                     .prop("displayname")
@@ -226,6 +302,13 @@ pub fn discover(transport: &dyn Transport, input: &str) -> Result<Vec<AddressBoo
 /// will not answer that is asked the long way instead — list the cards, then
 /// fetch them — because some deployments disable the report and their owners
 /// still have contacts.
+///
+/// All or nothing (#28). A card the server failed to send, an answer cut off
+/// part-way, a vCard that does not parse, or a card on a host the password
+/// must not go to: each makes this an error naming what was missed, and the
+/// caller keeps the copy it has. A book that is genuinely empty is an empty
+/// success. What is never returned is part of a book presented as all of it,
+/// because the caller replaces the local book with whatever this returns.
 pub fn fetch_book(transport: &dyn Transport, book_url: &str) -> Result<Vec<Person>> {
     let reply = transport.send(&DavRequest {
         method: "REPORT",
@@ -239,17 +322,31 @@ pub fn fetch_book(transport: &dyn Transport, book_url: &str) -> Result<Vec<Perso
     }
 
     if reply.status < 300 {
-        let responses = parse_multistatus(&reply.body)?;
-        let cards: Vec<u8> = responses
-            .iter()
-            .filter_map(|response| response.prop("address-data"))
-            .collect::<Vec<_>>()
-            .join("\n")
-            .into_bytes();
-        let people = people_from_vcards(&cards);
-        if !people.is_empty() || !responses.is_empty() {
-            return Ok(people);
+        let responses = parse_multistatus_complete(&reply.body)?;
+        let mut cards: Vec<u8> = Vec::new();
+        let mut failed: Vec<String> = Vec::new();
+        let mut total = 0usize;
+        for response in responses.iter().filter(|response| !is_the_book(response, book_url)) {
+            total += 1;
+            let readable = response
+                .prop("address-data")
+                .filter(|data| !crate::contacts::vcard::split_cards(data.as_bytes()).is_empty());
+            match readable {
+                Some(data) => {
+                    cards.extend_from_slice(data.as_bytes());
+                    cards.push(b'\n');
+                }
+                None => failed.push(format!(
+                    "{} {}",
+                    response.href,
+                    if response.status.is_empty() { "sent no card" } else { response.status.as_str() }
+                )),
+            }
         }
+        if !failed.is_empty() {
+            return Err(incomplete(&failed, total));
+        }
+        return Ok(people_from_vcards(&cards));
     }
 
     fetch_book_one_at_a_time(transport, book_url)
@@ -257,29 +354,64 @@ pub fn fetch_book(transport: &dyn Transport, book_url: &str) -> Result<Vec<Perso
 
 /// The long way: ask what is in the book, then fetch each card.
 fn fetch_book_one_at_a_time(transport: &dyn Transport, book_url: &str) -> Result<Vec<Person>> {
-    let (responses, from) = propfind(transport, book_url, "1", PROP_HREFS)?;
-    let mut people = Vec::new();
+    let reply = transport.send(&DavRequest {
+        method: "PROPFIND",
+        url: book_url.to_string(),
+        depth: Some("1"),
+        body: Some(PROP_HREFS.to_string()),
+    })?;
+    if reply.status == 401 || reply.status == 403 {
+        return Err(anyhow!("the server refused those credentials"));
+    }
+    if reply.status >= 300 {
+        return Err(anyhow!("the server would not list the address book (HTTP {})", reply.status));
+    }
+    let responses = parse_multistatus_complete(&reply.body)?;
+    let from = reply.url;
 
+    let mut people = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    let mut total = 0usize;
     for response in responses {
         // The collection lists itself; it is not one of its own cards.
-        if response.href.trim_end_matches('/') == Url::parse(book_url)?.path().trim_end_matches('/') {
+        if is_the_book(&response, book_url) {
             continue;
         }
         if response.resource_types.iter().any(|kind| kind == "collection") {
             continue;
         }
+        total += 1;
         let url = resolve(&from, &response.href)?;
+        // A card is fetched from the book's own origin and nowhere else: an
+        // href elsewhere is not one of this book's cards, and following it
+        // would hand the password to whoever it names.
+        if !same_origin(&url, book_url) {
+            return Err(anyhow!(
+                "the address book listed a card on another server ({}); nothing was sent there and the last complete copy is kept",
+                Url::parse(&url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default()
+            ));
+        }
         let reply = transport.send(&DavRequest {
             method: "GET",
             url,
             depth: None,
             body: None,
         })?;
+        if reply.status == 401 || reply.status == 403 {
+            return Err(anyhow!("the server refused those credentials"));
+        }
         if reply.status >= 300 {
-            // One card that will not come is not a reason to lose the book.
+            failed.push(format!("{} HTTP {}", response.href, reply.status));
+            continue;
+        }
+        if crate::contacts::vcard::split_cards(reply.body.as_bytes()).is_empty() {
+            failed.push(format!("{} is not a vCard", response.href));
             continue;
         }
         people.extend(people_from_vcards(reply.body.as_bytes()));
+    }
+    if !failed.is_empty() {
+        return Err(incomplete(&failed, total));
     }
 
     Ok(people)

@@ -137,6 +137,25 @@ describe('what a message says was done to it', () => {
     await waitFor(() => expect(view.container.textContent).toContain('Signature does not check out'))
   })
 
+  // #9: an expired signing certificate never reads as a valid signature,
+  // held or not.
+  it('says an expired certificate is expired and never calls the signature valid', async () => {
+    stubVerify('smime.verify', {
+      verdict: 'certificateNotValid',
+      fingerprint: 'AB',
+      addresses: ['oriol@example.test'],
+      reason: 'expired',
+      notBefore: 1577836800,
+      notAfter: 1609459200,
+      trusted: true,
+      matchesSender: true,
+    })
+    const view = render(<ProtectionNotice message={checkable('smimeSigned')} />)
+    await waitFor(() => expect(view.container.textContent).toContain('certificate that made it expired'))
+    expect(view.container.textContent).not.toContain('Signature checked out')
+    expect(view.container.textContent).not.toContain('Valid signature')
+  })
+
   it('opens an S/MIME-encrypted message through smime.decrypt, not pgp.decrypt', async () => {
     const calls = stubDecrypt('smime.decrypt', { ok: true, body: 'The figures are attached.' })
     const view = render(<ProtectionNotice message={checkable('smimeEnveloped')} />)
@@ -144,6 +163,19 @@ describe('what a message says was done to it', () => {
     await waitFor(() => expect(view.container.textContent).toContain('The figures are attached.'))
     expect(calls).toContain('smime.decrypt')
     expect(calls).not.toContain('pgp.decrypt')
+  })
+
+  // #12: a message in a format this app does not read is said to be that,
+  // not answered with a request for a passphrase that could never help.
+  it('says an unsupported format is unsupported and asks for no passphrase', async () => {
+    stubDecrypt('pgp.decrypt', {
+      ok: false,
+      failure: { reason: 'unsupported', detail: "it is encrypted with GnuPG's LibrePGP AEAD mode (OCB)" },
+    })
+    const view = render(<ProtectionNotice message={checkable('pgpEncrypted')} />)
+    fireEvent.click(view.getByText('Open it'))
+    await waitFor(() => expect(view.container.textContent).toContain('LibrePGP AEAD mode'))
+    expect(view.container.querySelector('input[type="password"]')).toBeNull()
   })
 
   it('opens a PGP-encrypted message through pgp.decrypt, not smime.decrypt', async () => {

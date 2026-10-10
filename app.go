@@ -261,7 +261,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.gmailBegin()
 	case "oauth.graphBegin":
 		account, _ := payload["account"].(string)
-		return a.graphBrowser().begin(account, outlookClientID())
+		writes, _ := payload["writes"].(bool)
+		return a.graphBrowser().beginWith(account, outlookClientID(), writes)
 	case "oauth.graphPoll":
 		attempt, _ := payload["attempt"].(string)
 		return a.graphBrowser().poll(attempt)
@@ -424,6 +425,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailCancelScheduledSend(payload)
 	case "mail.sendScheduledNow":
 		return a.mailSendScheduledNow(payload)
+	case "mail.outgoingAttempts":
+		return a.mailOutgoingAttempts(payload)
+	case "mail.resolveOutgoing":
+		return a.mailResolveOutgoing(payload)
 	case "mail.markStarred":
 		return a.markStarred(payload)
 	case "mail.markAllRead":

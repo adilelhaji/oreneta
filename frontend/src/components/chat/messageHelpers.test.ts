@@ -245,3 +245,17 @@ describe('messageHelpers recipient summary', () => {
     expect(formatRecipientSummary('', null)).toBe('')
   })
 })
+
+describe('attachments the provider cannot hand over (#142)', () => {
+  it('are listed as files whatever their type, never silently dropped', () => {
+    const message = {
+      attachments: [
+        { filename: 'diagram.png', mime: 'image/png', size: 0, key: null, unavailable: 'link' },
+        { filename: '', mime: '', size: 0, key: null, unavailable: 'tooLarge' },
+        { filename: 'photo.png', mime: 'image/png', size: 3, key: 'acct/INBOX/1/0.png' },
+      ],
+    } as any
+    const media = getVisibleMedia(message, { load_remote_images: false } as any, false)
+    expect(media.files.map((file: any) => file.unavailable ?? file.filename)).toEqual(['link', 'tooLarge'])
+  })
+})

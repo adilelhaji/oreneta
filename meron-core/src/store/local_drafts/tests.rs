@@ -65,7 +65,7 @@ fn migration_preserves_legacy_state_and_is_idempotent() {
     crate::store::run_migrations(&conn).unwrap();
     assert_eq!(get(&conn, "draft")["revision"], 1);
     assert_eq!(crate::store::settings_get(&conn, &["keep".into()]).unwrap()["keep"], 42);
-    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(),35);
+    assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(),36);
 }
 
 #[test]

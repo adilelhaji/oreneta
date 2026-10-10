@@ -561,7 +561,7 @@ const ORENETA_DARK: BaseThemeTokens = {
   bgHeader: '#152137',
   bgHover: '#22314c',
   bgRaised: '#1b2a42',
-  bgActive: '#293f63',
+  bgActive: '#253a5c',
   border: '#30415b',
   textPrimary: '#e6edf9',
   textSecondary: '#a7b8d2',

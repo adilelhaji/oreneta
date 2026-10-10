@@ -22,6 +22,9 @@ Meron does, plus:
 
 ## Delivery roadmap
 
+The [completion plan](docs/completion-plan-2026-10-09.md) (2026-10-09) orders the
+remaining work into three declared candidates and sixteen iterations, each with
+its required tests, and defines the verification levels and quality gates.
 The [competitive delivery plan](docs/competitive-delivery-plan.md) and
 [backlog audit](docs/competitive-backlog-audit.md) record the 2026-10-05 execution review.
 The [eM Client parity plan](docs/emclient-parity-plan.md) tracks the frozen

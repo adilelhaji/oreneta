@@ -10,6 +10,7 @@ import {
   bulkDeleteSelected,
   bulkMarkSelectedUnread,
   bulkCopySelectedToFolder,
+  bulkMarkSelectedRead,
   copyThreadToFolder,
   deleteThread,
   discardSavedDraftCopy,
@@ -83,6 +84,45 @@ describe('thread message refresh reconciliation', () => {
     try {
       await bulkCopySelectedToFolder([bulkItem(thread())], 'graph@example.test', 'INBOX')
       expect(calls).toEqual([])
+    } finally {
+      accounts$.set(previous)
+      ;(window as any).go = previousGo
+    }
+  })
+  it('a Graph account changes messages only with the change permission (#141)', async () => {
+    const previous = accounts$.peek()
+    const previousGo = (window as any).go
+    try {
+      for (const graph_writes of [false, true]) {
+        const calls: string[] = []
+        accounts$.set([
+          { id: 'graph@example.test', auth_type: 'graph_oauth', graph_writes } as (typeof previous)[number],
+        ])
+        ;(window as any).go = {
+          main: {
+            App: {
+              Invoke: async (command: string) => {
+                calls.push(command)
+                return {}
+              },
+            },
+          },
+        }
+        const unread = thread({
+          id: 'graph@example.test#INBOX#1',
+          thread_id: 'graph@example.test#INBOX#t',
+          account_id: 'graph@example.test',
+          unread: true,
+        })
+        mail$.threads.set([unread])
+        const item = bulkItem(unread)
+        await bulkMarkSelectedRead([item])
+        expect(calls.length > 0, `graph_writes=${graph_writes}`).toBe(graph_writes)
+        // Copying to another account stays unsupported either way.
+        calls.length = 0
+        await bulkCopySelectedToFolder([item], 'other@example.test', 'INBOX')
+        expect(calls).toEqual([])
+      }
     } finally {
       accounts$.set(previous)
       ;(window as any).go = previousGo

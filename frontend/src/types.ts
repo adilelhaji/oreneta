@@ -53,6 +53,9 @@ export type Account = {
   paused?: boolean
   /** True when account metadata was restored but the OS keychain secret is missing. */
   needs_reconnect?: boolean
+  /** Microsoft Graph only: whether the grant Microsoft returned allows
+   * message changes (read, flag, move, delete; #141). */
+  graph_writes?: boolean
   /** RSS automatic sync interval in minutes (default 60). */
   rss_sync_interval_minutes?: number
   feed_url?: string
@@ -142,6 +145,9 @@ export type Attachment = {
   key: string | null
   /** Remote image URL (RSS inline images); null/absent for local attachments. */
   url?: string | null
+  /** Why there are no bytes to open (#142): 'link' for a cloud attachment,
+   * 'tooLarge' when the message is over the size read. Absent otherwise. */
+  unavailable?: string
 }
 
 export type ComposerAttachment = {
@@ -238,8 +244,10 @@ export type Message = {
    * rendered as a "+N" hint. Absent/0 for inbound or single-recipient threads. */
   recipient_overflow?: number
   /** Local send lifecycle for an optimistically-rendered outgoing message.
-   * Absent on messages loaded from the engine (treated as already sent). */
-  send_status?: 'queued' | 'sending' | 'sent' | 'failed'
+   * Absent on messages loaded from the engine (treated as already sent).
+   * `uncertain` is a message the server took in full and never answered
+   * for: it may have gone, and only the reader can settle it. */
+  send_status?: 'queued' | 'sending' | 'sent' | 'failed' | 'uncertain'
 }
 
 // Editable state for a compose/reply draft living inside a compose tab.

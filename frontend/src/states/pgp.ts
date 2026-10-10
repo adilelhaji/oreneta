@@ -59,12 +59,14 @@ export type PgpSecretKey = {
   addedAt: number
 }
 
-/** Why a message could not be opened. */
-export type DecryptionFailure = 'noKey' | 'needsPassphrase' | 'malformed'
+/** Why a message could not be opened. `unsupported` is a message in a
+ * format this app does not read (GnuPG's AEAD mode, say): not a passphrase
+ * problem, so no passphrase is asked for. */
+export type DecryptionFailure = 'noKey' | 'needsPassphrase' | 'malformed' | 'unsupported'
 
 export type DecryptResult =
   | { ok: true; body: string; bodyHtml?: string | null; signature?: SignatureResult | null }
-  | { ok: false; failure: { reason: DecryptionFailure } }
+  | { ok: false; failure: { reason: DecryptionFailure; detail?: string } }
 
 export const secretKeys$ = observable({
   keys: [] as PgpSecretKey[],

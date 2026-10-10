@@ -1,4 +1,4 @@
-import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { copyBlocked, messageChangesBlocked } from '../../lib/mailCapabilities'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
@@ -18,7 +18,7 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import type { BulkSelectionItem } from '../../states/ui'
 import { clearBulkSelection, setBulkSelection } from '../../states/ui'
-import { accounts$, isSendableAccount } from '../../states/accounts'
+import { accounts$ } from '../../states/accounts'
 import {
   bulkArchiveSelected,
   bulkCopySelectedToFolder,
@@ -59,8 +59,16 @@ export function BulkActionBar({
   const [moveFlyoutPosition, setMoveFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const [copyFlyoutPosition, setCopyFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const mailItems = useMemo(() => items.filter((item) => item.kind === 'mail'), [items])
-  const readOnly = items.some((item) => readOnlyTarget(accounts, item.accountId))
-  const mailAccounts = accounts.filter(isSendableAccount)
+  // Every action here changes messages: on Microsoft Graph that needs the
+  // change permission (#141), and copying stays within the same account.
+  const readOnly = items.some((item) => messageChangesBlocked(accounts, item.accountId))
+  const mailAccounts = accounts.filter(
+    (account) =>
+      account.auth_type !== 'rss' &&
+      account.provider !== 'rss' &&
+      account.needs_reconnect !== true &&
+      mailItemsAll(items).every((item) => !copyBlocked(accounts, item.accountId, account.id)),
+  )
   const accountIds = Array.from(new Set(mailItems.map((item) => item.accountId)))
   const singleAccountId = accountIds.length === 1 ? accountIds[0] : ''
   const selectedFolders = new Set(mailItems.map((item) => item.folderId))
@@ -361,4 +369,8 @@ export function BulkActionBar({
       )}
     </div>
   )
+}
+
+function mailItemsAll(items: BulkSelectionItem[]): BulkSelectionItem[] {
+  return items.filter((item) => item.kind === 'mail')
 }

@@ -644,6 +644,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         tx.execute_batch(super::local_drafts::SCHEMA)?;
         tx.pragma_update(None, "user_version", 35)?;
     }
+    if version < 36 {
+        tx.execute_batch(super::outgoing::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 36)?;
+    }
 
     tx.commit()?;
     Ok(())

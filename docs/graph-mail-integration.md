@@ -21,14 +21,20 @@ global-service, signed-in mailbox only. No automatic IMAP/EWS conversion.
 - Active Graph accounts support cached/offline folder, conversation and body
   reads. Inbox readiness is not a claim that every other folder is synchronized;
   opening/synchronizing a folder completes its own independent delta round.
-- Sending, remote drafts, flags/read-state edits, move/copy/delete, attachments,
-  calendars, contacts, shared mailboxes and national clouds remain unsupported
-  in this slice. Disable their UI affordances and reject their backend commands
-  before any mutation, SMTP, IMAP or delegated fallback. Local labels and
-  existing local drafts are preserved; reading does not mark remote mail read.
-  Local label assignments remain available; remote label linking is blocked.
-  This includes keyboard/bulk paths, draft menus, folder creation and kanban
-  dragging. Failed wizard cancellation retains its handle for an explicit retry.
+- Read state, flags, move, copy within the account and delete are available
+  once the reader allows changes and Microsoft grants `Mail.ReadWrite`; see
+  [design/graph-message-actions.md](design/graph-message-actions.md) (#141).
+  Attachments and inline images are read through MIME; see
+  [design/graph-attachments.md](design/graph-attachments.md) (#142).
+  Sending, remote drafts, folder management, calendars, contacts,
+  shared mailboxes and national clouds remain unsupported. Disable their UI
+  affordances and reject their backend commands before any mutation, SMTP,
+  IMAP or delegated fallback. Local labels and existing local drafts are
+  preserved; reading does not mark remote mail read. Local label assignments
+  remain available; remote label linking is blocked. This includes
+  keyboard/bulk paths, draft menus and folder creation; kanban dragging follows
+  the change permission. Failed wizard cancellation retains its handle for an
+  explicit retry.
 
 ## Identity and folder projection
 

@@ -7,10 +7,17 @@ import { ComposerHeaderFields } from './ComposerHeaderFields'
 import { ComposerToolbar } from './ComposerToolbar'
 import { ComposerAttachments } from './ComposerAttachments'
 import { ComposerFooter } from './ComposerFooter'
+import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
 import { confirmAction } from '../../states/ui'
 import type { Template } from '../../states/templates'
-import { insertAtCaret, messageTemplateFields, messageTemplateOverwrites } from './applyTemplate'
+import {
+  insertAtCaret,
+  messageTemplateFields,
+  messageTemplateOverwrites,
+  templateInsertHtml,
+  templateInsertText,
+} from './applyTemplate'
 
 export function Composer({ tabId }: { tabId: string }) {
   const { t } = useTranslation()
@@ -75,13 +82,13 @@ export function Composer({ tabId }: { tabId: string }) {
       editor
         .chain()
         .focus()
-        .insertContent(template.bodyHtml || template.bodyText)
+        .insertContent(templateInsertHtml(template))
         .run()
       return
     }
 
     const area = textRef.current
-    const insert = template.bodyText || template.bodyHtml.replace(/<[^>]*>/g, '')
+    const insert = templateInsertText(template)
     const { text, caret } = insertAtCaret(
       draft.text,
       insert,
@@ -139,6 +146,8 @@ export function Composer({ tabId }: { tabId: string }) {
       />
 
       {error && <p className="shrink-0 px-4 pb-1 text-caption font-medium text-danger">{error}</p>}
+
+      <LocalDraftStatus tabId={tabId} />
 
       <ComposerFooter
         rich={draft.rich}

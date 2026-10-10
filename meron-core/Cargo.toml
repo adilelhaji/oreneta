@@ -34,7 +34,10 @@ base64 = "0.22.1"
 # OpenPGP. The pure-Rust crypto backend rather than the default Nettle one:
 # this crate is cross-compiled to windows-msvc, macOS and Android, and a C
 # library per target is a build system nobody wants to maintain.
-sequoia-openpgp = { version = "2", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
+# Compression is on because other people's software compresses: GnuPG wraps
+# every message in ZLIB by default, and a message this cannot inflate reads
+# as malformed, which #12 found reported as a passphrase problem.
+sequoia-openpgp = { version = "2", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto", "compression-deflate", "compression-bzip2"] }
 ureq = { version = "3.3.0", features = ["socks-proxy"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 # Forked for the calendar item properties the published crate does not model

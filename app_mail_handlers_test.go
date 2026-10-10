@@ -371,6 +371,112 @@ func TestMailSendMapsPayloadToSidecarSend(t *testing.T) {
 	}
 }
 
+// The core's verdict on a send is handed through whole: a message whose
+// outcome nobody knows must not reach the interface as a plain success.
+func TestMailSendPassesTheOutcomeThrough(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"ok": false, "outcome": "uncertain", "attempt_id": "<message@example.com>", "error": "connection reset",
+	}})
+
+	out, err := app.mailSend(map[string]any{
+		"account_id": "acc",
+		"to":         "bob@example.com",
+		"message_id": "<message@example.com>",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := out.(map[string]any)
+	if result["ok"] != false || result["outcome"] != "uncertain" || result["attempt_id"] != "<message@example.com>" {
+		t.Fatalf("send result = %#v, want the uncertain outcome handed through", result)
+	}
+	if result["error"] != "connection reset" {
+		t.Fatalf("send result = %#v, want the reason handed through", result)
+	}
+	// Not a deliberate resend: the flag is absent from the core request.
+	if _, present := writer.calls[0].Params["resend"]; present {
+		t.Fatalf("send params = %#v, want no resend flag", writer.calls[0].Params)
+	}
+}
+
+// Sending again on purpose is a different request from sending, and the core
+// is told so; a retry from the interface never carries the flag by accident.
+func TestMailSendForwardsADeliberateResend(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{"ok": true, "outcome": "archived"}})
+
+	out, err := app.mailSend(map[string]any{
+		"account_id": "acc",
+		"to":         "bob@example.com",
+		"message_id": "<message@example.com>",
+		"resend":     true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.(map[string]any)["outcome"] != "archived" {
+		t.Fatalf("send result = %#v", out)
+	}
+	if writer.calls[0].Params["resend"] != true {
+		t.Fatalf("send params = %#v, want resend=true", writer.calls[0].Params)
+	}
+}
+
+func TestOutgoingAttemptsAndResolveMapToTheCore(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t,
+		sidecarResponsePlan{Result: map[string]any{"attempts": []any{map[string]any{"id": "a-1"}}}},
+		sidecarResponsePlan{Result: map[string]any{"ok": true, "resolved": true}},
+	)
+
+	out, err := app.mailOutgoingAttempts(map[string]any{"account_id": "acc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.(map[string]any)["attempts"].([]any)) != 1 {
+		t.Fatalf("attempts = %#v", out)
+	}
+	assertCall(t, writer.calls[0], "mail.outgoingAttempts", map[string]any{"account": "acc"})
+
+	if _, err := app.mailResolveOutgoing(map[string]any{"id": "a-1"}); err != nil {
+		t.Fatal(err)
+	}
+	assertCall(t, writer.calls[1], "mail.resolveOutgoing", map[string]any{"id": "a-1"})
+
+	if _, err := app.mailResolveOutgoing(map[string]any{}); err == nil {
+		t.Fatal("resolving nothing should be refused")
+	}
+}
+
+// #27: confirming a sweep hands the core the review it previewed, nothing
+// recomputed; the core's item-by-item answer comes back whole.
+func TestMailSweepConfirmsTheReviewedPreview(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"ok": false, "swept": 2, "unresolved": []any{float64(7)}, "folder": "Trash", "complete": false, "error": "move failed",
+	}})
+
+	out, err := app.mailSweep(map[string]any{"account_id": "acc", "review_id": "sweep-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(writer.calls) != 1 {
+		t.Fatalf("sidecar calls = %#v, want one sweepExecute and no preview", writer.calls)
+	}
+	assertCall(t, writer.calls[0], "mail.sweepExecute", map[string]any{"account": "acc", "review_id": "sweep-1"})
+	result := out.(map[string]any)
+	if result["complete"] != false || result["swept"] != 2 {
+		t.Fatalf("sweep result = %#v, want the partial outcome handed through", result)
+	}
+}
+
+func TestMailSweepRefusesToActWithoutAReview(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t)
+	if _, err := app.mailSweep(map[string]any{"account_id": "acc", "from": "x@example.com"}); err == nil {
+		t.Fatal("a sweep without a review id should be refused")
+	}
+	if len(writer.calls) != 0 {
+		t.Fatalf("nothing should reach the core: %#v", writer.calls)
+	}
+}
+
 func TestEmlFilenameSanitizesSubject(t *testing.T) {
 	cases := map[string]string{
 		"Quarterly report":     "Quarterly report.eml",

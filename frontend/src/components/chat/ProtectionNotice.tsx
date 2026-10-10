@@ -99,6 +99,11 @@ export function ProtectionNotice({ message }: { message: Message }) {
             setFailure(passphrase ? t('crypto.wrongPassphrase') : null)
             return
           }
+          if (answer.failure.reason === 'unsupported') {
+            setNeedsPassphrase(false)
+            setFailure(t('crypto.failure.unsupported', { detail: answer.failure.detail ?? '' }))
+            return
+          }
           setFailure(t(`crypto.failure.${answer.failure.reason}`))
         })
         .catch((error) => setFailure(error instanceof Error ? error.message : t('crypto.failure.malformed')))
@@ -203,6 +208,28 @@ export function ProtectionNotice({ message }: { message: Message }) {
         <span className="flex items-start gap-1.5">
           <ShieldQuestion size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
           <span>{t('crypto.validUntrustedText', { signer: result.addresses[0] ?? '' })}</span>
+        </span>
+      </Notice>
+    )
+  }
+
+  // S/MIME only: the cryptography holds, but the certificate was not valid
+  // when this was checked. Integrity, time validity and trust are three
+  // different facts; this one alone is enough to withhold "valid".
+  if (result?.verdict === 'certificateNotValid') {
+    const when = new Date(
+      (result.reason === 'expired' ? result.notAfter : result.notBefore) * 1000,
+    ).toLocaleDateString()
+    return (
+      <Notice tone="warning" className="mb-2" title={t('crypto.certificateNotValidTitle')}>
+        <span className="flex items-start gap-1.5">
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" strokeWidth={1.75} />
+          <span>
+            {t(result.reason === 'expired' ? 'crypto.certificateExpiredText' : 'crypto.certificateNotYetValidText', {
+              signer: result.addresses[0] ?? '',
+              date: when,
+            })}
+          </span>
         </span>
       </Notice>
     )

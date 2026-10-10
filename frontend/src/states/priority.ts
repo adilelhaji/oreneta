@@ -73,7 +73,19 @@ export type SweepPreview = {
   from: string
   folder: string
   keepNewest: number
+  /** The core's handle on exactly this list. Confirming sends it back, so
+   * what moves is what was shown and nothing that arrived since. */
+  reviewId: string
   messages: SweepCandidate[]
+}
+
+/** What a confirmed sweep came to, item by item. */
+export type SweepOutcome = {
+  swept: number
+  /** Reviewed messages still in the folder after the move was attempted. */
+  unresolved: number[]
+  complete: boolean
+  error?: string | null
 }
 
 /** What a sweep would move, moving nothing. */
@@ -93,29 +105,35 @@ export async function sweepPreview(args: {
 }
 
 /**
- * Moves everything the preview named to the trash.
+ * Does the sweep that was previewed.
  *
- * The core is asked for the list again rather than being handed the one the
- * dialog is showing: between showing it and agreeing to it, mail may have
- * arrived from the same sender, and sweeping a message nobody was shown is the
- * one thing this must not do. What that costs is that the count can differ
- * from the preview by a message that arrived in between — which is the honest
- * outcome, and the toast says how many actually went.
+ * The dialog hands back the review the core issued with the list, and the
+ * core moves those messages: not the sender's mail recomputed now, which by
+ * then may include something nobody was shown. The answer is item by item.
+ * When some reviewed messages are still there afterwards — another client
+ * took them first, or the move failed part-way — the toast says so rather
+ * than a count that reads as "all done"; a fresh preview shows what is left.
  */
-export async function sweep(args: {
-  accountId: string
-  folder: string
-  from: string
-  keepNewest: number
-}): Promise<number> {
-  const res = await invoke<{ swept?: number }>('mail.sweep', {
+export async function sweep(args: { accountId: string; reviewId: string }): Promise<SweepOutcome> {
+  const res = await invoke<Partial<SweepOutcome> | null>('mail.sweep', {
     account_id: args.accountId,
-    folder: args.folder,
-    from: args.from,
-    keep_newest: args.keepNewest,
+    review_id: args.reviewId,
   })
-  const swept = res?.swept ?? 0
-  showToast(t('sweep.done', { count: swept }))
+  const outcome: SweepOutcome = {
+    swept: res?.swept ?? 0,
+    unresolved: res?.unresolved ?? [],
+    complete: res?.complete === true,
+    error: res?.error ?? null,
+  }
+  if (outcome.complete) {
+    showToast(t('sweep.done', { count: outcome.swept }))
+  } else {
+    showToast(
+      t('sweep.partial', { swept: outcome.swept, left: outcome.unresolved.length }) +
+        (outcome.error ? ` · ${outcome.error}` : ''),
+      'error',
+    )
+  }
   await loadThreads(false)
-  return swept
+  return outcome
 }

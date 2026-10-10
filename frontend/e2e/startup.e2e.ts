@@ -1,4 +1,6 @@
+import { writeFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { createFixture } from '../baseline/fixtures'
 import { defaultCustomInput, deriveThemeTokens } from '../src/lib/themes'
 
@@ -24,6 +26,78 @@ type SetupOptions = {
   syncHealth?: boolean
   manualRefresh?: boolean
 }
+
+// Automated accessibility audit of the production entry: onboarding, and the
+// mail workspace with an account, in both appearances. Critical and serious
+// WCAG 2.1 A/AA violations fail the run; the complete result, moderate and
+// minor findings included, is attached so #37 can read it. An automated audit
+// checks what a rule can check — names, roles, contrast, structure — and is
+// not the keyboard, focus and screen-reader evidence #37 still requires.
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  test(`accessibility audit: ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, theme })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    const blocking: string[] = []
+    const audit = async (screen: string) => {
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      const body = JSON.stringify(
+        {
+          screen,
+          theme,
+          url: results.url,
+          violations: results.violations.map((violation) => ({
+            id: violation.id,
+            impact: violation.impact,
+            help: violation.help,
+            nodes: violation.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+          })),
+          passes: results.passes.length,
+          incomplete: results.incomplete.map((rule) => rule.id),
+        },
+        null,
+        2,
+      )
+      // Attached to the report and written beside the screenshots, so the
+      // uploaded evidence carries the full audit without opening the report.
+      await info.attach(`axe-${screen}-${theme}`, { body, contentType: 'application/json' })
+      writeFileSync(info.outputPath(`axe-${screen}.json`), body)
+      for (const violation of results.violations) {
+        if (violation.impact === 'critical' || violation.impact === 'serious') {
+          blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${violation.nodes.length} node(s)`)
+        }
+      }
+    }
+    await audit('mailbox')
+    // The conversation pane with a message open, which is where most of the
+    // day is spent.
+    const row = page.getByRole('row').first()
+    if (await row.isVisible()) {
+      await row.click()
+      await audit('conversation')
+    }
+    expect(blocking).toEqual([])
+    expect(errors).toEqual([])
+  })
+}
+
+test('accessibility audit: onboarding', async ({ page }, info) => {
+  const errors = await prepareStartup(page)
+  await page.goto('/')
+  await expect(page.getByRole('textbox', { name: 'Email Address', exact: true })).toBeVisible()
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const body = JSON.stringify(results.violations, null, 2)
+  await info.attach('axe-onboarding', { body, contentType: 'application/json' })
+  writeFileSync(info.outputPath('axe-onboarding.json'), body)
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map((violation) => `${violation.id} (${violation.impact}) on ${violation.nodes.length} node(s)`)
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
 
 test('onboarding remains keyboard reachable in a short zoom-equivalent viewport', async ({ page }) => {
   const errors = await prepareStartup(page)
@@ -793,6 +867,11 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'composer.pruneMedia': { removed: 0 },
         'labels.list': { labels: [] },
         'mail.scheduledSends': { messages: [] },
+        'mail.outgoingAttempts': { attempts: [] },
+        'localDrafts.list': { drafts: [] },
+        'localDrafts.get': { draft: null },
+        'localDrafts.save': { applied: true, revision: 1, deleted: false },
+        'localDrafts.delete': { applied: true, revision: 2, deleted: true },
         'tray.setUnread': { ok: true },
         'update.status': {
           state: 'idle',

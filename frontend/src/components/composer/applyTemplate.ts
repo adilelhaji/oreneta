@@ -9,6 +9,8 @@
 
 import type { ComposeDraft } from '../../types'
 import type { Template } from '../../states/templates'
+import { htmlToText } from '../../lib/html'
+import { escapeHtml } from '../../lib/printDocument'
 
 /**
  * Put text in at the caret, replacing a selection if there is one.
@@ -67,7 +69,30 @@ export function messageTemplateFields(
     // Both forms are kept precisely so neither mode has to derive the other.
     // Where one is missing the other stands in, because showing the text of a
     // template as plain is a smaller loss than showing nothing.
-    html: rich ? template.bodyHtml || template.bodyText : '',
-    text: rich ? '' : template.bodyText || template.bodyHtml.replace(/<[^>]*>/g, ''),
+    html: rich ? templateInsertHtml(template) : '',
+    text: rich ? '' : templateInsertText(template),
   }
+}
+
+/**
+ * Plain text as markup that shows exactly that text (#40): escaped, so
+ * "a < b" and "<b>" stay what was written, with blank lines as paragraphs and
+ * single line breaks as breaks.
+ */
+export function plainTextToHtml(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+/** A template's body for the rich editor: its HTML, or its text made safe. */
+export function templateInsertHtml(template: Template): string {
+  return template.bodyHtml.trim() ? template.bodyHtml : plainTextToHtml(template.bodyText)
+}
+
+/** A template's body for the plain editor: its text, or its HTML read as text. */
+export function templateInsertText(template: Template): string {
+  return template.bodyText || htmlToText(template.bodyHtml)
 }

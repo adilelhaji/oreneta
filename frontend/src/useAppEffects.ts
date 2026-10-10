@@ -15,7 +15,7 @@ import {
   refreshAccountFoldersCache,
   inboxUnread,
 } from './states/mail'
-import { openMailtoCompose, openThreadTabById } from './states/compose'
+import { flushComposeDrafts, openMailtoCompose, openThreadTabById, restoreLocalDrafts } from './states/compose'
 import { accounts$ } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
@@ -25,11 +25,8 @@ import type { UpdateStatus } from './lib/update'
 import { useFoldersByAccount } from './lib/kanbanData'
 import { setTrayUnread } from './lib/trayUnread'
 import { loadLabels } from './states/labels'
-import {
-  forgetScheduledSend,
-  markScheduledSendFailed,
-  refreshScheduledSends,
-} from './states/scheduledSends'
+import { forgetScheduledSend, markScheduledSendFailed, refreshScheduledSends } from './states/scheduledSends'
+import { refreshOutgoingAttempts } from './states/outgoingAttempts'
 import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
 
 const DEFAULT_RSS_SYNC_INTERVAL_MINUTES = 60
@@ -56,13 +53,19 @@ export function useAppEffects() {
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
   const autoUpdateCheck = useValue(settings$.autoUpdateCheck)
 
-  useEffect(() => { retainSyncAccounts(accounts.map((account) => account.id)) }, [accounts])
+  useEffect(() => {
+    retainSyncAccounts(accounts.map((account) => account.id))
+  }, [accounts])
 
   // A held send must not be lost to the app closing. The window hides to the
   // tray rather than quitting, so this is the rarer path of an actual quit —
   // best effort, and the reason the grace periods on offer are short.
   useEffect(() => {
-    const flush = () => flushQueuedSends()
+    const flush = () => {
+      flushQueuedSends()
+      // Likewise a draft typed in the last moment before quitting.
+      void flushComposeDrafts()
+    }
     window.addEventListener('beforeunload', flush)
     window.addEventListener('pagehide', flush)
     return () => {
@@ -233,6 +236,11 @@ export function useAppEffects() {
   // off yesterday is visible today without having to go looking for it.
   useEffect(() => {
     void refreshScheduledSends()
+    // And what the core could not settle on its own: sends it never got an
+    // answer for, including any the last run was in the middle of.
+    void refreshOutgoingAttempts()
+    // Drafts written in the full editor, with their files, as they were left.
+    void restoreLocalDrafts()
     // The label set, once: every chip in the list is painted from it, so a
     // list that arrives before the labels do would show conversations with
     // labels it cannot name.
@@ -378,46 +386,50 @@ export function useAppEffects() {
     // worst thing this feature could do to them.
     const offScheduledFailed = eventsOn(
       'mail.scheduledSendFailed',
-      (detail: { id?: string; subject?: string; error?: string }) => {
-        if (detail?.id) markScheduledSendFailed(detail.id, detail.error ?? '')
-        showToast(t('sendLater.toast.failed', { subject: detail?.subject ?? '' }), 'error')
+      (detail: { id?: string; subject?: string; error?: string; uncertain?: boolean }) => {
+        const uncertain = detail?.uncertain === true
+        if (detail?.id) markScheduledSendFailed(detail.id, detail.error ?? '', uncertain)
+        // Two different things to say: refused, or sent without an answer.
+        // The second must not read as the first, or the reader will send it
+        // again and may deliver it twice.
+        showToast(
+          t(uncertain ? 'outgoing.toast.scheduledUncertain' : 'sendLater.toast.failed', {
+            subject: detail?.subject ?? '',
+          }),
+          'error',
+        )
+        if (uncertain) void refreshOutgoingAttempts()
       },
     )
 
     // A calendar refresh that failed. Nothing consumed this before, so the
     // agenda simply went stale in silence — the worst way for it to be wrong,
     // since it still looks current.
-    const offCalendarError = eventsOn(
-      'calendar.syncError',
-      (detail: { message?: string }) => {
-        calendar$.syncError.set(detail?.message || 'calendar sync failed')
-      },
-    )
+    const offCalendarError = eventsOn('calendar.syncError', (detail: { message?: string }) => {
+      calendar$.syncError.set(detail?.message || 'calendar sync failed')
+    })
 
     // A calendar window is fetched from the cache and refreshed behind the
     // request, so the agenda renders whatever was already stored and needs
     // telling when the server's answer lands — on a first open the cache is
     // empty, and without this the view would simply stay that way.
-    const offCalendarSynced = eventsOn(
-      'calendar.synced',
-      (detail: { from?: number; to?: number }) => {
-        // The list of calendars refreshes too: a sync is how a freshly added
-        // account's calendars are first discovered, and the settings rail
-        // would otherwise not show them until the dialog was reopened.
-        void loadCalendars()
-        const { from, to } = calendar$.peek()
-        if (to <= from) return
-        // Re-read when the synced window overlaps the one on screen, not only
-        // when it matches: a write syncs just the hours its event occupies,
-        // and requiring equality meant a newly created event never appeared.
-        if (detail?.from !== undefined && detail?.to !== undefined) {
-          if (detail.to <= from || detail.from >= to) return
-        }
-        // A sync that landed clears whatever the last failure said.
-        calendar$.syncError.set('')
-        void loadWindow(from, to, false)
-      },
-    )
+    const offCalendarSynced = eventsOn('calendar.synced', (detail: { from?: number; to?: number }) => {
+      // The list of calendars refreshes too: a sync is how a freshly added
+      // account's calendars are first discovered, and the settings rail
+      // would otherwise not show them until the dialog was reopened.
+      void loadCalendars()
+      const { from, to } = calendar$.peek()
+      if (to <= from) return
+      // Re-read when the synced window overlaps the one on screen, not only
+      // when it matches: a write syncs just the hours its event occupies,
+      // and requiring equality meant a newly created event never appeared.
+      if (detail?.from !== undefined && detail?.to !== undefined) {
+        if (detail.to <= from || detail.from >= to) return
+      }
+      // A sync that landed clears whatever the last failure said.
+      calendar$.syncError.set('')
+      void loadWindow(from, to, false)
+    })
 
     const offSynced = eventsOn('mail.synced', (detail: { account?: string; folders?: boolean }) => {
       recordMailActivity(detail?.account ?? null)

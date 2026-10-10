@@ -27,6 +27,8 @@ use tokio::sync::Mutex;
 use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
+use meron_core::store::outgoing;
+use meron_core::sweep_review;
 use meron_core::{
     assistant, backup, cached_conversations, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
     search, secrets, smtp, spam, store, thread_list, thread_read, unified,
@@ -170,6 +172,63 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BackgroundSyncCancelled, is_transient_sync_error, retry_background_sync};
+    use super::{ScheduledOutcome, scheduled_send_precheck};
+    use meron_core::store::outgoing::{AttemptKind, AttemptState, OutgoingAttempt};
+
+    fn earlier(state: AttemptState, error: &str) -> OutgoingAttempt {
+        OutgoingAttempt {
+            id: "s-1".to_string(),
+            account: "acct".to_string(),
+            kind: AttemptKind::Scheduled,
+            message_id: String::new(),
+            subject: "Later".to_string(),
+            recipients: "bob@example.com".to_string(),
+            payload: "{}".to_string(),
+            state,
+            error: error.to_string(),
+            archive_error: String::new(),
+            created_at: 1,
+            updated_at: 2,
+        }
+    }
+
+    /// H03 from #29: a scheduled row still present after the server accepted
+    /// its message is a crash between sending and forgetting, and must be
+    /// reported as sent — never sent again. An unanswered try stays
+    /// unanswered. Only a refusal, or nothing at all, is tried.
+    #[test]
+    fn a_scheduled_row_whose_attempt_already_went_is_not_sent_twice() {
+        assert!(scheduled_send_precheck(None).is_none(), "never tried: send it");
+        assert!(scheduled_send_precheck(Some(&earlier(AttemptState::Rejected, "550 no"))).is_none());
+        assert!(scheduled_send_precheck(Some(&earlier(AttemptState::Resolved, ""))).is_none());
+
+        assert!(matches!(
+            scheduled_send_precheck(Some(&earlier(AttemptState::Accepted, ""))),
+            Some(ScheduledOutcome::Sent)
+        ));
+        assert!(matches!(
+            scheduled_send_precheck(Some(&earlier(AttemptState::Archived, ""))),
+            Some(ScheduledOutcome::Sent)
+        ));
+        match scheduled_send_precheck(Some(&earlier(AttemptState::Uncertain, "connection reset"))) {
+            Some(ScheduledOutcome::Uncertain(reason)) => assert_eq!(reason, "connection reset"),
+            other => panic!("an unanswered try stays unanswered, got {}", describe(other)),
+        }
+        // A row still marked as going belongs to a process that died: the
+        // reason is supplied when the record has none.
+        match scheduled_send_precheck(Some(&earlier(AttemptState::Sending, ""))) {
+            Some(ScheduledOutcome::Uncertain(reason)) => assert!(reason.contains("stopped"), "{reason}"),
+            other => panic!("got {}", describe(other)),
+        }
+    }
+
+    fn describe(outcome: Option<ScheduledOutcome>) -> String {
+        match outcome {
+            None => "None".to_string(),
+            Some(ScheduledOutcome::Sent) => "Sent".to_string(),
+            Some(ScheduledOutcome::Uncertain(reason)) => format!("Uncertain({reason})"),
+        }
+    }
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     struct GraphTestHost;
@@ -218,6 +277,39 @@ mod tests {
         let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
+    }
+    #[tokio::test]
+    async fn graph_writes_pass_the_guard_only_where_granted_and_supported() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let (account,other)=("graph@example.test","other@example.test");
+        for id in [account,other] {
+            engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[id]).unwrap();
+        }
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true})).unwrap();
+        // Supported and granted: past the guard (they fail later, with no
+        // Graph profile in this test, but not as "read-only").
+        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account,"uid":1,"target_folder":"INBOX.x"})),&writer).await.unwrap_err();
+            assert!(!error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
+        assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
+        // Still unsupported, granted or not.
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
+            assert!(error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        // Not to another account, and not for an account without the grant.
+        let error=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":other,"target_folder":"x","uid":1})),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        let error=dispatch(&engine,&request("messages.markRead",json!({"account":other,"uid":1})),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
+        let writes:Vec<(String,bool)>=list["accounts"].as_array().unwrap().iter().map(|a|(a["id"].as_str().unwrap().to_owned(),a["graph_writes"].as_bool().unwrap())).collect();
+        assert!(writes.contains(&(account.to_owned(),true)) && writes.contains(&(other.to_owned(),false)));
     }
     #[test]
     fn graph_failures_do_not_enter_imap_retry_policy() {
@@ -744,8 +836,8 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                         continue;
                     }
                 };
-                match perform_send(&engine, &message).await {
-                    Ok(_) => {
+                match send_scheduled(&engine, &row, &message, false).await {
+                    Ok(ScheduledOutcome::Sent) => {
                         {
                             let db = engine.db.lock().unwrap();
                             let _ = store::cancel_scheduled_send(&db, &row.id);
@@ -760,6 +852,17 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                             }),
                         )
                         .await;
+                    }
+                    Ok(ScheduledOutcome::Uncertain(reason)) => {
+                        // Not a refusal and not a success: nobody knows. It
+                        // is not tried again, which could deliver it twice,
+                        // and it is not dropped, which could lose it. It
+                        // stays in the list for a person, marked as unknown.
+                        {
+                            let db = engine.db.lock().unwrap();
+                            let _ = store::give_up_on_send(&db, &row.id, &reason, now);
+                        }
+                        emit(&out, "mail.scheduledSendFailed", uncertain_send_json(&row, &reason)).await;
                     }
                     Err(err) => {
                         let reason = format!("{err:#}");
@@ -890,6 +993,13 @@ fn spawn_calendar_sync(
 /// not to pay for it.
 /// Now, as epoch seconds. A clock that cannot be read is treated as the epoch,
 /// which shows as "never synced" rather than as a plausible wrong time.
+/// Sweeps previewed and not yet confirmed. Process-wide: a review is a thing
+/// the interface was shown, not a thing the store knows.
+fn sweep_reviews() -> &'static sweep_review::Registry {
+    static REVIEWS: std::sync::OnceLock<sweep_review::Registry> = std::sync::OnceLock::new();
+    REVIEWS.get_or_init(sweep_review::Registry::new)
+}
+
 fn now_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1454,6 +1564,20 @@ async fn main() {
 
     // Reminders are watched for as long as the core runs, not per account:
     // the query already knows which accounts have anything due.
+    // Before anything can be sent: a send the last process died in the
+    // middle of has an outcome nobody knows, and must be marked as such
+    // before the scheduled watch could mistake its row for one never tried.
+    {
+        let db = engine.db.lock().unwrap();
+        let now = now_seconds();
+        match outgoing::mark_interrupted_uncertain(&db, now) {
+            Ok(0) => {}
+            Ok(n) => eprintln!("meron-core: {n} send(s) interrupted by the last shutdown are marked as uncertain"),
+            Err(err) => eprintln!("meron-core: could not reconcile interrupted sends: {err:#}"),
+        }
+        let _ = outgoing::prune_settled(&db, now - OUTGOING_HISTORY_SECONDS);
+    }
+
     spawn_reminder_watch(engine.clone(), out.clone());
     spawn_deferred_watch(engine.clone(), out.clone());
 
@@ -1558,7 +1682,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let manager = engine.graph_auth.clone();
             let client = req_str(p, "client_id")?;
             let redirect = req_str(p, "redirect_uri")?;
-            let begin = tokio::task::spawn_blocking(move || manager.begin(selected, &client, &redirect, route)).await??;
+            // `writes` asks for message changes on an existing account (#141).
+            let writes = p.get("writes").and_then(Value::as_bool).unwrap_or(false);
+            let begin = tokio::task::spawn_blocking(move || manager.begin_with(selected, &client, &redirect, route, writes)).await??;
             Ok(serde_json::to_value(begin)?)
         }
         "graph.authPoll" => {
@@ -1753,14 +1879,29 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
             let from_addr = req_str(p, "from")?;
             let keep = p.get("keep_newest").and_then(Value::as_u64).unwrap_or(1) as u32;
-            let candidates = {
+            let (candidates, uidvalidity) = {
                 let db = engine.db.lock().unwrap();
-                store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?
+                (
+                    store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?,
+                    store::get_folder_state(&db, &account, &folder)?.map(|(validity, _)| validity).unwrap_or(0),
+                )
             };
+            // The list is what gets confirmed, not the question that produced
+            // it: the review names these messages, in this folder as it is now,
+            // and confirming it later acts on them and nothing that arrived since.
+            let review_id = sweep_reviews().issue(
+                &account,
+                &folder,
+                uidvalidity,
+                candidates.iter().map(|candidate| candidate.uid).collect(),
+                now_seconds(),
+            );
             Ok(json!({
                 "from": from_addr,
                 "folder": folder,
                 "keepNewest": keep,
+                "reviewId": review_id,
+                "uidvalidity": uidvalidity,
                 "messages": candidates
                     .iter()
                     .map(|candidate| json!({
@@ -1769,6 +1910,78 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "date": candidate.date,
                     }))
                     .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Does the sweep that was previewed: those messages, once, and only
+        // while the folder is still the folder they were previewed in.
+        //
+        // The answer is item by item. A move that fails part-way, or a
+        // message another client took first, leaves reviewed messages behind,
+        // and the reader is told which rather than shown a count that says
+        // everything went.
+        "mail.sweepExecute" => {
+            let account = req_str(p, "account")?;
+            let review_id = req_str(p, "review_id")?;
+            let review = sweep_reviews().take(&review_id, &account, now_seconds())?;
+            {
+                let db = engine.db.lock().unwrap();
+                let current = store::get_folder_state(&db, &account, &review.folder)?.map(|(validity, _)| validity);
+                sweep_review::check_folder_unchanged(&review, current)?;
+            }
+            if review.uids.is_empty() {
+                return Ok(json!({
+                    "ok": true,
+                    "swept": 0,
+                    "unresolved": [],
+                    "folder": review.folder,
+                    "complete": true,
+                }));
+            }
+            // The trash as the cache knows it, or as the server names it when
+            // the folder list has not been read yet — the same lookup a
+            // delete makes, so a sweep never goes to a different place.
+            let cached_trash = store::folder_for_role(&engine.db.lock().unwrap(), &account, "trash")?;
+            let target = match cached_trash {
+                Some(trash) => trash,
+                None => engine
+                    .with_write_session(&account, |session| {
+                        Box::pin(async move {
+                            let trash = session.find_trash_folder().await?;
+                            anyhow::Ok(trash)
+                        })
+                    })
+                    .await?
+                    .context("this account has no trash folder")?,
+            };
+            // The move itself is the ordinary one, with the reviewed UIDs and
+            // nothing recomputed; its own failure is reported after the
+            // per-item check below, which is what the reader needs to see.
+            let move_request = Request {
+                id: req.id,
+                method: "messages.move".to_string(),
+                params: json!({
+                    "account": account,
+                    "folder": review.folder,
+                    "target_folder": target,
+                    "uids": review.uids,
+                }),
+            };
+            let moved = Box::pin(dispatch(engine, &move_request, out)).await;
+            let remaining = {
+                let db = engine.db.lock().unwrap();
+                store::existing_message_uids(&db, &account, &review.folder, &review.uids)?
+            };
+            let outcome = sweep_review::SweepOutcome::from_remaining(&review.uids, &remaining);
+            let error = moved.err().map(|err| format!("{err:#}"));
+            Ok(json!({
+                "ok": error.is_none(),
+                "swept": outcome.swept.len(),
+                "sweptUids": outcome.swept,
+                "unresolved": outcome.unresolved,
+                "folder": target,
+                "complete": outcome.complete() && error.is_none(),
+                "error": error,
             }))
         }
 
@@ -2856,12 +3069,40 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // reader can still find, change their mind about, or be told failed.
         "mail.scheduledSends" => {
             let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
-            let rows = store::scheduled_sends(&engine.db.lock().unwrap(), account.as_deref())?;
-            Ok(json!({ "messages": rows.iter().map(scheduled_send_json).collect::<Vec<_>>() }))
+            let db = engine.db.lock().unwrap();
+            let rows = store::scheduled_sends(&db, account.as_deref())?;
+            let messages = rows
+                .iter()
+                .map(|row| {
+                    let uncertain = outgoing::attempt(&db, &row.id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|attempt| attempt.state == outgoing::AttemptState::Uncertain);
+                    scheduled_send_json(row, uncertain)
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({ "messages": messages }))
         }
 
         // Calls a scheduled send off and hands the message back, so its words
         // return to the composer instead of being taken away.
+        // Sends whose outcome nobody knows, and sent messages without a
+        // Sent copy. Listed so a person can look at them; nothing here is
+        // retried on its own.
+        "mail.outgoingAttempts" => {
+            let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
+            let rows = outgoing::unsettled(&engine.db.lock().unwrap(), account.as_deref())?;
+            Ok(json!({ "attempts": rows.iter().map(outgoing::OutgoingAttempt::to_json).collect::<Vec<_>>() }))
+        }
+
+        // A person has settled an uncertain send, whichever way. The record
+        // stays, marked as looked at; only the doubt is cleared.
+        "mail.resolveOutgoing" => {
+            let id = req_str(p, "id")?;
+            let resolved = outgoing::resolve(&engine.db.lock().unwrap(), &id, now_seconds())?;
+            Ok(json!({ "ok": true, "resolved": resolved }))
+        }
+
         "mail.cancelScheduledSend" => {
             let id = req_str(p, "id")?;
             let cancelled = store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
@@ -2886,10 +3127,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let row = row.context("no such scheduled message")?;
             let message: Value = serde_json::from_str(&row.payload)
                 .context("this scheduled message can no longer be read")?;
-            match perform_send(engine, &message).await {
-                Ok(_) => {
+            // Sending again a message whose earlier try may have gone is a
+            // decision, not a retry; the interface says so explicitly.
+            let resend = p.get("resend").and_then(Value::as_bool).unwrap_or(false);
+            match send_scheduled(engine, &row, &message, resend).await {
+                Ok(ScheduledOutcome::Sent) => {
                     store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
-                    Ok(json!({ "ok": true }))
+                    Ok(json!({ "ok": true, "outcome": "sent" }))
+                }
+                Ok(ScheduledOutcome::Uncertain(reason)) => {
+                    store::give_up_on_send(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
+                    Ok(json!({ "ok": false, "outcome": "uncertain", "id": id, "error": reason }))
                 }
                 Err(err) => {
                     let reason = format!("{err:#}");
@@ -3042,6 +3290,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         let status=meron_core::graph::mail::status(&engine.db.lock().unwrap(),&id);
                         let reconnect=status.as_ref().map_or(true,|s|matches!(s.error.as_deref(),Some("reauthenticate"|"consent_required"|"access_denied")));
                         obj.insert("needs_reconnect".into(),json!(reconnect));
+                        // Whether its grant allows message changes (#141).
+                        obj.insert("graph_writes".into(),json!(meron_core::graph::mail::writes_enabled(&engine.db.lock().unwrap(),&id)));
                         continue;
                     }
                     let needs_reconnect = live_accounts
@@ -4881,6 +5131,30 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }));
             }
 
+            // Within one account, a server that can copy on its own does so
+            // (Microsoft Graph, #141): the bytes never travel through here,
+            // and its session has already brought both folders up to date.
+            let graph_account = store::load_account(&engine.db.lock().unwrap(), &account)?
+                .is_some_and(|creds| creds.is_graph());
+            if graph_account && account == target_account {
+                let native = engine
+                    .with_write_session(&account, |session| {
+                        let (folder, target_folder, uids) =
+                            (folder.clone(), target_folder.clone(), uids.clone());
+                        Box::pin(async move { session.copy_within(&folder, &target_folder, &uids).await })
+                    })
+                    .await?;
+                if let Some(copied) = native {
+                    return Ok(json!({
+                        "ok": true,
+                        "copied": copied,
+                        "source_folder": folder,
+                        "target_account": target_account,
+                        "target_folder": target_folder
+                    }));
+                }
+            }
+
             let raw_messages = engine
                 .with_read_session(&account, |session| {
                     let folder = folder.clone();
@@ -5927,14 +6201,93 @@ fn failed_send_json(row: &store::ScheduledSend, reason: &str) -> Value {
         "account": row.account,
         "subject": row.subject,
         "error": reason,
+        "uncertain": false,
     })
+}
+
+/// A scheduled message that may or may not have gone. Told apart from a
+/// refusal so the interface does not offer "send now" as if nothing had
+/// happened.
+fn uncertain_send_json(row: &store::ScheduledSend, reason: &str) -> Value {
+    json!({
+        "id": row.id,
+        "account": row.account,
+        "subject": row.subject,
+        "error": reason,
+        "uncertain": true,
+    })
+}
+
+/// How long settled send history is kept before it is forgotten. Doubt is
+/// never forgotten on a timer; see `outgoing::prune_settled`.
+const OUTGOING_HISTORY_SECONDS: i64 = 30 * 24 * 60 * 60;
+
+/// How one try at a scheduled message ended, for the watch and for
+/// "send now" alike.
+enum ScheduledOutcome {
+    /// Accepted by the server (whether or not the Sent copy was filed).
+    Sent,
+    /// Transmitted without an answer, or already transmitted by an earlier
+    /// try nobody recorded the end of. Carries the reason to show.
+    Uncertain(String),
+}
+
+/// What a scheduled row's earlier attempt, if any, already settles.
+///
+/// Pure, so the rule can be tested without a server: a row whose attempt
+/// was accepted has gone, however the process ended afterwards; one whose
+/// attempt is uncertain stays uncertain; anything else is tried.
+fn scheduled_send_precheck(earlier: Option<&outgoing::OutgoingAttempt>) -> Option<ScheduledOutcome> {
+    let earlier = earlier?;
+    match earlier.state {
+        outgoing::AttemptState::Accepted | outgoing::AttemptState::Archived => Some(ScheduledOutcome::Sent),
+        outgoing::AttemptState::Uncertain | outgoing::AttemptState::Sending => {
+            Some(ScheduledOutcome::Uncertain(if earlier.error.is_empty() {
+                "the application stopped while this message was being sent".to_string()
+            } else {
+                earlier.error.clone()
+            }))
+        }
+        outgoing::AttemptState::Rejected | outgoing::AttemptState::Resolved => None,
+    }
+}
+
+/// Sends a scheduled message once, looking first at what an earlier try
+/// already settled. A row still present after an accepted send is a crash
+/// between sending and forgetting, not a message that never went: it is
+/// reported as sent, never sent again.
+async fn send_scheduled(
+    engine: &Arc<Engine>,
+    row: &store::ScheduledSend,
+    message: &Value,
+    resend: bool,
+) -> anyhow::Result<ScheduledOutcome> {
+    if !resend {
+        let earlier = outgoing::attempt(&engine.db.lock().unwrap(), &row.id)?;
+        if let Some(settled) = scheduled_send_precheck(earlier.as_ref()) {
+            return Ok(settled);
+        }
+    }
+    let mut request = message.clone();
+    if let Some(object) = request.as_object_mut() {
+        object.insert("attempt_id".to_string(), Value::String(row.id.clone()));
+        object.insert("attempt_kind".to_string(), Value::String("scheduled".to_string()));
+        object.insert("resend".to_string(), Value::Bool(resend));
+    }
+    let result = perform_send(engine, &request).await?;
+    match result.get("outcome").and_then(Value::as_str) {
+        Some("uncertain") => Ok(ScheduledOutcome::Uncertain(
+            result.get("error").and_then(Value::as_str).unwrap_or("outcome unknown").to_string(),
+        )),
+        _ => Ok(ScheduledOutcome::Sent),
+    }
 }
 
 /// One scheduled message as the interface reads it.
 ///
 /// The payload is left out: it is the message itself, sometimes with megabytes
 /// of attachment, and a list of what is waiting has no use for it.
-fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
+fn scheduled_send_json(row: &store::ScheduledSend, uncertain: bool) -> Value {
     json!({
         "id": row.id,
         "account": row.account,
@@ -5949,6 +6302,9 @@ fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
         // Whether the watch has stopped trying, so the interface can say so
         // rather than leave a failed message looking merely late.
         "gaveUp": row.attempts >= store::MAX_SEND_ATTEMPTS,
+        // Whether it stopped because nobody knows if the message went: the
+        // one case where "send now" is not the obvious next thing.
+        "uncertain": uncertain,
     })
 }
 
@@ -5962,6 +6318,118 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
         meron_core::graph::mail::guard_command(&engine.db.lock().unwrap(),"send",p)?;
         let account = req_str(p, "account")?;
         let to = req_str(p, "to")?;
+        // Every send is written down before it goes and settled after, so a
+        // crash, a lost connection or a failed Sent copy can be told apart
+        // from a refusal later. The id is the scheduled row's for a scheduled
+        // message and the Message-ID for an immediate one, so trying the
+        // same message again finds its own earlier attempt.
+        let attempt_kind = match p.get("attempt_kind").and_then(Value::as_str) {
+            Some("scheduled") => outgoing::AttemptKind::Scheduled,
+            _ => outgoing::AttemptKind::Now,
+        };
+        let attempt_id = {
+            let explicit = req_str(p, "attempt_id").unwrap_or_default();
+            let message_id = req_str(p, "message_id").unwrap_or_default();
+            if !explicit.trim().is_empty() {
+                explicit.trim().to_string()
+            } else if !message_id.trim().is_empty() {
+                message_id.trim().to_string()
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            }
+        };
+        let resend = p.get("resend").and_then(Value::as_bool).unwrap_or(false);
+        {
+            let db = engine.db.lock().unwrap();
+            // The same message tried again while its earlier attempt may
+            // already have reached the recipient is not retried on a hunch:
+            // the caller has to say so, having told the reader what it means.
+            if let Some(earlier) = outgoing::attempt(&db, &attempt_id)? {
+                if earlier.state.may_have_gone() && !resend {
+                    return Ok(json!({
+                        "ok": false,
+                        "outcome": "already_attempted",
+                        "attempt_id": attempt_id,
+                        "state": earlier.state.as_str(),
+                        "error": earlier.error,
+                    }));
+                }
+            }
+            outgoing::begin_attempt(
+                &db,
+                &attempt_id,
+                &account,
+                attempt_kind,
+                &req_str(p, "message_id").unwrap_or_default(),
+                p,
+                now_seconds(),
+            )?;
+        }
+        match perform_send_transaction(engine, p, &account, &to).await {
+            Ok(SendTransaction { raw, archived_by_server }) => {
+                {
+                    let db = engine.db.lock().unwrap();
+                    outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
+                }
+                // Finalize the Sent view. For Gmail/Outlook defaults this only
+                // refreshes the provider-created copy; other accounts get Meron's
+                // best-effort APPEND plus refresh. The mail already left, so
+                // Sent-folder issues are recorded, never reported as "send failed".
+                let outcome = match append_to_sent(engine, &account, &raw).await {
+                    Ok(()) => {
+                        outgoing::mark_archived(&engine.db.lock().unwrap(), &attempt_id, now_seconds())?;
+                        "archived"
+                    }
+                    Err(err) if archived_by_server => {
+                        // The server filed its own copy; only the local view
+                        // failed to refresh, which the next sync will mend.
+                        eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
+                        outgoing::mark_archived(&engine.db.lock().unwrap(), &attempt_id, now_seconds())?;
+                        "archived"
+                    }
+                    Err(err) => {
+                        eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
+                        outgoing::mark_archive_failed(
+                            &engine.db.lock().unwrap(),
+                            &attempt_id,
+                            &format!("{err:#}"),
+                            now_seconds(),
+                        )?;
+                        "accepted"
+                    }
+                };
+                Ok(json!({ "ok": true, "outcome": outcome, "attempt_id": attempt_id }))
+            }
+            Err(err) if smtp::is_uncertain(&err) => {
+                let reason = format!("{err:#}");
+                outgoing::mark_uncertain(&engine.db.lock().unwrap(), &attempt_id, &reason, now_seconds())?;
+                Ok(json!({ "ok": false, "outcome": "uncertain", "attempt_id": attempt_id, "error": reason }))
+            }
+            Err(err) => {
+                outgoing::mark_rejected(&engine.db.lock().unwrap(), &attempt_id, &format!("{err:#}"), now_seconds())?;
+                Err(err)
+            }
+        }
+}
+
+/// What a completed transaction hands back: the message as it should be
+/// filed in Sent, and whether the server already filed it itself.
+struct SendTransaction {
+    raw: Vec<u8>,
+    archived_by_server: bool,
+}
+
+/// Builds, protects and transmits one message. Everything up to the server's
+/// answer; nothing about recording it, which [`perform_send`] does around
+/// this so the record is kept whichever way this returns.
+async fn perform_send_transaction(
+    engine: &Arc<Engine>,
+    p: &Value,
+    account: &str,
+    to: &str,
+) -> anyhow::Result<SendTransaction> {
+        let account = account.to_string();
+        let to = to.to_string();
         let cc = req_str(p, "cc").unwrap_or_default();
         let bcc = req_str(p, "bcc").unwrap_or_default();
         let subject = req_str(p, "subject").unwrap_or_default();
@@ -6122,14 +6590,12 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                     let raw = raw.clone();
                     Box::pin(async move { session.send_mime(raw).await })
                 })
-                .await?;
-            // The server files its own copy, so this only refreshes the
-            // local Sent view — the upload is suppressed for Exchange in
-            // `should_append_sent_copy`.
-            if let Err(err) = append_to_sent(engine, &account, &raw).await {
-                eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
-            }
-            return Ok(json!({ "ok": true }));
+                .await
+                .map_err(classify_ews_send_error)?;
+            // The server files its own copy, so the caller's Sent step only
+            // refreshes the local view — the upload is suppressed for
+            // Exchange in `should_append_sent_copy`.
+            return Ok(SendTransaction { raw, archived_by_server: true });
         }
         // What the sender asked for, with the keys it needs. Built before the
         // Exchange branch above would have returned, so a request to protect a
@@ -6153,15 +6619,28 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             protection.as_ref(),
         )
         .await?;
-        // Finalize the Sent view. For Gmail/Outlook defaults this only
-        // refreshes the provider-created copy; other accounts get Meron's
-        // best-effort APPEND plus refresh. The mail already left via SMTP,
-        // so Sent-folder issues should not surface as "send failed".
-        if let Err(err) = append_to_sent(engine, &account, &raw).await {
-            eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
-        }
-        Ok(json!({ "ok": true }))
-    
+        Ok(SendTransaction { raw, archived_by_server: false })
+}
+
+/// An Exchange submission that failed without a verdict.
+///
+/// EWS submits and files in one call, so there is no data phase to watch:
+/// a SOAP fault or a refused request is a refusal, while a connection that
+/// broke or a reply that never came after the request went out leaves the
+/// same doubt as a lost SMTP reply, and is marked the same way.
+fn classify_ews_send_error(err: anyhow::Error) -> anyhow::Error {
+    let transport_lost = err.chain().any(|cause| {
+        cause.downcast_ref::<std::io::Error>().is_some()
+            || cause.downcast_ref::<tokio::time::error::Elapsed>().is_some()
+            || cause
+                .downcast_ref::<ureq::Error>()
+                .is_some_and(|e| matches!(e, ureq::Error::Io(_) | ureq::Error::Timeout(_)))
+    });
+    if transport_lost {
+        err.context(smtp::UncertainSend)
+    } else {
+        err
+    }
 }
 
 fn req_str(params: &Value, key: &str) -> anyhow::Result<String> {

@@ -595,3 +595,183 @@ fn transport_failure_does_not_expose_request_url_or_token() {
     assert!(!format!("{err:?} {err}").contains(fixture.base.as_str()));
     assert!(!format!("{err:?} {err}").contains("fixture-token"));
 }
+
+// ---- #141: message writes ----
+
+fn writer(fixture: &Fixture, scope: &str) -> Client {
+    let mut client = Client::new(grant(scope), crate::proxy::ProxyChoice::Direct);
+    client.base = fixture.base.clone();
+    client
+}
+fn body_of(request: &str) -> serde_json::Value {
+    let body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+    serde_json::from_str(body).unwrap_or(serde_json::Value::Null)
+}
+
+#[test]
+fn a_read_only_grant_sends_no_write_at_all() {
+    let fixture = Fixture::new(|_| vec![]);
+    let client = writer(&fixture, "Mail.Read");
+    for result in [
+        client.set_read(&message("M1"), true),
+        client.set_flag(&message("M1"), true),
+        client.delete_message(&message("M1")),
+        client.move_message(&message("M1"), &folder("F2")).map(|_| ()),
+        client.copy_message(&message("M1"), &folder("F2")).map(|_| ()),
+    ] {
+        assert_eq!(result.unwrap_err().kind, ErrorKind::ConsentRequired);
+    }
+    assert!(fixture.requests().is_empty());
+}
+
+#[test]
+fn read_state_and_flag_are_absolute_patches_with_immutable_ids() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            ok(json!({"id":"M/1","isRead":true})),
+            (204, String::new(), String::new()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite");
+    client.set_read(&message("M/1"), true).unwrap();
+    client.set_flag(&message("M/1"), false).unwrap();
+    let requests = fixture.requests();
+    assert!(requests[0].starts_with("PATCH /v1.0/me/messages/M%2F1 "), "{}", requests[0]);
+    assert!(requests[0].to_ascii_lowercase().contains("authorization: bearer fixture-token"));
+    assert!(requests[0].to_ascii_lowercase().contains("prefer: idtype=\"immutableid\""));
+    assert_eq!(body_of(&requests[0]), json!({"isRead": true}));
+    assert_eq!(body_of(&requests[1]), json!({"flag": {"flagStatus": "notFlagged"}}));
+}
+
+#[test]
+fn a_patch_confirming_another_message_is_not_a_confirmation() {
+    let fixture = Fixture::new(|_| vec![ok(json!({"id":"OTHER"}))]);
+    let error = writer(&fixture, "Mail.ReadWrite").set_read(&message("M1"), false).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::InvalidResponse);
+}
+
+#[test]
+fn move_and_copy_post_the_destination_and_return_the_reported_id() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            (201, String::new(), json!({"id":"M1","parentFolderId":"F2"}).to_string()),
+            (201, String::new(), json!({"id":"COPY","parentFolderId":"F2"}).to_string()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite");
+    assert_eq!(client.move_message(&message("M1"), &folder("F2")).unwrap(), message("M1"));
+    assert_eq!(client.copy_message(&message("M1"), &folder("F2")).unwrap(), message("COPY"));
+    let requests = fixture.requests();
+    assert!(requests[0].starts_with("POST /v1.0/me/messages/M1/move "));
+    assert!(requests[1].starts_with("POST /v1.0/me/messages/M1/copy "));
+    assert_eq!(body_of(&requests[0]), json!({"destinationId": "F2"}));
+}
+
+#[test]
+fn a_move_reported_into_another_folder_is_rejected() {
+    let fixture = Fixture::new(|_| vec![(201, String::new(), json!({"id":"M1","parentFolderId":"ELSEWHERE"}).to_string())]);
+    let error = writer(&fixture, "Mail.ReadWrite")
+        .move_message(&message("M1"), &folder("F2"))
+        .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::InvalidResponse);
+}
+
+#[test]
+fn delete_is_a_delete_with_no_content() {
+    let fixture = Fixture::new(|_| vec![(204, String::new(), String::new())]);
+    writer(&fixture, "Mail.ReadWrite").delete_message(&message("M1")).unwrap();
+    assert!(fixture.requests()[0].starts_with("DELETE /v1.0/me/messages/M1 "));
+}
+
+#[test]
+fn write_errors_keep_their_category_and_retry_delay() {
+    let cases = [
+        (401, ErrorKind::Reauthenticate),
+        (403, ErrorKind::AccessDenied),
+        (404, ErrorKind::NotFound),
+        (409, ErrorKind::Conflict),
+        (412, ErrorKind::Conflict),
+        (429, ErrorKind::Throttled),
+        (503, ErrorKind::Unavailable),
+    ];
+    let fixture = Fixture::new(|_| {
+        cases
+            .iter()
+            .map(|(status, _)| (*status, "Retry-After: 30\r\n".to_string(), "{\"error\":{\"message\":\"secret mail text\"}}".to_string()))
+            .collect()
+    });
+    let client = writer(&fixture, "Mail.ReadWrite");
+    for (status, kind) in cases {
+        let error = client.set_read(&message("M1"), true).unwrap_err();
+        assert_eq!((error.kind, error.status), (kind, Some(status)));
+        let expected = matches!(kind, ErrorKind::Throttled | ErrorKind::Unavailable).then_some(30);
+        assert_eq!(error.retry_after_seconds, expected);
+        assert!(!error.to_string().contains("secret"));
+    }
+}
+
+#[test]
+fn a_connection_lost_after_sending_is_uncertain_and_not_repeated() {
+    // No reply: the fixture reads the request and closes the socket.
+    let fixture = Fixture::new(|_| vec![]);
+    let error = writer(&fixture, "Mail.ReadWrite")
+        .move_message(&message("M1"), &folder("F2"))
+        .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Uncertain);
+    assert_eq!(fixture.requests().len(), 1, "a move whose outcome is unknown is sent once");
+}
+
+#[test]
+fn writes_never_follow_a_redirect() {
+    let fixture = Fixture::new(|base| vec![(307, format!("Location: {base}me/messages/M2\r\n"), String::new())]);
+    let error = writer(&fixture, "Mail.ReadWrite").set_flag(&message("M1"), true).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::InvalidResponse);
+    assert_eq!(fixture.requests().len(), 1);
+}
+
+#[test]
+fn a_write_for_another_account_is_refused_before_sending() {
+    let fixture = Fixture::new(|_| vec![]);
+    let other = ResourceId::new("account-b", ResourceKind::Message, "M1").unwrap();
+    let error = writer(&fixture, "Mail.ReadWrite").set_read(&other, true).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::InvalidInput);
+    assert!(fixture.requests().is_empty());
+}
+
+// ---- #142: attachments ----
+
+#[test]
+fn the_whole_message_is_read_as_mime_with_a_read_grant() {
+    let raw = "Subject: Report\r\n\r\nbody";
+    let fixture = Fixture::new(|_| vec![(200, String::new(), raw.to_string())]);
+    let client = writer(&fixture, "Mail.Read");
+    assert_eq!(client.message_mime(&message("M/1")).unwrap(), raw.as_bytes());
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("GET /v1.0/me/messages/M%2F1/$value "), "{request}");
+}
+
+#[test]
+fn a_message_over_the_bound_is_too_large_and_nothing_is_kept() {
+    let fixture = Fixture::new(|_| vec![(200, String::new(), "x".repeat(64))]);
+    let client = writer(&fixture, "Mail.Read");
+    let url = client.route(&["me", "messages", "M1", "$value"]);
+    let error = client.get_bytes(&url, "*/*", 16).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::TooLarge);
+}
+
+#[test]
+fn attachments_are_listed_without_bytes_and_links_are_recognised() {
+    let fixture = Fixture::new(|_| {
+        vec![ok(json!({"value":[
+            {"@odata.type":"#microsoft.graph.fileAttachment","name":"q3.pdf","contentType":"application/pdf","size":10,"isInline":false},
+            {"@odata.type":"#microsoft.graph.referenceAttachment","name":"Plan.xlsx","contentType":null,"size":0,"isInline":false,"sourceUrl":"https://contoso.sharepoint.com/secret"}
+        ]}))]
+    });
+    let listed = writer(&fixture, "Mail.Read").attachments(&message("M1")).unwrap();
+    assert_eq!(listed.iter().map(|a| a.is_link()).collect::<Vec<_>>(), vec![false, true]);
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("GET /v1.0/me/messages/M1/attachments?"), "{request}");
+    assert!(request.contains("%24select=name%2CcontentType%2Csize%2CisInline"), "{request}");
+    // Only the one request: a link is never followed.
+    assert_eq!(fixture.requests().len(), 1);
+}

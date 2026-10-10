@@ -309,6 +309,12 @@ pub enum DecryptionFailure {
     NeedsPassphrase,
     /// It was not readable as an encrypted message at all.
     Malformed,
+    /// A key of the reader's opened the session key, and the message still
+    /// could not be read: it uses a construction this app does not implement
+    /// (GnuPG's LibrePGP AEAD packet, say) or its ciphertext is damaged.
+    /// Told apart from a passphrase problem so nobody is asked for one that
+    /// would not help.
+    Unsupported { detail: String },
 }
 
 struct DecryptHelper<'a> {
@@ -318,6 +324,13 @@ struct DecryptHelper<'a> {
     /// Set when a key that could have opened it was found, so a failure can
     /// tell "wrong passphrase" from "not for you".
     saw_own_key: bool,
+    /// Set when such a key was locked and no passphrase, or the wrong one,
+    /// was given: the one case that is a passphrase problem.
+    locked_key_skipped: bool,
+    /// Set when a usable key produced a session key and the message body
+    /// still would not decrypt with it: the format, not the key, is the
+    /// problem.
+    session_key_rejected: bool,
     /// Set when the thing turned out to be an encrypted message at all.
     ///
     /// This is what tells "no key for this" from "that was not encrypted
@@ -394,22 +407,25 @@ impl DecryptionHelper for &mut DecryptHelper<'_> {
                     let mut key = ka.key().clone();
                     if !key.has_unencrypted_secret() {
                         let Some(password) = &self.password else {
+                            self.locked_key_skipped = true;
                             continue;
                         };
                         key = match key.decrypt_secret(password) {
                             Ok(key) => key,
-                            Err(_) => continue,
+                            Err(_) => {
+                                self.locked_key_skipped = true;
+                                continue;
+                            }
                         };
                     }
                     let Ok(mut pair) = key.into_keypair() else {
                         continue;
                     };
-                    if pkesk
-                        .decrypt(&mut pair, sym_algo)
-                        .map(|(algo, session_key)| decrypt(algo, &session_key))
-                        .unwrap_or(false)
-                    {
-                        return Ok(Some(cert.clone()));
+                    if let Some((algo, session_key)) = pkesk.decrypt(&mut pair, sym_algo) {
+                        if decrypt(algo, &session_key) {
+                            return Ok(Some(cert.clone()));
+                        }
+                        self.session_key_rejected = true;
                     }
                 }
             }
@@ -429,6 +445,42 @@ pub struct Decrypted {
     pub signature: Option<SignatureVerdict>,
 }
 
+/// A packet in the message that this app's OpenPGP library does not read,
+/// named so the reader can be told what their correspondent used.
+///
+/// The one seen in practice is GnuPG's LibrePGP AEAD-encrypted data packet
+/// (tag 20), which GnuPG 2.4 writes whenever the recipient's key advertises
+/// an AEAD preference — as keys it generates do by default. The library
+/// stops at the packet without ever asking for a key, so without this check
+/// such a message would read as "not an encrypted message at all".
+fn unsupported_packet(ciphertext: &[u8]) -> Option<String> {
+    use sequoia_openpgp::packet::Tag;
+    use sequoia_openpgp::parse::{PacketParser, PacketParserResult};
+    let mut parser = PacketParser::from_bytes(ciphertext).ok()?;
+    while let PacketParserResult::Some(pp) = parser {
+        let tag = pp.packet.tag();
+        let found = match tag {
+            Tag::AED => Some(
+                "it is encrypted with GnuPG's LibrePGP AEAD mode (OCB), which this app does not read yet; \
+                 the sender can turn it off with --compat-flags no-aead or you can publish a key without an AEAD preference"
+                    .to_string(),
+            ),
+            Tag::Unknown(number) => Some(format!("it contains an OpenPGP packet of type {number} this app does not read")),
+            _ => None,
+        };
+        if found.is_some() {
+            return found;
+        }
+        // Encrypted containers are not descended into here; what is inside
+        // them is the decryptor's business.
+        parser = match pp.next() {
+            Ok((_, next)) => next,
+            Err(_) => return None,
+        };
+    }
+    None
+}
+
 /// Decrypt an OpenPGP message with the reader's keys.
 pub fn decrypt(
     ciphertext: &[u8],
@@ -441,6 +493,8 @@ pub fn decrypt(
         password: passphrase.map(Password::from),
         policy: &policy,
         saw_own_key: false,
+        locked_key_skipped: false,
+        session_key_rejected: false,
         saw_ciphertext: false,
         signature: None,
     };
@@ -458,8 +512,20 @@ pub fn decrypt(
             content,
             signature: helper.signature,
         }),
-        // A key of ours was there and still nothing opened: the passphrase is
-        // wrong or missing.
+        // Something in the message the library does not read at all. Checked
+        // before the key-based verdicts: the library may never have got as
+        // far as asking for a key.
+        Err(_) if unsupported_packet(ciphertext).is_some() => Err(DecryptionFailure::Unsupported {
+            detail: unsupported_packet(ciphertext).unwrap_or_default(),
+        }),
+        // A key of ours produced the session key and the message still would
+        // not open, or a usable key was there and the library gave up on the
+        // packets: the message, not the key, is what this app cannot read.
+        Err(err) if helper.session_key_rejected || (helper.saw_own_key && !helper.locked_key_skipped) => {
+            Err(DecryptionFailure::Unsupported { detail: format!("{err:#}") })
+        }
+        // A key of ours was there, locked, and nothing unlocked it: the
+        // passphrase is wrong or missing.
         Err(_) if helper.saw_own_key => Err(DecryptionFailure::NeedsPassphrase),
         // It was an encrypted message; just not one for any key here.
         Err(_) if helper.saw_ciphertext => Err(DecryptionFailure::NoKey),

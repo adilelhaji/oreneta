@@ -65,6 +65,31 @@ pub trait Source: Send + Sync {
     fn well_known(&self, alias: &str) -> Result<Folder>;
     fn delta(&self, folder: &ResourceId, checkpoint: Option<&Checkpoint>) -> Result<Page<Message>>;
     fn message(&self, id: &ResourceId) -> Result<Message>;
+    /// The whole message as MIME (#142). A source without it cannot show
+    /// attachments, and says so rather than returning an empty message.
+    fn message_mime(&self, _id: &ResourceId) -> Result<Vec<u8>> {
+        Err(Error::new(ErrorKind::InvalidInput))
+    }
+    /// The message's attachments as listed, without bytes.
+    fn attachments(&self, _id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        Ok(Vec::new())
+    }
+    // Writes (#141). A source that cannot write refuses before sending.
+    fn set_read(&self, _id: &ResourceId, _read: bool) -> Result<()> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn set_flag(&self, _id: &ResourceId, _flagged: bool) -> Result<()> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn move_message(&self, _id: &ResourceId, _to: &ResourceId) -> Result<ResourceId> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn copy_message(&self, _id: &ResourceId, _to: &ResourceId) -> Result<ResourceId> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn delete_message(&self, _id: &ResourceId) -> Result<()> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
 }
 impl Source for Client {
     fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
@@ -78,6 +103,27 @@ impl Source for Client {
     }
     fn message(&self, id: &ResourceId) -> Result<Message> {
         self.message(id)
+    }
+    fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
+        Client::message_mime(self, id)
+    }
+    fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        Client::attachments(self, id)
+    }
+    fn set_read(&self, id: &ResourceId, read: bool) -> Result<()> {
+        Client::set_read(self, id, read)
+    }
+    fn set_flag(&self, id: &ResourceId, flagged: bool) -> Result<()> {
+        Client::set_flag(self, id, flagged)
+    }
+    fn move_message(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        Client::move_message(self, id, to)
+    }
+    fn copy_message(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        Client::copy_message(self, id, to)
+    }
+    fn delete_message(&self, id: &ResourceId) -> Result<()> {
+        Client::delete_message(self, id)
     }
 }
 pub struct NativeSource {
@@ -109,6 +155,27 @@ impl Source for NativeSource {
     }
     fn message(&self, id: &ResourceId) -> Result<Message> {
         self.client()?.message(id)
+    }
+    fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
+        self.client()?.message_mime(id)
+    }
+    fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
+        self.client()?.attachments(id)
+    }
+    fn set_read(&self, id: &ResourceId, read: bool) -> Result<()> {
+        self.client()?.set_read(id, read)
+    }
+    fn set_flag(&self, id: &ResourceId, flagged: bool) -> Result<()> {
+        self.client()?.set_flag(id, flagged)
+    }
+    fn move_message(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        self.client()?.move_message(id, to)
+    }
+    fn copy_message(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        self.client()?.copy_message(id, to)
+    }
+    fn delete_message(&self, id: &ResourceId) -> Result<()> {
+        self.client()?.delete_message(id)
     }
 }
 fn auth_error(error: auth::Failure) -> Error {
@@ -654,6 +721,44 @@ fn parsed_body(fields: &MessageFields, uid: u32) -> Result<crate::parse::Message
     })
 }
 
+#[derive(Clone, Copy)]
+enum Change {
+    Read(bool),
+    Flag(bool),
+}
+
+/// A batch of writes stopped at its first failure. Earlier items were
+/// applied; later ones were not attempted. Never shown as total success.
+#[derive(Debug)]
+pub struct BatchError {
+    pub done: usize,
+    pub total: usize,
+    pub error: Error,
+}
+impl std::fmt::Display for BatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let reason = match self.error.kind {
+            ErrorKind::Uncertain => "no answer came back, so whether it was applied is unknown; it was not repeated".to_owned(),
+            ErrorKind::Throttled => match self.error.retry_after_seconds {
+                Some(seconds) => format!("the server asked to wait {seconds}s"),
+                None => "the server asked to wait".to_owned(),
+            },
+            ErrorKind::ConsentRequired => "this account does not allow changes; allow them in its settings".to_owned(),
+            ErrorKind::AccessDenied => "access was denied".to_owned(),
+            ErrorKind::NotFound => "a message is no longer there".to_owned(),
+            ErrorKind::Conflict => "it changed on the server meanwhile".to_owned(),
+            ErrorKind::Reauthenticate => "the account needs to sign in again".to_owned(),
+            kind => format!("{kind:?}"),
+        };
+        if self.done == 0 {
+            write!(f, "Microsoft Graph: not changed: {reason}")
+        } else {
+            write!(f, "Microsoft Graph: {} of {} changed, then stopped: {reason}", self.done, self.total)
+        }
+    }
+}
+impl std::error::Error for BatchError {}
+
 #[cfg(test)]
 mod tests;
 
@@ -684,6 +789,39 @@ pub fn decorate_folders(
         }
     }
     Ok(())
+}
+
+fn collect_graph_accounts(conn: &Connection, v: &Value, out: &mut Vec<String>) -> anyhow::Result<()> {
+    match v {
+        Value::Object(o) => {
+            for (k, v) in o {
+                if matches!(
+                    k.as_str(),
+                    "account" | "account_id" | "target_account" | "target_account_id" | "source_account" | "source_account_id"
+                ) {
+                    if let Some(id) = v.as_str() {
+                        if crate::store::load_account(conn, id)?.is_some_and(|c| c.is_graph()) {
+                            out.push(id.to_owned());
+                        }
+                    }
+                }
+                collect_graph_accounts(conn, v, out)?;
+            }
+        }
+        Value::Array(a) => {
+            for v in a {
+                collect_graph_accounts(conn, v, out)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Whether this Graph account may change messages (#141): a preflight from
+/// the grant marker. The grant itself is checked again on every request.
+pub fn writes_enabled(conn: &Connection, account: &str) -> bool {
+    auth::writes_marked(conn, account)
 }
 
 /// Preflight before optimistic/local writes or outbound work, not just at the
@@ -718,6 +856,24 @@ pub fn guard_command(conn: &Connection, method: &str, p: &Value) -> anyhow::Resu
     );
     if !blocked {
         return Ok(());
+    }
+    // #141: the message changes Graph supports, for an account whose grant
+    // was recorded with them. Copying stays within one account.
+    if matches!(
+        method,
+        "messages.markRead" | "messages.markStarred" | "messages.delete" | "messages.move" | "messages.copy"
+    ) {
+        let mut graph = Vec::new();
+        collect_graph_accounts(conn, p, &mut graph)?;
+        if graph.is_empty() {
+            return Ok(());
+        }
+        let same_account = method != "messages.copy"
+            || p.get("account").and_then(Value::as_str) == p.get("target_account").and_then(Value::as_str);
+        if same_account && graph.iter().all(|account| auth::writes_marked(conn, account)) {
+            return Ok(());
+        }
+        return unsupported();
     }
     if method == "messages.markAllReadUnified" {
         let graph:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE json_extract(config,'$.auth_type')='graph_oauth' AND COALESCE(json_extract(prefs,'$.included_in_unified'),1)=1)",[],|r|r.get(0))?;
@@ -941,38 +1097,257 @@ impl Session {
             )?,
         })
     }
+    /// One message's body. With attachments, the whole message is read as
+    /// MIME through the IMAP parser, which writes the files to the media cache
+    /// for this account, folder and UID and points `cid:` images at them; cloud
+    /// links are named as unavailable (#142). Without, the JSON body is enough.
     pub async fn read_message(
         &self,
         folder: &str,
         uid: u32,
+        media: Option<crate::parse::MediaCtx>,
     ) -> anyhow::Result<crate::parse::Message> {
         let folder = folder.to_owned();
         self.work(move|s|{
             (||->anyhow::Result<crate::parse::Message>{
                 let account=&s.lease.account;
-                let id={let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
-                    if let Some(cached)=crate::store::get_cached_message(&conn,account,&folder,uid)? {return Ok(cached);}
-                    conn.query_row("SELECT i.remote_id FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id JOIN graph_folders f ON f.account=m.account AND f.remote_id=m.folder_id WHERE i.account=?1 AND i.uid=?2 AND f.local_name=?3 AND f.active=1",params![account,uid,folder],|r|r.get::<_,String>(0))?
+                let (id,has_attachments)={let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
+                    let located:Option<(String,bool)>=conn.query_row("SELECT i.remote_id,COALESCE(json_extract(i.fields,'$.hasAttachments'),0) FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id JOIN graph_folders f ON f.account=m.account AND f.remote_id=m.folder_id WHERE i.account=?1 AND i.uid=?2 AND f.local_name=?3 AND f.active=1",params![account,uid,folder],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+                    let cached=crate::store::get_cached_message(&conn,account,&folder,uid)?;
+                    let Some((id,has_attachments))=located else {
+                        return cached.ok_or_else(||Error::new(ErrorKind::NotFound).into());
+                    };
+                    if let Some(cached)=cached {
+                        // A copy cached without its files (before #142, or read
+                        // without a media cache) is read again, not trusted.
+                        let complete=!has_attachments || media.is_none() || (!cached.attachments.is_empty() && media.as_ref().is_some_and(|m|crate::parse::cached_media_available(&m.root,&cached)));
+                        if complete {return Ok(cached);}
+                    }
+                    (id,has_attachments)
                 };
                 let id=ResourceId::new(account,ResourceKind::Message,&id)?;
-                let message=s.source.message(&id)?;
-                if message.id!=id {return Err(Error::new(ErrorKind::InvalidResponse).into());}
-                let body=parsed_body(&message.fields,uid)?;
+                let body=match media.as_ref().filter(|_|has_attachments) {
+                    Some(media)=>s.read_with_attachments(&id,uid,media)?,
+                    None=>s.read_json(&id,uid)?,
+                };
                 let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
                 crate::store::save_cached_message(&conn,account,&folder,uid,&body)?;
                 Ok(body)
             })().map_err(clean_error)
         }).await
     }
+    fn read_json(&self, id: &ResourceId, uid: u32) -> anyhow::Result<crate::parse::Message> {
+        let message=self.source.message(id)?;
+        if &message.id!=id {return Err(Error::new(ErrorKind::InvalidResponse).into());}
+        Ok(parsed_body(&message.fields,uid)?)
+    }
+    fn read_with_attachments(&self, id: &ResourceId, uid: u32, media: &crate::parse::MediaCtx) -> anyhow::Result<crate::parse::Message> {
+        let mut parsed=match self.source.message_mime(id) {
+            Ok(raw)=>crate::parse::parse_message(&raw,Some(media)),
+            // Too big to read here: the text still shows, and the files are
+            // said to be missing rather than silently absent.
+            Err(e) if e.kind==ErrorKind::TooLarge=>{
+                let mut body=self.read_json(id,uid)?;
+                body.attachments.push(crate::parse::Attachment{filename:String::new(),mime:String::new(),size:0,key:None,unavailable:"tooLarge".into()});
+                return Ok(body);
+            }
+            Err(e)=>return Err(e.into()),
+        };
+        // Cloud attachments are links, not parts of the MIME message. Named so
+        // they are not mistaken for missing; their link is never followed. A
+        // failed listing does not hide the files that did arrive.
+        if let Ok(listed)=self.source.attachments(id) {
+            for link in listed.iter().filter(|a|a.is_link()) {
+                parsed.attachments.push(crate::parse::Attachment{
+                    filename:link.name.clone().unwrap_or_default(),
+                    mime:link.content_type.clone().unwrap_or_default(),
+                    size:link.size.unwrap_or(0) as usize,
+                    key:None,
+                    unavailable:"link".into(),
+                });
+            }
+        }
+        Ok(parsed)
+    }
     pub async fn fetch_bodies(
         &self,
         folder: &str,
         uids: &[u32],
+        media_root: std::path::PathBuf,
     ) -> anyhow::Result<Vec<(u32, crate::parse::Message)>> {
         let mut result = Vec::with_capacity(uids.len());
         for uid in uids {
-            result.push((*uid, self.read_message(folder, *uid).await?));
+            let media = crate::parse::MediaCtx {
+                root: media_root.clone(),
+                account: self.lease.account.clone(),
+                folder: folder.to_owned(),
+                uid: *uid,
+            };
+            result.push((*uid, self.read_message(folder, *uid, Some(media)).await?));
         }
         Ok(result)
     }
+
+    /// Mark messages read or unread (#141). See docs/design/graph-message-actions.md.
+    pub async fn set_seen(&self, uids: &[u32], seen: bool) -> anyhow::Result<()> {
+        self.change_flags(uids, Change::Read(seen)).await
+    }
+    /// Flag or unflag messages.
+    pub async fn set_flagged(&self, uids: &[u32], flagged: bool) -> anyhow::Result<()> {
+        self.change_flags(uids, Change::Flag(flagged)).await
+    }
+    async fn change_flags(&self, uids: &[u32], change: Change) -> anyhow::Result<()> {
+        let uids = uids.to_vec();
+        self.write(move |s| {
+            let items = s.resolve(None, &uids)?;
+            let total = items.len();
+            for (done, (uid, id)) in items.into_iter().enumerate() {
+                let result = match change {
+                    Change::Read(read) => s.source.set_read(&id, read),
+                    Change::Flag(flagged) => s.source.set_flag(&id, flagged),
+                };
+                if let Err(error) = result {
+                    return Err(BatchError { done, total, error }.into());
+                }
+                // Each confirmed change is kept, so a batch cut short by a
+                // later item never shows the earlier ones as unchanged.
+                s.remember(uid, change)?;
+            }
+            Ok(())
+        })
+        .await
+    }
+    /// Move messages to another folder of this account, by reviewed UIDs.
+    pub async fn move_uids(&self, source: &str, target: &str, uids: &[u32]) -> anyhow::Result<()> {
+        self.relocate(source, target, uids, false).await.map(|_| ())
+    }
+    /// Copy messages to another folder of this account. Returns how many.
+    pub async fn copy_uids(&self, source: &str, target: &str, uids: &[u32]) -> anyhow::Result<usize> {
+        self.relocate(source, target, uids, true).await
+    }
+    async fn relocate(&self, source: &str, target: &str, uids: &[u32], copy: bool) -> anyhow::Result<usize> {
+        let (source, target, uids) = (source.to_owned(), target.to_owned(), uids.to_vec());
+        self.write(move |s| {
+            let items = s.resolve(Some(&source), &uids)?;
+            let destination = s.folder(&target)?;
+            let total = items.len();
+            let mut outcome = Ok(total);
+            for (done, (_, id)) in items.into_iter().enumerate() {
+                let result = if copy {
+                    s.source.copy_message(&id, &destination)
+                } else {
+                    s.source.move_message(&id, &destination)
+                };
+                if let Err(error) = result {
+                    outcome = Err(BatchError { done, total, error });
+                    break;
+                }
+            }
+            // Whatever happened, the cache is brought to what the server holds,
+            // not to what was attempted.
+            s.reconcile(&[&source, &target]);
+            outcome.map_err(Into::into)
+        })
+        .await
+    }
+    /// Remove messages from the mailbox's view (only from Deleted Items or
+    /// Drafts, as the caller decides; elsewhere deleting is a move to Trash).
+    pub async fn delete_uids(&self, folder: &str, uids: &[u32]) -> anyhow::Result<()> {
+        let (folder, uids) = (folder.to_owned(), uids.to_vec());
+        self.write(move |s| {
+            let items = s.resolve(Some(&folder), &uids)?;
+            let total = items.len();
+            let mut outcome = Ok(());
+            for (done, (_, id)) in items.into_iter().enumerate() {
+                if let Err(error) = s.source.delete_message(&id) {
+                    outcome = Err(BatchError { done, total, error });
+                    break;
+                }
+            }
+            s.reconcile(&[&folder]);
+            outcome.map_err(Into::into)
+        })
+        .await
+    }
+
+    /// Like `work`, but a batch error keeps its counts.
+    async fn write<T: Send + 'static>(
+        &self,
+        f: impl FnOnce(&Self) -> anyhow::Result<T> + Send + 'static,
+    ) -> anyhow::Result<T> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let _guard = this.lock.lock().unwrap();
+            check(&this.db.lock().unwrap(), &this.lease).map_err(clean_error)?;
+            let result = f(&this);
+            // Only a lost sign-in is the account's health. A write the grant
+            // does not allow, or one the server refused, leaves reading as it
+            // was and is reported on the action itself.
+            if let Err(e) = &result {
+                if let Some(batch) = e.downcast_ref::<BatchError>() {
+                    if batch.error.kind == ErrorKind::Reauthenticate {
+                        let _ = record_failure(&this.db.lock().unwrap(), &this.lease, &batch.error);
+                    }
+                }
+            }
+            result
+        })
+        .await?
+    }
+    /// The reviewed set, resolved to Graph ids in one read before any request:
+    /// a message that arrived since, or that is not in `folder`, cannot join.
+    fn resolve(&self, folder: Option<&str>, uids: &[u32]) -> anyhow::Result<Vec<(u32, ResourceId)>> {
+        let conn = self.db.lock().unwrap();
+        check(&conn, &self.lease)?;
+        let account = &self.lease.account;
+        let mut items = Vec::with_capacity(uids.len());
+        for uid in uids {
+            let remote: Option<String> = match folder {
+                Some(folder) => conn.query_row("SELECT i.remote_id FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id JOIN graph_folders f ON f.account=m.account AND f.remote_id=m.folder_id WHERE i.account=?1 AND i.uid=?2 AND f.local_name=?3 AND f.active=1",params![account,uid,folder],|r|r.get(0)).optional()?,
+                None => conn.query_row("SELECT remote_id FROM graph_items WHERE account=?1 AND uid=?2",params![account,uid],|r|r.get(0)).optional()?,
+            };
+            let remote = remote.ok_or_else(|| Error::new(ErrorKind::NotFound))?;
+            items.push((*uid, ResourceId::new(account, ResourceKind::Message, &remote)?));
+        }
+        Ok(items)
+    }
+    fn folder(&self, local: &str) -> anyhow::Result<ResourceId> {
+        let conn = self.db.lock().unwrap();
+        check(&conn, &self.lease)?;
+        let remote: String = conn
+            .query_row("SELECT remote_id FROM graph_folders WHERE account=?1 AND local_name=?2 AND active=1 AND search_folder=0",params![self.lease.account,local],|r|r.get(0))
+            .optional()?
+            .ok_or_else(|| Error::new(ErrorKind::NotFound))?;
+        Ok(ResourceId::new(&self.lease.account, ResourceKind::Folder, &remote)?)
+    }
+    fn remember(&self, uid: u32, change: Change) -> anyhow::Result<()> {
+        let conn = self.db.lock().unwrap();
+        check(&conn, &self.lease)?;
+        let account = &self.lease.account;
+        match change {
+            Change::Read(read) => {
+                conn.execute("UPDATE messages SET seen=?3 WHERE account=?1 AND uid=?2", params![account, uid, read])?;
+                conn.execute("UPDATE graph_items SET fields=json_set(fields,'$.isRead',json(?3)) WHERE account=?1 AND uid=?2", params![account, uid, if read { "true" } else { "false" }])?;
+            }
+            Change::Flag(flagged) => {
+                conn.execute("UPDATE messages SET starred=?3 WHERE account=?1 AND uid=?2", params![account, uid, flagged])?;
+                conn.execute("UPDATE graph_items SET fields=json_set(fields,'$.flag',json(?3)) WHERE account=?1 AND uid=?2", params![account, uid, json!({"flagStatus": if flagged {"flagged"} else {"notFlagged"}}).to_string()])?;
+            }
+        }
+        Ok(())
+    }
+    /// Complete a delta round for each folder. Best effort: a change that
+    /// landed is not turned into an error because the refresh after it failed;
+    /// the next ordinary sync finishes the job.
+    fn reconcile(&self, folders: &[&str]) {
+        for folder in folders {
+            for _ in 0..50 {
+                match sync_page(self.source.as_ref(), &self.db, &self.lease, folder) {
+                    Ok(true) | Err(_) => break,
+                    Ok(false) => {}
+                }
+            }
+        }
+    }
+
 }

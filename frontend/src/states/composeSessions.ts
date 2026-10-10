@@ -6,6 +6,11 @@ export type ComposeSession = {
   savesStopped: boolean
   savedAccountId?: string
   savedDraftMessageId?: string
+  /** The Message-ID this tab's send goes out under, allocated on the first
+   * press of Send and kept for the tab's life: a second press after an
+   * unanswered send names the same message, so the core can see it is the
+   * same attempt rather than a new message to deliver on top of it. */
+  messageId?: string
   close?: CloseComposeSession
   closing?: Promise<void>
 }
