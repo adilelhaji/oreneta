@@ -279,6 +279,72 @@ func TestUpdaterCheckThenDownload(t *testing.T) {
 	}
 }
 
+// A staged payload changed after its download was verified is not installed:
+// it is thrown away and offered for download again, and the application it
+// would have replaced is untouched.
+func TestUpdaterInstallRejectsAPayloadChangedAfterDownload(t *testing.T) {
+	payload := []byte("pretend this is an AppImage")
+	sum := sha256.Sum256(payload)
+	asset := updateAsset{URL: "https://example.test/oreneta.AppImage", SHA256: hex.EncodeToString(sum[:]), Size: int64(len(payload))}
+
+	for name, tamper := range map[string]func(path string) error{
+		"same size, other bytes": func(path string) error {
+			return os.WriteFile(path, []byte("pretend this is an AppImagE"), 0o755)
+		},
+		"grown":   func(path string) error { return os.WriteFile(path, append(payload, '!'), 0o755) },
+		"removed": os.Remove,
+	} {
+		t.Run(name, func(t *testing.T) {
+			isolateTestProfile(t)
+			target := filepath.Join(t.TempDir(), "Oreneta.AppImage")
+			if err := os.WriteFile(target, []byte("current version"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			app := &App{}
+			app.updateChannelOnce.Do(func() {
+				app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: target}
+			})
+			u := app.ensureUpdater()
+			if err := os.MkdirAll(updateCacheDir(), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			staged := filepath.Join(updateCacheDir(), "oreneta.AppImage")
+			if err := os.WriteFile(staged, payload, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := verifyStagedPayload(staged, asset); err != nil {
+				t.Fatalf("untouched payload rejected: %v", err)
+			}
+			u.mu.Lock()
+			u.state, u.asset, u.stagedPath, u.latest = updateStateReady, asset, staged, "99.0.0"
+			u.mu.Unlock()
+
+			if err := tamper(staged); err != nil {
+				t.Fatal(err)
+			}
+			got, err := u.install()
+			if err != nil {
+				t.Fatalf("install: %v", err)
+			}
+			status := got.(updateStatusPayload)
+			if status.State != updateStateAvailable || !strings.Contains(status.Error, "download it again") {
+				t.Fatalf("status = %+v, want available with a reason", status)
+			}
+			if current, _ := os.ReadFile(target); string(current) != "current version" {
+				t.Fatalf("application replaced by a rejected payload: %q", current)
+			}
+			if _, err := os.Stat(updateCacheDir()); !os.IsNotExist(err) {
+				t.Fatalf("rejected payload kept in the cache: %v", err)
+			}
+			u.mu.Lock()
+			defer u.mu.Unlock()
+			if u.stagedPath != "" {
+				t.Fatalf("staged path kept: %q", u.stagedPath)
+			}
+		})
+	}
+}
+
 // An up-to-date manifest leaves the updater idle and offers nothing to install.
 func TestUpdaterCheckWhenCurrent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

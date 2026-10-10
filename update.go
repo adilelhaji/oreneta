@@ -419,6 +419,26 @@ func (u *updater) downloadTo(asset updateAsset) (string, error) {
 	return path, nil
 }
 
+// verifyStagedPayload re-reads a staged payload and checks it is still exactly
+// what the manifest named: same size, same SHA-256.
+func verifyStagedPayload(path string, asset updateAsset) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("update install: downloaded update is missing; download it again")
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	// One byte past the expected size is enough to tell it grew.
+	written, err := io.Copy(hasher, io.LimitReader(file, asset.Size+1))
+	if err != nil {
+		return fmt.Errorf("update install: could not read the downloaded update: %w", err)
+	}
+	if written != asset.Size || !strings.EqualFold(hex.EncodeToString(hasher.Sum(nil)), asset.SHA256) {
+		return errors.New("update install: the downloaded update changed after it was verified; download it again")
+	}
+	return nil
+}
+
 // progressReader reports bytes read back to the updater so the UI can draw a
 // progress bar. Emission is throttled inside emitLocked.
 type progressReader struct {
@@ -517,10 +537,27 @@ func (u *updater) install() (any, error) {
 	}
 	channel := u.app.updateChannel()
 	staged := u.stagedPath
+	asset := u.asset
 	u.state = updateStateInstalling
 	u.errMessage = ""
 	u.emitLocked(true)
 	u.mu.Unlock()
+
+	// The payload was verified when it was downloaded, then waited in a cache
+	// directory any process of this user can write to until the person chose
+	// to install. Verify it again right before it replaces the application.
+	if err := verifyStagedPayload(staged, asset); err != nil {
+		u.app.logf("update: staged payload rejected: %v", err)
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		u.discardStagedLocked()
+		// Not installable as it is; offered for download again.
+		u.state = updateStateAvailable
+		u.downloaded = 0
+		u.errMessage = err.Error()
+		u.emitLocked(true)
+		return u.statusLocked(), nil
+	}
 
 	u.app.logf("update: installing %s via %s", staged, channel.Kind)
 	if err := applyUpdate(channel, staged); err != nil {
