@@ -1,4 +1,5 @@
 import { BUBBLE_CODE_BASE_PX, BUBBLE_HTML_BASE_PX, type MessageFrameFont } from '../../lib/fonts'
+import { stripTrackingPixels } from './readerHtml'
 
 const DEFAULT_MESSAGE_FRAME_FONT: MessageFrameFont = {
   family: null,
@@ -17,7 +18,8 @@ const DEFAULT_MESSAGE_FRAME_FONT: MessageFrameFont = {
 export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT_MESSAGE_FRAME_FONT) {
   try {
     const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
+    // Tracking pixels go, as in the reader tab (#35).
+    const doc = parser.parseFromString(stripTrackingPixels(html), 'text/html')
 
     // The iframe runs with `allow-scripts` (so our link-click handler fires),
     // so we must block the email's own JS here. `default-src 'none'` denies

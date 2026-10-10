@@ -49,10 +49,7 @@ describe('a conversation on paper', () => {
   })
 
   it('prints every message of the conversation, in order', () => {
-    const page = build([
-      message({ id: 'm-1', body: 'First thing' }),
-      message({ id: 'm-2', body: 'Second thing' }),
-    ])
+    const page = build([message({ id: 'm-1', body: 'First thing' }), message({ id: 'm-2', body: 'Second thing' })])
     expect(page.indexOf('First thing')).toBeLessThan(page.indexOf('Second thing'))
     expect(page.match(/<article class="message">/g)).toHaveLength(2)
   })
@@ -117,3 +114,48 @@ describe('a conversation on paper', () => {
     expect(build([message()])).toContain('.body a::after')
   })
 })
+
+// #35: printing keeps the reader's privacy and says what it leaves out.
+describe('what a printout loads and says', () => {
+  const tracked = message({
+    body_html:
+      '<p>Hello</p><img width="1" height="1" src="https://t.example/x.gif"><img src="https://cdn.example/logo.png">',
+  })
+  const csp = (html: string) =>
+    new DOMParser()
+      .parseFromString(html, 'text/html')
+      .querySelector('meta[http-equiv="Content-Security-Policy"]')
+      ?.getAttribute('content') ?? ''
+
+  it('drops tracking pixels, as the reader does', () => {
+    expect(build([tracked])).not.toContain('t.example/x.gif')
+  })
+
+  it('loads remote images only where the account allows them', () => {
+    const blocked = csp(buildPrintDocument({ ...args(), messages: [tracked], allowRemoteImages: false }))
+    expect(blocked).toContain("default-src 'none'")
+    expect(blocked).not.toMatch(/img-src[^;]*https?:/)
+    const allowed = csp(buildPrintDocument({ ...args(), messages: [tracked], allowRemoteImages: true }))
+    expect(allowed).toMatch(/img-src[^;]*https:/)
+    // Never scripts, either way.
+    expect(allowed).toContain("script-src 'none'")
+  })
+
+  it('says when older messages of the conversation were not loaded', () => {
+    const notice = 'Older messages are not included.'
+    expect(buildPrintDocument({ ...args(), messages: [tracked], incompleteNotice: notice })).toContain(notice)
+    expect(build([tracked])).not.toContain(notice)
+  })
+})
+
+function args() {
+  return {
+    subject: 'Lunch',
+    messages: [] as Message[],
+    printedLabel: 'Printed',
+    printedAt: new Date(1_700_000_000_000),
+    toLabel: 'To',
+    ccLabel: 'Cc',
+    attachmentsLabel: 'Attachments',
+  }
+}

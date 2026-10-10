@@ -351,6 +351,11 @@ export function ConversationHeader({
                       // were written: a printout of one message out of twelve
                       // is a printout of a fragment.
                       messages: mail$.messages.peek().filter((message) => message.thread_id === activeThread.thread_id),
+                      // The printout loads what the reader would, and says
+                      // when older messages were not loaded (#35).
+                      allowRemoteImages:
+                        accounts.find((account) => account.id === activeThread.account_id)?.load_remote_images ?? false,
+                      incompleteNotice: mail$.messagesCursor.peek() ? t('print.incomplete') : undefined,
                       printedLabel: t('print.printedOn'),
                       toLabel: t('print.to'),
                       ccLabel: t('print.cc'),

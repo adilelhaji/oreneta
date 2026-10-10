@@ -993,6 +993,7 @@
   "print.action": "Imprimir…",
   "print.attachments": "Anexos:",
   "print.cc": "Cc",
+  "print.incomplete": "As mensagens mais antigas desta conversa não foram carregadas e não estão incluídas.",
   "print.printedOn": "Impresso em",
   "print.to": "Para",
   "priority.always": "Always show this sender first",

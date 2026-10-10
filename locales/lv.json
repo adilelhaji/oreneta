@@ -993,6 +993,7 @@
   "print.action": "Print…",
   "print.attachments": "Attachments:",
   "print.cc": "Cc",
+  "print.incomplete": "Vecākie šīs sarunas ziņojumi netika ielādēti un nav iekļauti.",
   "print.printedOn": "Printed",
   "print.to": "To",
   "priority.always": "Always show this sender first",

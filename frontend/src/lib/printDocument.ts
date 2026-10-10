@@ -10,14 +10,11 @@
 // or scroll to find out.
 
 import type { Message } from '../types'
+import { stripTrackingPixels } from '../components/chat/readerHtml'
 
 /** Escapes text for placing in HTML. */
 export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 /**
@@ -32,7 +29,9 @@ export function printableBody(message: Message): string {
   if (!message.body_html) {
     return `<pre class="plain">${escapeHtml(message.body ?? '')}</pre>`
   }
-  const doc = new DOMParser().parseFromString(message.body_html, 'text/html')
+  // Tracking pixels go, as they do in the reader tab (#35): printing is not a
+  // reason to tell a sender the message was opened.
+  const doc = new DOMParser().parseFromString(stripTrackingPixels(message.body_html), 'text/html')
   for (const element of doc.querySelectorAll('script, iframe, object, embed, link, meta')) {
     element.remove()
   }
@@ -40,7 +39,10 @@ export function printableBody(message: Message): string {
   for (const element of doc.querySelectorAll('*')) {
     for (const attribute of [...element.attributes]) {
       const name = attribute.name.toLowerCase()
-      if (name.startsWith('on') || (name === 'href' && attribute.value.trim().toLowerCase().startsWith('javascript:'))) {
+      if (
+        name.startsWith('on') ||
+        (name === 'href' && attribute.value.trim().toLowerCase().startsWith('javascript:'))
+      ) {
         element.removeAttribute(attribute.name)
       }
     }
@@ -83,10 +85,7 @@ const STYLE = `
 `
 
 /** One message: who wrote it, when, to whom, and what it said. */
-function senderBlock(
-  message: Message,
-  labels: { toLabel: string; ccLabel: string; attachmentsLabel: string },
-): string {
+function senderBlock(message: Message, labels: { toLabel: string; ccLabel: string; attachmentsLabel: string }): string {
   const name = message.from_name.trim()
   const address = message.from_addr.trim()
   // The name alone is not enough on paper — two people share a first name and
@@ -128,20 +127,35 @@ export function buildPrintDocument(args: {
   toLabel: string
   ccLabel: string
   attachmentsLabel: string
+  /** Whether the account loads remote images; otherwise the printout does not
+   * either, whatever the message asks for (#35). */
+  allowRemoteImages?: boolean
+  /** Said at the top when older messages of the conversation were not loaded. */
+  incompleteNotice?: string
 }): string {
   const subject = args.subject.trim() || '(no subject)'
   const messages = args.messages.map((message) => senderBlock(message, args)).join('\n')
+  // The message's own policy is stripped with its other <meta> tags, so the
+  // printout states its own: no scripts, no frames, no forms, and remote
+  // images only where the reader allows them.
+  const images = args.allowRemoteImages ? "'self' data: blob: https: http:" : "'self' data: blob:"
+  const policy = `default-src 'none'; script-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; img-src ${images}; style-src 'unsafe-inline'; font-src 'self' data:`
+  const notice = args.incompleteNotice
+    ? `<div class="thread-meta incomplete">${escapeHtml(args.incompleteNotice)}</div>`
+    : ''
 
   return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${policy}">
 <title>${escapeHtml(subject)}</title>
 <style>${STYLE}</style>
 </head>
 <body>
 <h1>${escapeHtml(subject)}</h1>
 <div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString())}</div>
+${notice}
 ${messages}
 </body>
 </html>`
