@@ -775,3 +775,55 @@ fn attachments_are_listed_without_bytes_and_links_are_recognised() {
     // Only the one request: a link is never followed.
     assert_eq!(fixture.requests().len(), 1);
 }
+
+// ---- #143: sending ----
+
+#[test]
+fn sending_posts_the_mime_base64_encoded_and_202_is_accepted() {
+    use base64::Engine as _;
+    let raw = b"From: a@example.com\r\nTo: b@example.com\r\nSubject: Hi\r\n\r\nHello";
+    let fixture = Fixture::new(|_| vec![(202, String::new(), String::new())]);
+    writer(&fixture, "Mail.Read Mail.Send").send_mime(raw).unwrap();
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("POST /v1.0/me/sendMail "), "{request}");
+    assert!(request.to_ascii_lowercase().contains("content-type: text/plain"));
+    let body = request.split("\r\n\r\n").nth(1).unwrap();
+    assert_eq!(base64::engine::general_purpose::STANDARD.decode(body).unwrap(), raw);
+}
+
+#[test]
+fn a_grant_without_mail_send_sends_nothing() {
+    let fixture = Fixture::new(|_| vec![]);
+    let error = writer(&fixture, "Mail.ReadWrite").send_mime(b"x").unwrap_err();
+    assert_eq!(error.kind, ErrorKind::ConsentRequired);
+    assert!(fixture.requests().is_empty());
+}
+
+#[test]
+fn a_message_over_the_request_bound_is_refused_before_sending() {
+    let fixture = Fixture::new(|_| vec![]);
+    let big = vec![b'a'; MAX_SEND_REQUEST];
+    let error = writer(&fixture, "Mail.Send").send_mime(&big).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::TooLarge);
+    assert!(fixture.requests().is_empty());
+}
+
+#[test]
+fn send_refusals_keep_their_category_and_a_lost_answer_is_uncertain() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            (403, String::new(), String::new()),
+            (429, "Retry-After: 20\r\n".to_string(), String::new()),
+            (504, String::new(), String::new()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.Send");
+    assert_eq!(client.send_mime(b"x").unwrap_err().kind, ErrorKind::AccessDenied);
+    let throttled = client.send_mime(b"x").unwrap_err();
+    assert_eq!((throttled.kind, throttled.retry_after_seconds), (ErrorKind::Throttled, Some(20)));
+    assert_eq!(client.send_mime(b"x").unwrap_err().kind, ErrorKind::Unavailable);
+    // No reply at all: sent once, outcome unknown.
+    let silent = Fixture::new(|_| vec![]);
+    assert_eq!(writer(&silent, "Mail.Send").send_mime(b"x").unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(silent.requests().len(), 1);
+}

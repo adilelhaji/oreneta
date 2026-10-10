@@ -56,6 +56,8 @@ export type Account = {
   /** Microsoft Graph only: whether the grant Microsoft returned allows
    * message changes (read, flag, move, delete; #141). */
   graph_writes?: boolean
+  /** Microsoft Graph only: whether the grant allows sending (Mail.Send; #143). */
+  graph_send?: boolean
   /** RSS automatic sync interval in minutes (default 60). */
   rss_sync_interval_minutes?: number
   feed_url?: string

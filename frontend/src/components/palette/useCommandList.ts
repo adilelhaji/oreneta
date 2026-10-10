@@ -1,6 +1,6 @@
 import { useTranslation } from '../../lib/i18n'
 import { settingsDestinations } from '../../lib/settingsDestinations'
-import { messageChangesBlocked, readOnlyTarget } from '../../lib/mailCapabilities'
+import { messageChangesBlocked, readOnlyTarget, sendBlocked } from '../../lib/mailCapabilities'
 import { useMemo } from 'react'
 import {
   Archive,
@@ -347,7 +347,8 @@ export function useCommandList(): Command[] {
     )
     // Sending and folder-wide changes are not supported on Microsoft Graph;
     // changing a message is, once the reader allowed it (#141).
-    const writeCommands = new Set(['compose.new', 'mail.markAllRead', 'reply.focus', 'compose.replyFull'])
+    const writeCommands = new Set(['mail.markAllRead'])
+    const sendCommands = new Set(['reply.focus', 'compose.replyFull'])
     const messageCommands = new Set(['thread.archive', 'thread.star', 'thread.unread', 'thread.delete'])
     return list.map((command) => {
       if (command.kind === 'setting') return command
@@ -368,6 +369,7 @@ export function useCommandList(): Command[] {
         command.id === 'compose.new'
           ? !currentAccounts.some(isSendableAccount)
           : (writeCommands.has(command.id) && readOnlyTarget(currentAccounts, target)) ||
+            (sendCommands.has(command.id) && sendBlocked(currentAccounts, target)) ||
             (messageCommands.has(command.id) && messageChangesBlocked(currentAccounts, target))
       const disabled = unavailable(accounts)
       return {

@@ -1407,16 +1407,22 @@ function OpmlGroup({ account }: { account: string }) {
 }
 
 /**
- * Whether a Microsoft Graph account may change messages, and the way to allow
- * it (#141). Reading never depends on this; sending is not part of it.
+ * What a Microsoft Graph account may do beyond reading, and the way to allow
+ * it: changing messages (#141) and sending (#143). Each is asked for on its
+ * own; the level shown is the one Microsoft granted.
  */
 function GraphChangesGroup({ account }: { account: Account }) {
   const { t } = useTranslation()
   const [progress, setProgress] = useState<GraphChangesState>({ state: 'idle' })
+  const [asking, setAsking] = useState<'writes' | 'send' | ''>('')
   const [flow] = useState(
     () =>
-      new GraphChangesFlow(invoke, setProgress, (id, writes) =>
-        accounts$.set(accounts$.peek().map((item) => (item.id === id ? { ...item, graph_writes: writes } : item))),
+      new GraphChangesFlow(invoke, setProgress, (id, level) =>
+        accounts$.set(
+          accounts$
+            .peek()
+            .map((item) => (item.id === id ? { ...item, graph_writes: level.writes, graph_send: level.send } : item)),
+        ),
       ),
   )
   useEffect(
@@ -1426,14 +1432,44 @@ function GraphChangesGroup({ account }: { account: Account }) {
     [flow],
   )
   const waiting = progress.state === 'authorizing'
-  const hint =
-    progress.state === 'notGranted'
-      ? t('settings.account.graphChanges.notGranted')
-      : progress.state === 'failed'
-        ? t('settings.account.graphChanges.failed')
-        : account.graph_writes
-          ? t('settings.account.graphChanges.allowedHint')
-          : t('settings.account.graphChanges.readOnlyHint')
+  const ask = (what: 'writes' | 'send') => {
+    setAsking(what)
+    // The whole level to hold afterwards, so allowing one keeps the other.
+    void flow.begin(account.id, {
+      writes: what === 'writes' || !!account.graph_writes,
+      send: what === 'send' || !!account.graph_send,
+    })
+  }
+  const outcome = (what: 'writes' | 'send') =>
+    asking !== what
+      ? null
+      : waiting
+        ? t('settings.account.graphChanges.waiting')
+        : progress.state === 'notGranted'
+          ? t('settings.account.graphChanges.notGranted')
+          : progress.state === 'failed'
+            ? t('settings.account.graphChanges.failed')
+            : null
+  const control = (what: 'writes' | 'send', granted: boolean, label: string) =>
+    granted ? null : waiting && asking === what ? (
+      <button
+        type="button"
+        onClick={() => void flow.cancel().then(() => setProgress({ state: 'idle' }))}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
+      >
+        {t('buttons.cancel')}
+      </button>
+    ) : (
+      <button
+        type="button"
+        disabled={waiting}
+        onClick={() => ask(what)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-on-accent font-bold text-2xs cursor-pointer transition-colors disabled:opacity-50"
+      >
+        <KeyRound size={14} strokeWidth={1.75} />
+        {label}
+      </button>
+    )
   return (
     <SettingsGroup title={t('settings.account.graphChanges.title')}>
       <SettingRow
@@ -1442,27 +1478,21 @@ function GraphChangesGroup({ account }: { account: Account }) {
             ? t('accounts.graph.changesAllowed')
             : t('accounts.graph.readOnly', { defaultValue: 'Read-only' })
         }
-        hint={waiting ? t('settings.account.graphChanges.waiting') : hint}
-        control={
-          account.graph_writes ? null : waiting ? (
-            <button
-              type="button"
-              onClick={() => void flow.cancel().then(() => setProgress({ state: 'idle' }))}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
-            >
-              {t('buttons.cancel')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void flow.begin(account.id)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-on-accent font-bold text-2xs cursor-pointer transition-colors"
-            >
-              <KeyRound size={14} strokeWidth={1.75} />
-              {t('settings.account.graphChanges.allow')}
-            </button>
-          )
+        hint={
+          outcome('writes') ??
+          (account.graph_writes
+            ? t('settings.account.graphChanges.allowedHint')
+            : t('settings.account.graphChanges.readOnlyHint'))
         }
+        control={control('writes', !!account.graph_writes, t('settings.account.graphChanges.allow'))}
+      />
+      <SettingRow
+        title={account.graph_send ? t('settings.account.graphSend.allowed') : t('settings.account.graphSend.title')}
+        hint={
+          outcome('send') ??
+          (account.graph_send ? t('settings.account.graphSend.allowedHint') : t('settings.account.graphSend.hint'))
+        }
+        control={control('send', !!account.graph_send, t('settings.account.graphSend.allow'))}
       />
     </SettingsGroup>
   )

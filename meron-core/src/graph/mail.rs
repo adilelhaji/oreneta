@@ -74,6 +74,10 @@ pub trait Source: Send + Sync {
     fn attachments(&self, _id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
         Ok(Vec::new())
     }
+    /// Submit a complete MIME message (#143).
+    fn send_mime(&self, _raw: &[u8]) -> Result<()> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
     // Writes (#141). A source that cannot write refuses before sending.
     fn set_read(&self, _id: &ResourceId, _read: bool) -> Result<()> {
         Err(Error::new(ErrorKind::ConsentRequired))
@@ -106,6 +110,9 @@ impl Source for Client {
     }
     fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
         Client::message_mime(self, id)
+    }
+    fn send_mime(&self, raw: &[u8]) -> Result<()> {
+        Client::send_mime(self, raw)
     }
     fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
         Client::attachments(self, id)
@@ -158,6 +165,9 @@ impl Source for NativeSource {
     }
     fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
         self.client()?.message_mime(id)
+    }
+    fn send_mime(&self, raw: &[u8]) -> Result<()> {
+        self.client()?.send_mime(raw)
     }
     fn attachments(&self, id: &ResourceId) -> Result<Vec<AttachmentInfo>> {
         self.client()?.attachments(id)
@@ -824,6 +834,11 @@ pub fn writes_enabled(conn: &Connection, account: &str) -> bool {
     auth::writes_marked(conn, account)
 }
 
+/// Whether this Graph account may send (#143), by the same marker.
+pub fn send_enabled(conn: &Connection, account: &str) -> bool {
+    auth::send_marked(conn, account)
+}
+
 /// Preflight before optimistic/local writes or outbound work, not just at the
 /// protocol session. Local labels and local draft records are not deleted.
 pub fn guard_command(conn: &Connection, method: &str, p: &Value) -> anyhow::Result<()> {
@@ -859,6 +874,15 @@ pub fn guard_command(conn: &Connection, method: &str, p: &Value) -> anyhow::Resu
     }
     // #141: the message changes Graph supports, for an account whose grant
     // was recorded with them. Copying stays within one account.
+    // #143: sending, for an account whose grant was recorded with Mail.Send.
+    if method == "send" {
+        let mut graph = Vec::new();
+        collect_graph_accounts(conn, p, &mut graph)?;
+        if graph.iter().all(|account| auth::send_marked(conn, account)) {
+            return Ok(());
+        }
+        return unsupported();
+    }
     if matches!(
         method,
         "messages.markRead" | "messages.markStarred" | "messages.delete" | "messages.move" | "messages.copy"
@@ -1186,6 +1210,24 @@ impl Session {
             result.push((*uid, self.read_message(folder, *uid, Some(media)).await?));
         }
         Ok(result)
+    }
+
+    /// Submit a message (#143). Sent once: the caller records the attempt
+    /// and decides what an error means; nothing here retries.
+    pub async fn send_mime(&self, raw: Vec<u8>) -> anyhow::Result<()> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let _guard = this.lock.lock().unwrap();
+            check(&this.db.lock().unwrap(), &this.lease).map_err(clean_error)?;
+            let result = this.source.send_mime(&raw);
+            if let Err(e) = &result {
+                if e.kind == ErrorKind::Reauthenticate {
+                    let _ = record_failure(&this.db.lock().unwrap(), &this.lease, e);
+                }
+            }
+            result.map_err(anyhow::Error::from)
+        })
+        .await?
     }
 
     /// Mark messages read or unread (#141). See docs/design/graph-message-actions.md.

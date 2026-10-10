@@ -2,6 +2,8 @@ import { EditorContent } from '@tiptap/react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { settings$ } from '../../states/settings'
+import { accounts$ } from '../../states/accounts'
+import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { useComposer } from './useComposer'
 import { ComposerHeaderFields } from './ComposerHeaderFields'
 import { ComposerToolbar } from './ComposerToolbar'
@@ -22,6 +24,7 @@ import {
 export function Composer({ tabId }: { tabId: string }) {
   const { t } = useTranslation()
   const spellCheck = useValue(settings$.spellCheck)
+  const accounts = useValue(accounts$)
   const {
     draft,
     editor,
@@ -79,11 +82,7 @@ export function Composer({ tabId }: { tabId: string }) {
     }
 
     if (draft.rich && editor) {
-      editor
-        .chain()
-        .focus()
-        .insertContent(templateInsertHtml(template))
-        .run()
+      editor.chain().focus().insertContent(templateInsertHtml(template)).run()
       return
     }
 
@@ -168,6 +167,7 @@ export function Composer({ tabId }: { tabId: string }) {
         onDiscard={() => void closeMessageTab(tabId)}
         onSubmit={() => void submit()}
         onSchedule={(at) => void submit(at)}
+        canSchedule={keepsServerDrafts(accounts.find((account) => account.id === draft.accountId))}
       />
     </div>
   )

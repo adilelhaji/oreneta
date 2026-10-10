@@ -26,7 +26,9 @@ global-service, signed-in mailbox only. No automatic IMAP/EWS conversion.
   [design/graph-message-actions.md](design/graph-message-actions.md) (#141).
   Attachments and inline images are read through MIME; see
   [design/graph-attachments.md](design/graph-attachments.md) (#142).
-  Sending, remote drafts, folder management, calendars, contacts,
+  Sending is available once the reader allows it and Microsoft grants
+  `Mail.Send`; see [design/graph-sending.md](design/graph-sending.md) (#143).
+  Remote drafts, scheduled sending, folder management, calendars, contacts,
   shared mailboxes and national clouds remain unsupported. Disable their UI
   affordances and reject their backend commands before any mutation, SMTP,
   IMAP or delegated fallback. Local labels and existing local drafts are

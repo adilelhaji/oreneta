@@ -3,6 +3,7 @@ import {
   isReadOnlyMail,
   messageChangesBlocked,
   copyBlocked,
+  keepsServerDrafts,
 } from '../lib/mailCapabilities'
 import { observable } from '@legendapp/state'
 import type { Account, Folder, Message } from '../types'
@@ -2046,6 +2047,9 @@ export async function discardSavedDraftCopy(
   options: { throwOnError?: boolean; failureMessage?: string } = {},
 ): Promise<boolean> {
   if (!draft.accountId && !draft.threadId) return true
+  // Nothing was written to a Microsoft Graph account's Drafts folder (#143).
+  if (draft.accountId && !keepsServerDrafts(accounts$.peek().find((account) => account.id === draft.accountId)))
+    return true
 
   const previousThreads = mail$.threads.get()
   const previousMessages = mail$.messages.get()

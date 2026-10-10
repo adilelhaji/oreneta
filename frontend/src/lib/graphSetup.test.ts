@@ -154,14 +154,14 @@ test('allowing changes asks for writes on that account and reports the level gra
   for (const writes of [true, false]) {
     const calls: { command: string; payload: any }[] = []
     const states: string[] = []
-    const granted: [string, boolean][] = []
+    const granted: [string, { writes: boolean; send: boolean }][] = []
     let polls = 0
     const flow = new GraphChangesFlow(
       async <T>(command: string, payload?: unknown) => {
         calls.push({ command, payload })
         if (command === 'oauth.graphBegin') return { attempt: 'a1' } as T
         if (command === 'oauth.graphPoll')
-          return (++polls < 2 ? { state: 'pending' } : { state: 'authorized', writes }) as T
+          return (++polls < 2 ? { state: 'pending' } : { state: 'authorized', writes, send: false }) as T
         return {} as T
       },
       (s) => states.push(s.state),
@@ -170,8 +170,11 @@ test('allowing changes asks for writes on that account and reports the level gra
     )
     await flow.begin('reader@example.test')
     for (let i = 0; i < 5; i++) await tick()
-    expect(calls[0]).toEqual({ command: 'oauth.graphBegin', payload: { account: 'reader@example.test', writes: true } })
-    expect(granted).toEqual([['reader@example.test', writes]])
+    expect(calls[0]).toEqual({
+      command: 'oauth.graphBegin',
+      payload: { account: 'reader@example.test', writes: true, send: false },
+    })
+    expect(granted).toEqual([['reader@example.test', { writes, send: false }]])
     expect(states).toEqual(['authorizing', writes ? 'allowed' : 'notGranted'])
   }
 })
@@ -208,4 +211,24 @@ test('a refused or cancelled request for changes leaves the account as it was', 
   await pending.cancel()
   expect(cancelled).toContain('oauth.graphCancel')
   expect(granted).toEqual([])
+})
+
+test('allowing sending keeps the changes already held and reports both levels (#143)', async () => {
+  const calls: { command: string; payload: any }[] = []
+  const states: string[] = []
+  const flow = new GraphChangesFlow(
+    async <T>(command: string, payload?: unknown) => {
+      calls.push({ command, payload })
+      if (command === 'oauth.graphBegin') return { attempt: 'a1' } as T
+      if (command === 'oauth.graphPoll') return { state: 'authorized', writes: true, send: false } as T
+      return {} as T
+    },
+    (s) => states.push(s.state),
+    () => {},
+    0,
+  )
+  await flow.begin('reader@example.test', { writes: true, send: true })
+  expect(calls[0].payload).toEqual({ account: 'reader@example.test', writes: true, send: true })
+  // Microsoft kept sending back: said, not shown as allowed.
+  expect(states.at(-1)).toBe('notGranted')
 })

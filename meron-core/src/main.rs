@@ -312,6 +312,51 @@ mod tests {
         assert!(writes.contains(&(account.to_owned(),true)) && writes.contains(&(other.to_owned(),false)));
     }
     #[test]
+    fn graph_send_failures_are_uncertain_only_when_microsoft_may_have_accepted() {
+        use super::{classify_graph_send_error, smtp};
+        use meron_core::graph::{Error, ErrorKind};
+        let classify = |kind, status| {
+            classify_graph_send_error(anyhow::Error::new(Error { kind, status, retry_after_seconds: None }))
+        };
+        for (kind, status) in [(ErrorKind::Uncertain, None), (ErrorKind::Unavailable, Some(504)), (ErrorKind::Unavailable, Some(500))] {
+            assert!(smtp::is_uncertain(&classify(kind, status)), "{kind:?}");
+        }
+        for (kind, status) in [
+            (ErrorKind::AccessDenied, Some(403)),
+            (ErrorKind::Throttled, Some(429)),
+            (ErrorKind::Reauthenticate, Some(401)),
+            (ErrorKind::InvalidResponse, Some(400)),
+            (ErrorKind::TooLarge, None),
+            (ErrorKind::ConsentRequired, None),
+        ] {
+            assert!(!smtp::is_uncertain(&classify(kind, status)), "{kind:?}");
+        }
+        assert!(classify(ErrorKind::TooLarge, None).to_string().contains("too large to send through Microsoft Graph"));
+        assert!(classify(ErrorKind::ConsentRequired, None).to_string().contains("allow it in the account settings"));
+    }
+    #[tokio::test]
+    async fn graph_send_passes_the_guard_only_with_the_send_grant() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let account="graph@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[account]).unwrap();
+        let send=json!({"account":account,"to":"b@example.test","subject":"Hi","body":"x","message_id":"m-graph@example.test"});
+        let error=dispatch(&engine,&request("send",send.clone()),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"),"{error}");
+        // Changes alone do not allow sending.
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true,"send":false})).unwrap();
+        assert!(dispatch(&engine,&request("send",send.clone()),&writer).await.unwrap_err().to_string().contains("read-only"));
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":false,"send":true})).unwrap();
+        let error=dispatch(&engine,&request("send",send),&writer).await.unwrap_err();
+        assert!(!error.to_string().contains("read-only"),"{error}");
+        // Scheduling is still not offered for Graph.
+        assert!(dispatch(&engine,&request("mail.scheduleSend",json!({"account":account})),&writer).await.unwrap_err().to_string().contains("read-only"));
+        let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
+        assert_eq!(list["accounts"][0]["graph_send"],true);
+    }
+    #[test]
     fn graph_failures_do_not_enter_imap_retry_policy() {
         for kind in [meron_core::graph::ErrorKind::Throttled,meron_core::graph::ErrorKind::Transport,meron_core::graph::ErrorKind::Unavailable,meron_core::graph::ErrorKind::Reauthenticate] {
             let error=meron_core::graph::Error{kind,status:None,retry_after_seconds:Some(30)};
@@ -1683,8 +1728,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let client = req_str(p, "client_id")?;
             let redirect = req_str(p, "redirect_uri")?;
             // `writes` asks for message changes on an existing account (#141).
-            let writes = p.get("writes").and_then(Value::as_bool).unwrap_or(false);
-            let begin = tokio::task::spawn_blocking(move || manager.begin_with(selected, &client, &redirect, route, writes)).await??;
+            // and `send` asks for sending (#143).
+            let level = meron_core::graph::auth::Level {
+                writes: p.get("writes").and_then(Value::as_bool).unwrap_or(false),
+                send: p.get("send").and_then(Value::as_bool).unwrap_or(false),
+            };
+            let begin = tokio::task::spawn_blocking(move || manager.begin_level(selected, &client, &redirect, route, level)).await??;
             Ok(serde_json::to_value(begin)?)
         }
         "graph.authPoll" => {
@@ -3292,6 +3341,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         obj.insert("needs_reconnect".into(),json!(reconnect));
                         // Whether its grant allows message changes (#141).
                         obj.insert("graph_writes".into(),json!(meron_core::graph::mail::writes_enabled(&engine.db.lock().unwrap(),&id)));
+                        obj.insert("graph_send".into(),json!(meron_core::graph::mail::send_enabled(&engine.db.lock().unwrap(),&id)));
                         continue;
                     }
                     let needs_reconnect = live_accounts
@@ -6560,9 +6610,9 @@ async fn perform_send_transaction(
         let creds = engine.ensure_valid_creds(&account).await?;
         let (from_addr, sender_name) =
             resolve_send_from(engine, &account, &creds, &requested_from)?;
-        if creds.is_ews() {
-            // Exchange submits the MIME itself and files the Sent copy in
-            // the same call, so there is no separate append.
+        if creds.is_ews() || creds.is_graph() {
+            // Exchange and Microsoft Graph (#143) submit the MIME themselves
+            // and file the Sent copy, so there is no separate append.
             //
             // The Bcc header is written into the message here, unlike the
             // SMTP path: SMTP carries blind recipients in the envelope,
@@ -6595,7 +6645,7 @@ async fn perform_send_transaction(
                     Box::pin(async move { session.send_mime(raw).await })
                 })
                 .await
-                .map_err(classify_ews_send_error)?;
+                .map_err(if creds.is_graph() { classify_graph_send_error } else { classify_ews_send_error })?;
             // The server files its own copy, so the caller's Sent step only
             // refreshes the local view — the upload is suppressed for
             // Exchange in `should_append_sent_copy`.
@@ -6643,6 +6693,32 @@ fn classify_ews_send_error(err: anyhow::Error) -> anyhow::Error {
         err.context(smtp::UncertainSend)
     } else {
         err
+    }
+}
+
+/// A Microsoft Graph submission that failed (#143).
+///
+/// sendMail answers 202 when it accepts a message. A connection lost after
+/// the request went out, or a 5xx (a gateway can time out after Microsoft
+/// accepted it), leaves the outcome unknown: marked like a lost SMTP reply and
+/// never retried. A 4xx, a throttle or a message refused before sending as too
+/// large is a refusal: nothing was accepted.
+fn classify_graph_send_error(err: anyhow::Error) -> anyhow::Error {
+    use meron_core::graph::ErrorKind;
+    let kind = err
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<meron_core::graph::Error>())
+        .map(|e| e.kind);
+    match kind {
+        Some(ErrorKind::Uncertain | ErrorKind::Unavailable) => err.context(smtp::UncertainSend),
+        Some(ErrorKind::TooLarge) => err.context(format!(
+            "too large to send through Microsoft Graph (limit {} MB including attachments)",
+            meron_core::graph::MAX_SEND_REQUEST / (1024 * 1024)
+        )),
+        Some(ErrorKind::ConsentRequired) => {
+            err.context("this account does not allow sending yet; allow it in the account settings")
+        }
+        _ => err,
     }
 }
 

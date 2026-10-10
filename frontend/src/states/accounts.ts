@@ -27,7 +27,8 @@ export function isSendableAccount(acc: Account | undefined | null): boolean {
     !!acc &&
     acc.provider !== 'rss' &&
     acc.auth_type !== 'rss' &&
-    acc.auth_type !== 'graph_oauth' &&
+    // Graph sends only with Mail.Send granted (#143).
+    (acc.auth_type !== 'graph_oauth' || acc.graph_send === true) &&
     acc.needs_reconnect !== true
   )
 }

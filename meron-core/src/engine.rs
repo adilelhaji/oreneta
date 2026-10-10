@@ -549,7 +549,7 @@ impl Engine {
         T: Send,
     {
         if self.ensure_valid_creds(account).await?.is_graph() {
-            if !retry && !crate::graph::mail::writes_enabled(&self.db.lock().unwrap(), account) {
+            if !retry && !graph_may_write(&self.db.lock().unwrap(), account) {
                 return crate::graph::mail::unsupported();
             }
             let mut session=backend::Session::Graph(self.graph_mail.session(account)?);
@@ -651,7 +651,7 @@ impl Engine {
         T: Send,
     {
         if self.ensure_valid_creds(account).await?.is_graph() {
-            if !crate::graph::mail::writes_enabled(&self.db.lock().unwrap(), account) {
+            if !graph_may_write(&self.db.lock().unwrap(), account) {
                 return crate::graph::mail::unsupported();
             }
             // Graph has no connection to warm up: the preflight runs on the
@@ -803,6 +803,13 @@ pub async fn write_gmail_label_change(
 
 /// Delete messages on the server. Returns `None` for a permanent expunge
 /// (Drafts, or items already in Trash), or `Some(trash)` when moved to Trash.
+/// A preflight for a Graph write session: changes (#141) or sending (#143).
+/// Which operation is allowed is decided per command by the dispatch guard,
+/// and every request checks the grant itself.
+fn graph_may_write(conn: &rusqlite::Connection, account: &str) -> bool {
+    crate::graph::mail::writes_enabled(conn, account) || crate::graph::mail::send_enabled(conn, account)
+}
+
 pub async fn delete_to_trash(
     engine: &Engine,
     account: &str,

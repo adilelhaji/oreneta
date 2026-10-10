@@ -38,3 +38,20 @@ export function copyBlocked(accounts: Account[], sourceId: string, targetAccount
   if (source && source.id === targetAccountId) return messageChangesBlocked(accounts, sourceId)
   return readOnlyTarget(accounts, sourceId) || readOnlyTarget(accounts, targetAccountId)
 }
+
+/** Whether this account can send: always for IMAP/EWS, and for Graph only
+ * with Mail.Send granted (#143). RSS and disconnected accounts are decided by
+ * isSendableAccount. */
+export function canSendFrom(account: Pick<Account, 'auth_type' | 'graph_send'> | undefined): boolean {
+  return !isReadOnlyMail(account) || !!account?.graph_send
+}
+
+export function sendBlocked(accounts: Account[], id: string): boolean {
+  return accounts.some((account) => !canSendFrom(account) && matches(account, id))
+}
+
+/** Whether drafts are also kept on this account's server. Graph keeps them
+ * only in the local store (#143); its Drafts folder is not written. */
+export function keepsServerDrafts(account: Pick<Account, 'auth_type'> | undefined): boolean {
+  return !isReadOnlyMail(account)
+}

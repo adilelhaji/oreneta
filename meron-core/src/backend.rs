@@ -384,7 +384,7 @@ impl Session {
     /// accounts submit through SMTP, which is not a session operation.
     pub async fn send_mime(&mut self, raw: Vec<u8>) -> Result<()> {
         match self {
-            Session::Graph(_) => crate::graph::mail::unsupported(),
+            Session::Graph(session) => session.send_mime(raw).await,
             Session::Imap(_) => Err(anyhow::anyhow!(
                 "IMAP accounts send through SMTP, not the mail session"
             )),

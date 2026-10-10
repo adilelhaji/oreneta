@@ -18,7 +18,7 @@ import { openExternal } from '../../lib/native'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import type { Message } from '../../types'
-import { useMessageChangesBlocked, useReadOnlyMail } from '../../lib/useReadOnlyMail'
+import { useMessageChangesBlocked, useReadOnlyMail, useSendBlocked } from '../../lib/useReadOnlyMail'
 
 export type MessageContextMenuState = {
   x: number
@@ -50,6 +50,8 @@ export function MessageContextMenu({
   // Read state, star and delete change the message (#141); forwarding, editing
   // as new, .eml and discarding a server draft stay unsupported on Graph.
   const changesBlocked = useMessageChangesBlocked(state.message.account_id)
+  // Forwarding and editing as new are sending (#143).
+  const sendingBlocked = useSendBlocked(state.message.account_id)
   const isDraft = isDraftFolder(state.message.folder_id, state.message.account_id)
   return (
     <FloatingContextMenu
@@ -148,7 +150,7 @@ export function MessageContextMenu({
             <MenuItem
               icon={<Forward size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.forward')}
-              disabled={readOnly}
+              disabled={sendingBlocked}
               onClick={() => {
                 const message = state.message
                 onClose()
@@ -160,7 +162,7 @@ export function MessageContextMenu({
             <MenuItem
               icon={<Copy size={14} className="text-accent" strokeWidth={1.75} />}
               label={t('chat.actions.editAsNewMessage')}
-              disabled={readOnly}
+              disabled={sendingBlocked}
               onClick={() => {
                 const message = state.message
                 onClose()

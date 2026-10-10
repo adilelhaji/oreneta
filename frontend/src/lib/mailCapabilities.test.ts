@@ -1,11 +1,15 @@
 import { expect, test } from 'bun:test'
 import {
   canChangeMessages,
+  canSendFrom,
   copyBlocked,
   isReadOnlyMail,
+  keepsServerDrafts,
   messageChangesBlocked,
   readOnlyTarget,
+  sendBlocked,
 } from './mailCapabilities'
+import { isSendableAccount } from '../states/accounts'
 import type { Account } from '../types'
 
 test('Graph read-only capability is explicit, never guessed from Microsoft provider', () => {
@@ -36,4 +40,17 @@ test('Graph message changes follow the granted permission; managing stays unsupp
   expect(copyBlocked(accounts, 'c@example.test#INBOX#1', 'b@example.test')).toBe(true)
   expect(copyBlocked(accounts, 'a@example.test#INBOX#1', 'a@example.test')).toBe(true)
   expect(copyBlocked(accounts, 'c@example.test#INBOX#1', 'c@example.test')).toBe(false)
+})
+
+test('Graph sends only with Mail.Send granted and never keeps server drafts (#143)', () => {
+  const sender = { id: 's@example.test', auth_type: 'graph_oauth', graph_send: true } as Account
+  const reader = { id: 'r@example.test', auth_type: 'graph_oauth', graph_writes: true } as Account
+  const imap = { id: 'i@example.test', auth_type: 'password' } as Account
+  expect([sender, reader, imap].map(canSendFrom)).toEqual([true, false, true])
+  expect(sendBlocked([sender, reader, imap], 'r@example.test#INBOX#1')).toBe(true)
+  expect(sendBlocked([sender, reader, imap], 's@example.test#INBOX#1')).toBe(false)
+  expect([sender, imap].map(keepsServerDrafts)).toEqual([false, true])
+  expect(isSendableAccount(sender)).toBe(true)
+  expect(isSendableAccount(reader)).toBe(false)
+  expect(isSendableAccount({ ...sender, needs_reconnect: true })).toBe(false)
 })

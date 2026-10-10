@@ -23,6 +23,23 @@ pub const SCOPES: &str =
 /// incremental consent). Mail.ReadWrite includes reading; it does not send.
 pub const SCOPES_WRITE: &str =
     "openid email profile offline_access https://graph.microsoft.com/Mail.ReadWrite";
+
+/// What a flow or a refresh asks Microsoft for. Each permission is asked for
+/// only once the reader enables it (ADR-0004); Mail.Send is separate (#143).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Level {
+    pub writes: bool,
+    pub send: bool,
+}
+impl Level {
+    pub fn scopes(self) -> String {
+        let mut scopes = String::from(if self.writes { SCOPES_WRITE } else { SCOPES });
+        if self.send {
+            scopes.push_str(" https://graph.microsoft.com/Mail.Send");
+        }
+        scopes
+    }
+}
 const TTL: i64 = 600;
 const MAX_JSON: u64 = 128 * 1024;
 
@@ -79,6 +96,14 @@ impl Record {
     pub fn can_write(&self) -> bool {
         has_write(&self.scopes)
     }
+    /// Whether Microsoft granted sending, by the scopes it returned (#143).
+    pub fn can_send(&self) -> bool {
+        self.scopes.split_ascii_whitespace().any(|s| is_scope(s, "Mail.Send"))
+    }
+    /// The level this grant holds, which a refresh asks for again.
+    pub fn level(&self) -> Level {
+        Level { writes: self.can_write(), send: self.can_send() }
+    }
     /// The same grant asked for at read level: what a refresh falls back to
     /// when write consent was withdrawn, so reading keeps working.
     fn read_level(&self) -> Self {
@@ -86,7 +111,7 @@ impl Record {
             scopes: self
                 .scopes
                 .split_ascii_whitespace()
-                .filter(|s| !is_scope(s, "Mail.ReadWrite"))
+                .filter(|s| !is_scope(s, "Mail.ReadWrite") && !is_scope(s, "Mail.Send"))
                 .chain(std::iter::once("https://graph.microsoft.com/Mail.Read"))
                 .collect::<Vec<_>>()
                 .join(" "),
@@ -149,7 +174,7 @@ impl<V: Vault> Vault for Journalled<V> {
         crate::store::setting_set(
             &self.db.lock().unwrap(),
             &marker(&record.account),
-            &serde_json::json!({ "writes": record.can_write() }),
+            &serde_json::json!({ "writes": record.can_write(), "send": record.can_send() }),
         )
         .map_err(|_| Failure::Storage)?;
         self.inner.save(record)
@@ -179,9 +204,16 @@ impl<V: Vault> Vault for Journalled<V> {
 /// Whether the stored grant for this account was recorded with message
 /// changes. Markers from before #141 (`true`) read as read-only.
 pub fn writes_marked(conn: &rusqlite::Connection, account: &str) -> bool {
+    marked(conn, account, "$.writes")
+}
+/// Whether the stored grant was recorded with sending (#143).
+pub fn send_marked(conn: &rusqlite::Connection, account: &str) -> bool {
+    marked(conn, account, "$.send")
+}
+fn marked(conn: &rusqlite::Connection, account: &str, path: &str) -> bool {
     conn.query_row(
-        "SELECT COALESCE(json_extract(value,'$.writes'),0) FROM settings WHERE key=?1 AND json_valid(value) AND json_type(value)='object'",
-        [marker(account)],
+        "SELECT COALESCE(json_extract(value,?2),0) FROM settings WHERE key=?1 AND json_valid(value) AND json_type(value)='object'",
+        rusqlite::params![marker(account), path],
         |r| r.get::<_, i64>(0),
     )
     .is_ok_and(|v| v == 1)
@@ -229,12 +261,12 @@ pub struct Flow {
     selected: Option<String>,
     deadline: i64,
     proxy: crate::proxy::ProxyChoice,
-    /// Whether this flow asks for message changes.
-    writes: bool,
+    /// What this flow asks for beyond reading.
+    level: Level,
 }
 impl Flow {
-    fn scopes(&self) -> &'static str {
-        if self.writes { SCOPES_WRITE } else { SCOPES }
+    fn scopes(&self) -> String {
+        self.level.scopes()
     }
 }
 #[derive(Clone, Serialize)]
@@ -251,6 +283,8 @@ pub struct Status {
     pub mail_backend_ready: bool,
     /// Whether the grant now stored allows message changes.
     pub writes: bool,
+    /// Whether the grant now stored allows sending (#143).
+    pub send: bool,
 }
 fn status(state: &str) -> Status {
     Status {
@@ -260,6 +294,7 @@ fn status(state: &str) -> Status {
         error: None,
         mail_backend_ready: false,
         writes: false,
+        send: false,
     }
 }
 struct Pending {
@@ -325,7 +360,19 @@ impl<P: Provider, V: Vault> Manager<P, V> {
         proxy: crate::proxy::ProxyChoice,
         writes: bool,
     ) -> Result<Begin> {
-        if writes && selected.is_none() {
+        self.begin_level(selected, client_id, redirect, proxy, Level { writes, send: false })
+    }
+    /// Ask for a level beyond reading. Only for an account already chosen: a
+    /// new account starts read-only and is upgraded on purpose.
+    pub fn begin_level(
+        &self,
+        selected: Option<String>,
+        client_id: &str,
+        redirect: &str,
+        proxy: crate::proxy::ProxyChoice,
+        level: Level,
+    ) -> Result<Begin> {
+        if level != Level::default() && selected.is_none() {
             return Err(Failure::InvalidRequest);
         }
         if !guid(client_id) || selected.as_deref().is_some_and(|s| !valid_address(s)) {
@@ -352,7 +399,7 @@ impl<P: Provider, V: Vault> Manager<P, V> {
             selected,
             deadline: now() + TTL,
             proxy,
-            writes,
+            level,
         };
         let mut url = Url::parse(LOGIN).unwrap();
         url.query_pairs_mut().extend_pairs([
@@ -360,7 +407,7 @@ impl<P: Provider, V: Vault> Manager<P, V> {
             ("response_type", "code"),
             ("response_mode", "query"),
             ("redirect_uri", redirect),
-            ("scope", flow.scopes()),
+            ("scope", &flow.scopes()),
             ("state", &flow.state),
             ("nonce", &flow.nonce),
             (
@@ -470,6 +517,7 @@ impl<P: Provider, V: Vault> Manager<P, V> {
                 p.status = Status {
                     state: "authorized".into(),
                     writes: record.can_write(),
+                    send: record.can_send(),
                     account: Some(record.account),
                     principal: Some(record.principal),
                     error: None,
@@ -496,7 +544,7 @@ impl<P: Provider, V: Vault> Manager<P, V> {
             // Write consent withdrawn or refused: keep reading on the grant
             // the reader still has, once, instead of losing the account.
             Err(Failure::Denied | Failure::ConsentRequired | Failure::Reauthenticate)
-                if record.can_write() =>
+                if record.level() != Level::default() =>
             {
                 self.provider.refresh(&record.read_level(), proxy)?
             }
@@ -694,7 +742,7 @@ impl Provider for Microsoft {
                 ("code", code),
                 ("redirect_uri", &flow.redirect),
                 ("code_verifier", &flow.verifier),
-                ("scope", flow.scopes()),
+                ("scope", &flow.scopes()),
             ],
         )?;
         let principal = self.identity(
@@ -733,7 +781,7 @@ impl Provider for Microsoft {
                 ("client_id", &record.client_id),
                 ("refresh_token", &record.refresh_token),
                 // The level the reader has; never widened by a refresh.
-                ("scope", if record.can_write() { SCOPES_WRITE } else { SCOPES }),
+                ("scope", &record.level().scopes()),
             ],
         )?;
         if let Some(jwt) = &tokens.id_token {

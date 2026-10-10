@@ -5,6 +5,7 @@ import { invoke } from '../lib/bridge'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
 import { ui$, showToast, confirmAction } from './ui'
 import { shouldRemindAttachment } from '../lib/attachmentReminder'
+import { keepsServerDrafts } from '../lib/mailCapabilities'
 import { accounts$, isSendableAccount, accountIdentities } from './accounts'
 import { mail$, getActiveThread, isDraftFolder, isInboxFolder, loadThread, discardSavedDraftCopy } from './mail'
 import {
@@ -456,6 +457,8 @@ async function performQuickReplyDraftSave() {
   const accounts = accounts$.peek()
   const activeAcc = accounts.find((acc) => acc.id === replyAccountId) || accounts[0] || null
   if (activeAcc?.provider === 'rss' || activeAcc?.auth_type === 'rss') return
+  // Microsoft Graph keeps no server drafts (#143).
+  if (!keepsServerDrafts(activeAcc ?? undefined)) return
 
   const target = pickReplyTarget(activeT)
   const ownAddrs = ownAddressSet(accounts)

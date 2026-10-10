@@ -25,6 +25,7 @@ import { formatDeferredWhen } from '../../lib/date'
 import { pickFiles, pickImageFiles } from '../../lib/nativeFilePicker'
 import { getComposeSession, registerComposeSession } from '../../states/composeSessions'
 import { accounts$, isSendableAccount } from '../../states/accounts'
+import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { ResizableImage } from './composerImage'
 import {
   clipboardHasImageMarkup,
@@ -267,6 +268,9 @@ export function useComposer(tabId: string) {
       if (session.savesStopped) return
       const current = compose$.tabs.peek().find((t) => t.id === tabId)?.compose
       if (!current?.accountId) return
+      // A Microsoft Graph account keeps drafts only in the local store (#143):
+      // nothing is written to its Drafts folder, and nothing claims it was.
+      if (!keepsServerDrafts(accounts$.peek().find((account) => account.id === current.accountId))) return
 
       // Autosaves overlap: a send-as change starts one immediately, and another
       // edit (a change of account, say) can start the next before it lands. Only

@@ -11,6 +11,9 @@ const MAX_BODY: u64 = 4 * 1024 * 1024;
 /// The largest whole message (MIME) read to show its attachments (#142).
 /// Bigger ones are reported as too large rather than read without bound.
 pub const MAX_MIME: u64 = 64 * 1024 * 1024;
+/// sendMail takes the message base64-encoded in a request of at most 4 MB
+/// (#143). Larger messages are refused before anything is sent.
+pub const MAX_SEND_REQUEST: usize = 4 * 1024 * 1024;
 const MAX_ITEMS: usize = 1000;
 const TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -147,6 +150,20 @@ impl Grant {
     /// granted scopes decide, never the requested ones.
     pub fn can_write(&self) -> bool {
         self.scopes.contains("Mail.ReadWrite")
+    }
+    /// Whether Microsoft granted sending (`Mail.Send`, #143).
+    pub fn can_send(&self) -> bool {
+        self.scopes.contains("Mail.Send")
+    }
+    fn authorize_send(&self) -> Result<()> {
+        if self.expires_at <= chrono::Utc::now().timestamp() {
+            return Err(Error::new(ErrorKind::Reauthenticate));
+        }
+        if self.can_send() {
+            Ok(())
+        } else {
+            Err(Error::new(ErrorKind::ConsentRequired))
+        }
     }
     fn authorize_write(&self) -> Result<()> {
         self.authorize(true)?;
@@ -589,6 +606,33 @@ impl Client {
             // route must not silently inherit a process-environment proxy.
             None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),
         })
+    }
+
+    /// Submit a complete MIME message (#143). 202 means accepted for delivery,
+    /// not delivered. A lost connection after sending is `Uncertain` and is
+    /// never repeated here; a message over the request bound is refused
+    /// before anything is sent.
+    pub fn send_mime(&self, raw: &[u8]) -> Result<()> {
+        use base64::Engine as _;
+        self.grant.authorize_send()?;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
+        if encoded.len() > MAX_SEND_REQUEST {
+            return Err(Error::new(ErrorKind::TooLarge));
+        }
+        let url = self.route(&["me", "sendMail"]);
+        let response = self
+            .agent()?
+            .post(url.as_str())
+            .header("Authorization", &format!("Bearer {}", self.grant.token))
+            .header("Content-Type", "text/plain")
+            .config()
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .timeout_global(Some(TIMEOUT))
+            .build()
+            .send(encoded.as_bytes())
+            .map_err(|_| Error::new(ErrorKind::Uncertain))?;
+        self.write_reply(response, &[202]).map(|_| ())
     }
 
     /// The whole message as MIME, to show its attachments and inline images

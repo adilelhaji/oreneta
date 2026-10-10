@@ -282,7 +282,7 @@ export function MessagePane() {
         onOpenContextMenu={setContextMenu}
       />
 
-      {activeAccount?.auth_type === 'graph_oauth' ? (
+      {activeAccount?.auth_type === 'graph_oauth' && !activeAccount.graph_send ? (
         <p role="status" className="border-t border-border px-4 py-3 text-caption text-secondary">
           {activeAccount.graph_writes
             ? t('accounts.graph.changesNotice')

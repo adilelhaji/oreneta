@@ -30,6 +30,7 @@ export function ComposerFooter({
   onDiscard,
   onSubmit,
   onSchedule,
+  canSchedule = true,
 }: {
   rich: boolean
   sending: boolean
@@ -51,6 +52,8 @@ export function ComposerFooter({
   onSubmit: () => void
   /** Holds the message until `at` instead of sending it now. */
   onSchedule: (at: number) => void
+  /** False where the account cannot schedule (Microsoft Graph, #143). */
+  canSchedule?: boolean
 }) {
   const { t } = useTranslation()
   const draftAutosaveFailed = t('composer.status.draftAutosaveFailed')
@@ -124,8 +127,14 @@ export function ComposerFooter({
           {t('buttons.discard')}
         </button>
         <SendLaterMenu
-          disabled={!canSend || pgpSign || pgpEncrypt}
-          title={pgpSign || pgpEncrypt ? t('crypto.cannotSchedule') : undefined}
+          disabled={!canSend || pgpSign || pgpEncrypt || !canSchedule}
+          title={
+            !canSchedule
+              ? t('composer.cannotScheduleGraph')
+              : pgpSign || pgpEncrypt
+                ? t('crypto.cannotSchedule')
+                : undefined
+          }
           onSchedule={onSchedule}
         />
         <button

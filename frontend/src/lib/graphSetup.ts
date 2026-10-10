@@ -109,7 +109,9 @@ export type GraphChangesState = {
   state: 'idle' | 'authorizing' | 'allowed' | 'notGranted' | 'failed'
   error?: string
 }
-type PollStatus = { state: string; writes?: boolean; error?: string }
+type PollStatus = { state: string; writes?: boolean; send?: boolean; error?: string }
+/** What a request asks for beyond reading (#141 changes, #143 sending). */
+export type GraphLevel = { writes: boolean; send: boolean }
 
 /**
  * Ask Microsoft for message changes on an account that already reads (#141).
@@ -124,7 +126,7 @@ export class GraphChangesFlow {
   constructor(
     private call: Call,
     private update: (state: GraphChangesState) => void,
-    private granted: (account: string, writes: boolean) => void,
+    private granted: (account: string, level: GraphLevel) => void,
     private intervalMs = 1000,
   ) {}
 
@@ -137,33 +139,40 @@ export class GraphChangesFlow {
     if (attempt) await this.call('oauth.graphCancel', { attempt })
   }
 
-  async begin(account: string) {
+  /** `wanted` is the whole level to hold afterwards: asking for sending on an
+   * account that changes messages asks for both, so neither is lost. */
+  async begin(account: string, wanted: GraphLevel = { writes: true, send: false }) {
     await this.cancel().catch(() => {})
     const generation = this.generation
     this.update({ state: 'authorizing' })
     try {
-      const { attempt } = await this.call<{ attempt: string }>('oauth.graphBegin', { account, writes: true })
+      const { attempt } = await this.call<{ attempt: string }>('oauth.graphBegin', {
+        account,
+        writes: wanted.writes,
+        send: wanted.send,
+      })
       if (generation !== this.generation) {
         await this.call('oauth.graphCancel', { attempt })
         return
       }
       this.attempt = attempt
-      await this.poll(generation, account)
+      await this.poll(generation, account, wanted)
     } catch {
       if (generation === this.generation) this.update({ state: 'failed', error: 'authorization_failed' })
     }
   }
 
-  private async poll(generation: number, account: string) {
+  private async poll(generation: number, account: string, wanted: GraphLevel) {
     if (generation !== this.generation) return
     try {
       const status = await this.call<PollStatus>('oauth.graphPoll', { attempt: this.attempt })
       if (generation !== this.generation) return
       if (status.state === 'authorized') {
         this.attempt = ''
-        const writes = status.writes === true
-        this.granted(account, writes)
-        this.update({ state: writes ? 'allowed' : 'notGranted' })
+        const granted = { writes: status.writes === true, send: status.send === true }
+        this.granted(account, granted)
+        const complete = (!wanted.writes || granted.writes) && (!wanted.send || granted.send)
+        this.update({ state: complete ? 'allowed' : 'notGranted' })
         return
       }
       if (['failed', 'cancelled', 'expired'].includes(status.state)) {
@@ -171,7 +180,7 @@ export class GraphChangesFlow {
         this.update({ state: 'failed', error: status.error ?? status.state })
         return
       }
-      this.timer = setTimeout(() => void this.poll(generation, account), this.intervalMs)
+      this.timer = setTimeout(() => void this.poll(generation, account, wanted), this.intervalMs)
     } catch {
       if (generation === this.generation) this.update({ state: 'failed', error: 'authorization_failed' })
     }

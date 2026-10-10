@@ -103,7 +103,7 @@ fn flow() -> Flow {
         selected: Some(EMAIL.into()),
         deadline: now() + 600,
         proxy: crate::proxy::ProxyChoice::Direct,
-        writes: false,
+        level: Level::default(),
     }
 }
 fn setup() -> (Manager<Fake, Arc<Memory>>, Arc<Memory>, Begin) {
@@ -783,4 +783,56 @@ fn the_marker_records_the_level_and_old_markers_read_as_read_only() {
     assert!(vault.registered(EMAIL).unwrap());
     vault.delete(EMAIL).unwrap();
     assert!(!writes_marked(&db.lock().unwrap(), EMAIL));
+}
+
+// ---- #143: sending ----
+
+#[test]
+fn the_sending_flow_asks_for_mail_send_and_keeps_changes_already_held() {
+    let memory = Arc::new(Memory::default());
+    let manager = Manager::new(Fake::new(), memory);
+    let begin = manager
+        .begin_level(
+            Some(EMAIL.into()),
+            CLIENT,
+            "http://127.0.0.1:2345",
+            crate::proxy::ProxyChoice::Direct,
+            Level { writes: true, send: true },
+        )
+        .unwrap();
+    let q: HashMap<_, _> = Url::parse(&begin.url).unwrap().query_pairs().into_owned().collect();
+    assert_eq!(q["scope"], format!("{SCOPES_WRITE} https://graph.microsoft.com/Mail.Send"));
+    assert_eq!(Level { writes: false, send: true }.scopes(), format!("{SCOPES} https://graph.microsoft.com/Mail.Send"));
+}
+
+#[test]
+fn sending_is_reported_and_marked_as_granted_and_kept_by_a_refresh() {
+    let sender = Record { scopes: "openid Mail.Read Mail.Send".into(), ..record() };
+    let (manager, memory, _) = setup();
+    let begin = manager
+        .begin_level(Some(EMAIL.into()), CLIENT, "http://127.0.0.1:2345", crate::proxy::ProxyChoice::Direct, Level { writes: false, send: true })
+        .unwrap();
+    *manager.provider.answer.lock().unwrap() = Ok(sender.clone());
+    let status = manager.complete(&begin.attempt, &begin.attempt, "code", false).unwrap();
+    assert!(status.send && !status.writes);
+
+    memory.save(&Record { expires_at: 0, ..sender.clone() }).unwrap();
+    manager.provider.refreshes.lock().unwrap().push_back(Ok(sender));
+    assert!(manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).unwrap().can_send());
+
+    let db = Arc::new(Mutex::new(rusqlite::Connection::open_in_memory().unwrap()));
+    db.lock().unwrap().execute_batch("CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT)").unwrap();
+    let vault = Journalled { inner: Arc::new(Memory::default()), db: db.clone() };
+    vault.save(&Record { scopes: "Mail.Read Mail.Send".into(), ..record() }).unwrap();
+    assert!(send_marked(&db.lock().unwrap(), EMAIL));
+    assert!(!writes_marked(&db.lock().unwrap(), EMAIL));
+}
+
+#[test]
+fn withdrawn_send_consent_falls_back_to_reading() {
+    let (manager, memory, _) = setup();
+    memory.save(&Record { expires_at: 0, scopes: "Mail.Read Mail.Send".into(), ..record() }).unwrap();
+    manager.provider.refreshes.lock().unwrap().extend([Err(Failure::ConsentRequired), Ok(record())]);
+    let kept = manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).unwrap();
+    assert!(!kept.can_send());
 }

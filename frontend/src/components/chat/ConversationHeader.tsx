@@ -39,7 +39,7 @@ import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
 import { accountIdentities, accounts$ } from '../../states/accounts'
-import { messageChangesBlocked, readOnlyTarget } from '../../lib/mailCapabilities'
+import { messageChangesBlocked, readOnlyTarget, sendBlocked } from '../../lib/mailCapabilities'
 import { AssistantReviewDialog } from './AssistantReviewDialog'
 
 // The conversation header: back/close affordances, sender info, the desktop
@@ -81,6 +81,7 @@ export function ConversationHeader({
   // Star, read state, archive and trash change messages: on Graph they need
   // the change permission (#141). Writing to the sender is sending.
   const changesBlocked = messageChangesBlocked(accounts, activeThread.account_id)
+  const sendingBlocked = sendBlocked(accounts, activeThread.account_id)
   const ownAddresses = accounts
     .filter((account) => account.id === activeThread.account_id)
     .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
@@ -450,7 +451,7 @@ export function ConversationHeader({
           <MenuItem
             icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.newMessageTo', { email: senderEmail })}
-            disabled={!senderEmail || readOnly}
+            disabled={!senderEmail || sendingBlocked}
             onClick={() => {
               openComposeTab({ accountId: activeThread.account_id, to: senderRecipient })
               setSenderMenu(null)

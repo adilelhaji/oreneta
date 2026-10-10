@@ -555,6 +555,43 @@ describe('Composer', () => {
     expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
   })
 
+  it('a Microsoft Graph sender keeps drafts locally, sends, and cannot schedule (#143)', async () => {
+    accounts$.set([
+      {
+        id: 'graph@example.test',
+        email: 'graph@example.test',
+        display_name: 'Graph',
+        provider: 'outlook',
+        auth_type: 'graph_oauth',
+        graph_send: true,
+      } as unknown as Account,
+    ])
+    const tabId = openComposeTab({
+      accountId: 'graph@example.test',
+      to: 'x@example.com',
+      subject: 'Hello',
+      text: 'hi',
+    })!
+    const view = render(<Composer tabId={tabId} />)
+    await act(async () => {
+      updateComposeDraft(tabId, { text: 'hi there' })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(savedDraftIds()).toEqual([])
+    const later = view.container.querySelector(
+      'button[title="Scheduled sending is not available for Microsoft Graph accounts"]',
+    )
+    expect((later as HTMLButtonElement | null)?.disabled).toBe(true)
+    await act(async () => {
+      const send = [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Send')!
+      send.click()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    const sent = calls.find((call) => call.command === 'mail.send')
+    expect(sent?.payload.account_id ?? sent?.payload.accountId ?? sent?.payload.account).toBe('graph@example.test')
+    expect(calls.some((call) => call.command === 'mail.saveDraft')).toBe(false)
+  })
+
   it('shows the new account’s signature in the editor when From changes', async () => {
     const tabId = openComposeTab()!
     render(<Composer tabId={tabId} />)
