@@ -217,6 +217,17 @@ nativo «escribir, cerrar y reabrir» (N4), la durabilidad de la respuesta
 rápida, la correspondencia de imágenes insertadas con sus bytes y la medición
 de memoria de vistas previas en el dispositivo de referencia (N6).
 
+Estado de la iteración 3 (2026-10-10): #141 permite cambiar mensajes en Graph
+(leído, marca, mover, copiar dentro de la cuenta, borrar) tras un permiso
+`Mail.ReadWrite` pedido aparte, con lote resuelto antes de enviar, parada en el
+primer fallo, resultado incierto sin repetición y reconciliación por delta
+([contrato](design/graph-message-actions.md)). #142 lee los adjuntos y las
+imágenes en línea por MIME con el analizador de IMAP, acota el tamaño y nombra
+los adjuntos de nube como no disponibles
+([contrato](design/graph-attachments.md)). El simulador Graph sigue siendo el
+servidor de bucle local con respuestas en línea. La certificación con un
+inquilino real (#98) y la evidencia nativa siguen pendientes.
+
 ### C-B: agenda e información personal (R2)
 
 | It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
