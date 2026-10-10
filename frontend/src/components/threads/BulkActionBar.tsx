@@ -160,7 +160,7 @@ export function BulkActionBar({
     folders: foldersByAccount[account.id] ?? [],
   }))
 
-  const selectedLabel = items.length === 1 ? '1 selected' : `${items.length} selected`
+  const selectedLabel = t('threads.bulk.selectedCount', { count: items.length })
   // Hidden once every row is already selected, so the menu never offers a no-op.
   const selectableItems = allItems ?? []
   const canSelectAll = selectableItems.some((item) => !items.some((selected) => selected.key === item.key))

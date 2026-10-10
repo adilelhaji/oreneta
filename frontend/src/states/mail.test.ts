@@ -11,6 +11,7 @@ import {
   bulkMarkSelectedUnread,
   bulkCopySelectedToFolder,
   bulkMarkSelectedRead,
+  bulkMoveSelectedToFolder,
   copyThreadToFolder,
   deleteThread,
   discardSavedDraftCopy,
@@ -1410,7 +1411,7 @@ describe('bulk thread actions', () => {
     expect(ui$.toast.get()).toBe('Marked unread')
   })
 
-  it('rolls back all local removals when a bulk archive fails', async () => {
+  it('rolls back only the conversation whose archive failed (#34)', async () => {
     const second = thread({ id: 'm2', thread_id: 'acc#inbox#t.NQ' })
     mail$.threads.set([thread({ thread_id: 'acc#inbox#t.MQ' }), second])
     responses['mail.archive'] = [
@@ -1421,8 +1422,18 @@ describe('bulk thread actions', () => {
 
     await bulkArchiveSelected(mail$.threads.get().map((item) => bulkItem(item)))
 
-    expect(mail$.threads.get().map((item) => item.thread_id)).toEqual(['acc#inbox#t.MQ', 'acc#inbox#t.NQ'])
+    // The first was archived on the server and stays out of the inbox; only
+    // the one that failed comes back, and the message says how far it got.
+    expect(mail$.threads.get().map((item) => item.thread_id)).toEqual(['acc#inbox#t.NQ'])
     expect(ui$.toastTone.get()).toBe('error')
+    expect(ui$.toast.get()).toBe('1 of 2 done, then stopped: Archive failed: no matching messages found')
+  })
+
+  it('a bulk archive that fails on the first conversation changes nothing', async () => {
+    mail$.threads.set([thread({ thread_id: 'acc#inbox#t.MQ' }), thread({ id: 'm2', thread_id: 'acc#inbox#t.NQ' })])
+    responses['mail.archive'] = [{ ok: true, moved: 0 }]
+    await bulkArchiveSelected(mail$.threads.get().map((item) => bulkItem(item)))
+    expect(mail$.threads.get().map((item) => item.thread_id)).toEqual(['acc#inbox#t.MQ', 'acc#inbox#t.NQ'])
     expect(ui$.toast.get()).toBe('Archive failed: no matching messages found')
   })
 
@@ -1874,5 +1885,106 @@ describe('junk', () => {
     // called Junk is a junk folder whoever owns it.
     expect(isJunkFolderId('other', 'Junk')).toBe(true)
     expect(isJunkFolderId('other', 'Projects')).toBe(false)
+  })
+})
+
+
+describe('bulk actions report what actually happened (#34)', () => {
+  const previousAccounts = accounts$.peek()
+  const previousGo = (window as any).go
+  afterEach(() => {
+    accounts$.set(previousAccounts)
+    ;(window as any).go = previousGo
+    mail$.threads.set([])
+  })
+
+  const three = () => {
+    accounts$.set([{ id: 'acc', auth_type: 'password' } as any])
+    const threads = [1, 2, 3].map((n) =>
+      thread({ id: `acc#INBOX#${n}`, thread_id: `acc#INBOX#t${n}`, account_id: 'acc', folder_id: 'INBOX', unread: true }),
+    )
+    mail$.threads.set(threads)
+    mail$.messages.set([])
+    mail$.folders.set([])
+    mail$.foldersByAccount.set({})
+    return threads
+  }
+
+  it('a move that fails part-way keeps the ones the server already moved, and says how many', async () => {
+    const threads = three()
+    const moves: string[] = []
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string, payload: any) => {
+            if (command === 'mail.move') {
+              moves.push(payload.thread_id)
+              if (moves.length === 2) throw new Error('server refused')
+              return { moved: 1 }
+            }
+            return {}
+          },
+        },
+      },
+    }
+    await bulkMoveSelectedToFolder(threads.map((t) => bulkItem(t)), 'Archive')
+    // The first is gone from the server; it must not reappear here.
+    const shown = mail$.threads.peek().map((t) => t.thread_id)
+    expect(shown).not.toContain('acc#INBOX#t1')
+    expect(shown).toContain('acc#INBOX#t2')
+    expect(shown).toContain('acc#INBOX#t3')
+    // The third was never tried.
+    expect(moves).toEqual(['acc#INBOX#t1', 'acc#INBOX#t2'])
+    expect(ui$.toast.peek()).toContain('1 of 3')
+    expect(ui$.toast.peek()).toContain('server refused')
+  })
+
+  it('marking read in bulk keeps the confirmed ones read when another fails, and says so', async () => {
+    const threads = three()
+    let calls = 0
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            if (command === 'mail.markRead') {
+              calls++
+              if (calls === 1) throw new Error('offline')
+              return { ok: true }
+            }
+            return {}
+          },
+        },
+      },
+    }
+    await bulkMarkSelectedRead(threads.map((t) => bulkItem(t)))
+    // Stopped at the first failure: nothing else changed, nothing claimed.
+    const unread = mail$.threads.peek().filter((t) => t.unread).map((t) => t.thread_id)
+    expect(unread).toContain('acc#INBOX#t1')
+    expect(ui$.toastTone.peek()).toBe('error')
+    expect(ui$.toast.peek()).toContain('offline')
+  })
+
+  it('a later failure leaves the earlier confirmed reads in place', async () => {
+    const threads = three()
+    let calls = 0
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            if (command === 'mail.markRead') {
+              calls++
+              if (calls === 2) throw new Error('offline')
+              return { ok: true }
+            }
+            return {}
+          },
+        },
+      },
+    }
+    await bulkMarkSelectedRead(threads.map((t) => bulkItem(t)))
+    const byId = Object.fromEntries(mail$.threads.peek().map((t) => [t.thread_id, t.unread]))
+    expect(byId['acc#INBOX#t1']).toBe(false)
+    expect(byId['acc#INBOX#t2']).toBe(true)
+    expect(ui$.toast.peek()).toContain('1 of 3')
   })
 })

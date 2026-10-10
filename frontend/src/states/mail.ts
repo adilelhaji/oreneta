@@ -1685,72 +1685,104 @@ function uniqueThreadItems(items: BulkSelectionItem[]) {
   return [...byThread.values()]
 }
 
+/**
+ * Run a bulk action one conversation at a time (#34).
+ *
+ * A failure undoes only that conversation's optimistic change: the ones before
+ * it happened on the server and stay done, and the rest are not attempted.
+ * Running them one by one also keeps each item's own undo snapshot from
+ * capturing — and later restoring — another item's change.
+ */
+async function runBulk(
+  targets: BulkSelectionItem[],
+  apply: (item: BulkSelectionItem) => Promise<void>,
+  options: { removesLocally?: boolean } = {},
+): Promise<{ done: number; error?: unknown }> {
+  let done = 0
+  for (const item of targets) {
+    const rollback = options.removesLocally ? removeThreadLocally(item.threadId).rollback : undefined
+    try {
+      await apply(item)
+      done++
+    } catch (error) {
+      rollback?.()
+      return { done, error }
+    }
+  }
+  return { done }
+}
+
+/** What a stopped bulk action says: how many were done, of how many, and why it stopped. */
+function bulkFailure(done: number, total: number, error: unknown, fallback: string): string {
+  const reason = error instanceof Error && error.message ? error.message : fallback
+  return done === 0 ? reason : t('mail.toast.bulkPartial', { done, total, reason })
+}
+
 export async function bulkMarkSelectedRead(items: BulkSelectionItem[]) {
   if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
-  await Promise.all(targets.map((item) => markThreadRead(item.threadId)))
+  const { done, error } = await runBulk(targets, (item) => markThreadRead(item.threadId))
   clearBulkSelection()
-  showToast(t('mail.toast.markedReadCount', { count: targets.length }))
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.markReadFailed')), 'error')
+  else showToast(t('mail.toast.markedReadCount', { count: targets.length }))
 }
 
 export async function bulkMarkSelectedUnread(items: BulkSelectionItem[]) {
   if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
-  await Promise.all(targets.map((item) => markThreadUnread(item.threadId)))
+  const { done, error } = await runBulk(targets, (item) => markThreadUnread(item.threadId))
   clearBulkSelection()
-  showToast(t('mail.toast.markedUnreadCount', { count: targets.length }))
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.markUnreadFailed')), 'error')
+  else showToast(t('mail.toast.markedUnreadCount', { count: targets.length }))
 }
 
 export async function bulkStarSelected(items: BulkSelectionItem[], starred: boolean) {
   if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
-  await Promise.all(targets.map((item) => starThread(item.threadId, starred)))
+  const { done, error } = await runBulk(targets, (item) => starThread(item.threadId, starred))
   clearBulkSelection()
-  showToast(starred ? t('mail.toast.starredSelected') : t('mail.toast.unstarredSelected'))
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.starFailed')), 'error')
+  else showToast(starred ? t('mail.toast.starredSelected') : t('mail.toast.unstarredSelected'))
 }
 
 export async function bulkArchiveSelected(items: BulkSelectionItem[]) {
   if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items).filter((item) => !item.draft && !item.trash)
   if (targets.length === 0) return
-  const rollbacks: Array<() => void> = []
-  try {
-    for (const item of targets) {
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
       const sourceThread = findLocalThread(item.threadId)
-      rollbacks.push(removeThreadLocally(item.threadId).rollback)
       const res = await invoke('mail.archive', { thread_id: item.threadId })
       assertMoveAffected(res, 'Archive')
       applyMutationFolderUnreads(res as MutationResult)
       if (sourceThread?.account_id) void refreshAccountFoldersCache(sourceThread.account_id, false)
-    }
-    await refreshThreadLocation(undefined, true)
-    clearBulkSelection()
-    showToast(t('mail.toast.archivedCount', { count: targets.length }))
-  } catch (error) {
-    for (const rollback of rollbacks.reverse()) rollback()
-    showToast(error instanceof Error ? error.message : t('mail.toast.archiveFailed'), 'error')
-  }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(undefined, true)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.archiveFailed')), 'error')
+  else showToast(t('mail.toast.archivedCount', { count: targets.length }))
 }
 
 export async function bulkMoveSelectedToFolder(items: BulkSelectionItem[], targetFolderId: string) {
   if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items).filter((item) => item.folderId !== targetFolderId)
   if (targets.length === 0) return
-  const rollbacks: Array<() => void> = []
-  try {
-    for (const item of targets) {
-      rollbacks.push(removeThreadLocally(item.threadId).rollback)
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
       const res = await invoke('mail.move', { thread_id: item.threadId, target_folder_id: targetFolderId })
       assertMoveAffected(res)
       applyMutationFolderUnreads(res as MutationResult)
-    }
-    await refreshThreadLocation(targets[0]?.accountId, true)
-    clearBulkSelection()
-    showToast(t('mail.toast.movedCount', { count: targets.length }))
-  } catch (error) {
-    for (const rollback of rollbacks.reverse()) rollback()
-    showToast(error instanceof Error ? error.message : t('mail.toast.moveFailed'), 'error')
-  }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(targets[0]?.accountId, true)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.moveFailed')), 'error')
+  else showToast(t('mail.toast.movedCount', { count: targets.length }))
 }
 
 export async function bulkCopySelectedToFolder(
@@ -1761,22 +1793,19 @@ export async function bulkCopySelectedToFolder(
   if (items.some((item) => copyBlocked(accounts$.peek(), item.accountId, targetAccountId))) return
   const targets = uniqueThreadItems(items)
   if (targets.length === 0) return
-  try {
-    for (const item of targets) {
-      const res = await invoke('mail.copy', {
-        thread_id: item.threadId,
-        target_account_id: targetAccountId,
-        target_folder_id: targetFolderId,
-      })
-      assertCopyAffected(res)
-    }
-    await refreshThreadLocation(targets[0]?.accountId, true)
-    if (targetAccountId !== targets[0]?.accountId) void loadFolders(targetAccountId, false)
-    clearBulkSelection()
-    showToast(t('mail.toast.copiedCount', { count: targets.length }))
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : t('mail.toast.copyFailed'), 'error')
-  }
+  const { done, error } = await runBulk(targets, async (item) => {
+    const res = await invoke('mail.copy', {
+      thread_id: item.threadId,
+      target_account_id: targetAccountId,
+      target_folder_id: targetFolderId,
+    })
+    assertCopyAffected(res)
+  })
+  if (!error) await refreshThreadLocation(targets[0]?.accountId, true)
+  if (done > 0 && targetAccountId !== targets[0]?.accountId) void loadFolders(targetAccountId, false)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.copyFailed')), 'error')
+  else showToast(t('mail.toast.copiedCount', { count: targets.length }))
 }
 
 export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
@@ -1799,24 +1828,22 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
     if (!confirmed) return
   }
 
-  const rollbacks: Array<() => void> = []
-  try {
-    for (const item of targets) {
-      rollbacks.push(removeThreadLocally(item.threadId).rollback)
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
       const res = await invoke('mail.delete', {
         thread_id: item.threadId,
         ...(item.folderId ? { folder: item.folderId } : {}),
       })
       assertDeleteAffected(res)
       applyMutationFolderUnreads(res as MutationResult)
-    }
-    await refreshThreadLocation(undefined, true)
-    clearBulkSelection()
-    showToast(t('mail.toast.deletedCount', { count: targets.length }))
-  } catch (error) {
-    for (const rollback of rollbacks.reverse()) rollback()
-    showToast(error instanceof Error ? error.message : t('mail.toast.deleteFailed'), 'error')
-  }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(undefined, true)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.deleteFailed')), 'error')
+  else showToast(t('mail.toast.deletedCount', { count: targets.length }))
 }
 
 /**
