@@ -496,6 +496,65 @@ describe('Composer', () => {
     expect(calls.some((call) => call.command === 'mail.send')).toBe(false)
   })
 
+  it('reminds about a mentioned attachment; Go back keeps the draft, Send anyway sends (#39)', async () => {
+    const tabId = openComposeTab({ to: 'x@example.com', subject: 'Report', text: 'Please see the attached report.' })!
+    const view = render(
+      <>
+        <Composer tabId={tabId} />
+        <AppConfirm />
+      </>,
+    )
+    const pressSend = async () => {
+      await act(async () => {
+        const send = [...view.container.querySelectorAll('button')].find((button) =>
+          button.textContent?.includes('Send'),
+        )!
+        send.click()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      })
+    }
+
+    await pressSend()
+    expect(view.getByRole('alertdialog').textContent).toContain('mentions an attachment')
+    await act(async () => {
+      view.getByRole('button', { name: 'Go back' }).click()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(false)
+    expect(compose$.tabs.peek().some((tab) => tab.id === tabId)).toBe(true)
+
+    await pressSend()
+    await act(async () => {
+      view.getByRole('button', { name: 'Send anyway' }).click()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
+  })
+
+  it('does not remind when the mentioned file is attached', async () => {
+    const tabId = openComposeTab({
+      to: 'x@example.com',
+      subject: 'Report',
+      text: 'Please see the attached report.',
+      attachments: [{ id: 'f1', filename: 'report.pdf', mime: 'application/pdf', size: 3, data: 'YWJj' }],
+    })!
+    const view = render(
+      <>
+        <Composer tabId={tabId} />
+        <AppConfirm />
+      </>,
+    )
+    await act(async () => {
+      const send = [...view.container.querySelectorAll('button')].find((button) =>
+        button.textContent?.includes('Send'),
+      )!
+      send.click()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(view.queryByRole('alertdialog')).toBeNull()
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
+  })
+
   it('shows the new account’s signature in the editor when From changes', async () => {
     const tabId = openComposeTab()!
     render(<Composer tabId={tabId} />)

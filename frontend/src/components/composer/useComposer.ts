@@ -37,6 +37,7 @@ import {
   textToHtml,
   type NativeClipboardImage,
 } from './composerHelpers'
+import { shouldRemindAttachment } from '../../lib/attachmentReminder'
 
 // All of the Composer's behaviour: the tiptap editor, attachment handling
 // (paste/drop/file-picker, inline images), rich/plain toggling, autosave, and
@@ -561,9 +562,27 @@ export function useComposer(tabId: string) {
     if (
       !subject &&
       !(await confirmAction({
-        title: 'No subject',
-        message: 'Send this message without a subject?',
-        confirmLabel: 'Send',
+        title: t('composer.noSubject.title'),
+        message: t('composer.noSubject.message'),
+        confirmLabel: t('composer.noSubject.send'),
+        cancelLabel: t('composer.attachmentReminder.goBack'),
+      }))
+    ) {
+      session.savesStopped = false
+      setSending(false)
+      return
+    }
+    // A reminder, not a block: "Send anyway" sends. Read from the latest copy,
+    // since the subject prompt above is another wait with the fields editable.
+    const beforeReminder = latestDraft()
+    if (
+      beforeReminder &&
+      shouldRemindAttachment(beforeReminder, t('composer.attachmentReminder.keywords')) &&
+      !(await confirmAction({
+        title: t('composer.attachmentReminder.title'),
+        message: t('composer.attachmentReminder.message'),
+        confirmLabel: t('composer.attachmentReminder.sendAnyway'),
+        cancelLabel: t('composer.attachmentReminder.goBack'),
       }))
     ) {
       session.savesStopped = false

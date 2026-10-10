@@ -3,7 +3,8 @@ import { t } from '../lib/i18n'
 import type { Account, Alias, Attachment, ComposeDraft, ComposerAttachment, Message, MessageTab } from '../types'
 import { invoke } from '../lib/bridge'
 import { CONVERSATION_PAGE_SIZE } from '../lib/pagination'
-import { ui$, showToast } from './ui'
+import { ui$, showToast, confirmAction } from './ui'
+import { shouldRemindAttachment } from '../lib/attachmentReminder'
 import { accounts$, isSendableAccount, accountIdentities } from './accounts'
 import { mail$, getActiveThread, isDraftFolder, isInboxFolder, loadThread, discardSavedDraftCopy } from './mail'
 import {
@@ -25,6 +26,7 @@ import {
 import { htmlToText, resolveInlineCids } from '../lib/html'
 import { parseMailto } from '../lib/mailto'
 import { splitAddressList, bareAddr } from '../lib/address'
+import { formatRecipient } from '../lib/recipients'
 import {
   bodyWithSignature,
   bodyWithSwappedSignature,
@@ -1619,7 +1621,10 @@ export function quickReplyFromState(): { identities: Alias[]; selected: Alias | 
 export function buildReplyRecipients(target: Message, ownAddrs: Set<string>): { to: string; cc: string } {
   const isOwnTarget = ownAddrs.has((target.from_addr || '').toLowerCase())
   const replyTo = splitAddressList(target.reply_to)
-  const fromEntry = target.from_name ? `${target.from_name} <${target.from_addr}>` : target.from_addr
+  // Quoted when needed: a sender named "Doe, John" is one recipient.
+  const fromEntry = target.from_name
+    ? formatRecipient({ name: target.from_name, address: target.from_addr, status: 'ok', raw: '' })
+    : target.from_addr
   const toList = isOwnTarget ? splitAddressList(target.to) : replyTo.length > 0 ? replyTo : [fromEntry]
   const toAddrs = new Set(toList.map(bareAddr))
 
@@ -1664,6 +1669,21 @@ export async function sendReply() {
   const activeAcc = accounts.find((acc) => acc.id === replyAccountId) || accounts[0] || null
   if (!replyAccountId || replyAccountId === 'unified') return
   if (activeAcc?.provider === 'rss' || activeAcc?.auth_type === 'rss') return
+
+  // The same reminder as the full editor: asked once, and "Send anyway" sends.
+  if (
+    shouldRemindAttachment(
+      { subject: '', rich: false, html: '', text: composerText, attachments },
+      t('composer.attachmentReminder.keywords'),
+    ) &&
+    !(await confirmAction({
+      title: t('composer.attachmentReminder.title'),
+      message: t('composer.attachmentReminder.message'),
+      confirmLabel: t('composer.attachmentReminder.sendAnyway'),
+      cancelLabel: t('composer.attachmentReminder.goBack'),
+    }))
+  )
+    return
 
   // Guarantee the open thread is loaded *with Message-IDs* before choosing a
   // reply target. A message synced from its envelope (e.g. one opened straight

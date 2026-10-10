@@ -33,7 +33,7 @@ import {
 import { outgoing$, settleOutgoingAttempt } from './outgoingAttempts'
 import { accounts$ } from './accounts'
 import { settings$ } from './settings'
-import { ui$ } from './ui'
+import { settleConfirm, ui$ } from './ui'
 import { mail$ } from './mail'
 
 const message = (overrides: Partial<Message> = {}): Message => ({
@@ -709,6 +709,38 @@ describe('quick reply draft sharing', () => {
     expect(compose$.composer.get()).toBe('')
     expect(compose$.quickReplyDraftId.get()).toBe('')
     expect(compose$.quickReplyDraftSaved.get()).toBe(false)
+  })
+
+  it('a quick reply that mentions an attachment it lacks is asked about once; going back keeps it (#39)', async () => {
+    const thread = message({
+      id: 'root',
+      account_id: 'acc-1',
+      thread_id: 't-1',
+      folder_id: 'INBOX',
+      from_addr: 'them@example.com',
+      message_id: 'root@example.com',
+      date: 1000,
+    })
+    mail$.threads.set([thread])
+    mail$.messages.set([thread])
+    ui$.selectedThread.set('t-1')
+    compose$.quickReplySignature.set(null)
+    settings$.signature.set('')
+    compose$.composer.set('Sending the attached invoice')
+
+    const first = sendReply()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(ui$.confirm.peek()?.message).toContain('mentions an attachment')
+    settleConfirm(false)
+    await first
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(false)
+    expect(compose$.composer.peek()).toBe('Sending the attached invoice')
+
+    const second = sendReply()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    settleConfirm(true)
+    await second
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
   })
 
   /// Acceptance for #29: an ambiguous outcome is persisted and is not
