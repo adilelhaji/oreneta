@@ -43,6 +43,12 @@ impl Transport for UreqTransport {
             .allow_non_standard_methods(true)
             .http_status_as_error(false)
             .timeout_global(Some(TIMEOUT))
+            // The password is set on the request, and a redirect is the
+            // server choosing where it goes next. It is never forwarded on
+            // one; a redirected request that needs it is answered 401 and
+            // reported, rather than sent to a host nobody checked (#28).
+            // ureq's default, stated so it cannot change under us.
+            .redirect_auth_headers(ureq::config::RedirectAuthHeaders::Never)
             .build();
         let mut response = agent
             .run(configured)

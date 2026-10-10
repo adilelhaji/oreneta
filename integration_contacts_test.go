@@ -83,6 +83,29 @@ func TestIntegrationContacts(t *testing.T) {
 		}
 	})
 
+	// #28: keeping the last complete copy on a failed read must not freeze
+	// the book. A contact really deleted on the server, in an answer that
+	// is complete, goes from the local copy too.
+	t.Run("a contact deleted on the server leaves on the next complete sync", func(t *testing.T) {
+		status, reply := server.dav(t, "DELETE", server.bookURL("contacts")+"itest-grace.vcf", "", nil)
+		if status != 200 && status != 204 {
+			t.Fatalf("DELETE on the server: HTTP %d %s", status, reply)
+		}
+		result := callMap(t, sidecar, "carddav.sync", map[string]any{"id": sourceID})
+		if result["ok"] != true {
+			t.Fatalf("sync after a server-side deletion failed: %v", result)
+		}
+		people := callMap(t, sidecar, "people.list", map[string]any{"query": ""})
+		if n := countSource(people, "carddav"); n != 1 {
+			t.Fatalf("%d CardDAV people after a deletion, want 1: %v", n, people)
+		}
+		// Put it back so the cases below start from the same two contacts.
+		server.putVCard(t, "contacts", "itest-grace", "Grace Hopper", "grace@example.test")
+		if result := callMap(t, sidecar, "carddav.sync", map[string]any{"id": sourceID}); result["ok"] != true {
+			t.Fatalf("resync failed: %v", result)
+		}
+	})
+
 	t.Run("a refused password is reported, not hidden", func(t *testing.T) {
 		result := callMap(t, sidecar, "carddav.add", map[string]any{
 			"url":      server.bookURL("contacts"),

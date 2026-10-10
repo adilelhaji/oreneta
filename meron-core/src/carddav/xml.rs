@@ -79,6 +79,27 @@ fn local_name(raw: &[u8]) -> String {
 /// PROPFIND has told us it does not support what was asked, and the caller
 /// handles "nothing here" already.
 pub fn parse_multistatus(body: &str) -> Result<Vec<DavResponse>> {
+    Ok(read_multistatus(body).0)
+}
+
+/// Read a `multistatus` that has to be all there.
+///
+/// Discovery can afford to take what it finds; reading a book cannot. A body
+/// cut off mid-way — a dropped connection, a proxy's size limit — parses into
+/// fewer cards than the book holds, and taking that as the book is how
+/// contacts disappear. So this fails unless the XML was well formed to the
+/// end and the closing `multistatus` actually arrived.
+pub fn parse_multistatus_complete(body: &str) -> Result<Vec<DavResponse>> {
+    let (responses, complete) = read_multistatus(body);
+    if !complete {
+        anyhow::bail!("the server's answer was cut off or not well formed, so it may not list every contact");
+    }
+    Ok(responses)
+}
+
+/// The responses read, and whether the document was read to its closing
+/// `multistatus` without an error.
+fn read_multistatus(body: &str) -> (Vec<DavResponse>, bool) {
     let mut reader = Reader::from_str(body);
     let config = reader.config_mut();
     config.trim_text(true);
@@ -90,10 +111,16 @@ pub fn parse_multistatus(body: &str) -> Result<Vec<DavResponse>> {
     let mut path: Vec<String> = Vec::new();
     let mut current: Option<DavResponse> = None;
     let mut text = String::new();
+    let mut closed = false;
+    let mut failed = false;
 
     loop {
         match reader.read_event() {
-            Ok(Event::Eof) | Err(_) => break,
+            Ok(Event::Eof) => break,
+            Err(_) => {
+                failed = true;
+                break;
+            }
             Ok(Event::Start(element)) => {
                 let name = local_name(element.name().as_ref());
                 if name == "response" {
@@ -149,7 +176,14 @@ pub fn parse_multistatus(body: &str) -> Result<Vec<DavResponse>> {
                                 response.prop_hrefs.push((parent, trimmed));
                             }
                         }
-                        "status" => response.status = value.trim().to_string(),
+                        "status" => {
+                            // Kept when it is a failure: a response with one
+                            // propstat that failed and one that did not must
+                            // not read as fine because the good one came last.
+                            if response.status.is_empty() || status_ok(&response.status) {
+                                response.status = value.trim().to_string();
+                            }
+                        }
                         "response" => {
                             let finished = current.take().expect("checked");
                             if !finished.href.is_empty() || !finished.props.is_empty() {
@@ -166,11 +200,23 @@ pub fn parse_multistatus(body: &str) -> Result<Vec<DavResponse>> {
                     }
                 }
 
+                if name == "multistatus" && current.is_none() {
+                    closed = true;
+                }
                 path.pop();
             }
             _ => {}
         }
     }
 
-    Ok(responses)
+    (responses, closed && !failed)
+}
+
+/// Whether an HTTP status line like `HTTP/1.1 200 OK` is a success.
+pub fn status_ok(status: &str) -> bool {
+    status
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse::<u16>().ok())
+        .is_some_and(|code| (200..300).contains(&code))
 }
