@@ -99,6 +99,11 @@ export function ProtectionNotice({ message }: { message: Message }) {
             setFailure(passphrase ? t('crypto.wrongPassphrase') : null)
             return
           }
+          if (answer.failure.reason === 'unsupported') {
+            setNeedsPassphrase(false)
+            setFailure(t('crypto.failure.unsupported', { detail: answer.failure.detail ?? '' }))
+            return
+          }
           setFailure(t(`crypto.failure.${answer.failure.reason}`))
         })
         .catch((error) => setFailure(error instanceof Error ? error.message : t('crypto.failure.malformed')))

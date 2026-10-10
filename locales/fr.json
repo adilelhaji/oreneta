@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "Cela n’a pas pu être lu comme un message chiffré.",
   "crypto.failure.needsPassphrase": "Votre clé est protégée par une phrase secrète.",
   "crypto.failure.noKey": "Aucune clé ici ne peut ouvrir ce message. Il a été chiffré pour quelqu’un d’autre, ou pour une de vos clés que vous n’avez pas importée.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "Cela ne ressemble pas à un certificat OpenPGP",
   "crypto.importKey": "Importer une clé",
   "crypto.importPlaceholder": "Collez ici un bloc -----BEGIN PGP PUBLIC KEY BLOCK-----",

@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "Αυτό δεν διαβάστηκε ως κρυπτογραφημένο μήνυμα.",
   "crypto.failure.needsPassphrase": "Το κλειδί σας προστατεύεται με φράση πρόσβασης.",
   "crypto.failure.noKey": "Κανένα κλειδί εδώ δεν ανοίγει αυτό το μήνυμα. Κρυπτογραφήθηκε για κάποιον άλλον, ή για δικό σας κλειδί που δεν έχετε εισαγάγει.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "Αυτό δεν μοιάζει με πιστοποιητικό OpenPGP",
   "crypto.importKey": "Εισαγωγή κλειδιού",
   "crypto.importPlaceholder": "Επικολλήστε εδώ ένα μπλοκ -----BEGIN PGP PUBLIC KEY BLOCK-----",

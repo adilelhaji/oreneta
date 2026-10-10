@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "To neizdevās nolasīt kā šifrētu ziņu.",
   "crypto.failure.needsPassphrase": "Tava atslēga ir aizsargāta ar paroli.",
   "crypto.failure.noKey": "Neviena šeit esošā atslēga nevar atvērt šo ziņu. Tā tika šifrēta kādam citam vai tavai atslēgai, ko neesi importējis.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "Šis neizskatās pēc OpenPGP sertifikāta",
   "crypto.importKey": "Importēt atslēgu",
   "crypto.importPlaceholder": "Ielīmē šeit bloku -----BEGIN PGP PUBLIC KEY BLOCK-----",

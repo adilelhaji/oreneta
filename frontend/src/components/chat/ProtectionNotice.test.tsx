@@ -146,6 +146,19 @@ describe('what a message says was done to it', () => {
     expect(calls).not.toContain('pgp.decrypt')
   })
 
+  // #12: a message in a format this app does not read is said to be that,
+  // not answered with a request for a passphrase that could never help.
+  it('says an unsupported format is unsupported and asks for no passphrase', async () => {
+    stubDecrypt('pgp.decrypt', {
+      ok: false,
+      failure: { reason: 'unsupported', detail: "it is encrypted with GnuPG's LibrePGP AEAD mode (OCB)" },
+    })
+    const view = render(<ProtectionNotice message={checkable('pgpEncrypted')} />)
+    fireEvent.click(view.getByText('Open it'))
+    await waitFor(() => expect(view.container.textContent).toContain('LibrePGP AEAD mode'))
+    expect(view.container.querySelector('input[type="password"]')).toBeNull()
+  })
+
   it('opens a PGP-encrypted message through pgp.decrypt, not smime.decrypt', async () => {
     const calls = stubDecrypt('pgp.decrypt', { ok: true, body: 'Lunch tomorrow?' })
     const view = render(<ProtectionNotice message={checkable('pgpEncrypted')} />)

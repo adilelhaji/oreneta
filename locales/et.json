@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "Seda ei õnnestunud lugeda krüpteeritud sõnumina.",
   "crypto.failure.needsPassphrase": "Sinu võti on parooliga kaitstud.",
   "crypto.failure.noKey": "Ükski siinne võti ei ava seda sõnumit. See krüpteeriti kellelegi teisele või sinu võtmele, mida sa pole importinud.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "See ei näe välja nagu OpenPGP sertifikaat",
   "crypto.importKey": "Impordi võti",
   "crypto.importPlaceholder": "Kleebi siia plokk -----BEGIN PGP PUBLIC KEY BLOCK-----",

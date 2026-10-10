@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "暗号化されたメッセージとして読み取れませんでした。",
   "crypto.failure.needsPassphrase": "鍵はパスフレーズで保護されています。",
   "crypto.failure.noKey": "ここにある鍵ではこのメッセージを開けません。別の人宛て、またはまだ取り込んでいないご自身の鍵宛てに暗号化されています。",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "OpenPGP 証明書には見えません",
   "crypto.importKey": "鍵を取り込む",
   "crypto.importPlaceholder": "-----BEGIN PGP PUBLIC KEY BLOCK----- のブロックをここに貼り付けます",

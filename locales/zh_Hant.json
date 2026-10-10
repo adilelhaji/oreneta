@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "無法將其讀取為加密郵件。",
   "crypto.failure.needsPassphrase": "你的金鑰受密語保護。",
   "crypto.failure.noKey": "這裡沒有能開啟這封郵件的金鑰。它是為他人加密的，或者為你尚未匯入的某個金鑰加密的。",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "這看起來不像 OpenPGP 憑證",
   "crypto.importKey": "匯入金鑰",
   "crypto.importPlaceholder": "在此貼上 -----BEGIN PGP PUBLIC KEY BLOCK----- 區塊",

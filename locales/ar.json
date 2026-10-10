@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "تعذّرت قراءة هذا كرسالة مشفّرة.",
   "crypto.failure.needsPassphrase": "مفتاحك محمي بعبارة مرور.",
   "crypto.failure.noKey": "لا يوجد هنا مفتاح يفتح هذه الرسالة. شُفّرت لشخص آخر، أو لمفتاح لك لم تستورده بعد.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "هذا لا يبدو شهادة OpenPGP",
   "crypto.importKey": "استيراد مفتاح",
   "crypto.importPlaceholder": "الصق هنا كتلة -----BEGIN PGP PUBLIC KEY BLOCK-----",

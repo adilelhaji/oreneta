@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "Bu, şifrelenmiş bir ileti olarak okunamadı.",
   "crypto.failure.needsPassphrase": "Anahtarınız bir parolayla korunuyor.",
   "crypto.failure.noKey": "Buradaki hiçbir anahtar bu iletiyi açamıyor. Başkası için ya da henüz içe aktarmadığınız bir anahtarınız için şifrelenmiş.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "Bu bir OpenPGP sertifikasına benzemiyor",
   "crypto.importKey": "Anahtar içe aktar",
   "crypto.importPlaceholder": "Buraya bir -----BEGIN PGP PUBLIC KEY BLOCK----- bloğu yapıştırın",

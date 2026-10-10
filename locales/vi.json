@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "Không thể đọc đây như một thư đã mã hoá.",
   "crypto.failure.needsPassphrase": "Khoá của bạn được bảo vệ bằng cụm mật khẩu.",
   "crypto.failure.noKey": "Không khoá nào ở đây mở được thư này. Nó được mã hoá cho người khác, hoặc cho một khoá của bạn mà bạn chưa nhập.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "Đây có vẻ không phải chứng chỉ OpenPGP",
   "crypto.importKey": "Nhập một khoá",
   "crypto.importPlaceholder": "Dán một khối -----BEGIN PGP PUBLIC KEY BLOCK----- vào đây",

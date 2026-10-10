@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "암호화된 메일로 읽을 수 없었습니다.",
   "crypto.failure.needsPassphrase": "키가 암호문으로 보호되어 있습니다.",
   "crypto.failure.noKey": "여기 있는 키로는 이 메일을 열 수 없습니다. 다른 사람에게, 또는 아직 가져오지 않은 당신의 키로 암호화되었습니다.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "OpenPGP 인증서로 보이지 않습니다",
   "crypto.importKey": "키 가져오기",
   "crypto.importPlaceholder": "-----BEGIN PGP PUBLIC KEY BLOCK----- 블록을 여기에 붙여넣으세요",

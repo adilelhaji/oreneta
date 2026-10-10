@@ -590,6 +590,7 @@
   "crypto.failure.malformed": "Det gick inte att läsa som ett krypterat meddelande.",
   "crypto.failure.needsPassphrase": "Din nyckel skyddas av en lösenfras.",
   "crypto.failure.noKey": "Ingen nyckel här kan öppna det här meddelandet. Det krypterades för någon annan, eller för en av dina nycklar som du inte har importerat.",
+  "crypto.failure.unsupported": "This message uses a format Oreneta cannot open yet: {detail}",
   "crypto.importFailed": "Det här ser inte ut som ett OpenPGP-certifikat",
   "crypto.importKey": "Importera en nyckel",
   "crypto.importPlaceholder": "Klistra in ett block -----BEGIN PGP PUBLIC KEY BLOCK----- här",
