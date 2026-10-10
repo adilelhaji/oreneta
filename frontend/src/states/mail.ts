@@ -1028,8 +1028,11 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   ) {
     const selectedThread = previousThreads.find((thread) => thread.thread_id === currentSelected)
     if (selectedThread) {
-      allThreads = [...allThreads, selectedThread]
-      allThreads.sort((a, b) => b.date - a.date)
+      // Back where it was, without re-sorting: these views are not all in
+      // date order (snoozed is by when each comes back), and sorting the page
+      // by date would reorder every row to keep one.
+      const at = Math.min(previousThreads.indexOf(selectedThread), allThreads.length)
+      allThreads = [...allThreads.slice(0, at), selectedThread, ...allThreads.slice(at)]
     }
   }
 

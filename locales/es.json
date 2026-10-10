@@ -1406,6 +1406,7 @@
   "table.date": "Fecha",
   "table.fixedOrder": "Esta vista se muestra siempre de más reciente a más antiguo; la columna elegida se aplica a las carpetas.",
   "table.sender": "De",
+  "table.snoozedOrder": "Las conversaciones pospuestas se listan por cuándo vuelven; la columna elegida se aplica a las carpetas.",
   "table.subject": "Asunto",
   "tasks.addAction": "Convertir en tarea",
   "tasks.addTitle": "Nueva tarea",

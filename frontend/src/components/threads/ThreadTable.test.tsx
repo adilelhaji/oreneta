@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { ThreadTable, appliedListSort } from './ThreadTable'
 import { mail$ } from '../../states/mail'
 import { settings$ } from '../../states/settings'
+import { ui$ } from '../../states/ui'
 
-const render = () =>
+const render = (accountId = 'acc') =>
   renderToStaticMarkup(
     <ThreadTable
+      accountId={accountId}
       threads={[]}
       accounts={[]}
       selectedThread=""
@@ -22,6 +24,7 @@ const sortOf = (html: string, label: string) =>
 afterEach(() => {
   settings$.listSort.set({ key: 'date', dir: 'desc' })
   mail$.threadsPagination.set('')
+  ui$.filters.set([])
 })
 
 describe('appliedListSort', () => {
@@ -32,6 +35,10 @@ describe('appliedListSort', () => {
   it('reports newest first everywhere else, whatever was chosen', () => {
     expect(appliedListSort({ key: 'subject', dir: 'asc' }, '')).toEqual({ key: 'date', dir: 'desc' })
     expect(appliedListSort({ key: 'date', dir: 'asc' }, '')).toEqual({ key: 'date', dir: 'desc' })
+  })
+
+  it('claims no column for one account snoozed view, ordered by wake time', () => {
+    expect(appliedListSort({ key: 'date', dir: 'desc' }, '', { snoozedByWakeTime: true })).toBeNull()
   })
 })
 
@@ -56,5 +63,17 @@ describe('ThreadTable', () => {
     expect(sortOf(html, 'From')).toBe('none')
     expect(sortOf(html, 'Date')).toBe('descending')
     expect(html).toContain('title="This view is always shown newest first')
+  })
+
+  it('marks no column on one account snoozed view, and says how it is ordered', () => {
+    ui$.filters.set(['snoozed'])
+    mail$.threadsPagination.set('')
+
+    const html = render()
+
+    for (const label of ['From', 'Subject', 'Date']) expect(sortOf(html, label)).toBe('none')
+    expect(html).toContain('title="Snoozed conversations are listed by when they come back')
+    // Merged across accounts, snoozed rows are newest first.
+    expect(sortOf(render('unified'), 'Date')).toBe('descending')
   })
 })

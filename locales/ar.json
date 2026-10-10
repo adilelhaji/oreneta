@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "تُعرض هذه الطريقة دائمًا من الأحدث إلى الأقدم؛ ينطبق العمود المختار على المجلدات.",
   "table.sender": "From",
+  "table.snoozedOrder": "تُعرض المحادثات المؤجلة حسب موعد عودتها؛ ينطبق العمود المختار على المجلدات.",
   "table.subject": "Subject",
   "tasks.addAction": "إضافة مهمة",
   "tasks.addTitle": "مهمة جديدة",

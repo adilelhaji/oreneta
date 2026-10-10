@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "此视图始终按最新优先显示；所选列适用于文件夹。",
   "table.sender": "From",
+  "table.snoozedOrder": "已延后的会话按返回时间排列；所选列适用于文件夹。",
   "table.subject": "Subject",
   "tasks.addAction": "添加任务",
   "tasks.addTitle": "新建任务",

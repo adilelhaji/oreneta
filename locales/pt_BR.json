@@ -1406,6 +1406,7 @@
   "table.date": "Data",
   "table.fixedOrder": "Esta visualização é sempre exibida da mais recente para a mais antiga; a coluna escolhida vale para as pastas.",
   "table.sender": "De",
+  "table.snoozedOrder": "As conversas adiadas são listadas por quando voltam; a coluna escolhida vale para as pastas.",
   "table.subject": "Assunto",
   "tasks.addAction": "Adicionar tarefa",
   "tasks.addTitle": "Nova tarefa",

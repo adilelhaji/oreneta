@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "Chế độ xem này luôn hiển thị mới nhất trước; cột đã chọn áp dụng cho các thư mục.",
   "table.sender": "From",
+  "table.snoozedOrder": "Các cuộc trò chuyện đã tạm ẩn được liệt kê theo thời điểm chúng quay lại; cột đã chọn áp dụng cho các thư mục.",
   "table.subject": "Subject",
   "tasks.addAction": "Thêm việc cần làm",
   "tasks.addTitle": "Việc cần làm mới",

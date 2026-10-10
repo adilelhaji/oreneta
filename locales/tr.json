@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "Bu görünüm her zaman en yeniden eskiye gösterilir; seçilen sütun klasörlere uygulanır.",
   "table.sender": "From",
+  "table.snoozedOrder": "Ertelenen konuşmalar geri dönecekleri zamana göre listelenir; seçilen sütun klasörlere uygulanır.",
   "table.subject": "Subject",
   "tasks.addAction": "Görev ekle",
   "tasks.addTitle": "Yeni görev",

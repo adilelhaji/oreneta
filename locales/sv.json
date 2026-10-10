@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "Den här vyn visas alltid med det senaste först; den valda kolumnen gäller för mappar.",
   "table.sender": "From",
+  "table.snoozedOrder": "Snoozade konversationer listas efter när de kommer tillbaka; den valda kolumnen gäller för mappar.",
   "table.subject": "Subject",
   "tasks.addAction": "Lägg till uppgift",
   "tasks.addTitle": "Ny uppgift",

@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "See vaade on alati uusimad eespool; valitud veerg kehtib kaustadele.",
   "table.sender": "From",
+  "table.snoozedOrder": "Edasi lükatud vestlused on järjestatud tagasituleku aja järgi; valitud veerg kehtib kaustadele.",
   "table.subject": "Subject",
   "tasks.addAction": "Lisa ülesanne",
   "tasks.addTitle": "Uus ülesanne",

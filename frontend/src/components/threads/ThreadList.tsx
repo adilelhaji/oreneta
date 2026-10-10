@@ -108,7 +108,11 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // Headings only where they mean something. Under any other ordering they
   // would repeat down the page saying nothing, and a search is its own kind of
   // list — the reader asked for relevance, not for a calendar.
-  const groupByDates = appliedListSort(listSort, threadsPagination).key === 'date' && !query.trim() && !isStarredView
+  const snoozedByWakeTime = filters.includes('snoozed') && selectedAccount !== 'unified'
+  const groupByDates =
+    appliedListSort(listSort, threadsPagination, { snoozedByWakeTime })?.key === 'date' &&
+    !query.trim() &&
+    !isStarredView
   const dateGroups = useMemo(
     () =>
       groupByDates

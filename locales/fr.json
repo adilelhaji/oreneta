@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "Cette vue est toujours affichée du plus récent au plus ancien ; la colonne choisie s’applique aux dossiers.",
   "table.sender": "De",
+  "table.snoozedOrder": "Les conversations reportées sont classées selon leur retour ; la colonne choisie s’applique aux dossiers.",
   "table.subject": "Objet",
   "tasks.addAction": "Ajouter une tâche",
   "tasks.addTitle": "Nouvelle tâche",

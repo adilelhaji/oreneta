@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "此檢視一律以最新優先顯示；所選欄位適用於資料夾。",
   "table.sender": "From",
+  "table.snoozedOrder": "已延後的對話依返回時間排列；所選欄位適用於資料夾。",
   "table.subject": "Subject",
   "tasks.addAction": "新增待辦事項",
   "tasks.addTitle": "新的待辦事項",

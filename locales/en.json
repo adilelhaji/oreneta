@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "This view is always shown newest first; the chosen column applies to folders.",
   "table.sender": "From",
+  "table.snoozedOrder": "Snoozed conversations are listed by when they come back; the chosen column applies to folders.",
   "table.subject": "Subject",
   "tasks.addAction": "Add task",
   "tasks.addTitle": "New task",

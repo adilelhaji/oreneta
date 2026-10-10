@@ -1406,6 +1406,7 @@
   "table.date": "Data",
   "table.fixedOrder": "Questa vista è sempre ordinata dal più recente; la colonna scelta vale per le cartelle.",
   "table.sender": "Da",
+  "table.snoozedOrder": "Le conversazioni posticipate sono ordinate in base a quando tornano; la colonna scelta vale per le cartelle.",
   "table.subject": "Oggetto",
   "tasks.addAction": "Aggiungi attività",
   "tasks.addTitle": "Nuova attività",

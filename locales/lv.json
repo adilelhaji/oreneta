@@ -1406,6 +1406,7 @@
   "table.date": "Date",
   "table.fixedOrder": "Šis skats vienmēr tiek rādīts no jaunākā; izvēlētā kolonna attiecas uz mapēm.",
   "table.sender": "From",
+  "table.snoozedOrder": "Atliktās sarunas ir sakārtotas pēc tā, kad tās atgriežas; izvēlētā kolonna attiecas uz mapēm.",
   "table.subject": "Subject",
   "tasks.addAction": "Pievienot uzdevumu",
   "tasks.addTitle": "Jauns uzdevums",
