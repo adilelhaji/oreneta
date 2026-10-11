@@ -7,6 +7,11 @@ export function createBaselineBridge(fixture: BaselineFixture) {
   const responses: Record<string, unknown> = {
     'app.prefsSet': null,
     'tasks.list': { tasks: fixture.tasks },
+    // Profiles (ADR-0016): only the one every install has.
+    'profiles.list': {
+      profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
+      active: 'default',
+    },
     // Task lists (ADR-0013): the fixed mail list only.
     'tasks.lists': { lists: [{ id: 'mail', name: '', position: 0, open: fixture.tasks.length }] },
     'mail.saveDraft': { id: 'synthetic-draft' },

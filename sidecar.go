@@ -105,6 +105,7 @@ func sidecarEnv() []string {
 	env := append(withoutOAuthEnv(os.Environ()),
 		"MERON_CORE_DB="+filepath.Join(appConfigDir(), "meron.db"),
 		"MERON_MEDIA_DIR="+mediaDir(),
+		"MERON_PROFILE="+activeProfile(),
 	)
 	// Pass the OAuth credentials this build accepts down so the sidecar's
 	// refresh path can read them from the environment without its own
@@ -341,7 +342,7 @@ func bundledSidecarPathIn(dir string) string {
 func extractEmbeddedSidecar() (string, error) {
 	sum := sha256.Sum256(embeddedSidecar)
 	name := "meron-core-" + hex.EncodeToString(sum[:8]) + sidecarExeSuffix
-	dir := filepath.Join(appCacheDir(), "bin")
+	dir := filepath.Join(rootCacheDir(), "bin")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

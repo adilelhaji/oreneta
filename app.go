@@ -119,6 +119,10 @@ func (a *App) onSystemResumed() {
 }
 
 func (a *App) HandleSecondInstanceLaunch(args []string) {
+	// Another window asked to open this profile: it is already open here.
+	if profile, _ := profileFromArgs(args, func(string) string { return "" }); profile != "" && a.ctx != nil {
+		showAndRaiseMainWindow(a.ctx)
+	}
 	for _, raw := range mailtoURLs(args) {
 		a.openMailtoURL(raw)
 	}
@@ -454,6 +458,16 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.saveAttachment(payload)
 	case "mail.saveEml":
 		return a.saveMessageEml(payload)
+	case "profiles.list":
+		return a.profilesList()
+	case "profiles.create":
+		return a.profilesCreate(payload)
+	case "profiles.rename":
+		return a.profilesRename(payload)
+	case "profiles.delete":
+		return a.profilesDelete(payload)
+	case "profiles.open":
+		return a.profilesOpen(payload)
 	case "mail.exportMbox":
 		return a.exportFolderMbox(payload)
 	case "mail.copyImage":

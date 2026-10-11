@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -34,6 +35,10 @@ var trayIconUnreadICO []byte
 var globalApp *App
 
 func main() {
+	// Before anything reads a path: the profile decides where data lives.
+	profileArg, _ := profileFromArgs(os.Args[1:], os.Getenv)
+	profile := selectProfile(profileArg)
+
 	setupNativeSpellChecking()
 
 	app := NewApp()
@@ -43,7 +48,7 @@ func main() {
 	preferX11Window()
 
 	err := wails.Run(&options.App{
-		Title:                    "Oreneta",
+		Title:                    windowTitle(profile),
 		Width:                    1200,
 		Height:                   800,
 		WindowStartState:         options.Maximised,
@@ -56,7 +61,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets:     assets,
 			Handler:    mediaHandler(),
-			Middleware: cspMiddleware,
+			Middleware: func(next http.Handler) http.Handler { return cspMiddleware(profileMiddleware(next)) },
 		},
 		Linux: &linux.Options{
 			Icon: appIconPNG,

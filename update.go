@@ -458,7 +458,7 @@ func (p *progressReader) Read(buf []byte) (int, error) {
 }
 
 func updateCacheDir() string {
-	return filepath.Join(appCacheDir(), "updates")
+	return filepath.Join(rootCacheDir(), "updates")
 }
 
 // updateFileName keeps the asset's own extension — the install step dispatches

@@ -1,3 +1,4 @@
+import { profileKey } from '../lib/profile'
 import { observable } from '@legendapp/state'
 import { t } from '../lib/i18n'
 import type { Account, Alias, Attachment, ComposeDraft, ComposerAttachment, Message, MessageTab } from '../types'
@@ -161,7 +162,7 @@ function hasExtraComposeHeaders(compose: Pick<ComposeDraft, 'cc' | 'bcc'>): bool
 }
 function loadPersistedComposeTabs(): MessageTab[] {
   try {
-    const raw = localStorage.getItem(COMPOSE_TABS_KEY)
+    const raw = localStorage.getItem(profileKey(COMPOSE_TABS_KEY))
     if (!raw) return []
     const parsed = JSON.parse(raw) as PersistedComposeTab[]
     if (!Array.isArray(parsed)) return []
@@ -314,7 +315,7 @@ compose$.tabs.onChange(({ value: tabs }) => {
       compose: { ...(t.compose as ComposeDraft), attachments: [] },
     }))
   try {
-    localStorage.setItem(COMPOSE_TABS_KEY, JSON.stringify(persisted))
+    localStorage.setItem(profileKey(COMPOSE_TABS_KEY), JSON.stringify(persisted))
   } catch {
     // localStorage quota exceeded — drop silently.
   }

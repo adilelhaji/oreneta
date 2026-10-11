@@ -1,3 +1,4 @@
+import { profileKey } from '../lib/profile'
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import {
@@ -364,7 +365,7 @@ export function initialThemeId(): string {
 
 function bootstrapThemeSelection(): Pick<Settings, 'themeId' | 'customThemes'> {
   try {
-    const raw = localStorage.getItem(THEME_CACHE_KEY)
+    const raw = localStorage.getItem(profileKey(THEME_CACHE_KEY))
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>
       return {
@@ -422,7 +423,7 @@ function applyFontSelection(fonts: FontSelection) {
 
 function bootstrapFontSelection(): FontSelection {
   try {
-    const raw = localStorage.getItem(FONT_CACHE_KEY)
+    const raw = localStorage.getItem(profileKey(FONT_CACHE_KEY))
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>
       return {
@@ -455,7 +456,7 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
   root.lang = lang.replace('_', '-')
   root.dir = lang === 'ar' ? 'rtl' : 'ltr'
   try {
-    localStorage.setItem(LANG_CACHE_KEY, lang)
+    localStorage.setItem(profileKey(LANG_CACHE_KEY), lang)
   } catch {
     // Storage unavailable: the attribute is still set, only the cache is skipped.
   }
@@ -463,7 +464,7 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
 
 ;(function bootstrapDocumentLanguage() {
   try {
-    const cached = normalizeI18nLanguage(localStorage.getItem(LANG_CACHE_KEY))
+    const cached = normalizeI18nLanguage(localStorage.getItem(profileKey(LANG_CACHE_KEY)))
     applyDocumentLanguage(cached ?? resolveI18nLanguageFromWebLocale(navigator.language) ?? 'en')
   } catch {
     // Best effort; useAppEffects re-applies once the DB-backed language resolves.
@@ -527,7 +528,7 @@ function syncFonts() {
   }
   applyFontSelection(fonts)
   try {
-    localStorage.setItem(FONT_CACHE_KEY, JSON.stringify(fonts))
+    localStorage.setItem(profileKey(FONT_CACHE_KEY), JSON.stringify(fonts))
   } catch {
     // Storage unavailable: only the next first-paint hint is lost.
   }
@@ -581,7 +582,7 @@ function applyActiveTheme() {
   }
 
   localStorage.setItem(
-    THEME_CACHE_KEY,
+    profileKey(THEME_CACHE_KEY),
     JSON.stringify({
       themeId: settings$.themeId.peek(),
       customThemes: settings$.customThemes.peek(),

@@ -350,7 +350,10 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
   búsqueda, conflicto por revisión y papelera (ADR-0015,
   [registro](design/notes.md)). Pendiente: adjuntos de archivo y
   sincronización con proveedores.
-- **#99:** perfiles, siguiente.
+- **#99:** perfiles aislados, cada uno en su ventana y proceso, con
+  carpetas, llavero y almacenamiento del webview propios (ADR-0016,
+  [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,
+  grupos de cuentas y la verificación en Windows (N4).
 
 Criterio de salida C-B: flujo de invitación completo verificado en Exchange y
 Google (N5); restauración ensayada en Windows (N4); importación de al menos

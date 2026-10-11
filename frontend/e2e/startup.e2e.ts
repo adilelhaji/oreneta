@@ -921,6 +921,10 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'tasks.list': { tasks: [] },
         'tasks.lists': { lists: [] },
         'notes.list': { notes: [], tags: [] },
+        'profiles.list': {
+          profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
+          active: 'default',
+        },
         'people.list': { people: [] },
         'people.duplicates': { groups: [] },
         'calendar.list': { calendars: [] },

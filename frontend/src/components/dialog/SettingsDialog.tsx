@@ -52,6 +52,7 @@ import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
 import { startMailImport } from '../../states/archive'
+import { ProfilesGroup } from './ProfilesGroup'
 import { MailImportDialog } from './MailImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
 import { showToast, ui$, type SetupMode } from '../../states/ui'
@@ -1043,6 +1044,7 @@ function GeneralSection() {
       <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}>
         <BackupGroup />
       </div>
+      <ProfilesGroup />
       <StorageGroup />
       <LogsGroup />
     </div>

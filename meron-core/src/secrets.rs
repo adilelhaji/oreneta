@@ -209,6 +209,21 @@ fn use_portal_keyring() -> bool {
     false
 }
 
+/// The keychain name for an entry of this app profile (#99, ADR-0016). The
+/// default profile keeps the names it always had; another profile's entries
+/// carry its id, so two profiles with the same account never share secrets
+/// or a store key.
+fn scoped(account: &str) -> String {
+    scoped_for(std::env::var("MERON_PROFILE").ok().as_deref(), account)
+}
+
+fn scoped_for(profile: Option<&str>, account: &str) -> String {
+    match profile.map(str::trim) {
+        None | Some("") | Some("default") => account.to_string(),
+        Some(profile) => format!("profile:{profile}/{account}"),
+    }
+}
+
 /// Store (or replace) an account's secrets in the OS keychain.
 pub fn store(account: &str, secrets: &Secrets) -> Result<()> {
     let blob = serde_json::to_string(secrets)?;
@@ -216,7 +231,7 @@ pub fn store(account: &str, secrets: &Secrets) -> Result<()> {
         off_mode_store(account, &blob);
         return Ok(());
     }
-    backend_store(account, &blob)
+    backend_store(&scoped(account), &blob)
 }
 
 /// Load an account's secrets, or defaults if no entry exists.
@@ -224,7 +239,7 @@ pub fn load(account: &str) -> Result<Secrets> {
     let blob = if keyring_disabled() {
         off_mode_load(account)
     } else {
-        backend_load(account)?
+        backend_load(&scoped(account))?
     };
     match blob {
         Some(blob) => Ok(serde_json::from_str(&blob).unwrap_or_default()),
@@ -237,17 +252,17 @@ pub fn load(account: &str) -> Result<Secrets> {
 pub(crate) fn graph_record_load(key: &str) -> Result<Option<String>> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_load(key)
+    backend_load(&scoped(key))
 }
 pub(crate) fn graph_record_store(key: &str, value: &str) -> Result<()> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_store(key, value)
+    backend_store(&scoped(key), value)
 }
 pub(crate) fn graph_record_delete(key: &str) -> Result<()> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_delete(key)
+    backend_delete(&scoped(key))
 }
 
 // ---- Backends ---------------------------------------------------------------
@@ -529,12 +544,12 @@ pub fn db_key() -> Result<Option<String>> {
     if keyring_disabled() {
         return Ok(None);
     }
-    match backend_load(DB_KEY_ACCOUNT).context("read db key from keychain")? {
+    match backend_load(&scoped(DB_KEY_ACCOUNT)).context("read db key from keychain")? {
         Some(key) if is_hex_key(&key) => Ok(Some(key)),
         // Missing (first run) or a malformed entry: mint and persist a fresh key.
         Some(_) | None => {
             let key = generate_db_key();
-            backend_store(DB_KEY_ACCOUNT, &key).context("store db key in keychain")?;
+            backend_store(&scoped(DB_KEY_ACCOUNT), &key).context("store db key in keychain")?;
             Ok(Some(key))
         }
     }
@@ -562,7 +577,21 @@ pub fn delete(account: &str) -> Result<()> {
         off_mode_delete(account);
         return Ok(());
     }
-    backend_delete(account)
+    backend_delete(&scoped(account))
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::scoped_for;
+
+    #[test]
+    fn the_default_profile_keeps_its_names_and_others_are_kept_apart() {
+        assert_eq!(scoped_for(None, "ana@x.cat"), "ana@x.cat");
+        assert_eq!(scoped_for(Some("default"), "ana@x.cat"), "ana@x.cat");
+        assert_eq!(scoped_for(Some(""), "__meron_db_key__"), "__meron_db_key__");
+        assert_eq!(scoped_for(Some("work"), "ana@x.cat"), "profile:work/ana@x.cat");
+        assert_ne!(scoped_for(Some("work"), "__meron_db_key__"), scoped_for(Some("home"), "__meron_db_key__"));
+    }
 }
 
 #[cfg(test)]
