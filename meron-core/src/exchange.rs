@@ -1880,6 +1880,18 @@ fn free_busy_name(status: ::ews::LegacyFreeBusyStatus) -> String {
 }
 
 /// Projects one server occurrence onto the shared event model.
+/// An all-day date as the calendar reads it: UTC midnight of that date.
+///
+/// Exchange sends an all-day event as the midnight of its date in the zone it
+/// was saved in: up to 13 hours before UTC midnight of that date (Auckland in
+/// summer) or 10 after (Honolulu). Kept as is, a day in Madrid (22:00Z the
+/// evening before) was drawn on the previous day. Shifting by 13 hours and
+/// taking the UTC day gives that date for every offset from -10 to +13,
+/// including UTC itself; only -11 and +14 (Niue, Kiritimati) fall outside.
+fn all_day_utc_date(instant: i64) -> i64 {
+    (instant + 13 * 3600).div_euclid(24 * 3600) * 24 * 3600
+}
+
 fn to_event(item: &Message, calendar_id: &str) -> anyhow::Result<Event> {
     let id = item
         .item_id
@@ -1892,15 +1904,22 @@ fn to_event(item: &Message, calendar_id: &str) -> anyhow::Result<Event> {
         .as_ref()
         .context("EWS returned a calendar item without a start")?;
     let end = item.end.as_ref().unwrap_or(start);
+    let all_day = item.is_all_day_event.unwrap_or(false);
+    let (start, end) = (start.0.unix_timestamp(), end.0.unix_timestamp());
+    let (start, end) = if all_day {
+        (all_day_utc_date(start), all_day_utc_date(end))
+    } else {
+        (start, end)
+    };
     Ok(Event {
         id: id.id.clone(),
         calendar_id: calendar_id.to_string(),
         change_key: id.change_key.clone(),
         subject: item.subject.clone().unwrap_or_default(),
         location: item.location.clone(),
-        start: start.0.unix_timestamp(),
-        end: end.0.unix_timestamp(),
-        all_day: item.is_all_day_event.unwrap_or(false),
+        start,
+        end,
+        all_day,
         is_recurring: item.is_recurring.unwrap_or(false),
             series_id: item.uid.clone(),
         recurrence: None,
@@ -2430,6 +2449,23 @@ fn is_discarded(deleted_items: Option<&str>, parent: Option<&::ews::FolderId>) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_all_day_date_is_kept_whichever_zone_exchange_saved_it_in() {
+        let date = |text: &str| chrono::DateTime::parse_from_rfc3339(text).unwrap().timestamp();
+        let monday = date("2026-10-05T00:00:00Z");
+        // Midnight of 5 October in Madrid, New York, Tokyo, Auckland, Honolulu and UTC.
+        for saved in [
+            "2026-10-05T00:00:00+02:00",
+            "2026-10-05T00:00:00-04:00",
+            "2026-10-05T00:00:00+09:00",
+            "2026-10-05T00:00:00+13:00",
+            "2026-10-05T00:00:00-10:00",
+            "2026-10-05T00:00:00Z",
+        ] {
+            assert_eq!(super::all_day_utc_date(date(saved)), monday, "{saved}");
+        }
+    }
     use ::ews::sync_folder_hierarchy::Change;
 
     fn folder(id: &str) -> ::ews::FolderId {
