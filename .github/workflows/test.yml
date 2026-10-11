@@ -91,6 +91,12 @@ jobs:
           mkdir -p coverage
           cargo llvm-cov --manifest-path meron-core/Cargo.toml --lcov --output-path coverage/rust.lcov
           cargo llvm-cov report --manifest-path meron-core/Cargo.toml --summary-only | tee coverage/rust-summary.txt
+      # The runner's clock is UTC, where calendar dates and instants coincide.
+      # Run the calendar tests again east and west of UTC, where they do not.
+      - name: Calendar tests outside UTC
+        run: |
+          TZ=Asia/Tokyo cargo test --manifest-path meron-core/Cargo.toml --lib calendar::
+          TZ=America/Los_Angeles cargo test --manifest-path meron-core/Cargo.toml --lib calendar::
       - name: Upload Rust coverage
         if: always()
         uses: actions/upload-artifact@v4

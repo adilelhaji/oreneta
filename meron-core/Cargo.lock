@@ -2620,6 +2620,7 @@ dependencies = [
  "base64",
  "cbc 0.2.1",
  "chrono",
+ "chrono-tz",
  "cms",
  "der 0.8.1",
  "des 0.9.0",

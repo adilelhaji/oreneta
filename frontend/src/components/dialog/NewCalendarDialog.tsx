@@ -15,6 +15,7 @@ import { Button } from '../button/Button'
 import { SelectInput, TextInput } from '../field/Field'
 import { Notice } from '../notice/Notice'
 import { Dialog } from './Dialog'
+import { isSubscriptionUrl } from '../../lib/subscriptionUrl'
 
 /// Creating a calendar, asking first where it should live.
 ///
@@ -41,7 +42,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   const pool = kind === 'account' ? capable : accounts
   const chosen = pool.some((account) => account.id === accountId) ? accountId : (pool[0]?.id ?? '')
 
-  const invalid = !name.trim() || !chosen || (kind === 'subscribed' && !/^https?:\/\//.test(url.trim()))
+  const invalid = !name.trim() || !chosen || (kind === 'subscribed' && !isSubscriptionUrl(url))
 
   const submit = async () => {
     setBusy(true)

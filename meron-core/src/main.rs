@@ -1083,11 +1083,30 @@ async fn sync_calendar_window(
                     continue;
                 };
                 let id = calendar.id.clone();
-                let body =
-                    tokio::task::spawn_blocking(move || calendar::subscription::fetch(&url))
-                        .await??;
-                let (events, skipped) =
-                    calendar::subscription::parse_window(&body, &id, from, to)?;
+                // One subscription that cannot be fetched or read is that
+                // calendar's problem: it keeps the events it last had, and the
+                // calendars after it are still refreshed. Returning the error
+                // here stopped the whole account's sync at the first one.
+                let fetched = match tokio::task::spawn_blocking(move || {
+                    calendar::subscription::fetch(&url)
+                })
+                .await
+                {
+                    Ok(Ok(body)) => calendar::subscription::parse_window(&body, &id, from, to),
+                    Ok(Err(err)) => Err(err),
+                    Err(err) => Err(err.into()),
+                };
+                let (events, skipped) = match fetched {
+                    Ok(parsed) => parsed,
+                    Err(err) => {
+                        meron_core::mlog!(
+                            meron_core::log::Level::Warn,
+                            "calendar",
+                            "{id}: subscription not refreshed: {err:#}"
+                        );
+                        continue;
+                    }
+                };
                 if skipped > 0 {
                     meron_core::mlog!(
                         meron_core::log::Level::Warn,
@@ -3803,10 +3822,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "calendar.subscribe" => {
             let account = req_str(p, "account")?;
             let name = req_str(p, "name")?;
-            let url = req_str(p, "url")?;
-            if !url.starts_with("https://") && !url.starts_with("http://") {
-                anyhow::bail!("a subscription needs an http(s) URL");
-            }
+            let url = calendar::subscription::normalize_url(&req_str(p, "url")?)?;
             let probe_url = url.clone();
             let body = tokio::task::spawn_blocking(move || {
                 calendar::subscription::fetch(&probe_url)
