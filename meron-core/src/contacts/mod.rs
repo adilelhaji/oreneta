@@ -4,6 +4,7 @@ pub mod exchange;
 pub mod google;
 pub mod person;
 pub mod vcard;
+pub mod vcard_import;
 pub mod vcard_write;
 
 #[cfg(test)]

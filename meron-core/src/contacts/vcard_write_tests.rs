@@ -78,3 +78,28 @@ fn a_long_line_is_folded_without_splitting_a_character() {
     let back = people_from_vcards(card.as_bytes()).remove(0);
     assert_eq!(back.name, "Ñ".repeat(60));
 }
+
+#[test]
+fn an_exported_card_says_where_it_came_from_and_reads_back() {
+    let person = Person { name: "Ana".into(), ..Default::default() };
+    let card = super::vcard_write::export_card(&person, "u1", "carddav");
+    assert!(card.contains("X-ORENETA-SOURCE:carddav\r\nEND:VCARD"), "{card}");
+    assert_eq!(people_from_vcards(card.as_bytes())[0].name, "Ana");
+}
+
+#[test]
+fn an_import_preview_counts_what_cannot_be_kept_and_refuses_what_is_not_vcard() {
+    use super::vcard_import::{already_there, preview};
+    let file = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ana\r\nEMAIL:Ana@X.cat\r\nEND:VCARD\r\nBEGIN:VCARD\r\nVERSION:3.0\r\nTEL:123\r\nEND:VCARD\r\n";
+    let found = preview(file.as_bytes()).unwrap();
+    assert_eq!((found.people.len(), found.skipped), (1, 1));
+    assert!(preview(b"just some text").is_err());
+    assert!(preview(&vec![b' '; super::vcard_import::MAX_BYTES + 1]).is_err());
+    let existing = vec![Person {
+        name: "ana".into(),
+        emails: vec![EmailAddress { addr: "ana@x.cat".into(), label: String::new() }],
+        ..Default::default()
+    }];
+    assert!(already_there(&found.people[0], &existing));
+    assert!(!already_there(&Person { name: "Ana".into(), ..Default::default() }, &existing));
+}

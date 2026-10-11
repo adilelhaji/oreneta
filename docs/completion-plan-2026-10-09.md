@@ -333,6 +333,15 @@ Estado de la iteración 9 (2026-10-11):
   ([contactos](design/contact-editing-decisions.md),
   [tareas](design/full-tasks-decisions.md)).
 
+Estado de la iteración 9 (cierre de código, 2026-10-11):
+- **Contactos:** libreta local, edición en CardDAV con ETag (probada contra
+  Radicale), importar y exportar vCard, y duplicados enlazables
+  ([registro](design/local-address-book.md)).
+- **Tareas:** listas, tareas sueltas, prioridad y recordatorios
+  ([registro](design/task-lists.md)).
+- **Pendiente:** la escritura en Google y Exchange (ADR-0012) y la
+  sincronización de tareas (ADR-0013).
+
 Criterio de salida C-B: flujo de invitación completo verificado en Exchange y
 Google (N5); restauración ensayada en Windows (N4); importación de al menos
 mbox/eml con corpus de regresión versionado en el repositorio.

@@ -238,6 +238,34 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn a_vcard_file_is_previewed_imported_once_and_exported_with_its_origin() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ana Prat\r\nEMAIL:ana@x.cat\r\nEND:VCARD\r\n\
+                   BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bo Ray\r\nEND:VCARD\r\n\
+                   BEGIN:VCARD\r\nVERSION:3.0\r\nNOTE:nobody\r\nEND:VCARD\r\n";
+        let preview = call("people.importPreview", json!({"vcf": vcf})).await.unwrap();
+        assert_eq!((preview["people"].as_array().unwrap().len(), preview["skipped"].clone()), (2, json!(1)));
+        assert!(call("people.list", json!({"query": ""})).await.unwrap()["people"].as_array().unwrap().is_empty(), "a preview stores nothing");
+
+        let first = call("people.import", json!({"vcf": vcf})).await.unwrap();
+        assert_eq!((first["imported"].clone(), first["duplicates"].clone()), (json!(2), json!(0)));
+        let again = call("people.import", json!({"vcf": vcf})).await.unwrap();
+        assert_eq!((again["imported"].clone(), again["duplicates"].clone()), (json!(0), json!(2)), "importing twice does not double the book");
+
+        let exported = call("people.exportVcf", json!({})).await.unwrap();
+        assert_eq!(exported["count"], 2);
+        let text = exported["vcf"].as_str().unwrap();
+        assert!(text.contains("FN:Ana Prat") && text.contains("X-ORENETA-SOURCE:local"));
+    }
+
+    #[tokio::test]
     async fn task_lists_hold_standalone_tasks_beside_mail_ones() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -3169,9 +3197,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "people.list" => {
             let query = req_str(p, "query").unwrap_or_default();
             let limit = req_u32(p, "limit").unwrap_or(500);
-            let (found, writable) = {
+            let (found, writable, links) = {
                 let db = engine.db.lock().unwrap();
-                (store::find_people(&db, &query, limit)?, store::contact_sources_writable(&db)?)
+                (
+                    store::find_people(&db, &query, limit)?,
+                    store::contact_sources_writable(&db)?,
+                    store::person_links::links(&db)?,
+                )
             };
             Ok(json!({
                 "people": found
@@ -3188,6 +3220,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "emails": stored.person.emails,
                         "phones": stored.person.phones,
                         "version": stored.version,
+                        // Linked by the reader with the same person elsewhere.
+                        "link": links.get(&stored.id),
                         // The local book, and CardDAV books the server has not
                         // said are read-only (ADR-0012). Google and Exchange
                         // stay read-only here.
@@ -3238,6 +3272,124 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     Ok(local_write_json(write))
                 }
             }
+        }
+
+        // People who share an address and may be one person: suggestions,
+        // never acted on alone (ADR-0012).
+        "people.duplicates" => {
+            let db = engine.db.lock().unwrap();
+            let groups = store::person_links::suggestions(&db)?;
+            let everyone = store::find_people(&db, "", u32::MAX)?;
+            let describe = |id: &String| {
+                everyone.iter().find(|stored| &stored.id == id).map(|stored| json!({
+                    "id": stored.id, "name": stored.person.name, "source": stored.origin.source,
+                    "book": stored.origin.book, "emails": stored.person.emails,
+                }))
+            };
+            Ok(json!({
+                "groups": groups.iter().map(|ids| ids.iter().filter_map(describe).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            }))
+        }
+        "people.link" => {
+            let ids: Vec<String> = serde_json::from_value(p.get("ids").cloned().unwrap_or_default()).context("ids")?;
+            let link = store::person_links::link(&engine.db.lock().unwrap(), &ids)?;
+            Ok(json!({ "ok": true, "link": link }))
+        }
+        "people.unlink" => {
+            store::person_links::unlink(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "people.dismissDuplicate" => {
+            let ids: Vec<String> = serde_json::from_value(p.get("ids").cloned().unwrap_or_default()).context("ids")?;
+            store::person_links::dismiss(&engine.db.lock().unwrap(), &ids)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // A .vcf of the people asked for (all when none are named), each
+        // saying where it came from (ADR-0012).
+        "people.exportVcf" => {
+            let wanted: Option<Vec<String>> = p
+                .get("ids")
+                .and_then(Value::as_array)
+                .map(|ids| ids.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            let everyone = store::find_people(&engine.db.lock().unwrap(), "", u32::MAX)?;
+            let mut vcf = String::new();
+            let mut count = 0;
+            for stored in everyone {
+                if wanted.as_ref().is_some_and(|ids| !ids.contains(&stored.id)) {
+                    continue;
+                }
+                let uid = if stored.person.uid.is_empty() { stored.id.clone() } else { stored.person.uid.clone() };
+                vcf.push_str(&meron_core::contacts::vcard_write::export_card(&stored.person, &uid, &stored.origin.source));
+                count += 1;
+            }
+            Ok(json!({ "vcf": vcf, "count": count }))
+        }
+
+        // What a .vcf would bring in, before anything is stored.
+        "people.importPreview" => {
+            let found = meron_core::contacts::vcard_import::preview(req_str(p, "vcf")?.as_bytes())?;
+            Ok(json!({
+                "people": found.people.iter().map(|person| json!({
+                    "name": person.name, "organisation": person.organisation, "emails": person.emails,
+                })).collect::<Vec<_>>(),
+                "skipped": found.skipped,
+            }))
+        }
+
+        // Stores a .vcf's people in the local book or a CardDAV book. One at a
+        // time; a person already there (same name and first address) is
+        // skipped, and the first failure stops the run and is reported with
+        // how far it got.
+        "people.import" => {
+            let vcf = req_str(p, "vcf")?;
+            let book = p.get("book").and_then(Value::as_str).filter(|b| !b.is_empty() && *b != "local").map(str::to_string);
+            let found = meron_core::contacts::vcard_import::preview(vcf.as_bytes())?;
+            let mut existing: Vec<meron_core::contacts::person::Person> = store::find_people(&engine.db.lock().unwrap(), "", u32::MAX)?
+                .into_iter()
+                .filter(|stored| match &book {
+                    Some(book) => &stored.origin.book == book,
+                    None => stored.origin.source == "local",
+                })
+                .map(|stored| stored.person)
+                .collect();
+            let source = match &book {
+                Some(book) => Some(
+                    store::contact_source(&engine.db.lock().unwrap(), book)?
+                        .filter(|source| source.kind == "carddav")
+                        .context("that address book cannot be written to")?,
+                ),
+                None => None,
+            };
+            let (mut imported, mut duplicates) = (0usize, 0usize);
+            let mut stopped: Option<String> = None;
+            for person in found.people {
+                if meron_core::contacts::vcard_import::already_there(&person, &existing) {
+                    duplicates += 1;
+                    continue;
+                }
+                let result = match &source {
+                    Some(source) => carddav_create(&engine, source, person.clone()).await.map(|_| ()),
+                    None => store::local_people::save(&engine.db.lock().unwrap(), None, None, &person, now_seconds())
+                        .map(|_| ()),
+                };
+                match result {
+                    Ok(()) => {
+                        imported += 1;
+                        existing.push(person);
+                    }
+                    Err(error) => {
+                        stopped = Some(format!("{error:#}"));
+                        break;
+                    }
+                }
+            }
+            Ok(json!({
+                "imported": imported,
+                "duplicates": duplicates,
+                "skipped": found.skipped,
+                "stopped": stopped,
+            }))
         }
 
         "people.delete" => {

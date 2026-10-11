@@ -832,6 +832,10 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
             .query_map(params![id], |row| row.get(0))?
             .collect::<rusqlite::Result<Vec<String>>>()?;
     }
+    tx.execute(
+        "DELETE FROM person_links WHERE person_id IN (SELECT id FROM people WHERE account = ?1)",
+        params![id],
+    )?;
     // A person's addresses and numbers have no account column of their own.
     for child in ["person_emails", "person_phones"] {
         tx.execute(

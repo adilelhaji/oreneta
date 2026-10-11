@@ -35,6 +35,14 @@ pub fn new_card(person: &Person, uid: &str) -> String {
     join(&lines)
 }
 
+/// A card for exporting `person`, saying where it came from in a field other
+/// apps ignore (ADR-0012): "local", "carddav", "google" or "exchange".
+pub fn export_card(person: &Person, uid: &str, source: &str) -> String {
+    let card = new_card(person, uid);
+    let end = card.rfind("END:VCARD").unwrap_or(card.len());
+    format!("{}X-ORENETA-SOURCE:{}\r\n{}", &card[..end], escape(source), &card[end..])
+}
+
 /// The card as the server holds it, with `person`'s fields written over the
 /// ones that changed. Lines this app does not edit are kept as they were.
 pub fn patch_card(raw: &str, person: &Person, now: i64) -> anyhow::Result<String> {

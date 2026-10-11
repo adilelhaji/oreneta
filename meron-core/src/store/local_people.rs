@@ -163,6 +163,7 @@ pub fn delete(conn: &Connection, id: &str, read_at: &str) -> Result<Write> {
     tx.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
     tx.execute("DELETE FROM people WHERE id = ?1", params![id])?;
     tx.commit()?;
+    super::person_links::unlink(conn, id)?;
     Ok(Write::Saved {
         id: id.to_string(),
         version: String::new(),

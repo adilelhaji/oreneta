@@ -95,7 +95,47 @@ separa solo por `;` sin escapar, igual que `N`.
 La prueba N3 se ejecutó en local contra Radicale 3.5.4 instalado aquí, en
 lugar de Docker. En CI se ejecuta con la imagen Docker del arnés.
 
+## Paso 3: vCard y duplicados
+
+### Importar y exportar vCard
+
+- **Exportar** guarda un `.vcf` con todos los contactos o con los que muestra
+  la búsqueda. Cada tarjeta indica su origen en `X-ORENETA-SOURCE`. El
+  archivo se escribe solo para el propietario, como una copia de seguridad.
+- **Importar** se hace en dos pasos:
+  - primero, una vista previa: cuántos contactos hay, cuáles se dejan fuera
+    por no tener ni nombre ni correo, y una muestra de nombres. No se guarda
+    nada;
+  - después se importa a «Este equipo» o a una libreta CardDAV editable.
+- **Reglas de la importación:**
+  - Un contacto ya presente en el destino (mismo nombre y mismo primer correo)
+    se salta, así que importar dos veces no duplica la libreta.
+  - El primer fallo detiene la importación y se informa cuántos se llegaron
+    a importar.
+  - Se rechazan los archivos de más de 20 MB y los que no son vCard.
+- **Fotos:** hoy no se guardan, así que no se exportan. Tampoco se descargan
+  nunca fotos remotas.
+
+### Duplicados
+
+- La app sugiere contactos que comparten correo, en cualquier libreta. Nunca
+  los une por su cuenta.
+- «Misma persona: enlazar» los muestra como uno solo en la lista. La ficha
+  muestra «Copias enlazadas», con cada origen y un botón «Desenlazar».
+- «No es la misma» se recuerda y no se vuelve a sugerir.
+- Un enlace es solo local: no borra, no fusiona y no escribe nada en ningún
+  servidor.
+- Sobrevive a la resincronización, porque los ids son estables, y desaparece
+  al borrar el contacto o su cuenta.
+
+### Pruebas del paso 3
+
+| Nivel | Qué cubre |
+|---|---|
+| N1 | Exportación con origen; vista previa (descartes, no vCard, tamaño); detección de duplicados exactos; sugerencias, enlace que sobrevive a resincronizar, desenlace, «no es la misma», enlace con contactos inexistentes |
+| N1 despachador | Vista previa sin guardar nada; importar dos veces sin duplicar; exportar |
+| N2 | Importación con vista previa y confirmación; exportación de lo que se ve; sugerir, enlazar, ver las copias y desenlazar |
+
 ## Siguiente
 
-- Duplicados, importación y exportación de vCard, y fotos (ADR-0012 punto 5).
-- Google y Exchange, cuando se cumplan sus condiciones.
+Google y Exchange, cuando se cumplan sus condiciones (ADR-0012).

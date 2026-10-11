@@ -141,8 +141,10 @@ export type Person = {
   phones: { number: string; label: string }[]
   /** The version it was read at; a write names it (ADR-0012). */
   version?: string
-  /** Whether this book can be written to from here. Only the local book, so far. */
+  /** Whether this book can be written to from here (ADR-0012). */
   editable?: boolean
+  /** The reader's link to the same person in other books, if any. */
+  link?: string | null
 }
 
 export type Attachment = {

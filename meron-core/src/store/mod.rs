@@ -48,6 +48,7 @@ pub const DEFAULT_RSS_SYNC_INTERVAL_MINUTES: u64 = 60;
 mod accounts;
 pub mod local_people;
 pub mod task_lists;
+pub mod person_links;
 mod settings;
 pub mod local_drafts;
 pub mod outgoing;
@@ -2816,6 +2817,7 @@ pub fn put_synced_person(conn: &Connection, origin: &BookOrigin, row: &SyncedRow
 
 /// Drops one contact from the local copy, after its card was deleted.
 pub fn forget_person(conn: &Connection, id: &str) -> Result<()> {
+    person_links::unlink(conn, id)?;
     conn.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
     conn.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
     conn.execute("DELETE FROM people WHERE id = ?1", params![id])?;

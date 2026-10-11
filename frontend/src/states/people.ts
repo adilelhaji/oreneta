@@ -16,7 +16,125 @@ export const people$ = observable({
   selectedId: '',
   /** The person being written, or null when the editor is closed. */
   editing: null as PersonEditing | null,
+  /** A .vcf read and waiting for the reader to confirm, or null. */
+  importing: null as VcfImport | null,
+  /** People who share an address and may be one person (ADR-0012). */
+  duplicates: [] as DuplicateGroup[],
+  duplicatesOpen: false,
 })
+
+export type DuplicateGroup = { id: string; name: string; source: string; book: string; emails: { addr: string }[] }[]
+
+/**
+ * The list as the reader sees it: people linked as one show once, by the
+ * first of them in the list's order. The others stay reachable from the card.
+ */
+export function collapseLinked(people: Person[]): Person[] {
+  const seen = new Set<string>()
+  return people.filter((person) => {
+    if (!person.link) return true
+    if (seen.has(person.link)) return false
+    seen.add(person.link)
+    return true
+  })
+}
+
+export async function loadDuplicates() {
+  try {
+    const res = await invoke<{ groups?: DuplicateGroup[] }>('people.duplicates', {})
+    people$.duplicates.set(res?.groups ?? [])
+  } catch {
+    people$.duplicates.set([])
+  }
+}
+
+async function linkCall(method: string, payload: Record<string, unknown>) {
+  try {
+    await invoke(method, payload)
+    await Promise.all([loadPeople(), loadDuplicates()])
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : t('people.saveFailed', { defaultValue: 'Could not save the contact.' }),
+      'error',
+    )
+  }
+}
+
+export const linkPeople = (ids: string[]) => linkCall('people.link', { ids })
+export const unlinkPerson = (id: string) => linkCall('people.unlink', { id })
+export const notTheSame = (ids: string[]) => linkCall('people.dismissDuplicate', { ids })
+
+/** What a .vcf would bring in (ADR-0012): nothing is stored until confirmed. */
+export type VcfImport = {
+  path: string
+  people: { name: string; organisation: string; emails: { addr: string; label: string }[] }[]
+  skipped: number
+  /** Where they go: a CardDAV source's id, or empty for this computer. */
+  book: string
+}
+
+/** Picks a .vcf and shows what it holds. */
+export async function startVcfImport() {
+  try {
+    const res = await invoke<Partial<VcfImport> & { cancelled?: boolean }>('people.importVcf', {})
+    if (!res || res.cancelled || !res.path) return
+    people$.importing.set({ path: res.path, people: res.people ?? [], skipped: res.skipped ?? 0, book: '' })
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : t('people.importFailed', { defaultValue: 'Could not read the file.' }),
+      'error',
+    )
+  }
+}
+
+/** Stores the previewed people, then says how it went. */
+export async function confirmVcfImport(pending: VcfImport) {
+  try {
+    const res = await invoke<{ imported?: number; duplicates?: number; skipped?: number; stopped?: string | null }>(
+      'people.importVcf',
+      { path: pending.path, confirm: true, book: pending.book },
+    )
+    people$.importing.set(null)
+    await loadPeople()
+    const summary = t('people.importDone', {
+      imported: res?.imported ?? 0,
+      duplicates: res?.duplicates ?? 0,
+      defaultValue:
+        '{imported, plural, one {# contact imported} other {# contacts imported}}{duplicates, plural, =0 {} other {; # already there}}.',
+    })
+    if (res?.stopped)
+      showToast(
+        `${summary} ${t('people.importStopped', { reason: res.stopped, defaultValue: 'Then it stopped: {reason}' })}`,
+        'error',
+      )
+    else showToast(summary)
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : t('people.importFailed', { defaultValue: 'Could not read the file.' }),
+      'error',
+    )
+  }
+}
+
+/** Writes the given people (everybody when none) to a .vcf the reader picks. */
+export async function exportVcf(ids?: string[]) {
+  try {
+    const res = await invoke<{ saved?: boolean; count?: number }>('people.exportVcf', ids ? { ids } : {})
+    if (res?.saved) {
+      showToast(
+        t('people.exportDone', {
+          count: res.count ?? 0,
+          defaultValue: '{count, plural, one {# contact exported} other {# contacts exported}}.',
+        }),
+      )
+    }
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : t('people.exportFailed', { defaultValue: 'Could not export.' }),
+      'error',
+    )
+  }
+}
 
 /** What the editor holds: the fields, and which copy they were read from. */
 export type PersonDraft = Pick<Person, 'name' | 'organisation' | 'note' | 'emails' | 'phones'>

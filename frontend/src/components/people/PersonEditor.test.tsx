@@ -39,7 +39,17 @@ function stubBridge(answers: Record<string, (payload: any) => unknown>) {
 
 beforeEach(() => {
   contactSources$.set({ sources: [], loaded: true })
-  people$.set({ people: [local, synced], loaded: true, loading: false, query: '', selectedId: '', editing: null })
+  people$.set({
+    people: [local, synced],
+    loaded: true,
+    loading: false,
+    query: '',
+    selectedId: '',
+    editing: null,
+    importing: null,
+    duplicates: [],
+    duplicatesOpen: false,
+  })
 })
 afterEach(() => {
   cleanup()
@@ -99,7 +109,7 @@ describe('the local address book', () => {
     fireEvent.click(view.getByText('Save'))
 
     await waitFor(() => expect(view.getByText('Changed in another window')).toBeTruthy())
-    expect(calls[0].payload).toMatchObject({ id: local.id, version: '3' })
+    expect(calls.find((c) => c.command === 'people.save')!.payload).toMatchObject({ id: local.id, version: '3' })
     expect(view.container.ownerDocument.body.textContent).toContain('Ann Lee-Smith')
     expect(view.container.ownerDocument.body.textContent).toContain('Ann L.')
 

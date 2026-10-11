@@ -4,12 +4,14 @@ import {
   BookUser,
   Building2,
   Copy,
+  Download,
   Mail,
   Pencil,
   Phone,
   Search,
   SquarePen,
   Trash2,
+  Upload,
   UserPlus,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
@@ -17,7 +19,19 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { openComposeTab } from '../../states/compose'
-import { deletePerson, draftOf, emptyDraft, loadPeople, people$, sourceLabel } from '../../states/people'
+import {
+  deletePerson,
+  draftOf,
+  emptyDraft,
+  exportVcf,
+  loadPeople,
+  people$,
+  collapseLinked,
+  loadDuplicates,
+  sourceLabel,
+  startVcfImport,
+  unlinkPerson,
+} from '../../states/people'
 import { confirmAction, showToast, ui$ } from '../../states/ui'
 import type { Person } from '../../types'
 import { Avatar } from '../avatar/Avatar'
@@ -27,6 +41,8 @@ import { IconButton } from '../button/IconButton'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { Button } from '../button/Button'
 import { PersonEditor } from './PersonEditor'
+import { VcfImportDialog } from './VcfImportDialog'
+import { DuplicatesDialog } from './DuplicatesDialog'
 
 /**
  * The address book, as a place rather than as a dropdown.
@@ -44,7 +60,10 @@ import { PersonEditor } from './PersonEditor'
  */
 export function PeopleView() {
   const { t } = useTranslation()
-  const people = useValue(people$.people)
+  const everyone = useValue(people$.people)
+  // People linked as one show once (ADR-0012).
+  const people = collapseLinked(everyone)
+  const duplicates = useValue(people$.duplicates)
   const loaded = useValue(people$.loaded)
   const loading = useValue(people$.loading)
   const query = useValue(people$.query)
@@ -57,6 +76,9 @@ export function PeopleView() {
   useEffect(() => {
     if (!loaded) void loadPeople()
   }, [loaded])
+  useEffect(() => {
+    void loadDuplicates()
+  }, [])
 
   // Searching re-asks the core rather than filtering what is loaded: the list
   // is capped, and a person past the cap would otherwise be unfindable.
@@ -65,7 +87,8 @@ export function PeopleView() {
     return () => clearTimeout(timer)
   }, [query])
 
-  const selected = people.find((person) => person.id === selectedId) ?? null
+  const selected = everyone.find((person) => person.id === selectedId) ?? null
+  const copies = selected?.link ? everyone.filter((person) => person.link === selected.link) : []
   useEffect(() => {
     if (!focusNavigation.current || !lastSelection.current) return
     focusNavigation.current = false
@@ -118,10 +141,27 @@ export function PeopleView() {
               <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
               {t('people.title')}
             </h1>
-            <Button variant="secondary" size="sm" onClick={() => people$.editing.set({ draft: emptyDraft() })}>
-              <UserPlus size={14} strokeWidth={1.75} />
-              {t('people.newContact', { defaultValue: 'New contact' })}
-            </Button>
+            <div className="flex items-center gap-1">
+              <IconButton
+                icon={Upload}
+                iconSize={14}
+                size="sm"
+                label={t('people.import', { defaultValue: 'Import contacts' })}
+                onClick={() => void startVcfImport()}
+              />
+              <IconButton
+                icon={Download}
+                iconSize={14}
+                size="sm"
+                label={t('people.export', { defaultValue: 'Export contacts' })}
+                // What the list shows: everybody, or the people a search found.
+                onClick={() => void exportVcf(query ? people.map((person) => person.id) : undefined)}
+              />
+              <Button variant="secondary" size="sm" onClick={() => people$.editing.set({ draft: emptyDraft() })}>
+                <UserPlus size={14} strokeWidth={1.75} />
+                {t('people.newContact', { defaultValue: 'New contact' })}
+              </Button>
+            </div>
           </div>
           <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent">
             <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
@@ -133,6 +173,18 @@ export function PeopleView() {
               className="min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none"
             />
           </div>
+          {duplicates.length > 0 && (
+            <button
+              type="button"
+              onClick={() => people$.duplicatesOpen.set(true)}
+              className="self-start rounded-control-sm px-2 py-1 text-caption font-semibold text-accent hover:bg-hover cursor-pointer"
+            >
+              {t('people.duplicatesCount', {
+                count: duplicates.length,
+                defaultValue: '{count, plural, one {# possible duplicate} other {# possible duplicates}}',
+              })}
+            </button>
+          )}
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!loaded && loading ? (
@@ -231,6 +283,36 @@ export function PeopleView() {
               }
               onDelete={() => void removePerson(selected)}
             />
+            {copies.length > 1 && (
+              <section className="mx-auto w-full max-w-2xl px-4 pb-6 min-[769px]:px-6">
+                <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">
+                  {t('people.linkedCopies', { defaultValue: 'Linked copies' })}
+                </h2>
+                <ul className="overflow-hidden rounded-control border border-border">
+                  {copies.map((copy) => (
+                    <li
+                      key={copy.id}
+                      className="flex flex-wrap items-center gap-2 border-b border-border bg-chats px-3 py-2 last:border-b-0"
+                    >
+                      <button
+                        type="button"
+                        aria-current={copy.id === selected.id}
+                        onClick={() => people$.selectedId.set(copy.id)}
+                        className="min-w-0 flex-1 text-left text-ui text-primary cursor-pointer"
+                      >
+                        {copy.name}{' '}
+                        <span className="text-caption text-secondary">
+                          · {t(`people.source.${sourceLabel(copy.source)}`)}
+                        </span>
+                      </button>
+                      <Button variant="ghost" size="sm" onClick={() => void unlinkPerson(copy.id)}>
+                        {t('people.unlink', { defaultValue: 'Unlink' })}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -239,6 +321,8 @@ export function PeopleView() {
         )}
       </section>
       <PersonEditor />
+      <VcfImportDialog />
+      <DuplicatesDialog />
     </div>
   )
 }

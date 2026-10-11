@@ -404,8 +404,12 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.carddavList(payload)
 	case "people.list":
 		return a.peopleList(payload)
-	case "people.save", "people.delete":
+	case "people.save", "people.delete", "people.duplicates", "people.link", "people.unlink", "people.dismissDuplicate":
 		return a.peopleWrite(command, payload)
+	case "people.exportVcf":
+		return a.peopleExportVcf(payload)
+	case "people.importVcf":
+		return a.peopleImportVcf(payload)
 	case "templates.list":
 		return a.templatesList(payload)
 	case "templates.save":

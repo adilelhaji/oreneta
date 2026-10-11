@@ -898,6 +898,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'tasks.list': { tasks: [] },
         'tasks.lists': { lists: [] },
         'people.list': { people: [] },
+        'people.duplicates': { groups: [] },
         'calendar.list': { calendars: [] },
         'storage.usage': { cacheBytes: 0, dbBytes: 0 },
         'oof.get': { kind: 'imap', settings: { enabled: false, startAt: 0, endAt: 0, subject: '', body: '' } },
