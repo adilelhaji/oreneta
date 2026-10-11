@@ -27,6 +27,8 @@ export function isSendableAccount(acc: Account | undefined | null): boolean {
     !!acc &&
     acc.provider !== 'rss' &&
     acc.auth_type !== 'rss' &&
+    // The local archive has no server to send through (ADR-0014).
+    acc.auth_type !== 'local_archive' &&
     // Graph sends only with Mail.Send granted (#143).
     (acc.auth_type !== 'graph_oauth' || acc.graph_send === true) &&
     acc.needs_reconnect !== true

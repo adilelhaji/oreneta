@@ -51,6 +51,8 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
+import { startMailImport } from '../../states/archive'
+import { MailImportDialog } from './MailImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
 import { showToast, ui$, type SetupMode } from '../../states/ui'
 import { accounts$, deleteAccount } from '../../states/accounts'
@@ -1149,7 +1151,24 @@ function BackupGroup() {
             </div>
           }
         />
+        <SettingRow
+          title={t('archive.settingsTitle', { defaultValue: 'Import mail' })}
+          hint={t('archive.settingsHint', {
+            defaultValue: 'Bring .eml and .mbox files into a local archive kept on this computer.',
+          })}
+          control={
+            <button
+              onClick={() => void startMailImport()}
+              disabled={busy}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Upload size={14} strokeWidth={1.75} />
+              {t('archive.importAction', { defaultValue: 'Import…' })}
+            </button>
+          }
+        />
       </SettingsGroup>
+      <MailImportDialog />
 
       {prompt && (
         <BackupPassphraseDialog

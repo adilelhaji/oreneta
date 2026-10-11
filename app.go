@@ -406,6 +406,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.peopleList(payload)
 	case "people.save", "people.delete", "people.duplicates", "people.link", "people.unlink", "people.dismissDuplicate":
 		return a.peopleWrite(command, payload)
+	case "archive.import":
+		return a.archiveImport(payload)
 	case "people.exportVcf":
 		return a.peopleExportVcf(payload)
 	case "people.importVcf":

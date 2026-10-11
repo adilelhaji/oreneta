@@ -686,6 +686,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         super::person_links::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 40)?;
     }
+    if version < 41 {
+        tx.execute_batch(crate::archive::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 41)?;
+    }
 
     tx.commit()?;
     Ok(())

@@ -178,7 +178,7 @@ pub fn pool_debug(account: &str, what: &str) {
 }
 
 pub fn creds_have_required_secret(creds: &imap::Creds) -> bool {
-    if creds.is_graph() { return true; }
+    if creds.is_graph() || creds.is_local() { return true; }
     if creds.is_oauth() {
         creds
             .refresh_token
@@ -197,7 +197,7 @@ fn load_and_secret_one(conn: &Connection, host: &dyn EngineHost, id: &str) -> Op
         .ok()?
         .into_iter()
         .find(|(row_id, _)| row_id == id)?;
-    if !creds.is_graph() { host.apply_secret(conn, id, &mut creds); }
+    if !creds.is_graph() && !creds.is_local() { host.apply_secret(conn, id, &mut creds); }
     creds_have_required_secret(&creds).then_some(creds)
 }
 
@@ -289,7 +289,7 @@ impl Engine {
                 shared_mailboxes.push((id, creds.delegate_account_id));
                 continue;
             }
-            if !creds.is_graph() { host.apply_secret(&conn, &id, &mut creds); }
+            if !creds.is_graph() && !creds.is_local() { host.apply_secret(&conn, &id, &mut creds); }
             if !creds_have_required_secret(&creds) {
                 eprintln!("meron-core: account {id} needs reconnect; no stored secret found");
                 continue;
@@ -370,7 +370,7 @@ impl Engine {
                 .and_then(|rows| rows.into_iter().find(|(id, _)| id == account));
             if let Some((id, mut creds)) = loaded {
                 if creds.delegate_account_id.is_empty() {
-                    if !creds.is_graph() { self.host
+                    if !creds.is_graph() && !creds.is_local() { self.host
                         .apply_secret(&self.db.lock().unwrap(), &id, &mut creds); }
                     if creds_have_required_secret(&creds) {
                         accounts.insert(id, creds);
@@ -390,7 +390,7 @@ impl Engine {
             .get_mut(account)
             .ok_or_else(|| anyhow::anyhow!("account needs reconnect: {account}"))?;
 
-        if creds.is_graph() { return Ok(creds.clone()); }
+        if creds.is_graph() || creds.is_local() { return Ok(creds.clone()); }
         if creds.is_oauth() {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -562,6 +562,10 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
+        if self.ensure_valid_creds(account).await?.is_local() {
+            let mut session = backend::Session::Local(crate::archive::LocalSession::new(self.db.clone(), account));
+            return f(&mut session).await;
+        }
         if self.ensure_valid_creds(account).await?.is_graph() {
             if !retry && !graph_may_write(&self.db.lock().unwrap(), account) {
                 return crate::graph::mail::unsupported();
@@ -664,6 +668,11 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
+        if self.ensure_valid_creds(account).await?.is_local() {
+            let mut session = backend::Session::Local(crate::archive::LocalSession::new(self.db.clone(), account));
+            preflight(&mut session).await?;
+            return f(&mut session).await;
+        }
         if self.ensure_valid_creds(account).await?.is_graph() {
             if !graph_may_write(&self.db.lock().unwrap(), account) {
                 return crate::graph::mail::unsupported();
@@ -744,6 +753,10 @@ pub async fn sync_folders(
     engine: &Arc<Engine>,
     account: &str,
 ) -> anyhow::Result<Vec<imap::Folder>> {
+    if engine.ensure_valid_creds(account).await?.is_local() {
+        // Nothing to sync: the archive's folders are the ones stored here.
+        return store::get_folders(&engine.db.lock().unwrap(), account);
+    }
     if engine.ensure_valid_creds(account).await?.is_graph() {
         return engine.graph_mail.session(account)?.sync_tree().await;
     }
@@ -1048,6 +1061,10 @@ pub async fn sync_messages(
     folder: &str,
     limit: u32,
 ) -> anyhow::Result<SyncMessagesResult> {
+    if engine.ensure_valid_creds(account).await?.is_local() {
+        let messages = store::recent_headers(&engine.db.lock().unwrap(), account, folder, limit as i64)?;
+        return Ok(SyncMessagesResult { count: messages.len(), messages });
+    }
     if engine.ensure_valid_creds(account).await?.is_graph() {
         let batch=engine.graph_mail.session(account)?.sync_folder(folder,limit).await?;
         return Ok(SyncMessagesResult{count:batch.messages.len(),messages:batch.messages});

@@ -84,6 +84,9 @@ pub struct Creds {
 impl Creds {
     pub fn is_graph(&self) -> bool { self.auth_type == "graph_oauth" }
 
+    /// The local archive (ADR-0014): no server, no secret, no network.
+    pub fn is_local(&self) -> bool { self.auth_type == "local_archive" }
+
     /// Whether this account is served by the Exchange backend.
     pub fn is_ews(&self) -> bool {
         !self.ews_url.is_empty()
@@ -285,6 +288,7 @@ pub(crate) async fn starttls_socket(tcp: TcpStream) -> Result<TcpStream> {
 
 pub async fn connect(creds: &Creds) -> Result<Session> {
     if creds.is_graph() { return crate::graph::mail::unsupported(); }
+    if creds.is_local() { return crate::archive::unsupported("connect to a server"); }
     // STARTTLS connects in cleartext and upgrades after the greeting; implicit
     // TLS wraps the socket up front. Plaintext (neither flag) is for local test
     // servers only.
@@ -970,6 +974,7 @@ pub async fn fetch_headers_by_uid(
 /// Read-state changes reconciled via CONDSTORE: which messages flipped \Seen or \Flagged (starred),
 /// plus the folder's current HIGHESTMODSEQ to persist for the next incremental
 /// fetch.
+#[derive(Default)]
 pub struct FlagSync {
     pub highest_modseq: u64,
     pub changes: Vec<(u32, bool, bool, Vec<String>)>, // (uid, seen, starred, gmail_labels)
@@ -1713,17 +1718,17 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 /// rather than a tuple because there are enough of them (and the recipient
 /// lists) that positional destructuring at the call sites would be error-prone.
 #[derive(Default)]
-struct HeaderFields {
-    subject: String,
-    from_name: String,
-    from_addr: String,
-    date: i64,
-    message_id: String,
-    in_reply_to: String,
+pub(crate) struct HeaderFields {
+    pub(crate) subject: String,
+    pub(crate) from_name: String,
+    pub(crate) from_addr: String,
+    pub(crate) date: i64,
+    pub(crate) message_id: String,
+    pub(crate) in_reply_to: String,
     /// First id of the `References` header, i.e. the thread root.
-    references_root: String,
-    to: Vec<Recipient>,
-    cc: Vec<Recipient>,
+    pub(crate) references_root: String,
+    pub(crate) to: Vec<Recipient>,
+    pub(crate) cc: Vec<Recipient>,
 }
 
 /// Everything the message list needs, parsed from `RFC822.HEADER`.
@@ -1740,7 +1745,7 @@ struct HeaderFields {
 /// an envelope subject containing double quotes arrived as `\"...\"` and, being
 /// part of the compound thread key, split the conversation into a duplicate
 /// thread.
-fn header_fields(header: &[u8]) -> HeaderFields {
+pub(crate) fn header_fields(header: &[u8]) -> HeaderFields {
     let Ok((headers, _)) = mailparse::parse_headers(header) else {
         return HeaderFields::default();
     };

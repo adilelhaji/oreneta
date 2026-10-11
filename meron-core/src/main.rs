@@ -238,6 +238,58 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn an_mbox_is_imported_into_the_local_archive_and_read_with_the_ordinary_mail_commands() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oreneta-archive-dispatch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // SAFETY: tests in this binary that touch the media root use their own directory.
+        unsafe { std::env::set_var("MERON_MEDIA_DIR", dir.join("media")) };
+        let mbox = dir.join("old.mbox");
+        std::fs::write(
+            &mbox,
+            "From ana@x.cat Mon Oct  5 09:00:00 2026\nFrom: Ana <ana@x.cat>\nSubject: Budget\nDate: Mon, 5 Oct 2026 09:00:00 +0000\nMessage-ID: <a@x>\n\nNumbers attached.\n\n\
+             From bo@x.cat Mon Oct  5 10:00:00 2026\nFrom: Bo <bo@x.cat>\nSubject: Re: Budget\nDate: Mon, 5 Oct 2026 10:00:00 +0000\nMessage-ID: <b@x>\nIn-Reply-To: <a@x>\nReferences: <a@x>\n\nThanks.\n",
+        )
+        .unwrap();
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let paths = json!([mbox.to_string_lossy()]);
+
+        let preview = call("archive.preview", json!({"paths": paths})).await.unwrap();
+        assert_eq!(preview["summary"]["imported"], 2);
+        assert!(store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT).unwrap().is_none(), "a preview creates nothing");
+
+        let imported = call("archive.import", json!({"paths": paths})).await.unwrap();
+        assert_eq!((imported["summary"]["imported"].clone(), imported["created"].clone()), (json!(2), json!(true)));
+        let again = call("archive.import", json!({"paths": paths})).await.unwrap();
+        assert_eq!(again["summary"]["duplicates"], 2, "a second import adds nothing");
+
+        let account = meron_core::archive::ACCOUNT;
+        let listed = call("account.list", json!({})).await.unwrap();
+        let archive = listed["accounts"].as_array().unwrap().iter().find(|a| a["id"] == account).cloned().unwrap();
+        assert_eq!(archive["needs_reconnect"], false);
+        let folders = call("folders.list", json!({"account": account})).await.unwrap();
+        let text = folders.to_string();
+        assert!(text.contains("INBOX") && text.contains("Trash"), "{text}");
+
+        let thread_key = store::recent_headers(&engine.db.lock().unwrap(), account, "INBOX", 10).unwrap()[0].thread_key.clone();
+        let thread = call("messages.thread", json!({"account": account, "folder": "INBOX", "thread_key": thread_key, "limit": 20})).await.unwrap();
+        let rendered = thread.to_string();
+        assert!(rendered.contains("Numbers attached") && rendered.contains("Thanks"), "both messages read, no server: {rendered}");
+
+        // Deleting moves to the archive's Trash, like any account.
+        call("messages.delete", json!({"account": account, "folder": "INBOX", "thread_key": thread_key})).await.unwrap();
+        let db = engine.db.lock().unwrap();
+        assert!(store::recent_headers(&db, account, "INBOX", 10).unwrap().is_empty());
+        assert_eq!(store::recent_headers(&db, account, "Trash", 10).unwrap().len(), 2);
+    }
+
+    #[tokio::test]
     async fn a_vcard_file_is_previewed_imported_once_and_exported_with_its_origin() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -1676,7 +1728,7 @@ async fn idle_watch(engine: Arc<Engine>, out: Writer, account: String, folder: S
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
-            Some(creds) if creds.is_ews() || creds.is_graph() => {
+            Some(creds) if creds.is_ews() || creds.is_graph() || creds.is_local() => {
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
@@ -2589,6 +2641,56 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }),
                 None => Value::Null,
             })
+        }
+
+        // Importing .eml/.mbox files into the local archive (ADR-0014). The
+        // paths come from the reader's file picker; the files are read here,
+        // never sent through the bridge. A preview first, then the import.
+        "archive.preview" | "archive.import" => {
+            let paths: Vec<String> = serde_json::from_value(p.get("paths").cloned().unwrap_or_default()).context("paths")?;
+            if paths.is_empty() {
+                anyhow::bail!("no files to import");
+            }
+            let folder = p
+                .get("folder")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .unwrap_or(meron_core::archive::DEFAULT_FOLDER)
+                .to_string();
+            let files = {
+                let paths = paths.clone();
+                tokio::task::spawn_blocking(move || {
+                    paths
+                        .iter()
+                        .map(|path| meron_core::archive::read_file(std::path::Path::new(path)))
+                        .collect::<anyhow::Result<Vec<_>>>()
+                })
+                .await??
+            };
+            if req.method == "archive.preview" {
+                let summary = meron_core::archive::preview(&engine.db.lock().unwrap(), &folder, &files)?;
+                return Ok(json!({ "summary": summary, "folder": folder }));
+            }
+            let created = meron_core::archive::ensure_account(&engine.db.lock().unwrap(), now_seconds())?;
+            if created {
+                let creds = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?;
+                if let Some(creds) = creds {
+                    engine.accounts.lock().await.insert(meron_core::archive::ACCOUNT.to_string(), creds);
+                }
+            }
+            let media_root = parse::media_root();
+            let summary = {
+                let engine = engine.clone();
+                let folder = folder.clone();
+                tokio::task::spawn_blocking(move || {
+                    let db = engine.db.lock().unwrap();
+                    meron_core::archive::import(&db, &folder, files.into_iter().flatten().collect(), &media_root)
+                })
+                .await??
+            };
+            emit(out, "mail.synced", json!({ "account": meron_core::archive::ACCOUNT, "folder": folder, "synced": summary.imported })).await;
+            Ok(json!({ "summary": summary, "folder": folder, "account": meron_core::archive::ACCOUNT, "created": created }))
         }
 
         // Lists and standalone tasks (ADR-0013).
@@ -3966,6 +4068,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     continue;
                 };
                 if let Some(obj) = account.as_object_mut() {
+                    // The local archive has nothing to reconnect (ADR-0014).
+                    if obj.get("auth_type").and_then(Value::as_str) == Some("local_archive") {
+                        obj.insert("needs_reconnect".into(), json!(false));
+                        continue;
+                    }
                     if obj.get("auth_type").and_then(Value::as_str)==Some("graph_oauth") {
                         let status=meron_core::graph::mail::status(&engine.db.lock().unwrap(),&id);
                         let reconnect=status.as_ref().map_or(true,|s|matches!(s.error.as_deref(),Some("reauthenticate"|"consent_required"|"access_denied")));
@@ -6855,7 +6962,7 @@ async fn apply_oof_to_arrivals(engine: &Arc<Engine>, account: &str, headers: &[i
     let Ok(creds) = engine.ensure_valid_creds(account).await else {
         return;
     };
-    if creds.is_ews() || creds.is_graph() {
+    if creds.is_ews() || creds.is_graph() || creds.is_local() {
         return;
     }
     let oof = {
@@ -7293,6 +7400,9 @@ async fn perform_send_transaction(
             }
         };
         let creds = engine.ensure_valid_creds(&account).await?;
+        if creds.is_local() {
+            anyhow::bail!("the local archive cannot send mail: choose one of your accounts as the sender");
+        }
         let (from_addr, sender_name) =
             resolve_send_from(engine, &account, &creds, &requested_from)?;
         if creds.is_ews() || creds.is_graph() {

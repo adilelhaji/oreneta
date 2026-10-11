@@ -805,6 +805,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("oof_replied", "account"),
     ("contact_sources", "account"),
     ("people", "account"),
+    // The local archive's original messages (ADR-0014).
+    ("archive_messages", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

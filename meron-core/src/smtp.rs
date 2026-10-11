@@ -435,6 +435,7 @@ pub async fn send(
     protect: Option<&Protection>,
 ) -> Result<Vec<u8>> {
     if creds.is_graph() { return crate::graph::mail::unsupported(); }
+    if creds.is_local() { return crate::archive::unsupported("send mail"); }
     // Caller passes the chosen send-as address (primary or a verified alias),
     // already validated against the account; fall back to the IMAP login.
     let from = if from_addr.trim().is_empty() {
