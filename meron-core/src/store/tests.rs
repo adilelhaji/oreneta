@@ -1668,6 +1668,49 @@ fn a_page_can_be_narrowed_to_one_label() {
 /// conversation when its messages move to another folder, stays after the
 /// store is closed and opened again, and never reaches another account's
 /// conversation that happens to share the key.
+/// #89: a conversation moved while snoozed stays findable in the Snoozed
+/// view, under the folder it is in now, rather than vanishing everywhere
+/// until it wakes. A uid key is tied to its folder and is not looked for
+/// elsewhere, where the same uid is another message.
+#[test]
+fn a_snoozed_conversation_moved_meanwhile_is_still_listed_where_it_is() {
+    let conn = test_conn();
+    let now = now_unix();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, date: 100, thread_key: "t-1".into(), subject: "Moved".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 100, subject: "Kept".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    snooze_thread(&conn, "acct", "t-1", "INBOX", now + 3600).unwrap();
+    snooze_thread(&conn, "acct", "uid:2", "INBOX", now + 7200).unwrap();
+    // The move, as a sync records it.
+    conn.execute("DELETE FROM messages WHERE uid = 1", []).unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "Archive",
+        &[
+            MessageHeader { uid: 9, date: 100, thread_key: "t-1".into(), subject: "Moved".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 50, subject: "Another message".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    let listed: Vec<(String, u32, String)> = get_snoozed_headers(&conn, "acct")
+        .unwrap()
+        .into_iter()
+        .map(|h| (h.folder, h.uid, h.subject))
+        .collect();
+    assert_eq!(
+        listed,
+        vec![("Archive".to_string(), 9, "Moved".to_string()), ("INBOX".to_string(), 2, "Kept".to_string())]
+    );
+}
+
 #[test]
 fn a_label_follows_a_move_survives_a_restart_and_stays_in_its_account() {
     let dir = std::env::temp_dir().join(format!("oreneta-label-restart-{}", std::process::id()));

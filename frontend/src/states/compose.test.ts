@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { Message } from '../types'
 import {
   restoreQuickReplyForThread,
@@ -27,6 +27,7 @@ import {
   sendReply,
   withoutHydratedQuickReplyDraft,
   undoSend,
+  HELD_SEND_MARGIN_SECONDS,
   retrySend,
   resendUncertainSend,
   sendComposed,
@@ -37,6 +38,7 @@ import { accounts$ } from './accounts'
 import { settings$ } from './settings'
 import { settleConfirm, ui$ } from './ui'
 import { mail$ } from './mail'
+import { flushQueuedSends, heldCopies } from './sendQueue'
 
 const message = (overrides: Partial<Message> = {}): Message => ({
   id: 'm1',
@@ -907,6 +909,91 @@ describe('quick reply draft sharing', () => {
     expect(compose$.quickReplyDraftSaved.get()).toBe(true)
     // Nothing was sent.
     expect(calls.some((c) => c.command === 'mail.send')).toBe(false)
+  })
+
+  // #89: a reply in its grace period is also kept by the core, under its own
+  // Message-ID, so quitting or crashing in those seconds cannot lose it.
+  describe('held replies are kept by the core', () => {
+    afterEach(() => {
+      settings$.undoSendSeconds.set(0)
+      flushQueuedSends()
+      heldCopies.clear()
+    })
+    const heldReply = async (seconds: number) => {
+      const thread = message({
+        id: 'held-root',
+        account_id: 'acc-1',
+        thread_id: 't-held',
+        folder_id: 'INBOX',
+        from_addr: 'them@example.com',
+        message_id: 'held-root@example.com',
+        date: 1000,
+      })
+      mail$.threads.set([thread])
+      mail$.messages.set([thread])
+      ui$.selectedThread.set('t-held')
+      compose$.composer.set('Held reply')
+      settings$.signature.set('')
+      settings$.undoSendSeconds.set(seconds)
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+        calls.push({ command, payload })
+        if (command === 'mail.allocateIdentity') return { message_id: '<held@example.com>' }
+        if (command === 'mail.send') return { ok: true, outcome: 'archived' }
+        return {}
+      }
+      await sendReply()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return mail$.messages.get().find((m) => m.id.startsWith('sent-'))!
+    }
+    const commands = () =>
+      calls
+        .map((c) => c.command)
+        .filter(
+          (c) => c.startsWith('mail.') && c !== 'mail.allocateIdentity' && !c.includes('Draft') && !c.includes('draft'),
+        )
+
+    it('keeps a stored copy of a held reply and removes it when the reply is taken back', async () => {
+      const before = Math.floor(Date.now() / 1000)
+      const bubble = await heldReply(30)
+      const stored = calls.find((c) => c.command === 'mail.scheduleSend')?.payload as any
+      expect(stored?.id).toBe(stored?.message?.message_id)
+      expect(stored?.id).toBeTruthy()
+      // Due only after the grace period and a margin: the reply's own timer
+      // lets it go first, and the copy goes on its own only if the app is gone.
+      expect(stored.due_at).toBeGreaterThanOrEqual(before + 30 + HELD_SEND_MARGIN_SECONDS)
+      expect(heldCopies.has(stored.id)).toBe(true)
+
+      undoSend(bubble.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.cancelScheduledSend'])
+      expect((calls.find((c) => c.command === 'mail.cancelScheduledSend')?.payload as any).id).toBe(stored.id)
+      expect(heldCopies.has(stored.id)).toBe(false)
+    })
+
+    it('removes the stored copy before sending a held reply whose time is up', async () => {
+      await heldReply(0.01)
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.cancelScheduledSend', 'mail.send'])
+    })
+
+    it('on closing, sends the stored copy, which stays stored until it has gone', async () => {
+      await heldReply(30)
+      flushQueuedSends()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.sendScheduledNow'])
+    })
+
+    it('leaves the stored copy to the core when the core cannot be reached as the time comes', async () => {
+      await heldReply(0.01)
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+        calls.push({ command, payload })
+        if (command === 'mail.cancelScheduledSend') throw new Error('engine unavailable')
+        return {}
+      }
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      // No second send beside the stored one.
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.cancelScheduledSend'])
+    })
   })
 
   it('keeps the consumed draft guarded while the post-send discard is still in flight', async () => {

@@ -371,17 +371,31 @@ export function useAppEffects() {
     // just has to look again, or it would stay hidden until something else
     // happened to refresh it.
     const offUnsnoozed = eventsOn('mail.unsnoozed', () => {
-      showToast(t('threads.snooze.returned', { defaultValue: 'Back in your inbox' }))
+      // The conversation was never moved, so it is not "back in the inbox":
+      // it is back in the list it was set aside from.
+      showToast(t('threads.snooze.returnedHere', { defaultValue: 'A snoozed conversation is back' }))
       void refreshCurrentMailbox().catch(console.error)
     })
 
     // A message written earlier that has now gone. Dropped from the waiting
     // list here rather than on the next read, so the reader is not shown a
     // message still waiting to be sent that has already been sent.
-    const offScheduledSent = eventsOn('mail.scheduledSent', (detail: { id?: string }) => {
-      if (detail?.id) forgetScheduledSend(detail.id)
-      void refreshCurrentMailbox().catch(console.error)
-    })
+    const offScheduledSent = eventsOn(
+      'mail.scheduledSent',
+      (detail: { id?: string; subject?: string; late?: boolean }) => {
+        if (detail?.id) forgetScheduledSend(detail.id)
+        // Gone later than its hour because the app was not running: said, so
+        // nobody believes it arrived when they asked.
+        if (detail?.late)
+          showToast(
+            t('sendLater.toast.sentLate', {
+              subject: detail.subject || '',
+              defaultValue: 'Sent late, as Oreneta was not running at its time: {subject}',
+            }),
+          )
+        void refreshCurrentMailbox().catch(console.error)
+      },
+    )
 
     // And one that could not go, after the core stopped trying. Said plainly:
     // a message the writer believes is on its way and is not would be the

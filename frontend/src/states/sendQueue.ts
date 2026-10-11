@@ -10,6 +10,8 @@ type Queued = {
   send: () => void
   /** Undoes it: the caller decides what "undone" means for its own path. */
   cancel: () => void
+  /** Lets it go as the app closes; `send` unless the caller says otherwise. */
+  flush: () => void
 }
 
 const queue = new Map<string, Queued>()
@@ -21,14 +23,17 @@ const queue = new Map<string, Queued>()
  * carry on as if the message had gone — which, as far as the reader is
  * concerned and after a few seconds, it has.
  */
-export function queueSend(id: string, seconds: number, send: () => void, cancel: () => void) {
+export function queueSend(id: string, seconds: number, send: () => void, cancel: () => void, flush: () => void = send) {
   // Already waiting: replace it rather than stack two timers on one message.
   clearQueuedSend(id)
-  const timer = setTimeout(() => {
-    queue.delete(id)
-    send()
-  }, Math.max(0, seconds) * 1000)
-  queue.set(id, { timer, send, cancel })
+  const timer = setTimeout(
+    () => {
+      queue.delete(id)
+      send()
+    },
+    Math.max(0, seconds) * 1000,
+  )
+  queue.set(id, { timer, send, cancel, flush })
 }
 
 /** Whether a send is still waiting, and can therefore still be taken back. */
@@ -71,6 +76,15 @@ export function flushQueuedSends() {
   for (const [id, waiting] of [...queue]) {
     clearTimeout(waiting.timer)
     queue.delete(id)
-    waiting.send()
+    waiting.flush()
   }
 }
+
+/**
+ * Ids of the stored copies of replies still in their grace period (#89).
+ * Each is a scheduled send the core keeps until the reply goes or is taken
+ * back, so quitting or crashing in those seconds cannot lose it; the list of
+ * messages waiting to go leaves them out, since the reply already shows as
+ * waiting where it was written.
+ */
+export const heldCopies = new Set<string>()

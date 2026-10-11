@@ -62,6 +62,13 @@ export function SendLaterMenu({
               }}
             />
           ))}
+          {/* Said before choosing, not after it went late (#89). */}
+          <p className="max-w-[15rem] px-2 pb-1 pt-1.5 text-2xs leading-snug text-secondary">
+            {t('sendLater.needsApp', {
+              defaultValue:
+                'Oreneta sends it while it is running. If it is closed or the computer sleeps at that time, it goes as soon as Oreneta opens again.',
+            })}
+          </p>
         </div>
       )}
     </div>

@@ -172,7 +172,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BackgroundSyncCancelled, is_transient_sync_error, retry_background_sync};
-    use super::{ScheduledOutcome, scheduled_send_precheck};
+    use super::{scheduled_outcome_of, scheduled_send_precheck, sent_late, strip_send_secrets, ScheduledOutcome};
     use meron_core::store::outgoing::{AttemptKind, AttemptState, OutgoingAttempt};
 
     fn earlier(state: AttemptState, error: &str) -> OutgoingAttempt {
@@ -214,12 +214,49 @@ mod tests {
             Some(ScheduledOutcome::Uncertain(reason)) => assert_eq!(reason, "connection reset"),
             other => panic!("an unanswered try stays unanswered, got {}", describe(other)),
         }
-        // A row still marked as going belongs to a process that died: the
-        // reason is supplied when the record has none.
-        match scheduled_send_precheck(Some(&earlier(AttemptState::Sending, ""))) {
+        // The reason is supplied when the record has none.
+        match scheduled_send_precheck(Some(&earlier(AttemptState::Uncertain, ""))) {
             Some(ScheduledOutcome::Uncertain(reason)) => assert!(reason.contains("stopped"), "{reason}"),
             other => panic!("got {}", describe(other)),
         }
+        // #89: still sending means sending now, in this process (startup
+        // turned a dead process's rows uncertain before the watch began).
+        // The second caller leaves the row to the first.
+        assert!(matches!(
+            scheduled_send_precheck(Some(&earlier(AttemptState::Sending, ""))),
+            Some(ScheduledOutcome::InFlight)
+        ));
+    }
+
+    /// #89: the watch and "send now" (or a held reply let go) reaching the
+    /// same message at once. The one that finds it already attempted must
+    /// not report it sent and drop its row: the first may still be refused.
+    #[test]
+    fn an_already_attempted_answer_is_not_taken_for_a_sent_message() {
+        let answer = |state: &str| {
+            serde_json::json!({ "ok": false, "outcome": "already_attempted", "state": state, "error": "" })
+        };
+        assert!(matches!(scheduled_outcome_of(&answer("sending")), ScheduledOutcome::InFlight));
+        assert!(matches!(scheduled_outcome_of(&answer("accepted")), ScheduledOutcome::Sent));
+        assert!(matches!(scheduled_outcome_of(&answer("archived")), ScheduledOutcome::Sent));
+        assert!(matches!(scheduled_outcome_of(&answer("uncertain")), ScheduledOutcome::Uncertain(_)));
+        assert!(matches!(
+            scheduled_outcome_of(&serde_json::json!({ "ok": true, "outcome": "accepted" })),
+            ScheduledOutcome::Sent
+        ));
+        assert!(matches!(
+            scheduled_outcome_of(&serde_json::json!({ "ok": false, "outcome": "uncertain", "error": "reset" })),
+            ScheduledOutcome::Uncertain(reason) if reason == "reset"
+        ));
+    }
+
+    #[test]
+    fn a_scheduled_message_is_stored_without_a_passphrase_and_late_is_said() {
+        let mut message = serde_json::json!({ "to": "bob@example.com", "passphrase": "secret", "sign": true });
+        strip_send_secrets(&mut message);
+        assert_eq!(message, serde_json::json!({ "to": "bob@example.com", "sign": true }));
+        assert!(!sent_late(1_000, 1_000 + 60), "the watch ticks every minute: that is on time");
+        assert!(sent_late(1_000, 1_000 + 3_600));
     }
 
     fn describe(outcome: Option<ScheduledOutcome>) -> String {
@@ -227,6 +264,7 @@ mod tests {
             None => "None".to_string(),
             Some(ScheduledOutcome::Sent) => "Sent".to_string(),
             Some(ScheduledOutcome::Uncertain(reason)) => format!("Uncertain({reason})"),
+            Some(ScheduledOutcome::InFlight) => "InFlight".to_string(),
         }
     }
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -1257,10 +1295,14 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                                 "id": row.id,
                                 "account": row.account,
                                 "subject": row.subject,
+                                // Gone later than asked, because the app was
+                                // not running at the hour: said, not hidden.
+                                "late": sent_late(row.due_at, now),
                             }),
                         )
                         .await;
                     }
+                    Ok(ScheduledOutcome::InFlight) => {}
                     Ok(ScheduledOutcome::Uncertain(reason)) => {
                         // Not a refusal and not a success: nobody knows. It
                         // is not tried again, which could deliver it twice,
@@ -4331,7 +4373,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             if due_at <= now_seconds() {
                 anyhow::bail!("a message cannot be scheduled for a moment already past");
             }
-            let message = p.get("message").cloned().context("missing param: message")?;
+            let mut message = p.get("message").cloned().context("missing param: message")?;
+            // A key's passphrase is never written down with the message: it
+            // would sit in the store until the hour came.
+            strip_send_secrets(&mut message);
             if req_str(&message, "to").unwrap_or_default().trim().is_empty() {
                 anyhow::bail!("a scheduled message needs a recipient");
             }
@@ -4421,6 +4466,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     store::give_up_on_send(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
                     Ok(json!({ "ok": false, "outcome": "uncertain", "id": id, "error": reason }))
                 }
+                Ok(ScheduledOutcome::InFlight) => Ok(json!({ "ok": false, "outcome": "in_flight", "id": id })),
                 Err(err) => {
                     let reason = format!("{err:#}");
                     store::record_send_failure(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
@@ -8089,6 +8135,43 @@ enum ScheduledOutcome {
     /// Transmitted without an answer, or already transmitted by an earlier
     /// try nobody recorded the end of. Carries the reason to show.
     Uncertain(String),
+    /// Another caller is sending this very message right now (the watch and
+    /// "send now" at once, or a held reply let go as the watch reached it).
+    /// Nothing is settled yet: the row stays, and the one sending settles it.
+    InFlight,
+}
+
+/// What a send's answer means for its scheduled row. An "already attempted"
+/// answer is not a success: the earlier attempt may still be in flight, or
+/// may yet be refused, and dropping the row then would lose the message.
+fn scheduled_outcome_of(result: &Value) -> ScheduledOutcome {
+    let error = || result.get("error").and_then(Value::as_str).unwrap_or("outcome unknown").to_string();
+    match result.get("outcome").and_then(Value::as_str) {
+        Some("uncertain") => ScheduledOutcome::Uncertain(error()),
+        Some("already_attempted") => match result.get("state").and_then(Value::as_str) {
+            Some("accepted") | Some("archived") => ScheduledOutcome::Sent,
+            Some("sending") => ScheduledOutcome::InFlight,
+            _ => ScheduledOutcome::Uncertain(if result.get("error").and_then(Value::as_str).unwrap_or("").is_empty() {
+                "an earlier try of this message may already have gone".to_string()
+            } else {
+                error()
+            }),
+        },
+        _ => ScheduledOutcome::Sent,
+    }
+}
+
+/// A scheduled message sent more than five minutes after its hour went late:
+/// the app was not running, or the computer was asleep.
+fn sent_late(due_at: i64, now: i64) -> bool {
+    now - due_at > 300
+}
+
+/// Removes what must never be stored with a message waiting to go.
+fn strip_send_secrets(message: &mut Value) {
+    if let Some(object) = message.as_object_mut() {
+        object.remove("passphrase");
+    }
 }
 
 /// What a scheduled row's earlier attempt, if any, already settles.
@@ -8100,13 +8183,15 @@ fn scheduled_send_precheck(earlier: Option<&outgoing::OutgoingAttempt>) -> Optio
     let earlier = earlier?;
     match earlier.state {
         outgoing::AttemptState::Accepted | outgoing::AttemptState::Archived => Some(ScheduledOutcome::Sent),
-        outgoing::AttemptState::Uncertain | outgoing::AttemptState::Sending => {
-            Some(ScheduledOutcome::Uncertain(if earlier.error.is_empty() {
-                "the application stopped while this message was being sent".to_string()
-            } else {
-                earlier.error.clone()
-            }))
-        }
+        // Startup turns every attempt a dead process left "sending" into
+        // "uncertain" before the watch starts, so one still sending now is in
+        // flight in this process: the caller that started it settles it.
+        outgoing::AttemptState::Sending => Some(ScheduledOutcome::InFlight),
+        outgoing::AttemptState::Uncertain => Some(ScheduledOutcome::Uncertain(if earlier.error.is_empty() {
+            "the application stopped while this message was being sent".to_string()
+        } else {
+            earlier.error.clone()
+        })),
         outgoing::AttemptState::Rejected | outgoing::AttemptState::Resolved => None,
     }
 }
@@ -8134,12 +8219,7 @@ async fn send_scheduled(
         object.insert("resend".to_string(), Value::Bool(resend));
     }
     let result = perform_send(engine, &request).await?;
-    match result.get("outcome").and_then(Value::as_str) {
-        Some("uncertain") => Ok(ScheduledOutcome::Uncertain(
-            result.get("error").and_then(Value::as_str).unwrap_or("outcome unknown").to_string(),
-        )),
-        _ => Ok(ScheduledOutcome::Sent),
-    }
+    Ok(scheduled_outcome_of(&result))
 }
 
 /// One scheduled message as the interface reads it.

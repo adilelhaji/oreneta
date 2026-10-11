@@ -401,6 +401,12 @@ Estado de la iteración 11 (2026-10-11, por delegación):
   movimiento, reinicio, aislamiento y separación. Exchange e IMAP quedan
   pendientes de evidencia real ([registro](design/labels-certification.md)).
 
+Estado de la iteración 12 (2026-10-12, por delegación):
+- **#89:** una respuesta en su periodo para deshacer ya no se pierde al
+  cerrar; dos envíos simultáneos no se dan por enviados; se avisa de que
+  hace falta la app y de los envíos tardíos; los pospuestos movidos siguen a
+  la vista (ADR-0024, [registro](design/send-lifecycle.md)).
+
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 

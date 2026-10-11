@@ -17,7 +17,7 @@ import {
   discardPendingSend,
   isLocalSendId,
 } from './pendingSends'
-import { queueSend, undoQueuedSend } from './sendQueue'
+import { heldCopies, queueSend, undoQueuedSend } from './sendQueue'
 import {
   type SendResult,
   isUnsettledOutcome,
@@ -1856,14 +1856,77 @@ export async function sendReply() {
 /// The message is already in the thread, marked as waiting: pressing Send has
 /// done everything except the irrevocable part, which is the only part worth
 /// pausing. With no grace period configured it goes at once.
+///
+/// While it waits, the core also keeps it as a scheduled send under its own
+/// Message-ID, due shortly after the grace period (#89). Quitting or crashing
+/// in those seconds then delays the reply instead of losing it; letting it go
+/// or taking it back removes that copy first; and because the copy and the
+/// reply share an attempt id, the core refuses to send them both.
 function holdSend(tempId: string, seconds: number) {
   setSendStatus(tempId, 'queued')
+  const payload = getPendingSend(tempId)
+  const copy = payload?.message_id?.trim() ?? ''
+  const stored: Promise<boolean> = copy
+    ? invoke('mail.scheduleSend', {
+        id: copy,
+        due_at: Math.floor(Date.now() / 1000) + seconds + HELD_SEND_MARGIN_SECONDS,
+        message: payload,
+      }).then(
+        () => true,
+        () => false,
+      )
+    : Promise.resolve(false)
+  if (copy) heldCopies.add(copy)
   queueSend(
     tempId,
     seconds,
-    () => void dispatchSend(tempId),
-    () => undoOptimisticSend(tempId),
+    () => void releaseHeldSend(tempId, copy, stored),
+    () => {
+      void dropHeldCopy(copy, stored)
+      undoOptimisticSend(tempId)
+    },
+    // Closing: the stored copy is sent, and stays stored until it has gone,
+    // so a quit that cuts this short only delays it to the next start.
+    () => {
+      void stored.then((kept) =>
+        kept ? invoke('mail.sendScheduledNow', { id: copy }).catch(() => {}) : dispatchSend(tempId),
+      )
+    },
   )
+}
+
+/** How long after its grace period a held reply's stored copy goes on its own. */
+export const HELD_SEND_MARGIN_SECONDS = 120
+
+async function releaseHeldSend(tempId: string, copy: string, stored: Promise<boolean>) {
+  if (await stored) {
+    try {
+      await invoke('mail.cancelScheduledSend', { id: copy })
+    } catch {
+      // The core cannot be reached, so it cannot send either: the stored
+      // copy goes when it can, and nothing here sends a second one.
+      return
+    }
+  }
+  heldCopies.delete(copy)
+  await dispatchSend(tempId)
+}
+
+async function dropHeldCopy(copy: string, stored: Promise<boolean>) {
+  if (!(await stored)) return
+  try {
+    await invoke('mail.cancelScheduledSend', { id: copy })
+    heldCopies.delete(copy)
+  } catch {
+    // Said plainly: the reply was taken back here, but its stored copy may
+    // still go, and the writer is the one who needs to know.
+    showToast(
+      t('compose.undoCopyKept', {
+        defaultValue: 'The reply was taken back, but its saved copy could not be removed and may still be sent.',
+      }),
+      'error',
+    )
+  }
 }
 
 /// Takes a held reply back: the message leaves the thread and its text returns

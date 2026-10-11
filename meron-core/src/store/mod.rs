@@ -1530,22 +1530,32 @@ pub fn newest_thread_uids(
 /// Read from wherever the thread was when it was set aside, so the list can
 /// show what it actually is rather than a bare subject line.
 pub fn get_snoozed_headers(conn: &Connection, account: &str) -> Result<Vec<MessageHeader>> {
+    // A snoozed conversation is found wherever it now is (#89): moved to
+    // another folder while it waits, it is still listed, under the folder it
+    // is in. Only a key made from a uid is tied to its folder, since a uid
+    // means nothing anywhere else.
     let mut stmt = conn.prepare(
-        "SELECT m.uid, m.subject, m.from_name, m.from_addr, m.date, m.seen, m.starred,
-                m.thread_key, json_extract(m.json, '$.to')
-           FROM snoozed_threads s
-           JOIN messages m
-             ON m.account = s.account
-            AND m.folder = s.folder
-            AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = s.thread_key
-          WHERE s.account = ?1 AND m.uid <> 0
-            AND m.date = (
-                  SELECT MAX(m2.date) FROM messages m2
-                   WHERE m2.account = m.account AND m2.folder = m.folder
-                     AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = s.thread_key)
-          ORDER BY s.until",
+        "WITH found AS (
+           SELECT m.uid, m.subject, m.from_name, m.from_addr, m.date, m.seen, m.starred,
+                  m.thread_key, json_extract(m.json, '$.to') AS recipients, m.folder, s.until,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY s.thread_key
+                    ORDER BY (m.folder = s.folder) DESC, m.date DESC, m.uid DESC) AS n
+             FROM snoozed_threads s
+             JOIN messages m
+               ON m.account = s.account AND m.uid <> 0
+              AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = s.thread_key
+              AND (s.thread_key NOT LIKE 'uid:%' OR m.folder = s.folder)
+            WHERE s.account = ?1
+         )
+         SELECT uid, subject, from_name, from_addr, date, seen, starred, thread_key, recipients, folder
+           FROM found WHERE n = 1 ORDER BY until",
     )?;
-    let rows = stmt.query_map(params![account], message_header_from_row)?;
+    let rows = stmt.query_map(params![account], |row| {
+        let mut header = message_header_from_row(row)?;
+        header.folder = row.get(9)?;
+        Ok(header)
+    })?;
     Ok(rows.filter_map(Result::ok).collect())
 }
 

@@ -7,6 +7,7 @@
 
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
+import { heldCopies } from './sendQueue'
 import { t } from '../lib/i18n'
 import { showToast } from './ui'
 import type { ComposedMessage } from './compose'
@@ -91,7 +92,8 @@ export async function refreshScheduledSends(accountId = '') {
     const res = await invoke<{ messages?: ScheduledSend[] }>('mail.scheduledSends', {
       account_id: accountId,
     })
-    scheduled$.messages.set(res?.messages ?? [])
+    // A reply in its grace period is shown where it was written, as waiting.
+    scheduled$.messages.set((res?.messages ?? []).filter((message) => !heldCopies.has(message.id)))
     scheduled$.loaded.set(true)
   } catch {
     // A list that cannot be read is not a list that is empty: leave whatever
@@ -129,6 +131,11 @@ export async function sendScheduledNow(id: string, resend = false) {
     if (res && res.ok === false && res.outcome === 'uncertain') {
       markScheduledSendFailed(id, res.error ?? '', true)
       showToast(t('outgoing.toast.uncertain'), 'error')
+      return
+    }
+    // Already on its way, started by the watch a moment before: left to it.
+    if (res && res.ok === false && res.outcome === 'in_flight') {
+      showToast(t('sendLater.toast.inFlight', { defaultValue: 'This message is already being sent' }))
       return
     }
     scheduled$.messages.set(scheduled$.messages.peek().filter((message) => message.id !== id))
