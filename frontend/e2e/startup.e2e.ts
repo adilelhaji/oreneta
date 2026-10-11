@@ -168,6 +168,23 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       contentType: 'image/png',
     })
     await audit('notes')
+    // Attachments across accounts, with coverage said (#93).
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.replies['attachments.list'] = {
+        items: [
+          {
+            account: 'synthetic@example.test', folder: 'INBOX', uid: 2, thread_key: 'k', thread_id: 'synthetic@example.test#INBOX#2',
+            subject: 'Quarterly numbers', from_name: 'Synthetic Sender', from_addr: 'sender@example.test', date: 1760000000,
+            index: 0, filename: 'report.pdf', mime: 'application/pdf', size: 90000, key: null, kind: 'pdf', unavailable: '',
+          },
+        ],
+        total: 1,
+        coverage: { messages: 10, downloaded: 7 },
+      }
+    })
+    await page.getByTitle('Attachments', { exact: true }).click()
+    await expect(page.getByText('report.pdf')).toBeVisible()
+    await audit('attachments')
     expect(blocking).toEqual([])
     expect(errors).toEqual([])
   })
@@ -922,6 +939,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'tasks.lists': { lists: [] },
         'notes.list': { notes: [], tags: [] },
         'backup.profileRestoreStatus': { state: 'none' },
+        'attachments.list': { items: [], total: 0, coverage: { messages: 0, downloaded: 0 } },
         'profiles.list': {
           profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
           active: 'default',

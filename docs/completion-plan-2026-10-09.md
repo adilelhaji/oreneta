@@ -382,6 +382,11 @@ mbox/eml con corpus de regresión versionado en el repositorio.
 | 15 | **Chat y POP3** | #110 → #111, #97 | N3 POP3 contra maddy (UIDL, reconexión, borrado diferido, sin duplicados tras reinicio); chat según el adaptador aprobado | Dos ADR |
 | 16 | **Plataformas y evolución** | #115, #116, #117, #86, #22/#21 | N4 macOS con runner propio para arranque y un flujo de correo; Linux con `startup:verify` sobre WebKitGTK; ledger completo | Ninguna |
 
+Estado de la iteración 11 (2026-10-11, por delegación):
+- **#93:** lista de todos los adjuntos con filtros, cobertura explícita y
+  enlace al mensaje, sin índice de contenido (ADR-0020,
+  [registro](design/attachments.md)).
+
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 

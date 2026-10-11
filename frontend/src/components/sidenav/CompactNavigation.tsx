@@ -20,6 +20,7 @@ export function CompactNavigation() {
           ui$.peopleOpen.set(false)
           ui$.tasksOpen.set(false)
           ui$.notesOpen.set(false)
+          ui$.attachmentsOpen.set(false)
         }}
       />
       <IconButton

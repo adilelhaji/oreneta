@@ -5,6 +5,7 @@ import {
   Info,
   ListTodo,
   StickyNote,
+  Paperclip,
   Mail,
   Plus,
   RefreshCw,
@@ -86,6 +87,7 @@ export function QuickSettingsMenu({
           { key: 'people', label: t('people.title'), icon: BookUser },
           { key: 'tasks', label: t('tasks.title'), icon: ListTodo },
           { key: 'notes', label: t('notes.title', { defaultValue: 'Notes' }), icon: StickyNote },
+          { key: 'attachments', label: t('attachmentsView.title', { defaultValue: 'Attachments' }), icon: Paperclip },
         ].map(({ key, label, icon: Icon }) => (
           <MenuItem
             key={key}
@@ -96,6 +98,7 @@ export function QuickSettingsMenu({
               ui$.peopleOpen.set(key === 'people')
               ui$.tasksOpen.set(key === 'tasks')
               ui$.notesOpen.set(key === 'notes')
+              ui$.attachmentsOpen.set(key === 'attachments')
               onClose()
             }}
           />
