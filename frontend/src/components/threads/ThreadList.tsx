@@ -64,6 +64,7 @@ import { ScheduledSendsBar } from './ScheduledSendsBar'
 import { QuickFilterBar } from './QuickFilterBar'
 import { SearchUnderstoodBar } from './SearchUnderstoodBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
+import { SearchBuilder } from './SearchBuilder'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { ThreadTable, appliedListSort } from './ThreadTable'
@@ -402,6 +403,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
               )}
             </div>
 
+            {!isRSSAccount && <SearchBuilder query={query} />}
             <SavedSearchMenu query={query} />
 
             {!searchExpanded && (

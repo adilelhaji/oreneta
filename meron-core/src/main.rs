@@ -5067,6 +5067,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "id": id }))
         }
 
+        // The search box's own grammar, for a builder that edits a search
+        // field by field (#43): read into parts, and written back as text.
+        "search.parse" => {
+            let query = req_str(p, "query").unwrap_or_default();
+            Ok(json!({ "query": search::parse(&query) }))
+        }
+        "search.compose" => {
+            let query: search::Query = serde_json::from_value(p.get("query").cloned().unwrap_or_default())?;
+            Ok(json!({ "text": search::compose(&query) }))
+        }
+
         // Every attachment of the mail kept here (#93, ADR-0020). A file whose
         // bytes are no longer on disk (the cache is pruned) is listed without
         // a key: the interface offers its message instead of a dead link.

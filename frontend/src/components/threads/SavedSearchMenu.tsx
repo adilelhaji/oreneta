@@ -4,6 +4,7 @@ import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { settings$, type SavedSearch } from '../../states/settings'
 import { ui$ } from '../../states/ui'
+import { openMailAccount } from '../../states/kanban'
 import { useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { menuItemClass } from '../menu/menuStyles'
 
@@ -26,7 +27,12 @@ export function SavedSearchMenu({ query }: { query: string }) {
   )
 
   const trimmed = query.trim()
-  const alreadySaved = saved.some((search) => search.query === trimmed)
+  const account = useValue(ui$.selectedAccount)
+  const folder = useValue(ui$.selectedFolder)
+  const alreadySaved = saved.some(
+    (search) =>
+      search.query === trimmed && (search.account ?? account) === account && (search.folder ?? folder) === folder,
+  )
   if (!trimmed && saved.length === 0) return null
 
   const save = () => {
@@ -37,6 +43,8 @@ export function SavedSearchMenu({ query }: { query: string }) {
       // knows whether the search is any good is asking too early.
       name: trimmed,
       query: trimmed,
+      // Where it was typed: opening it goes back there (#43).
+      ...(account && folder ? { account, folder } : {}),
     }
     settings$.savedSearches.set([...saved, entry])
   }
@@ -76,13 +84,25 @@ export function SavedSearchMenu({ query }: { query: string }) {
               <button
                 type="button"
                 onClick={() => {
+                  if (search.account && search.folder && (search.account !== account || search.folder !== folder)) {
+                    openMailAccount(search.account, search.folder)
+                  }
                   ui$.query.set(search.query)
                   setOpen(false)
                 }}
                 className={`${menuItemClass} min-w-0 flex-1`}
               >
                 <Bookmark size={14} className="text-secondary" strokeWidth={1.75} />
-                <span className="min-w-0 flex-1 truncate text-left">{search.name}</span>
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {search.name}
+                  {search.folder && (
+                    <span className="ml-1.5 text-2xs text-secondary">
+                      {search.account === 'unified'
+                        ? t('search.scopeAll', { defaultValue: 'all accounts' })
+                        : search.folder}
+                    </span>
+                  )}
+                </span>
               </button>
               <button
                 type="button"

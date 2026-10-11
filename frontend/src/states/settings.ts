@@ -66,6 +66,12 @@ export type SavedSearch = {
   id: string
   name: string
   query: string
+  /**
+   * Where it was saved (#43): opening it goes back there. Absent on searches
+   * saved before this existed, which keep applying to whatever is open.
+   */
+  account?: string
+  folder?: string
 }
 
 /**
@@ -247,7 +253,9 @@ export function sanitizeSavedSearches(value: unknown): SavedSearch[] | null {
     const query = typeof candidate.query === 'string' ? candidate.query.trim() : ''
     const id = typeof candidate.id === 'string' ? candidate.id : ''
     if (!name || !query || !id) continue
-    clean.push({ id, name, query })
+    const account = typeof candidate.account === 'string' ? candidate.account : ''
+    const folder = typeof candidate.folder === 'string' ? candidate.folder : ''
+    clean.push(account && folder ? { id, name, query, account, folder } : { id, name, query })
   }
   return clean
 }

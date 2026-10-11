@@ -121,3 +121,42 @@ fn read_and_unread_are_different_questions() {
     // An `is:` nobody knows is text, not a silently dropped filter.
     assert_eq!(parse("is:important").text, "is:important");
 }
+
+#[test]
+fn a_query_written_back_reads_the_same() {
+    for input in [
+        "invoice",
+        "from:ann invoice",
+        "from:ann from:bob to:\"Cy Example\" subject:\"Quarterly numbers\" has:attachment is:unread",
+        "label:Work after:2026-01-31 before:2026-03-01",
+        "is:starred is:read",
+        "http://example.com/a:b report",
+        "after:2026-13-45 budget",
+        "since:2025-02-28 until:2025-03-01",
+        "  spaced    words  ",
+        "subject:\"   \" from:",
+    ] {
+        let read = parse(input);
+        let written = compose(&read);
+        assert_eq!(parse(&written), read, "{input:?} -> {written:?}");
+        assert_eq!(compose(&parse(&written)), written, "stable: {written:?}");
+    }
+}
+
+#[test]
+fn a_query_built_field_by_field_is_written_as_the_box_takes_it() {
+    let query = Query {
+        text: "budget".into(),
+        from: vec!["Ann Example".into()],
+        subject: vec!["Q3".into()],
+        flags: vec![Flag::HasAttachment],
+        label: Some("Client work".into()),
+        after: parse("after:2026-01-01").after,
+        ..Default::default()
+    };
+    assert_eq!(
+        compose(&query),
+        "budget from:\"Ann Example\" subject:Q3 has:attachment label:\"Client work\" after:2026-01-01"
+    );
+    assert_eq!(compose(&Query { from: vec!["  ".into(), "\"".into()], ..Default::default() }), "", "an empty value is no term");
+}

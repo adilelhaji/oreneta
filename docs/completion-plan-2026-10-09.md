@@ -386,6 +386,9 @@ Estado de la iteración 11 (2026-10-11, por delegación):
 - **#93:** lista de todos los adjuntos con filtros, cobertura explícita y
   enlace al mensaje, sin índice de contenido (ADR-0020,
   [registro](design/attachments.md)).
+- **#43:** constructor de búsquedas que lee y escribe con la gramática del
+  núcleo (ida y vuelta probada), y búsquedas guardadas con su cuenta y
+  carpeta (ADR-0021, [registro](design/search-builder.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
