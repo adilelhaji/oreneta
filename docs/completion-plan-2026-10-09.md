@@ -351,6 +351,25 @@ mbox/eml con corpus de regresión versionado en el repositorio.
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 
+### Modo de ejecución acordado el 2026-10-11
+
+El responsable eligió dos cosas:
+- **Decisiones de arquitectura.** Las que quedan las toma el agente con la
+  opción más prudente. Cada una se registra como ADR «aceptada por
+  delegación», con sus alternativas, y el responsable la revisa al final. Se
+  consulta antes solo lo que implique gasto, publicar algo o usar datos
+  reales.
+- **Verificación.** Se mantienen las pruebas automáticas en cada cambio (N1 a
+  N3 y N6-a11y en CI). La verificación nativa en Windows (N4) y con
+  proveedores reales (N5) se hace una sola vez, sobre la versión final.
+
+Siguen bloqueados hasta que el responsable aporte los recursos:
+- los registros OAuth propios;
+- la firma de la aplicación;
+- la identidad de Partner Center;
+- un equipo Windows;
+- cuentas de prueba.
+
 ## 5. Estrategia de verificación
 
 ### Niveles y qué prueba cada uno
