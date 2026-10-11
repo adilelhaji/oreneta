@@ -1,18 +1,32 @@
 import { useEffect, useRef } from 'react'
-import { ArrowLeft, BookUser, Building2, Copy, Mail, Phone, Search, SquarePen } from 'lucide-react'
+import {
+  ArrowLeft,
+  BookUser,
+  Building2,
+  Copy,
+  Mail,
+  Pencil,
+  Phone,
+  Search,
+  SquarePen,
+  Trash2,
+  UserPlus,
+} from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { openComposeTab } from '../../states/compose'
-import { loadPeople, people$, sourceLabel } from '../../states/people'
-import { showToast, ui$ } from '../../states/ui'
+import { deletePerson, draftOf, emptyDraft, loadPeople, people$, sourceLabel } from '../../states/people'
+import { confirmAction, showToast, ui$ } from '../../states/ui'
 import type { Person } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
+import { Button } from '../button/Button'
+import { PersonEditor } from './PersonEditor'
 
 /**
  * The address book, as a place rather than as a dropdown.
@@ -23,8 +37,10 @@ import { CompactNavigation } from '../sidenav/CompactNavigation'
  * came from, because a person from a CardDAV server and one from Google are
  * two rows on purpose and the reader should be able to tell which is which.
  *
- * Read-only, and it looks it: there is no edit button that turns out not to
- * save. Editing lives where the book does until writing back exists here.
+ * Only the local book is written to from here (ADR-0012): its people have an
+ * edit and a delete button. A synced book's people have neither — there is no
+ * edit button that turns out not to save. Editing those lives where the book
+ * does until writing back to it exists.
  */
 export function PeopleView() {
   const { t } = useTranslation()
@@ -67,6 +83,19 @@ export function PeopleView() {
     openComposeTab({ accountId: from.id, to: person.name ? `${person.name} <${addr}>` : addr })
   }
 
+  const removePerson = async (person: Person) => {
+    const confirmed = await confirmAction({
+      title: t('people.deleteTitle', { defaultValue: 'Delete contact?' }),
+      message: t('people.deleteText', {
+        name: person.name || person.emails[0]?.addr || '',
+        defaultValue: '{name} will be deleted from the address book on this computer.',
+      }),
+      confirmLabel: t('buttons.delete'),
+      tone: 'danger',
+    })
+    if (confirmed) await deletePerson(person)
+  }
+
   const copy = (text: string) => {
     void navigator.clipboard?.writeText(text).then(() => showToast(t('people.copied')))
   }
@@ -81,10 +110,16 @@ export function PeopleView() {
       >
         <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-header px-4 py-3">
           <CompactNavigation />
-          <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
-            <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
-            {t('people.title')}
-          </h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
+              <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
+              {t('people.title')}
+            </h1>
+            <Button variant="secondary" size="sm" onClick={() => people$.editing.set({ draft: emptyDraft() })}>
+              <UserPlus size={14} strokeWidth={1.75} />
+              {t('people.newContact', { defaultValue: 'New contact' })}
+            </Button>
+          </div>
           <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent">
             <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
             <input
@@ -173,7 +208,15 @@ export function PeopleView() {
                 {t('buttons.back')}
               </button>
             </div>
-            <PersonCard person={selected} onWrite={(addr) => writeTo(selected, addr)} onCopy={copy} />
+            <PersonCard
+              person={selected}
+              onWrite={(addr) => writeTo(selected, addr)}
+              onCopy={copy}
+              onEdit={() =>
+                people$.editing.set({ id: selected.id, version: selected.version, draft: draftOf(selected) })
+              }
+              onDelete={() => void removePerson(selected)}
+            />
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -181,6 +224,7 @@ export function PeopleView() {
           </div>
         )}
       </section>
+      <PersonEditor />
     </div>
   )
 }
@@ -189,10 +233,14 @@ function PersonCard({
   person,
   onWrite,
   onCopy,
+  onEdit,
+  onDelete,
 }: {
   person: Person
   onWrite: (addr: string) => void
   onCopy: (text: string) => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
   const { t } = useTranslation()
   const source = sourceLabel(person.source)
@@ -216,6 +264,18 @@ function PersonCard({
           {/* Where they came from, as a fact rather than an icon. */}
           <p className="mt-1 text-caption text-secondary/80">{t(`people.source.${source}`)}</p>
         </div>
+        {person.editable && (
+          <div className="flex gap-1">
+            <IconButton
+              icon={Pencil}
+              iconSize={14}
+              size="sm"
+              label={t('people.edit', { defaultValue: 'Edit' })}
+              onClick={onEdit}
+            />
+            <IconButton icon={Trash2} iconSize={14} size="sm" label={t('buttons.delete')} onClick={onDelete} />
+          </div>
+        )}
       </header>
 
       {person.emails.length > 0 && (

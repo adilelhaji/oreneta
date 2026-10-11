@@ -404,6 +404,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.carddavList(payload)
 	case "people.list":
 		return a.peopleList(payload)
+	case "people.save", "people.delete":
+		return a.peopleWrite(command, payload)
 	case "templates.list":
 		return a.templatesList(payload)
 	case "templates.save":

@@ -238,6 +238,44 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &request(method, params), &writer).await }
+        };
+
+        let created = call("people.save", json!({"person": {"name": "Ann", "emails": [{"addr": "ann@example.com"}]}}))
+            .await
+            .unwrap();
+        let id = created["id"].as_str().unwrap().to_owned();
+        assert_eq!(created["version"], "1");
+        let listed = call("people.list", json!({"query": "ann"})).await.unwrap();
+        assert_eq!(listed["people"][0]["editable"], true);
+        assert_eq!(listed["people"][0]["version"], "1");
+
+        // Two windows opened at version 1; the first one saves.
+        call("people.save", json!({"id": id, "version": "1", "person": {"name": "Ann Lee"}})).await.unwrap();
+        let stale = call("people.save", json!({"id": id, "version": "1", "person": {"name": "Annie"}}))
+            .await
+            .unwrap();
+        assert_eq!(stale["conflict"], true);
+        assert_eq!(stale["current"]["name"], "Ann Lee", "the reader is shown what is there now");
+
+        // An edit that does not say which version it was made from is refused.
+        assert!(call("people.save", json!({"id": id, "person": {"name": "X"}})).await.is_err());
+
+        let gone = call("people.delete", json!({"id": id, "version": "2"})).await.unwrap();
+        assert_eq!(gone["ok"], true);
+        let listed = call("people.list", json!({"query": ""})).await.unwrap();
+        assert!(listed["people"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn a_local_calendar_keeps_its_events_without_a_server() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -1051,6 +1089,59 @@ fn local_calendar_write(
             anyhow::bail!("{} is a subscribed calendar and cannot be changed here", calendar.name)
         }
         _ => Ok(None),
+    }
+}
+
+/// A person as the editor sends it: any field may be left out.
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct PersonInput {
+    name: String,
+    organisation: String,
+    note: String,
+    emails: Vec<LabelledInput>,
+    phones: Vec<LabelledInput>,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct LabelledInput {
+    #[serde(alias = "number")]
+    addr: String,
+    label: String,
+}
+
+impl PersonInput {
+    fn into_person(self) -> meron_core::contacts::person::Person {
+        use meron_core::contacts::person::{EmailAddress, Person, PhoneNumber};
+        Person {
+            name: self.name,
+            organisation: self.organisation,
+            note: self.note,
+            emails: self.emails.into_iter().map(|e| EmailAddress { addr: e.addr, label: e.label }).collect(),
+            phones: self.phones.into_iter().map(|p| PhoneNumber { number: p.addr, label: p.label }).collect(),
+            ..Default::default()
+        }
+    }
+}
+
+/// The bridge's answer to a write to the local address book.
+fn local_write_json(write: store::local_people::Write) -> Value {
+    match write {
+        store::local_people::Write::Saved { id, version } => json!({ "ok": true, "id": id, "version": version }),
+        store::local_people::Write::Conflict { current } => json!({
+            "ok": false,
+            "conflict": true,
+            "current": current.map(|stored| json!({
+                "id": stored.id,
+                "name": stored.person.name,
+                "organisation": stored.person.organisation,
+                "note": stored.person.note,
+                "emails": stored.person.emails,
+                "phones": stored.person.phones,
+                "version": stored.version,
+            })),
+        }),
     }
 }
 
@@ -2857,9 +2948,37 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "photo": stored.photo_key,
                         "emails": stored.person.emails,
                         "phones": stored.person.phones,
+                        "version": stored.version,
+                        // Only the local book is written to so far (ADR-0012);
+                        // every synced book stays read-only here.
+                        "editable": stored.origin.source == "local",
                     }))
                     .collect::<Vec<_>>()
             }))
+        }
+
+        // Creates a person in the local book, or edits one from the version
+        // it was read at. A different version saves nothing and answers with
+        // the copy that is there now, for the reader to choose (ADR-0012).
+        "people.save" => {
+            let id = p.get("id").and_then(Value::as_str).filter(|id| !id.is_empty());
+            let version = p.get("version").and_then(Value::as_str);
+            if id.is_some() && version.is_none() {
+                anyhow::bail!("an edit must say which version it was made from");
+            }
+            let input: PersonInput =
+                serde_json::from_value(p.get("person").cloned().context("missing param: person")?)
+                    .context("person")?;
+            let person = input.into_person();
+            let write = store::local_people::save(&engine.db.lock().unwrap(), id, version, &person, now_seconds())?;
+            Ok(local_write_json(write))
+        }
+
+        "people.delete" => {
+            let id = req_str(p, "id")?;
+            let version = req_str(p, "version")?;
+            let write = store::local_people::delete(&engine.db.lock().unwrap(), &id, &version)?;
+            Ok(local_write_json(write))
         }
 
         // Text the writer keeps because they write it often: a snippet

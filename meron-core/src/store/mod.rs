@@ -46,6 +46,7 @@ use crate::parse::{Attachment, Message};
 pub const DEFAULT_RSS_SYNC_INTERVAL_MINUTES: u64 = 60;
 
 mod accounts;
+pub mod local_people;
 mod settings;
 pub mod local_drafts;
 pub mod outgoing;
@@ -2598,6 +2599,8 @@ pub struct StoredPerson {
     pub person: crate::contacts::person::Person,
     /// Media key of the cached picture, empty when there is none.
     pub photo_key: String,
+    /// The version it was read at (ADR-0012); a write names it.
+    pub version: String,
 }
 
 /// Replace everything in one book with what a sync just read.
@@ -2747,7 +2750,7 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
     let needle = query.trim().to_lowercase();
     let like = format!("%{}%", escape_like(needle.clone()));
     let mut stmt = conn.prepare(
-        "SELECT id, source, account, book, uid, name, organisation, note, photo
+        "SELECT id, source, account, book, uid, name, organisation, note, photo, version
            FROM people
           WHERE ?1 = ''
              OR lower(name) LIKE ?2 ESCAPE '\\'
@@ -2774,6 +2777,7 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
                 photo: None,
             },
             photo_key: row.get(8)?,
+            version: row.get(9)?,
         })
     })?;
     let mut people: Vec<StoredPerson> = rows.flatten().collect();

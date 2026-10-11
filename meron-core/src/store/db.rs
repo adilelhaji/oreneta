@@ -648,6 +648,20 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         tx.execute_batch(super::outgoing::SCHEMA)?;
         tx.pragma_update(None, "user_version", 36)?;
     }
+    if version < 37 {
+        // The version a contact was read at: an ETag for CardDAV, a revision
+        // for the local book. A write carries it so a change made elsewhere is
+        // never overwritten (ADR-0012). Empty until the next read fills it.
+        // Checked first: a database whose recorded version was set back
+        // (as a repair or a test does) must not fail on a column it has.
+        let has_version: bool = tx
+            .prepare("SELECT 1 FROM pragma_table_info('people') WHERE name = 'version'")?
+            .exists([])?;
+        if !has_version {
+            tx.execute_batch("ALTER TABLE people ADD COLUMN version TEXT NOT NULL DEFAULT '';")?;
+        }
+        tx.pragma_update(None, "user_version", 37)?;
+    }
 
     tx.commit()?;
     Ok(())

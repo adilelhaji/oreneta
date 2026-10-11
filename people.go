@@ -19,3 +19,13 @@ func (a *App) peopleList(payload map[string]any) (any, error) {
 	}
 	return a.sidecar.Call("people.list", params)
 }
+
+// peopleWrite carries a write to the local address book (ADR-0012) through
+// to the core unchanged: the version check and the conflict answer are the
+// core's, and an engine that is not running cannot pretend to have saved.
+func (a *App) peopleWrite(method string, payload map[string]any) (any, error) {
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call(method, payload)
+}

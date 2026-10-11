@@ -139,6 +139,10 @@ export type Person = {
   photo: string
   emails: { addr: string; label: string }[]
   phones: { number: string; label: string }[]
+  /** The version it was read at; a write names it (ADR-0012). */
+  version?: string
+  /** Whether this book can be written to from here. Only the local book, so far. */
+  editable?: boolean
 }
 
 export type Attachment = {
