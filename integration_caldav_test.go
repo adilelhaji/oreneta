@@ -173,6 +173,30 @@ func TestIntegrationCalDAV(t *testing.T) {
 		}
 		eventsWhere(3, func(rows []map[string]any) bool { return count(rows, "Stand-up") == 1 })
 	})
+
+	t.Run("a .ics file goes to the server with its rule, once", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "in.ics")
+		ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Itest//EN\r\nBEGIN:VEVENT\r\nUID:yoga@itest\r\n" +
+			"DTSTAMP:20260101T000000Z\r\nDTSTART:20260305T180000Z\r\nDTEND:20260305T190000Z\r\nRRULE:FREQ=WEEKLY;COUNT=2\r\n" +
+			"SUMMARY:Yoga\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+		if err := os.WriteFile(file, []byte(ics), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		params := map[string]any{"account": account, "calendar": calendarURL, "path": file, "confirm": true}
+		first := callMap(t, sidecar, "calendar.importIcs", params)
+		if summary := first["summary"].(map[string]any); summary["added"] != float64(1) || summary["series"] != float64(1) {
+			t.Fatalf("import: %v", first)
+		}
+		status, body := server.dav(t, "GET", calendarURL+"yoga_itest.ics", "", nil)
+		if status != 200 || !strings.Contains(body, "RRULE:FREQ=WEEKLY;COUNT=2") {
+			t.Fatalf("the series should be on the server with its rule: HTTP %d\n%s", status, body)
+		}
+		again := callMap(t, sidecar, "calendar.importIcs", params)
+		if summary := again["summary"].(map[string]any); summary["added"] != float64(0) || summary["duplicates"] != float64(1) {
+			t.Fatalf("a second import adds nothing: %v", again)
+		}
+		eventsWhere(5, func(rows []map[string]any) bool { return count(rows, "Yoga") == 2 })
+	})
 }
 
 func copyMap(in map[string]any) map[string]any {

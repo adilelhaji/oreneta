@@ -97,3 +97,27 @@ it('an account still keeps its last server calendar', () => {
   const view = render(<CalendarPanel calendar={own} />)
   expect(view.getByText('An account keeps at least one calendar.')).toBeTruthy()
 })
+
+it('imports a .ics file only after showing what it adds, and offers it only where events can go', async () => {
+  const { importIcs, canImportInto } = await import('../../states/calendarFiles')
+  const { ui$, settleConfirm } = await import('../../states/ui')
+  expect(canImportInto({ kind: 'local', read_only: false })).toBe(true)
+  expect(canImportInto({ kind: 'caldav', read_only: false })).toBe(true)
+  expect(canImportInto({ kind: 'caldav', read_only: true })).toBe(false)
+  expect(canImportInto({ kind: 'subscribed', read_only: true })).toBe(false)
+  expect(canImportInto({ kind: 'account', read_only: false })).toBe(false)
+
+  const calls = bridge((_command, payload) =>
+    payload.confirm
+      ? { summary: { added: 2, duplicates: 1, skipped: 0, series: 1 }, imported: true }
+      : { summary: { added: 2, duplicates: 1, skipped: 0, series: 1 }, imported: false, path: '/tmp/a.ics' },
+  )
+  const pending = importIcs({ accountId: imap.id, id: 'local:1', name: 'Home' })
+  await waitFor(() => expect(ui$.confirm.get()).toBeTruthy())
+  expect(ui$.confirm.get()!.message).toContain('2 events will be added (1 repeating). 1 already there')
+  expect(calls).toHaveLength(1)
+  settleConfirm(true)
+  await pending
+  expect(calls[1].payload).toEqual({ account: imap.id, calendar: 'local:1', path: '/tmp/a.ics', confirm: true })
+  expect(ui$.toast.get()).toBe('Imported 2 events')
+})

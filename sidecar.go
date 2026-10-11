@@ -452,7 +452,7 @@ func sidecarCallTimeout(method string) time.Duration {
 		return 30 * time.Second
 	// Whole folders and whole profiles go through these: they stream to and
 	// from disk for as long as the data takes, so only a stuck call ends here.
-	case "messages.exportMbox", "archive.import", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage":
+	case "messages.exportMbox", "archive.import", "calendar.importIcs", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage":
 		return 2 * time.Hour
 	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete":
 		return 30 * time.Second

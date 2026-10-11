@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { CalendarDays, Trash2 } from 'lucide-react'
+import { CalendarDays, Download, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import {
   CALENDAR_COLORS,
@@ -11,6 +11,7 @@ import {
   setCalendarEnabled,
   type Calendar,
 } from '../../states/calendar'
+import { canImportInto, exportIcs, importIcs } from '../../states/calendarFiles'
 import { SettingsGroup, SettingRow, ToggleRow } from './AccountSettingsRows'
 import { Field } from '../field/Field'
 
@@ -96,6 +97,29 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
           checked={calendar.enabled}
           onChange={() => void run(setCalendarEnabled(calendar.accountId, calendar.id, !calendar.enabled))}
         />
+      </SettingsGroup>
+
+      <SettingsGroup title={t('calendar.files', { defaultValue: 'Calendar files' })}>
+        <div className="flex flex-wrap gap-2 px-4 py-3.5">
+          {canImportInto(calendar) && (
+            <button
+              type="button"
+              onClick={() => void importIcs(calendar)}
+              className="inline-flex items-center gap-1.5 rounded-control bg-hover px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-active cursor-pointer"
+            >
+              <Upload size={14} strokeWidth={1.75} aria-hidden="true" />
+              {t('calendar.importIcs', { defaultValue: 'Import .ics…' })}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void exportIcs(calendar)}
+            className="inline-flex items-center gap-1.5 rounded-control bg-hover px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-active cursor-pointer"
+          >
+            <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            {t('calendar.exportIcs', { defaultValue: 'Export .ics…' })}
+          </button>
+        </div>
       </SettingsGroup>
 
       <SettingsGroup title={t('calendar.dangerZone', { defaultValue: 'Remove' })}>

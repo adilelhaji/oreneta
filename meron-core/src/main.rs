@@ -396,6 +396,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_ics_file_is_previewed_imported_once_and_exported_from_a_local_calendar() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oreneta-ics-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let account = "acct@example.test";
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let file = dir.join("in.ics");
+        std::fs::write(&file, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n\
+BEGIN:VEVENT\r\nUID:a@x\r\nDTSTART:20300110T090000Z\r\nDTEND:20300110T100000Z\r\nSUMMARY:Dentist\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:b@x\r\nDTSTART:20300111T090000Z\r\nDTEND:20300111T100000Z\r\nSUMMARY:Plumber\r\nEND:VEVENT\r\n\
+END:VCALENDAR\r\n").unwrap();
+        let params = json!({"account": account, "calendar": home, "path": file.to_string_lossy()});
+
+        let preview = call("calendar.importIcs", params.clone()).await.unwrap();
+        assert_eq!((preview["summary"]["added"].clone(), preview["imported"].clone()), (json!(2), json!(false)));
+        assert!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().is_empty(), "a preview stores nothing");
+
+        let mut confirm = params.clone();
+        confirm["confirm"] = json!(true);
+        assert_eq!(call("calendar.importIcs", confirm.clone()).await.unwrap()["summary"]["added"], 2);
+        let again = call("calendar.importIcs", confirm).await.unwrap();
+        assert_eq!((again["summary"]["added"].clone(), again["summary"]["duplicates"].clone()), (json!(0), json!(2)));
+
+        let out = dir.join("out.ics");
+        let exported = call("calendar.exportIcs", json!({"account": account, "calendar": home, "path": out.to_string_lossy()})).await.unwrap();
+        assert_eq!(exported["events"], 2);
+        let written = std::fs::read_to_string(&out).unwrap();
+        assert!(written.contains("SUMMARY:Dentist") && written.contains("SUMMARY:Plumber"));
+        assert!(!dir.join("out.ics.part").exists());
+
+        // A subscription cannot take imported events.
+        let refused = call("calendar.importIcs", json!({"account": account, "calendar": "missing", "path": file.to_string_lossy()})).await;
+        assert!(refused.is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
     async fn notes_are_written_searched_and_trashed_through_the_dispatcher() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -4828,6 +4872,124 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }],
             )?;
             Ok(json!({ "id": id }))
+        }
+
+        // A .ics file into a local or CalDAV calendar (#101): previewed first
+        // (`confirm` false), and never added twice.
+        "calendar.importIcs" => {
+            let account = req_str(p, "account")?;
+            let calendar_id = req_str(p, "calendar")?;
+            let path = req_str(p, "path")?;
+            let confirm = p.get("confirm").and_then(Value::as_bool).unwrap_or(false);
+            let size = std::fs::metadata(&path).with_context(|| format!("open {path}"))?.len();
+            if size as usize > calendar::import::MAX_FILE_BYTES {
+                anyhow::bail!("this file is larger than a calendar file may be (20 MB)");
+            }
+            let text = String::from_utf8_lossy(&std::fs::read(&path)?).into_owned();
+            let items = calendar::import::split(&text)?;
+            let target = calendar::calendar_of(&engine.db.lock().unwrap(), &account, &calendar_id)?
+                .context("that calendar is no longer here")?;
+            let mut summary = calendar::import::Summary::default();
+            match target.kind {
+                calendar::CalendarKind::Local => {
+                    let now = now_seconds();
+                    let db = engine.db.lock().unwrap();
+                    for item in &items {
+                        let (events, skipped) = match calendar::import::local_events(item, &calendar_id, now) {
+                            Ok(found) => found,
+                            Err(_) => {
+                                summary.skipped += 1;
+                                continue;
+                            }
+                        };
+                        summary.skipped += skipped;
+                        let fresh: Vec<&calendar::Event> = events
+                            .iter()
+                            .filter(|event| {
+                                !db.prepare("SELECT 1 FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id = ?3")
+                                    .and_then(|mut stmt| stmt.exists(rusqlite::params![account, calendar_id, event.id]))
+                                    .unwrap_or(false)
+                            })
+                            .collect();
+                        if fresh.is_empty() {
+                            if !events.is_empty() {
+                                summary.duplicates += 1;
+                            }
+                            continue;
+                        }
+                        summary.added += 1;
+                        summary.series += item.repeats as usize;
+                        if confirm {
+                            for event in fresh {
+                                calendar::put_local_event(&db, &account, event)?;
+                            }
+                        }
+                    }
+                }
+                calendar::CalendarKind::CalDav => {
+                    let (target, transport) = caldav_write(&engine, &account, &calendar_id)?
+                        .context("that calendar is no longer here")?;
+                    let known: Vec<bool> = {
+                        let db = engine.db.lock().unwrap();
+                        items
+                            .iter()
+                            .map(|item| calendar::caldav::locate(&db, &account, &target.id, &item.uid).map(|l| l.is_some()))
+                            .collect::<anyhow::Result<_>>()?
+                    };
+                    let url = target.id.clone();
+                    let plan: Vec<(calendar::import::Item, bool)> = items.into_iter().zip(known).collect();
+                    let (result, located) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+                        let mut summary = calendar::import::Summary::default();
+                        let mut located = Vec::new();
+                        for (item, known) in plan {
+                            if known {
+                                summary.duplicates += 1;
+                                continue;
+                            }
+                            if !confirm {
+                                summary.added += 1;
+                                summary.series += item.repeats as usize;
+                                continue;
+                            }
+                            let href = calendar::caldav::new_href(&url, &item.uid)?;
+                            match calendar::caldav::put_object(&transport, &url, &href, &item.object, None)? {
+                                meron_core::carddav::client::Written::Saved { etag } => {
+                                    summary.added += 1;
+                                    summary.series += item.repeats as usize;
+                                    located.push(calendar::caldav::Located { uid: item.uid, href, etag: etag.unwrap_or_default() });
+                                }
+                                // Something already lives at that address: the
+                                // same event, imported before.
+                                meron_core::carddav::client::Written::Conflict => summary.duplicates += 1,
+                            }
+                        }
+                        Ok((summary, located))
+                    })
+                    .await??;
+                    summary = result;
+                    if confirm {
+                        calendar::caldav::remember(&engine.db.lock().unwrap(), &account, &target.id, &located)?;
+                        let now = now_seconds();
+                        spawn_calendar_sync(engine.clone(), out.clone(), account.clone(), now - 86_400 * 31, now + 86_400 * 366);
+                    }
+                }
+                _ => anyhow::bail!("{} cannot take imported events; choose a local or CalDAV calendar", target.name),
+            }
+            Ok(json!({ "summary": summary, "imported": confirm }))
+        }
+
+        // A calendar's events, as the calendar holds them here, to a .ics
+        // file. Written beside the target and renamed when complete.
+        "calendar.exportIcs" => {
+            let account = req_str(p, "account")?;
+            let calendar_id = req_str(p, "calendar")?;
+            let path = req_str(p, "path")?;
+            let events = calendar::events_of_calendar(&engine.db.lock().unwrap(), &account, &calendar_id)?;
+            let body = calendar::ics::export(&events, now_seconds());
+            let partial = format!("{path}.part");
+            std::fs::write(&partial, body.as_bytes()).with_context(|| format!("write {path}"))?;
+            std::fs::rename(&partial, &path).with_context(|| format!("finish {path}"))?;
+            Ok(json!({ "saved": true, "events": events.len() }))
         }
 
         // CalDAV (#101, ADR-0018): find the calendars on a server, then keep

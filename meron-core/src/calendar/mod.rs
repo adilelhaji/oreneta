@@ -12,6 +12,8 @@
 pub mod caldav;
 pub mod google;
 pub mod ics;
+pub mod import;
+pub mod itip;
 pub mod route;
 pub mod subscription;
 
@@ -543,6 +545,21 @@ pub fn events_in_window(
     account: &str,
     window: (i64, i64),
 ) -> Result<Vec<Event>> {
+    events_where(conn, account, window, None)
+}
+
+/// Every cached occurrence of one calendar, shown or hidden: what an export
+/// of it holds.
+pub fn events_of_calendar(conn: &Connection, account: &str, calendar_id: &str) -> Result<Vec<Event>> {
+    events_where(conn, account, (i64::MIN, i64::MAX), Some(calendar_id))
+}
+
+fn events_where(
+    conn: &Connection,
+    account: &str,
+    window: (i64, i64),
+    calendar_id: Option<&str>,
+) -> Result<Vec<Event>> {
     let (from, to) = window;
     let mut stmt = conn.prepare(
         "SELECT e.calendar_id, e.event_id, e.change_key, e.subject, e.location,
@@ -552,12 +569,13 @@ pub fn events_in_window(
          FROM calendar_events e
          JOIN calendars c
            ON c.account = e.account AND c.provider_id = e.calendar_id
-         WHERE e.account = ?1 AND c.enabled = 1
+         WHERE e.account = ?1
+           AND (?4 IS NULL AND c.enabled = 1 OR e.calendar_id = ?4)
            AND e.end_utc > ?2 AND e.start_utc < ?3
          ORDER BY e.start_utc, e.subject",
     )?;
     let events = stmt
-        .query_map(params![account, from, to], |row| {
+        .query_map(params![account, from, to, calendar_id], |row| {
             Ok(Event {
                 calendar_id: row.get(0)?,
                 id: row.get(1)?,
