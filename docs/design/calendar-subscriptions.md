@@ -51,6 +51,24 @@ Los defectos de abajo se reprodujeron con fixtures antes de corregirlos.
   Exchange real podría rechazar todas las ediciones de series. Necesita
   evidencia de proveedor y decidir entre `AutoResolve` y `NeverOverwrite`.
 
+## Editar toda la serie en Google (#100)
+
+- **La regla no se borra.** Una edición enviaba `"recurrence": null` cuando el
+  editor no había cargado la regla. Al ser un PATCH, eso borraba la regla y la
+  serie se quedaba en su primera ocurrencia. Ahora la regla solo se envía si
+  hay una, y nunca en la edición de una ocurrencia suelta.
+- **La serie no se recorta.** Editar la serie desde una ocurrencia escribía
+  la fecha de esa ocurrencia en el maestro: la serie empezaba ahí y perdía las
+  anteriores. Ahora se lee el maestro y se conserva su primera fecha. Cambian
+  la hora del día, en la zona del equipo, y la duración. La escritura lleva el
+  etag del maestro.
+- **Mover la serie a otros días** desde una ocurrencia no se hace por esta
+  vía. Hace falta cambiar la regla.
+- **Exchange pendiente.** `update_fields` tiene el mismo defecto: escribe el
+  inicio de la ocurrencia en el maestro y no envía la regla. Corregirlo
+  necesita leer el maestro por EWS y probarlo contra un Exchange real. La
+  política del repositorio no admite grabaciones inventadas.
+
 ## Pendiente
 
 - **Hora ambigua en el cambio de hora.** Un `DTSTART` en la hora que se repite

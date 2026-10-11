@@ -412,7 +412,7 @@ pub fn create_event(token: &str, event: &Event, notify: bool) -> Result<Event> {
         token,
         "POST",
         &url,
-        Some(event_body(event)?),
+        Some(event_body(event, true)?),
     )?)
     .context("parse created event")?;
     Ok(Event {
@@ -434,11 +434,36 @@ pub fn update_event(
     // Changing the series means changing the master it was expanded from;
     // changing this one means changing the instance, which Google records as
     // an exception and leaves the rest of the series alone.
-    let (target, version) = match (whole_series, event.series_id.as_deref()) {
-        // The version read is the occurrence's, not the master's, so it
-        // cannot guard a write to the master.
-        (true, Some(series)) => (series, None),
-        _ => (event.id.as_str(), event.change_key.as_deref()),
+    let (target, body, version) = match (whole_series, event.series_id.as_deref()) {
+        (true, Some(series)) => {
+            // The occurrence being edited is not where the series starts.
+            // Writing its date onto the master moved the start of the series
+            // to it, and every earlier occurrence was gone. The master keeps
+            // its own first date and takes the new time of day and length.
+            let master_url = format!(
+                "{API}/calendars/{}/events/{}",
+                urlencode(&event.calendar_id),
+                urlencode(series),
+            );
+            #[derive(Deserialize)]
+            struct Master {
+                start: Option<EventDateTime>,
+                #[serde(default)]
+                etag: Option<String>,
+            }
+            let master: Master = serde_json::from_str(&call(token, "GET", &master_url, None)?)
+                .context("read the series")?;
+            let first = master
+                .start
+                .as_ref()
+                .and_then(instant)
+                .context("the series has no start")?;
+            let anchored = anchored_to_series(event, first).context("place the series")?;
+            (series, event_body(&anchored, true)?, master.etag)
+        }
+        // An occurrence cannot carry a rule of its own; only the series can.
+        (false, Some(_)) => (event.id.as_str(), event_body(event, false)?, event.change_key.clone()),
+        _ => (event.id.as_str(), event_body(event, true)?, event.change_key.clone()),
     };
     let url = format!(
         "{API}/calendars/{}/events/{}?{}",
@@ -448,10 +473,40 @@ pub fn update_event(
     );
     // Sent with the version it was read at, so an edit made elsewhere in
     // between is refused (412) rather than silently overwritten.
-    let answer = call_with(token, "PATCH", &url, Some(event_body(event)?), version)?;
+    let answer = call_with(token, "PATCH", &url, Some(body), version.as_deref())?;
+    if whole_series && event.series_id.is_some() {
+        // The new version is the master's; the occurrence on screen has its
+        // own, which the sync that follows brings.
+        return Ok(None);
+    }
     Ok(serde_json::from_str::<CreatedEvent>(&answer)
         .ok()
         .and_then(|updated| updated.etag))
+}
+
+/// The edited occurrence's times moved onto the series' first date: same
+/// time of day (in this machine's zone, which is the zone the series is
+/// written in) and same length.
+fn anchored_to_series(event: &Event, series_start: i64) -> Option<Event> {
+    use chrono::TimeZone as _;
+    let length = (event.end - event.start).max(0);
+    let start = if event.all_day {
+        // All-day dates are UTC dates throughout this module.
+        let date = chrono::DateTime::from_timestamp(series_start, 0)?.date_naive();
+        date.and_hms_opt(0, 0, 0)?.and_utc().timestamp()
+    } else {
+        let date = chrono::Local.timestamp_opt(series_start, 0).earliest()?.date_naive();
+        let time = chrono::Local.timestamp_opt(event.start, 0).earliest()?.time();
+        chrono::Local
+            .from_local_datetime(&date.and_time(time))
+            .earliest()?
+            .timestamp()
+    };
+    Some(Event {
+        start,
+        end: start + length,
+        ..event.clone()
+    })
 }
 
 /// Answers a meeting invitation.
@@ -612,7 +667,7 @@ fn local_timezone() -> String {
 }
 
 /// The request body for a create or update.
-fn event_body(event: &Event) -> Result<serde_json::Value> {
+fn event_body(event: &Event, with_rule: bool) -> Result<serde_json::Value> {
     // Both keys are always sent, the unused one as null.
     //
     // An update is a PATCH, so anything left out keeps the value the server
@@ -648,7 +703,7 @@ fn event_body(event: &Event) -> Result<serde_json::Value> {
             }),
         )
     };
-    Ok(serde_json::json!({
+    let mut body = serde_json::json!({
         "summary": event.subject,
         "location": event.location.clone().unwrap_or_default(),
         "description": event.description,
@@ -665,12 +720,6 @@ fn event_body(event: &Event) -> Result<serde_json::Value> {
         // Explicit either way: sending overrides when there is a reminder, and
         // an empty override list when there is none, so removing a reminder
         // actually removes it rather than falling back to the calendar's.
-        // Only on a create: changing an existing series' rule is a different
-        // question ("this one or all of them?") and is not asked here yet.
-        "recurrence": match event.recurrence.as_ref().and_then(|rule| rrule(rule, event.start)) {
-            Some(line) => serde_json::json!([line]),
-            None => serde_json::Value::Null,
-        },
         "reminders": match event.reminder_minutes {
             Some(minutes) => serde_json::json!({
                 "useDefault": false,
@@ -678,7 +727,16 @@ fn event_body(event: &Event) -> Result<serde_json::Value> {
             }),
             None => serde_json::json!({ "useDefault": false, "overrides": [] }),
         },
-    }))
+    });
+    // A rule is sent only when there is one to send. This is a PATCH: a null
+    // here cleared the series' rule whenever the editor had not loaded it,
+    // turning a series into its first occurrence.
+    if with_rule {
+        if let Some(line) = event.recurrence.as_ref().and_then(|rule| rrule(rule, event.start)) {
+            body["recurrence"] = serde_json::json!([line]);
+        }
+    }
+    Ok(body)
 }
 
 /// Who is on an event, and its notes.
@@ -1071,11 +1129,67 @@ mod tests {
 
     #[test]
     fn a_series_edit_does_not_claim_the_occurrences_version_for_the_master() {
-        let seen = serve(vec![(200, r#"{"id":"master"}"#.into())]);
+        let seen = serve(vec![
+            (200, r#"{"etag":"\"master\"","start":{"dateTime":"2026-10-05T09:00:00Z"}}"#.into()),
+            (200, r#"{"id":"master"}"#.into()),
+        ]);
         update_event("token", &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
         let seen = seen.lock().unwrap();
-        assert!(seen[0].path.contains("/events/master"));
-        assert_eq!(seen[0].if_match, None);
+        assert!(seen[1].path.contains("/events/master"));
+        assert_eq!(seen[1].if_match.as_deref(), Some("\"master\""), "the master's own version, never the occurrence's");
+    }
+
+    #[test]
+    fn a_series_edit_keeps_the_series_first_date_and_its_rule() {
+        use chrono::TimeZone as _;
+        let local = |y, m, d, h| {
+            chrono::Local
+                .from_local_datetime(&chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, 0, 0).unwrap())
+                .earliest()
+                .unwrap()
+                .timestamp()
+        };
+        // The series began on 5 October at 09:00. The occurrence on 19
+        // October is edited to 10:00–11:30 and saved for the whole series.
+        let master_start = rfc3339(local(2026, 10, 5, 9)).unwrap();
+        let seen = serve(vec![
+            (200, format!(r#"{{"etag":"\"master-v3\"","start":{{"dateTime":"{master_start}"}}}}"#)),
+            (200, r#"{"id":"master","etag":"\"master-v4\""}"#.into()),
+        ]);
+        let mut occurrence = stored(Some("\"occurrence\""), Some("master"));
+        occurrence.start = local(2026, 10, 19, 10);
+        occurrence.end = occurrence.start + 90 * 60;
+        occurrence.recurrence = None; // the editor had not loaded the rule
+
+        let version = update_event("token", &occurrence, true, false).unwrap();
+        assert_eq!(version, None, "the master's version is not the occurrence's");
+
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].method, "GET");
+        assert!(seen[1].path.contains("/events/master"));
+        assert_eq!(seen[1].if_match.as_deref(), Some("\"master-v3\""), "the master is written at the version read");
+        let body: serde_json::Value = serde_json::from_str(&seen[1].body).unwrap();
+        let start = chrono::DateTime::parse_from_rfc3339(body["start"]["dateTime"].as_str().unwrap()).unwrap();
+        let end = chrono::DateTime::parse_from_rfc3339(body["end"]["dateTime"].as_str().unwrap()).unwrap();
+        assert_eq!(start.timestamp(), local(2026, 10, 5, 10), "first date kept, new time of day");
+        assert_eq!(end.timestamp() - start.timestamp(), 90 * 60);
+        assert!(body.get("recurrence").is_none(), "no rule sent means the rule is kept, not cleared");
+    }
+
+    #[test]
+    fn an_occurrence_edit_never_carries_a_rule() {
+        let seen = serve(vec![(200, r#"{"id":"occurrence-1","etag":"\"v2\""}"#.into())]);
+        let mut occurrence = stored(Some("\"v1\""), Some("master"));
+        occurrence.recurrence = Some(super::super::Recurrence {
+            freq: super::super::Frequency::Weekly,
+            interval: 1,
+            weekdays: vec![1],
+            until: None,
+            count: None,
+        });
+        update_event("token", &occurrence, false, false).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].body).unwrap();
+        assert!(body.get("recurrence").is_none());
     }
 
     #[test]
@@ -1177,7 +1291,7 @@ mod tests {
             all_day: false,
             ..Default::default()
         };
-        let body = event_body(&timed).expect("body");
+        let body = event_body(&timed, true).expect("body");
         assert!(body["start"]["dateTime"].is_string());
         assert!(
             body["start"]["timeZone"].is_string(),
@@ -1192,7 +1306,7 @@ mod tests {
             all_day: true,
             ..timed
         };
-        let body = event_body(&all_day).expect("body");
+        let body = event_body(&all_day, true).expect("body");
         assert!(body["start"]["date"].is_string());
         assert!(body["start"]["dateTime"].is_null());
         assert!(body["end"]["dateTime"].is_null());
