@@ -5400,3 +5400,76 @@ fn update_message_gmail_labels_with_an_empty_set_genuinely_clears_the_cache() {
 
     assert!(thread_labels(&conn, "acct", "t-1").unwrap().is_empty());
 }
+
+#[test]
+fn a_task_on_a_conversation_with_two_messages_at_the_same_time_is_listed_once() {
+    let conn = test_conn();
+    let header = |uid| MessageHeader {
+        uid,
+        from_name: "Ann".into(),
+        subject: "Re: plan".into(),
+        thread_key: "t-1".into(),
+        date: 50,
+        ..Default::default()
+    };
+    upsert_messages(&conn, "acct", "INBOX", &[header(1), header(2)]).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    let tasks = list_tasks(&conn, true).unwrap();
+    assert_eq!(tasks.len(), 1, "one task, one row");
+    assert_eq!(tasks[0].subject, "Re: plan");
+}
+
+#[test]
+fn a_task_follows_its_conversation_to_the_folder_it_moved_to() {
+    let conn = test_conn();
+    let message = |uid, key: &str| MessageHeader {
+        uid,
+        subject: "Renew".into(),
+        thread_key: key.into(),
+        date: 5,
+        ..Default::default()
+    };
+    upsert_messages(&conn, "acct", "Archive", &[message(7, "t-1")]).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    let tasks = list_tasks(&conn, true).unwrap();
+    assert_eq!((tasks[0].folder.as_str(), tasks[0].subject.as_str(), tasks[0].located), ("Archive", "Renew", true));
+
+    // Still in the folder it was made in as well (Gmail labels): that one wins.
+    upsert_messages(&conn, "acct", "INBOX", &[message(3, "t-1")]).unwrap();
+    assert_eq!(list_tasks(&conn, true).unwrap()[0].folder, "INBOX");
+
+    // A uid key names one message in one folder; uid 7 elsewhere is another message.
+    upsert_messages(&conn, "acct", "Archive", &[message(9, "")]).unwrap();
+    save_task(&conn, "acct", "uid:9", "INBOX", None, "", 11).unwrap();
+    let orphan = list_tasks(&conn, true).unwrap().into_iter().find(|t| t.thread_key == "uid:9").unwrap();
+    assert_eq!((orphan.folder.as_str(), orphan.located), ("INBOX", false), "reported as not found, not guessed");
+
+    // Saving again from where it now is records the new folder.
+    save_task(&conn, "acct", "t-1", "Archive", None, "moved", 12).unwrap();
+    let folder: String = conn
+        .query_row("SELECT folder FROM tasks WHERE thread_key = 't-1'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(folder, "Archive");
+}
+
+#[test]
+fn reopening_a_task_says_why_it_cannot_and_a_missing_task_is_an_error() {
+    let conn = test_conn();
+    let first = save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    set_task_completed(&conn, first, true, 20).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "again", 30).unwrap();
+    let error = set_task_completed(&conn, first, false, 40).unwrap_err().to_string();
+    assert!(error.contains("already has an open task"), "{error}");
+    let error = set_task_completed(&conn, 9999, true, 40).unwrap_err().to_string();
+    assert!(error.contains("no longer exists"), "{error}");
+}
+
+#[test]
+fn removing_an_account_removes_its_tasks_and_no_others() {
+    let conn = test_conn();
+    save_task(&conn, "gone", "t-1", "INBOX", None, "", 10).unwrap();
+    save_task(&conn, "kept", "t-1", "INBOX", None, "", 10).unwrap();
+    crate::store::delete_account(&conn, "gone").unwrap();
+    let left: Vec<String> = list_tasks(&conn, true).unwrap().into_iter().map(|t| t.account).collect();
+    assert_eq!(left, vec!["kept"]);
+}

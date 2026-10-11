@@ -33,6 +33,10 @@ export function TaskDialog() {
   const [note, setNote] = useState(() => state?.note ?? '')
   const [busy, setBusy] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(editing)
+  // The task's own fields could not be read (the core failed, or the task is
+  // gone). Saving then would write the blank placeholder over the real note,
+  // so the fields stay locked and the reader is told why.
+  const [unreadable, setUnreadable] = useState(false)
 
   // The card only ever carries the id and due date, never the note, so an
   // existing task's real fields are fetched fresh rather than trusting a
@@ -42,11 +46,13 @@ export function TaskDialog() {
     let live = true
     void getTask(state.id).then((task) => {
       if (!live) return
-      if (task) {
+      if (task && task !== 'failed') {
         setDueAt(toDateInput(task.due_at))
         setNote(task.note)
+        setLoadingExisting(false)
+      } else {
+        setUnreadable(true)
       }
-      setLoadingExisting(false)
     })
     return () => {
       live = false
@@ -58,6 +64,8 @@ export function TaskDialog() {
   const close = () => ui$.taskEditor.set(null)
 
   const submit = async () => {
+    // Enter in the form submits too, so the lock is checked here as well.
+    if (loadingExisting) return
     setBusy(true)
     try {
       await saveTask(state.threadId, { dueAt: fromDateInput(dueAt), note: note.trim() })
@@ -107,6 +115,14 @@ export function TaskDialog() {
           void submit()
         }}
       >
+        {unreadable && (
+          <p role="alert" className="rounded-control bg-raised px-3 py-2 text-caption text-secondary">
+            {t('tasks.unreadable', {
+              defaultValue:
+                'This task could not be read, so it cannot be edited now. Close and try again; nothing has been changed.',
+            })}
+          </p>
+        )}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="task-due" className="text-caption font-bold uppercase tracking-wide text-secondary">
             {t('tasks.dueDate')}

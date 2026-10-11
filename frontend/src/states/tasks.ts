@@ -19,6 +19,9 @@ export type Task = {
   subject: string
   from_name: string
   from_addr: string
+  /** Whether the conversation was found in the local cache; `folder_id` is
+   * where it was found. Absent from older cores, which never said. */
+  located?: boolean
 }
 
 export const tasks$ = observable({
@@ -49,11 +52,13 @@ export async function loadTasks(includeCompleted = tasks$.includeCompleted.get()
  * task, rather than starting from a blank note that would overwrite the
  * real one on save.
  */
-export async function getTask(id: number): Promise<{ due_at: number | null; note: string } | null> {
+export async function getTask(id: number): Promise<{ due_at: number | null; note: string } | null | 'failed'> {
   try {
     return await invoke('tasks.get', { id })
   } catch {
-    return null
+    // Not the same as "no such task": the caller must not go on as if the
+    // note were blank, or saving would overwrite the real one.
+    return 'failed'
   }
 }
 

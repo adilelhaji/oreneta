@@ -6,7 +6,7 @@ import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
 import { deleteTask, loadTasks, setTaskCompleted, tasks$, type Task } from '../../states/tasks'
 import { openMailAccount } from '../../states/kanban'
-import { ui$ } from '../../states/ui'
+import { showToast, ui$ } from '../../states/ui'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
@@ -57,6 +57,18 @@ export function TasksView() {
   }, [loaded])
 
   const open = (task: Task) => {
+    // Opening a folder the conversation is not in showed an empty reader and
+    // no reason. Say so instead, and stay on the list.
+    if (task.located === false) {
+      showToast(
+        t('tasks.notFound', {
+          defaultValue:
+            'This conversation is no longer in the local copy of your mail (moved or deleted). The task is kept.',
+        }),
+        'error',
+      )
+      return
+    }
     ui$.tasksOpen.set(false)
     openMailAccount(task.account_id, task.folder_id, false)
     ui$.selectedThread.set(task.thread_id)

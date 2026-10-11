@@ -2335,6 +2335,10 @@ pub struct TaskCard {
     pub subject: String,
     pub from_name: String,
     pub from_addr: String,
+    /// Whether the conversation was found in the local cache. `folder` is
+    /// where it was found, which is where the task was made unless the
+    /// conversation has moved since.
+    pub located: bool,
 }
 
 /// Creates a task on this conversation, or edits the one already open on it.
@@ -2357,7 +2361,8 @@ pub fn save_task(
          VALUES(?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(account, thread_key) WHERE completed_at IS NULL DO UPDATE SET
            note = excluded.note,
-           due_at = excluded.due_at",
+           due_at = excluded.due_at,
+           folder = excluded.folder",
         params![account, thread_key, folder, note, due_at, now],
     )?;
     conn.query_row(
@@ -2376,10 +2381,26 @@ pub fn save_task(
 /// honest answer here, not a case to paper over.
 pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64) -> Result<()> {
     let completed_at: Option<i64> = completed.then_some(now);
-    conn.execute(
+    let changed = match conn.execute(
         "UPDATE tasks SET completed_at = ?2 WHERE id = ?1",
         params![id, completed_at],
-    )?;
+    ) {
+        Ok(changed) => changed,
+        // Reopening a task while another is open on the same conversation.
+        // The raw constraint message ("UNIQUE constraint failed: tasks...")
+        // told the reader nothing they could act on.
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            anyhow::bail!(
+                "this conversation already has an open task; finish or delete that one before reopening this one"
+            )
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if changed == 0 {
+        anyhow::bail!("this task no longer exists");
+    }
     Ok(())
 }
 
@@ -2412,18 +2433,30 @@ pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
 /// subject/sender rather than vanishing: the reader made the task, and a
 /// gap in the local cache is not a reason to lose it.
 pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<TaskCard>> {
-    let where_clause = if include_completed { "" } else { "WHERE t.completed_at IS NULL" };
+    let where_clause = if include_completed { "" } else { "WHERE task.completed_at IS NULL" };
+    // One message stands for the conversation: in the folder the task was
+    // made in if it is still there, otherwise wherever it has moved to
+    // (archived, filed), latest first, ties broken by uid. A join on "the
+    // latest date" listed a task twice when two messages shared that date,
+    // and a conversation moved elsewhere came back blank and opened the
+    // folder it had left. A `uid:` key names a message in one folder only,
+    // so it is never looked for elsewhere.
     let sql = format!(
-        "SELECT t.id, t.account, t.folder, t.thread_key, t.note, t.due_at, t.completed_at, t.created_at,
-                COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, '')
-           FROM tasks t
-           LEFT JOIN messages m
-             ON m.account = t.account AND m.folder = t.folder
-            AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = t.thread_key
-            AND m.date = (SELECT MAX(m2.date) FROM messages m2
-                            WHERE m2.account = m.account AND m2.folder = m.folder
-                              AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = t.thread_key)
-          {where_clause}
+        "SELECT t.id, t.account, COALESCE(m.folder, t.folder), t.thread_key, t.note, t.due_at,
+                t.completed_at, t.created_at,
+                COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, ''),
+                m.id IS NOT NULL
+           FROM (SELECT task.*, COALESCE(
+                   (SELECT m2.id FROM messages m2
+                     WHERE m2.account = task.account AND m2.folder = task.folder
+                       AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = task.thread_key
+                     ORDER BY m2.date DESC, m2.uid DESC LIMIT 1),
+                   (SELECT m2.id FROM messages m2
+                     WHERE m2.account = task.account AND task.thread_key NOT LIKE 'uid:%'
+                       AND m2.thread_key = task.thread_key
+                     ORDER BY m2.date DESC, m2.uid DESC LIMIT 1)) AS message_id
+                   FROM tasks task {where_clause}) t
+           LEFT JOIN messages m ON m.id = t.message_id
           ORDER BY (t.completed_at IS NOT NULL), t.due_at IS NULL, t.due_at ASC, t.completed_at DESC, t.created_at DESC"
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -2440,9 +2473,12 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
             subject: row.get(8)?,
             from_name: row.get(9)?,
             from_addr: row.get(10)?,
+            located: row.get(11)?,
         })
     })?;
-    Ok(rows.filter_map(Result::ok).collect())
+    // A row that cannot be read is an error to report, not a task to drop
+    // silently from the list.
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// The open task's id and due date, if any, on each of these conversations —

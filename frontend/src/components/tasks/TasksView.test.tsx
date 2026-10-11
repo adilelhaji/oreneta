@@ -77,6 +77,21 @@ describe('the tasks view', () => {
     expect(ui$.mobilePane.get()).toBe('conversation')
   })
 
+  it('a task whose conversation is not in the local copy says so and stays on the list', async () => {
+    stubBridge({ 'tasks.list': { tasks: [task({ located: false })] } })
+    ui$.tasksOpen.set(true)
+    ui$.toast.set('')
+    const view = render(<TasksView />)
+    await waitFor(() => expect(view.container.querySelectorAll('li').length).toBe(1))
+
+    fireEvent.click(view.getByText('Renew the contract'))
+
+    expect(ui$.tasksOpen.get()).toBe(true)
+    expect(ui$.selectedThread.get()).toBe('')
+    expect(ui$.toastTone.get()).toBe('error')
+    expect(ui$.toast.get()).toContain('no longer in the local copy')
+  })
+
   it('exposes opening as an independent button alongside the task actions', async () => {
     stubBridge({ 'tasks.list': { tasks: [task()] } })
     const view = render(<TasksView />)

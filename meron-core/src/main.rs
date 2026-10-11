@@ -2236,6 +2236,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "subject": task.subject,
                         "from_name": task.from_name,
                         "from_addr": task.from_addr,
+                        "located": task.located,
                     }))
                     .collect::<Vec<_>>(),
             }))

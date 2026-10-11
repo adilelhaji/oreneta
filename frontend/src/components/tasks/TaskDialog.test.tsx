@@ -78,6 +78,33 @@ describe('editing an existing task', () => {
   })
 })
 
+describe('when the task cannot be read', () => {
+  it('keeps the fields locked so a blank note cannot overwrite the real one', async () => {
+    ui$.taskEditor.set({ threadId: 'acct#INBOX#t1', id: 7, dueAt: null, note: '' })
+    const calls: string[] = []
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            calls.push(command)
+            if (command === 'tasks.get') throw new Error('database is locked')
+            return {}
+          },
+        },
+      },
+    }
+    const view = render(<TaskDialog />)
+    await waitFor(() => expect(view.getByRole('alert').textContent).toContain('could not be read'))
+
+    expect((view.getByLabelText('Note') as HTMLTextAreaElement).disabled).toBe(true)
+    expect((view.getByText('Save').closest('button') as HTMLButtonElement).disabled).toBe(true)
+    // Enter in the form must not save either.
+    fireEvent.submit(view.getByLabelText('Note').closest('form')!)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(calls).not.toContain('tasks.save')
+  })
+})
+
 describe('with no task being edited', () => {
   it('renders nothing', () => {
     ui$.taskEditor.set(null)

@@ -771,6 +771,9 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
     tx.execute("DELETE FROM folders WHERE account = ?1", params![id])?;
+    // Tasks hang off this account's conversations; left behind, they stayed
+    // in the task list pointing at an account that no longer exists.
+    tx.execute("DELETE FROM tasks WHERE account = ?1", params![id])?;
     tx.execute("DELETE FROM messages WHERE account = ?1", params![id])?;
     tx.execute(
         "DELETE FROM mail_search_hits WHERE account = ?1",
