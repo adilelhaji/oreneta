@@ -1809,6 +1809,29 @@ export async function bulkMoveSelectedToFolder(items: BulkSelectionItem[], targe
   else showToast(t('mail.toast.movedCount', { count: targets.length }))
 }
 
+/**
+ * One conversation archived, for a Quick Action step (#92): throws on
+ * failure so the action can report it, and leaves the list refresh to the
+ * caller, which knows when the whole run is over.
+ */
+export async function archiveThreadStep(threadId: string) {
+  const res = await invoke('mail.archive', { thread_id: threadId })
+  assertMoveAffected(res, 'Archive')
+  applyMutationFolderUnreads(res as MutationResult)
+}
+
+/** One conversation moved, for a Quick Action step (#92). Throws on failure. */
+export async function moveThreadStep(threadId: string, targetFolderId: string) {
+  const res = await invoke('mail.move', { thread_id: threadId, target_folder_id: targetFolderId })
+  assertMoveAffected(res)
+  applyMutationFolderUnreads(res as MutationResult)
+}
+
+/** After a run of steps: the lists show where things ended up. */
+export async function refreshAfterSteps(accountId?: string) {
+  await refreshThreadLocation(accountId, true)
+}
+
 export async function bulkCopySelectedToFolder(
   items: BulkSelectionItem[],
   targetAccountId: string,

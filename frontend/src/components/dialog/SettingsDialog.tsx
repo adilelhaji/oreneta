@@ -54,6 +54,7 @@ import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
 import { startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
+import { QuickActionsGroup } from '../quick/QuickActionsGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
@@ -1056,6 +1057,7 @@ function GeneralSection() {
         <BackupGroup />
       </div>
       <ProfilesGroup />
+      <QuickActionsGroup />
       <StorageGroup />
       <LogsGroup />
     </div>

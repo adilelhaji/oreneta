@@ -12,6 +12,7 @@ import {
   Trash2,
   ListChecks,
   X,
+  Zap,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -34,6 +35,8 @@ import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { FolderMenuTree } from '../menu/FolderMenuTree'
 import { MenuItem } from '../menu/MenuItem'
+import { settings$ } from '../../states/settings'
+import { startQuickAction } from '../../states/quickActions'
 
 export function BulkActionBar({
   items,
@@ -48,6 +51,7 @@ export function BulkActionBar({
   const { t } = useTranslation()
   const accounts = useValue(accounts$)
   const foldersByAccount = useValue(mail$.foldersByAccount)
+  const quickActions = useValue(settings$.quickActions)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [moveOpen, setMoveOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
@@ -218,6 +222,24 @@ export function BulkActionBar({
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
+          {quickActions.length > 0 && (
+            <>
+              {quickActions.map((action, index) => (
+                <MenuItem
+                  key={action.id}
+                  icon={<Zap size={14} className="text-secondary" strokeWidth={1.75} />}
+                  label={action.name}
+                  trailing={<span className="text-2xs text-secondary">Alt+{index + 1}</span>}
+                  disabled={readOnly || mailItems.length === 0}
+                  onClick={() => {
+                    setMenu(null)
+                    startQuickAction(action, mailItems)
+                  }}
+                />
+              ))}
+              <div className="my-1 border-t border-border" />
+            </>
+          )}
           <MenuItem
             icon={<MailOpen size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.markAsRead')}

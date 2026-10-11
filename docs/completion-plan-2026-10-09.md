@@ -389,6 +389,9 @@ Estado de la iteración 11 (2026-10-11, por delegación):
 - **#43:** constructor de búsquedas que lee y escribe con la gramática del
   núcleo (ida y vuelta probada), y búsquedas guardadas con su cuenta y
   carpeta (ADR-0021, [registro](design/search-builder.md)).
+- **#92:** acciones rápidas con pasos seguros (leer, destacar, archivar o
+  mover al final), conjunto fijado al confirmar, informe por paso y
+  Alt+1…9 (ADR-0022, [registro](design/quick-actions.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

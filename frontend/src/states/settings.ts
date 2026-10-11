@@ -1,3 +1,4 @@
+import { sanitizeQuickActions, type QuickAction } from './quickActionModel'
 import { profileKey } from '../lib/profile'
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
@@ -170,6 +171,8 @@ export type Settings = {
   conversationLayout: ConversationLayout
   /** Searches the reader has kept, in the order they were saved. */
   savedSearches: SavedSearch[]
+  /** Quick Actions (#92): named step lists run over a reviewed selection. */
+  quickActions: QuickAction[]
   /**
    * Whether a message's own typography and widths give way to the app's.
    *
@@ -308,6 +311,7 @@ const DB_KEY = {
   sendShortcut: 'send_shortcut',
   conversationLayout: 'conversation_layout',
   savedSearches: 'saved_searches',
+  quickActions: 'quick_actions',
   stickyFilters: 'sticky_filters',
   simplifyMessages: 'simplify_messages',
   listView: 'list_view',
@@ -491,6 +495,7 @@ export const settings$ = observable<Settings>({
   sendShortcut: 'mod_enter',
   conversationLayout: 'traditional',
   savedSearches: [],
+  quickActions: [],
   stickyFilters: false,
   simplifyMessages: false,
   listView: 'table',
@@ -813,6 +818,8 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const saved = sanitizeSavedSearches(prefs[DB_KEY.savedSearches])
     if (saved) settings$.savedSearches.set(saved)
+    const quick = sanitizeQuickActions(prefs[DB_KEY.quickActions])
+    if (quick) settings$.quickActions.set(quick)
 
     if (typeof prefs[DB_KEY.stickyFilters] === 'boolean') {
       settings$.stickyFilters.set(prefs[DB_KEY.stickyFilters] as boolean)
