@@ -396,6 +396,10 @@ Estado de la iteración 11 (2026-10-11, por delegación):
   visible, correcciones por conversación y remitente que sobreviven a la
   sincronización, Todo y Otros siempre presentes y recuentos con cobertura
   (ADR-0023, [registro](design/inbox-categories.md)).
+- **#95:** inventario de etiquetas, categorías y anotaciones por flujo,
+  con su prueba; etiquetar en lote sin pisar otras etiquetas; pruebas de
+  movimiento, reinicio, aislamiento y separación. Exchange e IMAP quedan
+  pendientes de evidencia real ([registro](design/labels-certification.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

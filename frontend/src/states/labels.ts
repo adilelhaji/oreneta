@@ -7,7 +7,9 @@
 
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
-import { mail$ } from './mail'
+import { bulkFailure, mail$, runBulk, uniqueThreadItems } from './mail'
+import { clearBulkSelection, showToast, type BulkSelectionItem } from './ui'
+import { t } from '../lib/i18n'
 
 export type Label = {
   id: string
@@ -82,9 +84,7 @@ export async function loadLabels() {
  * and a nameless chip is one nobody could tell from another.
  */
 export async function saveLabels(labels: Label[]) {
-  const named = labels
-    .map((label) => ({ ...label, name: label.name.trim() }))
-    .filter((label) => label.name)
+  const named = labels.map((label) => ({ ...label, name: label.name.trim() })).filter((label) => label.name)
   await invoke('labels.save', { labels: named })
   labels$.labels.set(named)
   // A deleted label is off every conversation now, so the rows on screen must
@@ -113,9 +113,7 @@ export async function linkLabel(labelId: string, accountId: string, remoteName: 
   labels$.labels.set(
     labels$.labels
       .peek()
-      .map((label) =>
-        label.id === labelId ? { ...label, links: { ...label.links, [accountId]: trimmed } } : label,
-      ),
+      .map((label) => (label.id === labelId ? { ...label, links: { ...label.links, [accountId]: trimmed } } : label)),
   )
 }
 
@@ -145,9 +143,39 @@ export async function assignLabels(threadId: string, labelIds: string[]) {
   // The list is repainted from what the core actually stored, not from what
   // was asked for: a label that no longer exists must not appear to stick.
   mail$.threads.set(
-    mail$.threads
-      .peek()
-      .map((thread) => (thread.thread_id === threadId ? { ...thread, labels: applied } : thread)),
+    mail$.threads.peek().map((thread) => (thread.thread_id === threadId ? { ...thread, labels: applied } : thread)),
   )
   return applied
+}
+
+/** How a label sits on a selection: on every conversation, some, or none. */
+export function labelCoverage(threadIds: string[], labelId: string): 'all' | 'some' | 'none' {
+  const threads = mail$.threads.peek()
+  const on = threadIds.filter((id) => threads.find((thread) => thread.thread_id === id)?.labels?.includes(labelId))
+  return on.length === 0 ? 'none' : on.length === threadIds.length ? 'all' : 'some'
+}
+
+/**
+ * Puts one label on, or takes it off, every selected conversation (#95),
+ * leaving their other labels as they are. A conversation whose labels are
+ * not on screen is not guessed at: stating its set from nothing would wipe
+ * the labels it has, so it is reported as not done instead.
+ */
+export async function bulkLabelSelected(items: BulkSelectionItem[], labelId: string, on: boolean) {
+  const targets = uniqueThreadItems(items)
+  const { done, error } = await runBulk(targets, async (item) => {
+    const thread = mail$.threads.peek().find((row) => row.thread_id === item.threadId)
+    if (!thread) throw new Error(t('labels.notLoaded', { defaultValue: 'A conversation is no longer in the list' }))
+    const current = thread.labels ?? []
+    if (current.includes(labelId) === on) return
+    await assignLabels(item.threadId, on ? [...current, labelId] : current.filter((id) => id !== labelId))
+  })
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('labels.assignFailed')), 'error')
+  else
+    showToast(
+      on
+        ? t('labels.addedCount', { count: targets.length, defaultValue: 'Label added to {count} conversations' })
+        : t('labels.removedCount', { count: targets.length, defaultValue: 'Label removed from {count} conversations' }),
+    )
 }

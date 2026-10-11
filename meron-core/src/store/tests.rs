@@ -1664,6 +1664,91 @@ fn a_page_can_be_narrowed_to_one_label() {
     assert_eq!(uids, vec![3, 1]);
 }
 
+/// #95: a label is on the conversation (ADR-0002), so it follows the
+/// conversation when its messages move to another folder, stays after the
+/// store is closed and opened again, and never reaches another account's
+/// conversation that happens to share the key.
+#[test]
+fn a_label_follows_a_move_survives_a_restart_and_stays_in_its_account() {
+    let dir = std::env::temp_dir().join(format!("oreneta-label-restart-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("store.db");
+    let _ = std::fs::remove_file(&path);
+    let only = |conn: &Connection, account: &str, folder: &str| {
+        let filter = RecentFilter { label_id: Some("l-1".into()), ..Default::default() };
+        get_recent_page(conn, account, folder, 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+    {
+        let conn = Connection::open(&path).unwrap();
+        db::run_migrations(&conn).unwrap();
+        replace_labels(&conn, &[label("l-1", "Work")]).unwrap();
+        let message = |uid| MessageHeader { uid, date: 100, thread_key: "t-1".into(), ..Default::default() };
+        upsert_messages(&conn, "acct", "INBOX", &[message(1)]).unwrap();
+        upsert_messages(&conn, "other", "INBOX", &[message(1)]).unwrap();
+        set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+        // The move, as a sync sees it: gone from one folder, new in another
+        // with a new uid and the same conversation.
+        conn.execute("DELETE FROM messages WHERE account = 'acct' AND folder = 'INBOX'", []).unwrap();
+        upsert_messages(&conn, "acct", "Archive", &[message(7)]).unwrap();
+        assert_eq!(only(&conn, "acct", "Archive"), vec![7]);
+    }
+    let conn = Connection::open(&path).unwrap();
+    db::run_migrations(&conn).unwrap();
+    assert_eq!(only(&conn, "acct", "Archive"), vec![7]);
+    assert_eq!(only(&conn, "other", "INBOX"), Vec::<u32>::new());
+    assert_eq!(thread_labels(&conn, "other", "t-1").unwrap(), Vec::<String>::new());
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// #95: labels and inbox categories (ADR-0023) are separate things. Putting
+/// one on a conversation does not put, take or filter the other.
+#[test]
+fn labels_and_inbox_categories_never_stand_in_for_each_other() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("work", "Work")]).unwrap();
+    crate::categories::save(
+        &conn,
+        &[crate::categories::Category {
+            id: "work".into(),
+            name: "Work".into(),
+            colour: "#2056dd".into(),
+            match_mode: crate::rules::Match::Any,
+            conditions: vec![],
+        }],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, date: 100, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 200, thread_key: "t-2".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["work".into()]).unwrap();
+    crate::categories::correct_conversation(&conn, "acct", "t-2", Some("work")).unwrap();
+    crate::categories::rejudge(&conn, "acct", true).unwrap();
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(uids(RecentFilter { label_id: Some("work".into()), ..Default::default() }), vec![1]);
+    assert_eq!(uids(RecentFilter { category: Some("work".into()), ..Default::default() }), vec![2]);
+    assert_eq!(thread_labels(&conn, "acct", "t-2").unwrap(), Vec::<String>::new());
+}
+
 #[test]
 fn the_labels_of_a_whole_page_are_read_in_one_go() {
     let conn = test_conn();

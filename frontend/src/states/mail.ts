@@ -1700,7 +1700,7 @@ export async function copyThreadToFolder(threadId: string, targetAccountId: stri
   }
 }
 
-function uniqueThreadItems(items: BulkSelectionItem[]) {
+export function uniqueThreadItems(items: BulkSelectionItem[]) {
   const byThread = new Map<string, BulkSelectionItem>()
   for (const item of items) {
     if (!item.threadId || item.kind !== 'mail') continue
@@ -1717,7 +1717,7 @@ function uniqueThreadItems(items: BulkSelectionItem[]) {
  * Running them one by one also keeps each item's own undo snapshot from
  * capturing — and later restoring — another item's change.
  */
-async function runBulk(
+export async function runBulk(
   targets: BulkSelectionItem[],
   apply: (item: BulkSelectionItem) => Promise<void>,
   options: { removesLocally?: boolean } = {},
@@ -1737,7 +1737,7 @@ async function runBulk(
 }
 
 /** What a stopped bulk action says: how many were done, of how many, and why it stopped. */
-function bulkFailure(done: number, total: number, error: unknown, fallback: string): string {
+export function bulkFailure(done: number, total: number, error: unknown, fallback: string): string {
   const reason = error instanceof Error && error.message ? error.message : fallback
   return done === 0 ? reason : t('mail.toast.bulkPartial', { done, total, reason })
 }
