@@ -55,6 +55,7 @@ import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } fro
 import { startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
 import { QuickActionsGroup } from '../quick/QuickActionsGroup'
+import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
@@ -1058,6 +1059,7 @@ function GeneralSection() {
       </div>
       <ProfilesGroup />
       <QuickActionsGroup />
+      <CategoriesGroup />
       <StorageGroup />
       <LogsGroup />
     </div>

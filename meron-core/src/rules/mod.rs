@@ -131,7 +131,7 @@ impl Subject<'_> {
 /// every message, and a half-written rule would quietly file the whole mailbox
 /// away; saving such a rule is refused too (see `validate`), so this is the
 /// second of two locks on the same door.
-fn holds(condition: &Condition, subject: &Subject) -> bool {
+pub(crate) fn holds(condition: &Condition, subject: &Subject) -> bool {
     let needle = condition.value.trim().to_lowercase();
     if needle.is_empty() {
         return false;

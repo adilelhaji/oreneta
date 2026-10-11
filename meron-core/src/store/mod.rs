@@ -478,6 +478,8 @@ pub struct RecentFilter {
     pub with_attachments: bool,
     /// Only what is worth interrupting for.
     pub priority_only: bool,
+    /// Only conversations in this inbox category ('' is Other), when set.
+    pub category: Option<String>,
 }
 
 impl RecentFilter {
@@ -543,6 +545,9 @@ pub fn get_recent_page_sorted(
            -- judged is not a message judged unimportant. The backfill is what
            -- keeps this from hiding anything, and it needs no server.
            AND (?10 = 0 OR priority = 1)
+           -- A category is judged per conversation and folder, so every
+           -- message of a conversation carries it (ADR-0023).
+           AND (?12 IS NULL OR category = ?12)
            -- A label is on the conversation, so the row is matched by the key
            -- it shares with the rest of its thread, not by its own uid.
            AND (?8 IS NULL OR EXISTS (
@@ -581,7 +586,8 @@ pub fn get_recent_page_sorted(
             filter.label_id.as_deref(),
             filter.with_attachments as i64,
             filter.priority_only as i64,
-            has_cursor
+            has_cursor,
+            filter.category.as_deref()
         ],
         |row| {
             let uid = row.get(0)?;
@@ -4374,7 +4380,7 @@ fn message_header_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MessageH
 }
 
 /// Parse a cached `$.to` JSON array into recipients, tolerating null/garbage.
-fn parse_recipients_json(json: Option<String>) -> Vec<crate::imap::Recipient> {
+pub(crate) fn parse_recipients_json(json: Option<String>) -> Vec<crate::imap::Recipient> {
     json.and_then(|s| serde_json::from_str::<Vec<crate::imap::Recipient>>(&s).ok())
         .unwrap_or_default()
 }

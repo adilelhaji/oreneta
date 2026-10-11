@@ -47,7 +47,10 @@ import {
   snoozeChoices,
   snoozeThread,
   exportFolderMbox,
+  isInboxFolder,
 } from '../../states/mail'
+import { categories$, dropStaleFacet } from '../../states/categories'
+import { CategoryTabs } from './CategoryTabs'
 import { canExportMail } from '../../lib/mailCapabilities'
 import type { Message } from '../../types'
 import { clsx } from '../../lib/utils'
@@ -194,6 +197,19 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // folders, or — in the unified view — the synthetic per-role list, where each
   // entry means "every account's own Sent/Archive/…". An RSS account has no
   // folders at all: its "inbox" is the whole feed set.
+  // Category tabs belong to an inbox, the unified one included (ADR-0023).
+  // Elsewhere, or while searching, a category facet would narrow the list
+  // with nothing on screen saying so, so it is dropped.
+  const categoryList = useValue(categories$.list)
+  const showCategoryTabs =
+    categoryList.length > 0 &&
+    !isRSSAccount &&
+    !isStarredView &&
+    !query.trim() &&
+    (selectedAccount === 'unified' ? selectedFolder === 'inbox' : isInboxFolder(selectedFolder, selectedAccount))
+  useEffect(() => {
+    dropStaleFacet(showCategoryTabs)
+  }, [showCategoryTabs, categoryList])
   const showFolderSwitcher = !isRSSAccount && !!selectedFolder && (selectedAccount === 'unified' || !!activeAccount)
   // Empty-state copy, which the folder switcher made it possible to land on for
   // any folder: "your inbox is empty" only holds in the inbox, and neither
@@ -524,6 +540,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
 
       {/* Not in the starred view, which is starred-only by definition, and not
           while searching, where the query is the narrowing. */}
+      {showCategoryTabs && <CategoryTabs />}
       {!isStarredView && !query.trim() && <QuickFilterBar hideSnoozed={isRSSAccount} />}
       <SearchUnderstoodBar />
 

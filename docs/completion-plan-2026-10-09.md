@@ -392,6 +392,10 @@ Estado de la iteración 11 (2026-10-11, por delegación):
 - **#92:** acciones rápidas con pasos seguros (leer, destacar, archivar o
   mover al final), conjunto fijado al confirmar, informe por paso y
   Alt+1…9 (ADR-0022, [registro](design/quick-actions.md)).
+- **#91:** categorías de bandeja definidas por la persona, con motivo
+  visible, correcciones por conversación y remitente que sobreviven a la
+  sincronización, Todo y Otros siempre presentes y recuentos con cobertura
+  (ADR-0023, [registro](design/inbox-categories.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

@@ -809,6 +809,9 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("archive_messages", "account"),
     ("caldav_objects", "account"),
     ("invitation_answers", "account"),
+    // Inbox categories (ADR-0023): the reader's corrections for this account.
+    ("category_threads", "account"),
+    ("category_senders", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

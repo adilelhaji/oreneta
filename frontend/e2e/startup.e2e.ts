@@ -39,8 +39,21 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   test(`accessibility audit: ${theme}`, async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     const errors = await prepareStartup(page, true, { navigation: true, theme })
+    // Inbox categories (#91): tabs with counts and their coverage line.
+    await page.addInitScript(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['categories.list'] = {
+        categories: [{ id: 'news', name: 'Newsletters', colour: '#2056dd', matchMode: 'any', conditions: [] }],
+      }
+      replies['categories.counts'] = {
+        counts: [{ category: 'news', conversations: 2, unread: 1 }, { category: '', conversations: 3, unread: 0 }],
+        conversations: 5,
+        messages: 8,
+      }
+    })
     await page.goto('/')
     await expect(page.getByRole('textbox').first()).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Inbox categories' })).toBeVisible()
     const blocking: string[] = []
     const audit = async (screen: string) => {
       const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
@@ -981,6 +994,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'i18n.setNativeLabels': { ok: true },
         'composer.pruneMedia': { removed: 0 },
         'labels.list': { labels: [] },
+        'categories.list': { categories: [] },
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
         'localDrafts.list': { drafts: [] },

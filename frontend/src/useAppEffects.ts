@@ -25,6 +25,7 @@ import type { UpdateStatus } from './lib/update'
 import { useFoldersByAccount } from './lib/kanbanData'
 import { setTrayUnread } from './lib/trayUnread'
 import { loadLabels } from './states/labels'
+import { loadCategories } from './states/categories'
 import { forgetScheduledSend, markScheduledSendFailed, refreshScheduledSends } from './states/scheduledSends'
 import { refreshOutgoingAttempts } from './states/outgoingAttempts'
 import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
@@ -245,6 +246,7 @@ export function useAppEffects() {
     // list that arrives before the labels do would show conversations with
     // labels it cannot name.
     void loadLabels()
+    void loadCategories()
   }, [])
 
   // The updater's state machine lives in Go and pushes its whole status on every

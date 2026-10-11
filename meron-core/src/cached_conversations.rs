@@ -79,8 +79,8 @@ struct LocatedCard {
 
 pub fn recent_filter(request: &ThreadListQuery) -> Option<store::RecentFilter> {
     match request.source() {
-        MailSource::Recent { unread_only, starred_only, label_id, with_attachments, priority_only } => {
-            Some(store::RecentFilter { unread_only, starred_only, label_id, with_attachments, priority_only })
+        MailSource::Recent { unread_only, starred_only, label_id, with_attachments, priority_only, category } => {
+            Some(store::RecentFilter { unread_only, starred_only, label_id, with_attachments, priority_only, category })
         }
         _ => None,
     }
@@ -192,7 +192,7 @@ pub fn page(
         // label facet, so a sorted set of raw facets is not a safe context.
         filter: URL_SAFE_NO_PAD.encode(serde_json::to_vec(&(
             filter.unread_only, filter.starred_only, filter.with_attachments,
-            filter.priority_only, &filter.label_id,
+            filter.priority_only, &filter.label_id, &filter.category,
         ))?),
         sort: request.sort(),
     };

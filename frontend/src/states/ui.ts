@@ -30,7 +30,14 @@ export const isFilterMode = (value: unknown): value is FilterMode => value === '
 /** The one narrowing a single-valued surface holds, as a set. */
 export const facetsOf = (mode: FilterMode): FilterFacet[] => (mode === 'all' ? [] : [mode])
 
-export type FilterFacet = 'unread' | 'starred' | 'snoozed' | 'attachments' | 'priority' | `label:${string}`
+export type FilterFacet =
+  | 'unread'
+  | 'starred'
+  | 'snoozed'
+  | 'attachments'
+  | 'priority'
+  | `label:${string}`
+  | `category:${string}`
 
 export const FILTER_FACETS: FilterFacet[] = ['priority', 'unread', 'starred', 'attachments', 'snoozed']
 
@@ -43,7 +50,9 @@ const isFilterFacet = (value: unknown): value is FilterFacet =>
   // A label facet names the label it means. The id is not checked here: a
   // label the reader has since deleted is dropped by whoever knows the label
   // set, not by a string test.
-  (typeof value === 'string' && value.startsWith('label:') && value.length > 'label:'.length)
+  (typeof value === 'string' && value.startsWith('label:') && value.length > 'label:'.length) ||
+  // An inbox category (ADR-0023); `category:none` is Other.
+  (typeof value === 'string' && value.startsWith('category:') && value.length > 'category:'.length)
 
 /**
  * The set as the core reads it: sorted and comma-joined, `all` when empty.

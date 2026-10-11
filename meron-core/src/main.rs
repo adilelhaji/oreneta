@@ -2527,6 +2527,11 @@ async fn prepare_recent_cache(
             eprintln!("meron-core: judging {account}: {err:#}");
         }
     }
+    if filter.category.is_some() {
+        if let Err(err) = meron_core::categories::rejudge(&engine.db.lock().unwrap(), account, true) {
+            eprintln!("meron-core: placing {account}: {err:#}");
+        }
+    }
 }
 
 async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::Result<Value> {
@@ -2899,6 +2904,61 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::set_sender_priority(&db, &account, &addr, choice)?;
             let judged = store::rejudge_priority(&db, &account, false)?;
             Ok(json!({ "ok": true, "judged": judged }))
+        }
+
+        // Inbox categories (#91, ADR-0023): the reader's tabs, where each
+        // conversation is and why, and the reader's corrections. All local.
+        "categories.list" => {
+            let db = engine.db.lock().unwrap();
+            Ok(json!({ "categories": meron_core::categories::list(&db)? }))
+        }
+        "categories.save" => {
+            let categories: Vec<meron_core::categories::Category> =
+                serde_json::from_value(p.get("categories").cloned().unwrap_or(Value::Null))
+                    .context("categories are not in the expected shape")?;
+            let db = engine.db.lock().unwrap();
+            meron_core::categories::save(&db, &categories)?;
+            Ok(json!({ "categories": meron_core::categories::list(&db)? }))
+        }
+        "categories.counts" => {
+            let account = req_str(p, "account")?;
+            let folder = req_str(p, "folder")?;
+            let db = engine.db.lock().unwrap();
+            Ok(serde_json::to_value(meron_core::categories::counts(&db, &account, &folder)?)?)
+        }
+        "categories.reason" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id).context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let verdict = meron_core::categories::reason(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?
+                .context("no such conversation")?;
+            let sender = store::thread_priority_signals(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?
+                .map(|(sender, _)| sender)
+                .unwrap_or_default();
+            Ok(json!({ "category": verdict.category, "reason": verdict.reason, "sender": sender }))
+        }
+        // `category` is an id, '' for Other, or null to hand it back to the
+        // rules; `scope` is "conversation" or "sender".
+        "categories.assign" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id).context("invalid thread_id")?;
+            let category = p.get("category").and_then(Value::as_str);
+            let db = engine.db.lock().unwrap();
+            match p.get("scope").and_then(Value::as_str).unwrap_or("conversation") {
+                "conversation" => meron_core::categories::correct_conversation(
+                    &db, &parsed.account, &parsed.thread_key, category,
+                )?,
+                "sender" => {
+                    let (sender, _) =
+                        store::thread_priority_signals(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?
+                            .context("no such conversation")?;
+                    meron_core::categories::correct_sender(&db, &parsed.account, &sender, category)?
+                }
+                other => anyhow::bail!("unknown scope {other}"),
+            }
+            meron_core::categories::rejudge(&db, &parsed.account, true)?;
+            let verdict = meron_core::categories::reason(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?;
+            Ok(json!({ "ok": true, "verdict": verdict }))
         }
 
         // Why a conversation looks like spam by what the reader has taught
@@ -5961,6 +6021,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     label_id,
                     with_attachments,
                     priority_only,
+                    category,
                 } => {
                     // Asking for what has an attachment is asking a question
                     // about every message, and some of them have never been
@@ -5984,6 +6045,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             eprintln!("meron-core: judging {account}: {err:#}");
                         }
                     }
+                    // A category tab must not hide mail nobody has placed yet.
+                    if category.is_some() {
+                        let db = engine.db.lock().unwrap();
+                        if let Err(err) = meron_core::categories::rejudge(&db, &account, true) {
+                            eprintln!("meron-core: placing {account}: {err:#}");
+                        }
+                    }
                     store::get_recent_page_sorted(
                         &engine.db.lock().unwrap(),
                         &account,
@@ -5996,6 +6064,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             label_id,
                             with_attachments,
                             priority_only,
+                            category: category.clone(),
                         },
                         request.sort(),
                     )?

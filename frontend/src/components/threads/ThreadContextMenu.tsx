@@ -48,6 +48,7 @@ import type { Account, Message } from '../../types'
 import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { MessageContextMenu } from '../chat/MessageContextMenu'
 import { PriorityMenuSection } from './PriorityMenuSection'
+import { CategoryMenuSection } from './CategoryMenuSection'
 
 export type ThreadMenuState =
   | {
@@ -535,6 +536,7 @@ export function ThreadContextMenu({
         }}
       />
       <PriorityMenuSection threadId={menu.threadId} accountId={menu.accountId} folderId={menu.folderId} onAct={close} />
+      <CategoryMenuSection threadId={menu.threadId} accountId={menu.accountId} folderId={menu.folderId} onAct={close} />
       {canMove && (
         <div
           ref={moveAnchorRef}

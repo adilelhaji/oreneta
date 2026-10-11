@@ -548,7 +548,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.tasksPassthrough(command, payload)
 	// Meeting invitations by mail (#102): the core reads, answers and files
 	// them; each call is the person's own action.
-	case "invite.status", "invite.respond", "invite.cancel", "attachments.list", "search.parse", "search.compose":
+	case "invite.status", "invite.respond", "invite.cancel", "attachments.list", "search.parse", "search.compose",
+		"categories.list", "categories.save", "categories.counts", "categories.reason", "categories.assign":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":
