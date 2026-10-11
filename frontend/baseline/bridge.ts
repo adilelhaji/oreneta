@@ -12,6 +12,7 @@ export function createBaselineBridge(fixture: BaselineFixture) {
       profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
       active: 'default',
     },
+    'backup.profileRestoreStatus': { state: 'none' },
     // Task lists (ADR-0013): the fixed mail list only.
     'tasks.lists': { lists: [{ id: 'mail', name: '', position: 0, open: fixture.tasks.length }] },
     'mail.saveDraft': { id: 'synthetic-draft' },

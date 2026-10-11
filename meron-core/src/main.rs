@@ -4084,6 +4084,24 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             .await??;
             Ok(json!({ "saved": true, "summary": summary }))
         }
+        // Readies an archive to replace this profile (#172). The profile in
+        // use is untouched; the bridge activates it with the core stopped.
+        "profileArchive.stage" => {
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let passphrase = req_str(p, "passphrase")?;
+            let summary = tokio::task::spawn_blocking(move || {
+                let machine_key = meron_core::secrets::db_key()?;
+                meron_core::profile_archive::prepare_restore(
+                    &path,
+                    &passphrase,
+                    &store::app_dir(),
+                    machine_key.as_deref(),
+                    now_seconds(),
+                )
+            })
+            .await??;
+            Ok(json!({ "ready": true, "summary": summary }))
+        }
         // Opens an archive in a private folder, checks every entry and the
         // store inside, and describes it. Nothing in use is touched.
         "profileArchive.inspect" => {

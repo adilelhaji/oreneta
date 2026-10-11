@@ -83,3 +83,42 @@ it('formats sizes readably', () => {
   expect(formatBytes(10)).toBe('1 KB')
   expect(formatBytes(3 * 1024 * 1024 * 1024)).toBe('3.00 GB')
 })
+
+it('restores only after the archive is checked aside and the person confirms, then reloads', async () => {
+  const { startProfileRestore, activateRestore } = await import('../../states/profileArchive')
+  const calls = bridge((command, payload) => {
+    if (command === 'backup.profileRestorePrepare')
+      return payload.path
+        ? { ready: true, summary, path: payload.path }
+        : { needsPassphrase: true, path: '/tmp/p.oreneta-profile' }
+    if (command === 'backup.profileRestoreActivate') return { activated: true }
+    throw new Error(command)
+  })
+  await startProfileRestore()
+  const view = render(<ProfileArchiveDialog />)
+  expect(view.getByText('Restore a profile archive')).toBeTruthy()
+  fireEvent.change(view.getByLabelText('Passphrase'), { target: { value: 'right passphrase' } })
+  fireEvent.click(view.getByRole('button', { name: 'Check and continue' }))
+  await waitFor(() => expect(view.getByText('Restore this profile?')).toBeTruthy())
+  expect(view.getByText(/Accounts come back paused/)).toBeTruthy()
+  expect(calls.some((call) => call.command === 'backup.profileRestoreActivate')).toBe(false)
+
+  let reloaded = 0
+  await activateRestore(() => reloaded++)
+  expect(calls.at(-1)!.command).toBe('backup.profileRestoreActivate')
+  expect(reloaded).toBe(1)
+  expect(profileArchive$.restoreState.get()).toBe('activated')
+})
+
+it('a failed activation stays in the dialog and says the previous profile is back', async () => {
+  const { activateRestore } = await import('../../states/profileArchive')
+  bridge(() => {
+    throw new Error('the core did not open the restored profile; the previous one is back')
+  })
+  profileArchive$.step.set({ kind: 'ready', path: '/tmp/p', summary })
+  const view = render(<ProfileArchiveDialog />)
+  let reloaded = 0
+  await activateRestore(() => reloaded++)
+  await waitFor(() => expect(view.getByRole('alert').textContent).toContain('previous one is back'))
+  expect(reloaded).toBe(0)
+})

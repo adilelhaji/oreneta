@@ -128,7 +128,8 @@ pub fn snapshot(conn: &Connection, dest: &Path, key: &str) -> Result<()> {
     let exported = conn
         .execute_batch(&format!(
             "SELECT sqlcipher_export('profile_snapshot');
-             PRAGMA profile_snapshot.user_version = {version};"
+             PRAGMA profile_snapshot.user_version = {version};
+             DELETE FROM profile_snapshot.account_secrets;"
         ))
         .context("copy the store");
     conn.execute_batch("DETACH DATABASE profile_snapshot;").context("close the snapshot")?;
@@ -431,6 +432,85 @@ pub fn summary(manifest: &Manifest, staging: &Path) -> Result<Summary> {
         messages,
         excluded: manifest.excluded.clone(),
     })
+}
+
+/// Where a restore waits, checked and ready, inside the profile folder.
+pub const STAGING_DIR: &str = "restore-staging";
+pub const READY_DIR: &str = "ready";
+pub const READY_FILE: &str = "READY.json";
+pub const RESTORED_DB: &str = "meron.db";
+
+/// Unpacks and checks an archive, then makes it ready to take the place of
+/// the store in use (#172): the store is re-keyed to this computer's key
+/// (`None` where the store is not encrypted), every account is paused so
+/// nothing syncs until the person reconnects it, and scheduled sends are
+/// held so none goes out on its own. The profile in use is not touched;
+/// activating it is the bridge's step, with the core stopped.
+pub fn prepare_restore(archive: &Path, passphrase: &str, profile_dir: &Path, machine_key: Option<&str>, now: i64) -> Result<Summary> {
+    let root = profile_dir.join(STAGING_DIR);
+    let work = root.join("work");
+    let ready = root.join(READY_DIR);
+    let _ = std::fs::remove_dir_all(&work);
+    let _ = std::fs::remove_dir_all(&ready);
+    let result = (|| -> Result<Summary> {
+        let manifest = stage(archive, passphrase, &work)?;
+        let described = summary(&manifest, &work)?;
+        let restored = work.join(RESTORED_DB);
+        {
+            let source = Connection::open(work.join(DB_ENTRY))?;
+            source.execute_batch(&format!("PRAGMA key = \"x'{}'\";", manifest.db_key))?;
+            let key = match machine_key {
+                Some(key) => format!("\"x'{key}'\""),
+                None => "''".to_string(),
+            };
+            source.execute_batch(&format!(
+                "ATTACH DATABASE '{}' AS restored KEY {key};
+                 SELECT sqlcipher_export('restored');
+                 PRAGMA restored.user_version = {};
+                 DETACH DATABASE restored;",
+                quote(&restored),
+                manifest.schema_version
+            ))?;
+        }
+        std::fs::remove_dir_all(work.join("db"))?;
+        let conn = Connection::open(&restored)?;
+        if let Some(key) = machine_key {
+            conn.execute_batch(&format!("PRAGMA key = \"x'{key}'\";"))?;
+        }
+        hold_restored(&conn)?;
+        drop(conn);
+        std::fs::write(
+            work.join(READY_FILE),
+            serde_json::to_vec(&serde_json::json!({ "prepared_at": now, "summary": &described }))?,
+        )?;
+        std::fs::rename(&work, &ready)?;
+        Ok(described)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(&work);
+    }
+    result
+}
+
+/// A restored profile does nothing on its own (ADR-0010): accounts stay
+/// paused until reconnected, and no scheduled message is sent by itself.
+pub fn hold_restored(conn: &Connection) -> Result<()> {
+    let ids: Vec<String> = conn
+        .prepare("SELECT id FROM accounts")?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in ids {
+        crate::store::set_account_pref(conn, &id, "paused", true)?;
+    }
+    conn.execute(
+        "UPDATE scheduled_sends SET attempts = ?1, last_error = ?2 WHERE attempts < ?1",
+        rusqlite::params![
+            crate::store::MAX_SEND_ATTEMPTS,
+            "restored from a profile archive, so this was not sent on its own"
+        ],
+    )?;
+    conn.execute("DELETE FROM account_secrets", [])?;
+    Ok(())
 }
 
 #[cfg(test)]

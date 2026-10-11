@@ -21,11 +21,15 @@ export type ArchiveStep =
   | { kind: 'export' }
   | { kind: 'check'; path: string }
   | { kind: 'checked'; path: string; summary: ArchiveSummary }
+  | { kind: 'restore'; path: string }
+  | { kind: 'ready'; path: string; summary: ArchiveSummary }
 
 export const profileArchive$ = observable({
   step: null as ArchiveStep | null,
   busy: false,
   error: '',
+  /** 'activated' while a restored profile is in use and the previous one is kept aside. */
+  restoreState: 'none' as 'none' | 'activated',
 })
 
 function reason(error: unknown, fallback: string) {
@@ -93,4 +97,84 @@ export async function checkProfile(passphrase: string) {
 
 export function closeProfileArchive() {
   if (!profileArchive$.busy.peek()) profileArchive$.assign({ step: null, error: '' })
+}
+
+// ---- Restoring (#172) ---------------------------------------------------------
+
+export async function startProfileRestore() {
+  try {
+    const res = await invoke<{ needsPassphrase?: boolean; path?: string }>('backup.profileRestorePrepare', {})
+    if (res?.needsPassphrase && res.path)
+      profileArchive$.assign({ step: { kind: 'restore', path: res.path }, error: '', busy: false })
+  } catch (error) {
+    showToast(reason(error, t('profileArchive.couldNotOpen', { defaultValue: 'Could not open the archive' })), 'error')
+  }
+}
+
+/** Unpacks and checks the archive aside; the profile in use is not touched yet. */
+export async function prepareRestore(passphrase: string) {
+  const step = profileArchive$.step.peek()
+  if (step?.kind !== 'restore') return
+  profileArchive$.assign({ busy: true, error: '' })
+  try {
+    const res = await invoke<{ summary: ArchiveSummary }>('backup.profileRestorePrepare', {
+      path: step.path,
+      passphrase,
+    })
+    profileArchive$.step.set({ kind: 'ready', path: step.path, summary: res.summary })
+  } catch (error) {
+    profileArchive$.error.set(
+      reason(error, t('profileArchive.unreadable', { defaultValue: 'The archive could not be read' })),
+    )
+  } finally {
+    profileArchive$.busy.set(false)
+  }
+}
+
+/** Reloads the window on success: everything shown came from the old profile. */
+export async function activateRestore(reload: () => void = () => window.location.reload()) {
+  profileArchive$.assign({ busy: true, error: '' })
+  try {
+    await invoke('backup.profileRestoreActivate', {})
+    profileArchive$.assign({ step: null, restoreState: 'activated' })
+    reload()
+  } catch (error) {
+    profileArchive$.error.set(
+      reason(error, t('profileArchive.restoreFailed', { defaultValue: 'The profile was not restored' })),
+    )
+  } finally {
+    profileArchive$.busy.set(false)
+  }
+}
+
+export async function loadRestoreState() {
+  try {
+    const res = await invoke<{ state: 'none' | 'activated' | 'swapping' }>('backup.profileRestoreStatus', {})
+    profileArchive$.restoreState.set(res?.state === 'activated' ? 'activated' : 'none')
+  } catch {
+    profileArchive$.restoreState.set('none')
+  }
+}
+
+export async function keepRestoredProfile() {
+  try {
+    await invoke('backup.profileRestoreKeep', {})
+    profileArchive$.restoreState.set('none')
+    showToast(t('profileArchive.kept', { defaultValue: 'The previous profile was deleted' }))
+  } catch (error) {
+    showToast(
+      reason(error, t('profileArchive.couldNotKeep', { defaultValue: 'Could not finish the restore' })),
+      'error',
+    )
+  }
+}
+
+export async function undoRestore(reload: () => void = () => window.location.reload()) {
+  try {
+    await invoke('backup.profileRestoreUndo', {})
+    profileArchive$.restoreState.set('none')
+    reload()
+  } catch (error) {
+    showToast(reason(error, t('profileArchive.couldNotUndo', { defaultValue: 'Could not go back' })), 'error')
+  }
 }

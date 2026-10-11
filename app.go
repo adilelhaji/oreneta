@@ -92,6 +92,13 @@ func (a *App) Startup(ctx context.Context) {
 	cleanupUpdateCache()
 	a.startTray()
 	a.logf("startup: core path=%s", coreBinaryPath())
+	// A restore cut short by a crash or power loss is undone before the core
+	// opens the store, so it never sees half of each profile.
+	if recovered, err := recoverInterruptedRestore(appConfigDir()); err != nil {
+		a.logf("restore: could not undo an interrupted restore: %v", err)
+	} else if recovered {
+		a.logf("restore: an interrupted restore was undone; the previous profile is back")
+	}
 	a.sidecar = NewSidecar(coreBinaryPath(), a.logWriter())
 	a.sidecar.onEvent = a.handleSidecarEvent
 	if err := a.sidecar.Start(ctx); err != nil {
@@ -462,6 +469,16 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.exportProfileArchive(payload)
 	case "backup.profileInspect":
 		return a.inspectProfileArchive(payload)
+	case "backup.profileRestorePrepare":
+		return a.prepareProfileRestore(payload)
+	case "backup.profileRestoreActivate":
+		return a.activateProfileRestore()
+	case "backup.profileRestoreUndo":
+		return a.undoProfileRestore()
+	case "backup.profileRestoreKeep":
+		return map[string]any{"ok": true}, keepRestore(appConfigDir())
+	case "backup.profileRestoreStatus":
+		return a.profileRestoreStatus()
 	case "profiles.list":
 		return a.profilesList()
 	case "profiles.create":

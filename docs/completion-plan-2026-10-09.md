@@ -350,6 +350,10 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
   búsqueda, conflicto por revisión y papelera (ADR-0015,
   [registro](design/notes.md)). Pendiente: adjuntos de archivo y
   sincronización con proveedores.
+- **#171 y #172:** copia completa del perfil cifrada con age (ADR-0017),
+  comprobación sin tocar el perfil en uso, y restauración preparada aparte,
+  activada con diario y reversible ([registro](design/profile-archive.md)).
+  Pendiente: copias programadas (#173) y N4 en Windows.
 - **#99:** perfiles aislados, cada uno en su ventana y proceso, con
   carpetas, llavero y almacenamiento del webview propios (ADR-0016,
   [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,

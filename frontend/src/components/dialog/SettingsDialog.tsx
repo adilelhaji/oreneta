@@ -55,7 +55,8 @@ import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } fro
 import { startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
-import { startProfileCheck, startProfileExport } from '../../states/profileArchive'
+import { RestoreStatusRow } from './RestoreStatusRow'
+import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
 import { MailImportDialog } from './MailImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
 import { showToast, ui$, type SetupMode } from '../../states/ui'
@@ -1156,6 +1157,7 @@ function BackupGroup() {
             </div>
           }
         />
+        <RestoreStatusRow />
         <SettingRow
           title={t('profileArchive.settingsTitle', { defaultValue: 'Whole profile' })}
           hint={t('profileArchive.settingsHint', {
@@ -1164,6 +1166,14 @@ function BackupGroup() {
           })}
           control={
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => void startProfileRestore()}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Upload size={14} strokeWidth={1.75} />
+                {t('profileArchive.restore', { defaultValue: 'Restore…' })}
+              </button>
               <button
                 onClick={() => void startProfileCheck()}
                 disabled={busy}

@@ -206,3 +206,51 @@ fn a_failed_export_keeps_the_previous_archive() {
     assert_eq!(std::fs::read(&dest).unwrap(), before);
     assert!(!fixture.dir.join("profile.oreneta-profile.part").exists());
 }
+
+#[test]
+fn a_restore_is_prepared_aside_rekeyed_and_held_until_the_person_reconnects() {
+    let fixture = Fixture::new("prepare");
+    fixture
+        .conn
+        .execute(
+            "INSERT INTO scheduled_sends(id, account, due_at, subject, payload) VALUES('s1', 'a@x.cat', 9999999999, 'Later', '{}')",
+            [],
+        )
+        .unwrap();
+    fixture.conn.execute("INSERT INTO account_secrets(account_id, blob) VALUES('a@x.cat', 'pw')", []).unwrap();
+    let archive = fixture.export();
+    let profile = fixture.dir.join("profile");
+    let machine = "ab".repeat(32);
+
+    let wrong = prepare_restore(&archive, "wrong passphrase", &profile, Some(&machine), 5);
+    assert!(wrong.is_err());
+    assert!(!profile.join(STAGING_DIR).join(READY_DIR).exists(), "nothing is left ready after a failure");
+    assert!(!profile.join(STAGING_DIR).join("work").exists());
+
+    let summary = prepare_restore(&archive, PASS, &profile, Some(&machine), 5).unwrap();
+    assert_eq!(summary.accounts, 1);
+    let ready = profile.join(STAGING_DIR).join(READY_DIR);
+    assert!(ready.join(READY_FILE).exists());
+    assert!(!ready.join("db").exists(), "the copy under the archive key is gone");
+    assert_eq!(std::fs::read(ready.join("media/avatars/acct/me.png")).unwrap(), b"avatar bytes");
+
+    let restored = Connection::open(ready.join(RESTORED_DB)).unwrap();
+    assert!(restored.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get::<_, i64>(0)).is_err(), "only this computer's key opens it");
+    restored.execute_batch(&format!("PRAGMA key = \"x'{machine}'\";")).unwrap();
+    assert!(crate::store::account_paused(&restored, "a@x.cat").unwrap(), "no sync until reconnected");
+    let (attempts, error): (i64, String) = restored
+        .query_row("SELECT attempts, last_error FROM scheduled_sends WHERE id = 's1'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap();
+    assert_eq!(attempts, crate::store::MAX_SEND_ATTEMPTS);
+    assert!(error.contains("restored"));
+    let secrets: i64 = restored.query_row("SELECT COUNT(*) FROM account_secrets", [], |r| r.get(0)).unwrap();
+    assert_eq!(secrets, 0, "no stored password travels in an archive");
+    let version: i64 = restored.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+    assert_eq!(version, crate::store::SCHEMA_VERSION);
+
+    // Without a key on this computer the restored store is plain, like the one in use.
+    let plain = prepare_restore(&archive, PASS, &profile, None, 6).unwrap();
+    assert_eq!(plain.accounts, 1);
+    let restored = Connection::open(ready.join(RESTORED_DB)).unwrap();
+    assert_eq!(restored.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+}

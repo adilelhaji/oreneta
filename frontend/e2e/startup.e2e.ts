@@ -921,6 +921,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'tasks.list': { tasks: [] },
         'tasks.lists': { lists: [] },
         'notes.list': { notes: [], tags: [] },
+        'backup.profileRestoreStatus': { state: 'none' },
         'profiles.list': {
           profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
           active: 'default',
