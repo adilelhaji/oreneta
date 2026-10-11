@@ -238,6 +238,53 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn a_local_calendar_keeps_its_events_without_a_server() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let account = "imap@example.test";
+        // No calendar route at all: anything that reached a server would fail.
+        let local = dispatch(&engine, &request("calendar.createLocal", json!({"account": account, "name": "Home"})), &writer)
+            .await.unwrap()["id"].as_str().unwrap().to_owned();
+        let event = |id: &str, subject: &str| json!({
+            "id": id, "calendar_id": local, "subject": subject, "start": 1_791_799_200i64, "end": 1_791_802_800i64,
+            "all_day": false, "is_recurring": false, "is_cancelled": false, "free_busy": "", "my_response": "",
+            "description": "", "attendees": [],
+        });
+
+        let created = dispatch(&engine, &request("calendar.create", json!({"account": account, "event": event("", "Dentist")})), &writer)
+            .await.expect("a local event is saved");
+        let id = created["event"]["id"].as_str().unwrap().to_owned();
+        assert!(id.starts_with("local:"));
+        let stored = || calendar::events_in_window(&engine.db.lock().unwrap(), account, (0, i64::MAX)).unwrap();
+        assert_eq!(stored().iter().map(|e| e.subject.as_str()).collect::<Vec<_>>(), vec!["Dentist"]);
+
+        dispatch(&engine, &request("calendar.update", json!({"account": account, "event": event(&id, "Dentist (moved)")})), &writer)
+            .await.expect("a local event is edited");
+        assert_eq!(stored()[0].subject, "Dentist (moved)");
+        assert_eq!(stored().len(), 1, "edited in place, not added");
+
+        let mut repeating = event("", "Gym");
+        repeating["recurrence"] = json!({"freq": "weekly", "interval": 1, "weekdays": [], "until": null, "count": null});
+        let refused = dispatch(&engine, &request("calendar.create", json!({"account": account, "event": repeating})), &writer).await;
+        assert!(refused.is_err_and(|e| e.to_string().contains("single events")));
+
+        dispatch(&engine, &request("calendar.delete", json!({"account": account, "event": id, "calendar": local})), &writer)
+            .await.expect("a local event is deleted");
+        assert!(stored().is_empty());
+
+        // A subscription is the publisher's: writing to it is refused by name.
+        calendar::upsert_calendars(&engine.db.lock().unwrap(), account, &[calendar::Calendar {
+            id: "sub:1".into(), name: "Holidays".into(), kind: calendar::CalendarKind::Subscribed, enabled: true,
+            ..Default::default()
+        }]).unwrap();
+        let mut published = event("", "Party");
+        published["calendar_id"] = json!("sub:1");
+        let refused = dispatch(&engine, &request("calendar.create", json!({"account": account, "event": published})), &writer).await;
+        assert!(refused.is_err_and(|e| e.to_string().contains("Holidays is a subscribed calendar")));
+    }
+    #[tokio::test]
     async fn local_draft_rpc_is_local_and_preserves_conflicts() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -985,6 +1032,26 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
             let _ = calendar::forget_old_reminders(&db, now);
         }
     });
+}
+
+/// The local calendar a write is addressed to, or None when it belongs to the
+/// account's server. A subscribed calendar is refused: it belongs to whoever
+/// publishes it. Local calendars used to be offered in the editor and then
+/// sent to the account's server, which has never heard of them, so saving an
+/// event there always failed.
+fn local_calendar_write(
+    engine: &Engine,
+    account: &str,
+    calendar_id: &str,
+) -> anyhow::Result<Option<calendar::Calendar>> {
+    let found = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?;
+    match found {
+        Some(calendar) if calendar.kind == calendar::CalendarKind::Local => Ok(Some(calendar)),
+        Some(calendar) if calendar.kind == calendar::CalendarKind::Subscribed => {
+            anyhow::bail!("{} is a subscribed calendar and cannot be changed here", calendar.name)
+        }
+        _ => Ok(None),
+    }
 }
 
 fn spawn_calendar_sync(
@@ -3996,6 +4063,25 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             if event.end < event.start {
                 anyhow::bail!("an event cannot end before it starts");
             }
+            if let Some(local) = local_calendar_write(&engine, &account, &event.calendar_id)? {
+                // A local calendar keeps single events: there is no server to
+                // expand a rule, and storing one unexpanded would show it once.
+                if event.recurrence.is_some() {
+                    anyhow::bail!(
+                        "a local calendar keeps single events; a repeating event needs an account calendar"
+                    );
+                }
+                let created = calendar::Event {
+                    id: format!("local:{}", uuid::Uuid::new_v4()),
+                    calendar_id: local.id,
+                    change_key: None,
+                    is_recurring: false,
+                    series_id: None,
+                    ..event
+                };
+                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &created)?;
+                return Ok(json!({ "event": serde_json::to_value(created)? }));
+            }
             // Telling the people on an event is never assumed: the caller says
             // so only after the reader has confirmed it.
             let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
@@ -4026,6 +4112,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .get("scope")
                 .and_then(Value::as_str)
                 .is_some_and(|scope| scope == "series");
+            if local_calendar_write(&engine, &account, &event.calendar_id)?.is_some() {
+                if event.recurrence.is_some() {
+                    anyhow::bail!(
+                        "a local calendar keeps single events; a repeating event needs an account calendar"
+                    );
+                }
+                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &event)?;
+                return Ok(json!({ "ok": true }));
+            }
             let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
             let version =
                 calendar::route::update_event(&engine, &account, &event, whole_series, notify)
@@ -4060,6 +4155,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .and_then(Value::as_str)
                 .is_some_and(|scope| scope == "series");
             let series_id = p.get("series").and_then(Value::as_str);
+            if local_calendar_write(&engine, &account, &calendar_id)?.is_some() {
+                calendar::forget_event(&engine.db.lock().unwrap(), &account, &id)?;
+                return Ok(json!({ "ok": true }));
+            }
             calendar::route::delete_event(
                 &engine,
                 &account,

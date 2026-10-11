@@ -9,6 +9,7 @@ import {
   loadSeriesRule,
   resolveNames,
   saveEvent,
+  writableCalendars,
   type EditScope,
   type EventDraft,
   type Frequency,
@@ -210,7 +211,7 @@ export function EventEditor() {
             )
           )}
 
-          {isNew && calendars.filter((calendar) => calendar.enabled).length > 1 && (
+          {isNew && writableCalendars(calendars).length > 1 && (
             <Labelled label={t('calendar.calendar', { defaultValue: 'Calendar' })}>
               <select
                 value={`${event.accountId} ${event.calendar_id}`}
@@ -220,13 +221,11 @@ export function EventEditor() {
                 }}
                 className={inputClass}
               >
-                {calendars
-                  .filter((calendar) => calendar.enabled)
-                  .map((calendar) => (
-                    <option key={`${calendar.accountId}:${calendar.id}`} value={`${calendar.accountId} ${calendar.id}`}>
-                      {calendar.name}
-                    </option>
-                  ))}
+                {writableCalendars(calendars).map((calendar) => (
+                  <option key={`${calendar.accountId}:${calendar.id}`} value={`${calendar.accountId} ${calendar.id}`}>
+                    {calendar.name}
+                  </option>
+                ))}
               </select>
             </Labelled>
           )}

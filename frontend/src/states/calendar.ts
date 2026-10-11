@@ -426,9 +426,15 @@ export function groupByDay(events: CalendarEvent[]): { day: number; events: DayE
 }
 
 
+/// The calendars a new event can be saved to: shown, and neither read-only
+/// nor a subscription, which belong to whoever publishes them.
+export function writableCalendars(calendars: Calendar[]): Calendar[] {
+  return calendars.filter((calendar) => calendar.enabled && !calendar.read_only && calendar.kind !== 'subscribed')
+}
+
 /// Opens the editor on a new event, defaulting to the next round hour.
 export function newEvent(startAt?: number): EventDraft | null {
-  const calendars = calendar$.calendars.peek().filter((calendar) => calendar.enabled)
+  const calendars = writableCalendars(calendar$.calendars.peek())
   const target = calendars.find((calendar) => calendar.is_default) ?? calendars[0]
   // With no calendar there is nowhere to put it, and inventing one would fail
   // at save time with a worse message.

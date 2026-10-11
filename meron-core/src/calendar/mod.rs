@@ -458,42 +458,60 @@ pub fn replace_window(
         params![account, calendar_id, from, to],
     )?;
     for event in events {
-        tx.execute(
-            "INSERT OR REPLACE INTO calendar_events(
-               account, calendar_id, event_id, change_key, subject, location,
-               start_utc, end_utc, all_day, is_recurring, is_cancelled,
-               free_busy, my_response, organizer, attendees, series_id,
-               description, reminder_minutes)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                    ?17, ?18)",
-            params![
-                account,
-                calendar_id,
-                event.id,
-                event.change_key,
-                event.subject,
-                event.location,
-                event.start,
-                event.end,
-                event.all_day as i64,
-                event.is_recurring as i64,
-                event.is_cancelled as i64,
-                event.free_busy,
-                event.my_response,
-                event
-                    .organizer
-                    .as_ref()
-                    .map(serde_json::to_string)
-                    .transpose()?,
-                serde_json::to_string(&event.attendees)?,
-                event.series_id,
-                event.description,
-                event.reminder_minutes,
-            ],
-        )?;
+        insert_event(&tx, account, calendar_id, event)?;
     }
     tx.commit()?;
     Ok(())
+}
+
+fn insert_event(conn: &Connection, account: &str, calendar_id: &str, event: &Event) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO calendar_events(
+           account, calendar_id, event_id, change_key, subject, location,
+           start_utc, end_utc, all_day, is_recurring, is_cancelled,
+           free_busy, my_response, organizer, attendees, series_id,
+           description, reminder_minutes)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                ?17, ?18)",
+        params![
+            account,
+            calendar_id,
+            event.id,
+            event.change_key,
+            event.subject,
+            event.location,
+            event.start,
+            event.end,
+            event.all_day as i64,
+            event.is_recurring as i64,
+            event.is_cancelled as i64,
+            event.free_busy,
+            event.my_response,
+            event
+                .organizer
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?,
+            serde_json::to_string(&event.attendees)?,
+            event.series_id,
+            event.description,
+            event.reminder_minutes,
+        ],
+    )?;
+    Ok(())
+}
+
+/// The stored calendar with this id, if the account has one.
+pub fn calendar_of(conn: &Connection, account: &str, calendar_id: &str) -> Result<Option<Calendar>> {
+    Ok(get_calendars(conn, account)?
+        .into_iter()
+        .find(|calendar| calendar.id == calendar_id))
+}
+
+/// Writes an event of a local calendar. A local calendar has no server: this
+/// row is the event, and sync never replaces it.
+pub fn put_local_event(conn: &Connection, account: &str, event: &Event) -> Result<()> {
+    insert_event(conn, account, &event.calendar_id, event)
 }
 
 /// Cached occurrences overlapping a window, across every enabled calendar of
