@@ -5473,3 +5473,102 @@ fn removing_an_account_removes_its_tasks_and_no_others() {
     let left: Vec<String> = list_tasks(&conn, true).unwrap().into_iter().map(|t| t.account).collect();
     assert_eq!(left, vec!["kept"]);
 }
+
+#[test]
+fn every_table_naming_an_account_is_either_removed_with_it_or_kept_on_purpose() {
+    use crate::store::accounts::{KEPT_ON_ACCOUNT_REMOVAL, REMOVED_WITH_ACCOUNT};
+    let conn = test_conn();
+    let tables: Vec<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    let mut unclassified = Vec::new();
+    for table in tables {
+        let columns: Vec<String> = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let names_account = columns.iter().any(|c| c == "account" || c == "account_id");
+        let classified = REMOVED_WITH_ACCOUNT.iter().any(|(t, _)| *t == table)
+            || KEPT_ON_ACCOUNT_REMOVAL.contains(&table.as_str());
+        if names_account && !classified {
+            unclassified.push(table);
+        }
+    }
+    assert!(
+        unclassified.is_empty(),
+        "decide whether these go with a removed account (ADR-0011): {unclassified:?}"
+    );
+}
+
+#[test]
+fn removing_an_account_takes_its_state_and_keeps_what_the_person_wrote() {
+    let conn = test_conn();
+    let mut counts = Vec::new();
+    for account in ["gone", "kept"] {
+        conn.execute("INSERT INTO accounts(id, email) VALUES(?1, ?1)", params![account]).unwrap();
+        conn.execute(
+            "INSERT INTO contact_sources(id, kind, account, url) VALUES(?1, 'carddav', ?2, 'https://dav.example/')",
+            params![format!("book-{account}"), account],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO people(id, source, account, book, uid, name, organisation, note, photo, updated)
+             VALUES(?1, 'carddav', ?2, 'b', 'u', 'Ann', '', '', '', 0)",
+            params![format!("p-{account}"), account],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO person_emails(person_id, addr, label, position) VALUES(?1, 'ann@example.com', '', 0)",
+            params![format!("p-{account}")],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sender_priority(account, addr, priority) VALUES(?1, 'x@example.com', 1)",
+            params![account],
+        )
+        .unwrap();
+        save_task(&conn, account, "t-1", "INBOX", None, "", 1).unwrap();
+    }
+    conn.execute_batch(
+        "INSERT INTO local_drafts(id, account, revision, deleted, document, updated_at)
+           VALUES('d1', 'gone', 1, 0, '{}', 1), ('d2', 'gone', 2, 1, NULL, 1);",
+    )
+    .unwrap();
+
+    crate::store::schedule_send(&conn, "s1", "gone", 50, "Later", "{}").unwrap();
+    let removal = crate::store::delete_account(&conn, "gone").unwrap();
+    assert_eq!(removal.contact_sources, vec!["book-gone".to_string()]);
+    assert_eq!(removal.kept_scheduled, 1);
+    assert!(
+        crate::store::due_scheduled_sends(&conn, 1_000_000).unwrap().is_empty(),
+        "adding the same address again must not send it on its own"
+    );
+    assert_eq!(removal.kept_drafts, 1, "the unsent draft is kept and counted; the tombstone is not");
+    let drafts: i64 = conn
+        .query_row("SELECT COUNT(*) FROM local_drafts WHERE account = 'gone'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(drafts, 2, "nothing the person wrote is deleted");
+
+    for (table, column) in crate::store::accounts::REMOVED_WITH_ACCOUNT {
+        let left: i64 = conn
+            .query_row(&format!("SELECT COUNT(*) FROM {table} WHERE {column} = 'gone'"), [], |r| r.get(0))
+            .unwrap();
+        counts.push((table, left));
+    }
+    assert!(counts.iter().all(|(_, left)| *left == 0), "{counts:?}");
+    let emails: i64 = conn
+        .query_row("SELECT COUNT(*) FROM person_emails WHERE person_id = 'p-gone'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(emails, 0, "a person's addresses go with them");
+    let other: i64 = conn
+        .query_row("SELECT COUNT(*) FROM people WHERE account = 'kept'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(other, 1, "another account is untouched");
+}

@@ -167,11 +167,34 @@ export async function addSharedMailbox(accountId: string, address: string, displ
   await boot()
 }
 
+/** What removing an account kept on this computer (ADR-0011). */
+export type KeptAfterRemoval = { drafts?: number; scheduled?: number; attempts?: number }
+
+/**
+ * The sentence that says what is still here after an account was removed, or
+ * null when nothing is. Drafts and scheduled messages are the person's own
+ * writing and stay; they are never sent from an account that is gone.
+ */
+export function keptAfterRemovalNotice(kept: KeptAfterRemoval | undefined): string | null {
+  const drafts = kept?.drafts ?? 0
+  const scheduled = kept?.scheduled ?? 0
+  if (drafts === 0 && scheduled === 0) return null
+  return t('accounts.toast.removedKept', {
+    drafts,
+    scheduled,
+    defaultValue:
+      'Account removed. Kept on this computer: {drafts, plural, =0 {} one {# draft} other {# drafts}}{drafts, plural, =0 {} other {{scheduled, plural, =0 {} other {, }}}}{scheduled, plural, =0 {} one {# scheduled message, not sent} other {# scheduled messages, not sent}}.',
+  })
+}
+
 export async function deleteAccount(accountId: string) {
   if (
     !(await confirmAction({
       title: 'Remove account?',
-      message: 'This account will be removed from Oreneta.',
+      message: t('accounts.removeKeepsWriting', {
+        defaultValue:
+          'This account will be removed from Oreneta with its mail, contacts and settings. Your unsent drafts and scheduled messages stay on this computer and are not sent.',
+      }),
       confirmLabel: 'Remove',
       tone: 'danger',
     }))
@@ -179,8 +202,8 @@ export async function deleteAccount(accountId: string) {
     return
   }
   try {
-    await invoke('account.remove', { id: accountId })
-    showToast(t('accounts.toast.accountRemoved'))
+    const result = await invoke<{ kept?: KeptAfterRemoval }>('account.remove', { id: accountId })
+    showToast(keptAfterRemovalNotice(result?.kept) ?? t('accounts.toast.accountRemoved'))
     await boot()
   } catch (error) {
     showToast(error instanceof Error ? error.message : t('accounts.toast.failedToRemove'), 'error')

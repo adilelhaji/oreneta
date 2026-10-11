@@ -41,23 +41,26 @@ Cada uno se reprodujo con una prueba que fallaba antes de corregirlo.
 - Una fila ilegible de la lista es un error que se informa, no una tarea que
   desaparece sin aviso.
 
-## Pendiente de decisión: datos que quedan al eliminar una cuenta
+## Datos que quedan al eliminar una cuenta (decidido en ADR-0011)
 
-`store::delete_account` no borra estas tablas, que tienen columna de cuenta:
+La validación encontró 17 tablas con datos de la cuenta que no se borraban al
+eliminarla. Se decidió y se aplicó lo siguiente:
+- **Se borra** todo el estado y los datos personales: etiquetas, pospuestos,
+  prioridad, spam, reglas, contactos sincronizados con sus direcciones y
+  teléfonos, libretas (también sus contraseñas en el llavero) y registros.
+- **Se conservan** los borradores, los envíos programados y los intentos de
+  envío.
+- Un envío programado conservado queda abandonado: como el id de una cuenta
+  es su dirección, volver a añadirla lo habría enviado solo.
+- El diálogo de confirmación y el aviso posterior dicen qué se ha quedado en
+  el equipo.
+- Una prueba falla si una tabla nueva con columna de cuenta no está en
+  ninguna de las dos listas (`REMOVED_WITH_ACCOUNT`,
+  `KEPT_ON_ACCOUNT_REMOVAL`).
 
-| Tabla | Contenido |
-|---|---|
-| `local_drafts`, `scheduled_sends`, `outgoing_attempts` | Borradores, envíos programados e intentos de envío |
-| `rules`, `rule_log` | Reglas y su registro |
-| `people`, `contact_sources`, `correspondents` | Contactos y libretas |
-| `snoozed_threads`, `thread_labels`, `label_links` | Estado por conversación |
-| `sender_priority`, `sender_spam`, `spam_triggers`, `spam_judgments` | Prioridad y spam |
-| `oof_replied`, `calendar_reminders_fired` | Registros de respuestas automáticas y recordatorios |
-
-Algunas pueden conservarse a propósito. Por ejemplo, un borrador sin enviar
-es contenido del usuario, y un intento de envío incierto es evidencia de #29.
-Otras son datos personales que ya no tienen dueño visible. Hace falta decidir,
-tabla por tabla, qué se borra y qué se ofrece exportar antes de borrar.
+Pendiente: una vista para exportar o borrar ese contenido conservado. Hoy los
+envíos programados siguen en su lista, pero los borradores de una cuenta
+eliminada no tienen dónde verse.
 
 ## Fuera de alcance
 

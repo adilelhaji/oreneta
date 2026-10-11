@@ -5639,19 +5639,30 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             for dependent in &dependents {
                 engine.accounts.lock().await.remove(dependent);
                 engine.clear_pool(dependent);
-                let db = engine.db.lock().unwrap();
-                store::delete_account(&db, dependent)?;
+                let removal = store::delete_account(&engine.db.lock().unwrap(), dependent)?;
+                for source in &removal.contact_sources {
+                    let _ = secrets::delete(source);
+                }
             }
             engine.accounts.lock().await.remove(&id);
             // Drop any warm sessions: their creds are gone and must not be reused.
             engine.clear_pool(&id);
-            {
-                let db = engine.db.lock().unwrap();
-                store::delete_account(&db, &id)?;
+            let removal = store::delete_account(&engine.db.lock().unwrap(), &id)?;
+            // An address book's password is kept under the book's own id.
+            for source in &removal.contact_sources {
+                let _ = secrets::delete(source);
             }
             parse::remove_account_media(&parse::media_root(), &id);
             let _ = secrets::delete(&id);
-            Ok(json!({ "ok": true }))
+            // What the person wrote stays (ADR-0011); the caller says so.
+            Ok(json!({
+                "ok": true,
+                "kept": {
+                    "drafts": removal.kept_drafts,
+                    "scheduled": removal.kept_scheduled,
+                    "attempts": removal.kept_attempts,
+                },
+            }))
         }
 
         // Add a shared mailbox: an Exchange account the reader has been
