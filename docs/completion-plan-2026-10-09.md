@@ -321,6 +321,18 @@ pendientes:
   con evidencia de proveedor;
 - libre/ocupado y el flujo completo de invitación en Exchange y Google (N5).
 
+Estado de la iteración 9 (2026-10-11):
+- **#42:** la validación de las tareas enlazadas encontró y corrigió seis
+  defectos, cada uno con su prueba
+  ([registro](design/message-linked-tasks.md)): tareas duplicadas, hilos
+  movidos de carpeta, nota borrada al fallar la lectura, error crudo al
+  reabrir y tareas de cuentas eliminadas.
+- **Pendiente:** decidir qué hacer con otras 17 tablas que quedan al eliminar
+  una cuenta.
+- **#41 y #103:** no hay código; esperan la aprobación de sus propuestas
+  ([contactos](design/contact-editing-decisions.md),
+  [tareas](design/full-tasks-decisions.md)).
+
 Criterio de salida C-B: flujo de invitación completo verificado en Exchange y
 Google (N5); restauración ensayada en Windows (N4); importación de al menos
 mbox/eml con corpus de regresión versionado en el repositorio.
