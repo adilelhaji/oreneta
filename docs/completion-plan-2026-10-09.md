@@ -286,6 +286,41 @@ responsable:
 | 9 | **Contactos y tareas** | #41, #42, #103 | N3 CardDAV edición con conflicto y deduplicación; N1 modelo de tareas con migración desde tarea enlazada; N2 flujos de recuperación | Modelo de tareas completas (ADR nueva) |
 | 10 | **Notas, importación y perfiles** | #104, #112, #99 | N1 importación mbox/eml con corpus malformado (cabeceras rotas, codificaciones mixtas, adjuntos truncados) y propiedad de ida y vuelta exportar→importar; N3 aislamiento entre perfiles (credenciales, caché, borradores); N4 cambio de perfil nativo | Almacenamiento de notas, formatos de importación, modelo de perfil (tres ADR) |
 
+Estado de la iteración 7 (2026-10-11): lo que existe es la copia de
+configuración de ADR-0008, no la del perfil completo. Se corrigió que una copia
+fallida borrara la anterior: ahora se escribe aparte y se renombra al terminar.
+La captura y la restauración del perfil completo esperan decisiones del
+responsable ([decisiones](design/full-profile-archive-decisions.md)): cifrado
+por bloques para perfiles grandes, límites del inventario, secretos opcionales,
+clave de la base restaurada en Windows, y límites y copias programadas.
+
+Estado de la iteración 8 (2026-10-11): una auditoría del calendario encontró
+defectos que se reprodujeron con pruebas y se corrigieron
+([registro](design/calendar-subscriptions.md)):
+- suscripciones `.ics` leídas según RFC 5545 (excepciones, `DURATION`, hora
+  flotante, zonas de Windows, días completos al este de UTC, eventos que
+  cruzan la ventana, `webcal://`), y una suscripción rota ya no detiene las
+  demás;
+- Google no sobrescribe cambios ajenos (`If-Match`), y editar toda la serie ya
+  no la recorta ni borra su regla;
+- reglas con el día de la semana y la fecha final que ve la persona, y nombre
+  de zona IANA también en Windows;
+- días completos de Exchange en su fecha;
+- vista semanal correcta los días de cambio de hora;
+- sin botones de respuesta para el organizador;
+- eventos en calendarios locales;
+- recordatorio de nuevo si el evento se mueve;
+- ventanas de Exchange con más ocurrencias de las que caben en una respuesta.
+
+CI ejecuta las pruebas de calendario también en Tokio y Los Ángeles. Siguen
+pendientes:
+- adaptador CalDAV, modelo iTIP, cola sin conexión e importación/exportación
+  ICS (cada uno con su ADR, como piden #101 y #102);
+- en Exchange: política de conflictos, edición de series, patrones mensuales
+  relativos (necesitan cambiar el fork de `ews-rs`) y zona en las escrituras,
+  con evidencia de proveedor;
+- libre/ocupado y el flujo completo de invitación en Exchange y Google (N5).
+
 Criterio de salida C-B: flujo de invitación completo verificado en Exchange y
 Google (N5); restauración ensayada en Windows (N4); importación de al menos
 mbox/eml con corpus de regresión versionado en el repositorio.
