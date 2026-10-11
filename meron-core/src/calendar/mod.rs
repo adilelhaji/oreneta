@@ -630,7 +630,8 @@ pub fn due_reminders(conn: &Connection, account: &str, now: i64) -> Result<Vec<E
            AND e.start_utc - (e.reminder_minutes * 60) <= ?2
            AND NOT EXISTS (
                  SELECT 1 FROM calendar_reminders_fired f
-                 WHERE f.account = e.account AND f.event_id = e.event_id)
+                 WHERE f.account = e.account
+                   AND f.event_id IN (e.event_id || '@' || e.start_utc, e.event_id))
          ORDER BY e.start_utc",
     )?;
     let events = stmt
@@ -652,11 +653,22 @@ pub fn due_reminders(conn: &Connection, account: &str, now: i64) -> Result<Vec<E
 }
 
 /// Records that a reminder has been raised, so it is not raised again.
-pub fn mark_reminder_fired(conn: &Connection, account: &str, event_id: &str, now: i64) -> Result<()> {
+///
+/// Recorded for the event *at that start*: an event moved to another time is
+/// a new moment to be reminded of. Keyed on the id alone, a meeting moved
+/// after its reminder was given never reminded again. Records written before
+/// this (the id alone) still count until they expire.
+pub fn mark_reminder_fired(
+    conn: &Connection,
+    account: &str,
+    event_id: &str,
+    start: i64,
+    now: i64,
+) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO calendar_reminders_fired(account, event_id, fired_at)
          VALUES(?1, ?2, ?3)",
-        params![account, event_id, now],
+        params![account, format!("{event_id}@{start}"), now],
     )?;
     Ok(())
 }
@@ -840,7 +852,7 @@ mod tests {
         assert_eq!(due[0].id, "soon");
 
         // Raised once: the same query must not offer it again.
-        mark_reminder_fired(&conn, "acct", "soon", now).unwrap();
+        mark_reminder_fired(&conn, "acct", "soon", now + 600, now).unwrap();
         assert!(due_reminders(&conn, "acct", now).unwrap().is_empty());
 
         // And a resync, which replaces the window's rows wholesale, must not
@@ -857,6 +869,40 @@ mod tests {
             due_reminders(&conn, "acct", now).unwrap().is_empty(),
             "a reminder already given is not given again after a sync"
         );
+
+        // Moved to five minutes later: a new moment, reminded of again.
+        replace_window(
+            &conn,
+            "acct",
+            "cal",
+            (0, now + 100_000),
+            &[with_reminder("soon", now + 900, Some(15))],
+        )
+        .unwrap();
+        let due = due_reminders(&conn, "acct", now).unwrap();
+        assert_eq!(due.len(), 1, "a moved meeting reminds again");
+        assert_eq!(due[0].start, now + 900);
+    }
+
+    #[test]
+    fn a_reminder_recorded_before_the_start_was_part_of_the_key_still_counts() {
+        let conn = store();
+        upsert_calendars(&conn, "acct", &[a_calendar()]).unwrap();
+        let now = 1_000_000i64;
+        replace_window(
+            &conn,
+            "acct",
+            "cal",
+            (0, now + 100_000),
+            &[Event { reminder_minutes: Some(15), ..event("soon", now + 600, now + 4200) }],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO calendar_reminders_fired(account, event_id, fired_at) VALUES('acct', 'soon', ?1)",
+            params![now],
+        )
+        .unwrap();
+        assert!(due_reminders(&conn, "acct", now).unwrap().is_empty(), "no repeat after upgrading");
     }
 
     #[test]

@@ -248,8 +248,8 @@ fn with_if_match<B>(request: ureq::RequestBuilder<B>, if_match: Option<&str>) ->
     }
 }
 
-/// Tests point the client at a local server, per thread, so they can see the
-/// requests it makes and answer them. Never set outside tests.
+// Tests point the client at a local server, per thread, so they can see the
+// requests it makes and answer them. Never set outside tests.
 #[cfg(test)]
 thread_local! {
     static TEST_BASE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
@@ -983,8 +983,8 @@ fn to_event(source: GoogleEvent, calendar_id: &str) -> Option<Event> {
         }),
         is_cancelled: source.status == "cancelled",
         free_busy: match source.transparency.as_deref() {
-            Some("transparent") => "Free".to_string(),
-            _ => "Busy".to_string(),
+            Some("transparent") => "free".to_string(),
+            _ => "busy".to_string(),
         },
         my_response,
         organizer,
@@ -1416,7 +1416,7 @@ mod tests {
         assert_eq!(event.my_response, "accepted", "this mailbox's own answer");
         assert_eq!(event.attendees.len(), 2);
         assert_eq!(event.organizer.as_ref().unwrap().name, "La Cap");
-        assert_eq!(event.free_busy, "Busy");
+        assert_eq!(event.free_busy, "busy", "the same words as Exchange");
     }
 
     #[test]

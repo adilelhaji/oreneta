@@ -1008,7 +1008,7 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                         let db = engine.db.lock().unwrap();
                         // Recorded before it is announced: a reminder given
                         // twice is worse than one lost to a crash in between.
-                        if calendar::mark_reminder_fired(&db, &account, &event.id, now).is_err() {
+                        if calendar::mark_reminder_fired(&db, &account, &event.id, event.start, now).is_err() {
                             continue;
                         }
                     }
