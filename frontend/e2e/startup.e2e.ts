@@ -79,6 +79,38 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await row.click()
       await audit('conversation')
     }
+    // The address book with a local contact open, then its editor (ADR-0012).
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.replies['people.list'] = {
+        people: [
+          {
+            id: 'local::local:synthetic',
+            source: 'local',
+            account: '',
+            book: 'local',
+            name: 'Synthetic Contact',
+            organisation: 'Example Org',
+            note: '',
+            photo: '',
+            emails: [{ addr: 'synthetic@example.test', label: '' }],
+            phones: [],
+            version: '1',
+            editable: true,
+          },
+        ],
+      }
+    })
+    await page.getByTitle('People', { exact: true }).click()
+    await page.getByRole('option', { name: /Synthetic Contact/ }).click()
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
+    await audit('people')
+    await page.getByRole('button', { name: 'Edit', exact: true }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await info.attach(`people-editor-${theme}`, {
+      body: await page.screenshot({ path: info.outputPath('people-editor.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await audit('people-editor')
     expect(blocking).toEqual([])
     expect(errors).toEqual([])
   })

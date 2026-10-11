@@ -144,7 +144,9 @@ export function PeopleView() {
               {people.map((person) => {
                 const active = person.id === selectedId
                 return (
-                  <li key={person.id}>
+                  // The option is the listbox's child as far as assistive
+                  // technology is concerned; the list item is only layout.
+                  <li key={person.id} role="none">
                     <button
                       type="button"
                       role="option"
@@ -171,7 +173,11 @@ export function PeopleView() {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-ui font-semibold text-primary">{person.name}</span>
-                        <span className="block truncate text-caption text-secondary">
+                        {/* On the selected row's tinted background the secondary
+                            colour falls just under 4.5:1, so it uses the primary. */}
+                        <span
+                          className={clsx('block truncate text-caption', active ? 'text-primary' : 'text-secondary')}
+                        >
                           {person.organisation || person.emails[0]?.addr || ''}
                         </span>
                       </span>
@@ -262,7 +268,7 @@ function PersonCard({
             </p>
           )}
           {/* Where they came from, as a fact rather than an icon. */}
-          <p className="mt-1 text-caption text-secondary/80">{t(`people.source.${source}`)}</p>
+          <p className="mt-1 text-caption text-secondary">{t(`people.source.${source}`)}</p>
         </div>
         {person.editable && (
           <div className="flex gap-1">
