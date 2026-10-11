@@ -687,6 +687,21 @@ pub fn forget_calendar(conn: &Connection, account: &str, calendar_id: &str) -> R
 }
 
 /// Drops one cached occurrence, after the server accepted its deletion.
+/// Records the version a write left an event at, so the next edit is checked
+/// against it rather than against the version read before this one.
+pub fn set_event_change_key(
+    conn: &Connection,
+    account: &str,
+    event_id: &str,
+    change_key: &str,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE calendar_events SET change_key = ?3 WHERE account = ?1 AND event_id = ?2",
+        params![account, event_id, change_key],
+    )?;
+    Ok(())
+}
+
 pub fn forget_event(conn: &Connection, account: &str, event_id: &str) -> Result<()> {
     conn.execute(
         "DELETE FROM calendar_events WHERE account = ?1 AND event_id = ?2",

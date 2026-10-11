@@ -161,6 +161,19 @@ struct CreatedCalendar {
 /// One authenticated call. Blocking, like the rest of this crate's HTTP;
 /// callers wrap it in `spawn_blocking`.
 fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -> Result<String> {
+    call_with(token, method, url, body, None)
+}
+
+/// [`call`] with an optional `If-Match`: the write happens only if the event
+/// is still the version that was read, and is refused with 412 otherwise.
+fn call_with(
+    token: &str,
+    method: &str,
+    url: &str,
+    body: Option<serde_json::Value>,
+    if_match: Option<&str>,
+) -> Result<String> {
+    let url = &test_base(url);
     let agent = crate::proxy::agent()?;
     let authorization = format!("Bearer {token}");
 
@@ -187,8 +200,7 @@ fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -
             .build()
             .call()
             .with_context(|| format!("{method} {url}"))?,
-        ("DELETE", _) => agent
-            .delete(url)
+        ("DELETE", _) => with_if_match(agent.delete(url), if_match)
             .header("Authorization", &authorization)
             .config()
             .http_status_as_error(false)
@@ -206,8 +218,7 @@ fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -
             .build()
             .send(payload.as_str())
             .with_context(|| format!("{method} {url}"))?,
-        ("PATCH", Some(_)) => agent
-            .patch(url)
+        ("PATCH", Some(_)) => with_if_match(agent.patch(url), if_match)
             .header("Authorization", &authorization)
             .header("Content-Type", "application/json")
             .config()
@@ -230,6 +241,33 @@ fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -
     Ok(text)
 }
 
+fn with_if_match<B>(request: ureq::RequestBuilder<B>, if_match: Option<&str>) -> ureq::RequestBuilder<B> {
+    match if_match.filter(|tag| !tag.is_empty()) {
+        Some(tag) => request.header("If-Match", tag),
+        None => request,
+    }
+}
+
+/// Tests point the client at a local server, per thread, so they can see the
+/// requests it makes and answer them. Never set outside tests.
+#[cfg(test)]
+thread_local! {
+    static TEST_BASE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn test_base(url: &str) -> String {
+    TEST_BASE.with(|base| match base.borrow().as_deref() {
+        Some(base) => url.replacen(API, base, 1),
+        None => url.to_string(),
+    })
+}
+
+#[cfg(not(test))]
+fn test_base(url: &str) -> String {
+    url.to_string()
+}
+
 /// What to tell the user about a refused call.
 ///
 /// The one refusal worth naming is a token that predates the calendar
@@ -243,6 +281,11 @@ fn explain(status: u16, body: &str) -> String {
     if needs_consent {
         return "this account has not granted calendar access yet — reconnect it \
                 to sign in again and allow the calendar"
+            .to_string();
+    }
+    if status == 412 {
+        return "this event was changed elsewhere since it was opened; nothing was \
+                saved — open it again to see the latest version"
             .to_string();
     }
     format!("Google Calendar answered {status}: {message}")
@@ -382,13 +425,20 @@ pub fn create_event(token: &str, event: &Event, notify: bool) -> Result<Event> {
 /// Updates an event in place. PATCH rather than PUT: only the fields this
 /// client owns are sent, so anything Google keeps that Meron does not model —
 /// conferencing links, reminders, colours — survives the edit.
-pub fn update_event(token: &str, event: &Event, whole_series: bool, notify: bool) -> Result<()> {
+pub fn update_event(
+    token: &str,
+    event: &Event,
+    whole_series: bool,
+    notify: bool,
+) -> Result<Option<String>> {
     // Changing the series means changing the master it was expanded from;
     // changing this one means changing the instance, which Google records as
     // an exception and leaves the rest of the series alone.
-    let target = match (whole_series, event.series_id.as_deref()) {
-        (true, Some(series)) => series,
-        _ => event.id.as_str(),
+    let (target, version) = match (whole_series, event.series_id.as_deref()) {
+        // The version read is the occurrence's, not the master's, so it
+        // cannot guard a write to the master.
+        (true, Some(series)) => (series, None),
+        _ => (event.id.as_str(), event.change_key.as_deref()),
     };
     let url = format!(
         "{API}/calendars/{}/events/{}?{}",
@@ -396,8 +446,12 @@ pub fn update_event(token: &str, event: &Event, whole_series: bool, notify: bool
         urlencode(target),
         updates_query(notify),
     );
-    call(token, "PATCH", &url, Some(event_body(event)?))?;
-    Ok(())
+    // Sent with the version it was read at, so an edit made elsewhere in
+    // between is refused (412) rather than silently overwritten.
+    let answer = call_with(token, "PATCH", &url, Some(event_body(event)?), version)?;
+    Ok(serde_json::from_str::<CreatedEvent>(&answer)
+        .ok()
+        .and_then(|updated| updated.etag))
 }
 
 /// Answers a meeting invitation.
@@ -412,18 +466,32 @@ pub fn respond(
     event_id: &str,
     response: super::Response,
 ) -> Result<()> {
-    #[derive(Deserialize)]
-    struct Current {
-        #[serde(default)]
-        attendees: Vec<serde_json::Value>,
-    }
     let url = format!(
         "{API}/calendars/{}/events/{}",
         urlencode(calendar_id),
         urlencode(event_id),
     );
+    // The list is read and written back, so the write is made conditional on
+    // the version read: someone added in between is kept by reading again,
+    // once, rather than dropped.
+    match answer_once(token, &url, response) {
+        Err(err) if format!("{err:#}").contains("changed elsewhere") => {
+            answer_once(token, &url, response)
+        }
+        other => other,
+    }
+}
+
+fn answer_once(token: &str, url: &str, response: super::Response) -> Result<()> {
+    #[derive(Deserialize)]
+    struct Current {
+        #[serde(default)]
+        attendees: Vec<serde_json::Value>,
+        #[serde(default)]
+        etag: Option<String>,
+    }
     let current: Current =
-        serde_json::from_str(&call(token, "GET", &url, None)?).context("read event to answer")?;
+        serde_json::from_str(&call(token, "GET", url, None)?).context("read event to answer")?;
 
     let mut attendees = current.attendees;
     let mut answered = false;
@@ -442,11 +510,12 @@ pub fn respond(
         anyhow::bail!("this account is not on the invitation");
     }
 
-    call(
+    call_with(
         token,
         "PATCH",
-        &url,
+        url,
         Some(serde_json::json!({ "attendees": attendees })),
+        current.etag.as_deref(),
     )?;
     Ok(())
 }
@@ -897,6 +966,137 @@ fn urlencode(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One request as the local server saw it.
+    #[derive(Debug, Clone)]
+    struct Seen {
+        method: String,
+        path: String,
+        if_match: Option<String>,
+        body: String,
+    }
+
+    /// Answers the given responses in order, one per connection, from a
+    /// loopback server, and points this thread's client at it.
+    fn serve(responses: Vec<(u16, String)>) -> std::sync::Arc<std::sync::Mutex<Vec<Seen>>> {
+        use std::io::{BufRead as _, BufReader, Read as _, Write as _};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/calendar/v3", listener.local_addr().unwrap());
+        TEST_BASE.with(|slot| *slot.borrow_mut() = Some(base));
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let record = seen.clone();
+        std::thread::spawn(move || {
+            for (status, body) in responses {
+                let Ok((stream, _)) = listener.accept() else { return };
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                let mut parts = line.split_whitespace();
+                let method = parts.next().unwrap_or_default().to_string();
+                let path = parts.next().unwrap_or_default().to_string();
+                let (mut length, mut if_match) = (0usize, None);
+                loop {
+                    let mut header = String::new();
+                    reader.read_line(&mut header).unwrap();
+                    let header = header.trim_end();
+                    if header.is_empty() {
+                        break;
+                    }
+                    let (name, value) = header.split_once(':').unwrap();
+                    match name.to_ascii_lowercase().as_str() {
+                        "content-length" => length = value.trim().parse().unwrap(),
+                        "if-match" => if_match = Some(value.trim().to_string()),
+                        _ => {}
+                    }
+                }
+                let mut content = vec![0; length];
+                reader.read_exact(&mut content).unwrap();
+                record.lock().unwrap().push(Seen {
+                    method,
+                    path,
+                    if_match,
+                    body: String::from_utf8(content).unwrap(),
+                });
+                let mut stream = stream;
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+            }
+        });
+        seen
+    }
+
+    fn stored(change_key: Option<&str>, series: Option<&str>) -> Event {
+        Event {
+            id: "occurrence-1".into(),
+            calendar_id: "primary".into(),
+            change_key: change_key.map(str::to_string),
+            subject: "Review".into(),
+            location: None,
+            start: 1_791_799_200,
+            end: 1_791_802_800,
+            all_day: false,
+            is_recurring: series.is_some(),
+            series_id: series.map(str::to_string),
+            recurrence: None,
+            description: String::new(),
+            reminder_minutes: None,
+            is_cancelled: false,
+            free_busy: String::new(),
+            my_response: String::new(),
+            organizer: None,
+            attendees: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn an_edit_is_sent_with_the_version_it_was_read_at() {
+        let seen = serve(vec![(200, r#"{"id":"occurrence-1","etag":"\"v2\""}"#.into())]);
+        let version = update_event("token", &stored(Some("\"v1\""), None), false, false).unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].method, "PATCH");
+        assert_eq!(seen[0].if_match.as_deref(), Some("\"v1\""));
+        assert_eq!(version.as_deref(), Some("\"v2\""), "the new version is reported back");
+    }
+
+    #[test]
+    fn an_edit_made_elsewhere_in_between_is_not_overwritten() {
+        let _seen = serve(vec![(412, r#"{"error":{"message":"Precondition Failed"}}"#.into())]);
+        let err = update_event("token", &stored(Some("\"v1\""), None), false, false).unwrap_err();
+        assert!(format!("{err:#}").contains("changed elsewhere"), "{err:#}");
+    }
+
+    #[test]
+    fn a_series_edit_does_not_claim_the_occurrences_version_for_the_master() {
+        let seen = serve(vec![(200, r#"{"id":"master"}"#.into())]);
+        update_event("token", &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
+        let seen = seen.lock().unwrap();
+        assert!(seen[0].path.contains("/events/master"));
+        assert_eq!(seen[0].if_match, None);
+    }
+
+    #[test]
+    fn an_answer_keeps_whoever_joined_while_it_was_being_written() {
+        // Read v1 with one attendee; the write is refused because someone was
+        // added; read again (v2, two attendees) and write that list.
+        let seen = serve(vec![
+            (200, r#"{"etag":"\"v1\"","attendees":[{"email":"me@x","self":true}]}"#.into()),
+            (412, r#"{"error":{"message":"Precondition Failed"}}"#.into()),
+            (200, r#"{"etag":"\"v2\"","attendees":[{"email":"me@x","self":true},{"email":"new@x"}]}"#.into()),
+            (200, r#"{}"#.into()),
+        ]);
+        respond("token", "primary", "event-1", super::super::Response::Accept).unwrap();
+        let seen = seen.lock().unwrap();
+        let methods: Vec<&str> = seen.iter().map(|request| request.method.as_str()).collect();
+        assert_eq!(methods, vec!["GET", "PATCH", "GET", "PATCH"]);
+        assert_eq!(seen[1].if_match.as_deref(), Some("\"v1\""));
+        assert_eq!(seen[3].if_match.as_deref(), Some("\"v2\""));
+        assert!(seen[3].body.contains("new@x"), "the attendee added in between is kept");
+        assert!(seen[3].body.contains("\"responseStatus\":\"accepted\""));
+    }
 
     #[test]
     fn a_rule_read_back_says_what_was_written() {

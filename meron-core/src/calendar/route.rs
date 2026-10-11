@@ -187,7 +187,7 @@ pub async fn update_event(
     event: &Event,
     whole_series: bool,
     notify: bool,
-) -> Result<()> {
+) -> Result<Option<String>> {
     // Everyone on it must be nameable before the list is written, or writing
     // it would remove those who are not.
     let event = &with_addresses(engine, account, event).await?;
@@ -199,7 +199,8 @@ pub async fn update_event(
                     let event = event.clone();
                     Box::pin(async move { session.update_event(&event, whole_series, notify).await })
                 })
-                .await
+                .await?;
+            Ok(None)
         }
         (Route::Google, token) => {
             let event = event.clone();

@@ -31,6 +31,26 @@ Los defectos de abajo se reprodujeron con fixtures antes de corregirlos.
 - **Interfaz** (`subscriptionUrl.test.ts`): el diálogo acepta `webcal://` y
   `webcals://`, y rechaza lo mismo que el núcleo.
 
+## Conflictos al editar en Google (#101)
+
+- Editar un evento o una ocurrencia envía `If-Match` con la versión (etag) con
+  que se leyó. Si alguien lo cambió entretanto, Google responde 412, no se
+  guarda nada y se dice que se abra de nuevo. Antes se sobrescribía en
+  silencio.
+- La versión nueva que devuelve Google se guarda al momento, así que editar
+  dos veces seguidas no da un falso conflicto.
+- Editar la serie entera no lleva `If-Match`: la versión que se tiene es la de
+  la ocurrencia, no la del maestro.
+- Responder a una invitación lee la lista de asistentes y la escribe con
+  `If-Match`. Si alguien se añadió en medio, se relee una vez y se conserva.
+- Pruebas: `calendar::google::tests` con un servidor local que comprueba la
+  cabecera, el 412 y la relectura.
+- **Exchange queda pendiente.** Envía `AlwaysOverwrite`, aunque su comentario
+  promete lo contrario. Para una serie, la clave de cambio que se manda es la
+  de la ocurrencia, así que pasar a `NeverOverwrite` sin probarlo contra un
+  Exchange real podría rechazar todas las ediciones de series. Necesita
+  evidencia de proveedor y decidir entre `AutoResolve` y `NeverOverwrite`.
+
 ## Pendiente
 
 - **Hora ambigua en el cambio de hora.** Un `DTSTART` en la hora que se repite

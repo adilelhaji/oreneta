@@ -4027,7 +4027,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .and_then(Value::as_str)
                 .is_some_and(|scope| scope == "series");
             let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
-            calendar::route::update_event(&engine, &account, &event, whole_series, notify).await?;
+            let version =
+                calendar::route::update_event(&engine, &account, &event, whole_series, notify)
+                    .await?;
+            if let (Some(version), false) = (version, whole_series) {
+                calendar::set_event_change_key(&engine.db.lock().unwrap(), &account, &event.id, &version)?;
+            }
             spawn_calendar_sync(
                 engine.clone(),
                 out.clone(),
