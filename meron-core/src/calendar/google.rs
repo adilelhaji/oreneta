@@ -643,27 +643,37 @@ pub fn delete_calendar(token: &str, calendar_id: &str, owned: bool) -> Result<()
 /// it a weekly meeting at nine would wander by an hour when the clocks change.
 /// Google refuses to create a series without it, which is the right refusal.
 fn local_timezone() -> String {
-    if let Ok(name) = std::env::var("TZ") {
-        let name = name.trim_start_matches(':').trim();
-        if !name.is_empty() {
-            return name.to_string();
-        }
-    }
-    // The conventional way to recover the name on Unix: the zone file the
-    // system points at is named after its zone.
-    if let Ok(target) = std::fs::read_link("/etc/localtime") {
-        let path = target.to_string_lossy();
-        if let Some(index) = path.find("zoneinfo/") {
-            let name = &path[index + "zoneinfo/".len()..];
-            if !name.is_empty() {
-                return name.to_string();
-            }
-        }
-    }
-    // Not knowing is survivable: UTC is a real zone, and the instants are
-    // right either way — only the expansion of a rule across a clock change
-    // would differ.
-    "UTC".to_string()
+    zone_name(
+        std::env::var("TZ").ok(),
+        std::fs::read_link("/etc/localtime").ok(),
+        iana_time_zone::get_timezone().ok(),
+    )
+}
+
+/// The first IANA name among the candidates: `TZ`, the zone file
+/// `/etc/localtime` points at, and the platform's own answer. Windows has
+/// neither of the first two, and returned "UTC" here, so a Google series
+/// written there moved an hour at every clock change. A `TZ` in POSIX form
+/// (`CET-1CEST`) is not a name Google accepts and is passed over.
+fn zone_name(
+    tz: Option<String>,
+    localtime: Option<std::path::PathBuf>,
+    platform: Option<String>,
+) -> String {
+    let from_tz = tz.map(|name| name.trim_start_matches(':').trim().to_string());
+    let from_file = localtime.and_then(|target| {
+        let path = target.to_string_lossy().into_owned();
+        path.find("zoneinfo/")
+            .map(|index| path[index + "zoneinfo/".len()..].to_string())
+    });
+    [from_tz, from_file, platform]
+        .into_iter()
+        .flatten()
+        .find(|name| !name.is_empty() && name.parse::<chrono_tz::Tz>().is_ok())
+        // Not knowing is survivable: UTC is a real zone, and the instants are
+        // right either way; only the expansion of a rule across a clock
+        // change would differ.
+        .unwrap_or_else(|| "UTC".to_string())
 }
 
 /// The request body for a create or update.
@@ -732,7 +742,7 @@ fn event_body(event: &Event, with_rule: bool) -> Result<serde_json::Value> {
     // here cleared the series' rule whenever the editor had not loaded it,
     // turning a series into its first occurrence.
     if with_rule {
-        if let Some(line) = event.recurrence.as_ref().and_then(|rule| rrule(rule, event.start)) {
+        if let Some(line) = event.recurrence.as_ref().and_then(|rule| rrule(rule, event.start, event.all_day)) {
             body["recurrence"] = serde_json::json!([line]);
         }
     }
@@ -875,7 +885,7 @@ fn parse_until(text: &str) -> Option<i64> {
 ///
 /// One line of iCalendar, which is what Google stores; the server expands it
 /// and hands back occurrences, so this is the only direction a rule travels.
-fn rrule(rule: &super::Recurrence, start: i64) -> Option<String> {
+fn rrule(rule: &super::Recurrence, start: i64, all_day: bool) -> Option<String> {
     use super::{Frequency, Recurrence as Rule};
     let mut parts = vec![match rule.freq {
         Frequency::Daily => "FREQ=DAILY".to_string(),
@@ -890,7 +900,7 @@ fn rrule(rule: &super::Recurrence, start: i64) -> Option<String> {
     if rule.freq == Frequency::Weekly {
         parts.push(format!(
             "BYDAY={}",
-            rule.days_or_start(start)
+            rule.days_or_start(start, all_day)
                 .into_iter()
                 .map(|day| Rule::RRULE_DAYS[day as usize])
                 .collect::<Vec<_>>()
@@ -903,7 +913,9 @@ fn rrule(rule: &super::Recurrence, start: i64) -> Option<String> {
             // UNTIL is inclusive and compared against the whole instant, so it
             // is set to the end of that day — otherwise a series "until the
             // 30th" stops on the 29th.
-            let end = chrono::DateTime::from_timestamp(until, 0)?;
+            // The editor stores the end date as the last minute of that
+            // day on this machine's clock.
+            let end = super::start_date(until, false)?;
             parts.push(format!("UNTIL={}", end.format("%Y%m%dT235959Z")));
         }
         (None, Some(count)) => parts.push(format!("COUNT={}", count.max(1))),
@@ -1240,19 +1252,37 @@ mod tests {
     #[test]
     fn a_rule_becomes_one_line_of_icalendar() {
         use super::super::{Frequency, Recurrence};
-        // Thursday 27 August 2026.
-        let start = chrono::DateTime::parse_from_rfc3339("2026-08-27T12:00:00Z")
-            .unwrap()
-            .timestamp();
+        // Thursday 27 August 2026 at noon on this machine's clock.
+        let start = {
+            use chrono::TimeZone as _;
+            chrono::Local
+                .from_local_datetime(
+                    &chrono::NaiveDate::from_ymd_opt(2026, 8, 27).unwrap().and_hms_opt(12, 0, 0).unwrap(),
+                )
+                .earliest()
+                .unwrap()
+                .timestamp()
+        };
 
         let fortnightly = Recurrence {
             freq: Frequency::Weekly,
             interval: 2,
             weekdays: vec![1, 3],
-            until: Some(start + 60 * 24 * 3600),
+            // As the editor stores "until 26 October": the last minute of
+            // that day on this machine's clock.
+            until: Some({
+                use chrono::TimeZone as _;
+                chrono::Local
+                    .from_local_datetime(
+                        &chrono::NaiveDate::from_ymd_opt(2026, 10, 26).unwrap().and_hms_opt(23, 59, 0).unwrap(),
+                    )
+                    .earliest()
+                    .unwrap()
+                    .timestamp()
+            }),
             count: None,
         };
-        let line = rrule(&fortnightly, start).expect("rrule");
+        let line = rrule(&fortnightly, start, false).expect("rrule");
         assert!(line.starts_with("RRULE:FREQ=WEEKLY"), "{line}");
         assert!(line.contains("INTERVAL=2"), "{line}");
         assert!(line.contains("BYDAY=TU,TH"), "{line}");
@@ -1269,7 +1299,7 @@ mod tests {
             until: None,
             count: Some(10),
         };
-        let line = rrule(&ten_days, start).expect("rrule");
+        let line = rrule(&ten_days, start, false).expect("rrule");
         assert_eq!(line, "RRULE:FREQ=DAILY;COUNT=10");
 
         // Weekly with no days named falls on the day the event starts.
@@ -1280,7 +1310,49 @@ mod tests {
             until: None,
             count: None,
         };
-        assert_eq!(rrule(&weekly, start).expect("rrule"), "RRULE:FREQ=WEEKLY;BYDAY=TH");
+        assert_eq!(rrule(&weekly, start, false).expect("rrule"), "RRULE:FREQ=WEEKLY;BYDAY=TH");
+    }
+
+    #[test]
+    fn a_rule_falls_on_the_days_and_end_date_the_person_sees() {
+        use super::super::{Frequency, Recurrence};
+        use chrono::TimeZone as _;
+        let local = |y, m, d, h, min| {
+            chrono::Local
+                .from_local_datetime(
+                    &chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, min, 0).unwrap(),
+                )
+                .earliest()
+                .unwrap()
+                .timestamp()
+        };
+        let weekly = |until| Recurrence { freq: Frequency::Weekly, interval: 1, weekdays: vec![], until, count: None };
+        // Tuesday 13 October 2026 at 00:30 on this machine's clock: east of
+        // UTC that is still Monday in UTC, and was saved as every Monday.
+        let line = rrule(&weekly(None), local(2026, 10, 13, 0, 30), false).unwrap();
+        assert_eq!(line, "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        // Late on Tuesday: west of UTC that is already Wednesday in UTC.
+        let line = rrule(&weekly(None), local(2026, 10, 13, 23, 30), false).unwrap();
+        assert_eq!(line, "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        // An all-day date is a UTC date already, whatever the machine.
+        let tuesday = chrono::DateTime::parse_from_rfc3339("2026-10-13T00:00:00Z").unwrap().timestamp();
+        assert_eq!(rrule(&weekly(None), tuesday, true).unwrap(), "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        // "Until 30 October" is stored as 23:59 that day on this clock.
+        let line = rrule(&weekly(Some(local(2026, 10, 30, 23, 59))), tuesday, true).unwrap();
+        assert!(line.ends_with("UNTIL=20261030T235959Z"), "{line}");
+    }
+
+    #[test]
+    fn the_zone_a_series_is_written_in_is_an_iana_name() {
+        let path = |p: &str| Some(std::path::PathBuf::from(p));
+        let name = |n: &str| Some(n.to_string());
+        assert_eq!(zone_name(name(":Europe/Madrid"), None, None), "Europe/Madrid");
+        assert_eq!(zone_name(None, path("/usr/share/zoneinfo/Asia/Tokyo"), None), "Asia/Tokyo");
+        // Windows: no TZ, no zone file; the platform answers.
+        assert_eq!(zone_name(None, None, name("Europe/Berlin")), "Europe/Berlin");
+        // A POSIX TZ is passed over for the next candidate.
+        assert_eq!(zone_name(name("CET-1CEST"), None, name("Europe/Paris")), "Europe/Paris");
+        assert_eq!(zone_name(None, None, None), "UTC");
     }
 
     #[test]

@@ -2629,6 +2629,7 @@ dependencies = [
  "futures",
  "hickory-resolver",
  "html-to-markdown-rs",
+ "iana-time-zone",
  "icalendar",
  "jni 0.21.1",
  "keyring",

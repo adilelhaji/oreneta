@@ -90,6 +90,9 @@ chrono = "0.4.44"
 # Named time zones for published calendars (TZID). Already in the tree
 # through rrule; named here so subscription.rs can resolve a TZID itself.
 chrono-tz = "0.10"
+# The machine's zone by name on every platform (Windows included). Already
+# in the tree through chrono.
+iana-time-zone = "0.1"
 url = "2.5.8"
 # Already resolved by url; decode Graph's equivalent OData continuation paths.
 percent-encoding = "2.3.2"

@@ -69,6 +69,21 @@ Los defectos de abajo se reprodujeron con fixtures antes de corregirlos.
   necesita leer el maestro por EWS y probarlo contra un Exchange real. La
   política del repositorio no admite grabaciones inventadas.
 
+## Fechas de las reglas y zona del equipo (#100)
+
+- **Día de la semana, día del mes, mes y fecha final.** Se calculaban en UTC.
+  Un evento semanal los martes a las 00:30 en Madrid (22:30Z del lunes) se
+  guardaba como «cada lunes» en Google y en Exchange. Una serie «hasta el 30»
+  escrita al oeste de UTC duraba un día más. Ahora se usa la fecha que ve la
+  persona: la fecha UTC guardada si es de día completo, el reloj del equipo si
+  no.
+- **Zona del equipo en Windows.** No hay `TZ` ni `/etc/localtime`, así que las
+  series de Google se escribían en «UTC» y se desplazaban una hora en cada
+  cambio de hora. Ahora se usa el nombre IANA del sistema (`iana-time-zone`),
+  y un `TZ` en formato POSIX se descarta.
+- **Pruebas:** reglas en Madrid, Tokio, Los Ángeles, Auckland y Honolulú, y la
+  elección del nombre de zona en cada plataforma.
+
 ## Pendiente
 
 - **Hora ambigua en el cambio de hora.** Un `DTSTART` en la hora que se repite

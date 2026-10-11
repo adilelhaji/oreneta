@@ -217,7 +217,7 @@ impl Recurrence {
 
     /// The days a weekly rule falls on, defaulting to the day the event starts
     /// when the caller named none.
-    pub fn days_or_start(&self, start: i64) -> Vec<u8> {
+    pub fn days_or_start(&self, start: i64, all_day: bool) -> Vec<u8> {
         if !self.weekdays.is_empty() {
             let mut days: Vec<u8> = self.weekdays.iter().copied().filter(|d| *d < 7).collect();
             days.sort_unstable();
@@ -226,12 +226,26 @@ impl Recurrence {
                 return days;
             }
         }
-        let weekday = chrono::DateTime::from_timestamp(start, 0)
-            .map(|instant| {
-                chrono::Datelike::weekday(&instant).num_days_from_monday() as u8
-            })
+        let weekday = start_date(start, all_day)
+            .map(|date| chrono::Datelike::weekday(&date).num_days_from_monday() as u8)
             .unwrap_or(0);
         vec![weekday]
+    }
+}
+
+/// The calendar date an instant falls on as the person sees it: an all-day
+/// event's stored UTC date, anything else on this machine's clock.
+///
+/// Rules (weekday, day of month, month, end date) are about dates, not
+/// instants. Read in UTC, a weekly meeting at 00:30 on Tuesday in Madrid
+/// (22:30Z Monday) was saved as every Monday, and a series "until the 30th"
+/// written west of UTC ran a day longer.
+pub fn start_date(instant: i64, all_day: bool) -> Option<chrono::NaiveDate> {
+    use chrono::TimeZone as _;
+    if all_day {
+        Some(chrono::DateTime::from_timestamp(instant, 0)?.date_naive())
+    } else {
+        Some(chrono::Local.timestamp_opt(instant, 0).earliest()?.date_naive())
     }
 }
 

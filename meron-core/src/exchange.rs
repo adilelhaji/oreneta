@@ -1680,7 +1680,7 @@ fn event_item(event: &Event) -> Message {
         recurrence: event
             .recurrence
             .as_ref()
-            .and_then(|rule| ews_recurrence(rule, event.start)),
+            .and_then(|rule| ews_recurrence(rule, event.start, event.all_day)),
         required_attendees: attendee_list(&event.attendees),
         ..Message::default()
     }
@@ -1716,9 +1716,13 @@ fn attendee_list(people: &[crate::calendar::Participant]) -> Option<::ews::Array
 /// Only sent when creating a series. The pattern says when it falls and the
 /// range how long it runs; the element requires exactly one of each, in that
 /// order, which is why they are built together here rather than separately.
-fn ews_recurrence(rule: &crate::calendar::Recurrence, start: i64) -> Option<::ews::Recurrence> {
+fn ews_recurrence(
+    rule: &crate::calendar::Recurrence,
+    start: i64,
+    all_day: bool,
+) -> Option<::ews::Recurrence> {
     use crate::calendar::{Frequency, Recurrence as Rule};
-    let start_at = chrono::DateTime::from_timestamp(start, 0)?;
+    let start_at = crate::calendar::start_date(start, all_day)?;
     let start_date = start_at.format("%Y-%m-%d").to_string();
     let interval = rule.interval.max(1);
 
@@ -1727,7 +1731,7 @@ fn ews_recurrence(rule: &crate::calendar::Recurrence, start: i64) -> Option<::ew
         Frequency::Weekly => ::ews::RecurrencePattern::WeeklyRecurrence {
             interval,
             days_of_week: rule
-                .days_or_start(start)
+                .days_or_start(start, all_day)
                 .into_iter()
                 .map(|day| Rule::EWS_DAYS[day as usize])
                 .collect::<Vec<_>>()
@@ -1748,7 +1752,7 @@ fn ews_recurrence(rule: &crate::calendar::Recurrence, start: i64) -> Option<::ew
     let range = match (rule.until, rule.count) {
         (Some(until), _) => ::ews::RecurrenceRange::EndDateRecurrence {
             start_date,
-            end_date: chrono::DateTime::from_timestamp(until, 0)?
+            end_date: crate::calendar::start_date(until, false)?
                 .format("%Y-%m-%d")
                 .to_string(),
         },
