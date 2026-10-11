@@ -87,6 +87,7 @@ pub fn parse_window(
     to: i64,
 ) -> Result<(Vec<Event>, usize)> {
     let body = with_iana_tzids(body);
+    let body = utc_wins(&body);
     let parsed: icalendar::Calendar = body
         .parse()
         .map_err(|err: String| anyhow::anyhow!("parse calendar: {err}"))?;
@@ -371,6 +372,34 @@ fn named_zone(tzid: &str) -> Option<chrono_tz::Tz> {
 /// Rewrites Windows TZID parameters to IANA names before the file is parsed,
 /// because the recurrence expansion resolves TZIDs itself and knows only
 /// IANA: a series published by Outlook was otherwise skipped whole.
+/// A time written in UTC (`…Z`) is UTC, whatever TZID sits beside it.
+/// RFC 5545 forbids the pair, but servers write it: Radicale (vobject) turns
+/// `DTSTART;TZID=Etc/UTC:20260316T080000` into `…080000Z`, and a reader that
+/// rejects it loses the event.
+fn utc_wins(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    for line in body.split_inclusive('\n') {
+        let content = line.trim_end_matches(['\r', '\n']);
+        let upper = content.to_ascii_uppercase();
+        let is_time = ["DTSTART;", "DTEND;", "RECURRENCE-ID;", "EXDATE;", "RDATE;", "DUE;"]
+            .iter()
+            .any(|name| upper.starts_with(name));
+        match (is_time, content.find(':')) {
+            (true, Some(colon)) if upper.contains("TZID=") && content[colon + 1..].trim_end().ends_with('Z') => {
+                let params: Vec<&str> = content[..colon]
+                    .split(';')
+                    .filter(|param| !param.to_ascii_uppercase().starts_with("TZID="))
+                    .collect();
+                out.push_str(&params.join(";"));
+                out.push_str(&content[colon..]);
+                out.push_str(&line[content.len()..]);
+            }
+            _ => out.push_str(line),
+        }
+    }
+    out
+}
+
 fn with_iana_tzids(body: &str) -> std::borrow::Cow<'_, str> {
     if !body.contains("TZID=") {
         return std::borrow::Cow::Borrowed(body);

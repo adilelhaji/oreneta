@@ -399,6 +399,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.oofSet(payload)
 	case "pgp.verify":
 		return a.pgpVerify(payload)
+	case "caldav.discover":
+		return a.carddavCall("caldav.discover", payload, "server")
+	case "caldav.add":
+		return a.carddavCall("caldav.add", payload, "account")
 	case "carddav.discover":
 		return a.carddavDiscover(payload)
 	case "carddav.add":

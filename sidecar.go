@@ -460,6 +460,10 @@ func sidecarCallTimeout(method string) time.Duration {
 	// it gets the same budget as a folder sync rather than the default.
 	case "calendar.events":
 		return 30 * time.Second
+	// Discovery walks principal, home set and collections on a server that
+	// may be slow; each request is bounded by the core at 30s.
+	case "caldav.discover", "caldav.add", "carddav.discover":
+		return 60 * time.Second
 	case "calendar.create", "calendar.update", "calendar.delete",
 		"calendar.createCalendar", "calendar.renameCalendar", "calendar.deleteCalendar",
 		"calendar.createLocal", "calendar.subscribe":

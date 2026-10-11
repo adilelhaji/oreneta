@@ -82,6 +82,12 @@ const PROP_HREFS: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 /// that a person does not have to know their provider's DAV path. A full URL
 /// is taken as given: somebody who pasted one knows better than this does.
 pub fn starting_point(input: &str) -> Result<String> {
+    starting_point_for(input, "/.well-known/carddav")
+}
+
+/// [`starting_point`] for another DAV service: CalDAV starts at
+/// `.well-known/caldav`.
+pub fn starting_point_for(input: &str, well_known: &str) -> Result<String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err(anyhow!("no server given"));
@@ -96,11 +102,11 @@ pub fn starting_point(input: &str) -> Result<String> {
     };
     // Only the host part: a typed "example.com/dav" keeps its path.
     let url = Url::parse(&format!("https://{host}")).context("that does not look like a server")?;
-    Ok(url.join("/.well-known/carddav")?.to_string())
+    Ok(url.join(well_known)?.to_string())
 }
 
 /// Resolve an href from a response against the URL it came from.
-fn resolve(base: &str, href: &str) -> Result<String> {
+pub(crate) fn resolve(base: &str, href: &str) -> Result<String> {
     Ok(Url::parse(base)?.join(href.trim())?.to_string())
 }
 
@@ -126,7 +132,7 @@ pub fn credentials_may_follow(from: &str, to: &str) -> bool {
 }
 
 /// Resolve an href and check the password may follow it there.
-fn resolve_trusted(base: &str, href: &str) -> Result<String> {
+pub(crate) fn resolve_trusted(base: &str, href: &str) -> Result<String> {
     let url = resolve(base, href)?;
     if !credentials_may_follow(base, &url) {
         let host = Url::parse(&url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
@@ -138,7 +144,7 @@ fn resolve_trusted(base: &str, href: &str) -> Result<String> {
 }
 
 /// Whether two URLs name the same origin: scheme, host and port.
-fn same_origin(a: &str, b: &str) -> bool {
+pub(crate) fn same_origin(a: &str, b: &str) -> bool {
     match (Url::parse(a), Url::parse(b)) {
         (Ok(a), Ok(b)) => a.origin() == b.origin(),
         _ => false,
@@ -157,7 +163,7 @@ fn incomplete(failed: &[String], total: usize) -> anyhow::Error {
 }
 
 /// Whether a response is the book itself rather than one of its cards.
-fn is_the_book(response: &DavResponse, book_url: &str) -> bool {
+pub(crate) fn is_the_book(response: &DavResponse, book_url: &str) -> bool {
     let Ok(book) = Url::parse(book_url) else {
         return false;
     };
@@ -167,7 +173,7 @@ fn is_the_book(response: &DavResponse, book_url: &str) -> bool {
 }
 
 /// A name for a book the server did not name.
-fn name_from_url(url: &str) -> String {
+pub(crate) fn name_from_url(url: &str) -> String {
     Url::parse(url)
         .ok()
         .and_then(|parsed| {
@@ -180,7 +186,7 @@ fn name_from_url(url: &str) -> String {
 }
 
 /// Send a PROPFIND and read the responses out of it.
-fn propfind(
+pub(crate) fn propfind(
     transport: &dyn Transport,
     url: &str,
     depth: &'static str,

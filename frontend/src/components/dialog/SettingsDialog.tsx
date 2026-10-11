@@ -447,6 +447,13 @@ function groupsBySource(
       calendars: local,
     })
   }
+  const caldav = calendars.filter((calendar) => calendar.kind === 'caldav')
+  if (caldav.length) {
+    groups.push({
+      label: t('calendar.groupCalDav', { defaultValue: 'CalDAV' }),
+      calendars: caldav,
+    })
+  }
   const subscribed = calendars.filter((calendar) => calendar.kind === 'subscribed')
   if (subscribed.length) {
     groups.push({

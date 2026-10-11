@@ -321,6 +321,11 @@ pendientes:
   con evidencia de proveedor;
 - libre/ocupado y el flujo completo de invitación en Exchange y Google (N5).
 
+Estado de la iteración 8 (continuación, 2026-10-11, por delegación):
+- **#101 CalDAV:** descubrimiento, lectura por ventana y escritura con ETag,
+  incluidas excepciones y EXDATE, probadas contra Radicale (ADR-0018,
+  [registro](design/caldav.md)).
+
 Estado de la iteración 9 (2026-10-11):
 - **#42:** la validación de las tareas enlazadas encontró y corrigió seis
   defectos, cada uno con su prueba

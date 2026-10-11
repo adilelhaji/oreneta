@@ -25,7 +25,11 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
   const color = calendar.color || CALENDAR_COLORS[0]
 
   const renamed = name.trim() && name.trim() !== calendar.name
-  const onlyOne = calendars.filter((c) => c.accountId === calendar.accountId).length === 1
+  // A server keeps at least one calendar per account; that rule is about the
+  // account's own calendars, not about ones merely listed under it.
+  const onlyOne =
+    calendar.kind === 'account' &&
+    calendars.filter((c) => c.accountId === calendar.accountId && c.kind === 'account').length === 1
 
   const run = async (action: Promise<unknown>) => {
     setError('')
@@ -113,10 +117,26 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
               {/* Said plainly: this is the destructive operation on this
                   screen, and its cost is the events, not the calendar. */}
               <p className="text-caption text-primary">
-                {t('calendar.deleteWarning', {
-                  defaultValue: 'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
-                  name: calendar.name,
-                })}
+                {calendar.kind === 'caldav'
+                  ? t('calendar.deleteWarningCalDav', {
+                      defaultValue: 'Stop showing "{name}" here? It stays on its server, with every event on it.',
+                      name: calendar.name,
+                    })
+                  : calendar.kind === 'subscribed'
+                    ? t('calendar.deleteWarningSubscribed', {
+                        defaultValue: 'Unsubscribe from "{name}"? The published calendar is not touched.',
+                        name: calendar.name,
+                      })
+                    : calendar.kind === 'local'
+                      ? t('calendar.deleteWarningLocal', {
+                          defaultValue: 'Remove "{name}" and every event on it? Nothing else has a copy.',
+                          name: calendar.name,
+                        })
+                      : t('calendar.deleteWarning', {
+                          defaultValue:
+                            'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
+                          name: calendar.name,
+                        })}
               </p>
               <div className="flex gap-2">
                 <button

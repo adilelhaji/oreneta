@@ -642,7 +642,7 @@ pub fn delete_calendar(token: &str, calendar_id: &str, owned: bool) -> Result<()
 /// A repeating event needs one: the rule is expanded *in* a zone, and without
 /// it a weekly meeting at nine would wander by an hour when the clocks change.
 /// Google refuses to create a series without it, which is the right refusal.
-fn local_timezone() -> String {
+pub(crate) fn local_timezone() -> String {
     zone_name(
         std::env::var("TZ").ok(),
         std::fs::read_link("/etc/localtime").ok(),
@@ -885,7 +885,7 @@ fn parse_until(text: &str) -> Option<i64> {
 ///
 /// One line of iCalendar, which is what Google stores; the server expands it
 /// and hands back occurrences, so this is the only direction a rule travels.
-fn rrule(rule: &super::Recurrence, start: i64, all_day: bool) -> Option<String> {
+pub(crate) fn rrule(rule: &super::Recurrence, start: i64, all_day: bool) -> Option<String> {
     use super::{Frequency, Recurrence as Rule};
     let mut parts = vec![match rule.freq {
         Frequency::Daily => "FREQ=DAILY".to_string(),

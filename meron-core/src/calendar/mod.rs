@@ -9,7 +9,9 @@
 //! The provider backends (Exchange today, Google next) map their own answers
 //! onto these types; everything above this line is provider-neutral.
 
+pub mod caldav;
 pub mod google;
+pub mod ics;
 pub mod route;
 pub mod subscription;
 
@@ -34,6 +36,10 @@ pub enum CalendarKind {
     /// A calendar file fetched from a URL. Read-only: it belongs to whoever
     /// publishes it.
     Subscribed,
+    /// A collection on a CalDAV server (#101, ADR-0018), signed in to with
+    /// its own user name and a password kept in the keychain.
+    #[serde(rename = "caldav")]
+    CalDav,
 }
 
 impl CalendarKind {
@@ -42,6 +48,7 @@ impl CalendarKind {
             CalendarKind::Account => "account",
             CalendarKind::Local => "local",
             CalendarKind::Subscribed => "subscribed",
+            CalendarKind::CalDav => "caldav",
         }
     }
 
@@ -49,6 +56,7 @@ impl CalendarKind {
         match value {
             "local" => CalendarKind::Local,
             "subscribed" => CalendarKind::Subscribed,
+            "caldav" => CalendarKind::CalDav,
             _ => CalendarKind::Account,
         }
     }

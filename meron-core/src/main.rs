@@ -1290,6 +1290,48 @@ fn local_calendar_write(
     }
 }
 
+/// A CalDAV calendar of an account, and a transport signed in to it.
+fn caldav_target(
+    engine: &Engine,
+    account: &str,
+    calendar_id: &str,
+) -> anyhow::Result<(calendar::Calendar, meron_core::carddav::http::UreqTransport)> {
+    let (found, sign_in) = {
+        let db = engine.db.lock().unwrap();
+        (
+            calendar::calendar_of(&db, account, calendar_id)?,
+            calendar::caldav::sign_in(&db, account, calendar_id)?,
+        )
+    };
+    let (Some(found), Some((_, username))) = (found, sign_in) else {
+        anyhow::bail!("that calendar is no longer here");
+    };
+    let password = meron_core::secrets::load(&calendar::caldav::secret_key(account, calendar_id))?.password;
+    Ok((found, meron_core::carddav::http::UreqTransport { username, password }))
+}
+
+/// The CalDAV calendar an edit is for, when it is one, refusing a read-only
+/// one before anything is sent.
+fn caldav_write(
+    engine: &Engine,
+    account: &str,
+    calendar_id: &str,
+) -> anyhow::Result<Option<(calendar::Calendar, meron_core::carddav::http::UreqTransport)>> {
+    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?
+        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+    if !is_caldav {
+        return Ok(None);
+    }
+    let (found, transport) = caldav_target(engine, account, calendar_id)?;
+    if found.read_only {
+        anyhow::bail!("{} is read-only on its server", found.name);
+    }
+    Ok(Some((found, transport)))
+}
+
+const CALDAV_CONFLICT: &str =
+    "this event was changed or removed on the server since it was opened; nothing was saved, and the calendar is being refreshed";
+
 /// The source a CardDAV contact belongs to, and a transport signed in to it.
 fn carddav_target(
     engine: &Engine,
@@ -1584,6 +1626,43 @@ async fn sync_calendar_window(
                 }
                 let db = engine.db.lock().unwrap();
                 calendar::replace_window(&db, account, &id, (from, to), &events)?;
+                calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
+            }
+            // A CalDAV calendar that cannot be read keeps its last window,
+            // like a subscription, and the others are still refreshed.
+            calendar::CalendarKind::CalDav => {
+                let id = calendar.id.clone();
+                let (_, transport) = match caldav_target(engine, account, &id) {
+                    Ok(found) => found,
+                    Err(err) => {
+                        meron_core::mlog!(meron_core::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
+                        continue;
+                    }
+                };
+                let url = id.clone();
+                let fetched = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::fetch_window(&transport, &url, from, to)
+                })
+                .await;
+                let objects = match fetched {
+                    Ok(Ok(objects)) => objects,
+                    Ok(Err(err)) => {
+                        meron_core::mlog!(meron_core::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
+                        continue;
+                    }
+                    Err(err) => return Err(err.into()),
+                };
+                let (events, located, skipped) = calendar::caldav::events_from(&objects, &id, from, to);
+                if skipped > 0 {
+                    meron_core::mlog!(
+                        meron_core::log::Level::Warn,
+                        "calendar",
+                        "{id}: {skipped} event(s) on the server could not be read"
+                    );
+                }
+                let db = engine.db.lock().unwrap();
+                calendar::replace_window(&db, account, &id, (from, to), &events)?;
+                calendar::caldav::remember(&db, account, &id, &located)?;
                 calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
             }
             calendar::CalendarKind::Account => {
@@ -4751,6 +4830,50 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "id": id }))
         }
 
+        // CalDAV (#101, ADR-0018): find the calendars on a server, then keep
+        // the ones chosen under an account.
+        "caldav.discover" => {
+            let server = req_str(p, "server")?;
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: req_str(p, "username").unwrap_or_default(),
+                password: req_str(p, "password").unwrap_or_default(),
+            };
+            let found = tokio::task::spawn_blocking(move || calendar::caldav::discover(&transport, &server)).await??;
+            Ok(json!({ "calendars": found }))
+        }
+        "caldav.add" => {
+            let account = req_str(p, "account")?;
+            let username = req_str(p, "username").unwrap_or_default();
+            let password = req_str(p, "password").unwrap_or_default();
+            let chosen: Vec<calendar::caldav::RemoteCalendar> = p
+                .get("calendars")
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|item| {
+                            Some(calendar::caldav::RemoteCalendar {
+                                url: item.get("url")?.as_str()?.to_string(),
+                                name: item.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+                                color: item.get("color").and_then(Value::as_str).map(str::to_string),
+                                writable: item.get("writable").and_then(Value::as_bool),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if chosen.is_empty() {
+                anyhow::bail!("choose at least one calendar");
+            }
+            for remote in &chosen {
+                meron_core::secrets::store(
+                    &calendar::caldav::secret_key(&account, &remote.url),
+                    &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() },
+                )?;
+            }
+            let ids = calendar::caldav::add_calendars(&engine.db.lock().unwrap(), &account, &chosen, &username)?;
+            Ok(json!({ "ids": ids }))
+        }
+
         // Answering a meeting invitation. Unlike every other calendar write,
         // this one deliberately reaches people: an answer nobody receives is
         // not an answer.
@@ -4876,7 +4999,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     .find(|calendar| calendar.id == id)
                     .is_some_and(|calendar| !calendar.read_only)
             };
-            calendar::route::delete_calendar(&engine, &account, &id, owned).await?;
+            let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), &account, &id)?
+                .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+            if is_caldav {
+                // Removing a CalDAV calendar here stops showing it; the
+                // collection stays on its server, where it belongs.
+                let _ = meron_core::secrets::delete(&calendar::caldav::secret_key(&account, &id));
+            } else {
+                calendar::route::delete_calendar(&engine, &account, &id, owned).await?;
+            }
             // Its events go with it: they lived on the calendar the server
             // just removed.
             calendar::forget_calendar(&engine.db.lock().unwrap(), &account, &id)?;
@@ -4919,6 +5050,26 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 calendar::put_local_event(&engine.db.lock().unwrap(), &account, &created)?;
                 return Ok(json!({ "event": serde_json::to_value(created)? }));
             }
+            if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
+                let wanted = event.clone();
+                let url = target.id.clone();
+                let (uid, change) = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::create(&transport, &url, &wanted, now_seconds())
+                })
+                .await??;
+                let calendar::caldav::Change::Saved { href, etag } = change else {
+                    anyhow::bail!("the server already holds an event at that address; nothing was saved");
+                };
+                calendar::caldav::remember(
+                    &engine.db.lock().unwrap(),
+                    &account,
+                    &target.id,
+                    &[calendar::caldav::Located { uid: uid.clone(), href, etag: etag.unwrap_or_default() }],
+                )?;
+                spawn_calendar_sync(engine.clone(), out.clone(), account, event.start, event.end.max(event.start + 1));
+                let created = calendar::Event { id: format!("{uid}@{}", event.start), ..event };
+                return Ok(json!({ "event": serde_json::to_value(created)? }));
+            }
             // Telling the people on an event is never assumed: the caller says
             // so only after the reader has confirmed it.
             let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
@@ -4958,6 +5109,31 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 calendar::put_local_event(&engine.db.lock().unwrap(), &account, &event)?;
                 return Ok(json!({ "ok": true }));
             }
+            if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
+                let uid = calendar::caldav::uid_of(&event.id);
+                let located = calendar::caldav::locate(&engine.db.lock().unwrap(), &account, &target.id, &uid)?
+                    .context("this event's place on the server is not known yet; refresh the calendar and try again")?;
+                let seen = event.change_key.clone().unwrap_or_default();
+                let wanted = event.clone();
+                let url = target.id.clone();
+                let change = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::update(&transport, &url, &located.href, &seen, &wanted, whole_series, now_seconds())
+                })
+                .await??;
+                spawn_calendar_sync(engine.clone(), out.clone(), account.clone(), event.start, event.end.max(event.start + 1));
+                match change {
+                    calendar::caldav::Change::Saved { href, etag } => {
+                        calendar::caldav::remember(
+                            &engine.db.lock().unwrap(),
+                            &account,
+                            &target.id,
+                            &[calendar::caldav::Located { uid, href, etag: etag.unwrap_or_default() }],
+                        )?;
+                        return Ok(json!({ "ok": true }));
+                    }
+                    calendar::caldav::Change::Conflict => anyhow::bail!(CALDAV_CONFLICT),
+                }
+            }
             let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
             let version =
                 calendar::route::update_event(&engine, &account, &event, whole_series, notify)
@@ -4994,6 +5170,44 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let series_id = p.get("series").and_then(Value::as_str);
             if local_calendar_write(&engine, &account, &calendar_id)?.is_some() {
                 calendar::forget_event(&engine.db.lock().unwrap(), &account, &id)?;
+                return Ok(json!({ "ok": true }));
+            }
+            if let Some((target, transport)) = caldav_write(&engine, &account, &calendar_id)? {
+                let uid = calendar::caldav::uid_of(&id);
+                let (located, all_day) = {
+                    let db = engine.db.lock().unwrap();
+                    let located = calendar::caldav::locate(&db, &account, &target.id, &uid)?;
+                    let all_day: bool = db
+                        .query_row(
+                            "SELECT all_day FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id = ?3",
+                            rusqlite::params![account, target.id, id],
+                            |row| row.get::<_, i64>(0),
+                        )
+                        .map(|v| v != 0)
+                        .unwrap_or(false);
+                    (located, all_day)
+                };
+                let located = located.context("this event's place on the server is not known yet; refresh the calendar and try again")?;
+                let seen = change_key.map(str::to_string).unwrap_or_else(|| located.etag.clone());
+                let occurrence_only = !whole_series && series_id.is_some();
+                let (url, href, event_id) = (target.id.clone(), located.href.clone(), id.clone());
+                let change = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::delete(&transport, &url, &href, &seen, &event_id, all_day, occurrence_only)
+                })
+                .await??;
+                if change == calendar::caldav::Change::Conflict {
+                    let now = now_seconds();
+                    spawn_calendar_sync(engine.clone(), out.clone(), account, now - 86_400 * 31, now + 86_400 * 366);
+                    anyhow::bail!(CALDAV_CONFLICT);
+                }
+                let db = engine.db.lock().unwrap();
+                if occurrence_only {
+                    calendar::forget_event(&db, &account, &id)?;
+                } else {
+                    calendar::forget_series(&db, &account, &uid)?;
+                    calendar::forget_event(&db, &account, &id)?;
+                    calendar::caldav::forget(&db, &account, &target.id, &uid)?;
+                }
                 return Ok(json!({ "ok": true }));
             }
             calendar::route::delete_event(
@@ -6558,7 +6772,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 engine.accounts.lock().await.remove(dependent);
                 engine.clear_pool(dependent);
                 let removal = store::delete_account(&engine.db.lock().unwrap(), dependent)?;
-                for source in &removal.contact_sources {
+                for source in removal.contact_sources.iter().chain(&removal.calendar_secrets) {
                     let _ = secrets::delete(source);
                 }
             }
@@ -6566,8 +6780,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // Drop any warm sessions: their creds are gone and must not be reused.
             engine.clear_pool(&id);
             let removal = store::delete_account(&engine.db.lock().unwrap(), &id)?;
-            // An address book's password is kept under the book's own id.
-            for source in &removal.contact_sources {
+            // An address book's password is kept under the book's own id,
+            // and a CalDAV calendar's under its own key.
+            for source in removal.contact_sources.iter().chain(&removal.calendar_secrets) {
                 let _ = secrets::delete(source);
             }
             parse::remove_account_media(&parse::media_root(), &id);

@@ -807,6 +807,7 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("people", "account"),
     // The local archive's original messages (ADR-0014).
     ("archive_messages", "account"),
+    ("caldav_objects", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an
@@ -820,6 +821,9 @@ pub struct AccountRemoval {
     /// Contact sources removed with the account; their passwords live in the
     /// keyring under these ids and are the caller's to delete.
     pub contact_sources: Vec<String>,
+    /// Keychain entries of the account's CalDAV calendars (ADR-0018), also
+    /// the caller's to delete.
+    pub calendar_secrets: Vec<String>,
     pub kept_drafts: i64,
     pub kept_scheduled: i64,
     pub kept_attempts: i64,
@@ -834,6 +838,10 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
             .query_map(params![id], |row| row.get(0))?
             .collect::<rusqlite::Result<Vec<String>>>()?;
     }
+    removal.calendar_secrets = crate::calendar::caldav::calendar_ids(&tx, id)?
+        .iter()
+        .map(|calendar| crate::calendar::caldav::secret_key(id, calendar))
+        .collect();
     tx.execute(
         "DELETE FROM person_links WHERE person_id IN (SELECT id FROM people WHERE account = ?1)",
         params![id],

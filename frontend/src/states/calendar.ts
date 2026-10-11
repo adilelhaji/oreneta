@@ -57,7 +57,7 @@ export type CalendarEvent = {
 
 /// Where a calendar comes from, which decides how it syncs and whether its
 /// events can be changed.
-export type CalendarKind = 'account' | 'local' | 'subscribed'
+export type CalendarKind = 'account' | 'local' | 'subscribed' | 'caldav'
 
 export type Calendar = {
   id: string
@@ -727,6 +727,28 @@ export async function createLocalCalendar(accountId: string, name: string): Prom
   })
   await loadCalendars()
   return res.id
+}
+
+/// A calendar collection found on a CalDAV server (#101, ADR-0018).
+export type RemoteCalendar = { url: string; name: string; color: string | null; writable: boolean | null }
+
+/// Asks a CalDAV server which calendars it holds for this sign-in.
+export async function discoverCalDav(server: string, username: string, password: string): Promise<RemoteCalendar[]> {
+  const res = await invoke<{ calendars: RemoteCalendar[] }>('caldav.discover', { server, username, password })
+  return res?.calendars ?? []
+}
+
+/// Keeps the chosen CalDAV calendars, listed under an account. The password
+/// goes to the system keychain, one entry per calendar.
+export async function addCalDav(
+  accountId: string,
+  username: string,
+  password: string,
+  calendars: RemoteCalendar[],
+): Promise<string[]> {
+  const res = await invoke<{ ids: string[] }>('caldav.add', { account: accountId, username, password, calendars })
+  await loadCalendars()
+  return res?.ids ?? []
 }
 
 /// Follows a published calendar file. The core fetches it once before storing,
