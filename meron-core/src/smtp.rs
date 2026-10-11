@@ -310,6 +310,24 @@ pub fn build_submission(
     }
 }
 
+/// An attachment's Content-Type, its parameters written as parameters: an
+/// invitation's answer goes as `text/calendar; method=REPLY`, and a mail
+/// reader recognises it by that parameter (RFC 6047).
+fn attachment_type(mime: &str) -> ContentType<'static> {
+    let mut parts = mime.split(';');
+    let base = parts.next().unwrap_or("application/octet-stream").trim();
+    let mut content_type = ContentType::new(if base.is_empty() { "application/octet-stream".to_string() } else { base.to_string() });
+    for part in parts {
+        if let Some((key, value)) = part.split_once('=') {
+            let (key, value) = (key.trim(), value.trim().trim_matches('"'));
+            if !key.is_empty() && !value.is_empty() {
+                content_type = content_type.attribute(key.to_ascii_lowercase(), value.to_string());
+            }
+        }
+    }
+    content_type
+}
+
 pub fn build_message(
     sender_name: &str,
     from: &str,
@@ -405,7 +423,7 @@ pub fn build_message(
             // Content-Type in BODYSTRUCTURE as `()` rather than the `NIL`
             // RFC 3501 actually requires there, which every strict parser —
             // including the one this app's own IMAP client uses — rejects.
-            let content_type = ContentType::new(att.mime.clone()).attribute("name", att.filename.clone());
+            let content_type = attachment_type(&att.mime).attribute("name", att.filename.clone());
             builder = builder.attachment(content_type, &att.filename, bytes);
         }
     }
@@ -1019,6 +1037,23 @@ mod tests {
         )
         .expect_err("must fail instead of sending without the attachment");
         assert!(err.to_string().contains("broken.bin"), "{err:#}");
+    }
+
+    #[test]
+    fn an_invitation_answer_is_sent_with_its_method_as_a_parameter() {
+        let atts = vec![super::AttachmentInput {
+            filename: "reply.ics".into(),
+            mime: "text/calendar; method=REPLY; charset=utf-8".into(),
+            data: "QkVHSU46VkNBTEVOREFS".into(),
+            inline_id: String::new(),
+        }];
+        let raw = build_message("Bo", "bo@x.com", "ana@y.com", "", "", false, "Accepted: Planning", "Accepted.", "", &atts, "", "", "", "")
+            .expect("built");
+        let text = String::from_utf8_lossy(&raw).to_string();
+        let parsed = mailparse::parse_mail(&raw).expect("parses");
+        let part = parsed.subparts.iter().find(|p| p.ctype.mimetype == "text/calendar").unwrap_or_else(|| panic!("{text}"));
+        assert_eq!(part.ctype.params.get("method").map(String::as_str), Some("REPLY"));
+        assert_eq!(part.ctype.params.get("name").map(String::as_str), Some("reply.ics"));
     }
 
     #[test]

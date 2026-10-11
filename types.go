@@ -103,8 +103,11 @@ type Message struct {
 	// Protection is what the message's own structure declares: "pgpEncrypted",
 	// "pgpSigned", "smimeEnveloped" and so on, empty when none. A claim, not a
 	// verdict: whether a signature is good is answered separately.
-	Protection       string `json:"protection,omitempty"`
-	Attachments      any    `json:"attachments,omitempty"`
+	Protection  string `json:"protection,omitempty"`
+	Attachments any    `json:"attachments,omitempty"`
+	// Invitation is the meeting request, cancellation or answer the message
+	// carries (#102), as the core read it. Nothing is answered on its own.
+	Invitation       any    `json:"invitation,omitempty"`
 	OriginalThreadID string `json:"original_thread_id,omitempty"`
 	// RecipientOverflow is the count of additional recipients beyond the one shown
 	// on an outbound thread card (for a "+N" hint); 0 for inbound/single-recipient.

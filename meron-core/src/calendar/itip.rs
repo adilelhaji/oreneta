@@ -234,5 +234,57 @@ pub fn sequence_of(ics: &str) -> Option<i64> {
         .or(Some(0))
 }
 
+// ---- What was answered (#102) ------------------------------------------------
+
+pub const SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS invitation_answers (
+  account     TEXT NOT NULL,
+  uid         TEXT NOT NULL,
+  sequence    INTEGER NOT NULL DEFAULT 0,
+  response    TEXT NOT NULL,
+  calendar_id TEXT NOT NULL DEFAULT '',
+  answered_at INTEGER NOT NULL,
+  PRIMARY KEY (account, uid)
+);
+";
+
+/// The last answer given to an invitation, from this account.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Answer {
+    pub sequence: i64,
+    /// "accept", "tentative", "decline", or "cancelled" when a cancellation
+    /// was applied.
+    pub response: String,
+    pub calendar_id: String,
+    pub answered_at: i64,
+}
+
+pub fn answer_of(conn: &rusqlite::Connection, account: &str, uid: &str) -> Result<Option<Answer>> {
+    use rusqlite::OptionalExtension;
+    Ok(conn
+        .query_row(
+            "SELECT sequence, response, calendar_id, answered_at FROM invitation_answers WHERE account = ?1 AND uid = ?2",
+            rusqlite::params![account, uid],
+            |row| Ok(Answer { sequence: row.get(0)?, response: row.get(1)?, calendar_id: row.get(2)?, answered_at: row.get(3)? }),
+        )
+        .optional()?)
+}
+
+/// Records an answer, unless one for a later version is already kept: an
+/// old invitation answered late does not undo a newer answer.
+pub fn record(conn: &rusqlite::Connection, account: &str, uid: &str, answer: &Answer) -> Result<bool> {
+    if answer_of(conn, account, uid)?.is_some_and(|kept| kept.sequence > answer.sequence) {
+        return Ok(false);
+    }
+    conn.execute(
+        "INSERT INTO invitation_answers(account, uid, sequence, response, calendar_id, answered_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(account, uid) DO UPDATE SET sequence = excluded.sequence, response = excluded.response,
+           calendar_id = excluded.calendar_id, answered_at = excluded.answered_at",
+        rusqlite::params![account, uid, answer.sequence, answer.response, answer.calendar_id, answer.answered_at],
+    )?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests;

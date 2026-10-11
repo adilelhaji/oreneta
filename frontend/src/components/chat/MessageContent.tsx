@@ -7,6 +7,7 @@ import type { Message } from '../../types'
 import { fileIconFor, formatFileSize, mediaSrc } from './messageHelpers'
 import { MessageBubbleBody } from './MessageBubbleBody'
 import { ProtectionNotice } from './ProtectionNotice'
+import { InvitationCard } from './InvitationCard'
 import { SpamNotice } from './SpamNotice'
 import { VideoAttachment } from './VideoAttachment'
 import type { MessageView } from './useMessageView'
@@ -118,6 +119,7 @@ export function MessageContent({
           trusted changes how its words should be read. */}
       <ProtectionNotice message={message} />
       <SpamNotice message={message} />
+      {message.invitation && <InvitationCard message={message} />}
 
       <MessageBubbleBody
         message={message}

@@ -123,6 +123,11 @@ pub struct Message {
     /// good needs keys and is answered elsewhere.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub protection: String,
+    /// A meeting invitation, cancellation or answer the message carries
+    /// (iMIP, #102). Described only: nothing is answered or added to a
+    /// calendar unless the person asks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invitation: Option<crate::calendar::itip::Invitation>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -236,6 +241,9 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
         (None, None) => (String::new(), None, false),
     };
     let preview = preview_of(&body);
+    let invitation = find_text_part(&mail, "text/calendar")
+        .or_else(|| find_text_part(&mail, "application/ics"))
+        .and_then(|ics| crate::calendar::itip::parse(&ics));
 
     Message {
         subject,
@@ -258,6 +266,7 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
             crate::crypto::detect::Protection::None => String::new(),
             other => other.as_str().to_string(),
         },
+        invitation,
     }
 }
 
@@ -1509,6 +1518,20 @@ AQID\r\n\
         // One the provider cannot hand over is not refetched forever.
         msg.attachments[0].unavailable = "link".into();
         assert!(cached_media_available(&root, &msg));
+    }
+
+    #[test]
+    fn a_message_carrying_an_invitation_describes_it() {
+        let raw = b"From: Ana <ana@example.com>\r\nTo: bo@example.com\r\nSubject: Invitation: Planning\r\n\
+MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\n\
+You are invited.\r\n--b\r\nContent-Type: text/calendar; method=REQUEST; charset=utf-8\r\n\r\n\
+BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:m@x\r\nDTSTART:20300110T090000Z\r\n\
+DTEND:20300110T100000Z\r\nSUMMARY:Planning\r\nORGANIZER:mailto:ana@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n--b--\r\n";
+        let message = parse_message(raw, None);
+        let invitation = message.invitation.expect("an invitation");
+        assert_eq!((invitation.method.as_str(), invitation.uid.as_str(), invitation.summary.as_str()), ("REQUEST", "m@x", "Planning"));
+        assert_eq!(message.body.trim(), "You are invited.");
+        assert!(parse_message(b"From: a@b\r\nSubject: hi\r\n\r\nhello\r\n", None).invitation.is_none());
     }
 
     #[test]

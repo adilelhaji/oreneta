@@ -5335,6 +5335,7 @@ pub fn get_cached_message(
         // overwhelming majority of mail is also the truth. A message that was
         // encrypted is re-parsed on read, so it corrects itself.
         protection: extra["protection"].as_str().unwrap_or_default().to_string(),
+        invitation: extra.get("invitation").cloned().and_then(|value| serde_json::from_value(value).ok()),
     }))
 }
 
@@ -5358,6 +5359,7 @@ pub fn save_cached_message(
         "body_html": message.body_html,
         "body_is_rendered": message.body_is_rendered,
         "protection": message.protection,
+        "invitation": message.invitation,
         "attachments": attachments_json,
     })
     .to_string();

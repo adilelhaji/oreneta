@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 43;
+pub const SCHEMA_VERSION: i64 = 44;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -700,6 +700,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     }
     if version < 43 {
         crate::calendar::caldav::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 43)?;
+    }
+    if version < 44 {
+        tx.execute_batch(crate::calendar::itip::SCHEMA)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

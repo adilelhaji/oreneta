@@ -490,6 +490,8 @@ pub fn thread_message_json(
         "attachments": cached
             .map(|message| serde_json::to_value(&message.attachments).unwrap_or_else(|_| json!([])))
             .unwrap_or_else(|| json!([])),
+        // A meeting invitation the message carries (#102), described only.
+        "invitation": cached.and_then(|message| message.invitation.as_ref()),
     })
 }
 

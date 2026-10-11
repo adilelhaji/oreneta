@@ -325,6 +325,9 @@ Estado de la iteración 8 (continuación, 2026-10-11, por delegación):
 - **#101 CalDAV:** descubrimiento, lectura por ventana y escritura con ETag,
   incluidas excepciones y EXDATE, probadas contra Radicale (ADR-0018,
   [registro](design/caldav.md)); importar y exportar `.ics` sin duplicados.
+- **#102 invitaciones por correo:** se leen y se contestan solo al pulsar,
+  con respuesta iTIP al organizador y el evento en un calendario local o
+  CalDAV (ADR-0019). Pendiente: contrapropuesta, disponibilidad y N5.
 
 Estado de la iteración 9 (2026-10-11):
 - **#42:** la validación de las tareas enlazadas encontró y corrigió seis

@@ -225,6 +225,8 @@ export type Message = {
    * separate answer, so the interface must not present this as one.
    */
   protection?: string
+  /** A meeting invitation, cancellation or answer the message carries (#102). */
+  invitation?: Invitation
   /**
    * Whether this is worth interrupting for, as the core judged it.
    *
@@ -347,4 +349,21 @@ export type SystemCheck = {
   outlook_oauth_configured: boolean
   database_path: string
   log_path?: string
+}
+
+/** A meeting invitation read from a message (iMIP, #102). */
+export type Invitation = {
+  method: string
+  uid: string
+  sequence: number
+  recurrence_id?: number | null
+  summary: string
+  location?: string | null
+  start: number
+  end: number
+  all_day: boolean
+  repeats: boolean
+  organizer?: { name: string; addr: string; response: string } | null
+  attendees: { name: string; addr: string; response: string }[]
+  ics: string
 }

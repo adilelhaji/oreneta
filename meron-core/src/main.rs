@@ -440,6 +440,50 @@ END:VCALENDAR\r\n").unwrap();
     }
 
     #[tokio::test]
+    async fn an_invitation_is_answered_kept_in_a_calendar_and_removed_when_cancelled() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let account = "bo@example.com";
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let request = |sequence: i64, method: &str| format!(
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:{method}\r\nBEGIN:VEVENT\r\nUID:meet@example.com\r\nSEQUENCE:{sequence}\r\n\
+DTSTART:20300110T090000Z\r\nDTEND:20300110T100000Z\r\nSUMMARY:Planning\r\nORGANIZER;CN=Ana:mailto:ana@example.com\r\n\
+ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+
+        let answered = call("invite.respond", json!({
+            "account": account, "ics": request(2, "REQUEST"), "response": "accept",
+            "me_name": "Bo", "me_addr": "Bo@Example.com", "calendar": home,
+        })).await.unwrap();
+        assert_eq!(answered["reply"]["to"], "ana@example.com");
+        assert_eq!(answered["reply"]["subject"], "Accepted: Planning");
+        assert!(answered["reply"]["ics"].as_str().unwrap().contains("ATTENDEE;PARTSTAT=ACCEPTED;CN=Bo:mailto:bo@example.com"));
+        let kept = calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap();
+        assert_eq!((kept.len(), kept[0].subject.as_str()), (1, "Planning"));
+
+        let status = call("invite.status", json!({"account": account, "uid": "meet@example.com"})).await.unwrap();
+        assert_eq!((status["answer"]["response"].clone(), status["calendars"].clone()), (json!("accept"), json!([home.clone()])));
+
+        let old = call("invite.respond", json!({
+            "account": account, "ics": request(1, "REQUEST"), "response": "decline", "me_addr": "bo@example.com", "calendar": home,
+        })).await;
+        assert!(old.unwrap_err().to_string().contains("newer version"), "an older invitation sends nothing");
+        assert_eq!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().len(), 1);
+
+        assert!(call("invite.cancel", json!({"account": account, "ics": request(3, "REQUEST")})).await.is_err(), "only a cancellation removes");
+        let cancelled = call("invite.cancel", json!({"account": account, "ics": request(3, "CANCEL")})).await.unwrap();
+        assert_eq!(cancelled["removed"], 1);
+        assert!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().is_empty());
+        let status = call("invite.status", json!({"account": account, "uid": "meet@example.com"})).await.unwrap();
+        assert_eq!(status["answer"]["response"], "cancelled");
+    }
+
+    #[tokio::test]
     async fn notes_are_written_searched_and_trashed_through_the_dispatcher() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -1375,6 +1419,155 @@ fn caldav_write(
 
 const CALDAV_CONFLICT: &str =
     "this event was changed or removed on the server since it was opened; nothing was saved, and the calendar is being refreshed";
+
+/// The calendars of an account that hold an invitation's event: CalDAV ones
+/// by where the UID lives, local ones by the ids imported events take.
+fn invitation_calendars(db: &rusqlite::Connection, account: &str, uid: &str) -> anyhow::Result<Vec<String>> {
+    let mut found: Vec<String> = db
+        .prepare("SELECT calendar_id FROM caldav_objects WHERE account = ?1 AND uid = ?2")?
+        .query_map(rusqlite::params![account, uid], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let local: Vec<String> = db
+        .prepare(
+            "SELECT DISTINCT calendar_id FROM calendar_events WHERE account = ?1 AND event_id LIKE ?2 ESCAPE '\\'",
+        )?
+        .query_map(rusqlite::params![account, local_import_pattern(uid)], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    found.extend(local);
+    found.sort();
+    found.dedup();
+    Ok(found)
+}
+
+fn local_import_pattern(uid: &str) -> String {
+    format!("local:import:{}@%", like_escaped(uid))
+}
+
+/// Text matched literally by a LIKE with `ESCAPE '\\'`.
+fn like_escaped(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+/// Puts an answered invitation in a calendar, or brings the copy there up
+/// to this version. A copy at a later version is left alone.
+async fn keep_invitation(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    calendar_id: &str,
+    invitation: &calendar::itip::Invitation,
+    me: &str,
+    response: calendar::Response,
+) -> anyhow::Result<()> {
+    let object = calendar::itip::as_event(invitation, me, response);
+    let found = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?
+        .context("that calendar is no longer here")?;
+    match found.kind {
+        calendar::CalendarKind::Local => {
+            let item = calendar::import::Item { uid: invitation.uid.clone(), object, repeats: invitation.repeats };
+            let (events, _) = calendar::import::local_events(&item, calendar_id, now_seconds())?;
+            let db = engine.db.lock().unwrap();
+            db.execute(
+                "DELETE FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id LIKE ?3 ESCAPE '\\'",
+                rusqlite::params![account, calendar_id, local_import_pattern(&invitation.uid)],
+            )?;
+            for event in &events {
+                calendar::put_local_event(&db, account, event)?;
+            }
+            Ok(())
+        }
+        calendar::CalendarKind::CalDav => {
+            let (target, transport) = caldav_write(engine, account, calendar_id)?.context("that calendar is no longer here")?;
+            let located = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, &invitation.uid)?;
+            let uid = invitation.uid.clone();
+            let sequence = invitation.sequence;
+            let url = target.id.clone();
+            let saved = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<calendar::caldav::Located>> {
+                use meron_core::carddav::client::Written;
+                let href = match located {
+                    Some(found) => found.href,
+                    None => calendar::caldav::new_href(&url, &uid)?,
+                };
+                // Whatever is there now decides: nothing, the same or an older
+                // version (replaced), or a newer one (kept).
+                let written = match calendar::caldav::get_object(&transport, &url, &href)? {
+                    None => calendar::caldav::put_object(&transport, &url, &href, &object, None)?,
+                    Some((current, etag)) => {
+                        if calendar::itip::sequence_of(&current).unwrap_or(0) > sequence {
+                            return Ok(None);
+                        }
+                        calendar::caldav::put_object(&transport, &url, &href, &object, Some(&etag))?
+                    }
+                };
+                match written {
+                    Written::Saved { etag } => Ok(Some(calendar::caldav::Located { uid, href, etag: etag.unwrap_or_default() })),
+                    Written::Conflict => anyhow::bail!(CALDAV_CONFLICT),
+                }
+            })
+            .await??;
+            if let Some(located) = saved {
+                calendar::caldav::remember(&engine.db.lock().unwrap(), account, &target.id, &[located])?;
+            }
+            spawn_calendar_sync(engine.clone(), out.clone(), account.to_string(), invitation.start, invitation.end.max(invitation.start + 1));
+            Ok(())
+        }
+        _ => anyhow::bail!("{} cannot take events from invitations; choose a local or CalDAV calendar", found.name),
+    }
+}
+
+/// Takes an invitation's event out of the calendars holding it (or of the
+/// one named). Returns how many calendars it was removed from.
+async fn remove_invitation(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    uid: &str,
+    only: Option<&str>,
+) -> anyhow::Result<usize> {
+    let holding: Vec<String> = invitation_calendars(&engine.db.lock().unwrap(), account, uid)?
+        .into_iter()
+        .filter(|id| only.is_none_or(|only| only == id))
+        .collect();
+    for calendar_id in &holding {
+        let kind = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?.map(|found| found.kind);
+        match kind {
+            Some(calendar::CalendarKind::Local) => {
+                engine.db.lock().unwrap().execute(
+                    "DELETE FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id LIKE ?3 ESCAPE '\\'",
+                    rusqlite::params![account, calendar_id, local_import_pattern(uid)],
+                )?;
+            }
+            Some(calendar::CalendarKind::CalDav) => {
+                let (target, transport) = caldav_write(engine, account, calendar_id)?.context("that calendar is no longer here")?;
+                let Some(located) = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, uid)? else { continue };
+                let url = target.id.clone();
+                let href = located.href.clone();
+                tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+                    use meron_core::carddav::client::Written;
+                    let Some((_, etag)) = calendar::caldav::get_object(&transport, &url, &href)? else { return Ok(()) };
+                    match calendar::caldav::delete_object(&transport, &url, &href, &etag)? {
+                        Written::Saved { .. } => Ok(()),
+                        Written::Conflict => anyhow::bail!(CALDAV_CONFLICT),
+                    }
+                })
+                .await??;
+                let db = engine.db.lock().unwrap();
+                calendar::caldav::forget(&db, account, &target.id, uid)?;
+                calendar::forget_series(&db, account, uid)?;
+                db.execute(
+                    "DELETE FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id LIKE ?3 ESCAPE '\\'",
+                    rusqlite::params![account, target.id, format!("{}@%", like_escaped(uid))],
+                )?;
+            }
+            _ => {}
+        }
+    }
+    if !holding.is_empty() {
+        let now = now_seconds();
+        spawn_calendar_sync(engine.clone(), out.clone(), account.to_string(), now - 86_400 * 31, now + 86_400 * 366);
+    }
+    Ok(holding.len())
+}
 
 /// The source a CardDAV contact belongs to, and a transport signed in to it.
 fn carddav_target(
@@ -4872,6 +5065,86 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }],
             )?;
             Ok(json!({ "id": id }))
+        }
+
+        // Meeting invitations that arrived by mail (#102, ADR-0019). Each of
+        // these runs only because the person asked; reading an invitation
+        // never answers it.
+        "invite.status" => {
+            let account = req_str(p, "account")?;
+            let uid = req_str(p, "uid")?;
+            let db = engine.db.lock().unwrap();
+            let answer = calendar::itip::answer_of(&db, &account, &uid)?;
+            let calendars = invitation_calendars(&db, &account, &uid)?;
+            Ok(json!({ "answer": answer, "calendars": calendars }))
+        }
+        "invite.respond" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let response = calendar::Response::parse(&req_str(p, "response")?).context("unknown answer")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let target = req_str(p, "calendar").unwrap_or_default();
+            let invitation = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            let kept = calendar::itip::answer_of(&engine.db.lock().unwrap(), &account, &invitation.uid)?;
+            if calendar::itip::is_outdated(&invitation, kept.as_ref().map(|answer| answer.sequence)) {
+                anyhow::bail!("a newer version of this invitation was already answered; nothing was sent");
+            }
+            let now = now_seconds();
+            let reply = calendar::itip::reply(&invitation, &me, response, now)?;
+            if !target.is_empty() {
+                if response == calendar::Response::Decline {
+                    remove_invitation(&engine, &out, &account, &invitation.uid, Some(&target)).await?;
+                } else {
+                    keep_invitation(&engine, &out, &account, &target, &invitation, &me.addr, response).await?;
+                }
+            }
+            calendar::itip::record(
+                &engine.db.lock().unwrap(),
+                &account,
+                &invitation.uid,
+                &calendar::itip::Answer {
+                    sequence: invitation.sequence,
+                    response: format!("{response:?}").to_ascii_lowercase(),
+                    calendar_id: target,
+                    answered_at: now,
+                },
+            )?;
+            let organizer = invitation.organizer.clone().context("this invitation names no organizer to answer")?;
+            let verb = match response {
+                calendar::Response::Accept => "Accepted",
+                calendar::Response::Tentative => "Tentative",
+                calendar::Response::Decline => "Declined",
+            };
+            Ok(json!({ "reply": {
+                "to": organizer.addr,
+                "subject": format!("{verb}: {}", invitation.summary),
+                "ics": reply,
+            }}))
+        }
+        "invite.cancel" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let invitation = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            if invitation.method != "CANCEL" {
+                anyhow::bail!("only a cancellation removes an event");
+            }
+            let removed = remove_invitation(&engine, &out, &account, &invitation.uid, None).await?;
+            calendar::itip::record(
+                &engine.db.lock().unwrap(),
+                &account,
+                &invitation.uid,
+                &calendar::itip::Answer {
+                    sequence: invitation.sequence,
+                    response: "cancelled".into(),
+                    calendar_id: String::new(),
+                    answered_at: now_seconds(),
+                },
+            )?;
+            Ok(json!({ "removed": removed }))
         }
 
         // A .ics file into a local or CalDAV calendar (#101): previewed first

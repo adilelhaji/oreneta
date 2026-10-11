@@ -170,6 +170,7 @@ func messageJSON(accountID, threadID, folder string, raw any) any {
 		Protection:     jsonString(msg["protection"]),
 		HasAttachments: len(attachmentList) > 0,
 		Attachments:    attachmentList,
+		Invitation:     msg["invitation"],
 	}}}
 }
 

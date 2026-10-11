@@ -88,3 +88,15 @@ fn one_occurrence_of_a_series_is_named() {
     let me = Participant { name: String::new(), addr: "b@example.com".into(), response: String::new() };
     assert!(reply(&invitation, &me, Response::Accept, 0).unwrap().contains("RECURRENCE-ID;TZID=Europe/Madrid:20260708T100000"));
 }
+
+#[test]
+fn an_answer_to_an_older_version_does_not_undo_a_newer_one() {
+    let conn = crate::store::open_at(":memory:").unwrap();
+    let answer = |sequence: i64, response: &str| Answer { sequence, response: response.into(), calendar_id: String::new(), answered_at: 1 };
+    assert!(record(&conn, "a", "uid", &answer(2, "accept")).unwrap());
+    assert!(!record(&conn, "a", "uid", &answer(1, "decline")).unwrap());
+    assert_eq!(answer_of(&conn, "a", "uid").unwrap().unwrap().response, "accept");
+    assert!(record(&conn, "a", "uid", &answer(2, "tentative")).unwrap(), "the same version may be answered again");
+    assert_eq!(answer_of(&conn, "a", "uid").unwrap().unwrap().response, "tentative");
+    assert!(answer_of(&conn, "b", "uid").unwrap().is_none(), "answers are per account");
+}

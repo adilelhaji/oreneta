@@ -50,3 +50,23 @@ En los ajustes de cada calendario, **Archivos de calendario**:
 | N3 Radicale | Importar a CalDAV conserva la regla, y la segunda vez no añade nada |
 | N2 `CalDavCalendars.test.tsx` (importar) | Confirmación con el resumen antes de importar; solo en locales y CalDAV con escritura |
 | N2 `CalDavCalendars.test.tsx` | Buscar y elegir calendarios (solo lectura sin marcar); error del servidor visible; textos de quitar y regla del último calendario |
+
+## Invitaciones por correo (#102, ADR-0019)
+
+Un mensaje que trae una invitación muestra una tarjeta con el asunto, la
+hora, el lugar y el organizador.
+- **Invitación:** se elige dónde guardarla (un calendario local o CalDAV, o
+  ninguno) y se contesta «Aceptar», «Quizá» o «Rechazar». La tarjeta avisa
+  de que contestar envía un mensaje al organizador.
+- **Cancelación:** la tarjeta ofrece «Quitar de mi calendario».
+- **Respuesta recibida:** dice quién aceptó o rechazó.
+
+Nada de esto ocurre sin pulsarlo.
+
+| Nivel | Qué cubre |
+|---|---|
+| N1 `calendar/itip/tests.rs` (fixtures según RFC 5546) | Lectura con zona, serie, organizador y asistentes; un calendario publicado no es invitación; respuesta con solo el asistente propio, SEQUENCE y RECURRENCE-ID; una cancelación no se contesta; evento guardado sin METHOD y con PARTSTAT; versiones; una respuesta antigua no deshace una nueva |
+| N1 `parse.rs` | Un mensaje multiparte con `text/calendar` trae la invitación; uno sin ella, no |
+| N1 `smtp.rs` | La respuesta sale con `method=REPLY` como parámetro del Content-Type |
+| N1 despachador | Aceptar guarda en el calendario local y prepara la respuesta al organizador; estado; una versión antigua no envía nada; solo una cancelación quita, y lo quita |
+| N2 `InvitationCard.test.tsx` | Nada se contesta sin pulsar; respuesta con adjunto `text/calendar; method=REPLY` al organizador; «Ningún calendario»; fallo de envío explicado; Exchange se contesta en su calendario; versión antigua sin botones; quitar una cancelación |
