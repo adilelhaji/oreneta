@@ -469,6 +469,11 @@ impl EwsClient {
     }
 
     /// Occurrences on a calendar between two instants, expanded by the server.
+    ///
+    /// A `CalendarView` cannot be paged: past `max` occurrences the server
+    /// stops and says so with `IncludesLastItemInRange="false"`, and the rest
+    /// were silently missing. A window that comes back incomplete is split in
+    /// two and each half asked again, down to an hour.
     pub fn calendar_view(
         &self,
         calendar: &EwsId,
@@ -476,6 +481,53 @@ impl EwsClient {
         to: i64,
         max: usize,
     ) -> anyhow::Result<Vec<Message>> {
+        let mut items = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        self.calendar_view_split(calendar, from, to, max, 0, &mut items, &mut seen)?;
+        Ok(items)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn calendar_view_split(
+        &self,
+        calendar: &EwsId,
+        from: i64,
+        to: i64,
+        max: usize,
+        depth: u8,
+        items: &mut Vec<Message>,
+        seen: &mut std::collections::HashSet<String>,
+    ) -> anyhow::Result<()> {
+        let (found, complete) = self.calendar_view_once(calendar, from, to, max)?;
+        if !complete && to - from > 3600 && depth < 12 {
+            let middle = from + (to - from) / 2;
+            self.calendar_view_split(calendar, from, middle, max, depth + 1, items, seen)?;
+            return self.calendar_view_split(calendar, middle, to, max, depth + 1, items, seen);
+        }
+        if !complete {
+            crate::mlog!(
+                crate::log::Level::Warn,
+                "calendar",
+                "Exchange returned more than {max} occurrences in one hour; some are not shown"
+            );
+        }
+        for item in found {
+            // An occurrence spanning the split appears in both halves.
+            let id = item.item_id.as_ref().map(|id| id.id.clone()).unwrap_or_default();
+            if id.is_empty() || seen.insert(id) {
+                items.push(item);
+            }
+        }
+        Ok(())
+    }
+
+    fn calendar_view_once(
+        &self,
+        calendar: &EwsId,
+        from: i64,
+        to: i64,
+        max: usize,
+    ) -> anyhow::Result<(Vec<Message>, bool)> {
         let stamp = |seconds: i64| {
             chrono::DateTime::from_timestamp(seconds, 0)
                 .unwrap_or_default()
@@ -497,12 +549,16 @@ impl EwsClient {
             parent_folder_ids: vec![folder_id(calendar)],
         })?;
         let mut items = Vec::new();
+        let mut complete = true;
         for message in into_successes(response).context("FindItem CalendarView")? {
+            if message.root_folder.includes_last_item_in_range == Some(false) {
+                complete = false;
+            }
             for item in message.root_folder.items.inner {
                 items.push(item.inner_message().clone());
             }
         }
-        Ok(items)
+        Ok((items, complete))
     }
 
     /// Fetches envelope fields for the given items in one call, without
@@ -3319,6 +3375,60 @@ mod tests {
     </m:SyncFolderItemsResponse>
   </s:Body>
 </s:Envelope>"#;
+
+    fn calendar_view_page(complete: bool, ids: &[&str]) -> String {
+        let items: String = ids
+            .iter()
+            .map(|id| {
+                format!(
+                    "<t:CalendarItem><t:ItemId Id=\"{id}\" ChangeKey=\"CK\"/><t:Subject>{id}</t:Subject>\
+<t:Start>2026-09-03T09:00:00Z</t:Start><t:End>2026-09-03T10:00:00Z</t:End>\
+<t:IsAllDayEvent>false</t:IsAllDayEvent></t:CalendarItem>"
+                )
+            })
+            .collect();
+        format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Header/><s:Body>
+  <m:FindItemResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+    <m:ResponseMessages><m:FindItemResponseMessage ResponseClass="Success">
+      <m:ResponseCode>NoError</m:ResponseCode>
+      <m:RootFolder TotalItemsInView="{}" IncludesLastItemInRange="{complete}"><t:Items>{items}</t:Items></m:RootFolder>
+    </m:FindItemResponseMessage></m:ResponseMessages>
+  </m:FindItemResponse></s:Body></s:Envelope>"#,
+            ids.len()
+        )
+    }
+
+    #[tokio::test]
+    async fn a_window_with_more_occurrences_than_one_answer_holds_is_asked_in_halves() {
+        // The whole window stops early; each half is complete; B spans the
+        // split and comes back twice.
+        let (url, server) = serve_soap(vec![
+            calendar_view_page(false, &["A"]),
+            calendar_view_page(true, &["A", "B"]),
+            calendar_view_page(true, &["B", "C"]),
+        ]);
+        let (mut session, _db) = test_session(url);
+        session
+            .calendars
+            .insert("cal".to_string(), ("AAMkCAL=".to_string(), None));
+        let events = session
+            .events_in_window("cal", 1787_000_000, 1790_000_000)
+            .await
+            .expect("window");
+        let mut ids: Vec<&str> = events.iter().map(|event| event.id.as_str()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["A", "B", "C"], "nothing missing, nothing twice");
+        let requests = server.join().expect("server");
+        assert_eq!(requests.len(), 3);
+        let middle = chrono::DateTime::from_timestamp((1787_000_000 + 1790_000_000) / 2, 0)
+            .unwrap()
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        assert!(requests[1].contains(&format!("EndDate=\"{middle}\"")), "left half ends at the middle");
+        assert!(requests[2].contains(&format!("StartDate=\"{middle}\"")), "right half starts there");
+    }
 
     /// One occurrence as an on-premises server really answers: an internal
     /// organizer identified by a directory name rather than an address.
