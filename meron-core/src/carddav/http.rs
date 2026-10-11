@@ -17,11 +17,22 @@ pub struct UreqTransport {
 impl Transport for UreqTransport {
     fn send(&self, request: &DavRequest) -> Result<HttpReply> {
         let agent = crate::proxy::agent()?;
+        let content_type = request
+            .headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+            .map(|(_, value)| value.as_str())
+            .unwrap_or("application/xml; charset=utf-8");
         let mut builder = ureq::http::Request::builder()
             .method(request.method)
             .uri(&request.url)
-            .header("Content-Type", "application/xml; charset=utf-8")
+            .header("Content-Type", content_type)
             .header("Accept", "application/xml, text/xml, text/vcard, */*");
+        for (name, value) in &request.headers {
+            if !name.eq_ignore_ascii_case("content-type") {
+                builder = builder.header(*name, value);
+            }
+        }
         if !self.username.is_empty() {
             let credentials = base64::Engine::encode(
                 &base64::engine::general_purpose::STANDARD,
@@ -58,10 +69,15 @@ impl Transport for UreqTransport {
         // Where the request ended up after redirects — `.well-known` exists to
         // redirect, and hrefs in the answer are relative to *here*.
         let url = ureq::ResponseExt::get_uri(&response).to_string();
+        let etag = response
+            .headers()
+            .get("etag")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
         let body = response
             .body_mut()
             .read_to_string()
             .with_context(|| format!("read {} {}", request.method, request.url))?;
-        Ok(HttpReply { status, body, url })
+        Ok(HttpReply { status, body, url, etag })
     }
 }

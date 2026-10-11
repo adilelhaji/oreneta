@@ -88,7 +88,10 @@ export function PeopleView() {
       title: t('people.deleteTitle', { defaultValue: 'Delete contact?' }),
       message: t('people.deleteText', {
         name: person.name || person.emails[0]?.addr || '',
-        defaultValue: '{name} will be deleted from the address book on this computer.',
+        defaultValue:
+          person.source === 'carddav'
+            ? '{name} will be deleted from the address book on its server, for every app that reads it.'
+            : '{name} will be deleted from the address book on this computer.',
       }),
       confirmLabel: t('buttons.delete'),
       tone: 'danger',
@@ -219,7 +222,12 @@ export function PeopleView() {
               onWrite={(addr) => writeTo(selected, addr)}
               onCopy={copy}
               onEdit={() =>
-                people$.editing.set({ id: selected.id, version: selected.version, draft: draftOf(selected) })
+                people$.editing.set({
+                  id: selected.id,
+                  version: selected.version,
+                  serverBook: selected.source === 'carddav' ? selected.book : undefined,
+                  draft: draftOf(selected),
+                })
               }
               onDelete={() => void removePerson(selected)}
             />

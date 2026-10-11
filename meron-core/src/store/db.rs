@@ -662,6 +662,22 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         }
         tx.pragma_update(None, "user_version", 37)?;
     }
+    if version < 38 {
+        // Where a synced contact's card lives on its server, so it can be
+        // written back; and whether the server lets this account write to
+        // the book at all (NULL: it did not say). ADR-0012.
+        let has = |table: &str, column: &str| -> rusqlite::Result<bool> {
+            tx.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = '{column}'"))?
+                .exists([])
+        };
+        if !has("people", "href")? {
+            tx.execute_batch("ALTER TABLE people ADD COLUMN href TEXT NOT NULL DEFAULT '';")?;
+        }
+        if !has("contact_sources", "writable")? {
+            tx.execute_batch("ALTER TABLE contact_sources ADD COLUMN writable INTEGER;")?;
+        }
+        tx.pragma_update(None, "user_version", 38)?;
+    }
 
     tx.commit()?;
     Ok(())

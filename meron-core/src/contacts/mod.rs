@@ -4,6 +4,7 @@ pub mod exchange;
 pub mod google;
 pub mod person;
 pub mod vcard;
+pub mod vcard_write;
 
 #[cfg(test)]
 mod exchange_tests;
@@ -13,3 +14,5 @@ mod google_tests;
 mod person_tests;
 #[cfg(test)]
 mod vcard_tests;
+#[cfg(test)]
+mod vcard_write_tests;

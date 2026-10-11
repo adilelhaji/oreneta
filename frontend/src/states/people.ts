@@ -24,6 +24,13 @@ export type PersonDraft = Pick<Person, 'name' | 'organisation' | 'note' | 'email
 export type PersonEditing = {
   /** Absent for a new person. */
   id?: string
+  /**
+   * Where a new person is saved: a CardDAV source's id, or absent for the
+   * local book. An existing person stays in the book it is in.
+   */
+  book?: string
+  /** For an existing person in a server book: that book's source id. */
+  serverBook?: string
   /** The version the draft was read at; absent for a new person. */
   version?: string
   draft: PersonDraft
@@ -64,6 +71,7 @@ export async function savePerson(editing: PersonEditing): Promise<'saved' | 'con
   try {
     const answer = await invoke<WriteAnswer>('people.save', {
       ...(editing.id ? { id: editing.id, version: editing.version ?? '' } : {}),
+      ...(!editing.id && editing.book ? { book: editing.book } : {}),
       person: editing.draft,
     })
     if (answer?.conflict) {
@@ -87,7 +95,11 @@ export async function savePerson(editing: PersonEditing): Promise<'saved' | 'con
 export function keepMine(editing: PersonEditing) {
   const current = editing.conflict?.current
   // Deleted elsewhere: keeping mine creates it again.
-  return savePerson(current ? { ...editing, version: current.version, conflict: undefined } : { draft: editing.draft })
+  return savePerson(
+    current
+      ? { ...editing, version: current.version, conflict: undefined }
+      : { draft: editing.draft, book: editing.book },
+  )
 }
 
 /** Drops this window's changes and shows the copy saved elsewhere. */

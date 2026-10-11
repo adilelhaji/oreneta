@@ -3320,7 +3320,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 37);
+    assert_eq!(version, 38);
 
     for table in [
         "accounts",
@@ -3370,7 +3370,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 37);
+    assert_eq!(version, 38);
 }
 
 #[test]
@@ -3398,7 +3398,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 37);
+    assert_eq!(version, 38);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3436,7 +3436,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 37);
+    assert_eq!(version, 38);
 }
 
 #[test]
@@ -5179,6 +5179,7 @@ fn the_book_is_searched_by_name_even_when_no_mail_matches() {
 fn removing_a_source_takes_its_people_with_it_and_nobody_else() {
     let conn = test_conn();
     let source = ContactSource {
+        writable: None,
         id: "src-1".into(),
         kind: "carddav".into(),
         account: String::new(),
@@ -5219,6 +5220,7 @@ fn removing_a_source_takes_its_people_with_it_and_nobody_else() {
 fn a_sync_outcome_is_recorded_and_a_good_one_clears_a_bad_one() {
     let conn = test_conn();
     let source = ContactSource {
+        writable: None,
         id: "src-1".into(),
         kind: "carddav".into(),
         account: String::new(),

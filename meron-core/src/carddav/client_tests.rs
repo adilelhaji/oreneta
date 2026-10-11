@@ -43,6 +43,7 @@ impl Transport for FakeServer {
                     status: *status,
                     body: body.clone(),
                     url: landed,
+                    ..Default::default()
                 });
             }
         }
@@ -50,6 +51,7 @@ impl Transport for FakeServer {
             status: 404,
             body: String::new(),
             url: landed,
+            ..Default::default()
         })
     }
 }
@@ -478,4 +480,29 @@ fn refused_credentials_while_fetching_are_said_so_too() {
         .unwrap_err()
         .to_string()
         .contains("refused"));
+}
+
+fn privileges_answer(privileges: &[&str]) -> String {
+    let items: String = privileges
+        .iter()
+        .map(|p| format!("<d:privilege><d:{p}/></d:privilege>"))
+        .collect();
+    format!(
+        r#"<d:multistatus xmlns:d="DAV:"><d:response><d:href>/alice/contacts/</d:href><d:propstat><d:prop>
+        <d:current-user-privilege-set>{items}</d:current-user-privilege-set>
+        </d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#
+    )
+}
+
+#[test]
+fn a_book_is_writable_only_when_the_server_grants_writing() {
+    const BOOK: &str = "https://dav.example/alice/contacts/";
+    let shared = FakeServer::new(vec![("PROPFIND", BOOK, 207, privileges_answer(&["read", "read-current-user-privilege-set"]))]);
+    assert_eq!(book_writable(&shared, BOOK).unwrap(), Some(false), "a read-only share");
+    let own = FakeServer::new(vec![("PROPFIND", BOOK, 207, privileges_answer(&["read", "write"]))]);
+    assert_eq!(book_writable(&own, BOOK).unwrap(), Some(true));
+    let all = FakeServer::new(vec![("PROPFIND", BOOK, 207, privileges_answer(&["all"]))]);
+    assert_eq!(book_writable(&all, BOOK).unwrap(), Some(true));
+    let silent = FakeServer::new(vec![("PROPFIND", BOOK, 207, privileges_answer(&[]))]);
+    assert_eq!(book_writable(&silent, BOOK).unwrap(), None, "not saying is not a refusal");
 }

@@ -1092,6 +1092,118 @@ fn local_calendar_write(
     }
 }
 
+/// The source a CardDAV contact belongs to, and a transport signed in to it.
+fn carddav_target(
+    engine: &Engine,
+    book: &str,
+) -> anyhow::Result<(store::ContactSource, meron_core::carddav::http::UreqTransport)> {
+    let source = {
+        let db = engine.db.lock().unwrap();
+        if store::contact_sources_writable(&db)?.get(book).copied().flatten() == Some(false) {
+            anyhow::bail!("the server says this address book is read-only for this account");
+        }
+        store::contact_source(&db, book)?.context("that address book is no longer set up")?
+    };
+    let password = meron_core::secrets::load(&source.id).map(|secrets| secrets.password).unwrap_or_default();
+    let transport = meron_core::carddav::http::UreqTransport { username: source.username.clone(), password };
+    Ok((source, transport))
+}
+
+/// Edits a CardDAV contact from the version it was read at (ADR-0012).
+async fn carddav_save(
+    engine: &Arc<Engine>,
+    stored: Option<&store::SyncedPerson>,
+    read_at: &str,
+    person: meron_core::contacts::person::Person,
+) -> anyhow::Result<Value> {
+    let stored = stored.context("no such contact")?.clone();
+    if stored.href.is_empty() {
+        anyhow::bail!("this contact's place on the server is not known yet; sync the address book and try again");
+    }
+    let (source, transport) = carddav_target(engine, &stored.origin.book)?;
+    let read_at = read_at.to_string();
+    let now = now_seconds();
+    let (book_url, href, uid) = (source.url.clone(), stored.href.clone(), stored.person.uid.clone());
+    let outcome = tokio::task::spawn_blocking(move || {
+        meron_core::carddav::write::save_existing(&transport, &book_url, &href, &read_at, &uid, &person, now)
+    })
+    .await??;
+    record_carddav_outcome(engine, &stored.origin, outcome, Some(&stored.origin.person_id(&stored.person.uid)))
+}
+
+async fn carddav_create(
+    engine: &Arc<Engine>,
+    source: &store::ContactSource,
+    person: meron_core::contacts::person::Person,
+) -> anyhow::Result<Value> {
+    let (source, transport) = carddav_target(engine, &source.id)?;
+    let book_url = source.url.clone();
+    let outcome =
+        tokio::task::spawn_blocking(move || meron_core::carddav::write::save_new(&transport, &book_url, &person)).await??;
+    let origin = store::BookOrigin { source: source.kind.clone(), account: source.account.clone(), book: source.id.clone() };
+    record_carddav_outcome(engine, &origin, outcome, None)
+}
+
+async fn carddav_delete(
+    engine: &Arc<Engine>,
+    id: &str,
+    stored: &store::SyncedPerson,
+    read_at: &str,
+) -> anyhow::Result<Value> {
+    if stored.href.is_empty() {
+        anyhow::bail!("this contact's place on the server is not known yet; sync the address book and try again");
+    }
+    let (source, transport) = carddav_target(engine, &stored.origin.book)?;
+    let (book_url, href, read_at) = (source.url.clone(), stored.href.clone(), read_at.to_string());
+    let outcome = tokio::task::spawn_blocking(move || {
+        meron_core::carddav::write::delete_existing(&transport, &book_url, &href, &read_at)
+    })
+    .await??;
+    record_carddav_outcome(engine, &stored.origin, outcome, Some(id))
+}
+
+/// Brings the local copy in line with what the server now holds, and answers
+/// the editor in the same shape as the local book does.
+fn record_carddav_outcome(
+    engine: &Engine,
+    origin: &store::BookOrigin,
+    outcome: meron_core::carddav::write::Outcome,
+    id: Option<&str>,
+) -> anyhow::Result<Value> {
+    use meron_core::carddav::write::Outcome;
+    let db = engine.db.lock().unwrap();
+    match outcome {
+        Outcome::Saved { href, version, person } => {
+            let id = store::put_synced_person(
+                &db,
+                origin,
+                &store::SyncedRow { person, photo_key: String::new(), href, version: version.clone() },
+                now_seconds(),
+            )?;
+            Ok(json!({ "ok": true, "id": id, "version": version }))
+        }
+        Outcome::Deleted => {
+            if let Some(id) = id {
+                store::forget_person(&db, id)?;
+            }
+            Ok(json!({ "ok": true }))
+        }
+        Outcome::Conflict { current } => Ok(json!({
+            "ok": false,
+            "conflict": true,
+            "current": current.map(|(person, version)| json!({
+                "id": id.unwrap_or_default(),
+                "name": person.name,
+                "organisation": person.organisation,
+                "note": person.note,
+                "emails": person.emails,
+                "phones": person.phones,
+                "version": version,
+            })),
+        })),
+    }
+}
+
 /// A person as the editor sends it: any field may be left out.
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
@@ -1702,7 +1814,19 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
             };
             let url = source.url.clone();
             tokio::task::spawn_blocking(move || {
-                meron_core::carddav::client::fetch_book(&transport, &url)
+                let cards = meron_core::carddav::client::fetch_cards(&transport, &url)?;
+                // Asked each sync: a share can be made read-only at any time.
+                let writable = meron_core::carddav::client::book_writable(&transport, &url).unwrap_or(None);
+                let rows = cards
+                    .into_iter()
+                    .map(|card| store::SyncedRow {
+                        person: card.person,
+                        photo_key: String::new(),
+                        href: card.href,
+                        version: card.etag,
+                    })
+                    .collect::<Vec<_>>();
+                anyhow::Ok((rows, Some(writable)))
             })
             .await?
         }
@@ -1716,7 +1840,13 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
                     Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
                 } else {
                     tokio::task::spawn_blocking(move || {
-                        meron_core::contacts::google::fetch_connections(&token)
+                        meron_core::contacts::google::fetch_connections(&token).map(|people| {
+                            let rows = people
+                                .into_iter()
+                                .map(|person| store::SyncedRow { person, ..Default::default() })
+                                .collect::<Vec<_>>();
+                            (rows, None)
+                        })
                     })
                     .await?
                 }
@@ -1730,15 +1860,17 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
     let now = chrono::Utc::now().timestamp();
     let db = engine.db.lock().unwrap();
     match fetched {
-        Ok(people) => {
+        Ok((rows, writable)) => {
             let origin = store::BookOrigin {
                 source: source.kind.clone(),
                 account: source.account.clone(),
                 book: source.id.clone(),
             };
             // Photos are not cached yet; the key stays empty until they are.
-            let rows: Vec<_> = people.into_iter().map(|person| (person, String::new())).collect();
-            store::replace_book(&db, &origin, &rows, now)?;
+            store::replace_book_rows(&db, &origin, &rows, now)?;
+            if let Some(writable) = writable {
+                store::set_contact_source_writable(&db, id, writable)?;
+            }
             store::mark_contact_source_synced(&db, id, "", "", now)?;
             Ok(())
         }
@@ -2421,6 +2553,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let account = req_str(p, "account").unwrap_or_default();
             let id = format!("carddav-{}", uuid::Uuid::new_v4());
             let source = store::ContactSource {
+                writable: None,
                 id: id.clone(),
                 kind: "carddav".into(),
                 account,
@@ -2470,6 +2603,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 store::upsert_contact_source(
                     &engine.db.lock().unwrap(),
                     &store::ContactSource {
+                        writable: None,
                         id: id.clone(),
                         kind: "google".into(),
                         account: account.clone(),
@@ -2933,7 +3067,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "people.list" => {
             let query = req_str(p, "query").unwrap_or_default();
             let limit = req_u32(p, "limit").unwrap_or(500);
-            let found = store::find_people(&engine.db.lock().unwrap(), &query, limit)?;
+            let (found, writable) = {
+                let db = engine.db.lock().unwrap();
+                (store::find_people(&db, &query, limit)?, store::contact_sources_writable(&db)?)
+            };
             Ok(json!({
                 "people": found
                     .iter()
@@ -2949,9 +3086,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "emails": stored.person.emails,
                         "phones": stored.person.phones,
                         "version": stored.version,
-                        // Only the local book is written to so far (ADR-0012);
-                        // every synced book stays read-only here.
-                        "editable": stored.origin.source == "local",
+                        // The local book, and CardDAV books the server has not
+                        // said are read-only (ADR-0012). Google and Exchange
+                        // stay read-only here.
+                        "editable": stored.origin.source == "local"
+                            || (stored.origin.source == "carddav"
+                                && writable.get(&stored.origin.book).copied().flatten() != Some(false)),
                     }))
                     .collect::<Vec<_>>()
             }))
@@ -2970,15 +3110,46 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 serde_json::from_value(p.get("person").cloned().context("missing param: person")?)
                     .context("person")?;
             let person = input.into_person();
-            let write = store::local_people::save(&engine.db.lock().unwrap(), id, version, &person, now_seconds())?;
-            Ok(local_write_json(write))
+            let stored = match id {
+                Some(id) => store::synced_person(&engine.db.lock().unwrap(), id)?,
+                None => None,
+            };
+            let book = p.get("book").and_then(Value::as_str).filter(|book| !book.is_empty() && *book != "local");
+            match (&stored, book) {
+                (Some(stored), _) if stored.origin.source == "carddav" => {
+                    carddav_save(&engine, Some(stored), version.unwrap_or_default(), person).await
+                }
+                (Some(stored), _) if stored.origin.source != "local" => {
+                    anyhow::bail!("this address book is read-only here")
+                }
+                (None, Some(book)) if id.is_none() => {
+                    let source = store::contact_source(&engine.db.lock().unwrap(), book)?
+                        .context("that address book is no longer set up")?;
+                    if source.kind != "carddav" {
+                        anyhow::bail!("this address book is read-only here");
+                    }
+                    carddav_create(&engine, &source, person).await
+                }
+                _ => {
+                    let write =
+                        store::local_people::save(&engine.db.lock().unwrap(), id, version, &person, now_seconds())?;
+                    Ok(local_write_json(write))
+                }
+            }
         }
 
         "people.delete" => {
             let id = req_str(p, "id")?;
             let version = req_str(p, "version")?;
-            let write = store::local_people::delete(&engine.db.lock().unwrap(), &id, &version)?;
-            Ok(local_write_json(write))
+            let stored = store::synced_person(&engine.db.lock().unwrap(), &id)?;
+            match stored {
+                Some(stored) if stored.origin.source == "carddav" => carddav_delete(&engine, &id, &stored, &version).await,
+                Some(stored) if stored.origin.source != "local" => anyhow::bail!("this address book is read-only here"),
+                _ => {
+                    let write = store::local_people::delete(&engine.db.lock().unwrap(), &id, &version)?;
+                    Ok(local_write_json(write))
+                }
+            }
         }
 
         // Text the writer keeps because they write it often: a snippet

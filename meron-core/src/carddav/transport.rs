@@ -56,8 +56,19 @@ impl Transport for HttpTransport {
             if let Some(depth) = request.depth {
                 builder = builder.header("Depth", depth);
             }
+            let content_type = request
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                .map(|(_, value)| value.as_str())
+                .unwrap_or("application/xml; charset=utf-8");
             if request.body.is_some() {
-                builder = builder.header("Content-Type", "application/xml; charset=utf-8");
+                builder = builder.header("Content-Type", content_type);
+            }
+            for (name, value) in &request.headers {
+                if !name.eq_ignore_ascii_case("content-type") {
+                    builder = builder.header(*name, value);
+                }
             }
 
             let http_request = builder
@@ -95,11 +106,16 @@ impl Transport for HttpTransport {
                 continue;
             }
 
+            let etag = response
+                .headers()
+                .get("etag")
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string);
             let body = response
                 .body_mut()
                 .read_to_string()
                 .with_context(|| format!("read {} {url}", request.method))?;
-            return Ok(HttpReply { status, body, url });
+            return Ok(HttpReply { status, body, url, etag });
         }
 
         Err(anyhow!("{} {}: too many redirects", request.method, request.url))

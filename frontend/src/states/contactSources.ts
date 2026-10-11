@@ -17,6 +17,13 @@ export type ContactSource = {
   lastSyncAt: number
   /** Why the last sync failed; empty when it did not. */
   lastError: string
+  /** Whether the server lets this account write to it; null when it has not said. */
+  writable?: boolean | null
+}
+
+/** The books a new contact can be saved to on a server (ADR-0012). */
+export function writableBooks(sources: ContactSource[]): ContactSource[] {
+  return sources.filter((source) => source.kind === 'carddav' && source.enabled && source.writable !== false)
 }
 
 export type DiscoveredBook = { url: string; name: string }

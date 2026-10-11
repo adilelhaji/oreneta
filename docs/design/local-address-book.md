@@ -40,6 +40,62 @@
 | Go (`people_write_test.go`) | Sin núcleo en marcha, una escritura falla en vez de fingir que guardó |
 | N2 vista (`PersonEditor.test.tsx`) | Alta desde la cabecera; botones solo en contactos editables; conflicto: se ven las dos copias y «Conservar la mía» guarda sobre la versión actual; «Descartar» no escribe |
 
+## Paso 2: libretas CardDAV
+
+### Qué se puede hacer
+
+Los contactos de una libreta CardDAV se pueden editar y borrar, y al crear un
+contacto se elige «Este equipo» o una libreta CardDAV editable. El editor dice
+dónde se guarda el cambio. Al borrar un contacto de servidor, el aviso recuerda
+que desaparece para todas las apps que leen esa libreta. Google y Exchange
+siguen siendo de solo lectura (ADR-0012).
+
+### Qué guarda la sincronización
+
+- De cada tarjeta: su URL (`people.href`, migración 38) y su ETag
+  (`people.version`).
+- De cada libreta: si el servidor deja escribir en ella, según
+  `current-user-privilege-set` (`contact_sources.writable`). Si el servidor
+  dice que no, no se ofrece editar. Si no dice nada, se permite editar y un
+  rechazo del servidor se muestra.
+
+### Cómo se escribe
+
+- **Editar.** Se lee la tarjeta actual. Si su ETag no es el que se leyó, no
+  se escribe nada y se devuelve la copia del servidor. Si coincide, se
+  modifica la tarjeta del servidor y se envía con `If-Match`. Un `412` entre
+  la lectura y la escritura también es un conflicto.
+- **Solo cambian las líneas tocadas** (`contacts::vcard_write`). Se conserva
+  todo lo que la app no muestra: direcciones, cumpleaños, foto, UID, campos
+  propios de otros clientes y la etiqueta de Apple que va con cada correo.
+  - Un correo o teléfono que sigue igual conserva su línea original.
+  - Al cambiar el nombre se reescriben `FN` y `N`. `N` lleva el nombre entero
+    como nombre de pila, sin adivinar apellidos.
+- **Crear.** Se envía una tarjeta vCard 3.0 nueva con `If-None-Match: *`. Si
+  el servidor no devuelve el ETag, se vuelve a leer la tarjeta.
+- **Borrar.** Se envía `DELETE` con `If-Match`.
+- **Nunca se escribe sin versión conocida** ni en otro servidor que el de la
+  libreta: la contraseña no sale de ahí (#28).
+
+### Corrección encontrada por el camino
+
+`ORG` se cortaba en un `;` escapado: «Acme\; Ltd» se leía «Acme». Ahora se
+separa solo por `;` sin escapar, igual que `N`.
+
+### Pruebas del paso 2
+
+| Nivel | Qué cubre |
+|---|---|
+| N1 (`contacts/vcard_write_tests.rs`) | Una tarjeta de Apple editada conserva ADR, BDAY, foto, UID y etiquetas; quitar un correo quita su etiqueta; renombrar; números con distinto espaciado; tarjeta nueva de ida y vuelta; líneas plegadas sin partir caracteres |
+| N1 (`carddav/write_tests.rs`, servidor falso con estado) | `If-Match` correcto; conflicto sin escritura; «Conservar la mía»; tarjeta borrada en el servidor; alta con `If-None-Match` y ETag leído de nuevo; borrado desde una versión antigua; nada se envía a otro servidor; nunca se escribe sin versión |
+| N1 (`carddav/client_tests.rs`) | Permisos: lectura sola, `write`, `all` y sin respuesta |
+| N3 (`integration_contact_writes_test.go`, Radicale 3.5.4) | Editar conservando BDAY y ADR; cambio en el servidor → conflicto sin escritura, y «Conservar la mía» después; alta en la libreta; borrado desde una versión antigua rechazado, y después correcto |
+| N2 (`PersonEditor.test.tsx`) | Elegir libreta al crear; editar un contacto de servidor con su versión, indicando dónde se guarda |
+
+La prueba N3 se ejecutó en local contra Radicale 3.5.4 instalado aquí, en
+lugar de Docker. En CI se ejecuta con la imagen Docker del arnés.
+
 ## Siguiente
 
-Paso 2 de ADR-0012: CardDAV con ETag contra Radicale.
+- Duplicados, importación y exportación de vCard, y fotos (ADR-0012 punto 5).
+- Google y Exchange, cuando se cumplan sus condiciones.

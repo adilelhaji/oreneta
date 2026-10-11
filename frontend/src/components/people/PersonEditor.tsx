@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, UserPen, X } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
+import { contactSources$, loadContactSources, writableBooks } from '../../states/contactSources'
 import { keepMine, keepSaved, people$, savePerson, type PersonDraft } from '../../states/people'
 import { Dialog } from '../dialog/Dialog'
 import { Button } from '../button/Button'
@@ -21,8 +22,31 @@ const labelClass = 'text-caption font-bold uppercase tracking-wide text-secondar
 export function PersonEditor() {
   const { t } = useTranslation()
   const editing = useValue(people$.editing)
+  const sources = useValue(contactSources$.sources)
+  const sourcesLoaded = useValue(contactSources$.loaded)
   const [busy, setBusy] = useState(false)
+  const open = Boolean(editing)
+  useEffect(() => {
+    if (open && !sourcesLoaded) void loadContactSources()
+  }, [open, sourcesLoaded])
   if (!editing) return null
+  const books = writableBooks(sources)
+  // Where this person is, or will be, kept: said plainly, because a change to
+  // a server book is seen by every app that reads it.
+  const bookName = (id?: string) => sources.find((source) => source.id === id)?.name
+  const where = editing.id
+    ? editing.serverBook
+      ? t('people.savedOnServer', {
+          name: bookName(editing.serverBook) ?? '',
+          defaultValue: 'Saved in {name}, on its server.',
+        })
+      : t('people.localOnly', { defaultValue: 'Kept on this computer only.' })
+    : editing.book
+      ? t('people.savedOnServer', {
+          name: bookName(editing.book) ?? '',
+          defaultValue: 'Saved in {name}, on its server.',
+        })
+      : t('people.localOnly', { defaultValue: 'Kept on this computer only.' })
 
   const draft = editing.draft
   const set = (patch: Partial<PersonDraft>) => people$.editing.set({ ...editing, draft: { ...draft, ...patch } })
@@ -92,7 +116,7 @@ export function PersonEditor() {
           ? t('people.editTitle', { defaultValue: 'Edit contact' })
           : t('people.newTitle', { defaultValue: 'New contact' })
       }
-      subtitle={t('people.localOnly', { defaultValue: 'Kept on this computer only.' })}
+      subtitle={where}
       icon={UserPen}
       width="md"
       onClose={close}
@@ -115,6 +139,23 @@ export function PersonEditor() {
           submit()
         }}
       >
+        {!editing.id && books.length > 0 && (
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClass}>{t('people.saveTo', { defaultValue: 'Save to' })}</span>
+            <select
+              value={editing.book ?? ''}
+              onChange={(e) => people$.editing.set({ ...editing, book: e.target.value || undefined })}
+              className="w-full rounded-control-sm border border-border bg-app px-3 py-2 text-sm text-primary outline-none focus:border-accent"
+            >
+              <option value="">{t('people.thisComputer', { defaultValue: 'This computer' })}</option>
+              {books.map((book) => (
+                <option key={book.id} value={book.id}>
+                  {book.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex flex-col gap-1.5">
           <span className={labelClass}>{t('people.name', { defaultValue: 'Name' })}</span>
           <TextInput value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus />

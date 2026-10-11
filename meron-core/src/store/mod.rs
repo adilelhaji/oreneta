@@ -2586,7 +2586,7 @@ pub struct BookOrigin {
 }
 
 impl BookOrigin {
-    fn person_id(&self, uid: &str) -> String {
+    pub fn person_id(&self, uid: &str) -> String {
         format!("{}:{}:{}:{}", self.source, self.account, self.book, uid)
     }
 }
@@ -2620,6 +2620,32 @@ pub fn replace_book(
     people: &[(crate::contacts::person::Person, String)],
     now: i64,
 ) -> Result<usize> {
+    let rows: Vec<SyncedRow> = people
+        .iter()
+        .map(|(person, photo_key)| SyncedRow {
+            person: person.clone(),
+            photo_key: photo_key.clone(),
+            href: String::new(),
+            version: String::new(),
+        })
+        .collect();
+    replace_book_rows(conn, origin, &rows, now)
+}
+
+/// One synced contact with where it lives and the version it was read at.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SyncedRow {
+    pub person: crate::contacts::person::Person,
+    pub photo_key: String,
+    /// The card's URL on its server, empty for a source that has none.
+    pub href: String,
+    /// The card's ETag, empty when the server gave none.
+    pub version: String,
+}
+
+/// [`replace_book`], keeping each card's URL and version so it can be written
+/// back (ADR-0012).
+pub fn replace_book_rows(conn: &Connection, origin: &BookOrigin, people: &[SyncedRow], now: i64) -> Result<usize> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "DELETE FROM person_emails WHERE person_id IN
@@ -2640,8 +2666,8 @@ pub fn replace_book(
     {
         let mut person_stmt = tx.prepare(
             "INSERT OR REPLACE INTO people
-               (id, source, account, book, uid, name, organisation, note, photo, updated)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+               (id, source, account, book, uid, name, organisation, note, photo, updated, href, version)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         )?;
         let mut email_stmt = tx.prepare(
             "INSERT OR REPLACE INTO person_emails(person_id, addr, label, position)
@@ -2652,7 +2678,8 @@ pub fn replace_book(
              VALUES(?1, ?2, ?3, ?4)",
         )?;
 
-        for (index, (person, photo_key)) in people.iter().enumerate() {
+        for (index, row) in people.iter().enumerate() {
+            let (person, photo_key) = (&row.person, &row.photo_key);
             // A book that gives nobody a uid — some exports do — still has
             // people in it. Their position stands in, which is stable for as
             // long as the book is, and a re-sync replaces the lot anyway.
@@ -2673,6 +2700,8 @@ pub fn replace_book(
                 person.note,
                 photo_key,
                 now,
+                row.href,
+                row.version,
             ])?;
             for (position, email) in person.emails.iter().enumerate() {
                 email_stmt.execute(params![id, email.addr, email.label, position as i64])?;
@@ -2685,6 +2714,116 @@ pub fn replace_book(
     }
     tx.commit()?;
     Ok(written)
+}
+
+/// A synced contact as stored: where it came from, where its card lives and
+/// the version it was read at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncedPerson {
+    pub origin: BookOrigin,
+    pub person: crate::contacts::person::Person,
+    pub href: String,
+    pub version: String,
+}
+
+pub fn synced_person(conn: &Connection, id: &str) -> Result<Option<SyncedPerson>> {
+    let row = conn
+        .query_row(
+            "SELECT source, account, book, uid, name, organisation, note, href, version
+               FROM people WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(SyncedPerson {
+                    origin: BookOrigin { source: row.get(0)?, account: row.get(1)?, book: row.get(2)? },
+                    person: crate::contacts::person::Person {
+                        uid: row.get(3)?,
+                        name: row.get(4)?,
+                        organisation: row.get(5)?,
+                        note: row.get(6)?,
+                        ..Default::default()
+                    },
+                    href: row.get(7)?,
+                    version: row.get(8)?,
+                })
+            },
+        )
+        .optional()?;
+    let Some(mut found) = row else { return Ok(None) };
+    let (emails, phones) = attachments_for(conn, &[id.to_string()])?;
+    found.person.emails = emails.get(id).cloned().unwrap_or_default();
+    found.person.phones = phones.get(id).cloned().unwrap_or_default();
+    Ok(Some(found))
+}
+
+/// Records one synced contact as the server now holds it, after a write
+/// there. Returns its id.
+pub fn put_synced_person(conn: &Connection, origin: &BookOrigin, row: &SyncedRow, now: i64) -> Result<String> {
+    let tx = conn.unchecked_transaction()?;
+    let id = origin.person_id(row.person.uid.trim());
+    let photo: String = tx
+        .query_row("SELECT photo FROM people WHERE id = ?1", params![id], |r| r.get(0))
+        .optional()?
+        .unwrap_or_default();
+    tx.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
+    tx.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
+    tx.execute(
+        "INSERT OR REPLACE INTO people
+           (id, source, account, book, uid, name, organisation, note, photo, updated, href, version)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            id,
+            origin.source,
+            origin.account,
+            origin.book,
+            row.person.uid.trim(),
+            row.person.name,
+            row.person.organisation,
+            row.person.note,
+            photo,
+            now,
+            row.href,
+            row.version
+        ],
+    )?;
+    for (position, email) in row.person.emails.iter().enumerate() {
+        tx.execute(
+            "INSERT OR IGNORE INTO person_emails(person_id, addr, label, position) VALUES(?1, ?2, ?3, ?4)",
+            params![id, email.addr.trim().to_lowercase(), email.label, position as i64],
+        )?;
+    }
+    for (position, phone) in row.person.phones.iter().enumerate() {
+        tx.execute(
+            "INSERT OR IGNORE INTO person_phones(person_id, number, label, position) VALUES(?1, ?2, ?3, ?4)",
+            params![id, phone.number, phone.label, position as i64],
+        )?;
+    }
+    tx.commit()?;
+    Ok(id)
+}
+
+/// Drops one contact from the local copy, after its card was deleted.
+pub fn forget_person(conn: &Connection, id: &str) -> Result<()> {
+    conn.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
+    conn.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
+    conn.execute("DELETE FROM people WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+/// Whether the server lets this account write to a source's book: `None`
+/// when it did not say.
+pub fn set_contact_source_writable(conn: &Connection, id: &str, writable: Option<bool>) -> Result<()> {
+    conn.execute(
+        "UPDATE contact_sources SET writable = ?2 WHERE id = ?1",
+        params![id, writable.map(i64::from)],
+    )?;
+    Ok(())
+}
+
+/// Every source's write permission, by id.
+pub fn contact_sources_writable(conn: &Connection) -> Result<HashMap<String, Option<bool>>> {
+    let mut stmt = conn.prepare("SELECT id, writable FROM contact_sources")?;
+    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?.map(|v| v != 0))))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// Read the addresses and phones belonging to a set of people, in one pass each.
@@ -2807,11 +2946,14 @@ pub struct ContactSource {
     pub ctag: String,
     pub last_sync_at: i64,
     pub last_error: String,
+    /// Whether the server lets this account write to the book; `None` when it
+    /// has not said (ADR-0012).
+    pub writable: Option<bool>,
 }
 
 pub fn contact_sources(conn: &Connection) -> Result<Vec<ContactSource>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, account, url, username, name, enabled, ctag, last_sync_at, last_error
+        "SELECT id, kind, account, url, username, name, enabled, ctag, last_sync_at, last_error, writable
            FROM contact_sources ORDER BY created_at, name",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -2826,6 +2968,7 @@ pub fn contact_sources(conn: &Connection) -> Result<Vec<ContactSource>> {
             ctag: row.get(7)?,
             last_sync_at: row.get(8)?,
             last_error: row.get(9)?,
+            writable: row.get::<_, Option<i64>>(10)?.map(|value| value != 0),
         })
     })?;
     Ok(rows.flatten().collect())

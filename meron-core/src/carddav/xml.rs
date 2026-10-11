@@ -29,6 +29,9 @@ pub struct DavResponse {
     /// href inside them rather than with text, which is why these are apart
     /// from `props`.
     pub prop_hrefs: Vec<(String, String)>,
+    /// The privileges in `current-user-privilege-set`, by local name: "read",
+    /// "write", "write-content", "all"…
+    pub privileges: Vec<String>,
 }
 
 impl DavResponse {
@@ -138,6 +141,12 @@ fn read_multistatus(body: &str) -> (Vec<DavResponse>, bool) {
                 if path.last().map(String::as_str) == Some("resourcetype") {
                     if let Some(response) = current.as_mut() {
                         response.resource_types.push(name);
+                    }
+                } else if path.last().map(String::as_str) == Some("privilege")
+                    && path.iter().any(|step| step == "current-user-privilege-set")
+                {
+                    if let Some(response) = current.as_mut() {
+                        response.privileges.push(name);
                     }
                 }
             }
