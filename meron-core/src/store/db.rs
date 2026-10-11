@@ -690,6 +690,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         tx.execute_batch(crate::archive::SCHEMA)?;
         tx.pragma_update(None, "user_version", 41)?;
     }
+    if version < 42 {
+        super::notes::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 42)?;
+    }
 
     tx.commit()?;
     Ok(())

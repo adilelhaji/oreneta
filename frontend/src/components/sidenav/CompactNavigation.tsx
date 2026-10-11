@@ -19,6 +19,7 @@ export function CompactNavigation() {
           ui$.calendarOpen.set(false)
           ui$.peopleOpen.set(false)
           ui$.tasksOpen.set(false)
+          ui$.notesOpen.set(false)
         }}
       />
       <IconButton

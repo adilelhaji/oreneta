@@ -16,6 +16,7 @@ import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
 import { PeopleView } from './components/people/PeopleView'
 import { TasksView } from './components/tasks/TasksView'
+import { NotesView } from './components/notes/NotesView'
 import { TaskDialog } from './components/tasks/TaskDialog'
 import { MessagePane } from './components/chat/MessagePane'
 import { AboutDialog } from './components/dialog/AboutDialog'
@@ -54,6 +55,7 @@ export default function App() {
   const calendarOpen = useValue(ui$.calendarOpen)
   const peopleOpen = useValue(ui$.peopleOpen)
   const tasksOpen = useValue(ui$.tasksOpen)
+  const notesOpen = useValue(ui$.notesOpen)
   const taskEditor = useValue(ui$.taskEditor)
   const setupOpen = useValue(ui$.setupOpen)
   const settingsOpen = useValue(ui$.settingsOpen)
@@ -88,7 +90,7 @@ export default function App() {
         <ErrorBoundary label="side navigation">
           <SideNav />
         </ErrorBoundary>
-        {!peopleOpen && !calendarOpen && !tasksOpen && !activeBoardId && (
+        {!peopleOpen && !calendarOpen && !tasksOpen && !notesOpen && !activeBoardId && (
           <ErrorBoundary label="mail navigation">
             <MailNavigation />
           </ErrorBoundary>
@@ -105,6 +107,10 @@ export default function App() {
           <ErrorBoundary label="tasks">
             <TasksView />
           </ErrorBoundary>
+        ) : notesOpen ? (
+          <ErrorBoundary label="notes">
+            <NotesView />
+          </ErrorBoundary>
         ) : (
         <ErrorBoundary label="thread list">
           {activeBoardId ? (
@@ -114,7 +120,7 @@ export default function App() {
           )}
         </ErrorBoundary>
         )}
-        {calendarOpen || peopleOpen || tasksOpen ? null : !activeBoardId ? (
+        {calendarOpen || peopleOpen || tasksOpen || notesOpen ? null : !activeBoardId ? (
           <ErrorBoundary label="conversation">
             <MessagePane />
           </ErrorBoundary>

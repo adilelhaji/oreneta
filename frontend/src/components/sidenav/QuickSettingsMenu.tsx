@@ -4,6 +4,7 @@ import {
   Columns3,
   Info,
   ListTodo,
+  StickyNote,
   Mail,
   Plus,
   RefreshCw,
@@ -84,6 +85,7 @@ export function QuickSettingsMenu({
           { key: 'calendar', label: t('calendar.title'), icon: CalendarDays },
           { key: 'people', label: t('people.title'), icon: BookUser },
           { key: 'tasks', label: t('tasks.title'), icon: ListTodo },
+          { key: 'notes', label: t('notes.title', { defaultValue: 'Notes' }), icon: StickyNote },
         ].map(({ key, label, icon: Icon }) => (
           <MenuItem
             key={key}
@@ -93,6 +95,7 @@ export function QuickSettingsMenu({
               ui$.calendarOpen.set(key === 'calendar')
               ui$.peopleOpen.set(key === 'people')
               ui$.tasksOpen.set(key === 'tasks')
+              ui$.notesOpen.set(key === 'notes')
               onClose()
             }}
           />

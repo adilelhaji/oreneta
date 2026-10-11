@@ -164,6 +164,7 @@ export const ui$ = observable({
   // exclusivity, for the same reason: a task is about a message, but the
   // list of them is not mail itself.
   tasksOpen: false,
+  notesOpen: false,
   // The task the "convert to task" dialog is open on, if any — the thread it
   // was opened from, and the existing task's fields when editing one already
   // open on that thread (absent when creating a new one).

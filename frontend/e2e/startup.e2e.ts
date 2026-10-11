@@ -145,6 +145,29 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       contentType: 'image/png',
     })
     await audit('task-editor')
+    await page.keyboard.press('Escape')
+    // Notes: the list with a tagged, pinned note and that note open (ADR-0015).
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      const note = {
+        id: 'note:synthetic', title: 'Synthetic note', html: '<p>Kept on this computer.</p>',
+        text: 'Kept on this computer.', tags: ['ideas'], pinned: true, revision: 1, created_at: 0,
+        updated_at: 1760000000, deleted_at: null,
+      }
+      replies['notes.list'] = {
+        notes: [{ ...note, preview: note.text }],
+        tags: [{ tag: 'ideas', count: 1 }],
+      }
+      replies['notes.get'] = { note }
+    })
+    await page.getByTitle('Notes', { exact: true }).click()
+    await page.getByRole('button', { name: /Synthetic note/ }).click()
+    await expect(page.getByLabel('Title')).toHaveValue('Synthetic note')
+    await info.attach(`notes-${theme}`, {
+      body: await page.screenshot({ path: info.outputPath('notes.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await audit('notes')
     expect(blocking).toEqual([])
     expect(errors).toEqual([])
   })
@@ -897,6 +920,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'mail.threadList': { threads: [], next_cursor: '', pagination: 'conversation-v1' },
         'tasks.list': { tasks: [] },
         'tasks.lists': { lists: [] },
+        'notes.list': { notes: [], tags: [] },
         'people.list': { people: [] },
         'people.duplicates': { groups: [] },
         'calendar.list': { calendars: [] },

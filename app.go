@@ -503,6 +503,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.tasksDelete(payload)
 	case "tasks.lists", "tasks.createList", "tasks.renameList", "tasks.deleteList", "tasks.create", "tasks.update":
 		return a.tasksPassthrough(command, payload)
+	// Standalone notes (#104): local only; the core decides everything.
+	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":
+		return a.tasksPassthrough(command, payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":

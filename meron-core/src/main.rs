@@ -369,6 +369,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn notes_are_written_searched_and_trashed_through_the_dispatcher() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let created = call("notes.create", json!({"note": {"title": "Ideas", "html": "<p>Ship <b>notes</b></p><script>x</script>", "tags": ["work"]}})).await.unwrap();
+        let id = created["note"]["id"].as_str().unwrap().to_owned();
+        assert_eq!(created["note"]["html"], "<p>Ship <b>notes</b></p>");
+
+        let listed = call("notes.list", json!({"search": "ship"})).await.unwrap();
+        assert_eq!(listed["notes"][0]["preview"], "Ship notes");
+        assert_eq!(listed["tags"], json!([{"tag": "work", "count": 1}]));
+
+        let saved = call("notes.update", json!({"id": id, "revision": 1, "note": {"title": "Ideas", "html": "<p>v2</p>"}})).await.unwrap();
+        assert_eq!((saved["status"].clone(), saved["note"]["revision"].clone()), (json!("saved"), json!(2)));
+        let stale = call("notes.update", json!({"id": id, "revision": 1, "note": {"title": "Ideas", "html": "<p>v1 again</p>"}})).await.unwrap();
+        assert_eq!((stale["status"].clone(), stale["stored"]["text"].clone()), (json!("conflict"), json!("v2")));
+
+        call("notes.trash", json!({"id": id})).await.unwrap();
+        assert!(call("notes.list", json!({})).await.unwrap()["notes"].as_array().unwrap().is_empty());
+        assert_eq!(call("notes.list", json!({"trash": true})).await.unwrap()["notes"].as_array().unwrap().len(), 1);
+        call("notes.restore", json!({"id": id})).await.unwrap();
+        call("notes.trash", json!({"id": id})).await.unwrap();
+        call("notes.purge", json!({"id": id})).await.unwrap();
+        assert!(call("notes.get", json!({"id": id})).await.unwrap()["note"].is_null());
+    }
+
+    #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -2711,6 +2743,57 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "tasks.lists" => {
             let lists = store::task_lists::lists(&engine.db.lock().unwrap())?;
             Ok(json!({ "lists": lists }))
+        }
+        // Standalone notes (#104, ADR-0015): local only, no account.
+        "notes.list" => {
+            let query: store::notes::Query = serde_json::from_value(p.clone()).unwrap_or_default();
+            let db = engine.db.lock().unwrap();
+            store::notes::tidy_trash(&db, now_seconds())?;
+            let notes = store::notes::list(&db, &query)?;
+            let tags: Vec<Value> = store::notes::tags(&db)?
+                .into_iter()
+                .map(|(tag, count)| json!({ "tag": tag, "count": count }))
+                .collect();
+            Ok(json!({ "notes": notes, "tags": tags }))
+        }
+        "notes.get" => {
+            let note = store::notes::get(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "note": note }))
+        }
+        "notes.create" => {
+            let fields: store::notes::NoteFields =
+                serde_json::from_value(p.get("note").cloned().unwrap_or_default())?;
+            let note = store::notes::create(&engine.db.lock().unwrap(), &fields, now_seconds())?;
+            Ok(json!({ "note": note }))
+        }
+        "notes.update" => {
+            let fields: store::notes::NoteFields =
+                serde_json::from_value(p.get("note").cloned().unwrap_or_default())?;
+            let written = store::notes::update(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "id")?,
+                req_i64(p, "revision")?,
+                &fields,
+                now_seconds(),
+            )?;
+            Ok(serde_json::to_value(written)?)
+        }
+        "notes.pin" => {
+            let pinned = p.get("pinned").and_then(Value::as_bool).unwrap_or(false);
+            store::notes::set_pinned(&engine.db.lock().unwrap(), &req_str(p, "id")?, pinned, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.trash" => {
+            store::notes::trash(&engine.db.lock().unwrap(), &req_str(p, "id")?, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.restore" => {
+            store::notes::restore(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.purge" => {
+            store::notes::purge(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
         }
         "tasks.createList" => {
             let id = store::task_lists::create_list(&engine.db.lock().unwrap(), &req_str(p, "name")?, now_seconds())?;

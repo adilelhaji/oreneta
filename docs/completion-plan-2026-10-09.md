@@ -342,6 +342,16 @@ Estado de la iteración 9 (cierre de código, 2026-10-11):
 - **Pendiente:** la escritura en Google y Exchange (ADR-0012) y la
   sincronización de tareas (ADR-0013).
 
+Estado de la iteración 10 (2026-10-11, decisiones por delegación):
+- **#112:** archivo local con importación EML/MBOX (ADR-0014) y exportación
+  de una carpeta a MBOX con ida y vuelta probada
+  ([registro](design/mail-import.md)). Pendiente: Thunderbird/Postbox y PST.
+- **#104:** notas locales con texto enriquecido, imágenes, etiquetas,
+  búsqueda, conflicto por revisión y papelera (ADR-0015,
+  [registro](design/notes.md)). Pendiente: adjuntos de archivo y
+  sincronización con proveedores.
+- **#99:** perfiles, siguiente.
+
 Criterio de salida C-B: flujo de invitación completo verificado en Exchange y
 Google (N5); restauración ensayada en Windows (N4); importación de al menos
 mbox/eml con corpus de regresión versionado en el repositorio.

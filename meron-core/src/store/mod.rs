@@ -49,6 +49,7 @@ mod accounts;
 pub mod local_people;
 pub mod task_lists;
 pub mod person_links;
+pub mod notes;
 mod settings;
 pub mod local_drafts;
 pub mod outgoing;
