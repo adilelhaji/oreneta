@@ -12,6 +12,7 @@ import {
   Search,
   Trash2,
   Clock,
+  Download,
 } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import type { FilterMode } from '../../states/ui'
@@ -29,6 +30,8 @@ export type ThreadActionsMenuItemsProps = {
   emptyFolderLabel?: string
   /** Only wired for an ordinary folder of a single mail account; hidden otherwise. */
   onDeleteFolder?: () => void
+  /** Only wired where the folder's original messages can be read (#112). */
+  onExportFolder?: () => void
   onSync?: () => void
   syncing?: boolean
   syncLabel?: string
@@ -52,6 +55,7 @@ export function ThreadActionsMenuItems({
   onEmptyFolder,
   emptyFolderLabel,
   onDeleteFolder,
+  onExportFolder,
   onSync,
   syncing = false,
   syncLabel,
@@ -149,6 +153,21 @@ export function ThreadActionsMenuItems({
           }}
         />
       )}
+      {onExportFolder && (
+        <MenuItem
+          className="flex-nowrap"
+          icon={<Download size={14} className="text-secondary shrink-0" strokeWidth={1.75} />}
+          label={
+            <span className="whitespace-nowrap shrink-0">
+              {t('threads.actions.exportFolder', { defaultValue: 'Export folder as .mbox' })}
+            </span>
+          }
+          onClick={() => {
+            onExportFolder()
+            closeMenu()
+          }}
+        />
+      )}
       {(onSync || onRemove || onDeleteFolder) && (
         <>
           <div className="my-1 border-t border-border" />
@@ -214,6 +233,7 @@ export function ThreadActionsMenu({
   onEmptyFolder,
   emptyFolderLabel,
   onDeleteFolder,
+  onExportFolder,
   onSync,
   syncing = false,
   syncLabel,
@@ -234,6 +254,7 @@ export function ThreadActionsMenu({
   onEmptyFolder?: () => void
   emptyFolderLabel?: string
   onDeleteFolder?: () => void
+  onExportFolder?: () => void
   onSync?: () => void
   syncing?: boolean
   syncLabel?: string
@@ -287,6 +308,7 @@ export function ThreadActionsMenu({
             onEmptyFolder={onEmptyFolder}
             emptyFolderLabel={emptyFolderLabel}
             onDeleteFolder={onDeleteFolder}
+            onExportFolder={onExportFolder}
             onSync={onSync}
             syncing={syncing}
             syncLabel={syncLabel}

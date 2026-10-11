@@ -282,6 +282,20 @@ mod tests {
         let rendered = thread.to_string();
         assert!(rendered.contains("Numbers attached") && rendered.contains("Thanks"), "both messages read, no server: {rendered}");
 
+        // Exporting the folder writes the same messages back out as mboxrd.
+        let out = dir.join("export.mbox");
+        let exported = call("messages.exportMbox", json!({"account": account, "folder": "INBOX", "path": out.to_string_lossy()})).await.unwrap();
+        assert_eq!(exported["exported"], 2);
+        let back = meron_core::archive::split_mbox(&std::fs::read(&out).unwrap());
+        assert_eq!(back.len(), 2);
+        assert!(String::from_utf8_lossy(&back[1]).contains("Message-ID: <b@x>"));
+        assert!(!dir.join("export.mbox.part").exists());
+        let first_uid = store::recent_headers(&engine.db.lock().unwrap(), account, "INBOX", 10).unwrap().iter().map(|h| h.uid).min().unwrap();
+        let one = call("messages.exportMbox", json!({"account": account, "folder": "INBOX", "path": out.to_string_lossy(), "uids": [first_uid]})).await.unwrap();
+        assert_eq!(one["exported"], 1);
+        let nowhere = dir.join("missing").join("x.mbox");
+        assert!(call("messages.exportMbox", json!({"account": account, "folder": "INBOX", "path": nowhere.to_string_lossy()})).await.is_err());
+
         // Deleting moves to the archive's Trash, like any account.
         call("messages.delete", json!({"account": account, "folder": "INBOX", "thread_key": thread_key})).await.unwrap();
         let db = engine.db.lock().unwrap();
@@ -5391,6 +5405,88 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .write_all(&message.raw)
                 .with_context(|| format!("write message export {path}"))?;
             Ok(json!({ "saved": true, "size": message.raw.len() }))
+        }
+
+        // A whole folder, or the chosen messages, as one mboxrd file (#112).
+        // Written beside the target and renamed into place, so a failure half
+        // way never leaves a truncated file under the chosen name.
+        "messages.exportMbox" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let path = req_str(p, "path")?;
+            let chosen: Vec<u32> = p
+                .get("uids")
+                .and_then(Value::as_array)
+                .map(|uids| uids.iter().filter_map(|uid| uid.as_u64()).map(|uid| uid as u32).collect())
+                .unwrap_or_default();
+            let mut uids = if chosen.is_empty() {
+                let listed = folder.clone();
+                engine
+                    .with_read_session(&account, |session| {
+                        let folder = listed.clone();
+                        Box::pin(async move { session.list_all_uids(&folder).await })
+                    })
+                    .await?
+                    .into_iter()
+                    .collect::<Vec<u32>>()
+            } else {
+                chosen
+            };
+            uids.sort_unstable();
+            uids.dedup();
+
+            let partial = format!("{path}.part");
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(0o600);
+            }
+            let written: anyhow::Result<(usize, u64)> = async {
+                let file = options
+                    .open(&partial)
+                    .with_context(|| format!("open mailbox export {path}"))?;
+                let mut output = std::io::BufWriter::new(file);
+                let stamp = chrono::Utc::now().timestamp();
+                let (mut exported, mut size) = (0usize, 0u64);
+                for batch in uids.chunks(50) {
+                    let batch = batch.to_vec();
+                    let fetched = folder.clone();
+                    let messages = engine
+                        .with_read_session(&account, |session| {
+                            let folder = fetched.clone();
+                            let batch = batch.clone();
+                            Box::pin(async move {
+                                session.fetch_raw_messages_for_copy(&folder, &batch).await
+                            })
+                        })
+                        .await?;
+                    for message in messages {
+                        meron_core::archive::write_mbox_entry(&mut output, &message.raw, stamp)
+                            .with_context(|| format!("write mailbox export {path}"))?;
+                        exported += 1;
+                        size += message.raw.len() as u64;
+                    }
+                }
+                output
+                    .into_inner()
+                    .map_err(|error| error.into_error())
+                    .and_then(|file| file.sync_all())
+                    .with_context(|| format!("write mailbox export {path}"))?;
+                std::fs::rename(&partial, &path)
+                    .with_context(|| format!("finish mailbox export {path}"))?;
+                Ok((exported, size))
+            }
+            .await;
+            match written {
+                Ok((exported, size)) => Ok(json!({ "saved": true, "exported": exported, "size": size })),
+                Err(error) => {
+                    let _ = std::fs::remove_file(&partial);
+                    Err(error)
+                }
+            }
         }
 
         "messages.read" => {

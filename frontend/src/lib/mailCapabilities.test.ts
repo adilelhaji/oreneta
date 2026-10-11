@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   canChangeMessages,
+  canExportMail,
   canSendFrom,
   copyBlocked,
   isReadOnlyMail,
@@ -53,4 +54,16 @@ test('Graph sends only with Mail.Send granted and never keeps server drafts (#14
   expect(isSendableAccount(sender)).toBe(true)
   expect(isSendableAccount(reader)).toBe(false)
   expect(isSendableAccount({ ...sender, needs_reconnect: true })).toBe(false)
+})
+
+test('folders export as .mbox only where the original messages can be read (#112)', () => {
+  expect(canExportMail({ auth_type: 'password' })).toBe(true)
+  expect(canExportMail({ auth_type: 'gmail_oauth' })).toBe(true)
+  expect(canExportMail({ auth_type: 'local_archive' })).toBe(true)
+  expect(canExportMail({ auth_type: 'graph_oauth' })).toBe(false)
+  expect(canExportMail({ auth_type: 'outlook_oauth', ews_url: 'https://ex.example.test/EWS/Exchange.asmx' })).toBe(
+    false,
+  )
+  expect(canExportMail({ auth_type: 'rss' })).toBe(false)
+  expect(canExportMail(undefined)).toBe(false)
 })

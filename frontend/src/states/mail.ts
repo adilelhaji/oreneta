@@ -530,6 +530,27 @@ export async function saveMessageAsEml(message: Message) {
   }
 }
 
+// Export a folder, or the chosen messages in it, as one .mbox file (#112).
+// The bridge asks where to save it and the core streams the original bytes
+// there, so it needs the server for an online account.
+export async function exportFolderMbox(accountId: string, folderId: string, name: string, uids?: number[]) {
+  try {
+    const res = await invoke<{ saved: boolean; exported?: number }>('mail.exportMbox', {
+      account: accountId,
+      folder: folderId,
+      name,
+      ...(uids?.length ? { uids } : {}),
+    })
+    if (res?.saved) {
+      showToast(
+        t('threads.actions.exported', { count: res.exported ?? 0, defaultValue: '{count, plural, one {Exported # message} other {Exported # messages}}' }),
+      )
+    }
+  } catch {
+    showToast(t('threads.actions.couldNotExport', { defaultValue: 'Could not export the folder' }))
+  }
+}
+
 // Copy a keyed image onto the system clipboard. The webview's native "Copy
 // Image" is inert in the Wails webview, so the bridge shells out to the same
 // clipboard helpers used for pasting.

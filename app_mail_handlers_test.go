@@ -531,3 +531,24 @@ func TestMessageEmlSourceUsesUIDAndCurrentFolder(t *testing.T) {
 		t.Fatalf("source params = %#v", params)
 	}
 }
+
+func TestMboxFilenameUsesTheFolderName(t *testing.T) {
+	cases := map[string]string{
+		"":             "mail.mbox",
+		"Inbox":        "Inbox.mbox",
+		"Work/Clients": "WorkClients.mbox",
+		"CON":          "_CON.mbox",
+	}
+	for folder, want := range cases {
+		if got := mboxFilename(folder); got != want {
+			t.Errorf("mboxFilename(%q) = %q, want %q", folder, got, want)
+		}
+	}
+}
+
+func TestExportFolderMboxNeedsAFolder(t *testing.T) {
+	app := &App{}
+	if _, err := app.exportFolderMbox(map[string]any{"account": "a"}); err == nil {
+		t.Fatal("expected an error without a folder")
+	}
+}

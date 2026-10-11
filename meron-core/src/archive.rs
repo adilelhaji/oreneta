@@ -111,6 +111,24 @@ pub fn split_mbox(file: &[u8]) -> Vec<Vec<u8>> {
         .collect()
 }
 
+/// Appends one message to an mboxrd file (#112): a `From ` separator stamped
+/// with `stamp` (seconds), the message with every `>*From ` line quoted once
+/// more, and a blank line. `split_mbox` reads it back to the same message.
+pub fn write_mbox_entry(out: &mut impl std::io::Write, raw: &[u8], stamp: i64) -> std::io::Result<()> {
+    let when = chrono::DateTime::from_timestamp(stamp, 0).unwrap_or_default();
+    writeln!(out, "From - {}", when.format("%a %b %e %H:%M:%S %Y"))?;
+    for line in raw.split_inclusive(|byte| *byte == b'\n') {
+        if line.iter().skip_while(|b| **b == b'>').take(5).eq(b"From ".iter()) {
+            out.write_all(b">")?;
+        }
+        out.write_all(line)?;
+    }
+    if !raw.ends_with(b"\n") {
+        out.write_all(b"\n")?;
+    }
+    out.write_all(b"\n")
+}
+
 /// Whether bytes look like one mail message: a header block with at least one
 /// of the fields every message has.
 pub fn looks_like_message(raw: &[u8]) -> bool {

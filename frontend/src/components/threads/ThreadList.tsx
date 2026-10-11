@@ -46,7 +46,9 @@ import {
   markThreadUnread,
   snoozeChoices,
   snoozeThread,
+  exportFolderMbox,
 } from '../../states/mail'
+import { canExportMail } from '../../lib/mailCapabilities'
 import type { Message } from '../../types'
 import { clsx } from '../../lib/utils'
 import { isRssAccount } from '../../lib/threadActions'
@@ -175,6 +177,11 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           folders.find((folder) => folder.id === selectedFolder),
           folders,
         )
+  // A folder of one account whose original messages can be read (#112).
+  const exportable =
+    !isStarredView &&
+    selectedAccount !== 'unified' &&
+    canExportMail(accounts.find((account) => account.id === selectedAccount))
   const hasUnread = isRSSAccount
     ? filteredThreads.some((thread) => thread.unread)
     : folderUnread(folders, selectedFolder) > 0 || filteredThreads.some((thread) => thread.unread)
@@ -451,6 +458,21 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                               selectedFolder,
                               deletableTarget.name,
                               deletableTarget.nested,
+                            )
+                        : undefined
+                    }
+                    onExportFolder={
+                      exportable
+                        ? () =>
+                            void exportFolderMbox(
+                              selectedAccount,
+                              selectedFolder,
+                              folderLabel(
+                                { accountId: selectedAccount, folderId: selectedFolder },
+                                folders,
+                                accounts,
+                                t,
+                              ),
                             )
                         : undefined
                     }

@@ -850,6 +850,46 @@ func (a *App) saveMessageEml(payload map[string]any) (any, error) {
 	return map[string]any{"saved": true, "path": dest}, nil
 }
 
+// mboxFilename is the save dialog's default name for a folder export.
+func mboxFilename(folder string) string {
+	if folder == "" {
+		folder = "mail"
+	}
+	return strings.TrimSuffix(emlFilename(folder), ".eml") + ".mbox"
+}
+
+// exportFolderMbox writes a folder, or the chosen messages in it, to one
+// mboxrd file the user picks (#112). The sidecar streams it to that path in
+// batches, so a large folder never crosses the JSON protocol.
+func (a *App) exportFolderMbox(payload map[string]any) (any, error) {
+	account, _ := payload["account"].(string)
+	folder, _ := payload["folder"].(string)
+	if account == "" || folder == "" {
+		return nil, errors.New("missing account or folder")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	name, _ := payload["name"].(string)
+	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:                "Export mail",
+		DefaultFilename:      mboxFilename(name),
+		CanCreateDirectories: true,
+		Filters:              []wailsRuntime.FileFilter{{DisplayName: "Mailbox (*.mbox)", Pattern: "*.mbox"}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dest == "" {
+		return map[string]any{"saved": false}, nil // user cancelled
+	}
+	params := map[string]any{"account": account, "folder": folder, "path": dest}
+	if uids, ok := payload["uids"].([]any); ok && len(uids) > 0 {
+		params["uids"] = uids
+	}
+	return a.sidecar.Call("messages.exportMbox", params)
+}
+
 // readAttachment reads an attachment the sidecar already wrote under the media
 // dir (served at /media/<key>) and returns it base64-encoded, for pulling a
 // stored attachment back into the composer (e.g. "Edit as New Message"). The key

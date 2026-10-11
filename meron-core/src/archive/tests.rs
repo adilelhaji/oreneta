@@ -125,3 +125,27 @@ fn an_mbox_with_crlf_endings_splits_the_same() {
     assert_eq!(messages.len(), 2);
     assert!(String::from_utf8_lossy(&messages[0]).ends_with("body\r\n"));
 }
+
+#[test]
+fn an_exported_mbox_reads_back_to_the_same_messages() {
+    let messages: Vec<Vec<u8>> = vec![
+        b"From: a@example.com\nSubject: one\n\nFrom the start of a line\n>From already quoted\nend\n".to_vec(),
+        b"From: b@example.com\r\nSubject: two\r\n\r\nCRLF body\r\n".to_vec(),
+        b"Subject: three\n\nno trailing newline".to_vec(),
+    ];
+    let mut file = Vec::new();
+    for raw in &messages {
+        write_mbox_entry(&mut file, raw, 1_760_000_000).unwrap();
+    }
+    let text = String::from_utf8_lossy(&file);
+    assert!(text.starts_with("From - Thu Oct  9 08:53:20 2025\n"));
+    assert!(text.contains("\n>From the start of a line\n"));
+    assert!(text.contains("\n>>From already quoted\n"));
+
+    let back = split_mbox(&file);
+    assert_eq!(back.len(), 3);
+    assert_eq!(back[0], messages[0]);
+    assert_eq!(back[1], messages[1]);
+    // A message without a final newline gains one; nothing else changes.
+    assert_eq!(back[2], b"Subject: three\n\nno trailing newline\n".to_vec());
+}

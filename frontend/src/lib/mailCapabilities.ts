@@ -55,3 +55,11 @@ export function sendBlocked(accounts: Account[], id: string): boolean {
 export function keepsServerDrafts(account: Pick<Account, 'auth_type'> | undefined): boolean {
   return !isReadOnlyMail(account)
 }
+
+/** Whether a folder of this account can be exported as an .mbox file (#112):
+ * it needs the original messages, which IMAP and the local archive keep and
+ * Graph and Exchange do not hand out. */
+export function canExportMail(account: Pick<Account, 'auth_type' | 'ews_url'> | undefined): boolean {
+  if (!account || account.auth_type === 'rss' || isReadOnlyMail(account)) return false
+  return !account.ews_url
+}
