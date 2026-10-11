@@ -1,12 +1,26 @@
-import { useEffect } from 'react'
-import { CalendarClock, Check, ListTodo, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bell, CalendarClock, Check, Flag, ListTodo, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
-import { deleteTask, loadTasks, setTaskCompleted, tasks$, type Task } from '../../states/tasks'
+import {
+  MAIL_LIST,
+  createTaskList,
+  deleteTask,
+  deleteTaskList,
+  listName,
+  loadTaskLists,
+  loadTasks,
+  renameTaskList,
+  setTaskCompleted,
+  taskTitle,
+  tasks$,
+  type Task,
+} from '../../states/tasks'
 import { openMailAccount } from '../../states/kanban'
-import { showToast, ui$ } from '../../states/ui'
+import { confirmAction, showToast, ui$ } from '../../states/ui'
+import { Button } from '../button/Button'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
@@ -51,12 +65,65 @@ export function TasksView() {
   const loaded = useValue(tasks$.loaded)
   const loading = useValue(tasks$.loading)
   const includeCompleted = useValue(tasks$.includeCompleted)
+  const lists = useValue(tasks$.lists)
+  const selectedList = useValue(tasks$.selectedList)
+  const search = useValue(tasks$.search)
+  const [newList, setNewList] = useState<string | null>(null)
 
   useEffect(() => {
     if (!loaded) void loadTasks()
   }, [loaded])
+  useEffect(() => {
+    void loadTaskLists()
+  }, [])
+
+  const needle = search.trim().toLowerCase()
+  const shown = items.filter(
+    (task) =>
+      (selectedList === 'all' || (task.list_id ?? MAIL_LIST) === selectedList) &&
+      (!needle ||
+        [taskTitle(task), task.note, task.from_name, task.from_addr].some((text) =>
+          text?.toLowerCase().includes(needle),
+        )),
+  )
+  const current = lists.find((list) => list.id === selectedList)
+
+  const newTask = () =>
+    ui$.taskEditor.set({
+      threadId: '',
+      id: 0,
+      dueAt: null,
+      note: '',
+      listId: selectedList === 'all' ? MAIL_LIST : selectedList,
+    })
+
+  const renameList = async () => {
+    if (!current) return
+    const name = window.prompt(t('tasks.renameList', { defaultValue: 'Rename list' }), current.name)
+    if (name?.trim()) await renameTaskList(current.id, name)
+  }
+
+  const removeList = async () => {
+    if (!current) return
+    const confirmed = await confirmAction({
+      title: t('tasks.deleteListTitle', { defaultValue: 'Delete list?' }),
+      message: t('tasks.deleteListText', {
+        name: current.name,
+        count: current.open,
+        defaultValue: '{name} and every task in it will be deleted.',
+      }),
+      confirmLabel: t('buttons.delete'),
+      tone: 'danger',
+    })
+    if (confirmed) await deleteTaskList(current.id)
+  }
 
   const open = (task: Task) => {
+    // A standalone task has no conversation to go to; opening it edits it.
+    if (task.linked === false) {
+      ui$.taskEditor.set({ threadId: '', id: task.id, dueAt: task.due_at, note: task.note })
+      return
+    }
     // Opening a folder the conversation is not in showed an empty reader and
     // no reason. Say so instead, and stay on the list.
     if (task.located === false) {
@@ -88,23 +155,107 @@ export function TasksView() {
           <ListTodo size={20} strokeWidth={1.75} />
           {t('tasks.title')}
         </h1>
-        <label className="flex items-center gap-1.5 text-caption text-secondary">
-          <input
-            type="checkbox"
-            checked={includeCompleted}
-            onChange={(event) => void loadTasks(event.target.checked)}
-          />
-          {t('tasks.showCompleted')}
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-1.5 text-caption text-secondary">
+            <input
+              type="checkbox"
+              checked={includeCompleted}
+              onChange={(event) => void loadTasks(event.target.checked)}
+            />
+            {t('tasks.showCompleted')}
+          </label>
+          <Button variant="secondary" size="sm" onClick={newTask}>
+            <Plus size={14} strokeWidth={1.75} />
+            {t('tasks.newTask', { defaultValue: 'New task' })}
+          </Button>
+        </div>
       </header>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
+        <div role="tablist" aria-label={t('tasks.lists', { defaultValue: 'Lists' })} className="flex flex-wrap gap-1.5">
+          {[
+            { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
+            ...lists.map((list) => ({ id: list.id, label: listName(list), open: list.open })),
+          ].map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedList === entry.id}
+              onClick={() => tasks$.selectedList.set(entry.id)}
+              className={clsx(
+                'rounded-control-sm px-2.5 py-1 text-caption font-semibold transition-colors cursor-pointer',
+                selectedList === entry.id ? 'bg-accent text-on-accent' : 'text-secondary hover:bg-hover',
+              )}
+            >
+              {entry.label}
+              {entry.open > 0 && <span className="ml-1 tabular-nums">{entry.open}</span>}
+            </button>
+          ))}
+        </div>
+        {newList === null ? (
+          <button
+            type="button"
+            onClick={() => setNewList('')}
+            className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+          >
+            + {t('tasks.newList', { defaultValue: 'New list' })}
+          </button>
+        ) : (
+          <form
+            className="flex items-center gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (newList.trim()) void createTaskList(newList)
+              setNewList(null)
+            }}
+          >
+            <input
+              autoFocus
+              value={newList}
+              aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
+              onChange={(event) => setNewList(event.target.value)}
+              onBlur={() => !newList.trim() && setNewList(null)}
+              className="w-36 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            />
+          </form>
+        )}
+        {current && current.id !== MAIL_LIST && (
+          <span className="ml-auto flex gap-1">
+            <button
+              type="button"
+              onClick={() => void renameList()}
+              className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+            >
+              {t('tasks.renameList', { defaultValue: 'Rename list' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => void removeList()}
+              className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-danger-soft hover:text-danger cursor-pointer"
+            >
+              {t('tasks.deleteList', { defaultValue: 'Delete list' })}
+            </button>
+          </span>
+        )}
+        <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent min-[600px]:max-w-64 min-[600px]:flex-none">
+          <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
+          <input
+            value={search}
+            onChange={(event) => tasks$.search.set(event.target.value)}
+            placeholder={t('tasks.search', { defaultValue: 'Search tasks' })}
+            aria-label={t('tasks.search', { defaultValue: 'Search tasks' })}
+            className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
+          />
+        </div>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!loaded && loading ? (
           <LoadingState title={t('tasks.loading')} />
-        ) : items.length === 0 ? (
+        ) : shown.length === 0 ? (
           <EmptyState title={t('tasks.emptyTitle')} text={t('tasks.emptyText')} />
         ) : (
           <ul className="mx-auto flex max-w-2xl flex-col gap-1.5 p-4">
-            {items.map((task) => {
+            {shown.map((task) => {
               const done = !!task.completed_at
               return (
                 <li
@@ -139,13 +290,33 @@ export function TasksView() {
                         done ? 'text-secondary line-through' : 'text-primary',
                       )}
                     >
-                      {task.subject || t('tasks.noSubject')}
+                      {task.priority === 2 && (
+                        <Flag
+                          size={12}
+                          strokeWidth={2}
+                          className="mr-1 inline text-danger"
+                          aria-label={t('tasks.priorityHigh', { defaultValue: 'High' })}
+                        />
+                      )}
+                      {taskTitle(task)}
                     </span>
                     <span className="block wrap-anywhere text-caption text-secondary">
-                      {task.from_name || task.from_addr}
-                      {task.note && ` · ${task.note}`}
+                      {task.linked === false
+                        ? task.note
+                        : [task.from_name || task.from_addr, task.note].filter(Boolean).join(' · ')}
                     </span>
-                    {!done && task.due_at && <DueChip dueAt={task.due_at} />}
+                    <span className="flex flex-wrap items-center gap-3">
+                      {!done && task.due_at && <DueChip dueAt={task.due_at} />}
+                      {!done && task.reminder_at && (
+                        <span className="flex items-center gap-1 text-2xs text-secondary">
+                          <Bell size={12} strokeWidth={1.75} aria-hidden="true" />
+                          {new Date(task.reminder_at * 1000).toLocaleString(undefined, {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}
+                        </span>
+                      )}
+                    </span>
                   </button>
                   <button
                     type="button"

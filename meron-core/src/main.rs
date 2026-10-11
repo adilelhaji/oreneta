@@ -238,6 +238,43 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn task_lists_hold_standalone_tasks_beside_mail_ones() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let home = call("tasks.createList", json!({"name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let task = json!({"list_id": home, "title": "Fix the tap", "priority": 2, "due_at": 100});
+        let id = call("tasks.create", json!({"task": task})).await.unwrap()["id"].as_i64().unwrap();
+        call("tasks.save", json!({"thread_id": "acct#INBOX#7", "note": "reply"})).await.unwrap();
+
+        let listed = call("tasks.list", json!({})).await.unwrap();
+        let rows = listed["tasks"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        let standalone = rows.iter().find(|row| row["id"] == id).unwrap();
+        assert_eq!((standalone["linked"].clone(), standalone["thread_id"].clone()), (json!(false), json!("")));
+        assert_eq!(standalone["title"], "Fix the tap");
+        assert!(rows.iter().any(|row| row["linked"] == true && row["list_id"] == "mail"));
+
+        let lists = call("tasks.lists", json!({})).await.unwrap();
+        assert_eq!(lists["lists"].as_array().unwrap().len(), 2);
+
+        let edited = json!({"list_id": home, "title": "Fix the kitchen tap", "priority": 1});
+        assert_eq!(call("tasks.update", json!({"id": id, "revision": 1, "task": edited})).await.unwrap()["revision"], 2);
+        let stale = call("tasks.update", json!({"id": id, "revision": 1, "task": edited})).await.unwrap();
+        assert_eq!(stale["conflict"], true);
+        assert_eq!(stale["current"]["title"], "Fix the kitchen tap");
+
+        assert!(call("tasks.deleteList", json!({"id": "mail"})).await.is_err());
+        call("tasks.deleteList", json!({"id": home})).await.unwrap();
+        assert_eq!(call("tasks.list", json!({})).await.unwrap()["tasks"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -1065,6 +1102,14 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                     )
                     .await;
                 }
+            }
+            // Task reminders (ADR-0013): local, so not tied to an account.
+            let due = store::task_lists::due_reminders(&engine.db.lock().unwrap(), now).unwrap_or_default();
+            for (id, title, due_at) in due {
+                if store::task_lists::mark_reminded(&engine.db.lock().unwrap(), id, now).is_err() {
+                    continue;
+                }
+                emit(&out, "tasks.reminder", json!({ "id": id, "title": title, "due_at": due_at })).await;
             }
             let db = engine.db.lock().unwrap();
             let _ = calendar::forget_old_reminders(&db, now);
@@ -2449,7 +2494,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     .iter()
                     .map(|task| json!({
                         "id": task.id,
-                        "thread_id": mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key),
+                        "thread_id": if task.thread_key.is_empty() {
+                            String::new()
+                        } else {
+                            mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key)
+                        },
                         "account_id": task.account,
                         "folder_id": task.folder,
                         "note": task.note,
@@ -2460,6 +2509,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "from_name": task.from_name,
                         "from_addr": task.from_addr,
                         "located": task.located,
+                        "linked": !task.thread_key.is_empty(),
+                        "list_id": task.list_id,
+                        "title": task.title,
+                        "priority": task.priority,
+                        "reminder_at": task.reminder_at,
+                        "revision": task.revision,
                     }))
                     .collect::<Vec<_>>(),
             }))
@@ -2498,10 +2553,57 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "tasks.get" => {
             let id = req_i64(p, "id")?;
             let db = engine.db.lock().unwrap();
-            let task = store::get_task(&db, id)?;
-            Ok(match task {
-                Some((due_at, note)) => json!({ "due_at": due_at, "note": note }),
+            Ok(match store::task_lists::get(&db, id)? {
+                Some((task, revision, linked)) => json!({
+                    "due_at": task.due_at, "note": task.note, "list_id": task.list_id, "title": task.title,
+                    "reminder_at": task.reminder_at, "priority": task.priority, "revision": revision,
+                    "linked": linked,
+                }),
                 None => Value::Null,
+            })
+        }
+
+        // Lists and standalone tasks (ADR-0013).
+        "tasks.lists" => {
+            let lists = store::task_lists::lists(&engine.db.lock().unwrap())?;
+            Ok(json!({ "lists": lists }))
+        }
+        "tasks.createList" => {
+            let id = store::task_lists::create_list(&engine.db.lock().unwrap(), &req_str(p, "name")?, now_seconds())?;
+            Ok(json!({ "ok": true, "id": id }))
+        }
+        "tasks.renameList" => {
+            store::task_lists::rename_list(&engine.db.lock().unwrap(), &req_str(p, "id")?, &req_str(p, "name")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "tasks.deleteList" => {
+            store::task_lists::delete_list(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "tasks.create" => {
+            let fields: store::task_lists::TaskFields =
+                serde_json::from_value(p.get("task").cloned().context("missing param: task")?).context("task")?;
+            let id = store::task_lists::create(&engine.db.lock().unwrap(), &fields, now_seconds())?;
+            Ok(json!({ "ok": true, "id": id, "revision": 1 }))
+        }
+        // An edit names the revision it was made from; a different one saves
+        // nothing and answers with what is there now (ADR-0012).
+        "tasks.update" => {
+            let id = req_i64(p, "id")?;
+            let revision = req_i64(p, "revision")?;
+            let fields: store::task_lists::TaskFields =
+                serde_json::from_value(p.get("task").cloned().context("missing param: task")?).context("task")?;
+            Ok(match store::task_lists::update(&engine.db.lock().unwrap(), id, revision, &fields)? {
+                store::task_lists::Edit::Saved { revision } => json!({ "ok": true, "revision": revision }),
+                store::task_lists::Edit::Conflict { current, revision } => json!({
+                    "ok": false,
+                    "conflict": true,
+                    "current": current.map(|task| json!({
+                        "list_id": task.list_id, "title": task.title, "note": task.note,
+                        "due_at": task.due_at, "reminder_at": task.reminder_at, "priority": task.priority,
+                        "revision": revision,
+                    })),
+                }),
             })
         }
 

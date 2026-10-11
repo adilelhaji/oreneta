@@ -111,6 +111,40 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       contentType: 'image/png',
     })
     await audit('people-editor')
+    await page.keyboard.press('Escape')
+    // Tasks with lists, a standalone task, and its editor (ADR-0013).
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['tasks.lists'] = {
+        lists: [
+          { id: 'mail', name: '', position: 0, open: 0 },
+          { id: 'list:home', name: 'Home', position: 1, open: 1 },
+        ],
+      }
+      replies['tasks.list'] = {
+        tasks: [
+          {
+            id: 2, thread_id: '', account_id: '', folder_id: '', note: 'Washer is in the drawer', due_at: null,
+            completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+            list_id: 'list:home', title: 'Fix the tap', priority: 2, reminder_at: null, revision: 1,
+          },
+        ],
+      }
+      replies['tasks.get'] = {
+        title: 'Fix the tap', note: 'Washer is in the drawer', due_at: null, list_id: 'list:home',
+        priority: 2, reminder_at: null, revision: 1, linked: false,
+      }
+    })
+    await page.getByTitle('Tasks', { exact: true }).click()
+    await expect(page.getByText('Fix the tap')).toBeVisible()
+    await audit('tasks')
+    await page.getByText('Fix the tap').click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await info.attach(`task-editor-${theme}`, {
+      body: await page.screenshot({ path: info.outputPath('task-editor.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await audit('task-editor')
     expect(blocking).toEqual([])
     expect(errors).toEqual([])
   })
@@ -862,6 +896,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'mail.folderList': { folders },
         'mail.threadList': { threads: [], next_cursor: '', pagination: 'conversation-v1' },
         'tasks.list': { tasks: [] },
+        'tasks.lists': { lists: [] },
         'people.list': { people: [] },
         'calendar.list': { calendars: [] },
         'storage.usage': { cacheBytes: 0, dbBytes: 0 },

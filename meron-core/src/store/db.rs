@@ -678,6 +678,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         }
         tx.pragma_update(None, "user_version", 38)?;
     }
+    if version < 39 {
+        super::task_lists::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 39)?;
+    }
 
     tx.commit()?;
     Ok(())

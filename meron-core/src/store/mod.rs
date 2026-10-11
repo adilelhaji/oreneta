@@ -47,6 +47,7 @@ pub const DEFAULT_RSS_SYNC_INTERVAL_MINUTES: u64 = 60;
 
 mod accounts;
 pub mod local_people;
+pub mod task_lists;
 mod settings;
 pub mod local_drafts;
 pub mod outgoing;
@@ -2340,6 +2341,13 @@ pub struct TaskCard {
     /// where it was found, which is where the task was made unless the
     /// conversation has moved since.
     pub located: bool,
+    /// ADR-0013: its list, its own title (empty for a linked task, which
+    /// shows its conversation's subject), priority, reminder and revision.
+    pub list_id: String,
+    pub title: String,
+    pub priority: i64,
+    pub reminder_at: Option<i64>,
+    pub revision: i64,
 }
 
 /// Creates a task on this conversation, or edits the one already open on it.
@@ -2360,7 +2368,7 @@ pub fn save_task(
     conn.execute(
         "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at)
          VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-         ON CONFLICT(account, thread_key) WHERE completed_at IS NULL DO UPDATE SET
+         ON CONFLICT(account, thread_key) WHERE completed_at IS NULL AND thread_key <> '' DO UPDATE SET
            note = excluded.note,
            due_at = excluded.due_at,
            folder = excluded.folder",
@@ -2446,7 +2454,7 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
         "SELECT t.id, t.account, COALESCE(m.folder, t.folder), t.thread_key, t.note, t.due_at,
                 t.completed_at, t.created_at,
                 COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, ''),
-                m.id IS NOT NULL
+                m.id IS NOT NULL, t.list_id, t.title, t.priority, t.reminder_at, t.revision
            FROM (SELECT task.*, COALESCE(
                    (SELECT m2.id FROM messages m2
                      WHERE m2.account = task.account AND m2.folder = task.folder
@@ -2475,6 +2483,11 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
             from_name: row.get(9)?,
             from_addr: row.get(10)?,
             located: row.get(11)?,
+            list_id: row.get(12)?,
+            title: row.get(13)?,
+            priority: row.get(14)?,
+            reminder_at: row.get(15)?,
+            revision: row.get(16)?,
         })
     })?;
     // A row that cannot be read is an error to report, not a task to drop

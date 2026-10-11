@@ -151,7 +151,8 @@ export default function App() {
         {scheduledSendsOpen && <ScheduledSendsDialog />}
         {ruleLogOpen && <RuleLogDialog />}
         {catalogueOpen && <DesignCatalogue />}
-        {taskEditor && <TaskDialog />}
+        {/* Keyed by the task, so moving from one to another starts from that one's fields. */}
+        {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
         {sweepTarget && (
           <SweepDialog
             accountId={sweepTarget.accountId}

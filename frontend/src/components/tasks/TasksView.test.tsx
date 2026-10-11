@@ -6,7 +6,15 @@ import { ui$ } from '../../states/ui'
 
 afterEach(() => {
   cleanup()
-  tasks$.set({ items: [], loaded: false, loading: false, includeCompleted: false })
+  tasks$.set({
+    items: [],
+    loaded: false,
+    loading: false,
+    includeCompleted: false,
+    lists: [],
+    selectedList: 'all',
+    search: '',
+  })
   ui$.taskEditor.set(null)
   ui$.selectedAccount.set('')
   ui$.selectedFolder.set('inbox')

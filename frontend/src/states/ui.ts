@@ -167,7 +167,14 @@ export const ui$ = observable({
   // The task the "convert to task" dialog is open on, if any — the thread it
   // was opened from, and the existing task's fields when editing one already
   // open on that thread (absent when creating a new one).
-  taskEditor: null as { threadId: string; id: number; dueAt: number | null; note: string } | null,
+  // threadId is empty for a standalone task, which may name its list (ADR-0013).
+  taskEditor: null as {
+    threadId: string
+    id: number
+    dueAt: number | null
+    note: string
+    listId?: string
+  } | null,
   selectedAccount: '',
   selectedFolder: 'inbox',
   selectedThread: '',

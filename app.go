@@ -493,6 +493,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.tasksSetCompleted(payload)
 	case "tasks.delete":
 		return a.tasksDelete(payload)
+	case "tasks.lists", "tasks.createList", "tasks.renameList", "tasks.deleteList", "tasks.create", "tasks.update":
+		return a.tasksPassthrough(command, payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":
