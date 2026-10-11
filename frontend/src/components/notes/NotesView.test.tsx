@@ -189,3 +189,14 @@ it('moves a note to the trash and back', async () => {
   fireEvent.click(await view.findByRole('button', { name: 'Restore' }))
   await waitFor(() => expect(core.notes.get('note:a')!.deleted_at).toBeNull())
 })
+
+it('opening a note and reading it saves nothing', async () => {
+  const core = fakeCore([note('note:a', 'Read me')])
+  const view = render(<NotesView />)
+  fireEvent.click(await view.findByRole('button', { name: /Read me/ }))
+  const title = (await view.findByLabelText('Title')) as HTMLInputElement
+  await waitFor(() => expect(title.value).toBe('Read me'))
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+  expect(core.calls.filter((call) => call.command === 'notes.update')).toHaveLength(0)
+  expect(core.notes.get('note:a')!.revision).toBe(1)
+})

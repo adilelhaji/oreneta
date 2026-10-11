@@ -107,7 +107,11 @@ export function NoteEditor({ initialId }: { initialId: string | null }) {
         'aria-label': t('notes.body', { defaultValue: 'Note' }),
       },
     },
-    onUpdate: ({ editor }) => changed({ html: editor.getHTML() }),
+    onUpdate: ({ editor }) => {
+      // Only a change to the text is an edit.
+      const html = editor.getHTML()
+      if (html !== fields.current.html) changed({ html })
+    },
   })
 
   const seed = (note: Note) => {
@@ -118,7 +122,8 @@ export function NoteEditor({ initialId }: { initialId: string | null }) {
     setPinned(note.pinned)
     setTrashed(note.deleted_at !== null)
     editor?.commands.setContent(note.html, { emitUpdate: false })
-    editor?.setEditable(note.deleted_at === null)
+    // Without `false` this counts as an edit, and merely opening a note saved it.
+    editor?.setEditable(note.deleted_at === null, false)
   }
 
   useEffect(() => {
