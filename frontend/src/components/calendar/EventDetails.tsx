@@ -17,6 +17,8 @@ import {
   type Participant,
 } from '../../states/calendar'
 import { ScopeAsk } from './ScopeAsk'
+import { isAnswerableInvitation } from '../../lib/calendarInvitation'
+import { accounts$ } from '../../states/accounts'
 
 /// An event at full size, to read rather than to edit.
 ///
@@ -51,6 +53,7 @@ export function EventDetails() {
       live = false
     }
   }, [event?.id, extra?.id])
+  const accounts = useValue(accounts$)
   useEscapeKey(closeDetails, Boolean(event))
   if (!event) return null
 
@@ -59,15 +62,20 @@ export function EventDetails() {
   // never wrong, only incomplete.
   const attendees = extra?.id === event.id && extra.attendees.length > 0 ? extra.attendees : event.attendees
   const description = extra?.id === event.id && extra.description ? extra.description : event.description
-  // An invitation to answer: someone else convened it and this account is on
-  // the list. An event of one's own has nobody to answer to.
-  const invitation = attendees.length > 0 && Boolean(event.my_response)
   const answered = !/^(none|noresponse|needsaction|unknown)/i.test(event.my_response)
   const calendar = calendars.find(
     (candidate) => candidate.accountId === event.accountId && candidate.id === event.calendar_id,
   )
   const color = eventColor(event, calendars)
   const readOnly = Boolean(calendar?.read_only)
+  // An invitation to answer: someone else convened it and this account is on
+  // the list. An event of one's own has nobody to answer to.
+  const invitation = isAnswerableInvitation(
+    event,
+    attendees.length,
+    accounts.find((account) => account.id === event.accountId),
+    readOnly,
+  )
 
   return (
     <div

@@ -13,6 +13,7 @@ import {
   type CalendarEvent,
 } from '../../states/calendar'
 import { formatTime } from './AgendaView'
+import { hoursIntoDay, instantAtHour } from '../../lib/calendarGrid'
 
 /// Pixels per hour. Tall enough that a half-hour meeting still fits a line of
 /// text, short enough that a working day fits a laptop screen.
@@ -152,7 +153,7 @@ export function WeekView({
               </span>
             ))}
           </div>
-          {byColumn.map(({ date, dayStart, lanes }) => (
+          {byColumn.map(({ date, lanes }) => (
             <div
               key={date.getTime()}
               className="relative border-l border-border/60"
@@ -160,7 +161,7 @@ export function WeekView({
               onDoubleClick={(mouse) => {
                 const bounds = mouse.currentTarget.getBoundingClientRect()
                 const hour = Math.floor((mouse.clientY - bounds.top) / HOUR_PX)
-                newEvent(dayStart + hour * 3600)
+                newEvent(instantAtHour(date, hour))
               }}
             >
               {hours.map((hour) => (
@@ -171,8 +172,8 @@ export function WeekView({
                 />
               ))}
               {lanes.map(({ event, lane, laneCount }) => {
-                const top = ((Math.max(event.start, dayStart) - dayStart) / 3600) * HOUR_PX
-                const bottom = ((Math.min(event.end, dayStart + 24 * 3600) - dayStart) / 3600) * HOUR_PX
+                const top = hoursIntoDay(event.start, date) * HOUR_PX
+                const bottom = hoursIntoDay(event.end, date) * HOUR_PX
                 const color = colorOf(event)
                 return (
                   <button
