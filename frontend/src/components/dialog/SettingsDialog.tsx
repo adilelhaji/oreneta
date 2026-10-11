@@ -37,6 +37,7 @@ import {
   MessagesSquare,
   Keyboard,
   Archive,
+  ShieldCheck,
   Server,
   CalendarDays,
   Lock,
@@ -53,6 +54,8 @@ import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
 import { startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
+import { ProfileArchiveDialog } from './ProfileArchiveDialog'
+import { startProfileCheck, startProfileExport } from '../../states/profileArchive'
 import { MailImportDialog } from './MailImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
 import { showToast, ui$, type SetupMode } from '../../states/ui'
@@ -1154,6 +1157,33 @@ function BackupGroup() {
           }
         />
         <SettingRow
+          title={t('profileArchive.settingsTitle', { defaultValue: 'Whole profile' })}
+          hint={t('profileArchive.settingsHint', {
+            defaultValue:
+              'One encrypted file with the mail kept on this computer, drafts, contacts, tasks, notes, settings and pictures.',
+          })}
+          control={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void startProfileCheck()}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShieldCheck size={14} strokeWidth={1.75} />
+                {t('profileArchive.check', { defaultValue: 'Check…' })}
+              </button>
+              <button
+                onClick={startProfileExport}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Archive size={14} strokeWidth={1.75} />
+                {t('profileArchive.backUp', { defaultValue: 'Back up…' })}
+              </button>
+            </div>
+          }
+        />
+        <SettingRow
           title={t('archive.settingsTitle', { defaultValue: 'Import mail' })}
           hint={t('archive.settingsHint', {
             defaultValue: 'Bring .eml and .mbox files into a local archive kept on this computer.',
@@ -1171,6 +1201,7 @@ function BackupGroup() {
         />
       </SettingsGroup>
       <MailImportDialog />
+      <ProfileArchiveDialog />
 
       {prompt && (
         <BackupPassphraseDialog

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // isolatedHome points every platform's config and cache directory at a
@@ -209,5 +210,16 @@ func TestThePageIsToldItsProfile(t *testing.T) {
 	profileMiddleware(page).ServeHTTP(asset, httptest.NewRequest("GET", "/assets/app.js", nil))
 	if strings.Contains(asset.Body.String(), "oreneta-profile") {
 		t.Fatal("only the document is changed")
+	}
+}
+
+func TestProfileArchiveNamesAndPassphraseGuard(t *testing.T) {
+	when := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	if got := profileArchiveFilename(when); got != "oreneta-profile-2026-10-11.oreneta-profile" {
+		t.Fatalf("got %q", got)
+	}
+	app := &App{}
+	if _, err := app.exportProfileArchive(map[string]any{"passphrase": "short"}); err == nil {
+		t.Fatal("a short passphrase is refused before anything else")
 	}
 }

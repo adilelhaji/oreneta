@@ -190,3 +190,88 @@ func writePrivateFile(path string, data []byte) error {
 
 // syncFile is (*os.File).Sync, replaceable in tests to fail a write late.
 var syncFile = (*os.File).Sync
+
+// profileArchiveFilename is offered in the save dialog for a full-profile
+// archive (ADR-0017): dated, so successive archives do not replace each other.
+func profileArchiveFilename(now time.Time) string {
+	return fmt.Sprintf("oreneta-profile-%s.oreneta-profile", now.Format("2006-01-02"))
+}
+
+// exportProfileArchive writes the whole profile — store, drafts, local mail,
+// chosen pictures — to one encrypted file the person picks. The core writes
+// it straight to that path; nothing passes through the JSON bridge but the
+// passphrase.
+func (a *App) exportProfileArchive(payload map[string]any) (any, error) {
+	passphrase, _ := payload["passphrase"].(string)
+	if len([]rune(passphrase)) < 8 {
+		return nil, errors.New("the passphrase needs at least 8 characters")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:                "Back up the whole profile",
+		DefaultFilename:      profileArchiveFilename(time.Now()),
+		CanCreateDirectories: true,
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Oreneta profile (*.oreneta-profile)", Pattern: "*.oreneta-profile"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dest == "" {
+		return map[string]any{"saved": false}, nil // user cancelled
+	}
+	res, err := a.sidecar.Call("profileArchive.export", map[string]any{
+		"path":        dest,
+		"passphrase":  passphrase,
+		"app_version": appVersion(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	a.logf("profileArchive.export: wrote %s", dest)
+	out, _ := res.(map[string]any)
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["path"] = dest
+	return out, nil
+}
+
+// inspectProfileArchive opens an archive in a private folder and checks it
+// whole, without touching the profile in use. The first call picks the file
+// and comes back asking for its passphrase.
+func (a *App) inspectProfileArchive(payload map[string]any) (any, error) {
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	src, _ := payload["path"].(string)
+	if src == "" {
+		chosen, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+			Title: "Check a profile archive",
+			Filters: []wailsRuntime.FileFilter{
+				{DisplayName: "Oreneta profile (*.oreneta-profile)", Pattern: "*.oreneta-profile"},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if chosen == "" {
+			return map[string]any{"cancelled": true}, nil
+		}
+		return map[string]any{"needsPassphrase": true, "path": chosen}, nil
+	}
+	passphrase, _ := payload["passphrase"].(string)
+	res, err := a.sidecar.Call("profileArchive.inspect", map[string]any{"path": src, "passphrase": passphrase})
+	if err != nil {
+		return nil, err
+	}
+	out, _ := res.(map[string]any)
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["path"] = src
+	return out, nil
+}

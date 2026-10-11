@@ -95,6 +95,11 @@ func TestSidecarCallTimeouts(t *testing.T) {
 		"backup.export":       30 * time.Second,
 		"backup.import":       30 * time.Second,
 		"unknown.sidecarCall": 5 * time.Second,
+		// Streaming whole folders or profiles is bounded by the data, not a fixed budget.
+		"messages.exportMbox":   2 * time.Hour,
+		"archive.import":        2 * time.Hour,
+		"profileArchive.export": 2 * time.Hour,
+		"profileArchive.stage":  2 * time.Hour,
 	}
 	for method, want := range tests {
 		if got := sidecarCallTimeout(method); got != want {

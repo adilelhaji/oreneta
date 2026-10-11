@@ -369,6 +369,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_profile_archive_is_written_and_inspected_without_touching_the_store_in_use() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oreneta-profile-dispatch-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        call("notes.create", json!({"note": {"title": "In the archive", "html": "<p>x</p>"}})).await.unwrap();
+        let path = dir.join("p.oreneta-profile");
+        let written = call("profileArchive.export", json!({"path": path.to_string_lossy(), "passphrase": "long enough pass", "app_version": "9.9.9"})).await.unwrap();
+        assert_eq!(written["summary"]["app_version"], "9.9.9");
+        assert!(written["summary"].get("db_key").is_none());
+
+        let inspected = call("profileArchive.inspect", json!({"path": path.to_string_lossy(), "passphrase": "long enough pass"})).await.unwrap();
+        assert_eq!(inspected["summary"]["schema_version"], store::SCHEMA_VERSION);
+        assert!(inspected.to_string().find("db_key").is_none(), "the store key never leaves the core");
+        assert!(call("profileArchive.inspect", json!({"path": path.to_string_lossy(), "passphrase": "wrong one!"})).await.is_err());
+        let titles = call("notes.list", json!({})).await.unwrap();
+        assert_eq!(titles["notes"][0]["title"], "In the archive");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
     async fn notes_are_written_searched_and_trashed_through_the_dispatcher() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -4029,6 +4056,49 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // Serialize accounts, prefs, feeds and settings to a backup document
         // (see `backup`). The passphrase-based key derivation is deliberately
         // slow, so this runs on the blocking pool rather than the reactor.
+        // The full-profile archive (#171, ADR-0017). The store is held only
+        // while it is copied; packing and encrypting run without it.
+        "profileArchive.export" => {
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let passphrase = req_str(p, "passphrase")?;
+            let app_version = p.get("app_version").and_then(Value::as_str).unwrap_or_default().to_string();
+            let engine = engine.clone();
+            let summary = tokio::task::spawn_blocking(move || {
+                let media_root = meron_core::parse::media_root();
+                let work_dir = store::app_dir().join("backup-work");
+                let options = meron_core::profile_archive::ExportOptions {
+                    media_root: &media_root,
+                    work_dir: &work_dir,
+                    app_version: &app_version,
+                    now: now_seconds(),
+                    // Debug-build tests would spend minutes in scrypt at the real cost.
+                    work_factor: if cfg!(test) { 10 } else { meron_core::profile_archive::WORK_FACTOR },
+                };
+                meron_core::profile_archive::export_with(
+                    |dest, key| meron_core::profile_archive::take_snapshot(&engine.db.lock().unwrap(), dest, key),
+                    &path,
+                    &passphrase,
+                    &options,
+                )
+            })
+            .await??;
+            Ok(json!({ "saved": true, "summary": summary }))
+        }
+        // Opens an archive in a private folder, checks every entry and the
+        // store inside, and describes it. Nothing in use is touched.
+        "profileArchive.inspect" => {
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let passphrase = req_str(p, "passphrase")?;
+            let summary = tokio::task::spawn_blocking(move || {
+                let staging = store::app_dir().join("restore-staging").join(uuid::Uuid::new_v4().to_string());
+                let result = meron_core::profile_archive::stage(&path, &passphrase, &staging)
+                    .and_then(|manifest| meron_core::profile_archive::summary(&manifest, &staging));
+                let _ = std::fs::remove_dir_all(&staging);
+                result
+            })
+            .await??;
+            Ok(json!({ "summary": summary }))
+        }
         "backup.export" => {
             let include_secrets = p
                 .get("include_secrets")

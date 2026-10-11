@@ -524,6 +524,10 @@ fn config_dir() -> PathBuf {
 
 // ---- Migrations -------------------------------------------------------------
 
+/// The schema this build writes: the last migration below. A store from a
+/// newer build is refused rather than opened (a restored archive included).
+pub const SCHEMA_VERSION: i64 = 42;
+
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
 /// Pending steps run inside one IMMEDIATE transaction that also bumps
@@ -692,7 +696,7 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     }
     if version < 42 {
         super::notes::migrate(&tx)?;
-        tx.pragma_update(None, "user_version", 42)?;
+        tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 
     tx.commit()?;

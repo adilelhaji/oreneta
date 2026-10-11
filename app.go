@@ -458,6 +458,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.saveAttachment(payload)
 	case "mail.saveEml":
 		return a.saveMessageEml(payload)
+	case "backup.profileExport":
+		return a.exportProfileArchive(payload)
+	case "backup.profileInspect":
+		return a.inspectProfileArchive(payload)
 	case "profiles.list":
 		return a.profilesList()
 	case "profiles.create":

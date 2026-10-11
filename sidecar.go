@@ -408,6 +408,10 @@ func sidecarCallTimeout(method string) time.Duration {
 	// writing every account, feed and setting.
 	case "backup.export", "backup.import":
 		return 30 * time.Second
+	// Whole folders and whole profiles go through these: they stream to and
+	// from disk for as long as the data takes, so only a stuck call ends here.
+	case "messages.exportMbox", "archive.import", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage":
+		return 2 * time.Hour
 	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete":
 		return 30 * time.Second
 	// A calendar window can span months and lists every enabled calendar, so

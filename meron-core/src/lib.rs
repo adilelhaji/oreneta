@@ -26,6 +26,8 @@ pub mod mail_model;
 pub mod oof;
 pub mod parse;
 pub mod priority;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod profile_archive;
 pub mod protocol;
 pub mod proxy;
 pub mod rss;

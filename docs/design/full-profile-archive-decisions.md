@@ -20,6 +20,11 @@ implementada.
 
 ## Decisiones
 
+> **Resueltas el 2026-10-11 por delegación** en
+> [ADR-0017](../adr/0017-profile-archive-format.md), que toma age para el
+> cifrado en lugar de la composición propia del punto 1. Lo que sigue es la
+> propuesta original, conservada como registro.
+
 1. **Cifrado de perfiles grandes.**
    - AES-GCM de una sola pasada obliga a tener todo el archivo en memoria y a
      ponerle un tope.
