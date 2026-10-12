@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// desktop's (`crate::pim`, ADR-0045) on the hosted Engine.
 pub(crate) const MOBILE_PIM_METHODS: &[&str] = &[
     "calendar.list",
+    "calendar.createLocal",
     "calendar.setEnabled",
     "calendar.events",
     "calendar.eventDetails",
@@ -31,6 +32,7 @@ pub(crate) fn run_mobile_pim_command(data_dir: &str, req: &Request) -> Result<Va
         crate::graph::mail::guard_command(&engine.db.lock().unwrap(), &req.method, p)?;
         match req.method.as_str() {
             "calendar.list" => crate::pim::calendar::list(&engine, p),
+            "calendar.createLocal" => crate::pim::calendar::create_local(&engine, p),
             "calendar.setEnabled" => crate::pim::calendar::set_enabled(&engine, p),
             "calendar.events" => crate::pim::calendar::events(&engine, &emit, p),
             "calendar.eventDetails" => crate::pim::calendar::event_details(&engine, p).await,

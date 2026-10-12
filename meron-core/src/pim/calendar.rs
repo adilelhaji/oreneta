@@ -21,6 +21,28 @@ pub fn list(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
     Ok(json!({ "calendars": serde_json::to_value(calendars)? }))
 }
 
+/// Adds a calendar kept only on this device, under an account.
+pub fn create_local(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
+    let account = req_str(p, "account")?;
+    let name = req_str(p, "name")?;
+    if name.trim().is_empty() {
+        anyhow::bail!("a calendar needs a name");
+    }
+    let id = format!("local:{}", uuid::Uuid::new_v4());
+    calendar::upsert_calendars(
+        &engine.db.lock().unwrap(),
+        &account,
+        &[calendar::Calendar {
+            id: id.clone(),
+            name,
+            kind: calendar::CalendarKind::Local,
+            enabled: true,
+            ..Default::default()
+        }],
+    )?;
+    Ok(json!({ "id": id }))
+}
+
 /// Shows or hides one calendar. Hiding never forgets it.
 pub fn set_enabled(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
     let account = req_str(p, "account")?;

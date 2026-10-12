@@ -74,6 +74,7 @@ object MobileCommand {
     // (calendar.go, people.go). See CalendarCommands.kt and PeopleCommands.kt.
     const val CalendarList = "calendar.list"
     const val CalendarSetEnabled = "calendar.setEnabled"
+    const val CalendarCreateLocal = "calendar.createLocal"
     const val CalendarEvents = "calendar.events"
     const val CalendarEventDetails = "calendar.eventDetails"
     const val CalendarCreate = "calendar.create"

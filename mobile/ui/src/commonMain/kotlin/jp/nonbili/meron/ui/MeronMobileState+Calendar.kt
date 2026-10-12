@@ -1,5 +1,6 @@
 package jp.nonbili.meron.ui
 
+import jp.nonbili.meron.shared.CalendarCreateLocalParams
 import jp.nonbili.meron.shared.CalendarCreateParams
 import jp.nonbili.meron.shared.CalendarDeleteParams
 import jp.nonbili.meron.shared.CalendarEvent
@@ -87,6 +88,26 @@ internal fun MeronMobileState.moveCalendarWindow(forward: Boolean) {
 internal fun MeronMobileState.showCalendarToday() {
     calendarUi.window = agendaWindowFrom(currentTimeMillis() / 1000, ::localUtcOffsetSeconds)
     loadCalendarScreen(refresh = true)
+}
+
+/**
+ * Adds a calendar kept on this phone. A fresh install has none, and without
+ * one there is nowhere to put an event. It goes under the first mail
+ * account, as the desktop files local calendars under an account.
+ */
+internal fun MeronMobileState.addLocalCalendar(name: String) {
+    val ui = calendarUi
+    val accountId = calendarAccountIds().firstOrNull()
+    if (name.isBlank() || accountId == null) return
+    scope.launch {
+        runCatching {
+            withContext(ioDispatcher) { calendarClient().createLocal(CalendarCreateLocalParams(accountId, name.trim())) }
+        }.onSuccess {
+            loadCalendarScreen(refresh = false)
+        }.onFailure {
+            ui.error = it.message.orEmpty()
+        }
+    }
 }
 
 /** Shows or hides one calendar. Hiding never forgets it. */

@@ -99,8 +99,9 @@
 - El OAuth de Google del móvil no pide `auth/calendar` (ni
   `contacts.readonly`): hasta ampliarlo y reconectar, el calendario de una
   cuenta Google responde con error en el móvil.
-- `calendar.createLocal` y el alta de CalDAV, suscripciones y CardDAV no se
-  atienden en el móvil; las contraseñas de CalDAV y CardDAV están en el
+- El alta de CalDAV, suscripciones y CardDAV no se atiende en el móvil
+  (`calendar.createLocal` sí, para que un teléfono nuevo tenga dónde poner
+  un evento); las contraseñas de CalDAV y CardDAV están en el
   llavero del escritorio.
 - La interfaz móvil no muestra `calendar.syncError`.
 - Evidencia en dispositivo (Maestro).

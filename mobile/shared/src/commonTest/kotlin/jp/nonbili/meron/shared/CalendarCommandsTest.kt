@@ -116,6 +116,11 @@ class CalendarCommandsTest {
             CalendarSetEnabledParams("acc-1", "cal-work", false).toJson(),
         )
         assertEquals(
+            """{"account":"acc-1","name":"Home \"main\""}""",
+            CalendarCreateLocalParams("acc-1", "Home \"main\"").toJson(),
+        )
+        assertEquals(MobileCommand.CalendarCreateLocal, "calendar.createLocal")
+        assertEquals(
             """{"account":"acc-1","from":100,"to":200,"refresh":true}""",
             CalendarEventsParams("acc-1", 100, 200).toJson(),
         )

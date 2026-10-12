@@ -31,6 +31,7 @@ internal fun CalendarRouteContent(
                     onMoveWindow = ::moveCalendarWindow,
                     onRefresh = { loadCalendarScreen(refresh = true) },
                     onSetCalendarShown = ::setCalendarShown,
+                    onAddCalendar = ::addLocalCalendar,
                     onNewEvent = ::startNewCalendarEvent,
                     onOpenEvent = ::openCalendarEvent,
                     onCloseEvent = ::closeCalendarEvent,

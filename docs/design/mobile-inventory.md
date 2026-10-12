@@ -79,9 +79,10 @@ nueva de plataforma.
   perfil (sin `auth/calendar`), así que el calendario de una cuenta Google
   responde con error del servidor hasta que se amplíe ese permiso y se
   vuelva a conectar la cuenta; y el móvil no tiene buzón Exchange propio.
-  Como `calendar.createLocal` tampoco se atiende en el móvil, hoy, en la
-  práctica, solo funcionan la libreta local y los calendarios locales que
-  ya estén en el almacén del dispositivo.
+  En la práctica, hoy funcionan la libreta local y los calendarios locales:
+  como un teléfono recién instalado no tiene ninguno, la ventana
+  *Calendarios* permite crear uno (`calendar.createLocal`, el mismo comando
+  del escritorio), que queda bajo la primera cuenta de correo.
 - **Pruebas.** Comunes de Kotlin: `CalendarCommandsTest` y
   `PeopleCommandsTest` (lectura de respuestas y forma exacta de cada
   petición, comparada con lo que envía el escritorio), `CalendarAgendaTest`

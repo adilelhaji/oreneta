@@ -5704,26 +5704,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // which is exactly what the user asked for when they chose "on this
         // computer" — and what the interface must say, since nothing else has
         // a copy of it.
-        "calendar.createLocal" => {
-            let account = req_str(p, "account")?;
-            let name = req_str(p, "name")?;
-            if name.trim().is_empty() {
-                anyhow::bail!("a calendar needs a name");
-            }
-            let id = format!("local:{}", uuid::Uuid::new_v4());
-            calendar::upsert_calendars(
-                &engine.db.lock().unwrap(),
-                &account,
-                &[calendar::Calendar {
-                    id: id.clone(),
-                    name,
-                    kind: calendar::CalendarKind::Local,
-                    enabled: true,
-                    ..Default::default()
-                }],
-            )?;
-            Ok(json!({ "id": id }))
-        }
+        "calendar.createLocal" => pim::calendar::create_local(engine, p),
 
         // Subscribing fetches once before storing, so a wrong URL is reported
         // now rather than as a calendar that silently never fills.

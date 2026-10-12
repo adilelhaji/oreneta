@@ -107,6 +107,14 @@ data class CalendarListParams(
     fun toJson(): String = jsonObject("account" to accountId.jsonString())
 }
 
+/** A calendar kept only on this device, under an account. */
+data class CalendarCreateLocalParams(
+    val accountId: String,
+    val name: String,
+) {
+    fun toJson(): String = jsonObject("account" to accountId.jsonString(), "name" to name.jsonString())
+}
+
 data class CalendarSetEnabledParams(
     val accountId: String,
     val calendarId: String,
@@ -203,6 +211,8 @@ class MobileCalendarCommandClient(
     private val core: MeronCore,
 ) {
     suspend fun listCalendars(params: CalendarListParams): String = requireCoreOk(core.invoke(MobileCommand.CalendarList, params.toJson()))
+
+    suspend fun createLocal(params: CalendarCreateLocalParams): String = requireCoreOk(core.invoke(MobileCommand.CalendarCreateLocal, params.toJson()))
 
     suspend fun setEnabled(params: CalendarSetEnabledParams): String = requireCoreOk(core.invoke(MobileCommand.CalendarSetEnabled, params.toJson()))
 

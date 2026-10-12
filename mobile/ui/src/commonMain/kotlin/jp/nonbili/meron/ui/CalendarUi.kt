@@ -81,6 +81,7 @@ internal class CalendarActions(
     val onMoveWindow: (forward: Boolean) -> Unit,
     val onRefresh: () -> Unit,
     val onSetCalendarShown: (CalendarSummary, Boolean) -> Unit,
+    val onAddCalendar: (name: String) -> Unit,
     val onNewEvent: () -> Unit,
     val onOpenEvent: (CalendarEvent) -> Unit,
     val onCloseEvent: () -> Unit,
@@ -179,7 +180,12 @@ internal fun CalendarScreen(
     }
 
     if (ui.calendarsOpen) {
-        CalendarsDialog(ui.calendars, onSetShown = actions.onSetCalendarShown, onDismiss = { ui.calendarsOpen = false })
+        CalendarsDialog(
+            ui.calendars,
+            onSetShown = actions.onSetCalendarShown,
+            onAdd = actions.onAddCalendar,
+            onDismiss = { ui.calendarsOpen = false },
+        )
     }
     ui.viewing?.let { event ->
         EventDetailsDialog(ui, event, offsetAt, actions)
@@ -323,8 +329,10 @@ private fun AgendaRow(
 private fun CalendarsDialog(
     calendars: List<CalendarSummary>,
     onSetShown: (CalendarSummary, Boolean) -> Unit,
+    onAdd: (name: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var newName by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr("mobile.calendar.calendars")) },
@@ -354,6 +362,23 @@ private fun CalendarsDialog(
                         }
                         Switch(checked = calendar.enabled, onCheckedChange = { onSetShown(calendar, it) })
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = { Text(tr("calendar.newCalendarName")) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        enabled = newName.isNotBlank(),
+                        onClick = {
+                            onAdd(newName)
+                            newName = ""
+                        },
+                    ) { Text(tr("calendar.addCalendar")) }
                 }
             }
         },

@@ -3627,13 +3627,12 @@ fn mobile_calendar_commands_run_the_shared_core() {
         assert!(answer.get("error").is_none(), "{method}: {answer}");
         answer["result"].clone()
     };
-    // `calendar.createLocal` is not a mobile command: the calendar is made the
-    // way that command makes it on the desktop.
-    let local = "local:home";
-    crate::calendar::upsert_calendars(&store::open_at(data_dir.join("meron.db")).unwrap(), account, &[crate::calendar::Calendar {
-        id: local.into(), name: "Home".into(), kind: crate::calendar::CalendarKind::Local, enabled: true,
-        ..Default::default()
-    }]).unwrap();
+    // A fresh phone has no calendar; the person makes one here.
+    assert_eq!(call("calendar.createLocal", json!({"account": account, "name": "  "}))["error"]["message"], "a calendar needs a name");
+    let made = ok("calendar.createLocal", json!({"account": account, "name": "Home"}));
+    let local = made["id"].as_str().unwrap().to_owned();
+    let local = local.as_str();
+    assert!(local.starts_with("local:"));
     let cached = |from: i64, to: i64| {
         let conn = store::open_at(data_dir.join("meron.db")).unwrap();
         json!({ "events": crate::calendar::events_in_window(&conn, account, (from, to)).unwrap() })
