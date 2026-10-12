@@ -32,6 +32,7 @@ pub mod merge;
 pub mod oof;
 pub mod parse;
 pub mod person_context;
+pub mod pim;
 pub mod pop3;
 pub mod priority;
 pub mod privacy;

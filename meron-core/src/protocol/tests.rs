@@ -2972,7 +2972,7 @@ fn protocol_invoke_wraps_unknown_method_error() {
     );
 }
 
-fn unique_data_dir(label: &str) -> std::path::PathBuf {
+pub(crate) fn unique_data_dir(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("meron-mobile-{label}-{}", unique_test_suffix()))
 }
 
@@ -2986,7 +2986,7 @@ fn unique_test_suffix() -> String {
     format!("{pid}-{nanos}-{count}")
 }
 
-fn seed_mobile_account(data_dir: &std::path::Path, email: &str) {
+pub(crate) fn seed_mobile_account(data_dir: &std::path::Path, email: &str) {
     let conn = store::open_at(data_dir.join("meron.db")).unwrap();
     let creds = Creds {
         host: "imap.example.com".to_string(),
@@ -3607,4 +3607,137 @@ fn mobile_protocol_round_trips_an_encrypted_backup_with_secrets() {
 
     let _ = std::fs::remove_dir_all(source_dir);
     let _ = std::fs::remove_dir_all(target_dir);
+}
+
+/// ADR-0045: the calendar commands answer on mobile through the desktop's own
+/// code (`crate::pim`), with the params the mobile client sends
+/// (CalendarCommands.kt) and the answers the desktop dispatcher gives.
+#[test]
+fn mobile_calendar_commands_run_the_shared_core() {
+    let data_dir = unique_data_dir("pim-calendar");
+    let account = "cal@example.com";
+    seed_mobile_account(&data_dir, account);
+    seed_mobile_password(&data_dir, account);
+    let dir = data_dir.to_str().unwrap();
+    let call = |method: &str, params: Value| {
+        invoke_mobile_protocol_json(&json!({"id": 1, "method": method, "params": params}).to_string(), Some(dir))
+    };
+    let ok = |method: &str, params: Value| {
+        let answer = call(method, params);
+        assert!(answer.get("error").is_none(), "{method}: {answer}");
+        answer["result"].clone()
+    };
+    // `calendar.createLocal` is not a mobile command: the calendar is made the
+    // way that command makes it on the desktop.
+    let local = "local:home";
+    crate::calendar::upsert_calendars(&store::open_at(data_dir.join("meron.db")).unwrap(), account, &[crate::calendar::Calendar {
+        id: local.into(), name: "Home".into(), kind: crate::calendar::CalendarKind::Local, enabled: true,
+        ..Default::default()
+    }]).unwrap();
+    let cached = |from: i64, to: i64| {
+        let conn = store::open_at(data_dir.join("meron.db")).unwrap();
+        json!({ "events": crate::calendar::events_in_window(&conn, account, (from, to)).unwrap() })
+    };
+
+    let listed = ok("calendar.list", json!({"account": account}));
+    assert_eq!(listed["calendars"][0]["id"], local);
+    assert_eq!(listed["calendars"][0]["kind"], "local");
+    assert_eq!(ok("calendar.setEnabled", json!({"account": account, "calendar": local, "enabled": false})), json!({"ok": true}));
+    assert_eq!(ok("calendar.list", json!({"account": account}))["calendars"][0]["enabled"], false);
+    ok("calendar.setEnabled", json!({"account": account, "calendar": local, "enabled": true}));
+
+    // As `CalendarEvent.toCoreJson` sends it: absent fields left out.
+    let event = |id: &str, subject: &str, change_key: Option<&str>| {
+        let mut event = json!({
+            "id": id, "calendar_id": local, "subject": subject, "start": 1_791_799_200i64, "end": 1_791_802_800i64,
+            "all_day": false, "is_recurring": false, "description": "", "is_cancelled": false, "free_busy": "",
+            "my_response": "", "attendees": [],
+        });
+        if let Some(key) = change_key {
+            event["change_key"] = json!(key);
+        }
+        event
+    };
+    let created = ok("calendar.create", json!({"account": account, "event": event("", "Dentist", None), "notify": false}));
+    let id = created["event"]["id"].as_str().unwrap().to_owned();
+    assert!(id.starts_with("local:"));
+    assert_eq!(created["event"]["change_key"], "0");
+    let (from, to) = (1_791_763_200i64, 1_791_849_600i64);
+    let window = ok("calendar.events", json!({"account": account, "from": from, "to": to, "refresh": false}));
+    assert_eq!(window, cached(from, to), "the cache, as the desktop answers it");
+    assert_eq!(window["events"][0]["subject"], "Dentist");
+    assert_eq!(
+        ok("calendar.eventDetails", json!({"account": account, "calendar": local, "event": id, "change_key": "0"})),
+        json!({"attendees": [], "description": ""}),
+    );
+
+    let updated = ok("calendar.update", json!({
+        "account": account, "event": event(&id, "Dentist (moved)", Some("0")), "scope": "occurrence", "notify": false,
+    }));
+    assert_eq!(updated, json!({"ok": true}));
+    let window = ok("calendar.events", json!({"account": account, "from": from, "to": to, "refresh": false}));
+    assert_eq!(window["events"].as_array().unwrap().len(), 1, "edited in place, not added");
+    assert_eq!(window["events"][0]["subject"], "Dentist (moved)");
+    assert_eq!(window["events"][0]["change_key"], "1");
+
+    let mut repeating = event("", "Gym", None);
+    repeating["recurrence"] = json!({"freq": "weekly", "interval": 1, "weekdays": [], "until": null, "count": null});
+    let refused = call("calendar.create", json!({"account": account, "event": repeating, "notify": false}));
+    assert!(refused["error"]["message"].as_str().unwrap().contains("single events"), "{refused}");
+    let backwards = call("calendar.events", json!({"account": account, "from": to, "to": from, "refresh": false}));
+    assert_eq!(backwards["error"]["message"], "calendar window ends before it starts");
+
+    let deleted = ok("calendar.delete", json!({
+        "account": account, "event": id, "calendar": local, "change_key": "1", "series": "", "scope": "occurrence",
+        "notify": false,
+    }));
+    assert_eq!(deleted, json!({"ok": true}));
+    assert_eq!(ok("calendar.events", json!({"account": account, "from": from, "to": to, "refresh": false})), json!({"events": []}));
+}
+
+/// ADR-0045: the address-book commands answer on mobile through the desktop's
+/// own code, with the params PeopleCommands.kt sends.
+#[test]
+fn mobile_people_commands_run_the_shared_core() {
+    let data_dir = unique_data_dir("pim-people");
+    let dir = data_dir.to_str().unwrap();
+    let call = |method: &str, params: Value| {
+        invoke_mobile_protocol_json(&json!({"id": 1, "method": method, "params": params}).to_string(), Some(dir))
+    };
+    let ok = |method: &str, params: Value| {
+        let answer = call(method, params);
+        assert!(answer.get("error").is_none(), "{method}: {answer}");
+        answer["result"].clone()
+    };
+    let person = |name: &str| json!({
+        "name": name, "organisation": "", "note": "",
+        "emails": [{"addr": "ann@example.com", "label": ""}], "phones": [{"number": "+34 600 000 000", "label": "mobile"}],
+    });
+
+    let created = ok("people.save", json!({"person": person("Ann")}));
+    let id = created["id"].as_str().unwrap().to_owned();
+    assert_eq!(created, json!({"ok": true, "id": id, "version": "1"}));
+    let listed = ok("people.list", json!({"query": "ann", "limit": 2000}));
+    assert_eq!(listed["people"][0]["source"], "local");
+    assert_eq!(listed["people"][0]["editable"], true);
+    assert_eq!(listed["people"][0]["version"], "1");
+    assert_eq!(listed["people"][0]["phones"][0]["number"], "+34 600 000 000");
+
+    // Two editors opened it at version 1; the first one saves.
+    assert_eq!(ok("people.save", json!({"id": id, "version": "1", "person": person("Ann Lee")}))["version"], "2");
+    let stale = ok("people.save", json!({"id": id, "version": "1", "person": person("Annie")}));
+    assert_eq!(stale["conflict"], true);
+    assert_eq!(stale["current"]["name"], "Ann Lee", "the reader is shown what is there now");
+    let unversioned = call("people.save", json!({"id": id, "person": person("X")}));
+    assert_eq!(unversioned["error"]["message"], "an edit must say which version it was made from");
+
+    assert_eq!(ok("people.delete", json!({"id": id, "version": "2"}))["ok"], true);
+    assert_eq!(ok("people.list", json!({"query": "", "limit": 2000})), json!({"people": []}));
+}
+
+/// A stored password, so the Engine treats a seeded account as signed in.
+pub(crate) fn seed_mobile_password(data_dir: &std::path::Path, account: &str) {
+    let conn = store::open_at(data_dir.join("meron.db")).unwrap();
+    let secrets = Secrets { password: "secret".into(), ..Default::default() };
+    store::upsert_secret(&conn, account, &serde_json::to_string(&secrets).unwrap()).unwrap();
 }

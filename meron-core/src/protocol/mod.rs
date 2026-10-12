@@ -17,6 +17,7 @@ mod helpers;
 pub mod mail;
 mod media;
 mod oauth;
+mod pim;
 mod prefs;
 
 pub(crate) use accounts::*;
@@ -26,10 +27,11 @@ pub(crate) use helpers::*;
 pub(crate) use mail::*;
 pub(crate) use media::*;
 pub(crate) use oauth::*;
+pub(crate) use pim::*;
 pub(crate) use prefs::*;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -223,6 +225,7 @@ pub fn dispatch_mobile_protocol_request(req: &Request, data_dir: &str) -> Result
         "rss.thread" => read_mobile_rss_thread(data_dir, &req.params),
         "rss.markRead" => mark_mobile_rss_thread_read(data_dir, &req.params),
         "rss.markStarred" => mark_mobile_rss_thread_starred(data_dir, &req.params),
+        method if MOBILE_PIM_METHODS.contains(&method) => run_mobile_pim_command(data_dir, req),
         _ => dispatch_protocol_request(req),
     }
 }
