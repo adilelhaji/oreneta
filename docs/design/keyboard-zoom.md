@@ -34,7 +34,9 @@ propia de la aplicación, no un `zoom` de CSS en la raíz.
     botones se salían por la izquierda; ahora mide `w-15` (3,75 rem);
   - en la cabecera de la conversación, los botones que dejan sitio cuando el
     panel es estrecho (destacar, no leído, asistente, y luego archivar y
-    papelera) se ocultan según el ancho de la propia cabecera, medido en rem
+    papelera) se ocultan según el ancho de la propia cabecera (por debajo de
+    24 rem y de 20 rem; al 100 % se ven como antes en todos los anchos que
+    prueba `mail boundary`), medido en rem
     con container queries. Antes dependían del ancho de la ventana en px. Todos
     siguen en el menú ⋮;
   - en el campo de destinatarios faltaba `min-w-0`, y el ancho natural del

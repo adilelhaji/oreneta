@@ -278,14 +278,14 @@ export function ConversationHeader({
                 icon={Star}
                 disabled={changesBlocked}
                 label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
-                className={clsx('hidden @min-[36rem]:flex', activeThread.starred && 'text-warning')}
+                className={clsx('hidden @min-[24rem]:flex', activeThread.starred && 'text-warning')}
                 onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
               />
               <IconButton
                 icon={activeThread.unread ? MailOpen : Mail}
                 disabled={changesBlocked}
                 label={activeThread.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
-                className="hidden @min-[36rem]:flex"
+                className="hidden @min-[24rem]:flex"
                 onClick={() =>
                   void (activeThread.unread
                     ? markThreadRead(activeThread.thread_id)
@@ -301,14 +301,14 @@ export function ConversationHeader({
                     icon={Archive}
                     disabled={changesBlocked}
                     label={t('threads.actions.archiveThread')}
-                    className="hidden @min-[26rem]:flex"
+                    className="hidden @min-[20rem]:flex"
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   <IconButton
                     icon={Trash2}
                     disabled={changesBlocked}
                     label={t('threads.actions.moveToTrash')}
-                    className="hidden @min-[26rem]:flex"
+                    className="hidden @min-[20rem]:flex"
                     onClick={() => void deleteThread(activeThread.thread_id)}
                   />
                 </>
