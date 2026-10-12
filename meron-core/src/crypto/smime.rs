@@ -664,11 +664,19 @@ pub fn certs_from_der(stored: &[Vec<u8>]) -> Vec<Certificate> {
 pub enum DecryptionFailure {
     /// Not encrypted to the identity this reader holds.
     NoKey,
-    /// Not readable as CMS `EnvelopedData`, or protected with something this
-    /// does not implement yet (RSAES-OAEP key transport, a content cipher
-    /// other than AES-CBC/3DES-CBC).
+    /// Not readable as CMS `EnvelopedData`.
     Malformed,
+    /// Readable, for this identity, but protected with something this does
+    /// not implement yet, named (#49): told apart from damage, so nobody is
+    /// told a sound message is broken.
+    Unsupported { algorithm: String },
 }
+
+/// `1.2.840.113549.1.9.16.1.23`: `id-ct-authEnvelopedData` (AES-GCM and the
+/// like, RFC 5083).
+const OID_AUTH_ENVELOPED_DATA: &str = "1.2.840.113549.1.9.16.1.23";
+/// `1.2.840.113549.1.1.7`: `id-RSAES-OAEP` key transport.
+const OID_RSAES_OAEP: &str = "1.2.840.113549.1.1.7";
 
 /// `1.2.840.113549.1.7.3`: `id-envelopedData`.
 const OID_ENVELOPED_DATA: &str = "1.2.840.113549.1.7.3";
@@ -704,10 +712,13 @@ fn identifies_recipient(rid: &cms::enveloped_data::RecipientIdentifier, cert: &C
 ///
 /// Only RSAES-PKCS1-v1.5 key transport is unwrapped — the shape every real
 /// S/MIME sender this was tested against actually uses — and only
-/// AES-CBC/3DES-CBC content ciphers; RSAES-OAEP or anything else is reported
-/// as [`DecryptionFailure::Malformed`] rather than guessed at.
+/// AES-CBC/3DES-CBC content ciphers; RSAES-OAEP, AES-GCM or anything else is
+/// named as [`DecryptionFailure::Unsupported`] rather than guessed at.
 pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> Result<Vec<u8>, DecryptionFailure> {
     let content_info = ContentInfo::from_der(cms_der).map_err(|_| DecryptionFailure::Malformed)?;
+    if content_info.content_type.to_string() == OID_AUTH_ENVELOPED_DATA {
+        return Err(DecryptionFailure::Unsupported { algorithm: "AES-GCM (authenticated enveloped data)".into() });
+    }
     if content_info.content_type.to_string() != OID_ENVELOPED_DATA {
         return Err(DecryptionFailure::Malformed);
     }
@@ -715,12 +726,19 @@ pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> 
         content_info.content.decode_as().map_err(|_| DecryptionFailure::Malformed)?;
 
     let mut content_key = None;
+    let mut unsupported_for_us = None;
     for recipient in enveloped.recip_infos.0.iter() {
         let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient else { continue };
         if !identifies_recipient(&ktri.rid, &identity.certificate) {
             continue;
         }
-        if ktri.key_enc_alg.oid.to_string() != OID_RSA_ENCRYPTION {
+        let key_alg = ktri.key_enc_alg.oid.to_string();
+        if key_alg != OID_RSA_ENCRYPTION {
+            unsupported_for_us = Some(if key_alg == OID_RSAES_OAEP {
+                "RSAES-OAEP key transport".to_string()
+            } else {
+                format!("key transport {key_alg}")
+            });
             continue;
         }
         if let Ok(key) = identity.private_key.decrypt(Pkcs1v15Encrypt, ktri.enc_key.as_bytes()) {
@@ -728,7 +746,11 @@ pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> 
             break;
         }
     }
-    let content_key = content_key.ok_or(DecryptionFailure::NoKey)?;
+    let content_key = match (content_key, unsupported_for_us) {
+        (Some(key), _) => key,
+        (None, Some(algorithm)) => return Err(DecryptionFailure::Unsupported { algorithm }),
+        (None, None) => return Err(DecryptionFailure::NoKey),
+    };
 
     let enc_info = &enveloped.encrypted_content;
     let ciphertext = enc_info
@@ -751,7 +773,7 @@ pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> 
         }
         OID_DES_EDE3_CBC => super::block_cipher::tdes_cbc_decrypt(&content_key, iv.as_bytes(), ciphertext)
             .map_err(|_| DecryptionFailure::Malformed),
-        _ => Err(DecryptionFailure::Malformed),
+        other => Err(DecryptionFailure::Unsupported { algorithm: format!("content cipher {other}") }),
     }
 }
 

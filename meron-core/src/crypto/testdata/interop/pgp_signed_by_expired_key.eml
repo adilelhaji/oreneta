@@ -1,0 +1,24 @@
+From: Olga Expired <olga@example.test>
+To: fixture@example.test
+Subject: Signed with GnuPG
+MIME-Version: 1.0
+Content-Type: multipart/signed; boundary="b1"; micalg=pgp-sha256; protocol="application/pgp-signature"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Hello from GnuPG.
+
+--b1
+Content-Type: application/pgp-signature; name="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iIgEABYIADAWIQT9opScWe/6x/YHBass4zWEXgrIawUCXtRFABIcb2xnYUBleGFt
+cGxlLnRlc3QACgkQLOM1hF4KyGsuTgEAy5kzHJ8e31ccBUhYoEEk0v9ELtEpDYsJ
+m1O5xsWnW2UA/29LXUPFiE1GifWyTd5/TfcsysjuOZT8kui+GnJmkXkA
+=d76m
+-----END PGP SIGNATURE-----
+
+--b1--

@@ -1,0 +1,29 @@
+From: Pau Interop <pau@example.test>
+To: fixture@example.test
+Subject: Encrypted with GnuPG
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; boundary="b2"; protocol="application/pgp-encrypted"
+
+--b2
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--b2
+Content-Type: application/octet-stream
+
+-----BEGIN PGP MESSAGE-----
+
+hF4DZ7sVT03ckXkSAQdALVw63Bmpm826DQxH544CPy9RgqoJSwQlJv234ejMeBAw
+5P+rcfBgnFWKRRGUBuUXaEUNaGMzTKV0MrmF023RcqpunpK+2ToUUlbARvHAXW4T
+0sBrAUZy2kchwRzu0grFulKzQhvacxadBt90o0Anj9Tc5sTUSQblJp3ZniIseGI0
++mcmhA2N0AhvylUuhDmQfSCrHh2Rvvf1s9wrxPZE7U3I//wQDrGfUBfZg+iP3riL
+Z0olWgGl5CQOq35OhHrIgjsqusUg3Zt4hEgWDLP5TTC2FhOSFDShDQP+oCjezdPZ
+L//dVPwSA37+uDuRnBM4AANZpkNvixbOiAFCQ9i8nlYncFkvXr8cRMwyXY+7hcbn
+LkqHvzSZYArLDUKoywEG2v7WeWGsPKQ8qdInpOHbd0x/jYlVEPWBmnUFawrySt9c
+N/4scbJQ4DeGjbn8Tx6Ee22rie6ysenxocPkL+DxNfDdrlaIttKMyu8aUer2OddQ
+4wqeSgUMgFYHsmPOpuI=
+=U9Zb
+-----END PGP MESSAGE-----
+
+--b2--

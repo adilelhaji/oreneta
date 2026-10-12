@@ -104,12 +104,21 @@ export async function removeSmimeIdentity(fingerprint: string) {
 export type SmimeDecryptResult =
   | { ok: true; body: string; bodyHtml?: string | null }
   | { ok: false; failure: { reason: 'noKey' | 'malformed' } }
+  // An algorithm this does not implement, named (#49); as `detail`, the
+  // shape OpenPGP's unsupported answer has, so both read the same.
+  | { ok: false; failure: { reason: 'unsupported'; detail: string } }
 
 /**
  * Open one S/MIME-encrypted message. No passphrase parameter, unlike
  * OpenPGP's `decryptMessage`: the identity's private key was unlocked once,
  * at import, and lives ready-to-use in the OS keyring from then on.
  */
-export function decryptSmimeMessage(account: string, folder: string, uid: number) {
-  return invoke<SmimeDecryptResult>('smime.decrypt', { account, folder, uid })
+export async function decryptSmimeMessage(account: string, folder: string, uid: number): Promise<SmimeDecryptResult> {
+  const answer = await invoke<
+    SmimeDecryptResult | { ok: false; failure: { reason: 'unsupported'; algorithm: string } }
+  >('smime.decrypt', { account, folder, uid })
+  if (!answer.ok && answer.failure.reason === 'unsupported' && 'algorithm' in answer.failure) {
+    return { ok: false, failure: { reason: 'unsupported', detail: answer.failure.algorithm } }
+  }
+  return answer as SmimeDecryptResult
 }

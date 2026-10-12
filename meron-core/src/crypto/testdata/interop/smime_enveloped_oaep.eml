@@ -1,0 +1,21 @@
+From: Sara Interop <sara@example.test>
+To: sara@example.test
+Subject: S/MIME with OpenSSL
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+
+MIICFgYJKoZIhvcNAQcDoIICBzCCAgMCAQAxggFtMIIBaQIBADBRMDkxFTATBgNV
+BAMMDFNhcmEgSW50ZXJvcDEgMB4GCSqGSIb3DQEJARYRc2FyYUBleGFtcGxlLnRl
+c3QCFAER8+A/W3YtBd9wbf77qiXTE9kVMA0GCSqGSIb3DQEBBzAABIIBAE0t0lDs
+uoEsf/wyM0XyoD3LgMQKim1YQrJOeSqpoq+QlDa5LmGHyPQLIYnb+/3r1+m7LwVT
+EYzkW3J/aBbZARTtSgg7bqywVW6UOlybtujucjwnjx/SAEMDHEk+Ctosd6WRKOWk
+6Qqm1g29SCxnzqJZJKFpN3Nun7O/4guZeBsiH8iDWlhO8DnvMaWmw23oxvrkUbzP
+jU+bQS9C12n7W/isRUngopXh1aYICrdkZKp3ZuuCgUdPbdC+dV0zgCfN0NTG4rWa
+aUKTSeyJ+kpAcGS08jOSZGRVQTTcqjous2WSaLDTTtTTHoFAwu3rROz+Aok/kMsm
+72AFwJywtY0X/a8wgYwGCSqGSIb3DQEHATAdBglghkgBZQMEASoEEJpiIZyq33Km
+cWaO7nwFsLaAYKQo7asc/6KpKZeR+Tw8c31mNA5+Z4BJurL1/a4jPDGvarEGm7Zx
+4v1ezo9YHPc84qxuT6XMSpYEHABtFlOTzMk1iEmBGyAO2/wNTTh2pFZP4Rx6YWPT
+zoLy7156gfDdlQ==
+

@@ -430,6 +430,10 @@ Estado de la iteración 13 (2026-10-12, por delegación):
   «mover» que se mostraban y no se hacían); ejecución sobre el correo
   existente tal como se revisó, con informe por paso
   (ADR-0028, [registro](design/spam-lists-and-rule-runs.md)).
+- **#49:** OpenPGP y S/MIME comprobados en ambos sentidos contra GnuPG y
+  OpenSSL; corregidos `MIME-Version` duplicado, firma armada como mensaje y
+  algoritmos no compatibles informados como daño
+  ([registro](design/crypto-interop.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

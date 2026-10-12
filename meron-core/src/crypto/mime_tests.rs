@@ -30,11 +30,20 @@ fn the_content_headers_go_inside_it_because_the_signature_covers_them() {
     assert!(entity.contains("The figures are 12 and 34."));
 }
 
+/// The wrapper writes the message's one MIME-Version; keeping the original
+/// too made two (#49), which strict readers refuse. Never inside the part.
 #[test]
-fn mime_version_belongs_to_the_message_and_not_to_the_part() {
+fn mime_version_is_written_once_by_the_wrapper_and_never_inside_the_part() {
     let split = split_for_signing(BUILT).unwrap();
-    assert!(split.message_headers.contains("MIME-Version"));
+    assert!(!split.message_headers.contains("MIME-Version"));
     assert!(!String::from_utf8_lossy(&split.entity).contains("MIME-Version"));
+    for built in [
+        build_signed(&split.message_headers, &split.entity, b"sig", "sha512"),
+        build_encrypted(&split.message_headers, b"cipher"),
+        build_smime_enveloped(&split.message_headers, b"der"),
+    ] {
+        assert_eq!(String::from_utf8_lossy(&built).matches("MIME-Version:").count(), 1);
+    }
 }
 
 #[test]

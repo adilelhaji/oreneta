@@ -67,6 +67,9 @@ pub fn split_for_signing(raw: &[u8]) -> Option<SplitMessage> {
     let mut entity_headers = String::new();
     let mut in_entity = false;
 
+    // The wrapper writes its own MIME-Version; the message's would make two
+    // (#49), which strict readers refuse.
+    let mut in_mime_version = false;
     for line in headers.split_inclusive('\n') {
         if line.trim().is_empty() {
             continue;
@@ -74,6 +77,10 @@ pub fn split_for_signing(raw: &[u8]) -> Option<SplitMessage> {
         let continuation = line.starts_with(' ') || line.starts_with('\t');
         if !continuation {
             in_entity = is_entity_header(line);
+            in_mime_version = line.to_ascii_lowercase().starts_with("mime-version:");
+        }
+        if in_mime_version {
+            continue;
         }
         if in_entity {
             entity_headers.push_str(line);

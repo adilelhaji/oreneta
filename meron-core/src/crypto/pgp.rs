@@ -768,7 +768,9 @@ fn sign_bytes(
     let mut sink = Vec::new();
     let build = || -> Result<()> {
         let message = Message::new(&mut sink);
-        let message = Armorer::new(message).build()?;
+        // Armoured as what it is (#49): a detached signature, which RFC 3156
+        // readers expect to say so.
+        let message = Armorer::new(message).kind(sequoia_openpgp::armor::Kind::Signature).build()?;
         let mut signer = Signer::new(message, keypair)?.detached().build()?;
         signer.write_all(data)?;
         signer.finalize()?;
