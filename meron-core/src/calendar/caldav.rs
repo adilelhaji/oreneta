@@ -152,6 +152,23 @@ pub fn fetch_window(transport: &dyn Transport, calendar_url: &str, from: i64, to
         stamp(from),
         stamp(to)
     );
+    query(transport, calendar_url, body, "events")
+}
+
+/// Every task (VTODO) in a collection, with no time window: a task list is
+/// read whole. All or nothing, like [`fetch_window`] (ADR-0039).
+pub fn fetch_todos(transport: &dyn Transport, calendar_url: &str) -> Result<Vec<Object>> {
+    let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:getetag/><c:calendar-data/></d:prop>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/></c:comp-filter></c:filter>
+</c:calendar-query>"#;
+    query(transport, calendar_url, body.to_string(), "tasks")
+}
+
+/// A calendar query, every object in the answer or an error. An object on
+/// another server, or one the server failed to send, fails the whole read.
+fn query(transport: &dyn Transport, calendar_url: &str, body: String, what: &str) -> Result<Vec<Object>> {
     let reply = transport.send(&DavRequest {
         method: "REPORT",
         url: calendar_url.to_string(),
@@ -188,7 +205,7 @@ pub fn fetch_window(transport: &dyn Transport, calendar_url: &str, from: i64, to
     }
     if !failed.is_empty() {
         bail!(
-            "{} of {} events could not be read (first: {}); the last complete copy is kept",
+            "{} of {} {what} could not be read (first: {}); the last complete copy is kept",
             failed.len(),
             failed.len() + objects.len(),
             failed[0]

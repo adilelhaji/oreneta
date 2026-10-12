@@ -423,6 +423,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_task_list_on_a_server_that_cannot_be_reached_keeps_its_tasks_and_says_why() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        // Nothing listens on port 9: the first read fails, so nothing is added.
+        let url = "http://127.0.0.1:9/ana/tasks/";
+        let added = call("tasks.caldavAdd", json!({"url": url, "name": "Dav", "server": "http://127.0.0.1:9/", "username": "ana", "password": "pw"})).await;
+        assert!(added.is_err());
+        assert_eq!(call("tasks.lists", json!({})).await.unwrap()["lists"].as_array().unwrap().len(), 1);
+
+        let id = meron_core::task_sync::add_list(&engine.db.lock().unwrap(), "Dav", url, "", "ana", 1).unwrap();
+        let task = json!({"list_id": id, "title": "Kept here"});
+        let task_id = call("tasks.create", json!({"task": task})).await.unwrap()["id"].as_i64().unwrap();
+        let synced = call("tasks.sync", json!({})).await.unwrap();
+        assert_eq!(synced["lists"][0]["ok"], false);
+        let lists = call("tasks.lists", json!({})).await.unwrap();
+        let bound = lists["lists"].as_array().unwrap().iter().find(|l| l["id"] == id.as_str()).unwrap().clone();
+        assert_eq!(bound["remote_url"], url);
+        assert!(!bound["last_error"].as_str().unwrap().is_empty());
+        let listed = call("tasks.list", json!({})).await.unwrap();
+        let row = listed["tasks"].as_array().unwrap().iter().find(|t| t["id"] == task_id).unwrap().clone();
+        assert_eq!((row["pending"].clone(), row["conflict"].clone()), (json!("put"), json!("")));
+        assert!(call("tasks.resolveConflict", json!({"id": task_id, "keep": "mine"})).await.is_err(), "no conflict to settle");
+        call("tasks.deleteList", json!({"id": id})).await.unwrap();
+        assert!(call("tasks.list", json!({})).await.unwrap()["tasks"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn a_profile_archive_is_written_and_inspected_without_touching_the_store_in_use() {
         use super::*;
         let dir = std::env::temp_dir().join(format!("oreneta-profile-dispatch-{}", uuid::Uuid::new_v4()));
@@ -1823,6 +1856,37 @@ fn local_write_json(write: store::local_people::Write) -> Value {
                 "version": stored.version,
             })),
         }),
+    }
+}
+
+/// The transport a bound task list signs in with: its user name, and the
+/// password kept in the keychain for it (ADR-0039).
+fn task_transport(
+    binding: &meron_core::task_sync::Binding,
+) -> anyhow::Result<meron_core::carddav::http::UreqTransport> {
+    let secrets = meron_core::secrets::load(&meron_core::task_sync::secret_key(&binding.list_id))?;
+    Ok(meron_core::carddav::http::UreqTransport { username: binding.username.clone(), password: secrets.password })
+}
+
+/// Syncs one bound task list, answering what happened rather than failing:
+/// the reason is also kept on the list for the Tasks view to show.
+async fn sync_task_list(engine: &Arc<Engine>, binding: meron_core::task_sync::Binding) -> Value {
+    let id = binding.list_id.clone();
+    let outcome = match task_transport(&binding) {
+        Err(error) => Err(error),
+        Ok(transport) => {
+            let db = engine.db.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::sync(&db, &transport, &binding.list_id, now_seconds())
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+        }
+    };
+    match outcome {
+        Ok(report) => json!({ "id": id, "ok": true, "report": report }),
+        Err(error) => json!({ "id": id, "ok": false, "error": format!("{error:#}") }),
     }
 }
 
@@ -3593,6 +3657,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "priority": task.priority,
                         "reminder_at": task.reminder_at,
                         "revision": task.revision,
+                        "pending": task.pending,
+                        "conflict": task.conflict,
+                        "recurring": task.recurring,
                     }))
                     .collect::<Vec<_>>(),
             }))
@@ -3755,9 +3822,100 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::task_lists::rename_list(&engine.db.lock().unwrap(), &req_str(p, "id")?, &req_str(p, "name")?)?;
             Ok(json!({ "ok": true }))
         }
+        // Deleting a list kept on a server deletes it here only: its tasks,
+        // and its password. Nothing on the server is touched (ADR-0039).
         "tasks.deleteList" => {
-            store::task_lists::delete_list(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            let id = req_str(p, "id")?;
+            let bound = {
+                let db = engine.db.lock().unwrap();
+                let bound = meron_core::task_sync::binding(&db, &id)?.is_some();
+                store::task_lists::delete_list(&db, &id)?;
+                bound
+            };
+            if bound {
+                meron_core::secrets::delete(&meron_core::task_sync::secret_key(&id))?;
+            }
             Ok(json!({ "ok": true }))
+        }
+        // Task lists kept on a CalDAV server (ADR-0039): find the
+        // collections, bind a new list to one, sync, settle a conflict.
+        "tasks.caldavDiscover" => {
+            let server = req_str(p, "server")?;
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: req_str(p, "username").unwrap_or_default(),
+                password: req_str(p, "password").unwrap_or_default(),
+            };
+            let found =
+                tokio::task::spawn_blocking(move || meron_core::task_sync::discover(&transport, &server)).await??;
+            Ok(json!({ "calendars": found }))
+        }
+        "tasks.caldavAdd" => {
+            let username = req_str(p, "username").unwrap_or_default();
+            let password = req_str(p, "password").unwrap_or_default();
+            let id = meron_core::task_sync::add_list(
+                &engine.db.lock().unwrap(),
+                p.get("name").and_then(Value::as_str).unwrap_or_default(),
+                &req_str(p, "url")?,
+                p.get("server").and_then(Value::as_str).unwrap_or_default(),
+                &username,
+                now_seconds(),
+            )?;
+            let key = meron_core::task_sync::secret_key(&id);
+            meron_core::secrets::store(&key, &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() })?;
+            let transport = meron_core::carddav::http::UreqTransport { username, password };
+            let db = engine.db.clone();
+            let list = id.clone();
+            let first = tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::sync(&db, &transport, &list, now_seconds())
+            })
+            .await?;
+            match first {
+                Ok(report) => Ok(json!({ "ok": true, "id": id, "report": report })),
+                // A list that could not be read once is not added: the
+                // dialog stays open with the reason.
+                Err(error) => {
+                    store::task_lists::delete_list(&engine.db.lock().unwrap(), &id)?;
+                    meron_core::secrets::delete(&key)?;
+                    Err(error)
+                }
+            }
+        }
+        // Syncs one bound list, or every one. A list that fails keeps what
+        // it had and records why; the others go on.
+        "tasks.sync" => {
+            let wanted = p.get("list_id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string);
+            let bindings = meron_core::task_sync::bindings(&engine.db.lock().unwrap())?;
+            let mut results = Vec::new();
+            for binding in bindings.into_iter().filter(|b| wanted.as_ref().is_none_or(|id| *id == b.list_id)) {
+                results.push(sync_task_list(engine, binding).await);
+            }
+            Ok(json!({ "lists": results }))
+        }
+        "tasks.resolveConflict" => {
+            let id = req_i64(p, "id")?;
+            let keep = meron_core::task_sync::Keep::parse(&req_str(p, "keep")?)
+                .context("keep must be mine or server")?;
+            let list_id: String = engine
+                .db
+                .lock()
+                .unwrap()
+                .query_row("SELECT list_id FROM tasks WHERE id = ?1", rusqlite::params![id], |row| row.get(0))
+                .map(Some)
+                .or_else(|error| match error {
+                    rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                    error => Err(error),
+                })?
+                .context("this task no longer exists")?;
+            let binding = meron_core::task_sync::binding(&engine.db.lock().unwrap(), &list_id)?
+                .context("this list is not kept on a server")?;
+            let transport = task_transport(&binding)?;
+            let db = engine.db.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::resolve_conflict(&db, &transport, id, keep, now_seconds())
+            })
+            .await??;
+            let synced = sync_task_list(engine, binding).await;
+            Ok(json!({ "ok": true, "sync": synced }))
         }
         "tasks.create" => {
             let fields: store::task_lists::TaskFields =

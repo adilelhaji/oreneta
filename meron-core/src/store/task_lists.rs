@@ -58,16 +58,38 @@ pub struct TaskList {
     pub name: String,
     pub position: i64,
     pub open: i64,
+    /// ADR-0039: the CalDAV collection the list is kept in, empty for a
+    /// list kept only here; who signs in there; when it was last read in
+    /// full; why the last sync failed, if it did; and how many of its tasks
+    /// wait for the person to choose between two copies.
+    pub remote_url: String,
+    pub remote_user: String,
+    pub synced_at: Option<i64>,
+    pub last_error: String,
+    pub conflicts: i64,
 }
 
 pub fn lists(conn: &Connection) -> Result<Vec<TaskList>> {
     let mut stmt = conn.prepare(
         "SELECT l.id, l.name, l.position,
-                (SELECT COUNT(*) FROM tasks t WHERE t.list_id = l.id AND t.completed_at IS NULL)
+                (SELECT COUNT(*) FROM tasks t
+                  WHERE t.list_id = l.id AND t.completed_at IS NULL AND t.pending <> 'delete'),
+                l.remote_url, l.remote_user, l.synced_at, l.last_error,
+                (SELECT COUNT(*) FROM tasks t WHERE t.list_id = l.id AND t.conflict <> '')
            FROM task_lists l ORDER BY l.position, l.created_at, l.name",
     )?;
     let rows = stmt.query_map([], |row| {
-        Ok(TaskList { id: row.get(0)?, name: row.get(1)?, position: row.get(2)?, open: row.get(3)? })
+        Ok(TaskList {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            position: row.get(2)?,
+            open: row.get(3)?,
+            remote_url: row.get(4)?,
+            remote_user: row.get(5)?,
+            synced_at: row.get(6)?,
+            last_error: row.get(7)?,
+            conflicts: row.get(8)?,
+        })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
@@ -139,6 +161,52 @@ fn list_exists(conn: &Connection, id: &str) -> Result<bool> {
     Ok(conn.prepare("SELECT 1 FROM task_lists WHERE id = ?1")?.exists(params![id])?)
 }
 
+/// The CalDAV collection a list is kept in, or empty for a local list.
+pub fn remote_of_list(conn: &Connection, id: &str) -> Result<String> {
+    Ok(conn
+        .query_row("SELECT remote_url FROM task_lists WHERE id = ?1", params![id], |row| row.get(0))
+        .optional()?
+        .unwrap_or_default())
+}
+
+/// The list a task is in, whether that list is on a server, and whether the
+/// task repeats (ADR-0039).
+fn sync_state(conn: &Connection, id: i64) -> Result<Option<(String, bool, bool)>> {
+    Ok(conn
+        .query_row(
+            "SELECT t.list_id, COALESCE(l.remote_url, '') <> '', t.recurring
+               FROM tasks t LEFT JOIN task_lists l ON l.id = t.list_id
+              WHERE t.id = ?1 AND t.pending <> 'delete'",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?)
+}
+
+/// Refuses a change this client does not write to a server yet: a task
+/// that repeats, in a list kept on a server.
+pub fn check_editable(conn: &Connection, id: i64) -> Result<()> {
+    if let Some((_, true, true)) = sync_state(conn, id)? {
+        bail!("this task repeats; change it in the app that made it, Oreneta does not edit repeating tasks yet");
+    }
+    Ok(())
+}
+
+/// Marks a task in a list kept on a server as changed here, so the next
+/// sync sends it. A task in a local list is left as it is.
+pub fn touched(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE tasks SET pending = 'put', sync_seq = sync_seq + 1
+          WHERE id = ?1 AND pending <> 'delete'
+            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '')",
+        params![id],
+    )?;
+    Ok(())
+}
+
+const MOVE_REFUSED: &str =
+    "moving a task between a list kept on a server and another list is not supported yet; nothing was changed";
+
 /// A standalone task, in the list named.
 pub fn create(conn: &Connection, fields: &TaskFields, now: i64) -> Result<i64> {
     fields.check(false)?;
@@ -151,7 +219,9 @@ pub fn create(conn: &Connection, fields: &TaskFields, now: i64) -> Result<i64> {
          VALUES('', '', '', ?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![fields.note.trim(), fields.due_at, now, list, fields.title.trim(), fields.priority, fields.reminder_at],
     )?;
-    Ok(conn.last_insert_rowid())
+    let id = conn.last_insert_rowid();
+    touched(conn, id)?;
+    Ok(id)
 }
 
 /// The result of an edit.
@@ -168,7 +238,7 @@ pub fn get(conn: &Connection, id: i64) -> Result<Option<(TaskFields, i64, bool)>
     Ok(conn
         .query_row(
             "SELECT list_id, title, note, due_at, reminder_at, priority, revision, thread_key <> ''
-               FROM tasks WHERE id = ?1",
+               FROM tasks WHERE id = ?1 AND pending <> 'delete'",
             params![id],
             |row| {
                 Ok((
@@ -203,6 +273,12 @@ pub fn update(conn: &Connection, id: i64, read_at: i64, fields: &TaskFields) -> 
     if !list_exists(&tx, list)? {
         bail!("that list no longer exists");
     }
+    if list != current.list_id
+        && (!remote_of_list(&tx, list)?.is_empty() || !remote_of_list(&tx, &current.list_id)?.is_empty())
+    {
+        bail!(MOVE_REFUSED);
+    }
+    check_editable(&tx, id)?;
     tx.execute(
         "UPDATE tasks SET list_id = ?2, title = ?3, note = ?4, due_at = ?5, priority = ?6,
                 reminder_at = ?7,
@@ -211,6 +287,7 @@ pub fn update(conn: &Connection, id: i64, read_at: i64, fields: &TaskFields) -> 
           WHERE id = ?1",
         params![id, list, fields.title.trim(), fields.note.trim(), fields.due_at, fields.priority, fields.reminder_at],
     )?;
+    touched(&tx, id)?;
     tx.commit()?;
     Ok(Edit::Saved { revision: revision + 1 })
 }
@@ -224,7 +301,7 @@ pub fn due_reminders(conn: &Connection, now: i64) -> Result<Vec<(i64, String, Op
                     ORDER BY m.date DESC LIMIT 1), '') END,
                 t.due_at
            FROM tasks t
-          WHERE t.completed_at IS NULL AND t.reminder_at IS NOT NULL
+          WHERE t.completed_at IS NULL AND t.reminder_at IS NOT NULL AND t.pending <> 'delete'
             AND t.reminder_at <= ?1 AND t.reminded_at IS NULL",
     )?;
     let rows = stmt.query_map(params![now], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;

@@ -100,6 +100,11 @@ func TestSidecarCallTimeouts(t *testing.T) {
 		"archive.import":        2 * time.Hour,
 		"profileArchive.export": 2 * time.Hour,
 		"profileArchive.stage":  2 * time.Hour,
+		// Task lists on a CalDAV server (ADR-0039).
+		"tasks.caldavDiscover":  60 * time.Second,
+		"tasks.caldavAdd":       60 * time.Second,
+		"tasks.resolveConflict": 60 * time.Second,
+		"tasks.sync":            5 * time.Minute,
 	}
 	for method, want := range tests {
 		if got := sidecarCallTimeout(method); got != want {

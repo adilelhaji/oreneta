@@ -31,9 +31,33 @@ export type Task = {
   priority?: number
   reminder_at?: number | null
   revision?: number
+  /** ADR-0039, in a list kept on a server: a change made here not sent yet. */
+  pending?: '' | 'put' | 'delete'
+  /** Why it waits for a choice: 'changed' (here and on the server) or
+   * 'deleted' (on the server); empty when it does not. */
+  conflict?: string
+  /** It repeats; such a task is not edited here yet. */
+  recurring?: boolean
 }
 
-export type TaskList = { id: string; name: string; position: number; open: number }
+export type TaskList = {
+  id: string
+  name: string
+  position: number
+  open: number
+  /** ADR-0039: the CalDAV collection the list is kept in; empty or absent
+   * for a list kept only here. */
+  remote_url?: string
+  remote_user?: string
+  synced_at?: number | null
+  last_error?: string
+  conflicts?: number
+}
+
+/** One collection a CalDAV server offers. */
+export type RemoteTaskCollection = { url: string; name: string; color?: string | null; writable?: boolean | null }
+
+export type TaskListSync = { id: string; ok: boolean; error?: string }
 
 /** The fields a task is written with (ADR-0013). */
 export type TaskFields = {
@@ -58,7 +82,14 @@ export const tasks$ = observable({
   /** Which list is shown: 'all', or a list's id. */
   selectedList: 'all',
   search: '',
+  /** A sync of the lists kept on a server is running. */
+  syncing: false,
 })
+
+/** Whether a list is kept on a CalDAV server (ADR-0039). */
+export function isRemoteList(list: TaskList | undefined): boolean {
+  return !!list?.remote_url
+}
 
 /** A list's name as the reader sees it: the mail list's is translated. */
 export function listName(list: TaskList): string {
@@ -210,4 +241,68 @@ export async function deleteTask(id: number) {
   } catch (error) {
     showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
   }
+}
+
+// ---- Lists kept on a CalDAV server (ADR-0039) ---------------------------------
+
+/** The collections on a server, for choosing one. Throws with the reason. */
+export async function discoverTaskCollections(
+  server: string,
+  username: string,
+  password: string,
+): Promise<RemoteTaskCollection[]> {
+  const res = await invoke<{ calendars?: RemoteTaskCollection[] }>('tasks.caldavDiscover', {
+    server,
+    username,
+    password,
+  })
+  return res?.calendars ?? []
+}
+
+/** A new list bound to a collection, read once. Throws if it could not be. */
+export async function addCalDavTaskList(input: {
+  url: string
+  name: string
+  server: string
+  username: string
+  password: string
+}): Promise<string> {
+  const res = await invoke<{ id?: string }>('tasks.caldavAdd', input)
+  await Promise.all([loadTaskLists(), loadTasks()])
+  if (res?.id) tasks$.selectedList.set(res.id)
+  return res?.id ?? ''
+}
+
+/**
+ * Syncs one list kept on a server, or every one. A failure is kept on the
+ * list (`last_error`) and shown there; it is not a toast, since opening the
+ * Tasks view offline is not something to interrupt anyone about.
+ */
+export async function syncTaskLists(listId?: string): Promise<TaskListSync[]> {
+  tasks$.syncing.set(true)
+  try {
+    const res = await invoke<{ lists?: TaskListSync[] }>('tasks.sync', listId ? { list_id: listId } : {})
+    const results = res?.lists ?? []
+    if (results.length > 0) await Promise.all([loadTaskLists(), loadTasks()])
+    return results
+  } catch (error) {
+    if (listId)
+      showToast(
+        error instanceof Error ? error.message : t('tasks.syncFailed', { defaultValue: 'Sync failed' }),
+        'error',
+      )
+    return []
+  } finally {
+    tasks$.syncing.set(false)
+  }
+}
+
+/** Settles a conflict with one copy, then syncs the list. */
+export async function resolveTaskConflict(id: number, keep: 'mine' | 'server') {
+  try {
+    await invoke('tasks.resolveConflict', { id, keep })
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+  }
+  await Promise.all([loadTaskLists(), loadTasks()])
 }

@@ -48,5 +48,7 @@
 
 ## Fuera de esta entrega (ADR-0013)
 
-Sincronización (CalDAV VTODO primero), repetición, delegación, subtareas y
-aparición en la agenda del calendario.
+Repetición, delegación, subtareas y aparición en la agenda del calendario.
+La sincronización con CalDAV (VTODO) llegó después, en ADR-0039
+([registro](caldav-tasks.md)); Google Tasks, Graph To Do y EWS siguen
+pendientes.

@@ -474,8 +474,13 @@ func sidecarCallTimeout(method string) time.Duration {
 		return 30 * time.Second
 	// Discovery walks principal, home set and collections on a server that
 	// may be slow; each request is bounded by the core at 30s.
-	case "caldav.discover", "caldav.add", "carddav.discover", "rules.serverStatus", "rules.serverPush", "rules.serverRemove":
+	case "caldav.discover", "caldav.add", "carddav.discover", "rules.serverStatus", "rules.serverPush", "rules.serverRemove",
+		"tasks.caldavDiscover", "tasks.caldavAdd", "tasks.resolveConflict":
 		return 60 * time.Second
+	// Every bound task list, one change at a time, each request bounded by
+	// the core at 30s.
+	case "tasks.sync":
+		return 5 * time.Minute
 	case "calendar.create", "calendar.update", "calendar.delete",
 		"calendar.createCalendar", "calendar.renameCalendar", "calendar.deleteCalendar",
 		"calendar.createLocal", "calendar.subscribe":

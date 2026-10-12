@@ -366,6 +366,11 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
   apagadas por omisión, comprobadas antes de contar, con retención que
   nunca borra la última buena ni archivos ajenos (ADR-0037,
   [registro](design/scheduled-backups.md)).
+- **#103 (2026-10-12, por delegación):** una lista de tareas se puede
+  enlazar con una colección CalDAV (VTODO): cambios locales pendientes,
+  enviados con versión, lectura todo o nada y conflictos sin fusión
+  silenciosa (ADR-0039, [registro](design/caldav-tasks.md)). Pendiente:
+  Google Tasks, Graph To Do, EWS y N5 con proveedores reales.
 - **#99 (2026-10-12, por delegación):** un perfil con datos se puede
   borrar escribiendo su nombre, si no está abierto. Antes, su núcleo borra
   sus entradas del llavero (ADR-0038, [registro](design/profiles.md)).

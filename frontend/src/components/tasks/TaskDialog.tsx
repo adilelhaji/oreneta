@@ -7,6 +7,7 @@ import {
   createTask,
   deleteTask,
   getTask,
+  isRemoteList,
   listName,
   loadTaskLists,
   loadTasks,
@@ -20,9 +21,14 @@ import { Dialog } from '../dialog/Dialog'
 import { Button } from '../button/Button'
 import { TextInput } from '../field/Field'
 
+/** The local date, the same one `fromDateInput` turns back into local
+ * midnight. The UTC date (`toISOString`) showed the day before east of UTC,
+ * and saving then moved the task a day earlier. */
 function toDateInput(unixSeconds: number | null): string {
   if (!unixSeconds) return ''
-  return new Date(unixSeconds * 1000).toISOString().slice(0, 10)
+  const date = new Date(unixSeconds * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 function fromDateInput(value: string): number | null {
@@ -66,6 +72,9 @@ export function TaskDialog() {
   const standalone = !!state && !state.threadId
   const [title, setTitle] = useState('')
   const [listId, setListId] = useState(state?.listId || MAIL_LIST)
+  // The list the task was read in: moving it to or from a list kept on a
+  // server is not supported yet (ADR-0039).
+  const [originalList, setOriginalList] = useState<string | null>(null)
   const [dueAt, setDueAt] = useState(() => toDateInput(state?.dueAt ?? null))
   const [reminderAt, setReminderAt] = useState('')
   const [priority, setPriority] = useState(1)
@@ -94,6 +103,7 @@ export function TaskDialog() {
         setNote(task.note)
         setTitle(task.title ?? '')
         setListId(task.list_id || MAIL_LIST)
+        setOriginalList(task.list_id || MAIL_LIST)
         setReminderAt(toDateTimeInput(task.reminder_at ?? null))
         setPriority(task.priority ?? 1)
         setRevision(task.revision ?? null)
@@ -107,6 +117,13 @@ export function TaskDialog() {
       live = false
     }
   }, [editing, state?.id])
+
+  const byId = (id: string) => lists.find((list) => list.id === id)
+  const moveRefused =
+    editing &&
+    originalList !== null &&
+    listId !== originalList &&
+    (isRemoteList(byId(originalList)) || isRemoteList(byId(listId)))
 
   if (!state) return null
 
@@ -128,6 +145,7 @@ export function TaskDialog() {
     // Enter in the form submits too, so the lock is checked here as well.
     if (loadingExisting) return
     if (standalone && !title.trim()) return
+    if (moveRefused) return
     setBusy(true)
     try {
       if (editing && revision !== null) {
@@ -231,7 +249,7 @@ export function TaskDialog() {
             variant="primary"
             size="sm"
             onClick={() => void submit()}
-            disabled={busy || locked || (standalone && !title.trim())}
+            disabled={busy || locked || moveRefused || (standalone && !title.trim())}
           >
             {busy ? t('common.loading') : t('buttons.save')}
           </Button>
@@ -287,6 +305,14 @@ export function TaskDialog() {
                 </option>
               ))}
             </select>
+            {moveRefused && (
+              <p role="alert" className="text-caption text-danger">
+                {t('tasks.moveRefused', {
+                  defaultValue:
+                    'A task cannot be moved between a list kept on a server and another list yet. Create it again in the other list instead.',
+                })}
+              </p>
+            )}
           </div>
         )}
         <div className="flex flex-col gap-1.5">

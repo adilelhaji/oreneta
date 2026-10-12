@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 55;
+pub const SCHEMA_VERSION: i64 = 56;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -754,6 +754,11 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     }
     if version < 55 {
         tx.execute_batch(crate::backup_schedule::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 55)?;
+    }
+    if version < 56 {
+        // Task lists kept on a CalDAV server (ADR-0039).
+        crate::task_sync::migrate(&tx)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

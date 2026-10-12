@@ -69,6 +69,7 @@ beforeEach(() => {
     lists: [],
     selectedList: 'all',
     search: '',
+    syncing: false,
   })
   ui$.taskEditor.set(null)
   ui$.tasksOpen.set(true)

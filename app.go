@@ -550,6 +550,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.tasksDelete(payload)
 	case "tasks.lists", "tasks.createList", "tasks.renameList", "tasks.deleteList", "tasks.create", "tasks.update":
 		return a.tasksPassthrough(command, payload)
+	// Task lists kept on a CalDAV server (ADR-0039): the core finds, binds,
+	// syncs and settles conflicts; the password goes to the keychain there.
+	case "tasks.caldavDiscover", "tasks.caldavAdd", "tasks.sync", "tasks.resolveConflict":
+		return a.tasksPassthrough(command, payload)
 	// Meeting invitations by mail (#102): the core reads, answers and files
 	// them; each call is the person's own action.
 	case "invite.status", "invite.respond", "invite.cancel", "attachments.list", "search.parse", "search.compose",

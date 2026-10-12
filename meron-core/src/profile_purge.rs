@@ -39,6 +39,9 @@ pub fn secret_names(conn: &Connection) -> Result<Vec<String>> {
     names.extend(
         column(conn, "SELECT fingerprint FROM smime_identities")?.iter().map(|f| format!("smime-identity-{f}")),
     );
+    names.extend(
+        column(conn, "SELECT id FROM task_lists WHERE remote_url <> ''")?.iter().map(|id| crate::task_sync::secret_key(id)),
+    );
     names.push(crate::backup_schedule::SECRET_KEY.to_string());
     names.sort();
     names.dedup();
@@ -79,13 +82,16 @@ mod tests {
         let conn = crate::store::open_in_memory_for_test().unwrap();
         conn.execute_batch(
             "INSERT INTO accounts(id, email, display_name, config) VALUES('a@x.cat', 'a@x.cat', 'A', '{}');
-             INSERT INTO chat_accounts(id, jid, host, port, created_at) VALUES('c1', 'a@chat', '', 5222, 0);",
+             INSERT INTO chat_accounts(id, jid, host, port, created_at) VALUES('c1', 'a@chat', '', 5222, 0);
+             INSERT INTO task_lists(id, name, remote_url) VALUES('list:dav', 'Dav', 'https://dav.example/ana/tasks/');",
         )
         .unwrap();
         let names = secret_names(&conn).unwrap();
         assert!(names.contains(&"a@x.cat".to_string()));
         assert!(names.contains(&crate::chat::secret_key("c1")));
         assert!(names.contains(&crate::backup_schedule::SECRET_KEY.to_string()));
+        assert!(names.contains(&crate::task_sync::secret_key("list:dav")));
+        assert!(!names.contains(&crate::task_sync::secret_key("mail")), "a local list has no password");
     }
 
     #[test]
@@ -117,7 +123,7 @@ mod tests {
         let main = include_str!("main.rs");
         let writes = main.matches("secrets::store(").count();
         assert_eq!(
-            writes, 11,
+            writes, 12,
             "a secret is written somewhere new: name it in profile_purge::secret_names, then update this count"
         );
         let graph = include_str!("graph/auth.rs").matches("graph_record_store(").count();

@@ -14,6 +14,7 @@ afterEach(() => {
     lists: [],
     selectedList: 'all',
     search: '',
+    syncing: false,
   })
   ui$.taskEditor.set(null)
   ui$.selectedAccount.set('')

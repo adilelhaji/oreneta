@@ -2439,6 +2439,12 @@ pub struct TaskCard {
     pub priority: i64,
     pub reminder_at: Option<i64>,
     pub revision: i64,
+    /// ADR-0039, for a task in a list kept on a server: a change made here
+    /// not yet sent (`put`, or `delete` for one deleted here), and why it
+    /// waits for the person to choose a copy (empty when it does not).
+    pub pending: String,
+    pub conflict: String,
+    pub recurring: bool,
 }
 
 /// Creates a task on this conversation, or edits the one already open on it.
@@ -2480,9 +2486,10 @@ pub fn save_task(
 /// two open tasks on one conversation, and that constraint error is the
 /// honest answer here, not a case to paper over.
 pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64) -> Result<()> {
+    task_lists::check_editable(conn, id)?;
     let completed_at: Option<i64> = completed.then_some(now);
     let changed = match conn.execute(
-        "UPDATE tasks SET completed_at = ?2 WHERE id = ?1",
+        "UPDATE tasks SET completed_at = ?2 WHERE id = ?1 AND pending <> 'delete'",
         params![id, completed_at],
     ) {
         Ok(changed) => changed,
@@ -2501,6 +2508,7 @@ pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64)
     if changed == 0 {
         anyhow::bail!("this task no longer exists");
     }
+    task_lists::touched(conn, id)?;
     Ok(())
 }
 
@@ -2519,8 +2527,20 @@ pub fn get_task(conn: &Connection, id: i64) -> Result<Option<(Option<i64>, Strin
 }
 
 /// Removes a task outright — "never mind, this was not one."
+///
+/// A task that is also on a server (ADR-0039) is kept, hidden, until the
+/// next sync deletes it there: deleting it here first would lose the
+/// version the server's copy must be deleted from.
 pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+    let tombstoned = conn.execute(
+        "UPDATE tasks SET pending = 'delete', sync_seq = sync_seq + 1
+          WHERE id = ?1 AND remote_etag <> ''
+            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '')",
+        params![id],
+    )?;
+    if tombstoned == 0 {
+        conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+    }
     Ok(())
 }
 
@@ -2533,7 +2553,13 @@ pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
 /// subject/sender rather than vanishing: the reader made the task, and a
 /// gap in the local cache is not a reason to lose it.
 pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<TaskCard>> {
-    let where_clause = if include_completed { "" } else { "WHERE task.completed_at IS NULL" };
+    // A task deleted here and not yet on the server is hidden, unless the
+    // server changed it meanwhile and the person has to choose (ADR-0039).
+    let where_clause = if include_completed {
+        "WHERE (task.pending <> 'delete' OR task.conflict <> '')"
+    } else {
+        "WHERE task.completed_at IS NULL AND (task.pending <> 'delete' OR task.conflict <> '')"
+    };
     // One message stands for the conversation: in the folder the task was
     // made in if it is still there, otherwise wherever it has moved to
     // (archived, filed), latest first, ties broken by uid. A join on "the
@@ -2545,7 +2571,8 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
         "SELECT t.id, t.account, COALESCE(m.folder, t.folder), t.thread_key, t.note, t.due_at,
                 t.completed_at, t.created_at,
                 COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, ''),
-                m.id IS NOT NULL, t.list_id, t.title, t.priority, t.reminder_at, t.revision
+                m.id IS NOT NULL, t.list_id, t.title, t.priority, t.reminder_at, t.revision,
+                t.pending, t.conflict, t.recurring
            FROM (SELECT task.*, COALESCE(
                    (SELECT m2.id FROM messages m2
                      WHERE m2.account = task.account AND m2.folder = task.folder
@@ -2579,6 +2606,9 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
             priority: row.get(14)?,
             reminder_at: row.get(15)?,
             revision: row.get(16)?,
+            pending: row.get(17)?,
+            conflict: row.get(18)?,
+            recurring: row.get(19)?,
         })
     })?;
     // A row that cannot be read is an error to report, not a task to drop
