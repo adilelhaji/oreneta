@@ -492,6 +492,23 @@ Estado de la iteración 16 (2026-10-12, por delegación):
   reuniones próximas y archivos de esa persona en esa cuenta, cada uno
   abriendo su origen. Coincide por dirección completa y dice cuánto
   correo hay aquí ([registro](design/contextual-sidebar.md)).
+- **#115:** el binario de producción arranca dos veces en un perfil nuevo
+  sobre WebKitGTK (Linux) y WKWebView (macOS) con la CSP de producción, en
+  CI y con capturas. El runner de macOS de GitHub no cuesta nada porque el
+  repositorio es público. Llavero, notificaciones, impresión, IME e
+  instalación firmada en macOS siguen sin evidencia: hacen falta un Mac y
+  la firma del propietario ([registro](design/desktop-platforms.md)).
+- **#116:** inventario móvil aparte. Hay correo, OAuth, RSS y copia de
+  seguridad; faltan calendario, libreta de contactos, tareas, notas,
+  cifrado, POP3 y chat. El alcance móvil lo decide el propietario
+  ([registro](design/mobile-inventory.md)).
+- **#117:** delta de eM Client 11 frente a Oreneta. Una fuente secundaria
+  dice que la 11 ya es estable, pero no está confirmado en emclient.com.
+  Mover la referencia del ledger (10.4.5674.0) lo decide el propietario
+  ([registro](design/emclient-11-delta.md)).
+- **Ledger:** las filas de lo entregado en las iteraciones 13 a 16 tienen
+  su estado y su ejecución verde de CI. Ninguna pasa a `verified`: falta la
+  evidencia nativa y de proveedor de la verificación final.
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
