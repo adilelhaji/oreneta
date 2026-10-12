@@ -59,6 +59,7 @@ import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { SenderListsGroup } from './SenderListsGroup'
 import { TrackingProtectionGroup } from './TrackingProtectionGroup'
 import { TranslationModelsGroup } from './TranslationModelsGroup'
+import { CloudStorageGroup } from './CloudStorageGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
@@ -1084,6 +1085,7 @@ function GeneralSection() {
       <SenderListsGroup />
       <TrackingProtectionGroup />
       <TranslationModelsGroup />
+      <CloudStorageGroup />
       <StorageGroup />
       <LogsGroup />
     </div>

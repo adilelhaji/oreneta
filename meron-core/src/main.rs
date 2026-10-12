@@ -3079,6 +3079,74 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true }))
         }
 
+        // Sharing files by link from cloud storage (#108, ADR-0033). Every
+        // upload and link is the person's own action.
+        "cloud.providers" => Ok(json!(meron_core::cloud::PROVIDERS
+            .iter()
+            .map(|(id, name, usable)| json!({ "id": id, "name": name, "usable": usable }))
+            .collect::<Vec<_>>())),
+        "cloud.list" => Ok(serde_json::to_value(meron_core::cloud::list(&engine.db.lock().unwrap())?)?),
+        "cloud.save" => {
+            let account: meron_core::cloud::CloudAccount =
+                serde_json::from_value(p.get("account").cloned().context("missing account")?)?;
+            meron_core::cloud::save(&engine.db.lock().unwrap(), &account, now_seconds())?;
+            if let Some(password) = p.get("password").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                meron_core::secrets::store(
+                    &meron_core::cloud::secret_key(&account.id),
+                    &meron_core::secrets::Secrets { password: password.to_string(), ..Default::default() },
+                )?;
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "cloud.check" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let caps = tokio::task::spawn_blocking(move || meron_core::cloud::capabilities(&account, &password)).await?;
+            Ok(match caps {
+                Ok(caps) => json!({ "capabilities": caps }),
+                Err(err) => json!({ "error": { "message": err.to_string(), "detail": err } }),
+            })
+        }
+        "cloud.remove" => {
+            let id = req_str(p, "id")?;
+            meron_core::cloud::remove(&engine.db.lock().unwrap(), &id)?;
+            let _ = meron_core::secrets::delete(&meron_core::cloud::secret_key(&id));
+            Ok(json!({ "ok": true }))
+        }
+        "cloud.upload" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let upload_id = req_str(p, "upload_id")?;
+            spawn_cloud_upload(out.clone(), account, password, path, upload_id.clone());
+            Ok(json!({ "started": upload_id }))
+        }
+        "cloud.cancel" => {
+            if let Some(flag) = cloud_uploads().lock().unwrap().get(&req_str(p, "upload_id")?) {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "cloud.share" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let path = req_str(p, "path")?;
+            let want: meron_core::cloud::LinkRequest =
+                serde_json::from_value(p.get("link").cloned().unwrap_or(json!({})))?;
+            let result = tokio::task::spawn_blocking(move || {
+                let caps = meron_core::cloud::capabilities(&account, &password)?;
+                meron_core::cloud::share(&account, &password, &path, &want, &caps)
+            })
+            .await?;
+            Ok(match result {
+                Ok(link) => json!({ "link": link }),
+                Err(err) => json!({ "error": { "message": err.to_string(), "detail": err } }),
+            })
+        }
+        "cloud.revoke" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let share_id = req_str(p, "share_id")?;
+            tokio::task::spawn_blocking(move || meron_core::cloud::revoke(&account, &password, &share_id)).await??;
+            Ok(json!({ "ok": true }))
+        }
+
         // Translation models (#106, ADR-0031). Fetched only when asked, from
         // the one source in the bundled registry, and checked before use.
         "translation.status" => {
@@ -8563,6 +8631,60 @@ fn server_rule_plan(engine: &Arc<Engine>, account: &str, extensions: &[String]) 
 
 /// Batches with a worker sending them now, so carrying on twice cannot start
 /// a second one (#90).
+fn cloud_account(engine: &Engine, p: &Value) -> anyhow::Result<(meron_core::cloud::CloudAccount, String)> {
+    let account = meron_core::cloud::get(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+    let password = meron_core::secrets::load(&meron_core::cloud::secret_key(&account.id))?.password;
+    anyhow::ensure!(!password.is_empty(), "this cloud storage has no app password saved");
+    Ok((account, password))
+}
+
+fn cloud_uploads() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// Uploads in the background, reporting progress about every 256 KB and the
+/// end once, with what went wrong.
+fn spawn_cloud_upload(
+    out: Writer,
+    account: meron_core::cloud::CloudAccount,
+    password: String,
+    path: std::path::PathBuf,
+    upload_id: String,
+) {
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    cloud_uploads().lock().unwrap().insert(upload_id.clone(), cancel.clone());
+    let total = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<u64>();
+    let progress_out = out.clone();
+    let progress_id = upload_id.clone();
+    tokio::spawn(async move {
+        while let Some(done) = rx.recv().await {
+            emit(&progress_out, "cloud.progress", json!({ "upload_id": progress_id, "done": done, "total": total })).await;
+        }
+    });
+    tokio::spawn(async move {
+        let result = tokio::task::spawn_blocking(move || {
+            let mut last = 0u64;
+            meron_core::cloud::upload(&account, &password, &path, &cancel, &mut |done| {
+                if done == total || done - last >= 256 * 1024 {
+                    last = done;
+                    let _ = tx.send(done);
+                }
+            })
+        })
+        .await;
+        cloud_uploads().lock().unwrap().remove(&upload_id);
+        let detail = match result {
+            Ok(Ok(remote)) => json!({ "upload_id": upload_id, "path": remote }),
+            Ok(Err(err)) => json!({ "upload_id": upload_id, "error": { "message": err.to_string(), "detail": err } }),
+            Err(err) => json!({ "upload_id": upload_id, "error": { "message": err.to_string() } }),
+        };
+        emit(&out, "cloud.uploaded", detail).await;
+    });
+}
+
 struct TranslationDownload {
     cancel: std::sync::atomic::AtomicBool,
     done: std::sync::atomic::AtomicU64,

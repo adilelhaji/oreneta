@@ -462,6 +462,11 @@ Estado de la iteración 14 (2026-10-12, por delegación):
   Se añade reescribir el borrador con revisión, y hay una prueba que falla
   si sale un campo no revisado
   (ADR-0032, [registro](design/assistant-consent.md)).
+- **#108:** enlaces de solo lectura desde Nextcloud y ownCloud, con destino,
+  progreso, cancelación, contraseña y caducidad. Se respeta lo que exige el
+  servidor, y un enlace más abierto de lo pedido se retira. Dropbox,
+  OneDrive y Google Drive quedan bloqueados por los registros OAuth
+  (ADR-0033, [registro](design/cloud-links.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

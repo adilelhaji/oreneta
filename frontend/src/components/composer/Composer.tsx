@@ -16,6 +16,8 @@ import { closeMessageTab } from '../../states/compose'
 import { confirmAction, showToast, showUndoToast } from '../../states/ui'
 import { TranslateDraftDialog, type DraftTranslation } from './TranslateDraftDialog'
 import { AssistantRewriteDialog } from './AssistantRewriteDialog'
+import { ShareLinkDialog } from './ShareLinkDialog'
+import type { CloudLink } from '../../states/cloud'
 import { assistantEnabled$ } from '../../states/assistant'
 import { textToHtml } from './composerHelpers'
 import { CURSOR_TOKEN, fillPlaceholders, takeCursor, type Filled } from '../../lib/placeholders'
@@ -56,9 +58,29 @@ export function Composer({ tabId }: { tabId: string }) {
   } = useComposer(tabId)
   const [translating, setTranslating] = useState(false)
   const [rewriting, setRewriting] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const assistantEnabled = useValue(assistantEnabled$)
 
   if (!draft) return null
+
+  /** A link the person made goes in at the end, with what it allows (#108). */
+  const insertLink = (link: CloudLink, name: string) => {
+    setSharing(false)
+    const until = link.expires
+      ? t('cloud.linkUntil', { date: link.expires, defaultValue: 'available until {date}' })
+      : ''
+    const label = name || link.url
+    if (draft.rich && editor) {
+      const escape = (text: string) =>
+        text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      editor.commands.insertContentAt(
+        editor.state.doc.content.size,
+        `<p><a href="${escape(link.url)}">${escape(label)}</a>${until ? ` — ${escape(until)}` : ''}</p>`,
+      )
+      return
+    }
+    update({ text: `${draft.text.trimEnd()}\n\n${label}: ${link.url}${until ? ` (${until})` : ''}\n` })
+  }
 
   /** A reviewed rewrite replaces the draft's text, with an undo (#52). */
   const applyRewrite = (text: string) => {
@@ -294,6 +316,8 @@ export function Composer({ tabId }: { tabId: string }) {
 
       <LocalDraftStatus tabId={tabId} />
 
+      {sharing && <ShareLinkDialog onInsert={insertLink} onClose={() => setSharing(false)} />}
+
       {rewriting && (
         <AssistantRewriteDialog
           accountId={draft.accountId}
@@ -326,6 +350,7 @@ export function Composer({ tabId }: { tabId: string }) {
         onUseTemplate={(template) => void useTemplate(template)}
         onTranslate={() => setTranslating(true)}
         onRewrite={assistantEnabled ? () => setRewriting(true) : undefined}
+        onShareLink={() => setSharing(true)}
         pgpSign={draft.pgpSign}
         pgpEncrypt={draft.pgpEncrypt}
         pgpPassphrase={pgpPassphrase}

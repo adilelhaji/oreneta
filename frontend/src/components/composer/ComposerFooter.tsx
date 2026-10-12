@@ -1,4 +1,4 @@
-import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type, Languages, Sparkles } from 'lucide-react'
+import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type, Languages, Sparkles, Cloud } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
 import type { Template } from '../../states/templates'
@@ -23,6 +23,7 @@ export function ComposerFooter({
   onUseTemplate,
   onTranslate,
   onRewrite,
+  onShareLink,
   pgpSign,
   pgpEncrypt,
   pgpPassphrase,
@@ -48,6 +49,8 @@ export function ComposerFooter({
   onTranslate?: () => void
   /** Opens the assistant's rewrite of the draft (#52), when it is turned on. */
   onRewrite?: () => void
+  /** Shares a file by link from cloud storage (#108). */
+  onShareLink?: () => void
   pgpSign: boolean
   pgpEncrypt: boolean
   pgpPassphrase: string
@@ -84,6 +87,15 @@ export function ComposerFooter({
           />
         )}
         <TemplateMenu onPick={onUseTemplate} />
+        {onShareLink && (
+          <IconButton
+            icon={Cloud}
+            iconSize={16}
+            label={t('cloud.title', { defaultValue: 'Share a file by link' })}
+            radius="xl"
+            onClick={onShareLink}
+          />
+        )}
         {onRewrite && (
           <IconButton
             icon={Sparkles}

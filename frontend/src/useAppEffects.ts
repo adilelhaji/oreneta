@@ -4,6 +4,7 @@ import { boot } from './boot'
 import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
+import { onCloudEvent } from './states/cloud'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
@@ -400,6 +401,14 @@ export function useAppEffects() {
       onTranslationEvent('translation.done', detail),
     )
 
+    // Cloud uploads (#108): progress and the end of each.
+    const offCloudProgress = eventsOn('cloud.progress', (detail: { upload_id: string }) =>
+      onCloudEvent('cloud.progress', detail),
+    )
+    const offCloudUploaded = eventsOn('cloud.uploaded', (detail: { upload_id: string }) =>
+      onCloudEvent('cloud.uploaded', detail),
+    )
+
     const offScheduledSent = eventsOn(
       'mail.scheduledSent',
       (detail: { id?: string; subject?: string; late?: boolean }) => {
@@ -495,6 +504,8 @@ export function useAppEffects() {
       if (typeof offAwaitingDue === 'function') offAwaitingDue()
       if (typeof offTranslationProgress === 'function') offTranslationProgress()
       if (typeof offTranslationDone === 'function') offTranslationDone()
+      if (typeof offCloudProgress === 'function') offCloudProgress()
+      if (typeof offCloudUploaded === 'function') offCloudUploaded()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

@@ -1031,6 +1031,12 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'spam.lists': { entries: [] },
         'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
         'translation.status': translation,
+        'cloud.list': [],
+        'cloud.providers': [
+          { id: 'nextcloud', name: 'Nextcloud', usable: true },
+          { id: 'owncloud', name: 'ownCloud', usable: true },
+          { id: 'dropbox', name: 'Dropbox', usable: false },
+        ],
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
         'localDrafts.list': { drafts: [] },

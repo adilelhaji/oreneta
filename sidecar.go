@@ -450,6 +450,9 @@ func sidecarCallTimeout(method string) time.Duration {
 	// Rules run on a previewed folder, one server action per step (#50).
 	case "rules.runReviewed":
 		return 10 * time.Minute
+	// Asking a cloud server what it allows and creating a link (#108).
+	case "cloud.check", "cloud.share", "cloud.revoke":
+		return 90 * time.Second
 	// Downloading and checking a whole filter list (#107).
 	case "privacy.update":
 		return 2 * time.Minute

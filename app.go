@@ -427,6 +427,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.peopleWrite(command, payload)
 	case "archive.import":
 		return a.archiveImport(payload)
+	case "cloud.pickFile":
+		return a.cloudPickFile()
 	case "people.exportVcf":
 		return a.peopleExportVcf(payload)
 	case "people.importVcf":
@@ -554,7 +556,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"awaiting.add", "awaiting.list", "awaiting.setState", "awaiting.ruleOn", "awaiting.remove",
 		"merge.preview", "merge.start", "merge.list", "merge.cancel", "merge.resume",
 		"rules.serverStatus", "rules.serverPush", "rules.serverRemove", "rules.runReviewed", "spam.lists", "spam.setListed",
-		"translation.status", "translation.download", "translation.cancel", "translation.remove":
+		"translation.status", "translation.download", "translation.cancel", "translation.remove",
+		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
+		"cloud.share", "cloud.revoke":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":
