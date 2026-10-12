@@ -73,6 +73,7 @@ import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
+import { accountGroups$ } from '../../states/accountGroups'
 
 type ThreadListProps = {
   width?: number
@@ -103,9 +104,10 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // true from the first paint of a navigation, which is a frame or more before
   // the effect that starts the load.
   const threadsLoadedKey = useValue(mail$.threadsLoadedKey)
+  const accountGroup = useValue(accountGroups$.active)
   const threadsLoading =
     threadsLoadedKey !==
-    threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort))
+    threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort), accountGroup)
   const threadMenu = useThreadContextMenu(accounts)
   // Starred is a folder of the unified view whose rows span every account. It
   // lists ordinary threads, so it shares this list's selection, context menu and

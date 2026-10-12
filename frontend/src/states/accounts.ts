@@ -4,6 +4,7 @@ import { invoke } from '../lib/bridge'
 import { boot } from '../boot'
 import type { Account, AccountProxy, AccountSignature, Alias, ChatWallpaper } from '../types'
 import { confirmAction, ui$, showToast } from './ui'
+import { forgetAccountInGroups, inUnifiedScope } from './accountGroups'
 
 // Accounts state — maps 1:1 to the `accounts` DB table. The list is loaded by
 // boot()/account flows; the mutations here update it optimistically and persist
@@ -11,9 +12,10 @@ import { confirmAction, ui$, showToast } from './ui'
 export const accounts$ = observable([] as Account[])
 
 // Accounts that participate in the unified inbox. Excluded accounts still exist
-// and are reachable by selecting them directly; they just don't merge in.
+// and are reachable by selecting them directly; they just don't merge in. With
+// an account group chosen, the unified view is that group's accounts (#99).
 export function unifiedAccounts() {
-  return accounts$.get().filter((account) => account.included_in_unified !== false)
+  return accounts$.get().filter(inUnifiedScope)
 }
 
 export function getActiveAccount() {
@@ -205,6 +207,7 @@ export async function deleteAccount(accountId: string) {
   }
   try {
     const result = await invoke<{ kept?: KeptAfterRemoval }>('account.remove', { id: accountId })
+    forgetAccountInGroups(accountId)
     showToast(keptAfterRemovalNotice(result?.kept) ?? t('accounts.toast.accountRemoved'))
     await boot()
   } catch (error) {

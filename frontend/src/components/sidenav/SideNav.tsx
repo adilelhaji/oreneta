@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import type { DragEvent } from 'react'
-import { Mail, MoreHorizontal, EyeOff, CalendarDays, BookUser, ListTodo, StickyNote, Paperclip, MessagesSquare } from 'lucide-react'
+import {
+  Mail,
+  MoreHorizontal,
+  EyeOff,
+  CalendarDays,
+  BookUser,
+  ListTodo,
+  StickyNote,
+  Paperclip,
+  MessagesSquare,
+  Layers,
+} from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -21,6 +32,7 @@ import { AccountContextMenu } from './AccountContextMenu'
 import { BoardContextMenu } from './BoardContextMenu'
 import { BoardDialog, type BoardDialogState } from './BoardDialog'
 import type { Account } from '../../types'
+import { accountGroups$, showAccountGroup } from '../../states/accountGroups'
 
 export function SideNav() {
   const { t } = useTranslation()
@@ -38,6 +50,7 @@ export function SideNav() {
   const foldersByAccount = useValue(mail$.foldersByAccount)
   const activeBoardId = useValue(kanban$.activeBoardId)
   const selectedAccount = useValue(ui$.selectedAccount)
+  const accountGroups = useValue(accountGroups$.groups)
   // Right-click context menu anchored at the cursor for one account.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const menuAccount = menu ? accounts.find((acc) => acc.id === menu.id) : null
@@ -166,7 +179,10 @@ export function SideNav() {
                     ? 'bg-accent text-on-accent '
                     : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
                 }`}
-                onClick={() => selectAccount('unified')}
+                onClick={() => {
+                  selectAccount('unified')
+                  showAccountGroup(null)
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
@@ -459,6 +475,18 @@ export function SideNav() {
 
       {unifiedMenu && (
         <RailContextMenu x={unifiedMenu.x} y={unifiedMenu.y} onClose={() => setUnifiedMenu(null)}>
+          {accountGroups.map((group) => (
+            <RailMenuItem
+              key={group.id}
+              icon={<Layers size={14} className="text-secondary" strokeWidth={1.75} />}
+              label={t('accountGroups.showGroup', { name: group.name, defaultValue: 'Show {name} together' })}
+              onClick={() => {
+                selectAccount('unified')
+                showAccountGroup(group.id)
+                setUnifiedMenu(null)
+              }}
+            />
+          ))}
           <RailMenuItem
             icon={<EyeOff size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('sidenav.actions.hideFromSideNav')}

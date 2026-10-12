@@ -10,7 +10,9 @@ import {
   Plus,
   RefreshCw,
   Settings,
-  SquareChevronRight, MessagesSquare } from 'lucide-react'
+  SquareChevronRight,
+  MessagesSquare,
+} from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'

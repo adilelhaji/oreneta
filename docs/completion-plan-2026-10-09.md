@@ -374,6 +374,9 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
 - **#99 (2026-10-12, por delegación):** un perfil con datos se puede
   borrar escribiendo su nombre, si no está abierto. Antes, su núcleo borra
   sus entradas del llavero (ADR-0038, [registro](design/profiles.md)).
+- **#99, grupos de cuentas (2026-10-12, por delegación):** vistas con nombre
+  sobre las cuentas elegidas, mostradas con la bandeja unificada y sin
+  mover nada (ADR-0040, [registro](design/account-groups.md)).
 - **#99:** perfiles aislados, cada uno en su ventana y proceso, con
   carpetas, llavero y almacenamiento del webview propios (ADR-0016,
   [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,

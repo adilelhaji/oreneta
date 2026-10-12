@@ -103,3 +103,31 @@ describe('production mailbox navigation', () => {
     expect(destinations).toEqual(['inbox'])
   })
 })
+
+describe('account groups in navigation (#99)', () => {
+  const groups = [{ id: 'group:work', name: 'Work', accounts: [account.id] }]
+
+  it('lists each group under the unified inbox and marks only the one shown', () => {
+    const chosen: string[] = []
+    const view = render(
+      <MailNavigationView
+        {...props}
+        selectedAccount="unified"
+        groups={groups}
+        activeGroup="group:work"
+        onGroup={(id) => chosen.push(id)}
+      />,
+    )
+    const group = view.getByRole('button', { name: 'Work' })
+    expect(group.getAttribute('aria-current')).toBe('true')
+    expect(view.getByRole('button', { name: 'Unified inbox' }).getAttribute('aria-current')).toBeNull()
+    fireEvent.click(group)
+    expect(chosen).toEqual(['group:work'])
+  })
+
+  it('marks the unified inbox when no group is chosen', () => {
+    const view = render(<MailNavigationView {...props} selectedAccount="unified" groups={groups} activeGroup={null} />)
+    expect(view.getByRole('button', { name: 'Unified inbox' }).getAttribute('aria-current')).toBe('true')
+    expect(view.getByRole('button', { name: 'Work' }).getAttribute('aria-current')).toBeNull()
+  })
+})

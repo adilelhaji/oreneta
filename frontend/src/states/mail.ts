@@ -19,6 +19,7 @@ import {
   type BulkSelectionItem,
 } from './ui'
 import { accounts$, unifiedAccounts } from './accounts'
+import { accountGroups$, inUnifiedScope } from './accountGroups'
 import { kanban$, forgetDeletedMailViewFolder, removeKanbanColumnsForFolder } from './kanban'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
 import { isUnifiedStarred, unifiedFolderRole, unifiedFolders } from '../lib/unifiedFolders'
@@ -822,11 +823,20 @@ type ThreadSearchStage = 'auto' | 'cache' | 'live'
 // id nor a single-line search box carries one). Both the loader and the list
 // build the key from the same fields, so the list can tell "these rows are for
 // what I'm showing" from "these rows are the previous view's".
-export function threadListViewKey(account: string, folder: string, query: string, filter: string, sort: string) {
+export function threadListViewKey(
+  account: string,
+  folder: string,
+  query: string,
+  filter: string,
+  sort: string,
+  group: string | null = accountGroups$.active.peek(),
+) {
   // The ordering is part of the view. Without it here, changing the sort would
   // leave the previous order's rows on screen looking settled, because the
-  // list would believe it was already showing the view it had loaded.
-  return [account, folder, query, filter, sort].join('\n')
+  // list would believe it was already showing the view it had loaded. So is
+  // the account group: each one is its own unified view (#99).
+  const scope = account === 'unified' && group ? `unified#${group}` : account
+  return [scope, folder, query, filter, sort].join('\n')
 }
 
 /**
@@ -2308,7 +2318,7 @@ export async function markAllRead() {
         (a) =>
           isReadOnlyMail(a) &&
           (a.id === ui$.selectedAccount.peek() ||
-            (ui$.selectedAccount.peek() === 'unified' && a.included_in_unified !== false)),
+            (ui$.selectedAccount.peek() === 'unified' && inUnifiedScope(a))),
       )
   )
     return
@@ -2375,7 +2385,8 @@ export async function markAccountInboxRead(accountId: string) {
   const inbox = accountFolders.find((folder) => folderMatches(folder, accountId, 'inbox'))
   const folderId = inbox?.id || 'inbox'
   const accountUnread = inbox?.unread ?? 0
-  const includedInUnified = accounts$.get().find((account) => account.id === accountId)?.included_in_unified !== false
+  const owner = accounts$.get().find((account) => account.id === accountId)
+  const includedInUnified = !!owner && inUnifiedScope(owner)
   const previousThreads = mail$.threads.get()
   const previousMessages = mail$.messages.get()
   const previousFolders = mail$.folders.get()
@@ -2641,7 +2652,7 @@ export async function syncMail() {
   const contextKey = () => JSON.stringify([
     ui$.selectedAccount.peek(), ui$.selectedFolder.peek(), ui$.query.peek(),
     filterKey(ui$.filters.peek()), sortParam(settings$.listSort.peek()), kanban$.activeBoardId.peek(),
-    accounts$.peek().filter((account) => selectedAcc === 'unified' ? account.included_in_unified !== false : account.id === selectedAcc).map((account) => account.id),
+    accounts$.peek().filter((account) => selectedAcc === 'unified' ? inUnifiedScope(account) : account.id === selectedAcc).map((account) => account.id),
   ])
   const initialContext = contextKey()
 

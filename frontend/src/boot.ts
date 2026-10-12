@@ -6,6 +6,7 @@ import { ensureDefaultKanbanBoard, restoreKanbanSession, KANBAN_SESSION_KEYS } f
 import { accounts$ } from './states/accounts'
 import { openMailtoCompose } from './states/compose'
 import { ASSISTANT_PREF_KEYS, hydrateAssistant } from './states/assistant'
+import { ACCOUNT_GROUP_KEYS, hydrateAccountGroups } from './states/accountGroups'
 
 // App bootstrap: load the system check, accounts, and persisted settings in
 // parallel, seed the initial selection, and drain any mailto: links the OS
@@ -15,12 +16,19 @@ export async function boot() {
     invoke<SystemCheck>('system.check'),
     invoke<{ accounts: Account[] }>('account.list'),
     invoke<{ prefs: Record<string, unknown> }>('app.prefsGet', {
-      keys: [...SETTINGS_DB_KEYS, ...UI_SESSION_KEYS, ...KANBAN_SESSION_KEYS, ...ASSISTANT_PREF_KEYS],
+      keys: [
+        ...SETTINGS_DB_KEYS,
+        ...UI_SESSION_KEYS,
+        ...KANBAN_SESSION_KEYS,
+        ...ASSISTANT_PREF_KEYS,
+        ...ACCOUNT_GROUP_KEYS,
+      ],
     }).catch(() => ({ prefs: {} })),
   ])
   const prefs = prefsResult.prefs || {}
   hydrateSettings(prefs)
   hydrateAssistant(prefs)
+  hydrateAccountGroups(prefs)
   ui$.system.set(systemResult)
   accounts$.set(accountResult.accounts)
   restoreUiSession(prefs, accountResult.accounts)

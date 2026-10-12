@@ -54,6 +54,7 @@ import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
 import { startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
+import { AccountGroupsGroup } from './AccountGroupsGroup'
 import { QuickActionsGroup } from '../quick/QuickActionsGroup'
 import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { SenderListsGroup } from './SenderListsGroup'
@@ -1081,6 +1082,7 @@ function GeneralSection() {
       <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}>
         <BackupGroup />
       </div>
+      <AccountGroupsGroup />
       <ProfilesGroup />
       <QuickActionsGroup />
       <CategoriesGroup />

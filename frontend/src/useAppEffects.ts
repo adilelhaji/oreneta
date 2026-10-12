@@ -7,6 +7,7 @@ import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
 import { onChatEvent } from './states/messaging'
 import { onBackupScheduled } from './states/backupSchedule'
+import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
@@ -296,10 +297,11 @@ export function useAppEffects() {
     }
   }, [])
 
+  const accountGroup = useValue(accountGroups$.active)
   useEffect(() => {
     if (!selectedAccount) return
     void loadFolders(selectedAccount)
-  }, [selectedAccount])
+  }, [selectedAccount, accountGroup])
 
   useThreadListLoader()
 
