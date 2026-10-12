@@ -13,7 +13,7 @@ struct Fake {
 impl Source for Fake {
     fn open(&self, url: &str) -> std::result::Result<Box<dyn Read + Send>, String> {
         self.asked.lock().unwrap().push(url.to_string());
-        let name = url.rsplit('/').next().unwrap().to_string();
+        let name = url.rsplit('/').next().unwrap().trim_start_matches("xxyy-").to_string();
         let mut bytes = self.files.get(&name).cloned().ok_or("404")?;
         if let Some((cut, at)) = &self.cut {
             if *cut == name {
@@ -98,7 +98,7 @@ fn a_model_is_in_place_only_after_every_file_checks_out() {
     assert!(seen.windows(2).all(|w| w[0].0 <= w[1].0));
     assert_eq!(
         fake.asked.lock().unwrap()[0],
-        format!("{BASE_URL}xxyy/model.bin"),
+        format!("{BASE_URL}xxyy-model.bin"),
         "only ever from the one source"
     );
     assert!(!staging(&d, &pair).exists());
@@ -185,4 +185,14 @@ fn status_reports_what_is_installed_and_how_much_space_it_takes() {
     // A file that shrank since is not counted as installed.
     std::fs::File::create(d.join("esen").join(&esen.files[0].name)).unwrap().set_len(1).unwrap();
     assert!(!installed(&d, esen));
+}
+
+#[test]
+fn every_model_file_has_its_own_name_in_the_release() {
+    // Some file names repeat across pairs; a release keeps one flat list.
+    let names: Vec<String> =
+        registry().iter().flat_map(|p| p.files.iter().map(move |f| asset_name(p, f))).collect();
+    let unique: std::collections::BTreeSet<&String> = names.iter().collect();
+    assert_eq!(unique.len(), names.len());
+    assert!(BASE_URL.starts_with("https://github.com/adilelhaji/oreneta/releases/download/"));
 }

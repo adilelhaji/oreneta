@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: '22'
       - run: node --test scripts/ci/*.test.cjs
+      - run: python3 scripts/translation-models/test_mirror.py
 
   go:
     runs-on: ubuntu-latest

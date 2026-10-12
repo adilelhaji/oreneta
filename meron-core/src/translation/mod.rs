@@ -21,8 +21,17 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Mozilla's production models (MPL-2.0), as published for Bergamot 0.3.3.
-/// Only the models Firefox shipped as production quality are offered.
-pub const BASE_URL: &str = "https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/";
+/// Only the models Firefox shipped as production quality are offered. They
+/// are served from this project's own release, copied unchanged from
+/// Mozilla's `bergamot-models-sandbox` bucket (ADR-0031): the registry's
+/// hashes are Mozilla's, so a copy that differs is refused.
+pub const BASE_URL: &str = "https://github.com/adilelhaji/oreneta/releases/download/translation-models-0.3.3/";
+
+/// A release keeps its files in one flat list, and some file names repeat
+/// across pairs, so each is published under its pair's key.
+pub fn asset_name(pair: &Pair, file: &ModelFile) -> String {
+    format!("{}-{}", pair.key(), file.name)
+}
 const REGISTRY: &str = include_str!("registry.json");
 
 /// The language every model translates to or from: other pairs go through it.
@@ -285,7 +294,7 @@ fn fetch_all(
         if cancel.load(Ordering::Relaxed) {
             return Err(DownloadError::Cancelled);
         }
-        let url = format!("{BASE_URL}{}/{}", pair.key(), file.name);
+        let url = format!("{BASE_URL}{}", asset_name(pair, file));
         let mut reader = source.open(&url).map_err(|message| DownloadError::Network { message })?;
         let mut out = std::fs::File::create(stage.join(&file.name)).map_err(disk_error)?;
         let mut hasher = Sha256::new();

@@ -12,7 +12,7 @@ const status = {
   languages: ['en', 'es'],
   used: 2,
   quota: 1024 ** 3,
-  source: 'https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/',
+  source: 'https://github.com/adilelhaji/oreneta/releases/download/translation-models-0.3.3/',
   downloading: {},
 }
 

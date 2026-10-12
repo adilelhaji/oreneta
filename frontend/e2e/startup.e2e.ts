@@ -55,7 +55,7 @@ function translationStatus(installed: string[] = []) {
     languages: [...new Set(pairs.flatMap((p) => [p.from, p.to]))].sort(),
     used: pairs.filter((p) => p.installed).reduce((n, p) => n + p.size, 0),
     quota: 1024 ** 3,
-    source: 'https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/',
+    source: 'https://github.com/adilelhaji/oreneta/releases/download/translation-models-0.3.3/',
     downloading: {},
   }
 }
