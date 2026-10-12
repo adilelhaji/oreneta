@@ -97,8 +97,33 @@ function pdfjsData() {
   }
 }
 
+// `vite preview` is what the e2e suite runs against: it answers with the exact
+// Content-Security-Policy the production build sends (read from csp_prod.go),
+// so a feature the policy would block in the app fails in a test instead of
+// only on someone's computer.
+export function productionCsp(source = fs.readFileSync(new URL('../csp_prod.go', import.meta.url), 'utf8')) {
+  const decl = source.slice(source.indexOf('const contentSecurityPolicy ='))
+  const end = decl.search(/"\s*\n\s*\n|"\s*\n\s*(func|const|var|\/\/)|"\s*$/)
+  const policy = [...decl.slice(0, end + 1).matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join('')
+  if (!policy.includes('default-src')) throw new Error('csp_prod.go: contentSecurityPolicy not found')
+  return policy
+}
+
+function previewCsp() {
+  return {
+    name: 'preview-csp',
+    configurePreviewServer(server) {
+      const policy = productionCsp()
+      server.middlewares.use((_req, res, next) => {
+        res.setHeader('Content-Security-Policy', policy)
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
   // Linked/hoisted packages must share the renderer's React dispatcher.
   resolve: { dedupe: ['react', 'react-dom'] },
-  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData()],
+  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData(), previewCsp()],
 })

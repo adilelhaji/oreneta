@@ -39,6 +39,15 @@
   (`@fontsource-variable/inter` 5.3.0, OFL-1.1). Abrir la aplicación ya no
   hace ninguna petición a terceros.
 
+- **Política de seguridad (CSP):**
+  - se añade `'wasm-unsafe-eval'` a `script-src`, que permite compilar
+    WebAssembly y no permite `eval` de JavaScript, y `worker-src 'self'
+    blob:`, porque Harper arranca su worker desde una URL `blob:`;
+  - se quitan los hosts de Google Fonts;
+  - las pruebas e2e corren ahora con la política exacta de producción
+    (`vite preview` la lee de `csp_prod.go`); así se vio que la primera
+    versión no habría funcionado en la aplicación.
+
 ## Alternativas
 
 - LanguageTool en un servidor: más idiomas, pero el texto sale del equipo.
