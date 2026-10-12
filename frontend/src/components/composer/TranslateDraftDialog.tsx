@@ -79,7 +79,7 @@ export function TranslateDraftDialog({
     try {
       const out = await translator.translate(rich ? html : text, installed, rich)
       if (out.state === 'tooLong')
-        setProblem(t('translation.tooLong', { defaultValue: 'This is too long to translate here.' }))
+        setProblem(t('translation.draftTooLong', { defaultValue: 'This is too long to translate here.' }))
       if (out.state === 'done') setResult(rich ? { html: out.text, text: plainTextOf(out.text) } : { text: out.text })
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error))
