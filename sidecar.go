@@ -446,6 +446,9 @@ func sidecarCallTimeout(method string) time.Duration {
 	// A full-folder STORE + EXPUNGE on a large Trash can take a while.
 	case "messages.emptyFolder":
 		return 60 * time.Second
+	// Rules run on a previewed folder, one server action per step (#50).
+	case "rules.runReviewed":
+		return 10 * time.Minute
 	// Backups derive a key with 600k PBKDF2 rounds, on top of reading or
 	// writing every account, feed and setting.
 	case "backup.export", "backup.import":

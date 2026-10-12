@@ -3217,6 +3217,20 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }))
         }
 
+        // Senders and domains the reader blocked or allowed (#50). A block
+        // makes the suggestion certain; it still moves nothing by itself.
+        "spam.lists" => {
+            let account = req_str(p, "account")?;
+            let lists = store::sender_lists(&engine.db.lock().unwrap(), &account)?;
+            Ok(json!({ "entries": lists.into_iter().map(|(pattern, allow)| json!({ "pattern": pattern, "allow": allow })).collect::<Vec<_>>() }))
+        }
+        "spam.setListed" => {
+            let account = req_str(p, "account")?;
+            let allow = p.get("allow").and_then(Value::as_bool);
+            let pattern = store::set_sender_listed(&engine.db.lock().unwrap(), &account, &req_str(p, "pattern")?, allow)?;
+            Ok(json!({ "ok": true, "pattern": pattern }))
+        }
+
         // Records what the reader decided about one conversation: spam
         // confirmed, or said not spam. Never moves anything itself — the
         // reader's own action (marking junk, or dismissing the notice) does
@@ -4480,6 +4494,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let limit = p.get("limit").and_then(Value::as_i64).unwrap_or(200).clamp(1, 1000);
             // Rules as sent when given, so an unsaved draft can be tried
             // before it is trusted with a mailbox; the stored ones otherwise.
+            let from_stored = p.get("rules").and_then(Value::as_array).is_none();
             let candidates: Vec<rules::Rule> = match p.get("rules").and_then(Value::as_array) {
                 Some(values) => values
                     .iter()
@@ -4494,11 +4509,18 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 store::recent_headers(&db, &account, &folder, limit)?
             };
             let mut hits = Vec::new();
+            let mut reviewed = Vec::new();
             for header in &headers {
                 let planned = rules::plan(&candidates, &account, &rule_subject(header));
                 if planned.is_empty() {
                     continue;
                 }
+                reviewed.push(rules::run::ReviewedMessage {
+                    uid: header.uid,
+                    subject: header.subject.clone(),
+                    from: header.from_addr.clone(),
+                    steps: planned.clone(),
+                });
                 hits.push(json!({
                     "uid": header.uid,
                     "subject": header.subject,
@@ -4514,7 +4536,89 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         .collect::<Vec<_>>(),
                 }));
             }
-            Ok(json!({ "examined": headers.len(), "matches": hits }))
+            // The stored rules' preview can be run as it stands (#50): the
+            // review names these messages and these steps, nothing more.
+            let review_id = if from_stored && !reviewed.is_empty() {
+                let uidvalidity = store::get_folder_state(&engine.db.lock().unwrap(), &account, &folder)?
+                    .map(|(validity, _)| validity)
+                    .unwrap_or(0);
+                Some(rule_runs().issue(
+                    &account,
+                    &folder,
+                    uidvalidity,
+                    &rules::run::fingerprint(&candidates),
+                    reviewed,
+                    now_seconds(),
+                ))
+            } else {
+                None
+            };
+            Ok(json!({ "examined": headers.len(), "matches": hits, "reviewId": review_id }))
+        }
+
+        // Runs a previewed set of rule actions on mail already in a folder,
+        // exactly as shown, and says what happened to each step (#50).
+        "rules.runReviewed" => {
+            let account = req_str(p, "account")?;
+            let review_id = req_str(p, "review_id")?;
+            let folder = req_str(p, "folder").map(|f| canon_folder(&f)).unwrap_or_else(|_| "INBOX".into());
+            let rules_now = stored_rules(engine);
+            let validity = store::get_folder_state(&engine.db.lock().unwrap(), &account, &folder)?
+                .map(|(v, _)| v)
+                .unwrap_or(0);
+            let run = rule_runs()
+                .take(&review_id, &account, validity, &rules::run::fingerprint(&rules_now), now_seconds())
+                .map_err(|err| anyhow::anyhow!("{err}"))?;
+            if run.folder != folder {
+                anyhow::bail!("this run was previewed for another folder");
+            }
+            let mut report = Vec::new();
+            let (mut done, mut failed) = (0usize, 0usize);
+            for message in &run.messages {
+                let mut steps = Vec::new();
+                let mut stopped = false;
+                for step in &message.steps {
+                    if stopped {
+                        steps.push(json!({ "action": action_label(&step.action), "ok": false, "error": "not run: an earlier step failed" }));
+                        continue;
+                    }
+                    // Boxed: an action runs through `dispatch`, which this is in.
+                    let result =
+                        Box::pin(run_rule_action(engine, out, &account, &run.folder, message.uid, &step.action)).await;
+                    let outcome = match &result {
+                        Ok(()) => "done".to_string(),
+                        Err(err) => format!("failed: {err:#}"),
+                    };
+                    {
+                        let db = engine.db.lock().unwrap();
+                        let _ = store::log_rule_action(
+                            &db,
+                            &store::RuleLogEntry {
+                                at: now_seconds(),
+                                account: account.clone(),
+                                rule_id: step.rule_id.clone(),
+                                rule_name: step.rule_name.clone(),
+                                folder: run.folder.clone(),
+                                uid: message.uid,
+                                subject: message.subject.clone(),
+                                from_addr: message.from.clone(),
+                                action: action_label(&step.action),
+                                outcome,
+                            },
+                        );
+                    }
+                    match result {
+                        Ok(()) => steps.push(json!({ "action": action_label(&step.action), "ok": true })),
+                        Err(err) => {
+                            stopped = true;
+                            steps.push(json!({ "action": action_label(&step.action), "ok": false, "error": format!("{err:#}") }));
+                        }
+                    }
+                }
+                if stopped { failed += 1 } else { done += 1 }
+                report.push(json!({ "uid": message.uid, "subject": message.subject, "steps": steps }));
+            }
+            Ok(json!({ "done": done, "failed": failed, "messages": report }))
         }
 
         // What the rules have actually done. A mailbox that changes by itself
@@ -8351,6 +8455,12 @@ fn scheduled_outcome_of(result: &Value) -> ScheduledOutcome {
         },
         _ => ScheduledOutcome::Sent,
     }
+}
+
+/// Previewed rule runs waiting to be confirmed (#50).
+fn rule_runs() -> &'static rules::run::Registry {
+    static RUNS: std::sync::OnceLock<rules::run::Registry> = std::sync::OnceLock::new();
+    RUNS.get_or_init(Default::default)
 }
 
 /// Why an account's rules cannot run on its server through ManageSieve.

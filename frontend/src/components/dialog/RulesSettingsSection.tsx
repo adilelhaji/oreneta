@@ -14,6 +14,8 @@ import {
   saveRules,
   type Rule,
   type RulePreview,
+  runReviewedRules,
+  type RuleRunReport,
 } from '../../states/rules'
 import { isRssAccount } from '../../lib/threadActions'
 import { SettingsGroup, Switch } from './AccountSettingsRows'
@@ -58,13 +60,16 @@ export function RulesSettingsSection() {
     }
   }
 
-  const tryRules = async (candidates: Rule[]) => {
+  // Without `candidates`, the stored rules: a preview of those can be run.
+  const tryRules = async (candidates?: Rule[]) => {
     const account = mailAccounts[0]
     if (!account) return
     setTrying(true)
     setPreview(null)
     try {
-      setPreview(await previewRules({ accountId: account.id, folder: 'INBOX', rules: candidates }))
+      setPreview(
+        await previewRules({ accountId: account.id, folder: 'INBOX', ...(candidates ? { rules: candidates } : {}) }),
+      )
     } catch (error) {
       showToast(error instanceof Error ? error.message : t('rules.tryFailed'), 'error')
     } finally {
@@ -213,7 +218,7 @@ export function RulesSettingsSection() {
             <button
               type="button"
               disabled={trying}
-              onClick={() => void tryRules(stored)}
+              onClick={() => void tryRules()}
               className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-caption font-semibold text-secondary transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
             >
               <FlaskConical size={14} strokeWidth={1.75} />
@@ -230,7 +235,11 @@ export function RulesSettingsSection() {
           </button>
         </div>
 
-        <PreviewResult preview={preview} />
+        <PreviewResult
+          preview={preview}
+          runTarget={mailAccounts[0] ? { accountId: mailAccounts[0].id, folder: 'INBOX' } : undefined}
+          onRan={() => setPreview(null)}
+        />
         <ServerRulesPanel />
       </div>
     </SettingsGroup>
@@ -257,9 +266,46 @@ function ruleSummary(rule: Rule, t: (key: string, vars?: Record<string, unknown>
  * matches" means something quite different out of twenty than out of two
  * thousand, and a rule is being judged on both.
  */
-function PreviewResult({ preview }: { preview: RulePreview | null }) {
+function PreviewResult({
+  preview,
+  runTarget,
+  onRan,
+}: {
+  preview: RulePreview | null
+  /** Where the preview was taken, when it can be run as it stands. */
+  runTarget?: { accountId: string; folder: string }
+  onRan?: () => void
+}) {
   const { t } = useTranslation()
+  const [report, setReport] = useState<RuleRunReport | null>(null)
+  const [running, setRunning] = useState(false)
+  if (report) return <RunReport report={report} onClose={() => setReport(null)} />
   if (!preview) return null
+
+  const run = async () => {
+    if (!runTarget || !preview.reviewId) return
+    const ok = await confirmAction({
+      title: t('rules.runTitle', {
+        count: preview.matches.length,
+        defaultValue: 'Run the rules on these {count} messages?',
+      }),
+      message: t('rules.runMessage', {
+        defaultValue: 'Exactly the steps listed, on exactly these messages; mail that arrived since is not touched.',
+      }),
+      confirmLabel: t('rules.runConfirm', { defaultValue: 'Run them' }),
+      cancelLabel: t('buttons.cancel'),
+    })
+    if (!ok) return
+    setRunning(true)
+    try {
+      setReport(await runReviewedRules(runTarget.accountId, runTarget.folder, preview.reviewId))
+      onRan?.()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setRunning(false)
+    }
+  }
 
   if (preview.matches.length === 0) {
     return <Notice tone="success">{t('rules.tryNone', { examined: preview.examined })}</Notice>
@@ -277,6 +323,50 @@ function PreviewResult({ preview }: { preview: RulePreview | null }) {
           </li>
         ))}
       </ul>
+      {runTarget && preview.reviewId && (
+        <button
+          type="button"
+          disabled={running}
+          onClick={() => void run()}
+          className="mt-2 rounded-control bg-accent px-3 py-1.5 text-caption font-bold text-on-accent transition-colors hover:bg-accent-hover cursor-pointer disabled:opacity-50"
+        >
+          {t('rules.runNow', { count: preview.matches.length, defaultValue: 'Run on these {count} messages' })}
+        </button>
+      )}
+    </Notice>
+  )
+}
+
+function RunReport({ report, onClose }: { report: RuleRunReport; onClose: () => void }) {
+  const { t } = useTranslation()
+  const failed = report.messages.filter((m) => m.steps.some((s) => !s.ok))
+  return (
+    <Notice
+      tone={report.failed ? 'warning' : 'success'}
+      title={t('rules.ranTitle', {
+        done: report.done,
+        total: report.done + report.failed,
+        defaultValue: 'Every step ran on {done} of {total} messages',
+      })}
+    >
+      {failed.length > 0 && (
+        <ul className="mt-1 flex max-h-56 flex-col gap-1 overflow-y-auto">
+          {failed.map((message) => (
+            <li key={message.uid} className="min-w-0">
+              <p className="truncate text-caption text-primary">{message.subject}</p>
+              {message.steps.map((step, index) => (
+                <p key={index} className={`text-2xs ${step.ok ? 'text-secondary' : 'text-danger'}`}>
+                  {step.ok ? '✓' : '✕'} {step.action}
+                  {step.error ? `: ${step.error}` : ''}
+                </p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" onClick={onClose} className="mt-2 text-caption text-accent underline cursor-pointer">
+        {t('common.close')}
+      </button>
     </Notice>
   )
 }

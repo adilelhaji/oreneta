@@ -3448,7 +3448,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 
     for table in [
         "accounts",
@@ -3498,7 +3498,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 }
 
 #[test]
@@ -3526,7 +3526,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3564,7 +3564,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 48);
+    assert_eq!(version, 49);
 }
 
 #[test]
@@ -5701,4 +5701,47 @@ fn removing_an_account_takes_its_state_and_keeps_what_the_person_wrote() {
         .query_row("SELECT COUNT(*) FROM people WHERE account = 'kept'", [], |r| r.get(0))
         .unwrap();
     assert_eq!(other, 1, "another account is untouched");
+}
+
+
+/// #50: blocked and allowed senders, by address or domain, per account; the
+/// address is asked before its domain, and the cached verdicts follow at once.
+#[test]
+fn senders_can_be_blocked_or_allowed_by_address_or_domain() {
+    let conn = test_conn();
+    assert_eq!(sender_pattern(" Promo@Shop.example "), Some("promo@shop.example".into()));
+    assert_eq!(sender_pattern("shop.example"), Some("@shop.example".into()));
+    assert_eq!(sender_pattern("@shop.example"), Some("@shop.example".into()));
+    assert_eq!(sender_pattern("not an address"), None);
+    assert!(set_sender_listed(&conn, "acct", "nonsense", Some(false)).is_err());
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, from_addr: "promo@shop.example".into(), subject: "Sale".into(), ..Default::default() },
+            MessageHeader { uid: 2, from_addr: "orders@shop.example".into(), subject: "Your order".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    set_sender_listed(&conn, "acct", "@shop.example", Some(false)).unwrap();
+    set_sender_listed(&conn, "acct", "orders@shop.example", Some(true)).unwrap();
+    assert_eq!(sender_listed(&conn, "acct", "promo@shop.example"), Some(true), "blocked by domain");
+    assert_eq!(sender_listed(&conn, "acct", "Orders@Shop.example"), Some(false), "allowed by address");
+    assert_eq!(sender_listed(&conn, "other", "promo@shop.example"), None, "per account");
+    let spam: Vec<(u32, i64)> = conn
+        .prepare("SELECT uid, spam FROM messages ORDER BY uid")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(spam, vec![(1, 1), (2, 0)], "the cached verdicts follow the lists at once");
+    assert_eq!(
+        sender_lists(&conn, "acct").unwrap(),
+        vec![("orders@shop.example".to_string(), true), ("@shop.example".to_string(), false)]
+    );
+    set_sender_listed(&conn, "acct", "shop.example", None).unwrap();
+    assert_eq!(sender_listed(&conn, "acct", "promo@shop.example"), None);
 }

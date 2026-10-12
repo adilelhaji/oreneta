@@ -2166,7 +2166,79 @@ pub fn spam_signals(conn: &Connection, account: &str, from_addr: &str, subject: 
         sender_spam_count,
         sender_ham_count,
         trigger_words: spam_trigger_words(conn, account, subject),
+        listed: sender_listed(conn, account, from_addr),
     }
+}
+
+// ---- Blocked and allowed senders (#50) ----------------------------------------
+
+pub const SENDER_LISTS_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS sender_lists (
+  account TEXT NOT NULL,
+  pattern TEXT NOT NULL,   -- an address, or @domain
+  allow   INTEGER NOT NULL,
+  PRIMARY KEY (account, pattern)
+);
+";
+
+/// An address as written, or a domain as `@domain`; `None` when it is
+/// neither.
+pub fn sender_pattern(text: &str) -> Option<String> {
+    let text = text.trim().trim_matches(['<', '>']).to_lowercase();
+    let valid = |domain: &str| domain.contains('.') && !domain.contains(|c: char| c.is_whitespace() || c == '@');
+    match text.split_once('@') {
+        Some(("", domain)) if valid(domain) => Some(format!("@{domain}")),
+        Some((local, domain)) if !local.is_empty() && valid(domain) && !local.contains(char::is_whitespace) => Some(text.clone()),
+        None if valid(&text) => Some(format!("@{text}")),
+        _ => None,
+    }
+}
+
+/// Whether the reader blocked (`true`) or allowed (`false`) a sender. The
+/// address is asked before its domain, so one person can be allowed from a
+/// domain that is blocked, or the other way round.
+pub fn sender_listed(conn: &Connection, account: &str, from_addr: &str) -> Option<bool> {
+    let addr = from_addr.trim().to_lowercase();
+    if addr.is_empty() {
+        return None;
+    }
+    let domain = addr.rsplit_once('@').map(|(_, d)| format!("@{d}")).unwrap_or_default();
+    let lookup = |pattern: &str| -> Option<bool> {
+        conn.query_row(
+            "SELECT allow FROM sender_lists WHERE account = ?1 AND pattern = ?2",
+            params![account, pattern],
+            |r| r.get::<_, bool>(0),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .map(|allow| !allow)
+    };
+    lookup(&addr).or_else(|| if domain.is_empty() { None } else { lookup(&domain) })
+}
+
+/// Puts a sender or domain on the allowed (`Some(true)`) or blocked
+/// (`Some(false)`) list, or takes it off with `None`, and re-judges the
+/// account so what is already here reflects it at once.
+pub fn set_sender_listed(conn: &Connection, account: &str, text: &str, allow: Option<bool>) -> Result<String> {
+    let pattern = sender_pattern(text)
+        .ok_or_else(|| anyhow::anyhow!("write an address, or a domain such as @example.com"))?;
+    match allow {
+        Some(allow) => conn.execute(
+            "INSERT OR REPLACE INTO sender_lists(account, pattern, allow) VALUES(?1, ?2, ?3)",
+            params![account, pattern, allow],
+        )?,
+        None => conn.execute("DELETE FROM sender_lists WHERE account = ?1 AND pattern = ?2", params![account, pattern])?,
+    };
+    rejudge_spam(conn, account, false)?;
+    Ok(pattern)
+}
+
+/// The lists, as (pattern, allowed).
+pub fn sender_lists(conn: &Connection, account: &str) -> Result<Vec<(String, bool)>> {
+    let mut stmt = conn.prepare("SELECT pattern, allow FROM sender_lists WHERE account = ?1 ORDER BY allow DESC, pattern")?;
+    let rows = stmt.query_map([account], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// The sender and subject of the newest message of one conversation — what a

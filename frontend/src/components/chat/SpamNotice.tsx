@@ -6,6 +6,12 @@ import { markThreadJunk } from '../../states/mail'
 import type { Message } from '../../types'
 import { Notice } from '../notice/Notice'
 
+/** Wording for the reasons that come from the reader's own lists (#50). */
+const LIST_REASONS: Record<string, string> = {
+  youBlocked: 'You blocked {sender} or their domain',
+  youAllowed: 'You allowed {sender} or their domain',
+}
+
 /**
  * What the learned spam filter thinks of this message, and why — fetched
  * only for a message the reader has flagged, the same "only when wondered
@@ -39,7 +45,7 @@ export function SpamNotice({ message }: { message: Message }) {
 
   const sender = verdict.sender || t('spam.reason.nothingKnown')
   const because = verdict.reasons
-    .map((reason) => t(`spam.reason.${reason}`, { sender, defaultValue: reason }))
+    .map((reason) => t(`spam.reason.${reason}`, { sender, defaultValue: LIST_REASONS[reason] ?? reason }))
     .join(' · ')
 
   const moveToJunk = () => {

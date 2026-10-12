@@ -424,6 +424,13 @@ Estado de la iteración 12 (2026-10-12, por delegación):
   Graph quedan bloqueados por permisos y evidencia
   (ADR-0027, [registro](design/server-rules.md)).
 
+Estado de la iteración 13 (2026-10-12, por delegación):
+- **#50:** remitentes bloqueados y permitidos que deciden la sugerencia sin
+  mover nada; plan de reglas que es lo que se ejecuta (corrige acciones tras
+  «mover» que se mostraban y no se hacían); ejecución sobre el correo
+  existente tal como se revisó, con informe por paso
+  (ADR-0028, [registro](design/spam-lists-and-rule-runs.md)).
+
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 

@@ -995,6 +995,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'composer.pruneMedia': { removed: 0 },
         'labels.list': { labels: [] },
         'categories.list': { categories: [] },
+        'spam.lists': { entries: [] },
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
         'localDrafts.list': { drafts: [] },

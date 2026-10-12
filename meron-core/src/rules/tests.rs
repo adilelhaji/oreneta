@@ -256,3 +256,24 @@ fn a_rule_survives_a_round_trip_through_storage() {
     let read_back: Rule = serde_json::from_str(&stored).unwrap();
     assert_eq!(read_back, original);
 }
+
+/// #50: what the preview shows is what runs. A message filed elsewhere is
+/// not where a later action would look for it, so the plan does everything
+/// else first and the one move last; a second move could never run and is
+/// not shown as if it would.
+#[test]
+fn the_plan_is_what_can_run_flags_first_and_one_move() {
+    let subject = message("Shop", "shop@example.com", "Your order");
+    let mut first = rule(
+        vec![contains(Field::From, "shop")],
+        vec![Action::MoveTo { folder: "Receipts".into() }, Action::MarkRead],
+    );
+    first.id = "r-first".into();
+    let mut second = rule(vec![contains(Field::Subject, "order")], vec![Action::MoveTo { folder: "Orders".into() }, Action::Star]);
+    second.id = "r-second".into();
+    let planned = plan(&[first, second], "acct", &subject);
+    assert_eq!(
+        planned.iter().map(|p| p.action.clone()).collect::<Vec<_>>(),
+        vec![Action::MarkRead, Action::Star, Action::MoveTo { folder: "Receipts".into() }]
+    );
+}

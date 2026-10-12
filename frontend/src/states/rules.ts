@@ -55,6 +55,19 @@ export type RulePreviewHit = {
 export type RulePreview = {
   examined: number
   matches: RulePreviewHit[]
+  /** When the stored rules were previewed: running exactly this is possible (#50). */
+  reviewId?: string | null
+}
+
+export type RuleRunReport = {
+  done: number
+  failed: number
+  messages: { uid: number; subject: string; steps: { action: string; ok: boolean; error?: string }[] }[]
+}
+
+/** Runs the previewed steps on the previewed messages, and nothing else (#50). */
+export function runReviewedRules(accountId: string, folder: string, reviewId: string): Promise<RuleRunReport> {
+  return invoke<RuleRunReport>('rules.runReviewed', { account: accountId, folder, review_id: reviewId })
 }
 
 /** One thing a rule actually did. */
@@ -101,9 +114,7 @@ export function newRule(): Rule {
  * so the reader is told while they are still writing the rule, rather than
  * after pressing save.
  */
-export function ruleProblem(
-  rule: Rule,
-): 'name' | 'conditions' | 'value' | 'actions' | 'folder' | 'label' | null {
+export function ruleProblem(rule: Rule): 'name' | 'conditions' | 'value' | 'actions' | 'folder' | 'label' | null {
   if (!rule.name.trim()) return 'name'
   if (rule.conditions.length === 0) return 'conditions'
   if (rule.conditions.some((condition) => !condition.value.trim())) return 'value'
@@ -148,7 +159,7 @@ export async function previewRules(args: {
     ...(args.rules ? { rules: args.rules } : {}),
     ...(args.limit ? { limit: args.limit } : {}),
   })
-  return { examined: res?.examined ?? 0, matches: res?.matches ?? [] }
+  return { examined: res?.examined ?? 0, matches: res?.matches ?? [], reviewId: res?.reviewId ?? null }
 }
 
 export async function loadRuleLog(limit = 200) {
