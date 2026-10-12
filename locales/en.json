@@ -2427,5 +2427,17 @@
   "messaging.roomPassword": "Group password (if it has one)",
   "messaging.sendFile": "Send a file",
   "messaging.sendingFile": "Sending {name}",
-  "messaging.uploads": "Files being sent"
+  "messaging.uploads": "Files being sent",
+  "calendar.cancelNotBuilt": "Nothing was deleted: the cancellation could not be prepared: {reason}",
+  "calendar.cancelNotSent": "The event was deleted, but the cancellation was not sent: {reason}",
+  "calendar.cancelSent": "Cancellation sent",
+  "calendar.noSender": "no mail account here can send it",
+  "calendar.noticeNoSender": "The event was saved, but no mail account here can tell the people on it.",
+  "calendar.noticeNotSent": "The event was saved, but the people on it were not told: {reason}",
+  "calendar.noticeSaidCancel": "This meeting has been cancelled.",
+  "calendar.noticeSaidRequest": "The details of this meeting are attached.",
+  "calendar.noticeSent": "The people on it were sent the new details",
+  "calendar.notifyFrom": "Sent by mail from {address}",
+  "invite.acceptNoticeAsks": "The editor opens with the proposed time. When you save, it asks whether to send the new time to the people invited. Declining sends a message to the person who proposed it.",
+  "zoom.size": "Size {size}%"
 }
