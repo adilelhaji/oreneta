@@ -23,7 +23,8 @@ import { useConversationScroll } from './useConversationScroll'
 import { ArrowRight } from 'lucide-react'
 import { wallpaperCss } from '../../lib/wallpapers'
 import { clearMediaSession } from '../../lib/mediaSession'
-import { openCorrespondentMail } from '../../states/kanban'
+import { openCorrespondentMail, openMailAccount } from '../../states/kanban'
+import { calendar$, startOfDay } from '../../states/calendar'
 import type { Message, MessageTab } from '../../types'
 
 function threadFromTab(tab: MessageTab, fallback: Message | null): Message {
@@ -351,6 +352,16 @@ export function MessagePane() {
               openCorrespondentMail(activeThread.account_id, activeThread.folder_id, person.email)
             }
             onClose={() => thread$.mediaOpen.set(false)}
+            accountId={activeThread.account_id}
+            onOpenConversation={(threadId, folder) => {
+              openMailAccount(activeThread.account_id, folder, false)
+              ui$.selectedThread.set(threadId)
+            }}
+            onOpenEvent={(start) => {
+              calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
+              calendar$.view.set('day')
+              ui$.calendarOpen.set(true)
+            }}
           />
         )}
       </div>

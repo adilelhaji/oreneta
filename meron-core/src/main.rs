@@ -5738,6 +5738,27 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // Every attachment of the mail kept here (#93, ADR-0020). A file whose
         // bytes are no longer on disk (the cache is pruned) is listed without
         // a key: the interface offers its message instead of a dead link.
+        // The reader's sidebar: one person's history in one account (#86).
+        "context.person" => {
+            let mut context = meron_core::person_context::person(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "account")?,
+                &req_str(p, "address")?,
+                now_seconds(),
+            )?;
+            let root = meron_core::parse::media_root();
+            for item in &mut context.files {
+                if item.key.as_ref().is_some_and(|key| !root.join(key).is_file()) {
+                    item.key = None;
+                }
+                item.thread_id = if item.thread_key.is_empty() {
+                    format!("{}#{}#{}", item.account, item.folder, item.uid)
+                } else {
+                    mail_model::format_thread_id(&item.account, &item.folder, &item.thread_key)
+                };
+            }
+            Ok(serde_json::to_value(context)?)
+        }
         "attachments.list" => {
             let query: store::attachment_list::Query = serde_json::from_value(p.clone()).unwrap_or_default();
             let mut page = store::attachment_list::list(&engine.db.lock().unwrap(), &query)?;

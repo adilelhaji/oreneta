@@ -487,6 +487,12 @@ Estado de la iteración 15 (2026-10-12, por delegación):
   Probado con Prosody real en CI. Grupos, archivos y otros proveedores
   quedan pendientes (ADR-0036, [registro](design/chat.md)).
 
+Estado de la iteración 16 (2026-10-12, por delegación):
+- **#86:** «Historial con …» en el panel de la conversación: conversaciones,
+  reuniones próximas y archivos de esa persona en esa cuenta, cada uno
+  abriendo su origen. Coincide por dirección completa y dice cuánto
+  correo hay aquí ([registro](design/contextual-sidebar.md)).
+
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 
