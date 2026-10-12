@@ -35,8 +35,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
@@ -252,6 +254,8 @@ internal fun MailDrawer(
     onShowAbout: () -> Unit,
     googleReauthAccountId: String? = null,
     onReconnectGoogle: (AccountSummary) -> Unit = {},
+    onSelectCalendar: () -> Unit = {},
+    onSelectContacts: () -> Unit = {},
 ) {
     val chat = LocalChatColors.current
     ModalDrawerSheet(
@@ -324,8 +328,30 @@ internal fun MailDrawer(
                     )
                 }
             }
+            // Views: Calendar and Contacts read the core's own stores, so they
+            // are offered even before a mail account exists; Kanban needs one.
+            item { DrawerLabel(tr("drawer.views"), chat) }
+            item {
+                SidebarRow(
+                    selected = currentScreen == Screen.Calendar,
+                    chat = chat,
+                    onClick = onSelectCalendar,
+                    leading = { Icon(Icons.Filled.CalendarMonth, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    title = tr("calendar.title"),
+                    trailing = null,
+                )
+            }
+            item {
+                SidebarRow(
+                    selected = currentScreen == Screen.Contacts,
+                    chat = chat,
+                    onClick = onSelectContacts,
+                    leading = { Icon(Icons.Filled.Contacts, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                    title = tr("people.title"),
+                    trailing = null,
+                )
+            }
             if (accounts.isNotEmpty()) {
-                item { DrawerLabel(tr("drawer.views"), chat) }
                 if (kanbanBoards.isEmpty()) {
                     item {
                         SidebarRow(

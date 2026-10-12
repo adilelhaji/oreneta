@@ -458,6 +458,12 @@ private fun MeronMobileScreenContent(
                                 }
                             }
 
+                            // The core refreshed a calendar window behind an
+                            // earlier read; the agenda rereads its cache.
+                            "calendar.synced" -> {
+                                scope.launch { reloadCalendarAfterSync() }
+                            }
+
                             // The deferred sync tail (body prefetch, Sent/Drafts
                             // headers) never changes the open folder's thread
                             // list, so only the open thread needs a refresh —
@@ -1314,6 +1320,14 @@ private fun MeronMobileScreenContent(
                         },
                     )
                 }
+            }
+
+            composable(AppRoutes.Calendar) {
+                CalendarRouteContent(state = state, drawerState = drawerState, drawerFolders = drawerFolders)
+            }
+
+            composable(AppRoutes.Contacts) {
+                ContactsRouteContent(state = state, drawerState = drawerState, drawerFolders = drawerFolders)
             }
 
             composable(AppRoutes.Kanban) {

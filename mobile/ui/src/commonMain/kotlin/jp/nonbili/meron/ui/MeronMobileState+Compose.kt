@@ -1755,6 +1755,9 @@ internal fun MeronMobileState.copyImageAttachment(attachment: MessageAttachment)
 internal fun MeronMobileState.openComposeTo(
     email: String,
     accountId: String,
+    // Where closing the composer goes back to: the thread by default, or the
+    // contact card a message was started from.
+    returnScreen: Screen = Screen.Thread,
 ) {
     openSignatureCompose {
         clearComposeDraftState()
@@ -1762,7 +1765,7 @@ internal fun MeronMobileState.openComposeTo(
         composeFromEmail = ""
         to = email
         body = seedBodyWithSignature("", accountId.ifBlank { defaultSendAccountId() })
-        composeReturnScreen = Screen.Thread
+        composeReturnScreen = returnScreen
         rememberComposeSeed()
         screen = Screen.Compose
     }

@@ -574,6 +574,19 @@ fun parseStorageUsageResponse(responseJson: String): StorageUsage =
         dbBytes = responseJson.findJsonLongProperty("dbBytes") ?: 0,
     )
 
+// The calendar and people parsers read objects that nest others (an event's
+// organizer, a person's emails), where a first-match key search would pick up
+// a nested key. They read top-level entries instead, through these.
+
+/** Top-level entries of a JSON object, values left as raw JSON. */
+internal fun String.topLevelJsonEntries(): Map<String, String> = jsonObjectEntries().toMap()
+
+/** Elements of a JSON array, each left as raw JSON. */
+internal fun String.jsonArrayValues(): List<String> = jsonArrayElements()
+
+/** This raw JSON value as a string, or null when it is not one (null, a number…). */
+internal fun String.decodeJsonString(): String? = if (startsWith('"')) readJsonString(0).value else null
+
 private fun String.findJsonArrayProperty(name: String): String? {
     val key = name.jsonString()
     var index = 0

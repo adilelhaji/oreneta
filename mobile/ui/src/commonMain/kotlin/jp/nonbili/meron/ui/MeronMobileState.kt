@@ -403,4 +403,9 @@ internal class MeronMobileState(
     var storageClearConfirming by mutableStateOf(false)
     var imagePreview by mutableStateOf<ImagePreview?>(null)
     var pendingAttachmentSave by mutableStateOf<MessageAttachment?>(null)
+
+    // Calendar and Contacts destinations (MeronMobileState+Calendar.kt,
+    // MeronMobileState+Contacts.kt).
+    val calendarUi = CalendarScreenState()
+    val contactsUi = ContactsScreenState()
 }
