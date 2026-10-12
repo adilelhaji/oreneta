@@ -2,6 +2,8 @@ import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { accounts$ } from './accounts'
 import type { Account } from '../types'
+import { showToast } from './ui'
+import { t } from '../lib/i18n'
 
 /// Whether an account keeps calendars on its server. Exchange does, and so
 /// does a Google account signed in with Google. Plain IMAP has no calendar
@@ -50,9 +52,41 @@ export type CalendarEvent = {
   my_response: string
   organizer?: Participant | null
   attendees: Participant[]
+  /// The online meeting bound to it (#109): from the server, or found in its
+  /// location or notes.
+  meeting?: OnlineMeeting | null
+  /// Write-only: create a Google Meet with this save, or remove the one there.
+  add_meeting?: 'meet' | 'none'
+  /// Answer to a meeting asked for: ready, still being set up, or not made.
+  meeting_status?: 'ready' | 'pending' | 'failed'
   /// Which account it came from. The core answers per account, so this is
   /// stamped on merge rather than sent.
   accountId: string
+}
+
+export type OnlineMeeting = { provider: string; url: string }
+
+/// What a meeting service is called.
+export function meetingName(provider: string): string {
+  return (
+    {
+      meet: 'Google Meet',
+      zoom: 'Zoom',
+      teams: 'Microsoft Teams',
+      webex: 'Webex',
+      jitsi: 'Jitsi Meet',
+      gotomeeting: 'GoTo Meeting',
+      whereby: 'Whereby',
+    } as Record<string, string>
+  )[provider] ?? provider
+}
+
+/// Whether this build can make a meeting on the event's calendar: Google Meet,
+/// on a calendar of a Google account signed in with OAuth (#109).
+export function canAddMeet(event: { calendar_id: string; accountId: string }): boolean {
+  const calendar = calendar$.calendars.peek().find((c) => c.id === event.calendar_id && c.accountId === event.accountId)
+  const account = accounts$.peek().find((a) => a.id === event.accountId)
+  return calendar?.kind === 'account' && account?.auth_type === 'gmail_oauth'
 }
 
 /// Where a calendar comes from, which decides how it syncs and whether its
@@ -615,7 +649,22 @@ export async function saveEvent(
     if (draft.id) {
       await invoke('calendar.update', { account_id: draft.accountId, event: draft, scope, notify })
     } else {
-      await invoke('calendar.create', { account_id: draft.accountId, event: draft, notify })
+      const created = await invoke<{ event?: { meeting_status?: string } }>('calendar.create', {
+        account_id: draft.accountId,
+        event: draft,
+        notify,
+      })
+      // Said, not assumed: an account without Meet saves the event alone.
+      const status = created?.event?.meeting_status
+      if (status === 'failed')
+        showToast(
+          t('calendar.meetFailed', {
+            defaultValue: 'The event was saved, but Google did not create a Meet for it. This account may not allow it.',
+          }),
+          'error',
+        )
+      if (status === 'pending')
+        showToast(t('calendar.meetPending', { defaultValue: 'Google is still setting up the Meet; it appears shortly.' }))
     }
     closeEditor()
     const { from, to } = calendar$.peek()

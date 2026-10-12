@@ -14,6 +14,7 @@ pub mod google;
 pub mod ics;
 pub mod import;
 pub mod itip;
+pub mod meeting;
 pub mod route;
 pub mod subscription;
 
@@ -169,6 +170,18 @@ pub struct Event {
     pub organizer: Option<Participant>,
     #[serde(default)]
     pub attendees: Vec<Participant>,
+    /// The online meeting bound to this event, as the server or its text
+    /// says (#109).
+    #[serde(default)]
+    pub meeting: Option<meeting::Meeting>,
+    /// Write-only: a meeting to create with this save (`meet`), or `none` to
+    /// remove the one there. Never read back from a server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub add_meeting: Option<String>,
+    /// Write-only answer: whether a meeting asked for is ready, still being
+    /// set up by the server, or could not be made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meeting_status: Option<String>,
 }
 
 /// How often an event repeats, as asked for when creating one.
@@ -494,9 +507,9 @@ fn insert_event(conn: &Connection, account: &str, calendar_id: &str, event: &Eve
            account, calendar_id, event_id, change_key, subject, location,
            start_utc, end_utc, all_day, is_recurring, is_cancelled,
            free_busy, my_response, organizer, attendees, series_id,
-           description, reminder_minutes)
+           description, reminder_minutes, meeting)
          VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                ?17, ?18)",
+                ?17, ?18, ?19)",
         params![
             account,
             calendar_id,
@@ -520,6 +533,7 @@ fn insert_event(conn: &Connection, account: &str, calendar_id: &str, event: &Eve
             event.series_id,
             event.description,
             event.reminder_minutes,
+            event.meeting.as_ref().map(serde_json::to_string).transpose()?,
         ],
     )?;
     Ok(())
@@ -565,7 +579,7 @@ fn events_where(
         "SELECT e.calendar_id, e.event_id, e.change_key, e.subject, e.location,
                 e.start_utc, e.end_utc, e.all_day, e.is_recurring, e.is_cancelled,
                 e.free_busy, e.my_response, e.organizer, e.attendees, e.series_id,
-                e.description, e.reminder_minutes
+                e.description, e.reminder_minutes, e.meeting
          FROM calendar_events e
          JOIN calendars c
            ON c.account = e.account AND c.provider_id = e.calendar_id
@@ -600,9 +614,22 @@ fn events_where(
                 description: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
                 reminder_minutes: row.get(16)?,
                 recurrence: None,
+                meeting: row
+                    .get::<_, Option<String>>(17)?
+                    .and_then(|json| serde_json::from_str(&json).ok()),
+                add_meeting: None,
+                meeting_status: None,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    // Any calendar's meeting address in its location or notes counts too.
+    let events = events
+        .into_iter()
+        .map(|mut event| {
+            event.meeting = meeting::of(&event);
+            event
+        })
+        .collect();
     Ok(events)
 }
 
@@ -807,6 +834,24 @@ mod tests {
             end,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn an_events_meeting_is_kept_and_any_calendars_meeting_address_is_found() {
+        let conn = store();
+        upsert_calendars(&conn, "acct", &[a_calendar()]).unwrap();
+        let mut google = event("g", 100, 200);
+        google.meeting = Some(meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/abc-defg-hij".into() });
+        put_local_event(&conn, "acct", &google).unwrap();
+        let mut caldav = event("c", 100, 200);
+        caldav.description = "Dial in: https://acme.zoom.us/j/81234?pwd=1".into();
+        put_local_event(&conn, "acct", &caldav).unwrap();
+        put_local_event(&conn, "acct", &event("n", 100, 200)).unwrap();
+        let read = events_in_window(&conn, "acct", (0, 1000)).unwrap();
+        let by = |id: &str| read.iter().find(|e| e.id == id).unwrap().meeting.clone().map(|m| m.provider);
+        assert_eq!(by("g").as_deref(), Some("meet"));
+        assert_eq!(by("c").as_deref(), Some("zoom"));
+        assert_eq!(by("n"), None);
     }
 
     fn a_calendar() -> Calendar {

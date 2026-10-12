@@ -467,6 +467,13 @@ Estado de la iteración 14 (2026-10-12, por delegación):
   servidor, y un enlace más abierto de lo pedido se retira. Dropbox,
   OneDrive y Google Drive quedan bloqueados por los registros OAuth
   (ADR-0033, [registro](design/cloud-links.md)).
+- **#109:** la reunión va unida a su evento: se lee del servidor y se
+  reconocen los enlaces de Meet, Zoom, Teams, Webex, Jitsi, GoTo y Whereby
+  en cualquier calendario, con «Unirse». Google Meet se crea, se mantiene y
+  se quita solo al elegirlo, sin duplicados. Los demás quedan bloqueados por
+  sus registros (ADR-0034, [registro](design/online-meetings.md)).
+- La iteración 14 queda completa en lo automatizable; faltan los registros
+  OAuth del propietario y N5.
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

@@ -93,6 +93,76 @@ struct GoogleEvent {
     attendees: Vec<GoogleAttendee>,
     #[serde(default)]
     reminders: Option<GoogleReminders>,
+    #[serde(rename = "hangoutLink", default)]
+    hangout_link: Option<String>,
+    #[serde(rename = "conferenceData", default)]
+    conference_data: Option<ConferenceData>,
+}
+
+/// The meeting Google keeps on an event (#109).
+#[derive(Deserialize, Default)]
+struct ConferenceData {
+    #[serde(rename = "entryPoints", default)]
+    entry_points: Vec<EntryPoint>,
+    #[serde(rename = "conferenceSolution", default)]
+    solution: Option<Solution>,
+    #[serde(rename = "createRequest", default)]
+    create_request: Option<CreateRequest>,
+}
+
+#[derive(Deserialize)]
+struct EntryPoint {
+    #[serde(rename = "entryPointType", default)]
+    kind: String,
+    #[serde(default)]
+    uri: String,
+}
+
+#[derive(Deserialize)]
+struct Solution {
+    #[serde(default)]
+    key: Option<SolutionKey>,
+}
+
+#[derive(Deserialize)]
+struct SolutionKey {
+    #[serde(rename = "type", default)]
+    kind: String,
+}
+
+#[derive(Deserialize)]
+struct CreateRequest {
+    #[serde(default)]
+    status: Option<CreateStatus>,
+}
+
+#[derive(Deserialize)]
+struct CreateStatus {
+    #[serde(rename = "statusCode", default)]
+    code: String,
+}
+
+/// The meeting Google bound to an event, and whether one asked for is ready.
+fn google_meeting(
+    data: Option<&ConferenceData>,
+    hangout: Option<&str>,
+) -> (Option<super::meeting::Meeting>, Option<String>) {
+    let status = data
+        .and_then(|d| d.create_request.as_ref())
+        .and_then(|r| r.status.as_ref())
+        .map(|s| s.code.clone());
+    let video = data.and_then(|d| d.entry_points.iter().find(|e| e.kind == "video" && e.uri.starts_with("https://")));
+    let provider = match data.and_then(|d| d.solution.as_ref()).and_then(|s| s.key.as_ref()).map(|k| k.kind.as_str()) {
+        Some("hangoutsMeet") | None => "meet".to_string(),
+        // An add-on (Zoom, Teams…) installed in Google Calendar: name it by
+        // its address.
+        Some(_) => video
+            .and_then(|e| super::meeting::detect(&e.uri))
+            .map(|m| m.provider)
+            .unwrap_or_else(|| "other".into()),
+    };
+    let url = video.map(|e| e.uri.clone()).or_else(|| hangout.map(str::to_string));
+    (url.map(|url| super::meeting::Meeting { provider, url }), status)
 }
 
 #[derive(Deserialize)]
@@ -148,6 +218,10 @@ struct CreatedEvent {
     id: String,
     #[serde(default)]
     etag: Option<String>,
+    #[serde(rename = "hangoutLink", default)]
+    hangout_link: Option<String>,
+    #[serde(rename = "conferenceData", default)]
+    conference_data: Option<ConferenceData>,
 }
 
 #[derive(Deserialize)]
@@ -403,23 +477,69 @@ fn updates_query(notify: bool) -> &'static str {
 
 /// Creates an event and returns it with the id the server assigned.
 pub fn create_event(token: &str, event: &Event, notify: bool) -> Result<Event> {
+    let mut body = event_body(event, true)?;
+    let meeting = meeting_request(event, &meeting_key(event))?;
+    if let Some(conference) = &meeting {
+        body["conferenceData"] = conference.clone();
+    }
     let url = format!(
-        "{API}/calendars/{}/events?{}",
+        "{API}/calendars/{}/events?{}{}",
         urlencode(&event.calendar_id),
         updates_query(notify),
+        if meeting.is_some() { "&conferenceDataVersion=1" } else { "" },
     );
-    let created: CreatedEvent = serde_json::from_str(&call(
-        token,
-        "POST",
-        &url,
-        Some(event_body(event, true)?),
-    )?)
-    .context("parse created event")?;
+    let created: CreatedEvent = serde_json::from_str(&call(token, "POST", &url, Some(body))?)
+        .context("parse created event")?;
+    let (found, status) = google_meeting(created.conference_data.as_ref(), created.hangout_link.as_deref());
     Ok(Event {
         id: created.id,
         change_key: created.etag,
+        meeting_status: meeting.as_ref().map(|_| meeting_status(found.as_ref(), status.as_deref())),
+        meeting: found,
+        add_meeting: None,
         ..event.clone()
     })
+}
+
+/// The key a new event's meeting request is made from: the same event asked
+/// for twice asks for the same meeting.
+fn meeting_key(event: &Event) -> String {
+    if !event.id.is_empty() {
+        return event.id.clone();
+    }
+    format!("{}\0{}\0{}\0{}", event.subject, event.start, event.end, event.calendar_id)
+}
+
+/// What to send for an asked-for meeting: a Meet to create, `null` to remove
+/// the one there, or nothing to leave it as it is.
+fn meeting_request(event: &Event, key: &str) -> Result<Option<serde_json::Value>> {
+    match event.add_meeting.as_deref() {
+        None => Ok(None),
+        Some("none") => Ok(Some(serde_json::Value::Null)),
+        Some("meet") => {
+            if event.meeting.as_ref().is_some_and(|m| m.provider == "meet") {
+                // There is one already: asking again would make a second.
+                return Ok(None);
+            }
+            Ok(Some(serde_json::json!({
+                "createRequest": {
+                    "requestId": super::meeting::request_id(&event.calendar_id, key),
+                    "conferenceSolutionKey": { "type": "hangoutsMeet" },
+                }
+            })))
+        }
+        Some(other) => anyhow::bail!("{other} meetings cannot be created here"),
+    }
+}
+
+/// Ready, still being set up, or refused (an account without Meet).
+fn meeting_status(found: Option<&super::meeting::Meeting>, status: Option<&str>) -> String {
+    match (found, status) {
+        (Some(_), _) => "ready",
+        (None, Some("pending")) => "pending",
+        _ => "failed",
+    }
+    .to_string()
 }
 
 /// Updates an event in place. PATCH rather than PUT: only the fields this
@@ -434,7 +554,7 @@ pub fn update_event(
     // Changing the series means changing the master it was expanded from;
     // changing this one means changing the instance, which Google records as
     // an exception and leaves the rest of the series alone.
-    let (target, body, version) = match (whole_series, event.series_id.as_deref()) {
+    let (target, mut body, version) = match (whole_series, event.series_id.as_deref()) {
         (true, Some(series)) => {
             // The occurrence being edited is not where the series starts.
             // Writing its date onto the master moved the start of the series
@@ -465,11 +585,18 @@ pub fn update_event(
         (false, Some(_)) => (event.id.as_str(), event_body(event, false)?, event.change_key.clone()),
         _ => (event.id.as_str(), event_body(event, true)?, event.change_key.clone()),
     };
+    // A meeting added or removed with this save (#109); left out, the one
+    // there stays, since this is a PATCH.
+    let meeting = meeting_request(event, target)?;
+    if let Some(conference) = &meeting {
+        body["conferenceData"] = conference.clone();
+    }
     let url = format!(
-        "{API}/calendars/{}/events/{}?{}",
+        "{API}/calendars/{}/events/{}?{}{}",
         urlencode(&event.calendar_id),
         urlencode(target),
         updates_query(notify),
+        if meeting.is_some() { "&conferenceDataVersion=1" } else { "" },
     );
     // Sent with the version it was read at, so an edit made elsewhere in
     // between is refused (412) rather than silently overwritten.
@@ -953,7 +1080,11 @@ fn to_event(source: GoogleEvent, calendar_id: &str) -> Option<Event> {
         })
         .collect();
 
+    let (meeting, _) = google_meeting(source.conference_data.as_ref(), source.hangout_link.as_deref());
     Some(Event {
+        meeting,
+        add_meeting: None,
+        meeting_status: None,
         id: source.id,
         calendar_id: calendar_id.to_string(),
         change_key: source.etag,
@@ -1119,7 +1250,106 @@ mod tests {
             my_response: String::new(),
             organizer: None,
             attendees: Vec::new(),
+            meeting: None,
+            add_meeting: None,
+            meeting_status: None,
         }
+    }
+
+    #[test]
+    fn a_meet_is_created_with_the_event_only_when_asked_and_bound_to_it() {
+        let seen = serve(vec![(
+            200,
+            r#"{"id":"ev1","etag":"\"v1\"","hangoutLink":"https://meet.google.com/abc-defg-hij",
+                "conferenceData":{"entryPoints":[{"entryPointType":"video","uri":"https://meet.google.com/abc-defg-hij"},
+                {"entryPointType":"phone","uri":"tel:+1-555"}],"conferenceSolution":{"key":{"type":"hangoutsMeet"}},
+                "createRequest":{"status":{"statusCode":"success"}}}}"#
+                .into(),
+        )]);
+        let mut event = stored(None, None);
+        event.id = String::new();
+        event.add_meeting = Some("meet".into());
+        let created = create_event("token", &event, false).unwrap();
+        assert_eq!(
+            created.meeting,
+            Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/abc-defg-hij".into() })
+        );
+        assert_eq!(created.meeting_status.as_deref(), Some("ready"));
+        let seen = seen.lock().unwrap();
+        assert!(seen[0].path.contains("conferenceDataVersion=1"), "{}", seen[0].path);
+        let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
+        let request = &body["conferenceData"]["createRequest"];
+        assert_eq!(request["conferenceSolutionKey"]["type"], "hangoutsMeet");
+        // Retrying the same save asks for the same meeting.
+        assert_eq!(request["requestId"], super::super::meeting::request_id("primary", &meeting_key(&event)));
+
+        // Not asked: nothing about meetings is sent.
+        drop(seen);
+        let seen = serve(vec![(200, r#"{"id":"ev2"}"#.into())]);
+        let plain = create_event("token", &stored(None, None), false).unwrap();
+        assert_eq!(plain.meeting_status, None);
+        let seen = seen.lock().unwrap();
+        assert!(!seen[0].path.contains("conferenceDataVersion"));
+        assert!(!seen[0].body.contains("conferenceData"));
+    }
+
+    #[test]
+    fn a_meet_google_cannot_make_is_said_not_assumed() {
+        let _seen = serve(vec![(
+            200,
+            r#"{"id":"ev1","conferenceData":{"createRequest":{"status":{"statusCode":"failure"}}}}"#.into(),
+        )]);
+        let mut event = stored(None, None);
+        event.add_meeting = Some("meet".into());
+        let created = create_event("token", &event, false).unwrap();
+        assert_eq!(created.meeting, None);
+        assert_eq!(created.meeting_status.as_deref(), Some("failed"));
+
+        let _seen = serve(vec![(
+            200,
+            r#"{"id":"ev1","conferenceData":{"createRequest":{"status":{"statusCode":"pending"}}}}"#.into(),
+        )]);
+        assert_eq!(create_event("token", &event, false).unwrap().meeting_status.as_deref(), Some("pending"));
+    }
+
+    #[test]
+    fn an_edit_keeps_the_meeting_adds_one_once_or_removes_it_when_asked() {
+        // Keeps: a plain edit sends nothing about it, and PATCH leaves it.
+        let seen = serve(vec![(200, r#"{"etag":"\"v2\""}"#.into())]);
+        let mut event = stored(Some("\"v1\""), None);
+        event.meeting = Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/x".into() });
+        update_event("token", &event, false, false).unwrap();
+        assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
+
+        // Asking for a Meet on an event that has one makes no second one.
+        let seen = serve(vec![(200, r#"{"etag":"\"v3\""}"#.into())]);
+        event.add_meeting = Some("meet".into());
+        update_event("token", &event, false, false).unwrap();
+        assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
+
+        // Removing it sends null, with the version that makes Google read it.
+        let seen = serve(vec![(200, r#"{"etag":"\"v4\""}"#.into())]);
+        event.add_meeting = Some("none".into());
+        update_event("token", &event, false, false).unwrap();
+        let seen = seen.lock().unwrap();
+        assert!(seen[0].path.contains("conferenceDataVersion=1"));
+        let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
+        assert!(body["conferenceData"].is_null() && body.as_object().unwrap().contains_key("conferenceData"));
+
+        // Another kind is refused before anything is sent.
+        event.add_meeting = Some("zoom".into());
+        assert!(update_event("token", &event, false, false).is_err());
+    }
+
+    #[test]
+    fn an_add_on_meeting_google_holds_is_named_by_its_address() {
+        let data: ConferenceData = serde_json::from_str(
+            r#"{"entryPoints":[{"entryPointType":"video","uri":"https://us02web.zoom.us/j/81234"}],
+                "conferenceSolution":{"key":{"type":"addOn"}}}"#,
+        )
+        .unwrap();
+        let (meeting, _) = google_meeting(Some(&data), None);
+        assert_eq!(meeting.unwrap().provider, "zoom");
     }
 
     #[test]

@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 51;
+pub const SCHEMA_VERSION: i64 = 52;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -732,6 +732,16 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     }
     if version < 51 {
         tx.execute_batch(crate::cloud::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 51)?;
+    }
+    if version < 52 {
+        // The online meeting bound to an event (#109).
+        let has = tx
+            .prepare("SELECT 1 FROM pragma_table_info('calendar_events') WHERE name = 'meeting'")?
+            .exists([])?;
+        if !has {
+            tx.execute_batch("ALTER TABLE calendar_events ADD COLUMN meeting TEXT;")?;
+        }
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

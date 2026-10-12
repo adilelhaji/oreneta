@@ -4,7 +4,9 @@ import { Trash2, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import {
   calendar$,
+  canAddMeet,
   closeEditor,
+  meetingName,
   deleteEvent,
   loadSeriesRule,
   resolveNames,
@@ -155,6 +157,51 @@ export function EventEditor() {
               ))}
             </select>
           </Labelled>
+
+          {/* An online meeting is made only by this choice, on this save (#109). */}
+          {/* A group, not a label: it holds a button and its own labelled
+              checkbox, which a <label> around them would misname. */}
+          <div
+            role="group"
+            aria-label={t('calendar.meeting', { defaultValue: 'Online meeting' })}
+            className="flex w-full flex-col gap-1.5"
+          >
+            <span className="pl-0.5 text-caption font-semibold text-secondary">
+              {t('calendar.meeting', { defaultValue: 'Online meeting' })}
+            </span>
+            {event.meeting && event.add_meeting !== 'none' ? (
+              <div className="flex flex-wrap items-center gap-2 text-caption">
+                <span className="text-primary">{meetingName(event.meeting.provider)}</span>
+                <span className="truncate text-secondary">{event.meeting.url}</span>
+                {event.meeting.provider === 'meet' && canAddMeet(event) && (
+                  <button
+                    type="button"
+                    onClick={() => set({ add_meeting: 'none' })}
+                    className="text-accent underline cursor-pointer"
+                  >
+                    {t('calendar.meetingRemove', { defaultValue: 'Remove it' })}
+                  </button>
+                )}
+              </div>
+            ) : canAddMeet(event) ? (
+              <label className="flex items-center gap-2 text-caption text-secondary">
+                <input
+                  type="checkbox"
+                  checked={event.add_meeting === 'meet'}
+                  onChange={(e) => set({ add_meeting: e.target.checked ? 'meet' : undefined })}
+                  className="accent-accent"
+                />
+                {t('calendar.addMeet', { defaultValue: 'Add a Google Meet when saving' })}
+              </label>
+            ) : (
+              <p className="text-caption text-secondary">
+                {t('calendar.meetingHint', {
+                  defaultValue:
+                    'Here a meeting can be created only on Google calendars. A Zoom, Teams or other link pasted into the location or notes is recognised.',
+                })}
+              </p>
+            )}
+          </div>
 
           <Labelled label={t('calendar.description', { defaultValue: 'Notes' })}>
             <textarea

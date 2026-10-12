@@ -1995,6 +1995,9 @@ fn to_event(item: &Message, calendar_id: &str) -> anyhow::Result<Event> {
             .then(|| item.reminder_minutes_before_start.map(|minutes| minutes as i64))
             .flatten(),
         is_cancelled: item.is_cancelled.unwrap_or(false),
+        meeting: None,
+        add_meeting: None,
+        meeting_status: None,
         free_busy: item
             .legacy_free_busy_status
             .map(free_busy_name)

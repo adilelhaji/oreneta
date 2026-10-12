@@ -6035,6 +6035,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 p.get("event").cloned().context("missing param: event")?,
             )
             .context("event")?;
+            // Local and CalDAV calendars have nobody to make a meeting with
+            // (#109); Exchange is refused where it is routed.
+            if event.add_meeting.as_deref().is_some_and(|m| m != "none")
+                && (local_calendar_write(&engine, &account, &event.calendar_id)?.is_some()
+                    || caldav_write(&engine, &account, &event.calendar_id)?.is_some())
+            {
+                anyhow::bail!("online meetings can be added here only to Google calendars");
+            }
             if event.end < event.start {
                 anyhow::bail!("an event cannot end before it starts");
             }
@@ -6097,6 +6105,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 p.get("event").cloned().context("missing param: event")?,
             )
             .context("event")?;
+            // Local and CalDAV calendars have nobody to make a meeting with
+            // (#109); Exchange is refused where it is routed.
+            if event.add_meeting.as_deref().is_some_and(|m| m != "none")
+                && (local_calendar_write(&engine, &account, &event.calendar_id)?.is_some()
+                    || caldav_write(&engine, &account, &event.calendar_id)?.is_some())
+            {
+                anyhow::bail!("online meetings can be added here only to Google calendars");
+            }
             if event.end < event.start {
                 anyhow::bail!("an event cannot end before it starts");
             }

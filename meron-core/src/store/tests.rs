@@ -3448,7 +3448,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 51);
+    assert_eq!(version, 52);
 
     for table in [
         "accounts",
@@ -3498,7 +3498,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 51);
+    assert_eq!(version, 52);
 }
 
 #[test]
@@ -3526,7 +3526,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 51);
+    assert_eq!(version, 52);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3564,7 +3564,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 51);
+    assert_eq!(version, 52);
 }
 
 #[test]

@@ -118,6 +118,10 @@ pub async fn create_event(
 ) -> Result<Event> {
     match route_with_token(engine, account).await? {
         (Route::Exchange, _) => {
+            anyhow::ensure!(
+                event.add_meeting.as_deref().is_none_or(|m| m == "none"),
+                "online meetings can be added here only to Google calendars"
+            );
             let event = event.clone();
             engine
                 .with_write_session(account, |session| {
@@ -193,6 +197,10 @@ pub async fn update_event(
     let event = &with_addresses(engine, account, event).await?;
     match route_with_token(engine, account).await? {
         (Route::Exchange, _) => {
+            anyhow::ensure!(
+                event.add_meeting.as_deref().is_none_or(|m| m == "none"),
+                "online meetings can be added here only to Google calendars"
+            );
             let event = event.clone();
             engine
                 .with_write_session(account, |session| {

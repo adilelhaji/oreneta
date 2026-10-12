@@ -259,6 +259,9 @@ fn event_from(
         // one it will never raise would be a promise it cannot keep.
         reminder_minutes: None,
         is_cancelled: is_cancelled(source),
+        meeting: None,
+        add_meeting: None,
+        meeting_status: None,
         // A subscription is read-only and its publisher decides what these
         // mean; reporting a response we cannot give would be inventing one.
         free_busy: String::new(),

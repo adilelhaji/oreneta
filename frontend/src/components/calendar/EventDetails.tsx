@@ -1,5 +1,6 @@
 import { useValue } from '@legendapp/state/react'
-import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2, User, Users, X } from 'lucide-react'
+import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2, User, Users, Video, X } from 'lucide-react'
+import { openExternal } from '../../lib/native'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { useEffect, useState } from 'react'
@@ -13,6 +14,7 @@ import {
   closeDetails,
   deleteEvent,
   editEvent,
+  meetingName,
   type CalendarEvent,
   type Participant,
 } from '../../states/calendar'
@@ -143,6 +145,18 @@ export function EventDetails() {
             )}
           </Row>
 
+          {event.meeting && (
+            <Row icon={<Video size={14} strokeWidth={1.75} />}>
+              <button
+                type="button"
+                onClick={() => openExternal(event.meeting!.url)}
+                title={event.meeting.url}
+                className="rounded-control-sm bg-accent px-2.5 py-1 text-caption font-semibold text-on-accent cursor-pointer"
+              >
+                {t('calendar.join', { name: meetingName(event.meeting.provider), defaultValue: 'Join {name}' })}
+              </button>
+            </Row>
+          )}
           {event.location && (
             <Row icon={<MapPin size={14} strokeWidth={1.75} />}>
               <span className="text-primary">{event.location}</span>
