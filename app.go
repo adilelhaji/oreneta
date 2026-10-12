@@ -429,6 +429,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.archiveImport(payload)
 	case "cloud.pickFile":
 		return a.cloudPickFile()
+	case "chat.pickFile":
+		return a.chatPickFile()
+	case "chat.saveFileAs":
+		return a.chatSaveFileAs(payload)
 	case "backupSchedule.pickFolder":
 		return a.backupPickFolder()
 	case "thunderbird.pickFolder":
@@ -578,7 +582,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
 		"notes.attachments", "notes.attach", "notes.removeAttachment",
 		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",
-		"chat.markRead", "chat.send", "chat.retry", "context.person":
+		"chat.markRead", "chat.send", "chat.retry", "context.person",
+		// Group chats and files in chat (ADR-0044).
+		"chat.rooms", "chat.join", "chat.leave", "chat.invitations", "chat.dismissInvitation",
+		"chat.sendFile", "chat.cancelUpload":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

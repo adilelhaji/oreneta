@@ -1069,6 +1069,9 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'chat.conversations': [],
         'chat.history': [],
         'chat.markRead': { ok: true },
+        // Group chats and their invitations (ADR-0044).
+        'chat.rooms': [],
+        'chat.invitations': [],
         'cloud.providers': [
           { id: 'nextcloud', name: 'Nextcloud', usable: true },
           { id: 'owncloud', name: 'ownCloud', usable: true },

@@ -109,7 +109,9 @@ jobs:
           ORENETA_DOVECOT_POP3: 127.0.0.1:11110
           ORENETA_DOVECOT_DIR: /tmp/oreneta-pop3
       # Chat against a real Prosody (#111): delivery, receipts, stream
-      # management and catching up from the archive without duplicates.
+      # management and catching up from the archive without duplicates;
+      # rooms (two people, rejoining) and a file over HTTPS upload with the
+      # script's throwaway authority (ADR-0044).
       - name: Chat against Prosody
         run: |
           sudo apt-get install -y prosody
@@ -118,6 +120,7 @@ jobs:
           cargo test --manifest-path meron-core/Cargo.toml --lib chat::tests::against_prosody -- --nocapture
         env:
           ORENETA_PROSODY: 127.0.0.1:15222
+          ORENETA_PROSODY_CA: /tmp/oreneta-xmpp/certs/ca.pem
       - name: Upload Rust coverage
         if: always()
         uses: actions/upload-artifact@v4

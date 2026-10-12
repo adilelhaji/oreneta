@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { AlertTriangle, Check, CheckCheck, Clock, MessagesSquare, Send } from 'lucide-react'
+import { AlertTriangle, Check, CheckCheck, Clock, FileText, MessagesSquare, Paperclip, Send, Users } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import {
+  cancelChatUpload,
+  dismissChatUpload,
+  dismissInvitation,
+  joinRoom,
+  leaveRoom,
   loadMessaging,
   messaging$,
   openConversation,
+  pickChatFile,
   removeChatAccount,
   retryChat,
   saveChatAccount,
+  saveChatFile,
   sendChat,
+  sendChatFile,
   refreshConversations,
   type ChatMessage,
+  type ChatRoom,
 } from '../../states/messaging'
+import { formatFileSize } from '../chat/messageHelpers'
 import { confirmAction, showToast } from '../../states/ui'
 import { Button } from '../button/Button'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
@@ -21,7 +31,10 @@ const input = 'rounded-control-sm border border-border bg-app px-2.5 py-1.5 text
 
 /**
  * Chat over XMPP (#111, ADR-0036): the person's conversations, each with
- * what was said, and for what they sent, where it got to.
+ * what was said, and for what they sent, where it got to. Group chats and
+ * files (ADR-0044): rooms beside the conversations, invitations offered
+ * (never acted on alone), files sent with their progress and received as a
+ * link saved only when the person asks.
  */
 export function MessagingView() {
   const { t } = useTranslation()
@@ -31,6 +44,10 @@ export function MessagingView() {
   const conversations = useValue(messaging$.conversations)
   const conversation = useValue(messaging$.conversation)
   const history = useValue(messaging$.history)
+  const rooms = useValue(messaging$.rooms)
+  const invitations = useValue(messaging$.invitations)
+  const uploads = useValue(messaging$.uploads)
+  const [joining, setJoining] = useState<{ room: string; nick: string; password: string } | null>(null)
   const [newChat, setNewChat] = useState('')
   const [draft, setDraft] = useState('')
   const end = useRef<HTMLDivElement | null>(null)
@@ -45,6 +62,27 @@ export function MessagingView() {
   if (accounts.length === 0) return <ChatSetup />
 
   const state = status[account]?.state
+  const me = accounts.find((a) => a.id === account)
+  const openRoom = rooms.find((r) => r.room === conversation)
+  const roomUploads = Object.entries(uploads).filter(([, u]) => u.conversation === conversation)
+  const startJoin = (room = '') => setJoining({ room, nick: me?.jid.split('@')[0] ?? '', password: '' })
+  const join = async () => {
+    if (!joining) return
+    try {
+      await joinRoom(joining.room.trim(), joining.nick.trim(), joining.password)
+      setJoining(null)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }
+  const attach = async () => {
+    try {
+      const file = await pickChatFile()
+      if (file) await sendChatFile(file)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }
   const send = async () => {
     const body = draft
     if (!body.trim()) return
@@ -114,30 +152,137 @@ export function MessagingView() {
             {t('messaging.start', { defaultValue: 'Open' })}
           </Button>
         </form>
-        <ul className="flex-1 overflow-y-auto">
-          {conversations.map((c) => (
-            <li key={c.conversation}>
-              <button
-                type="button"
-                aria-current={c.conversation === conversation}
-                onClick={() => void openConversation(c.conversation)}
-                className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left cursor-pointer ${
-                  c.conversation === conversation ? 'bg-accent/10' : 'hover:bg-hover'
-                }`}
+        {joining ? (
+          <form
+            aria-label={t('messaging.joinTitle', { defaultValue: 'Join a group' })}
+            className="flex flex-col gap-1.5 border-b border-border px-3 py-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void join()
+            }}
+          >
+            <label className="flex flex-col gap-1 text-caption text-secondary">
+              {t('messaging.roomAddress', { defaultValue: 'Group address' })}
+              <input
+                className={input}
+                placeholder="team@rooms.server.example"
+                value={joining.room}
+                onChange={(e) => setJoining({ ...joining, room: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-caption text-secondary">
+              {t('messaging.nick', { defaultValue: 'Your name in the group' })}
+              <input
+                className={input}
+                value={joining.nick}
+                onChange={(e) => setJoining({ ...joining, nick: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-caption text-secondary">
+              {t('messaging.roomPassword', { defaultValue: 'Group password (if it has one)' })}
+              <input
+                type="password"
+                autoComplete="off"
+                className={input}
+                value={joining.password}
+                onChange={(e) => setJoining({ ...joining, password: e.target.value })}
+              />
+            </label>
+            <div className="flex gap-1.5">
+              <Button size="sm" type="submit" disabled={!joining.room.includes('@') || !joining.nick.trim()}>
+                {t('messaging.join', { defaultValue: 'Join' })}
+              </Button>
+              <Button size="sm" variant="ghost" type="button" onClick={() => setJoining(null)}>
+                {t('buttons.cancel', { defaultValue: 'Cancel' })}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="border-b border-border px-3 py-1.5">
+            <button
+              type="button"
+              onClick={() => startJoin()}
+              className="flex items-center gap-1.5 text-caption text-accent underline cursor-pointer"
+            >
+              <Users size={14} strokeWidth={1.75} aria-hidden="true" />
+              {t('messaging.joinGroup', { defaultValue: 'Join a group' })}
+            </button>
+          </div>
+        )}
+        {invitations.length > 0 && (
+          <ul
+            aria-label={t('messaging.invitations', { defaultValue: 'Invitations' })}
+            className="flex flex-col gap-1.5 border-b border-border px-3 py-2"
+          >
+            {invitations.map((inv) => (
+              <li
+                key={inv.room}
+                className="flex flex-col gap-1 rounded-control-sm bg-raised px-2.5 py-1.5 text-caption"
               >
-                <span className="flex items-center gap-2">
-                  <span className="truncate text-sm font-semibold text-primary">{c.conversation}</span>
-                  {c.unread > 0 && (
-                    <span className="ml-auto rounded-full bg-accent px-1.5 text-2xs font-semibold text-on-accent">
-                      {t('messaging.unread', { count: c.unread, defaultValue: '{count} new' })}
-                    </span>
-                  )}
+                <span className="text-primary">
+                  {t('messaging.invited', {
+                    inviter: inv.inviter,
+                    room: inv.room,
+                    defaultValue: '{inviter} invites you to {room}',
+                  })}
                 </span>
-                <span className="truncate text-caption text-secondary">{c.last_body}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                {inv.reason && <span className="text-secondary">{inv.reason}</span>}
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startJoin(inv.room)}
+                    className="text-accent underline cursor-pointer"
+                  >
+                    {t('messaging.joinInvited', { defaultValue: 'Join…' })}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void dismissInvitation(inv.room)}
+                    className="text-secondary underline cursor-pointer"
+                  >
+                    {t('messaging.notNow', { defaultValue: 'Not now' })}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex-1 overflow-y-auto">
+          {rooms.length > 0 && (
+            <>
+              <h3 className="px-3 pt-2 text-2xs font-semibold uppercase text-secondary">
+                {t('messaging.groups', { defaultValue: 'Groups' })}
+              </h3>
+              <ul aria-label={t('messaging.groups', { defaultValue: 'Groups' })}>
+                {rooms.map((r) => (
+                  <li key={r.room}>
+                    <ConversationButton
+                      name={r.room}
+                      last={r.last_body || roomStateLabel(r, t)}
+                      unread={r.unread}
+                      current={r.room === conversation}
+                      group
+                      onOpen={() => void openConversation(r.room)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <ul aria-label={t('messaging.direct', { defaultValue: 'Direct conversations' })}>
+            {conversations.map((c) => (
+              <li key={c.conversation}>
+                <ConversationButton
+                  name={c.conversation}
+                  last={c.last_body}
+                  unread={c.unread}
+                  current={c.conversation === conversation}
+                  onOpen={() => void openConversation(c.conversation)}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
         <footer className="border-t border-border px-3 py-2">
           <button
             type="button"
@@ -173,16 +318,90 @@ export function MessagingView() {
               >
                 {t('messaging.back', { defaultValue: 'Conversations' })}
               </button>
-              {conversation}
+              {openRoom && <Users size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />}
+              <span className="truncate">{conversation}</span>
+              {openRoom && (
+                <>
+                  <span
+                    className="text-caption font-normal text-secondary"
+                    title={openRoom.detail?.message ?? undefined}
+                  >
+                    {roomStateLabel(openRoom, t)}
+                  </span>
+                  <button
+                    type="button"
+                    className="ml-auto text-caption font-normal text-secondary underline cursor-pointer"
+                    onClick={() =>
+                      void confirmAction({
+                        title: t('messaging.leaveTitle', { defaultValue: 'Leave this group?' }),
+                        message: t('messaging.leaveMessage', {
+                          defaultValue:
+                            'It is not joined again, and what was kept of it on this computer is removed. The group keeps its own history.',
+                        }),
+                        confirmLabel: t('messaging.leave', { defaultValue: 'Leave' }),
+                        cancelLabel: t('buttons.cancel'),
+                      }).then((ok) => (ok ? leaveRoom(openRoom.room) : undefined))
+                    }
+                  >
+                    {t('messaging.leaveGroup', { defaultValue: 'Leave group' })}
+                  </button>
+                </>
+              )}
             </header>
             <div className="flex-1 overflow-y-auto px-4 py-3">
               <ol className="flex flex-col gap-1.5">
                 {history.map((m) => (
-                  <Bubble key={m.id} message={m} />
+                  <Bubble key={m.id} message={m} group={!!openRoom} />
                 ))}
               </ol>
               <div ref={end} />
             </div>
+            {roomUploads.length > 0 && (
+              <ul
+                aria-label={t('messaging.uploads', { defaultValue: 'Files being sent' })}
+                className="flex flex-col gap-1 border-t border-border px-4 py-2 text-caption"
+              >
+                {roomUploads.map(([id, u]) => (
+                  <li key={id} className="flex items-center gap-2 text-secondary">
+                    <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
+                    <span className="truncate text-primary">{u.name}</span>
+                    {u.error ? (
+                      <>
+                        <span role="alert" className="text-danger">
+                          {uploadErrorText(u.error, t)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => dismissChatUpload(id)}
+                          className="ml-auto underline cursor-pointer"
+                        >
+                          {t('messaging.dismiss', { defaultValue: 'Dismiss' })}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <progress
+                          aria-label={t('messaging.sendingFile', { name: u.name, defaultValue: 'Sending {name}' })}
+                          value={u.done}
+                          max={u.total || 1}
+                          className="w-32"
+                        />
+                        <span>
+                          {formatFileSize(u.done)} / {formatFileSize(u.total)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void cancelChatUpload(id)}
+                          className="ml-auto underline cursor-pointer"
+                        >
+                          {t('buttons.cancel', { defaultValue: 'Cancel' })}
+                        </button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
             <form
               className="flex items-end gap-2 border-t border-border px-4 py-2.5"
               onSubmit={(e) => {
@@ -203,6 +422,15 @@ export function MessagingView() {
                 }}
                 className={`${input} flex-1 resize-none`}
               />
+              <button
+                type="button"
+                onClick={() => void attach()}
+                aria-label={t('messaging.sendFile', { defaultValue: 'Send a file' })}
+                title={t('messaging.sendFile', { defaultValue: 'Send a file' })}
+                className="flex min-h-9 items-center rounded-control-sm px-2 text-secondary hover:bg-hover hover:text-primary cursor-pointer"
+              >
+                <Paperclip size={16} strokeWidth={1.75} aria-hidden="true" />
+              </button>
               <Button type="submit" disabled={!draft.trim()} leftIcon={Send}>
                 {t('messaging.send', { defaultValue: 'Send' })}
               </Button>
@@ -218,7 +446,127 @@ export function MessagingView() {
   )
 }
 
-function Bubble({ message }: { message: ChatMessage }) {
+type T = (key: string, values?: Record<string, unknown>) => string
+
+/** What a room's connection state means, in a few words. */
+function roomStateLabel(room: ChatRoom, t: T) {
+  switch (room.state) {
+    case 'joined':
+      return t('messaging.room.joined', { defaultValue: 'In the group' })
+    case 'joining':
+      return t('messaging.room.joining', { defaultValue: 'Joining…' })
+    case 'error':
+      return room.detail?.message ?? t('messaging.room.error', { defaultValue: 'Could not join' })
+    case 'out':
+      return t('messaging.room.out', { defaultValue: 'Not in the group' })
+    default:
+      return t('messaging.room.offline', { defaultValue: 'Not connected' })
+  }
+}
+
+/** Why a file was not sent, said for a person. */
+function uploadErrorText(error: { message: string; detail?: { code: string } }, t: T) {
+  switch (error.detail?.code) {
+    case 'tooLarge':
+      return t('messaging.file.tooLarge', { defaultValue: 'Too large for the chat server. Nothing was sent.' })
+    case 'noService':
+      return t('messaging.file.noService', { defaultValue: 'This chat server does not accept files.' })
+    case 'disconnected':
+      return t('messaging.file.disconnected', { defaultValue: 'The connection went. Nothing was sent.' })
+    default:
+      return error.message
+  }
+}
+
+function ConversationButton({
+  name,
+  last,
+  unread,
+  current,
+  group,
+  onOpen,
+}: {
+  name: string
+  last: string
+  unread: number
+  current: boolean
+  group?: boolean
+  onOpen: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <button
+      type="button"
+      aria-current={current}
+      onClick={onOpen}
+      className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left cursor-pointer ${
+        current ? 'bg-accent/10' : 'hover:bg-hover'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        {group && <Users size={14} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
+        <span className="truncate text-sm font-semibold text-primary">{name}</span>
+        {unread > 0 && (
+          <span className="ml-auto rounded-full bg-accent px-1.5 text-2xs font-semibold text-on-accent">
+            {t('messaging.unread', { count: unread, defaultValue: '{count} new' })}
+          </span>
+        )}
+      </span>
+      <span className="truncate text-caption text-secondary">{last}</span>
+    </button>
+  )
+}
+
+/** A file someone sent as a link: its name, and saving it only when asked, over HTTPS. */
+function FileCard({ message, mine }: { message: ChatMessage; mine: boolean }) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = useState(false)
+  const secure = /^https:\/\//i.test(message.file_url ?? '')
+  const save = async () => {
+    setBusy(true)
+    try {
+      const result = await saveChatFile(message)
+      if (result?.saved) showToast(t('messaging.file.saved', { defaultValue: 'Saved' }))
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <span
+      className={`flex items-center gap-2 rounded-panel px-3 py-1.5 text-sm ${
+        mine ? 'bg-accent text-on-accent' : 'bg-raised text-primary'
+      }`}
+    >
+      <FileText size={16} strokeWidth={1.75} aria-hidden="true" />
+      <span className="truncate">{message.file_name || t('messaging.file.unnamed', { defaultValue: 'File' })}</span>
+      {message.file_size != null && (
+        <span className="text-caption opacity-80">{formatFileSize(message.file_size)}</span>
+      )}
+      {secure ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void save()}
+          className="underline cursor-pointer disabled:opacity-60"
+          aria-label={t('messaging.file.saveNamed', {
+            name: message.file_name ?? '',
+            defaultValue: 'Save {name}',
+          })}
+        >
+          {t('messaging.file.save', { defaultValue: 'Save…' })}
+        </button>
+      ) : (
+        <span className="text-caption opacity-80">
+          {t('messaging.file.insecure', { defaultValue: 'Not a secure link; not saved' })}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function Bubble({ message, group }: { message: ChatMessage; group?: boolean }) {
   const { t } = useTranslation()
   const mine = message.direction === 'out'
   const time = new Date(message.stamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -237,13 +585,18 @@ function Bubble({ message }: { message: ChatMessage }) {
   const Icon = state?.icon
   return (
     <li className={`flex max-w-[75%] flex-col gap-0.5 ${mine ? 'self-end items-end' : 'self-start items-start'}`}>
-      <span
-        className={`whitespace-pre-wrap break-words rounded-panel px-3 py-1.5 text-sm ${
-          mine ? 'bg-accent text-on-accent' : 'bg-raised text-primary'
-        }`}
-      >
-        {message.body}
-      </span>
+      {group && !mine && <span className="text-2xs font-semibold text-secondary">{message.sender}</span>}
+      {message.file_url ? (
+        <FileCard message={message} mine={mine} />
+      ) : (
+        <span
+          className={`whitespace-pre-wrap break-words rounded-panel px-3 py-1.5 text-sm ${
+            mine ? 'bg-accent text-on-accent' : 'bg-raised text-primary'
+          }`}
+        >
+          {message.body}
+        </span>
+      )}
       <span className="flex items-center gap-1 text-2xs text-secondary">
         {time}
         {Icon && state && (

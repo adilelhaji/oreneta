@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 57;
+pub const SCHEMA_VERSION: i64 = 58;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -764,6 +764,11 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 57 {
         // Files attached to notes (ADR-0042).
         tx.execute_batch(super::note_attachments::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 57)?;
+    }
+    if version < 58 {
+        // Group chats and files in chat (ADR-0044).
+        crate::chat::migrate_groups(&tx)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

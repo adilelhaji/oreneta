@@ -34,6 +34,16 @@ pub fn secret_names(conn: &Connection) -> Result<Vec<String>> {
         names.push(crate::calendar::caldav::secret_key(&account, &id));
     }
     names.extend(column(conn, "SELECT id FROM chat_accounts")?.iter().map(|id| crate::chat::secret_key(id)));
+    // Room passwords (ADR-0044), of rooms joined and of invitations waiting.
+    let mut stmt = conn.prepare(
+        "SELECT chat_account, room FROM chat_rooms WHERE has_password = 1
+          UNION SELECT chat_account, room FROM chat_invitations WHERE has_password = 1",
+    )?;
+    let rooms = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    for room in rooms {
+        let (account, room) = room?;
+        names.push(crate::chat::room_secret_key(&account, &room));
+    }
     names.extend(column(conn, "SELECT id FROM cloud_accounts")?.iter().map(|id| crate::cloud::secret_key(id)));
     names.extend(column(conn, "SELECT fingerprint FROM pgp_secret_keys")?.iter().map(|f| format!("pgp-secret-{f}")));
     names.extend(
@@ -83,12 +93,19 @@ mod tests {
         conn.execute_batch(
             "INSERT INTO accounts(id, email, display_name, config) VALUES('a@x.cat', 'a@x.cat', 'A', '{}');
              INSERT INTO chat_accounts(id, jid, host, port, created_at) VALUES('c1', 'a@chat', '', 5222, 0);
+             INSERT INTO chat_rooms(chat_account, room, nick, has_password, joined_at) VALUES('c1', 'team@rooms.chat', 'a', 1, 0);
+             INSERT INTO chat_rooms(chat_account, room, nick, has_password, joined_at) VALUES('c1', 'open@rooms.chat', 'a', 0, 0);
+             INSERT INTO chat_invitations(chat_account, room, inviter, reason, has_password, received_at)
+               VALUES('c1', 'club@rooms.chat', 'b@chat', '', 1, 0);
              INSERT INTO task_lists(id, name, remote_url) VALUES('list:dav', 'Dav', 'https://dav.example/ana/tasks/');",
         )
         .unwrap();
         let names = secret_names(&conn).unwrap();
         assert!(names.contains(&"a@x.cat".to_string()));
         assert!(names.contains(&crate::chat::secret_key("c1")));
+        assert!(names.contains(&crate::chat::room_secret_key("c1", "team@rooms.chat")));
+        assert!(names.contains(&crate::chat::room_secret_key("c1", "club@rooms.chat")));
+        assert!(!names.contains(&crate::chat::room_secret_key("c1", "open@rooms.chat")), "no password, no secret");
         assert!(names.contains(&crate::backup_schedule::SECRET_KEY.to_string()));
         assert!(names.contains(&crate::task_sync::secret_key("list:dav")));
         assert!(!names.contains(&crate::task_sync::secret_key("mail")), "a local list has no password");
@@ -123,7 +140,7 @@ mod tests {
         let main = include_str!("main.rs");
         let writes = main.matches("secrets::store(").count();
         assert_eq!(
-            writes, 12,
+            writes, 13,
             "a secret is written somewhere new: name it in profile_purge::secret_names, then update this count"
         );
         let graph = include_str!("graph/auth.rs").matches("graph_record_store(").count();

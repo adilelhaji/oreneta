@@ -427,6 +427,11 @@ export function useAppEffects() {
       onChatEvent('chat.changed', detail),
     )
     const offChatStatus = eventsOn('chat.status', (detail: { account?: string }) => onChatEvent('chat.status', detail))
+    // Group chats and files in chat (ADR-0044): a room's state, an
+    // invitation, and an upload's progress and end.
+    const offChatOthers = ['chat.room', 'chat.invitation', 'chat.progress', 'chat.uploaded'].map((name) =>
+      eventsOn(name, (detail: { account?: string }) => onChatEvent(name, detail)),
+    )
 
     // Cloud uploads (#108): progress and the end of each.
     const offCloudProgress = eventsOn('cloud.progress', (detail: { upload_id: string }) =>
@@ -535,6 +540,7 @@ export function useAppEffects() {
       if (typeof offCloudUploaded === 'function') offCloudUploaded()
       if (typeof offChatChanged === 'function') offChatChanged()
       if (typeof offChatStatus === 'function') offChatStatus()
+      for (const off of offChatOthers) if (typeof off === 'function') off()
       if (typeof offBackupScheduled === 'function') offBackupScheduled()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }

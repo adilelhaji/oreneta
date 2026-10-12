@@ -3346,6 +3346,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "chat.remove" => {
             let id = req_str(p, "id")?;
             stop_chat(&id);
+            let room_keys = meron_core::chat::room_secret_keys(&engine.db.lock().unwrap(), &id)?;
+            for key in room_keys {
+                let _ = secrets::delete(&key);
+            }
             meron_core::chat::remove_account(&engine.db.lock().unwrap(), &id)?;
             let _ = secrets::delete(&meron_core::chat::secret_key(&id));
             chat_status().lock().unwrap().remove(&id);
@@ -3376,8 +3380,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let body = req_str(p, "body")?;
             let me = meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
             let id = uuid::Uuid::new_v4().to_string();
-            meron_core::chat::queue(&engine.db.lock().unwrap(), &account, &conversation, &id, &me.jid, &body, now_seconds())?;
-            chat_dispatch(&engine, &account, &conversation, &id, &body);
+            // To a room, it goes as a group message under the person's nickname there.
+            let room = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?;
+            let mut message = meron_core::chat::ChatMessage::chat(
+                &account,
+                &conversation,
+                &id,
+                "out",
+                room.as_ref().map(|r| r.nick.as_str()).unwrap_or(&me.jid),
+                &body,
+                now_seconds(),
+                "sending",
+            );
+            if room.is_some() {
+                message.kind = meron_core::chat::KIND_GROUP.into();
+            }
+            meron_core::chat::queue_message(&engine.db.lock().unwrap(), &message)?;
+            chat_dispatch(&engine, &message);
             Ok(json!({ "id": id }))
         }
         "chat.retry" => {
@@ -3391,8 +3410,127 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "only a message whose sending failed or is uncertain can be sent again"
             );
             meron_core::chat::set_state(&engine.db.lock().unwrap(), &account, &id, "sending")?;
-            chat_dispatch(&engine, &account, &message.conversation, &id, &message.body);
+            chat_dispatch(&engine, &message);
             Ok(json!({ "ok": true }))
+        }
+        // Group chats (ADR-0044): joined by the person, joined again on each
+        // connection, left by the person.
+        "chat.rooms" => {
+            let account = req_str(p, "account")?;
+            let rooms = meron_core::chat::rooms(&engine.db.lock().unwrap(), &account)?;
+            let states = chat_room_status().lock().unwrap().clone();
+            let rooms: Vec<Value> = rooms
+                .into_iter()
+                .map(|room| {
+                    let mut value = serde_json::to_value(&room).unwrap_or(Value::Null);
+                    let state = states.get(&(account.clone(), room.room.clone())).cloned().unwrap_or(json!({ "state": "offline" }));
+                    value["state"] = state["state"].clone();
+                    value["detail"] = state["detail"].clone();
+                    value
+                })
+                .collect();
+            Ok(json!(rooms))
+        }
+        "chat.join" => {
+            let account = req_str(p, "account")?;
+            let room = meron_core::chat::check_room(&req_str(p, "room")?)?;
+            let nick = meron_core::chat::check_nick(&req_str(p, "nick")?)?;
+            meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let key = meron_core::chat::room_secret_key(&account, &room);
+            // A password typed now, or the one an invitation brought.
+            let password = match p.get("password").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                Some(typed) => {
+                    store_room_password(&account, &room, typed)?;
+                    Some(typed.to_string())
+                }
+                None => secrets::load(&key).ok().map(|s| s.password).filter(|s| !s.is_empty()),
+            };
+            meron_core::chat::save_room(&engine.db.lock().unwrap(), &account, &room, &nick, password.is_some(), now_seconds())?;
+            let sent = chat_sessions().lock().unwrap().get(&account).is_some_and(|tx| {
+                tx.send(meron_core::chat::xmpp::Command::Join { room: room.clone(), nick, password }).is_ok()
+            });
+            Ok(json!({ "room": room, "connected": sent }))
+        }
+        "chat.leave" => {
+            let account = req_str(p, "account")?;
+            let room = req_str(p, "room")?;
+            if let Some(joined) = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &room)? {
+                if let Some(tx) = chat_sessions().lock().unwrap().get(&account) {
+                    let _ = tx.send(meron_core::chat::xmpp::Command::Leave { room: room.clone(), nick: joined.nick });
+                }
+            }
+            meron_core::chat::leave_room(&engine.db.lock().unwrap(), &account, &room)?;
+            let _ = secrets::delete(&meron_core::chat::room_secret_key(&account, &room));
+            chat_room_status().lock().unwrap().remove(&(account, room));
+            Ok(json!({ "ok": true }))
+        }
+        "chat.invitations" => Ok(serde_json::to_value(meron_core::chat::invitations(
+            &engine.db.lock().unwrap(),
+            &req_str(p, "account")?,
+        )?)?),
+        "chat.dismissInvitation" => {
+            let account = req_str(p, "account")?;
+            let room = req_str(p, "room")?;
+            let db = engine.db.lock().unwrap();
+            meron_core::chat::dismiss_invitation(&db, &account, &room)?;
+            if meron_core::chat::room(&db, &account, &room)?.is_none() {
+                let _ = secrets::delete(&meron_core::chat::room_secret_key(&account, &room));
+            }
+            Ok(json!({ "ok": true }))
+        }
+        // Files (ADR-0044): put on the server's upload service and sent as a
+        // link; saved from a link only when the person asks, over HTTPS.
+        "chat.sendFile" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?.trim().to_lowercase();
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let upload_id = req_str(p, "upload_id")?;
+            // Asked only on a live connection: a question queued on a dead
+            // stream might go out later, when nobody is watching.
+            let online = chat_status().lock().unwrap().get(&account).is_some_and(|s| s["state"] == "online");
+            anyhow::ensure!(online, "this chat account is not connected; nothing was sent");
+            let meta = std::fs::metadata(&path).context("the file cannot be read")?;
+            anyhow::ensure!(meta.is_file(), "only a file can be sent");
+            let name = path.file_name().and_then(|n| n.to_str()).context("the file has no name")?.to_string();
+            let group = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?.is_some();
+            let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let upload = meron_core::chat::xmpp::Upload {
+                id: upload_id.clone(),
+                conversation,
+                group,
+                path,
+                name,
+                size: meta.len(),
+                cancel: cancel.clone(),
+            };
+            chat_uploads().lock().unwrap().insert(upload_id.clone(), cancel);
+            let sent = chat_sessions()
+                .lock()
+                .unwrap()
+                .get(&account)
+                .is_some_and(|tx| tx.send(meron_core::chat::xmpp::Command::Upload(upload)).is_ok());
+            if !sent {
+                chat_uploads().lock().unwrap().remove(&upload_id);
+                anyhow::bail!("this chat account is not connected; nothing was sent");
+            }
+            Ok(json!({ "started": upload_id }))
+        }
+        "chat.cancelUpload" => {
+            if let Some(flag) = chat_uploads().lock().unwrap().get(&req_str(p, "upload_id")?) {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "chat.download" => {
+            let link = req_str(p, "url")?;
+            let dest = std::path::PathBuf::from(req_str(p, "path")?);
+            meron_core::chat::files::https_only(&link)?;
+            let result = tokio::task::spawn_blocking(move || {
+                let agent = meron_core::chat::files::agent(&[])?;
+                meron_core::chat::files::download(&agent, &link, &dest).map_err(anyhow::Error::from)
+            })
+            .await??;
+            Ok(json!({ "saved": true, "bytes": result }))
         }
 
         // When a POP3 account deletes from its server (#97, ADR-0035).
@@ -9477,11 +9615,33 @@ fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()>
     // Events leave the session through a channel to the async writer.
     let (etx, mut erx) = tokio::sync::mpsc::unbounded_channel::<(String, Value)>();
     tokio::spawn(async move {
-        while let Some((name, detail)) = erx.recv().await {
-            if name == "chat.status" {
-                if let Some(account) = detail["account"].as_str() {
-                    chat_status().lock().unwrap().insert(account.to_string(), detail.clone());
+        while let Some((name, mut detail)) = erx.recv().await {
+            let account = detail["account"].as_str().unwrap_or_default().to_string();
+            match name.as_str() {
+                "chat.status" if !account.is_empty() => {
+                    chat_status().lock().unwrap().insert(account, detail.clone());
                 }
+                "chat.room" => {
+                    let room = detail["room"].as_str().unwrap_or_default().to_string();
+                    chat_room_status().lock().unwrap().insert((account, room), detail.clone());
+                }
+                "chat.uploaded" => {
+                    chat_uploads().lock().unwrap().remove(detail["upload_id"].as_str().unwrap_or_default());
+                }
+                // An invitation's room password goes to the keychain; the app
+                // only hears that there is one.
+                "chat.invitation" => {
+                    if let Some(password) = detail.get("password").and_then(Value::as_str).filter(|p| !p.is_empty()) {
+                        let room = detail["room"].as_str().unwrap_or_default().to_string();
+                        if let Err(err) = store_room_password(&account, &room, password) {
+                            eprintln!("meron-core: could not keep a room password: {err:#}");
+                        }
+                    }
+                    if let Some(map) = detail.as_object_mut() {
+                        map.remove("password");
+                    }
+                }
+                _ => {}
             }
             emit(&out, &name, detail).await;
         }
@@ -9489,23 +9649,58 @@ fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()>
     let emit_fn: meron_core::chat::xmpp::Emit = Arc::new(move |name: &str, detail: Value| {
         let _ = etx.send((name.to_string(), detail));
     });
-    tokio::spawn(meron_core::chat::xmpp::run(account, password, engine.db.clone(), connector, rx, emit_fn));
+    let account_id = id.to_string();
+    let options = meron_core::chat::xmpp::Options {
+        room_password: Arc::new(move |room: &str| {
+            secrets::load(&meron_core::chat::room_secret_key(&account_id, room))
+                .ok()
+                .map(|s| s.password)
+                .filter(|p| !p.is_empty())
+        }),
+        file_roots: Vec::new(),
+    };
+    tokio::spawn(meron_core::chat::xmpp::run(account, password, engine.db.clone(), connector, rx, emit_fn, options));
     Ok(())
 }
 
 /// Hands a message to its account's connection; with none, it failed.
-fn chat_dispatch(engine: &Arc<Engine>, account: &str, conversation: &str, id: &str, body: &str) {
-    let sent = chat_sessions().lock().unwrap().get(account).is_some_and(|tx| {
+fn chat_dispatch(engine: &Arc<Engine>, message: &meron_core::chat::ChatMessage) {
+    let sent = chat_sessions().lock().unwrap().get(&message.account).is_some_and(|tx| {
         tx.send(meron_core::chat::xmpp::Command::Send {
-            conversation: conversation.to_string(),
-            id: id.to_string(),
-            body: body.to_string(),
+            conversation: message.conversation.clone(),
+            id: message.id.clone(),
+            body: message.body.clone(),
+            group: message.kind == meron_core::chat::KIND_GROUP,
+            file: message.file_url.clone(),
         })
         .is_ok()
     });
     if !sent {
-        let _ = meron_core::chat::set_state(&engine.db.lock().unwrap(), account, id, "failed");
+        let _ = meron_core::chat::set_state(&engine.db.lock().unwrap(), &message.account, &message.id, "failed");
     }
+}
+
+/// Each room's last known state (joining, joined, out, error), by account
+/// and room, for the app to show.
+fn chat_room_status() -> &'static std::sync::Mutex<std::collections::HashMap<(String, String), Value>> {
+    static STATUS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<(String, String), Value>>> =
+        std::sync::OnceLock::new();
+    STATUS.get_or_init(Default::default)
+}
+
+/// Chat uploads running, each with its cancel flag.
+fn chat_uploads() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// A room's password goes to the keychain, never to the store.
+fn store_room_password(account: &str, room: &str, password: &str) -> anyhow::Result<()> {
+    secrets::store(
+        &meron_core::chat::room_secret_key(account, room),
+        &secrets::Secrets { password: password.to_string(), ..Default::default() },
+    )
 }
 
 struct TranslationDownload {

@@ -541,6 +541,15 @@ Estado de la iteración 16 (2026-10-12, por delegación):
   editor y las tarjetas avisan de las coincidencias con la agenda propia,
   sin red. La disponibilidad de otras personas desde los servidores queda
   bloqueada (ADR-0043, [registro](design/counter-proposals.md)).
+- **#111, lo pendiente de ADR-0036:** grupos XMPP (MUC): unirse por
+  dirección con apodo y contraseña en el llavero, historia al entrar y
+  archivo de la sala, entrar otra vez al reconectar, el eco propio sin
+  duplicar, el apodo de quien habla, salir, e invitaciones que solo se
+  ofrecen. Archivos por HTTP File Upload: límite del servidor antes de
+  subir, solo HTTPS, progreso y cancelación, y el enlace como OOB; lo
+  recibido se guarda solo al pedirlo. Probado con Prosody real en CI, con
+  dos personas en una sala y un archivo por HTTPS
+  (ADR-0044, [registro](design/chat.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
