@@ -35,7 +35,24 @@ const FRAME_FALLBACK = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemF
 
 export const DEFAULT_FONT_SCALE = 100
 export const MIN_FONT_SCALE = 80
-export const MAX_FONT_SCALE = 150
+/** 200% is what resizing text must reach (WCAG 1.4.4, #181). */
+export const MAX_FONT_SCALE = 200
+/**
+ * The steps keyboard zoom moves through, like a browser's. The app's own
+ * scale stands in for the webview's zoom, which Wails leaves without
+ * keyboard accelerators: it grows the root font size, and with it every
+ * rem-sized text and spacing utility, while media queries keep reading the
+ * window's real width (#181).
+ */
+export const ZOOM_STEPS = [80, 90, 100, 110, 125, 150, 175, 200] as const
+
+/** The next zoom step above (`1`) or below (`-1`) a scale, clamped at the ends.
+ * A scale typed between two steps moves to the nearest one in that direction. */
+export function zoomStep(scale: number, direction: 1 | -1): number {
+  const current = clampFontScale(scale)
+  if (direction > 0) return ZOOM_STEPS.find((step) => step > current) ?? MAX_FONT_SCALE
+  return [...ZOOM_STEPS].reverse().find((step) => step < current) ?? MIN_FONT_SCALE
+}
 /**
  * Message bodies stretch much further than the app-wide size: the frames zoom
  * and reflow, so a large-print reading size stays usable, while the chrome

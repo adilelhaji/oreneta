@@ -291,6 +291,52 @@ test('onboarding remains keyboard reachable in a short zoom-equivalent viewport'
   expect(errors).toEqual([])
 })
 
+for (const width of [1440, 1024]) {
+  test(`keyboard zoom to 200% keeps the mailbox, reader and composer on screen and survives a reload, ${width}px (#181)`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.goto('/')
+    const search = page.getByRole('textbox').first()
+    await expect(search).toBeVisible()
+    const rootSize = () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+    expect(await rootSize()).toBe('32px')
+    await expect(page.getByText('Size 200%')).toBeVisible()
+    const onScreen = async (where: string) => {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+      const outside = await page.evaluate(() => [...document.querySelectorAll('button, [role=button]')]
+        .filter((element) => { const box = element.getBoundingClientRect(); return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1) })
+        .map((element) => element.getAttribute('aria-label') ?? element.textContent?.trim()))
+      expect(outside, where).toEqual([])
+    }
+    await onScreen('mailbox')
+    // The reader and the composer at the same size.
+    await page.getByRole('row').filter({ hasText: 'Sep 8' }).first().click()
+    await expect(page.getByText('No Conversation Selected')).toBeHidden()
+    await onScreen('reader')
+    await page.keyboard.press(`${mod}+KeyN`)
+    await expect(page.getByPlaceholder('Subject')).toBeVisible()
+    await onScreen('composer')
+    await page.screenshot({ path: info.outputPath('zoom-200-composer.png') })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    // While typing: the text and the focus stay where they were.
+    await search.click()
+    await search.fill('budget')
+    await page.keyboard.press(`${mod}+Minus`)
+    expect(await rootSize()).toBe('28px')
+    await expect(search).toBeFocused()
+    await expect(search).toHaveValue('budget')
+    await page.reload()
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    expect(await rootSize()).toBe('28px')
+    await page.keyboard.press(`${mod}+Digit0`)
+    expect(await rootSize()).toBe('16px')
+    expect(errors).toEqual([])
+  })
+}
+
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
   for (const width of [1440, 600]) {
     test(`secondary screen design: ${theme}, ${width}px`, async ({ page }, info) => {

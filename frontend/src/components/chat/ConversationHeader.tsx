@@ -134,7 +134,7 @@ export function ConversationHeader({
 
   return (
     <>
-      <header className="relative z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-header px-2 select-none">
+      <header className="@container relative z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-header px-2 select-none">
         <button
           className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-hover text-secondary min-[769px]:hidden cursor-pointer"
           onClick={() => ui$.mobilePane.set('threads')}
@@ -266,24 +266,26 @@ export function ConversationHeader({
                   icon={Sparkles}
                   label={t('assistant.open', { defaultValue: 'Review with assistant' })}
                   onClick={() => setAssistantOpen(true)}
-                  className="hidden min-[1200px]:flex"
+                  className="hidden @min-[42rem]:flex"
                 />
               )}
               {/* The two that give way first when the pane is narrow. They
                   stay in the menu below, so nothing becomes unreachable —
-                  only less immediate. */}
+                  only less immediate. Measured on the header itself, in rem,
+                  so a larger app size (#181) makes room the same way a
+                  narrower window does. */}
               <IconButton
                 icon={Star}
                 disabled={changesBlocked}
                 label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
-                className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-warning')}
+                className={clsx('hidden @min-[36rem]:flex', activeThread.starred && 'text-warning')}
                 onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
               />
               <IconButton
                 icon={activeThread.unread ? MailOpen : Mail}
                 disabled={changesBlocked}
                 label={activeThread.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
-                className="hidden min-[860px]:flex"
+                className="hidden @min-[36rem]:flex"
                 onClick={() =>
                   void (activeThread.unread
                     ? markThreadRead(activeThread.thread_id)
@@ -293,16 +295,20 @@ export function ConversationHeader({
               {!isRSS && (
                 <>
                   <LabelPicker threadId={activeThread.thread_id} applied={activeThread.labels ?? []} />
+                  {/* Next to give way, for the same reason; the menu has
+                      both. */}
                   <IconButton
                     icon={Archive}
                     disabled={changesBlocked}
                     label={t('threads.actions.archiveThread')}
+                    className="hidden @min-[26rem]:flex"
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   <IconButton
                     icon={Trash2}
                     disabled={changesBlocked}
                     label={t('threads.actions.moveToTrash')}
+                    className="hidden @min-[26rem]:flex"
                     onClick={() => void deleteThread(activeThread.thread_id)}
                   />
                 </>

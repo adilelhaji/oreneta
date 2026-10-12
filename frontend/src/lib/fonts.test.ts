@@ -3,6 +3,7 @@ import {
   DEFAULT_FONT_SCALE,
   FONT_OPTIONS,
   MAX_FONT_SCALE,
+  zoomStep,
   MAX_MESSAGE_FONT_SCALE,
   MIN_FONT_SCALE,
   clampFontScale,
@@ -61,8 +62,20 @@ describe('font scale', () => {
   it('lets message bodies scale past the app-wide cap', () => {
     expect(clampMessageFontScale(999)).toBe(MAX_MESSAGE_FONT_SCALE)
     expect(clampMessageFontScale(380)).toBe(380)
-    expect(clampFontScale(180)).toBe(MAX_FONT_SCALE)
+    expect(clampFontScale(250)).toBe(MAX_FONT_SCALE)
     expect(sanitizeFontScale(380, MAX_MESSAGE_FONT_SCALE)).toBe(380)
+  })
+
+  it('zooms through the browser-like steps up to 200% and back', () => {
+    expect(MAX_FONT_SCALE).toBe(200)
+    const up: number[] = []
+    for (let scale = 100; up.length < 6; ) up.push((scale = zoomStep(scale, 1)))
+    expect(up).toEqual([110, 125, 150, 175, 200, 200])
+    expect(zoomStep(100, -1)).toBe(90)
+    expect(zoomStep(80, -1)).toBe(80)
+    // A size typed by hand moves to the nearest step in that direction.
+    expect(zoomStep(117, 1)).toBe(125)
+    expect(zoomStep(117, -1)).toBe(110)
   })
 
   it('only accepts stored numbers', () => {

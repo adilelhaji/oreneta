@@ -141,7 +141,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
   }
 
   return (
-    <div className="relative flex-1">
+    <div className="relative min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-1">
         {committed.map((recipient, index) => {
           const label = recipient.name || recipient.address || recipient.raw
