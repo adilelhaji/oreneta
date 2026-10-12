@@ -2979,6 +2979,70 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "judged": judged }))
         }
 
+        // The reader's rules on the account's server (#94, ADR-0027), through
+        // ManageSieve. Nothing goes to the server until the person pushes.
+        "rules.serverStatus" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if let Some(reason) = sieve_unavailable(&creds) {
+                return Ok(json!({ "available": false, "reason": reason }));
+            }
+            let last = rules::server::state(&engine.db.lock().unwrap(), &account)?;
+            let (mut session, caps) = match rules::managesieve::connect(&creds).await {
+                Ok(open) => open,
+                Err(err) => return Ok(json!({ "available": false, "reason": format!("{err:#}") })),
+            };
+            let status = rules::managesieve::status(&mut session, caps.clone(), last.as_ref().map(|s| s.script_hash.as_str())).await?;
+            session.logout().await?;
+            let plan = server_rule_plan(engine, &account, &caps.sieve);
+            Ok(json!({ "available": true, "status": status, "plan": plan, "state": last }))
+        }
+        "rules.serverPush" => {
+            let account = req_str(p, "account")?;
+            let overwrite = p.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if let Some(reason) = sieve_unavailable(&creds) {
+                anyhow::bail!(reason);
+            }
+            let last = rules::server::state(&engine.db.lock().unwrap(), &account)?;
+            let (mut session, caps) = rules::managesieve::connect(&creds).await?;
+            let plan = server_rule_plan(engine, &account, &caps.sieve);
+            let pushed = rules::managesieve::push(
+                &mut session,
+                &plan.script,
+                last.as_ref().map(|s| s.script_hash.as_str()),
+                overwrite,
+            )
+            .await?;
+            session.logout().await?;
+            if let rules::managesieve::Pushed::Stored { hash, active, .. } = &pushed {
+                rules::server::save(
+                    &engine.db.lock().unwrap(),
+                    &account,
+                    &rules::server::State {
+                        script_hash: hash.clone(),
+                        included: plan.included.clone(),
+                        active: *active,
+                        pushed_at: now_seconds(),
+                    },
+                )?;
+            }
+            Ok(json!({ "pushed": pushed, "plan": plan }))
+        }
+        "rules.serverRemove" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if let Some(reason) = sieve_unavailable(&creds) {
+                anyhow::bail!(reason);
+            }
+            let (mut session, _) = rules::managesieve::connect(&creds).await?;
+            let removed = rules::managesieve::remove(&mut session).await?;
+            session.logout().await?;
+            // Only once it is off the server do the rules run here again.
+            rules::server::clear(&engine.db.lock().unwrap(), &account)?;
+            Ok(json!({ "removed": removed }))
+        }
+
         // Personalized mass mail (#90, ADR-0026). The preview and the batch
         // are rendered by the same function from the same inputs.
         "merge.preview" => {
@@ -8092,7 +8156,9 @@ async fn apply_rules_to_arrivals(
     arrivals: &[imap::MessageHeader],
 ) -> std::collections::HashSet<u32> {
     let mut handled = std::collections::HashSet::new();
-    let rules = stored_rules(engine);
+    // Rules the account's server already applies are not applied twice (#94).
+    let on_server = rules::server::on_server(&engine.db.lock().unwrap(), account);
+    let rules: Vec<rules::Rule> = stored_rules(engine).into_iter().filter(|r| !on_server.contains(&r.id)).collect();
     if rules.is_empty() || arrivals.is_empty() {
         return handled;
     }
@@ -8285,6 +8351,31 @@ fn scheduled_outcome_of(result: &Value) -> ScheduledOutcome {
         },
         _ => ScheduledOutcome::Sent,
     }
+}
+
+/// Why an account's rules cannot run on its server through ManageSieve.
+fn sieve_unavailable(creds: &imap::Creds) -> Option<String> {
+    if creds.is_ews() || creds.is_graph() {
+        return Some("Exchange keeps its own server rules, which Oreneta does not edit yet".into());
+    }
+    if creds.is_local() {
+        return Some("a local archive has no server".into());
+    }
+    if creds.password.is_empty() || creds.is_oauth() {
+        return Some("this account signs in without a password; its provider's own filters are not edited yet".into());
+    }
+    None
+}
+
+/// The script for an account from the stored rules, given what its server
+/// supports, with labels linked to this account's keywords.
+fn server_rule_plan(engine: &Arc<Engine>, account: &str, extensions: &[String]) -> rules::sieve::Plan {
+    let rules = stored_rules(engine);
+    let links = store::label_links(&engine.db.lock().unwrap()).unwrap_or_default();
+    let keyword = |label: &str| {
+        links.iter().find(|l| l.label_id == label && l.account_id == account).map(|l| l.remote_name.clone())
+    };
+    rules::sieve::plan(&rules, account, extensions, &keyword)
 }
 
 /// Batches with a worker sending them now, so carrying on twice cannot start

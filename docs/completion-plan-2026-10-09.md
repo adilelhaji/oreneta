@@ -418,6 +418,11 @@ Estado de la iteración 12 (2026-10-12, por delegación):
   vista previa completa que es exactamente lo enviado, problemas que
   impiden enviar, resultado por destinatario, pausa ante límites y ningún
   reintento a ciegas (ADR-0026, [registro](design/personalized-mailings.md)).
+- **#94:** inventario por proveedor y reglas en el servidor por ManageSieve,
+  con traducción exacta o la regla entera se queda aquí, sin pisar copias
+  cambiadas ni apagar otros scripts y sin aplicar dos veces. Gmail, EWS y
+  Graph quedan bloqueados por permisos y evidencia
+  (ADR-0027, [registro](design/server-rules.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

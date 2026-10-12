@@ -12,6 +12,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod managesieve;
+pub mod server;
+pub mod sieve;
+
 #[cfg(test)]
 mod tests;
 

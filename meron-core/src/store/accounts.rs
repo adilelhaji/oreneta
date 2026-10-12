@@ -816,6 +816,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("awaiting_replies", "account"),
     // Personalized mailings (ADR-0026); their messages go just before.
     ("merge_batches", "account"),
+    // Which rules run on the account's server (ADR-0027).
+    ("server_rules", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

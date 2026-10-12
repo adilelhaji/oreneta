@@ -18,6 +18,7 @@ import {
 import { isRssAccount } from '../../lib/threadActions'
 import { SettingsGroup, Switch } from './AccountSettingsRows'
 import { RuleEditor } from './RuleEditor'
+import { ServerRulesPanel } from './ServerRulesPanel'
 import { Notice } from '../notice/Notice'
 
 /**
@@ -230,6 +231,7 @@ export function RulesSettingsSection() {
         </div>
 
         <PreviewResult preview={preview} />
+        <ServerRulesPanel />
       </div>
     </SettingsGroup>
   )
