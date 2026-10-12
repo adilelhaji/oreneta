@@ -410,6 +410,10 @@ Estado de la iteración 12 (2026-10-12, por delegación):
   `In-Reply-To`, conversación y remitente (nunca por el asunto), dudas que
   decide la persona y un recordatorio que solo avisa dentro de la app
   (ADR-0025, [registro](design/awaiting-replies.md)).
+- **#88:** texto guardado con búsqueda, marcadores rellenados desde el
+  mensaje (lo que no se puede rellenar se queda y se avisa) y `{{cursor}}`;
+  la sincronización de firmas con proveedores queda pendiente de evidencia
+  real ([registro](design/quicktext-placeholders.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

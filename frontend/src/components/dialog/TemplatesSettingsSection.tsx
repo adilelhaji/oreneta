@@ -56,8 +56,16 @@ export function TemplatesSettingsSection() {
 
   const persist = async (next: Template[]) => {
     try {
-      await saveTemplates(next)
+      const left = await saveTemplates(next)
       setDrafts(null)
+      if (left.length)
+        showToast(
+          t('templates.leftOut', {
+            names: left.join(', '),
+            defaultValue: 'Not saved, as they are incomplete: {names}',
+          }),
+          'error',
+        )
     } catch (error) {
       showToast(error instanceof Error ? error.message : t('templates.saveFailed'), 'error')
     }
@@ -67,6 +75,14 @@ export function TemplatesSettingsSection() {
     <SettingsGroup title={t('templates.title')}>
       <div className="flex flex-col gap-3 px-3.5 py-3">
         <p className="text-caption text-secondary">{t('templates.intro')}</p>
+        <p className="text-caption text-secondary">
+          {t('templates.placeholdersHint', {
+            list: '{{to.firstName}}, {{to.name}}, {{to.email}}, {{me.name}}, {{me.firstName}}, {{me.email}}, {{subject}}, {{date}}',
+            cursor: '{{cursor}}',
+            defaultValue:
+              'Placeholders are filled when the text goes in: {list}. {cursor} marks where writing carries on. One that cannot be filled is left as written and said.',
+          })}
+        </p>
 
         {list.length === 0 ? (
           <p className="py-2 text-ui text-secondary">{t('templates.empty')}</p>

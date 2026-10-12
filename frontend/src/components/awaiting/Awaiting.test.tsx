@@ -55,10 +55,23 @@ it('says how an answer is known, and leaves a doubtful one to the person', async
       subject: 'Invoice',
       status: 'possible',
       possible: [
-        { messageId: 'auto@example.com', from: 'no-reply@example.com', date: 1_800_000_200, link: 'direct', doubt: 'automated' },
+        {
+          messageId: 'auto@example.com',
+          from: 'no-reply@example.com',
+          date: 1_800_000_200,
+          link: 'direct',
+          doubt: 'automated',
+        },
       ],
     },
-    { ...base, messageId: 'q3@example.com', subject: 'Keys', status: 'waiting', overdue: true, remindAt: 1_800_000_050 },
+    {
+      ...base,
+      messageId: 'q3@example.com',
+      subject: 'Keys',
+      status: 'waiting',
+      overdue: true,
+      remindAt: 1_800_000_050,
+    },
   ]
   awaiting$.open.set(true)
   const view = render(<AwaitingDialog />)

@@ -72,3 +72,17 @@ describe('the menu of kept text', () => {
     expect(view.getByText('Manage saved text')).toBeTruthy()
   })
 })
+
+describe('finding kept text (#88)', () => {
+  it('narrows by every word typed, in names and in the words kept', () => {
+    templates$.templates.set([snippet, message])
+    const view = open()
+    fireEvent.change(view.getByLabelText('Search kept text'), { target: { value: 'floor' } })
+    expect(view.queryByText('Directions')).toBeTruthy()
+    expect(view.queryByText('Weekly report')).toBeNull()
+    fireEvent.change(view.getByLabelText('Search kept text'), { target: { value: 'report here' } })
+    expect(view.queryByText('Weekly report')).toBeTruthy()
+    fireEvent.change(view.getByLabelText('Search kept text'), { target: { value: 'nothing like it' } })
+    expect(view.container.textContent).toContain('Nothing kept matches that.')
+  })
+})

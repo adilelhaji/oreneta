@@ -11,7 +11,8 @@ import { ComposerAttachments } from './ComposerAttachments'
 import { ComposerFooter } from './ComposerFooter'
 import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
-import { confirmAction } from '../../states/ui'
+import { confirmAction, showToast } from '../../states/ui'
+import { CURSOR_TOKEN, fillPlaceholders, takeCursor, type Filled } from '../../lib/placeholders'
 import type { Template } from '../../states/templates'
 import {
   insertAtCaret,
@@ -61,6 +62,60 @@ export function Composer({ tabId }: { tabId: string }) {
   const useTemplate = async (template: Template) => {
     if (!draft) return
 
+    // Placeholders are filled from this message (#88); what cannot be filled
+    // is left as written and said, never dropped.
+    const account = accounts.find((a) => a.id === draft.accountId)
+    const alias = account?.aliases?.find((a) => a.email.toLowerCase() === draft.fromEmail.toLowerCase())
+    const context = {
+      to: draft.to,
+      me: { name: alias?.name || account?.display_name || '', email: draft.fromEmail || account?.email || '' },
+      subject: draft.subject,
+      now: new Date(),
+    }
+    const left = { missing: new Set<string>(), unknown: new Set<string>() }
+    const fill = (text: string, html: boolean) => {
+      const filled: Filled = fillPlaceholders(text, context, html)
+      filled.missing.forEach((name) => left.missing.add(name))
+      filled.unknown.forEach((name) => left.unknown.add(name))
+      return filled.text
+    }
+    const report = () => {
+      if (left.unknown.size)
+        showToast(
+          t('templates.unknownPlaceholders', {
+            names: [...left.unknown].map((n) => `{{${n}}}`).join(', '),
+            defaultValue: 'Not a placeholder this knows, left as written: {names}',
+          }),
+          'error',
+        )
+      else if (left.missing.size)
+        showToast(
+          t('templates.missingPlaceholders', {
+            names: [...left.missing].map((n) => `{{${n}}}`).join(', '),
+            defaultValue: 'Nothing to fill these from yet, left as written: {names}',
+          }),
+          'error',
+        )
+    }
+    // The first cursor mark becomes the caret; any others go.
+    const caretAtMark = () => {
+      if (!editor) return
+      let first = -1
+      for (;;) {
+        let at = -1
+        editor.state.doc.descendants((node, pos) => {
+          if (at >= 0) return false
+          const index = node.isText && node.text ? node.text.indexOf(CURSOR_TOKEN) : -1
+          if (index >= 0) at = pos + index
+          return true
+        })
+        if (at < 0) break
+        editor.commands.deleteRange({ from: at, to: at + CURSOR_TOKEN.length })
+        if (first < 0) first = at
+      }
+      if (first >= 0) editor.chain().focus().setTextSelection(first).run()
+    }
+
     if (template.kind === 'message') {
       if (
         messageTemplateOverwrites(draft, template) &&
@@ -74,20 +129,41 @@ export function Composer({ tabId }: { tabId: string }) {
         return
       }
       const fields = messageTemplateFields(template, draft.rich)
-      update(fields)
-      // The editor holds its own copy of the body, so telling the draft is
-      // not enough: what is on screen has to be told as well.
-      if (draft.rich && editor) editor.commands.setContent(fields.html)
+      const subject = takeCursor(fill(fields.subject, false)).text
+      if (draft.rich && editor) {
+        update({ ...fields, subject, html: fill(fields.html, true) })
+        // The editor holds its own copy of the body, so telling the draft is
+        // not enough: what is on screen has to be told as well.
+        editor.commands.setContent(fill(fields.html, true))
+        caretAtMark()
+      } else {
+        const { text, cursor } = takeCursor(fill(fields.text, false))
+        update({ ...fields, subject, text })
+        queueMicrotask(() => {
+          const area = textRef.current
+          if (!area) return
+          area.focus()
+          area.setSelectionRange(cursor, cursor)
+        })
+      }
+      report()
       return
     }
 
     if (draft.rich && editor) {
-      editor.chain().focus().insertContent(templateInsertHtml(template)).run()
+      editor
+        .chain()
+        .focus()
+        .insertContent(fill(templateInsertHtml(template), true))
+        .run()
+      caretAtMark()
+      report()
       return
     }
 
     const area = textRef.current
-    const insert = templateInsertText(template)
+    const marked = takeCursor(fill(templateInsertText(template), false))
+    const insert = marked.text
     const { text, caret } = insertAtCaret(
       draft.text,
       insert,
@@ -95,12 +171,14 @@ export function Composer({ tabId }: { tabId: string }) {
       area?.selectionEnd ?? draft.text.length,
     )
     update({ text })
-    // After React has written the new value, put the cursor back where the
-    // writer was rather than at the top of the box.
+    report()
+    // After React has written the new value, put the cursor at the mark the
+    // snippet carries, else after it, rather than at the top of the box.
+    const at = caret - insert.length + marked.cursor
     queueMicrotask(() => {
       if (!area) return
       area.focus()
-      area.setSelectionRange(caret, caret)
+      area.setSelectionRange(at, at)
     })
   }
 

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { accounts$ } from '../../states/accounts'
 import { settings$ } from '../../states/settings'
 import { closeMessageTab, compose$, openComposeTab, updateComposeDraft } from '../../states/compose'
 import { ui$ } from '../../states/ui'
+import { templates$ } from '../../states/templates'
 import type { Account } from '../../types'
 import { Composer } from './Composer'
 import { ConversationTabs } from '../chat/ConversationTabs'
@@ -620,5 +621,36 @@ describe('Composer', () => {
 
     expect(bodyHtml()).toContain('Hello there')
     expect(bodyHtml()).toContain('From B')
+  })
+
+  // #88: placeholders are filled from the message, the cursor mark goes, and
+  // what cannot be filled stays visible and is said.
+  it('fills a snippet from the message and says what it could not fill', async () => {
+    templates$.loaded.set(true)
+    templates$.templates.set([
+      {
+        id: 's1',
+        kind: 'snippet',
+        name: 'Greeting',
+        subject: '',
+        bodyHtml: '<p>Hi {{to.firstName}}, {{cursor}}thanks. {{me.name}} {{to.nick}}</p>',
+        bodyText: '',
+      },
+    ])
+    const tabId = openComposeTab()!
+    await act(async () => {
+      updateComposeDraft(tabId, { to: '"Rivera, Morgan" <morgan@example.com>' })
+    })
+    const view = render(<Composer tabId={tabId} />)
+    await act(async () => {
+      fireEvent.click(view.getByLabelText('Insert saved text'))
+    })
+    await act(async () => {
+      fireEvent.click(view.getByText('Greeting'))
+    })
+    expect(bodyHtml()).toContain('Hi Morgan, thanks. a {{to.nick}}')
+    expect(bodyHtml()).not.toContain('{{cursor}}')
+    expect(ui$.toast.get()).toContain('{{to.nick}}')
+    expect(ui$.toastTone.get()).toBe('error')
   })
 })

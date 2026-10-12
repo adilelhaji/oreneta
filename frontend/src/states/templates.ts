@@ -72,8 +72,22 @@ export async function loadTemplates() {
  * whole save if any one of them is wrong, and losing four good templates to
  * a fifth half-written one is not what the writer asked for.
  */
-export async function saveTemplates(templates: Template[]) {
+export async function saveTemplates(templates: Template[]): Promise<string[]> {
   const complete = templates.filter((template) => templateProblem(template) === null)
   await invoke('templates.save', { templates: complete })
   templates$.templates.set(complete)
+  // Said, not silent (#88): the names of what was left out, for the caller
+  // to show.
+  return templates.filter((template) => templateProblem(template) !== null).map((template) => template.name || '—')
+}
+
+/** Kept text whose name or words contain every word asked for. */
+export function searchTemplates(templates: Template[], query: string): Template[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return templates
+  return templates.filter((template) => {
+    const haystack =
+      `${template.name} ${template.subject} ${template.bodyText} ${template.bodyHtml.replace(/<[^>]*>/g, ' ')}`.toLowerCase()
+    return words.every((word) => haystack.includes(word))
+  })
 }
