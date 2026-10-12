@@ -54,8 +54,11 @@ contestar solo.
 
 ## Pendiente
 
-- Contraproponer y reenviar.
-- Disponibilidad (free/busy).
+- Contraproponer: resuelto en ADR-0043 (COUNTER y DECLINECOUNTER).
+- Reenviar una invitación.
+- Disponibilidad (free/busy): las coincidencias con la agenda propia se
+  resuelven en ADR-0043; la disponibilidad de otras personas desde los
+  servidores sigue bloqueada (ver ADR-0043).
 - Actualizar como organizador el estado de los asistentes al recibir
   respuestas: ahora solo se muestran.
 - Verificación N5 con Outlook, Gmail y Apple Calendar.

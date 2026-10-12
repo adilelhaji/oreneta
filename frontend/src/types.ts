@@ -369,5 +369,9 @@ export type Invitation = {
   repeats: boolean
   organizer?: { name: string; addr: string; response: string } | null
   attendees: { name: string; addr: string; response: string }[]
+  /** What the sender wrote with it (COMMENT): a proposal's or a refusal's words. */
+  comment?: string | null
+  /** STATUS:CANCELLED on the event itself. */
+  cancelled?: boolean
   ics: string
 }

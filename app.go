@@ -571,6 +571,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"translation.status", "translation.download", "translation.cancel", "translation.remove",
 		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
 		"cloud.share", "cloud.revoke", "pop3.retention",
+		// Proposing another time and the organizer's side of it, and the
+		// local schedule check behind both (ADR-0043).
+		"invite.counter", "invite.counterStatus", "invite.declineCounter", "calendar.conflicts",
 		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
 		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
 		"notes.attachments", "notes.attach", "notes.removeAttachment",

@@ -20,6 +20,7 @@ import {
 } from '../../states/calendar'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
+import { ConflictNote } from './ConflictNote'
 
 /// Creates or edits one event.
 ///
@@ -79,8 +80,12 @@ export function EventEditor() {
   // event being created, has only one answer.
   const repeats = !isNew && event.is_recurring && Boolean(event.series_id)
   // People who could be told. Only those with an address: an attendee the
-  // server named without one cannot be written to.
-  const invitees = event.attendees.map((person) => person.addr.trim()).filter(Boolean)
+  // server named without one cannot be written to. Only an account's own
+  // calendar (Exchange, Google) can tell them: a local or CalDAV save sends
+  // nothing, so the question is not asked there (ADR-0043).
+  const kind = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
+  const canNotify = kind !== 'local' && kind !== 'caldav'
+  const invitees = canNotify ? event.attendees.map((person) => person.addr.trim()).filter(Boolean) : []
 
   /// Runs an action through the questions it raises, in order: which
   /// occurrences, then whether to tell anyone. Neither is asked when it has
@@ -233,6 +238,15 @@ export function EventEditor() {
             <input type="checkbox" checked={event.all_day} onChange={(e) => set(asAllDay(event, e.target.checked))} />
             {t('calendar.allDay', { defaultValue: 'All day' })}
           </label>
+
+          {/* The person's own events at that time, from the calendars kept
+              here; the event itself does not count. */}
+          <ConflictNote
+            start={event.start}
+            end={event.end}
+            allDay={event.all_day}
+            exclude={[event.id, event.series_id ?? '']}
+          />
 
           {/* The rule shows for a new event and for one whose series can be
               reached; a change to it takes effect when the save applies to the
@@ -400,7 +414,7 @@ function Labelled({ label, children }: { label: string; children: React.ReactNod
 /// already had. Plain controls work the same everywhere; hour and minute are
 /// separate so any time is reachable exactly, without hunting through a list
 /// of every minute in the day.
-function DateAndTime({
+export function DateAndTime({
   value,
   allDay,
   onChange,

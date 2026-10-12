@@ -2,7 +2,9 @@
 //! (#102, ADR-0019).
 //!
 //! A message carrying a `text/calendar` part with a METHOD is an invitation
-//! (REQUEST), a cancellation (CANCEL) or an answer (REPLY). Reading one only
+//! (REQUEST), a cancellation (CANCEL), an answer (REPLY), a proposal of
+//! another time (COUNTER) or the organizer turning one down (DECLINECOUNTER,
+//! ADR-0043). Reading one only
 //! describes it. Nothing is sent and nothing reaches a calendar unless the
 //! person asks: received mail never answers on anyone's behalf.
 
@@ -32,6 +34,13 @@ pub struct Invitation {
     pub organizer: Option<Participant>,
     #[serde(default)]
     pub attendees: Vec<Participant>,
+    /// The note the sender wrote with it (COMMENT): what a proposal of
+    /// another time or its refusal says in words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    /// STATUS:CANCELLED on the event itself.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cancelled: bool,
     /// The calendar object as it arrived, for answering and for adding it.
     pub ics: String,
 }
@@ -99,6 +108,8 @@ pub fn parse(ics: &str) -> Option<Invitation> {
             "RRULE" => invitation.repeats = true,
             "ORGANIZER" => invitation.organizer = Some(person(line)),
             "ATTENDEE" => invitation.attendees.push(person(line)),
+            "COMMENT" => invitation.comment = Some(unescape(value(line))).filter(|c| !c.trim().is_empty()),
+            "STATUS" => invitation.cancelled = value(line).trim().eq_ignore_ascii_case("CANCELLED"),
             _ => {}
         }
     }
@@ -214,6 +225,176 @@ pub fn as_event(invitation: &Invitation, me: &str, response: super::Response) ->
         })
         .map(|l| fold(&l) + "\r\n")
         .collect()
+}
+
+fn stamp(at: i64) -> String {
+    chrono::DateTime::from_timestamp(at, 0).unwrap_or_default().format("%Y%m%dT%H%M%SZ").to_string()
+}
+
+fn date(at: i64) -> String {
+    chrono::DateTime::from_timestamp(at, 0).unwrap_or_default().format("%Y%m%d").to_string()
+}
+
+fn same_person(a: &str, b: &str) -> bool {
+    let bare = |s: &str| {
+        let s = s.trim();
+        let s = match s.get(..7) {
+            Some(scheme) if scheme.eq_ignore_ascii_case("mailto:") => &s[7..],
+            _ => s,
+        };
+        s.to_ascii_lowercase()
+    };
+    !a.trim().is_empty() && bare(a) == bare(b)
+}
+
+/// The main event's lines of a calendar object, without the wrapper.
+fn event_lines(ics: &str) -> Result<Vec<String>> {
+    let lines = unfold(ics);
+    let begin = lines.iter().position(|l| l.eq_ignore_ascii_case("BEGIN:VEVENT")).context("no event")?;
+    let end = lines[begin..].iter().position(|l| l.eq_ignore_ascii_case("END:VEVENT")).context("no event")? + begin;
+    Ok(lines[begin..end].to_vec())
+}
+
+/// A proposal of another time for an invitation (RFC 5546 §3.2.7): the same
+/// UID and SEQUENCE (a proposal does not make a new version), the organizer
+/// as the invitation names them, only this attendee, the proposed start and
+/// end, and what the person wrote.
+///
+/// The times are instants; for an all-day invitation they are dates at
+/// midnight UTC, as this calendar keeps them, and go out as `VALUE=DATE`.
+pub fn counter(
+    invitation: &Invitation,
+    me: &Participant,
+    start: i64,
+    end: i64,
+    comment: &str,
+    now: i64,
+) -> Result<String> {
+    if invitation.method == "CANCEL" || invitation.cancelled {
+        bail!("this meeting was cancelled; there is no time to propose");
+    }
+    if invitation.method != "REQUEST" {
+        bail!("another time can be proposed only for an invitation");
+    }
+    let organizer = invitation.organizer.as_ref().context("this invitation names no organizer to propose to")?;
+    if same_person(&organizer.addr, &me.addr) {
+        bail!("you organize this meeting; change its time in your calendar instead");
+    }
+    if invitation.repeats && invitation.recurrence_id.is_none() {
+        bail!("another time can be proposed for one meeting, not for a whole series");
+    }
+    let (dtstart, dtend) = if invitation.all_day {
+        let (from, to) = (date(start), date(end));
+        if to <= from {
+            bail!("the proposed end must be after its start");
+        }
+        (format!("DTSTART;VALUE=DATE:{from}"), format!("DTEND;VALUE=DATE:{to}"))
+    } else {
+        if end <= start {
+            bail!("the proposed end must be after its start");
+        }
+        (format!("DTSTART:{}", stamp(start)), format!("DTEND:{}", stamp(end)))
+    };
+    let lines = event_lines(&invitation.ics)?;
+    let original = |name: &str| lines.iter().find(|l| name_of(l) == name).cloned();
+    let mut out = vec![
+        "BEGIN:VCALENDAR".to_string(),
+        "VERSION:2.0".into(),
+        format!("PRODID:{}", super::ics::PRODID),
+        "METHOD:COUNTER".into(),
+        "BEGIN:VEVENT".into(),
+        format!("UID:{}", invitation.uid),
+        format!("SEQUENCE:{}", invitation.sequence),
+        format!("DTSTAMP:{}", stamp(now)),
+    ];
+    if let Some(line) = original("RECURRENCE-ID") {
+        out.push(line);
+    }
+    out.push(dtstart);
+    out.push(dtend);
+    out.push(original("ORGANIZER").unwrap_or_else(|| format!("ORGANIZER:mailto:{}", organizer.addr)));
+    let cn = if me.name.is_empty() { String::new() } else { format!(";CN={}", quote_param(&me.name)) };
+    out.push(format!("ATTENDEE{cn}:mailto:{}", me.addr.to_ascii_lowercase()));
+    out.push(format!("SUMMARY:{}", escape(&invitation.summary)));
+    if let Some(location) = invitation.location.as_deref() {
+        out.push(format!("LOCATION:{}", escape(location)));
+    }
+    if !comment.trim().is_empty() {
+        out.push(format!("COMMENT:{}", escape(comment.trim())));
+    }
+    out.push("END:VEVENT".into());
+    out.push("END:VCALENDAR".into());
+    Ok(out.iter().map(|l| fold(l) + "\r\n").collect())
+}
+
+/// The organizer turning a proposal down (RFC 5546 §3.2.8): the proposal's
+/// UID and SEQUENCE, the organizer, the attendee who proposed it and,
+/// optionally, why. The meeting stays as it was.
+pub fn decline_counter(counter: &Invitation, me: &Participant, comment: &str, now: i64) -> Result<String> {
+    if counter.method != "COUNTER" {
+        bail!("only a proposal of another time can be declined this way");
+    }
+    let proposer = counter.attendees.first().context("this proposal names nobody who proposed it")?;
+    if let Some(organizer) = counter.organizer.as_ref().filter(|o| !same_person(&o.addr, &me.addr)) {
+        bail!("this proposal was sent to {}, who organizes the meeting; only they can decline it", organizer.addr);
+    }
+    let lines = event_lines(&counter.ics)?;
+    let original = |name: &str| lines.iter().find(|l| name_of(l) == name).cloned();
+    let mut out = vec![
+        "BEGIN:VCALENDAR".to_string(),
+        "VERSION:2.0".into(),
+        format!("PRODID:{}", super::ics::PRODID),
+        "METHOD:DECLINECOUNTER".into(),
+        "BEGIN:VEVENT".into(),
+        format!("UID:{}", counter.uid),
+        format!("SEQUENCE:{}", counter.sequence),
+        format!("DTSTAMP:{}", stamp(now)),
+    ];
+    if let Some(line) = original("RECURRENCE-ID") {
+        out.push(line);
+    }
+    out.push(original("ORGANIZER").unwrap_or_else(|| {
+        let cn = if me.name.is_empty() { String::new() } else { format!(";CN={}", quote_param(&me.name)) };
+        format!("ORGANIZER{cn}:mailto:{}", me.addr.to_ascii_lowercase())
+    }));
+    let cn = if proposer.name.is_empty() { String::new() } else { format!(";CN={}", quote_param(&proposer.name)) };
+    out.push(format!("ATTENDEE{cn}:mailto:{}", proposer.addr));
+    if !counter.summary.is_empty() {
+        out.push(format!("SUMMARY:{}", escape(&counter.summary)));
+    }
+    if !comment.trim().is_empty() {
+        out.push(format!("COMMENT:{}", escape(comment.trim())));
+    }
+    out.push("END:VEVENT".into());
+    out.push("END:VCALENDAR".into());
+    Ok(out.iter().map(|l| fold(l) + "\r\n").collect())
+}
+
+/// The event this account keeps for a proposal's meeting and organizes: an
+/// occurrence in one of its own calendars (not a subscription) with this
+/// UID, whose organizer is `me`. The occurrence the proposal names when it
+/// names one, else the earliest. `None` when it is not kept here or someone
+/// else organizes it: then the proposal is only information.
+pub fn organized_event(
+    conn: &rusqlite::Connection,
+    account: &str,
+    me: &str,
+    uid: &str,
+    recurrence_id: Option<i64>,
+) -> Result<Option<super::Event>> {
+    let mut found: Vec<super::Event> = super::events_with_uid(conn, account, uid)?
+        .into_iter()
+        .filter(|e| !e.is_cancelled)
+        .filter(|e| e.organizer.as_ref().is_some_and(|o| same_person(&o.addr, me)))
+        .collect();
+    found.sort_by_key(|e| e.start);
+    let named = recurrence_id.and_then(|at| {
+        found.iter().position(|e| super::ics::occurrence_of(&e.id).is_some_and(|(_, s)| s == at) || e.start == at)
+    });
+    Ok(match named {
+        Some(i) => Some(found.swap_remove(i)),
+        None => found.into_iter().next(),
+    })
 }
 
 /// Whether this invitation is older than the version already kept: a

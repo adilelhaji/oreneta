@@ -1050,6 +1050,9 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
         'translation.status': translation,
         'cloud.list': [],
+        // The event editor and invitation cards check the person's own schedule (ADR-0043).
+        'calendar.conflicts': { conflicts: [] },
+        'invite.counterStatus': { organizer: false, event: null, sequence: null, outdated: false },
         'notes.attachments': { attachments: [] },
         'backupSchedule.status': {
           schedule: { enabled: false, folder: '', every_hours: 24, keep: 7, max_bytes: null },

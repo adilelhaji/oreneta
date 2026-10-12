@@ -485,6 +485,10 @@ func sidecarCallTimeout(method string) time.Duration {
 		"calendar.createCalendar", "calendar.renameCalendar", "calendar.deleteCalendar",
 		"calendar.createLocal", "calendar.subscribe":
 		return 30 * time.Second
+	// Where a proposal stands may read the event's version from its CalDAV
+	// server (ADR-0043).
+	case "invite.counterStatus", "invite.declineCounter":
+		return 30 * time.Second
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second
 	case "folders.list", "folders.create", "folders.archive", "messages.recent", "messages.sync", "rss.markRead", "rss.markAllRead", "watch.start", "watch.stop", "discard_draft", "account.addRss", "feed.add", "rss.importOpml":

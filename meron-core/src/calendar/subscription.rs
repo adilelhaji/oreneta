@@ -262,9 +262,17 @@ fn event_from(
         meeting: None,
         add_meeting: None,
         meeting_status: None,
-        // A subscription is read-only and its publisher decides what these
-        // mean; reporting a response we cannot give would be inventing one.
-        free_busy: String::new(),
+        // Only what the file says: a transparent event leaves the time free
+        // (RFC 5545 §3.8.2.7), which is what keeps it out of the conflicts a
+        // proposed time is checked against (ADR-0043). Anything else is left
+        // unsaid rather than guessed.
+        free_busy: source
+            .property_value("TRANSP")
+            .filter(|t| t.trim().eq_ignore_ascii_case("TRANSPARENT"))
+            .map(|_| "free".to_string())
+            .unwrap_or_default(),
+        // A subscription is read-only and its publisher decides what this
+        // means; reporting a response we cannot give would be inventing one.
         my_response: String::new(),
         organizer,
         attendees: Vec::new(),
@@ -571,6 +579,18 @@ END:VCALENDAR\r\n";
         let single: Vec<_> = events.iter().filter(|e| e.subject == "Lunch").collect();
         assert_eq!(single.len(), 1);
         assert!(!single[0].is_recurring, "a dated event is not a series");
+    }
+
+    #[test]
+    fn a_transparent_event_leaves_the_time_free() {
+        let file = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n\
+BEGIN:VEVENT\r\nUID:a@x\r\nDTSTART:20300110T090000Z\r\nDTEND:20300110T100000Z\r\nTRANSP:TRANSPARENT\r\nSUMMARY:FYI\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:b@x\r\nDTSTART:20300110T090000Z\r\nDTEND:20300110T100000Z\r\nTRANSP:OPAQUE\r\nSUMMARY:Busy\r\nEND:VEVENT\r\n\
+END:VCALENDAR\r\n";
+        let (mut events, _) = parse_window(file, "cal", 0, 4_102_444_800).unwrap();
+        events.sort_by(|a, b| a.subject.cmp(&b.subject));
+        assert_eq!((events[0].subject.as_str(), events[0].free_busy.as_str()), ("Busy", ""), "nothing guessed");
+        assert_eq!((events[1].subject.as_str(), events[1].free_busy.as_str()), ("FYI", "free"));
     }
 
     #[test]

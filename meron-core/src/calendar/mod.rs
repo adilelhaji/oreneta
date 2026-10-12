@@ -15,6 +15,7 @@ pub mod ics;
 pub mod import;
 pub mod itip;
 pub mod meeting;
+pub mod overlap;
 pub mod route;
 pub mod subscription;
 
@@ -568,6 +569,72 @@ pub fn events_of_calendar(conn: &Connection, account: &str, calendar_id: &str) -
     events_where(conn, account, (i64::MIN, i64::MAX), Some(calendar_id))
 }
 
+pub(crate) const EVENT_COLUMNS: &str = "e.calendar_id, e.event_id, e.change_key, e.subject, e.location,
+                e.start_utc, e.end_utc, e.all_day, e.is_recurring, e.is_cancelled,
+                e.free_busy, e.my_response, e.organizer, e.attendees, e.series_id,
+                e.description, e.reminder_minutes, e.meeting";
+
+fn event_row(row: &rusqlite::Row) -> rusqlite::Result<Event> {
+    event_row_at(row, 0)
+}
+
+/// An event read from [`EVENT_COLUMNS`] starting at column `base`.
+pub(crate) fn event_row_at(row: &rusqlite::Row, base: usize) -> rusqlite::Result<Event> {
+    Ok(Event {
+        calendar_id: row.get(base)?,
+        id: row.get(base + 1)?,
+        change_key: row.get(base + 2)?,
+        subject: row.get(base + 3)?,
+        location: row.get(base + 4)?,
+        start: row.get(base + 5)?,
+        end: row.get(base + 6)?,
+        all_day: row.get::<_, i64>(base + 7)? != 0,
+        is_recurring: row.get::<_, i64>(base + 8)? != 0,
+        is_cancelled: row.get::<_, i64>(base + 9)? != 0,
+        free_busy: row.get::<_, Option<String>>(base + 10)?.unwrap_or_default(),
+        my_response: row.get::<_, Option<String>>(base + 11)?.unwrap_or_default(),
+        organizer: row
+            .get::<_, Option<String>>(base + 12)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
+        attendees: row
+            .get::<_, Option<String>>(base + 13)?
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default(),
+        series_id: row.get(base + 14)?,
+        description: row.get::<_, Option<String>>(base + 15)?.unwrap_or_default(),
+        reminder_minutes: row.get(base + 16)?,
+        recurrence: None,
+        meeting: row
+            .get::<_, Option<String>>(base + 17)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
+        add_meeting: None,
+        meeting_status: None,
+    })
+}
+
+/// Every kept occurrence of the event with this iCalendar UID in an
+/// account's own calendars (subscriptions are someone else's), shown or
+/// hidden, earliest first. Ids name the UID in the forms each kind of
+/// calendar gives them: `uid@start` (CalDAV, files), `local:import:uid@start`
+/// (a local calendar), the series id, or the UID itself.
+pub fn events_with_uid(conn: &Connection, account: &str, uid: &str) -> Result<Vec<Event>> {
+    let pattern = |prefix: &str| format!("{prefix}{}@%", overlap::like_escaped(uid));
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {EVENT_COLUMNS}
+         FROM calendar_events e
+         JOIN calendars c
+           ON c.account = e.account AND c.provider_id = e.calendar_id
+         WHERE e.account = ?1 AND c.kind != 'subscribed'
+           AND (e.event_id = ?2 OR e.series_id = ?2
+                OR e.event_id LIKE ?3 ESCAPE '\\' OR e.event_id LIKE ?4 ESCAPE '\\')
+         ORDER BY e.start_utc, e.subject"
+    ))?;
+    let events = stmt
+        .query_map(params![account, uid, pattern(""), pattern("local:import:")], event_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(events)
+}
+
 fn events_where(
     conn: &Connection,
     account: &str,
@@ -575,52 +642,18 @@ fn events_where(
     calendar_id: Option<&str>,
 ) -> Result<Vec<Event>> {
     let (from, to) = window;
-    let mut stmt = conn.prepare(
-        "SELECT e.calendar_id, e.event_id, e.change_key, e.subject, e.location,
-                e.start_utc, e.end_utc, e.all_day, e.is_recurring, e.is_cancelled,
-                e.free_busy, e.my_response, e.organizer, e.attendees, e.series_id,
-                e.description, e.reminder_minutes, e.meeting
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {EVENT_COLUMNS}
          FROM calendar_events e
          JOIN calendars c
            ON c.account = e.account AND c.provider_id = e.calendar_id
          WHERE e.account = ?1
            AND (?4 IS NULL AND c.enabled = 1 OR e.calendar_id = ?4)
            AND e.end_utc > ?2 AND e.start_utc < ?3
-         ORDER BY e.start_utc, e.subject",
-    )?;
+         ORDER BY e.start_utc, e.subject"
+    ))?;
     let events = stmt
-        .query_map(params![account, from, to, calendar_id], |row| {
-            Ok(Event {
-                calendar_id: row.get(0)?,
-                id: row.get(1)?,
-                change_key: row.get(2)?,
-                subject: row.get(3)?,
-                location: row.get(4)?,
-                start: row.get(5)?,
-                end: row.get(6)?,
-                all_day: row.get::<_, i64>(7)? != 0,
-                is_recurring: row.get::<_, i64>(8)? != 0,
-                is_cancelled: row.get::<_, i64>(9)? != 0,
-                free_busy: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-                my_response: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-                organizer: row
-                    .get::<_, Option<String>>(12)?
-                    .and_then(|json| serde_json::from_str(&json).ok()),
-                attendees: row
-                    .get::<_, Option<String>>(13)?
-                    .and_then(|json| serde_json::from_str(&json).ok())
-                    .unwrap_or_default(),
-                series_id: row.get(14)?,
-                description: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
-                reminder_minutes: row.get(16)?,
-                recurrence: None,
-                meeting: row
-                    .get::<_, Option<String>>(17)?
-                    .and_then(|json| serde_json::from_str(&json).ok()),
-                add_meeting: None,
-                meeting_status: None,
-            })
-        })?
+        .query_map(params![account, from, to, calendar_id], event_row)?
         .collect::<Result<Vec<_>, _>>()?;
     // Any calendar's meeting address in its location or notes counts too.
     let events = events

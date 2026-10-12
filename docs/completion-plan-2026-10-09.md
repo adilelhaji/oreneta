@@ -534,6 +534,13 @@ Estado de la iteración 16 (2026-10-12, por delegación):
 - **Ledger:** las filas de lo entregado en las iteraciones 13 a 16 tienen
   su estado y su ejecución verde de CI. Ninguna pasa a `verified`: falta la
   evidencia nativa y de proveedor de la verificación final.
+- **#102, lo pendiente de ADR-0019:** proponer otra hora (COUNTER) desde la
+  tarjeta de una invitación, y como organizador ver la propuesta, rechazarla
+  (DECLINECOUNTER) o abrirla en el editor con la hora propuesta. Guardar en
+  calendarios locales y CalDAV no avisa a los asistentes, y se dice. El
+  editor y las tarjetas avisan de las coincidencias con la agenda propia,
+  sin red. La disponibilidad de otras personas desde los servidores queda
+  bloqueada (ADR-0043, [registro](design/counter-proposals.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

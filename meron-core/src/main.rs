@@ -614,12 +614,60 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(old.unwrap_err().to_string().contains("newer version"), "an older invitation sends nothing");
         assert_eq!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().len(), 1);
 
+        // The kept event is in the person's schedule, except for itself (ADR-0043).
+        let (nine, ten) = (1_894_266_000i64, 1_894_269_600i64);
+        let busy = call("calendar.conflicts", json!({"start": nine, "end": ten})).await.unwrap();
+        assert!(busy["conflicts"].as_array().unwrap().iter().any(|c| c["account"] == account && c["subject"] == "Planning"));
+        let itself = call("calendar.conflicts", json!({"start": nine, "end": ten, "exclude": ["meet@example.com"]})).await.unwrap();
+        assert!(!itself["conflicts"].as_array().unwrap().iter().any(|c| c["account"] == account && c["subject"] == "Planning"));
+
+        // Proposing another time: to the organizer, only for the current version.
+        let proposed = call("invite.counter", json!({
+            "account": account, "ics": request(2, "REQUEST"), "me_name": "Bo", "me_addr": "bo@example.com",
+            "start": nine + 4 * 3600, "end": ten + 4 * 3600, "comment": "After lunch?",
+        })).await.unwrap();
+        assert_eq!((proposed["proposal"]["to"].clone(), proposed["proposal"]["subject"].clone()), (json!("ana@example.com"), json!("New time proposed: Planning")));
+        let counter_ics = proposed["proposal"]["ics"].as_str().unwrap().to_owned();
+        assert!(counter_ics.contains("METHOD:COUNTER") && counter_ics.contains("SEQUENCE:2") && counter_ics.contains("DTSTART:20300110T130000Z"));
+        let stale = call("invite.counter", json!({
+            "account": account, "ics": request(1, "REQUEST"), "me_addr": "bo@example.com", "start": nine, "end": ten,
+        })).await;
+        assert!(stale.unwrap_err().to_string().contains("newer version"));
+
+        // The organizer's side: information only until the event is theirs here.
+        let ana = "ana@example.com";
+        let status = call("invite.counterStatus", json!({"account": ana, "me_addr": ana, "ics": counter_ics})).await.unwrap();
+        assert_eq!((status["organizer"].clone(), status["outdated"].clone()), (json!(false), json!(false)));
+        assert!(call("invite.declineCounter", json!({"account": ana, "me_addr": ana, "ics": counter_ics})).await.is_err(), "nothing is sent for a meeting not kept here");
+        let ana_home = call("calendar.createLocal", json!({"account": ana, "name": "Ana"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        calendar::put_local_event(&engine.db.lock().unwrap(), ana, &calendar::Event {
+            id: format!("local:import:meet@example.com@{nine}"),
+            calendar_id: ana_home.clone(),
+            subject: "Planning".into(),
+            start: nine,
+            end: ten,
+            organizer: Some(calendar::Participant { name: "Ana".into(), addr: ana.into(), response: String::new() }),
+            ..Default::default()
+        }).unwrap();
+        let status = call("invite.counterStatus", json!({"account": ana, "me_addr": ana, "ics": counter_ics})).await.unwrap();
+        assert_eq!((status["organizer"].clone(), status["event"]["calendar_id"].clone(), status["outdated"].clone()), (json!(true), json!(ana_home), json!(false)));
+        let declined = call("invite.declineCounter", json!({
+            "account": ana, "me_name": "Ana", "me_addr": ana, "ics": counter_ics, "comment": "The room is taken",
+        })).await.unwrap();
+        assert_eq!(declined["reply"]["to"], "bo@example.com");
+        let refusal = declined["reply"]["ics"].as_str().unwrap();
+        assert!(refusal.contains("METHOD:DECLINECOUNTER") && refusal.contains("SEQUENCE:2") && refusal.contains("COMMENT:The room is taken"));
+
         assert!(call("invite.cancel", json!({"account": account, "ics": request(3, "REQUEST")})).await.is_err(), "only a cancellation removes");
         let cancelled = call("invite.cancel", json!({"account": account, "ics": request(3, "CANCEL")})).await.unwrap();
         assert_eq!(cancelled["removed"], 1);
         assert!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().is_empty());
         let status = call("invite.status", json!({"account": account, "uid": "meet@example.com"})).await.unwrap();
         assert_eq!(status["answer"]["response"], "cancelled");
+        let after = call("invite.counter", json!({
+            "account": account, "ics": request(3, "REQUEST"), "me_addr": "bo@example.com", "start": nine, "end": ten,
+        })).await;
+        assert!(after.unwrap_err().to_string().contains("cancelled"), "a cancelled meeting takes no proposal");
     }
 
     #[tokio::test]
@@ -1599,6 +1647,58 @@ fn local_import_pattern(uid: &str) -> String {
 /// Text matched literally by a LIKE with `ESCAPE '\\'`.
 fn like_escaped(text: &str) -> String {
     text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+/// Where a proposal of another time stands for this account: the event it
+/// is about when this account organizes it in a calendar kept here, the
+/// event's current SEQUENCE when it can be read, and whether the proposal
+/// was made against an older version.
+struct CounterStanding {
+    event: Option<calendar::Event>,
+    sequence: Option<i64>,
+    outdated: bool,
+}
+
+async fn counter_standing(
+    engine: &Arc<Engine>,
+    account: &str,
+    me: &str,
+    proposal: &calendar::itip::Invitation,
+) -> anyhow::Result<CounterStanding> {
+    let event = calendar::itip::organized_event(
+        &engine.db.lock().unwrap(),
+        account,
+        me,
+        &proposal.uid,
+        proposal.recurrence_id,
+    )?;
+    let Some(event) = event else {
+        return Ok(CounterStanding { event: None, sequence: None, outdated: false });
+    };
+    // Occurrences keep no SEQUENCE. A CalDAV calendar has the object on its
+    // server, which is read; a local calendar has no version to compare, and
+    // a server that cannot be reached leaves it unknown rather than guessed.
+    let mut sequence = None;
+    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, &event.calendar_id)?
+        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+    if is_caldav {
+        if let Ok((target, transport)) = caldav_target(engine, account, &event.calendar_id) {
+            let located = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, &proposal.uid)?;
+            if let Some(located) = located {
+                let url = target.id.clone();
+                sequence = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::get_object(&transport, &url, &located.href)
+                        .ok()
+                        .flatten()
+                        .and_then(|(object, _)| calendar::itip::sequence_of(&object))
+                })
+                .await
+                .unwrap_or(None);
+            }
+        }
+    }
+    let outdated = calendar::itip::is_outdated(proposal, sequence);
+    Ok(CounterStanding { event: Some(event), sequence, outdated })
 }
 
 /// Puts an answered invitation in a calendar, or brings the copy there up
@@ -6193,6 +6293,103 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 },
             )?;
             Ok(json!({ "removed": removed }))
+        }
+        // Proposing another time, and the organizer's side of it (RFC 5546
+        // §3.2.7–3.2.8, ADR-0043). Like answers, each builds what is to be
+        // sent and the frontend sends it as an ordinary message; nothing
+        // goes out unless a button was pressed.
+        "invite.counter" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let start = req_i64(p, "start")?;
+            let end = req_i64(p, "end")?;
+            let comment = req_str(p, "comment").unwrap_or_default();
+            let invitation = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            let kept = calendar::itip::answer_of(&engine.db.lock().unwrap(), &account, &invitation.uid)?;
+            if calendar::itip::is_outdated(&invitation, kept.as_ref().map(|answer| answer.sequence)) {
+                anyhow::bail!("a newer version of this invitation was already answered; nothing was sent");
+            }
+            if kept.as_ref().is_some_and(|answer| answer.response == "cancelled" && answer.sequence >= invitation.sequence) {
+                anyhow::bail!("this meeting was cancelled; there is no time to propose");
+            }
+            let proposal = calendar::itip::counter(&invitation, &me, start, end, &comment, now_seconds())?;
+            let organizer = invitation.organizer.clone().context("this invitation names no organizer to propose to")?;
+            Ok(json!({ "proposal": {
+                "to": organizer.addr,
+                "subject": format!("New time proposed: {}", invitation.summary),
+                "ics": proposal,
+            }}))
+        }
+        "invite.counterStatus" => {
+            let account = req_str(p, "account")?;
+            let me = req_str(p, "me_addr")?.to_ascii_lowercase();
+            let ics = req_str(p, "ics")?;
+            let proposal = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            let standing = counter_standing(&engine, &account, &me, &proposal).await?;
+            Ok(json!({
+                "organizer": standing.event.is_some(),
+                "event": standing.event,
+                "sequence": standing.sequence,
+                "outdated": standing.outdated,
+            }))
+        }
+        "invite.declineCounter" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let comment = req_str(p, "comment").unwrap_or_default();
+            let proposal = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            if proposal.method != "COUNTER" {
+                anyhow::bail!("only a proposal of another time can be declined this way");
+            }
+            let standing = counter_standing(&engine, &account, &me.addr, &proposal).await?;
+            if standing.event.is_none() {
+                anyhow::bail!("this meeting is not one you organize in a calendar kept here; nothing was sent");
+            }
+            if standing.outdated {
+                anyhow::bail!("the meeting has changed since this time was proposed; nothing was sent");
+            }
+            let refusal = calendar::itip::decline_counter(&proposal, &me, &comment, now_seconds())?;
+            let proposer = proposal.attendees.first().context("this proposal names nobody who proposed it")?;
+            Ok(json!({ "reply": {
+                "to": proposer.addr,
+                "subject": format!("Proposed time declined: {}", proposal.summary),
+                "ics": refusal,
+            }}))
+        }
+        // Which of the person's own events a time overlaps (ADR-0043): read
+        // from the events kept here, every account unless one is named. No
+        // server is asked.
+        "calendar.conflicts" => {
+            let start = req_i64(p, "start")?;
+            let end = req_i64(p, "end")?;
+            let all_day = p.get("all_day").and_then(Value::as_bool).unwrap_or(false);
+            let offset = p.get("offset").and_then(Value::as_i64).unwrap_or(0);
+            let account = p.get("account").and_then(Value::as_str).filter(|a| !a.is_empty()).map(str::to_string);
+            let exclude: Vec<String> = p
+                .get("exclude")
+                .and_then(Value::as_array)
+                .map(|list| list.iter().filter_map(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string).collect())
+                .unwrap_or_default();
+            let found = calendar::overlap::overlapping(
+                &engine.db.lock().unwrap(),
+                account.as_deref(),
+                start,
+                end,
+                all_day,
+                offset,
+                &exclude,
+            )?;
+            Ok(json!({ "conflicts": found }))
         }
 
         // A .ics file into a local or CalDAV calendar (#101): previewed first
