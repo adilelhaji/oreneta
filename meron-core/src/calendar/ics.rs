@@ -7,6 +7,12 @@
 //! kept line for line, so saving here never strips what another program put
 //! there.
 //!
+//! The people on an event are the exception: the organizer and attendees
+//! the editor names are added, and an attendee is removed only when the
+//! editor says it removed them. A line for someone the editor never showed
+//! (a copy read before attendees were kept here, another client's addition)
+//! stays, so a save never drops a guest by not knowing about them.
+//!
 //! Times: a single event is written in UTC. A series is written in a named
 //! zone (the one it already had, or this computer's), because a rule is
 //! expanded in local time and a series in UTC would move an hour at every
@@ -15,7 +21,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, TimeZone, Utc};
 
-use super::{Event, Recurrence};
+use super::{Event, Participant, Recurrence};
 
 pub const PRODID: &str = "-//Oreneta//Oreneta Calendar//EN";
 
@@ -99,7 +105,7 @@ fn date(instant: i64) -> String {
 
 /// `DTSTART`/`DTEND`/`RECURRENCE-ID`/`EXDATE` for an instant: a date for an
 /// all-day event, local time in `zone` when one is given, UTC otherwise.
-fn time_property(name: &str, instant: i64, all_day: bool, zone: Option<&str>) -> String {
+pub(super) fn time_property(name: &str, instant: i64, all_day: bool, zone: Option<&str>) -> String {
     if all_day {
         return format!("{name};VALUE=DATE:{}", date(instant));
     }
@@ -115,7 +121,7 @@ fn time_property(name: &str, instant: i64, all_day: bool, zone: Option<&str>) ->
 }
 
 /// The TZID a property line names, if any.
-fn tzid_of(line: &str) -> Option<String> {
+pub(super) fn tzid_of(line: &str) -> Option<String> {
     let params = &line[..line.find(':')?];
     params
         .split(';')
@@ -135,6 +141,135 @@ fn alarm(minutes: Option<i64>, subject: &str) -> Vec<String> {
         format!("TRIGGER:-PT{minutes}M"),
         "END:VALARM".into(),
     ]
+}
+
+/// The address an ORGANIZER or ATTENDEE line names: lower-cased, without
+/// `mailto:`. Empty when the line names none.
+pub(super) fn address_of(line: &str) -> String {
+    let value = line.find(':').map(|i| &line[i + 1..]).unwrap_or("").trim();
+    let bare = match value.get(..7) {
+        Some(scheme) if scheme.eq_ignore_ascii_case("mailto:") => &value[7..],
+        _ => value,
+    };
+    bare.trim().to_ascii_lowercase()
+}
+
+/// A CN parameter value, quoted when it holds a separator (RFC 5545 §3.2).
+pub(super) fn quote_param(text: &str) -> String {
+    let clean: String = text.chars().filter(|c| *c != '"' && !c.is_control()).collect();
+    if clean.contains([';', ':', ',']) {
+        format!("\"{clean}\"")
+    } else {
+        clean
+    }
+}
+
+fn cn(name: &str) -> String {
+    if name.trim().is_empty() {
+        String::new()
+    } else {
+        format!(";CN={}", quote_param(name.trim()))
+    }
+}
+
+/// The organizer as a content line.
+pub(super) fn organizer_line(person: &Participant) -> String {
+    format!("ORGANIZER{}:mailto:{}", cn(&person.name), person.addr.trim().to_ascii_lowercase())
+}
+
+/// An attendee as a content line, with the answer they gave when one is
+/// known and a request for one otherwise.
+pub(super) fn attendee_line(person: &Participant) -> String {
+    let partstat = match person.response.as_str() {
+        "accept" => "ACCEPTED",
+        "decline" => "DECLINED",
+        "tentative" => "TENTATIVE",
+        _ => "NEEDS-ACTION",
+    };
+    let rsvp = if partstat == "NEEDS-ACTION" { ";RSVP=TRUE" } else { "" };
+    format!(
+        "ATTENDEE{};ROLE=REQ-PARTICIPANT;PARTSTAT={partstat}{rsvp}:mailto:{}",
+        cn(&person.name),
+        person.addr.trim().to_ascii_lowercase()
+    )
+}
+
+/// The people lines a new event is written with: the organizer, only when
+/// there is someone to organize, and each attendee with an address.
+fn people_lines(event: &Event) -> Vec<String> {
+    let attendees: Vec<&Participant> = event.attendees.iter().filter(|p| p.addr.contains('@')).collect();
+    let mut lines = Vec::new();
+    if attendees.is_empty() {
+        return lines;
+    }
+    if let Some(organizer) = event.organizer.as_ref().filter(|o| o.addr.contains('@')) {
+        lines.push(organizer_line(organizer));
+    }
+    lines.extend(attendees.into_iter().map(attendee_line));
+    lines
+}
+
+/// Brings the people of one component in line with an edit: the organizer
+/// added when it has none, attendees the editor added appended, and those in
+/// `removed` taken out. Nothing else about an existing line changes, so the
+/// answers a server recorded are kept.
+fn merge_people(lines: &mut Vec<String>, at: &Component, event: &Event, removed: &[String]) {
+    let removed: Vec<String> = removed.iter().map(|addr| addr.trim().to_ascii_lowercase()).collect();
+    let mut kept: Vec<String> = Vec::new();
+    let mut has_organizer = false;
+    let mut depth = 0usize;
+    let mut drop: Vec<usize> = Vec::new();
+    for (index, line) in lines.iter().enumerate().take(at.end).skip(at.begin + 1) {
+        let upper = line.to_ascii_uppercase();
+        if upper.starts_with("BEGIN:") {
+            depth += 1;
+        } else if upper.starts_with("END:") && depth > 0 {
+            depth -= 1;
+        } else if depth == 0 {
+            match name_of(line).as_str() {
+                "ORGANIZER" => has_organizer = true,
+                "ATTENDEE" => {
+                    let addr = address_of(line);
+                    if !addr.is_empty() && removed.contains(&addr) {
+                        drop.push(index);
+                    } else {
+                        kept.push(addr);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut added: Vec<String> = Vec::new();
+    for person in event.attendees.iter().filter(|p| p.addr.contains('@')) {
+        let addr = person.addr.trim().to_ascii_lowercase();
+        if !kept.contains(&addr) && !removed.contains(&addr) {
+            kept.push(addr);
+            added.push(attendee_line(person));
+        }
+    }
+    let attendees_remain = kept.iter().any(|addr| !addr.is_empty());
+    let wanted = event.organizer.as_ref().filter(|o| !has_organizer && attendees_remain && o.addr.contains('@'));
+    if let Some(organizer) = wanted {
+        added.insert(0, organizer_line(organizer));
+    }
+    // Inserted before the component closes, then removed from the back so the
+    // indexes found above still point where they did.
+    let close = at.end;
+    lines.splice(close..close, added);
+    for index in drop.into_iter().rev() {
+        lines.remove(index);
+    }
+}
+
+/// [`merge_people`] on every event component of an object.
+fn merge_people_everywhere(lines: &mut Vec<String>, event: &Event, removed: &[String]) -> Result<()> {
+    let count = components(lines)?.len();
+    for n in 0..count {
+        let found = components(lines)?;
+        merge_people(lines, &found[n], event, removed);
+    }
+    Ok(())
 }
 
 /// The lines this client owns on an event, in a stable order.
@@ -180,6 +315,7 @@ pub fn new_object_in(event: &Event, uid: &str, now: i64, zone: Option<&str>) -> 
     ];
     lines.extend(owned_lines(event, zone.as_deref(), now));
     lines.push("SEQUENCE:0".into());
+    lines.extend(people_lines(event));
     if let Some(rule) = event.recurrence.as_ref().and_then(|rule| rrule_line(rule, event.start, event.all_day)) {
         lines.push(rule);
     }
@@ -231,7 +367,7 @@ fn components(lines: &[String]) -> Result<Vec<Component>> {
 
 /// The instant a RECURRENCE-ID or EXDATE value names, read loosely: UTC,
 /// floating or date. Enough to match an occurrence this client wrote or read.
-fn instant_of(line: &str) -> Option<i64> {
+pub(super) fn instant_of(line: &str) -> Option<i64> {
     let value = &line[line.find(':')? + 1..];
     let zone = tzid_of(line).and_then(|zone| zone.parse::<chrono_tz::Tz>().ok());
     let first = value.split(',').next()?.trim();
@@ -317,8 +453,10 @@ fn rewrite(lines: &[String], at: &Component, replacement: Vec<String>, keep_rule
 /// An edit of a single event, or of a whole series. For a series the edit
 /// is made on the occurrence the person opened and carried to the series as
 /// a shift: the series keeps its first date, and only the time, duration and
-/// text change. `recurrence` replaces the rule when given.
-pub fn patch_event(ics: &str, event: &Event, whole_series: bool, now: i64) -> Result<String> {
+/// text change. `recurrence` replaces the rule when given. The people are
+/// merged as the module says, with `removed` the attendees the editor took
+/// out.
+pub fn patch_event(ics: &str, event: &Event, whole_series: bool, removed: &[String], now: i64) -> Result<String> {
     let lines = unfold(ics);
     let found = components(&lines)?;
     let main = master(&found)?;
@@ -339,19 +477,36 @@ pub fn patch_event(ics: &str, event: &Event, whole_series: bool, now: i64) -> Re
     let rule = event.recurrence.as_ref().and_then(|rule| rrule_line(rule, edited.start, edited.all_day));
     let keep_rule = rule.is_none();
     let mut out = rewrite(&lines, main, replacement, keep_rule, rule);
+    merge_people_everywhere(&mut out, event, removed)?;
     let again = components(&out)?;
     bump_sequence(&mut out, master(&again)?);
     Ok(render(&out))
 }
 
 /// One occurrence of a series changed on its own: an exception component
-/// with the occurrence's RECURRENCE-ID, replacing any earlier one.
-pub fn put_override(ics: &str, event: &Event, now: i64) -> Result<String> {
+/// with the occurrence's RECURRENCE-ID, replacing any earlier one. Its
+/// SEQUENCE is one past the earlier exception's, or the series', whichever
+/// is higher, so what was sent about the occurrence before is superseded.
+pub fn put_override(ics: &str, event: &Event, removed: &[String], now: i64) -> Result<String> {
     let (uid, original) = occurrence_of(&event.id).context("this is not an occurrence of a series")?;
     let lines = unfold(ics);
     let found = components(&lines)?;
     let main = master(&found)?;
     let zone = lines[main.begin..main.end].iter().find(|line| name_of(line) == "DTSTART").and_then(|line| tzid_of(line));
+    let sequence = |at: &Component| {
+        lines[at.begin..at.end]
+            .iter()
+            .find(|line| name_of(line) == "SEQUENCE")
+            .and_then(|line| line.split(':').nth(1))
+            .and_then(|n| n.trim().parse::<i64>().ok())
+            .unwrap_or(0)
+    };
+    let previous = found
+        .iter()
+        .filter(|c| c.recurrence_id.as_deref().and_then(instant_of) == Some(original))
+        .map(sequence)
+        .max();
+    let next = previous.unwrap_or(0).max(sequence(main)) + 1;
     let mut out = without_override(&lines, &found, original);
     let kept_people: Vec<String> = lines[main.begin..main.end]
         .iter()
@@ -361,12 +516,18 @@ pub fn put_override(ics: &str, event: &Event, now: i64) -> Result<String> {
     let mut component = vec!["BEGIN:VEVENT".to_string(), format!("UID:{uid}")];
     component.push(time_property("RECURRENCE-ID", original, event.all_day, zone.as_deref()));
     component.extend(owned_lines(event, zone.as_deref(), now));
-    component.push("SEQUENCE:1".into());
+    component.push(format!("SEQUENCE:{next}"));
     component.extend(kept_people);
     component.extend(alarm(event.reminder_minutes, &event.subject));
     component.push("END:VEVENT".into());
     let close = out.iter().rposition(|line| line.eq_ignore_ascii_case("END:VCALENDAR")).context("the calendar object is damaged")?;
     out.splice(close..close, component);
+    let again = components(&out)?;
+    let added = again
+        .iter()
+        .find(|c| c.recurrence_id.as_deref().and_then(instant_of) == Some(original))
+        .context("the calendar object is damaged")?;
+    merge_people(&mut out, added, event, removed);
     Ok(render(&out))
 }
 

@@ -352,7 +352,9 @@ pub fn create(transport: &dyn Transport, calendar_url: &str, event: &Event, now:
 
 /// An edit: of the event, of the whole series, or of one occurrence. Made
 /// on the object as the server has it now, and sent only if that is still
-/// the version the person was looking at (`seen`).
+/// the version the person was looking at (`seen`). `removed` names the
+/// attendees the editor took out; anyone else on the object stays.
+#[allow(clippy::too_many_arguments)]
 pub fn update(
     transport: &dyn Transport,
     calendar_url: &str,
@@ -360,6 +362,7 @@ pub fn update(
     seen: &str,
     event: &Event,
     whole_series: bool,
+    removed: &[String],
     now: i64,
 ) -> Result<Change> {
     let Some((ics, etag)) = get_object(transport, calendar_url, href)? else {
@@ -369,9 +372,9 @@ pub fn update(
         return Ok(Change::Conflict);
     }
     let patched = if event.is_recurring && !whole_series {
-        super::ics::put_override(&ics, event, now)?
+        super::ics::put_override(&ics, event, removed, now)?
     } else {
-        super::ics::patch_event(&ics, event, whole_series, now)?
+        super::ics::patch_event(&ics, event, whole_series, removed, now)?
     };
     let version = if etag.is_empty() { seen } else { etag.as_str() };
     Ok(match put_object(transport, calendar_url, href, &patched, Some(version))? {

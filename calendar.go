@@ -99,13 +99,15 @@ func (a *App) calendarCreate(payload map[string]any) (any, error) {
 
 // calendarUpdate applies a changed event. The event carries the change key it
 // was read with, which the server checks so an edit made elsewhere is not
-// silently overwritten.
+// silently overwritten. RemovedAttendees names the guests the editor took
+// out; a CalDAV copy keeps anyone else it names.
 func (a *App) calendarUpdate(payload map[string]any) (any, error) {
 	var req struct {
-		AccountID string         `json:"account_id"`
-		Event     map[string]any `json:"event"`
-		Scope     string         `json:"scope"`
-		Notify    bool           `json:"notify"`
+		AccountID        string         `json:"account_id"`
+		Event            map[string]any `json:"event"`
+		Scope            string         `json:"scope"`
+		Notify           bool           `json:"notify"`
+		RemovedAttendees []string       `json:"removed_attendees"`
 	}
 	if err := decode(payload, &req); err != nil {
 		return nil, err
@@ -114,10 +116,11 @@ func (a *App) calendarUpdate(payload map[string]any) (any, error) {
 		return nil, a.engineUnavailable()
 	}
 	return a.sidecar.Call("calendar.update", map[string]any{
-		"account": req.AccountID,
-		"event":   req.Event,
-		"scope":   req.Scope,
-		"notify":  req.Notify,
+		"account":           req.AccountID,
+		"event":             req.Event,
+		"scope":             req.Scope,
+		"notify":            req.Notify,
+		"removed_attendees": req.RemovedAttendees,
 	})
 }
 

@@ -239,9 +239,11 @@ export function InvitationCard({ message }: { message: Message }) {
                   </Button>
                 </div>
                 <p className="text-2xs text-secondary">
-                  {t('invite.acceptNotice', {
+                  {/* Saving in the editor asks before telling anyone, local
+                      and CalDAV calendars included (2026-10-12). */}
+                  {t('invite.acceptNoticeAsks', {
                     defaultValue:
-                      'The editor opens with the proposed time; saving changes your calendar only. The people invited are not sent the new time from here. Declining sends a message to the person who proposed it.',
+                      'The editor opens with the proposed time. When you save, it asks whether to send the new time to the people invited. Declining sends a message to the person who proposed it.',
                   })}
                 </p>
               </>

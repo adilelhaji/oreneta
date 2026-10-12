@@ -227,17 +227,50 @@ fn event_from(
     all_day: bool,
     repeats: bool,
 ) -> Event {
-    let organizer = source.multi_properties().get("ORGANIZER").and_then(|list| {
-        list.first().map(|property| Participant {
+    // The reader keeps a property that appears once among the single ones,
+    // so ORGANIZER is looked for there as well as among the repeated.
+    let organizer = source
+        .multi_properties()
+        .get("ORGANIZER")
+        .and_then(|list| list.first())
+        .or_else(|| source.properties().get("ORGANIZER"))
+        .map(|property| Participant {
             name: property
                 .params()
                 .get("CN")
                 .map(|param| param.value().to_string())
                 .unwrap_or_default(),
-            addr: property.value().trim_start_matches("mailto:").to_string(),
+            addr: super::ics::address_of(&format!(":{}", property.value())),
             response: String::new(),
+        });
+    // The people on it, as the object names them: what lets the organizer of
+    // a meeting kept on a CalDAV server see, edit and tell them. Only those
+    // with an address; the answer each gave is read from PARTSTAT.
+    let attendees = source
+        .multi_properties()
+        .get("ATTENDEE")
+        .map(|list| {
+            list.iter()
+                .map(|property| Participant {
+                    name: property.params().get("CN").map(|param| param.value().to_string()).unwrap_or_default(),
+                    addr: super::ics::address_of(&format!(":{}", property.value())),
+                    response: match property
+                        .params()
+                        .get("PARTSTAT")
+                        .map(|param| param.value().to_ascii_uppercase())
+                        .as_deref()
+                    {
+                        Some("ACCEPTED") => "accept".into(),
+                        Some("DECLINED") => "decline".into(),
+                        Some("TENTATIVE") => "tentative".into(),
+                        Some("NEEDS-ACTION") => "none".into(),
+                        _ => String::new(),
+                    },
+                })
+                .filter(|person| person.addr.contains('@'))
+                .collect()
         })
-    });
+        .unwrap_or_default();
     Event {
         // An occurrence is identified by its series and its instant: the file
         // gives one UID for the whole series, so a per-date suffix is what
@@ -275,7 +308,7 @@ fn event_from(
         // means; reporting a response we cannot give would be inventing one.
         my_response: String::new(),
         organizer,
-        attendees: Vec::new(),
+        attendees,
     }
 }
 

@@ -136,11 +136,11 @@ fn an_event_is_created_read_back_with_its_version_and_edited_only_from_it() {
     server.touch(&href, "SUMMARY:Plan", "SUMMARY:Plan (phone)");
     let mut mine = events[0].clone();
     mine.subject = "Plan (mine)".into();
-    assert_eq!(update(&server, CAL, &href, "\"e1\"", &mine, false, 2).unwrap(), Change::Conflict);
+    assert_eq!(update(&server, CAL, &href, "\"e1\"", &mine, false, &[], 2).unwrap(), Change::Conflict);
     assert!(server.objects.borrow()[&href].0.contains("SUMMARY:Plan (phone)"), "nothing was written over it");
 
     // From the version now on the server, the edit goes through.
-    let Change::Saved { etag, .. } = update(&server, CAL, &href, "\"e2\"", &mine, false, 2).unwrap() else { panic!() };
+    let Change::Saved { etag, .. } = update(&server, CAL, &href, "\"e2\"", &mine, false, &[], 2).unwrap() else { panic!() };
     assert_eq!(etag.as_deref(), Some("\"e3\""));
     assert!(server.objects.borrow()[&href].0.contains("SUMMARY:Plan (mine)"));
 }
@@ -164,7 +164,7 @@ fn an_occurrence_is_changed_or_removed_without_touching_the_rest_of_the_series()
     second.start += 1800;
     second.end += 1800;
     let version = second.change_key.clone().unwrap();
-    assert!(matches!(update(&server, CAL, &href, &version, &second, false, 2).unwrap(), Change::Saved { .. }));
+    assert!(matches!(update(&server, CAL, &href, &version, &second, false, &[], 2).unwrap(), Change::Saved { .. }));
     let events = read(&server);
     assert_eq!(events.iter().map(|e| e.subject.as_str()).collect::<Vec<_>>(), vec!["Stand-up", "Stand-up (moved)", "Stand-up"]);
 

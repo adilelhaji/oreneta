@@ -578,6 +578,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		// Proposing another time and the organizer's side of it, and the
 		// local schedule check behind both (ADR-0043).
 		"invite.counter", "invite.counterStatus", "invite.declineCounter", "calendar.conflicts",
+		// The organizer of a meeting in a local or CalDAV calendar telling
+		// the people on it, after confirming who (2026-10-12).
+		"invite.notify",
 		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
 		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
 		"notes.attachments", "notes.attach", "notes.removeAttachment",

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, mock } from 'bun:test'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 
 mock.module('../../boot', () => ({ boot: async () => {} }))
 
@@ -336,7 +336,7 @@ it('lets the organizer decline a proposal, sending the refusal to whoever propos
   expect(view.getByText('Cy proposes a new time:')).toBeTruthy()
   expect(view.getByText('“After lunch?”')).toBeTruthy()
   await waitFor(() => expect(view.getByText('Overlaps: Lunch')).toBeTruthy())
-  expect(view.getByText(/saving changes your calendar only/)).toBeTruthy()
+  expect(view.getByText(/When you save, it asks whether to send the new time/)).toBeTruthy()
   expect(calls.find((c) => c.command === 'invite.counterStatus')!.payload).toMatchObject({
     account: imap.id,
     me_addr: 'bo@example.com',
@@ -362,6 +362,16 @@ it('opens the organizer’s event in the editor with the proposed time, saving t
     if (command === 'invite.counterStatus') return { organizer: true, event: kept, sequence: null, outdated: false }
     if (command === 'calendar.conflicts')
       return { conflicts: payload.exclude?.includes(kept.id) ? [conflict('Gym'), conflict('Call')] : [] }
+    if (command === 'invite.notify')
+      return {
+        notice: {
+          method: 'REQUEST',
+          to: payload.people,
+          subject: 'Updated invitation: Planning',
+          sequence: 3,
+          ics: 'BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n',
+        },
+      }
     return { ok: true }
   })
   const view = render(<InvitationCard message={proposal()} />)
@@ -380,11 +390,25 @@ it('opens the organizer’s event in the editor with the proposed time, saving t
   const editor = render(<EventEditor />)
   await waitFor(() => expect(editor.getByText('Overlaps: Gym, Call')).toBeTruthy())
   fireEvent.click(editor.getByRole('button', { name: 'Save' }))
-  // A local calendar tells nobody, so it does not ask whether to.
-  await waitFor(() => expect(calls.some((c) => c.command === 'calendar.update')).toBe(true))
+  // A local calendar has no server to tell the people invited, so the editor
+  // asks, naming them, and the new time goes out by mail from here.
+  expect(within(editor.getByRole('alertdialog')).getByText('cy@example.com')).toBeTruthy()
+  await act(async () => {
+    fireEvent.click(editor.getByRole('button', { name: 'Send it' }))
+  })
+  await waitFor(() => expect(calls.some((c) => c.command === 'mail.send')).toBe(true))
   const update = calls.find((c) => c.command === 'calendar.update')!.payload
   expect(update.notify).toBe(false)
   expect(update.event).toMatchObject({ id: kept.id, start: 1_894_280_000, end: 1_894_283_600 })
+  expect(calls.find((c) => c.command === 'invite.notify')!.payload).toMatchObject({
+    event: kept.id,
+    method: 'request',
+    me_addr: 'bo@example.com',
+    people: ['cy@example.com'],
+  })
+  const sent = calls.find((c) => c.command === 'mail.send')!.payload
+  expect(sent.to).toBe('cy@example.com')
+  expect(sent.attachments[0].mime).toBe('text/calendar; method=REQUEST; charset=utf-8')
   ui$.calendarOpen.set(false)
   cal.editing.set(null)
 })

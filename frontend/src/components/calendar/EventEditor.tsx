@@ -18,23 +18,27 @@ import {
   type Participant,
   type Recurrence,
 } from '../../states/calendar'
+import { accounts$ } from '../../states/accounts'
+import { mailsNotices, noticeRecipients, noticeSender, organizerFor } from '../../states/organizerNotices'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
 
 /// Creates or edits one event.
 ///
-/// Saving never notifies anyone — the backend declares that explicitly on
-/// every write — so this offers no "send invitations" control it could not
-/// honour. Attendees are shown when an event has them but not edited here:
-/// changing who is invited is what actually mails people, and belongs with
-/// meeting invitations rather than with editing a time.
+/// Saving tells nobody on its own. When the event has people on it, saving or
+/// deleting asks whether to tell them, naming who, and only what the person
+/// chooses is sent: by the account's server for Google and Exchange, by mail
+/// from here for local and CalDAV calendars (2026-10-12). Where nothing could
+/// be sent — someone else organizes it, or no account here sends mail — the
+/// question is not asked and a note says so.
 export function EventEditor() {
   const { t } = useTranslation()
   const draft = useValue(calendar$.editing)
   const saving = useValue(calendar$.saving)
   const error = useValue(calendar$.error)
   const calendars = useValue(calendar$.calendars)
+  const accounts = useValue(accounts$)
   const [local, setLocal] = useState<EventDraft | null>(null)
   const [pendingScope, setPendingScope] = useState<'save' | 'delete' | null>(null)
   // An action waiting on "should the people on it be told?", with the scope
@@ -80,12 +84,23 @@ export function EventEditor() {
   // event being created, has only one answer.
   const repeats = !isNew && event.is_recurring && Boolean(event.series_id)
   // People who could be told. Only those with an address: an attendee the
-  // server named without one cannot be written to. Only an account's own
-  // calendar (Exchange, Google) can tell them: a local or CalDAV save sends
-  // nothing, so the question is not asked there (ADR-0043).
+  // server named without one cannot be written to. An account's own calendar
+  // (Exchange, Google) tells them itself; a local or CalDAV one is told by
+  // mail from here, which needs an account that sends as the organizer.
+  // Without one the question is not asked, since nothing could follow it.
   const kind = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
-  const canNotify = kind !== 'local' && kind !== 'caldav'
-  const invitees = canNotify ? event.attendees.map((person) => person.addr.trim()).filter(Boolean) : []
+  const byMail = mailsNotices(kind)
+  const sender = byMail ? noticeSender(event, accounts) : null
+  const canNotify = !byMail || sender !== null
+  const invitees = !canNotify
+    ? []
+    : byMail
+      ? noticeRecipients(event, sender)
+      : event.attendees.map((person) => person.addr.trim()).filter(Boolean)
+  // A meeting with guests is saved naming its organizer: the identity the
+  // notice goes out from, when it names none yet.
+  const toSave: EventDraft =
+    byMail && sender && event.attendees.length > 0 ? { ...event, organizer: organizerFor(event, sender) } : event
 
   /// Runs an action through the questions it raises, in order: which
   /// occurrences, then whether to tell anyone. Neither is asked when it has
@@ -93,7 +108,7 @@ export function EventEditor() {
   const begin = (action: 'save' | 'delete') => {
     if (repeats) return setPendingScope(action)
     if (invitees.length > 0) return setPendingNotify({ action, scope: 'occurrence' })
-    if (action === 'save') void saveEvent(event)
+    if (action === 'save') void saveEvent(toSave)
     else void deleteEvent(event)
   }
 
@@ -291,7 +306,7 @@ export function EventEditor() {
             </Labelled>
           )}
 
-          {event.attendees.length > 0 && (
+          {event.attendees.length > 0 && !canNotify && (
             <p className="text-caption text-secondary">
               {t('calendar.attendeesNote', {
                 defaultValue: 'This event has {count} guests. Editing it here does not notify them.',
@@ -316,7 +331,7 @@ export function EventEditor() {
             onChoose={(scope: EditScope) => {
               setPendingScope(null)
               if (invitees.length > 0) return setPendingNotify({ action: asking, scope })
-              if (asking === 'save') void saveEvent(event, scope)
+              if (asking === 'save') void saveEvent(toSave, scope)
               else void deleteEvent(event, scope)
             }}
           />
@@ -326,11 +341,12 @@ export function EventEditor() {
           <NotifyAsk
             action={pendingNotify.action}
             people={invitees}
+            from={sender?.identity.email}
             onCancel={() => setPendingNotify(null)}
             onChoose={(notify) => {
               const { action, scope } = pendingNotify
               setPendingNotify(null)
-              if (action === 'save') void saveEvent(event, scope, notify)
+              if (action === 'save') void saveEvent(toSave, scope, notify)
               else void deleteEvent(event, scope, notify)
             }}
           />

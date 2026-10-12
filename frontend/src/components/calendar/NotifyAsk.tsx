@@ -11,11 +11,15 @@ import { Dialog } from '../dialog/Dialog'
 export function NotifyAsk({
   action,
   people,
+  from,
   onChoose,
   onCancel,
 }: {
   action: 'save' | 'delete'
   people: string[]
+  /// The address it is mailed from, when it goes out as mail from here
+  /// rather than from the calendar's own server.
+  from?: string
   onChoose: (notify: boolean) => void
   onCancel: () => void
 }) {
@@ -53,6 +57,11 @@ export function NotifyAsk({
           </li>
         ))}
       </ul>
+      {from && (
+        <p className="text-caption text-secondary">
+          {t('calendar.notifyFrom', { defaultValue: 'Sent by mail from {address}', address: from })}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
         <Button onClick={() => onChoose(true)}>

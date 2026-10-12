@@ -486,8 +486,9 @@ func sidecarCallTimeout(method string) time.Duration {
 		"calendar.createLocal", "calendar.subscribe":
 		return 30 * time.Second
 	// Where a proposal stands may read the event's version from its CalDAV
-	// server (ADR-0043).
-	case "invite.counterStatus", "invite.declineCounter":
+	// server (ADR-0043); a notice to the people on a meeting reads the event
+	// from there too.
+	case "invite.counterStatus", "invite.declineCounter", "invite.notify":
 		return 30 * time.Second
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second

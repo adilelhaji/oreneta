@@ -788,6 +788,88 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(refused.is_err_and(|e| e.to_string().contains("Holidays is a subscribed calendar")));
     }
     #[tokio::test]
+    async fn the_organizer_of_a_local_event_builds_an_invitation_and_a_cancellation() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let account = "ana@example.com";
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let event = |id: &str, subject: &str, change_key: Option<&str>| json!({
+            "id": id, "calendar_id": home, "subject": subject, "start": 1_894_269_600i64, "end": 1_894_273_200i64,
+            "all_day": false, "is_recurring": false, "is_cancelled": false, "free_busy": "", "my_response": "",
+            "description": "", "change_key": change_key,
+            "organizer": {"name": "Ana", "addr": "ana@example.com", "response": ""},
+            "attendees": [
+                {"name": "Bo", "addr": "bo@example.com", "response": ""},
+                {"name": "Cy", "addr": "cy@example.com", "response": "accept"},
+            ],
+        });
+        let notify = |id: String, method: &'static str, me: &'static str, people: Value| {
+            let home = home.clone();
+            async move {
+                call("invite.notify", json!({
+                    "account": account, "calendar": home, "event": id, "scope": "occurrence", "method": method,
+                    "me_name": "Ana", "me_addr": me, "people": people,
+                }))
+                .await
+            }
+        };
+        let both = json!(["bo@example.com", "CY@example.com"]);
+
+        let id = call("calendar.create", json!({"account": account, "event": event("", "Planning", None)})).await.unwrap()["event"]["id"]
+            .as_str().unwrap().to_owned();
+        let first = notify(id.clone(), "request", "Ana@Example.com", both.clone()).await.unwrap();
+        assert_eq!(first["notice"]["to"], json!(["bo@example.com", "cy@example.com"]), "everyone on it but the organizer");
+        assert_eq!(first["notice"]["subject"], "Invitation: Planning");
+        assert_eq!(first["notice"]["method"], "REQUEST");
+        let ics = first["notice"]["ics"].as_str().unwrap();
+        assert!(ics.contains("METHOD:REQUEST\r\n") && ics.contains(&format!("UID:{id}\r\n")) && ics.contains("SEQUENCE:0\r\n"), "{ics}");
+        assert!(ics.contains("ORGANIZER;CN=Ana:mailto:ana@example.com"));
+
+        // Each save is a newer version, counted from what is stored even when
+        // the editor still holds an older one.
+        call("calendar.update", json!({"account": account, "event": event(&id, "Planning (moved)", Some("0"))})).await.unwrap();
+        call("calendar.update", json!({"account": account, "event": event(&id, "Planning (moved again)", Some("0"))})).await.unwrap();
+        let updated = notify(id.clone(), "request", "ana@example.com", both.clone()).await.unwrap();
+        assert_eq!(updated["notice"]["sequence"], 2);
+        assert_eq!(updated["notice"]["subject"], "Updated invitation: Planning (moved again)");
+        let read = calendar::itip::parse(updated["notice"]["ics"].as_str().unwrap()).unwrap();
+        assert_eq!((read.uid.as_str(), read.sequence), (id.as_str(), 2));
+        // What an answer to it comes back with finds the event again.
+        let organized = calendar::itip::organized_event(&engine.db.lock().unwrap(), account, account, &read.uid, None).unwrap();
+        assert_eq!(organized.map(|e| e.id), Some(id.clone()));
+
+        // Nobody is mailed who was not named in the question.
+        let unseen = notify(id.clone(), "request", "ana@example.com", json!(["bo@example.com"])).await.unwrap_err();
+        assert!(unseen.to_string().contains("cy@example.com, who was not shown"), "{unseen}");
+        // Only the organizer tells.
+        let other = notify(id.clone(), "request", "bo@example.com", both.clone()).await.unwrap_err();
+        assert!(other.to_string().contains("ana@example.com organizes this meeting"), "{other}");
+
+        // The cancellation is built before the event goes, one version on.
+        let cancel = notify(id.clone(), "cancel", "ana@example.com", both.clone()).await.unwrap();
+        assert_eq!(cancel["notice"]["subject"], "Cancelled: Planning (moved again)");
+        let ics = cancel["notice"]["ics"].as_str().unwrap();
+        assert!(ics.contains("METHOD:CANCEL\r\n") && ics.contains("SEQUENCE:3\r\n") && ics.contains("STATUS:CANCELLED\r\n"), "{ics}");
+        call("calendar.delete", json!({"account": account, "event": id, "calendar": home})).await.unwrap();
+        assert!(notify(id.clone(), "cancel", "ana@example.com", both.clone()).await.unwrap_err().to_string().contains("no longer"));
+
+        // A calendar that tells people itself is not one this builds for.
+        let refused = call("invite.notify", json!({
+            "account": account, "calendar": "primary", "event": "x", "method": "request", "me_addr": "ana@example.com",
+        })).await.unwrap_err();
+        assert!(refused.to_string().contains("own server tells"), "{refused}");
+        assert!(call("invite.notify", json!({
+            "account": account, "calendar": home, "event": "x", "method": "reply", "me_addr": "ana@example.com",
+        })).await.is_err(), "only an update or a cancellation");
+    }
+
+    #[tokio::test]
     async fn local_draft_rpc_is_local_and_preserves_conflicts() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -1676,11 +1758,15 @@ async fn counter_standing(
         return Ok(CounterStanding { event: None, sequence: None, outdated: false });
     };
     // Occurrences keep no SEQUENCE. A CalDAV calendar has the object on its
-    // server, which is read; a local calendar has no version to compare, and
-    // a server that cannot be reached leaves it unknown rather than guessed.
+    // server, which is read; a local event made here keeps it in its change
+    // key; a server that cannot be reached leaves it unknown rather than
+    // guessed.
     let mut sequence = None;
-    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, &event.calendar_id)?
-        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+    let kind = calendar::calendar_of(&engine.db.lock().unwrap(), account, &event.calendar_id)?.map(|found| found.kind);
+    if kind == Some(calendar::CalendarKind::Local) && !event.id.starts_with("local:import:") && event.change_key.is_some() {
+        sequence = Some(calendar::local_sequence(&event));
+    }
+    let is_caldav = kind == Some(calendar::CalendarKind::CalDav);
     if is_caldav {
         if let Ok((target, transport)) = caldav_target(engine, account, &event.calendar_id) {
             let located = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, &proposal.uid)?;
@@ -6504,6 +6590,75 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "ics": refusal,
             }}))
         }
+        // The organizer of a meeting in a local or CalDAV calendar telling
+        // the people on it, after the person confirmed who (2026-10-12).
+        // Like answers, the core builds what is to be sent and the frontend
+        // sends it as an ordinary message. Built from the event as stored:
+        // after a save, its new version; before a delete, the one going.
+        // Google and Exchange tell people themselves and are refused here.
+        "invite.notify" => {
+            let account = req_str(p, "account")?;
+            let calendar_id = req_str(p, "calendar")?;
+            let event_id = req_str(p, "event")?;
+            let notice = calendar::itip::Notice::parse(&req_str(p, "method")?).context("unknown method")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.trim().to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let whole_series = p.get("scope").and_then(Value::as_str).is_some_and(|scope| scope == "series");
+            let now = now_seconds();
+            let built = if local_calendar_write(&engine, &account, &calendar_id)?.is_some() {
+                let event = calendar::event_of(&engine.db.lock().unwrap(), &account, &calendar_id, &event_id)?
+                    .context("this event is no longer in the calendar")?;
+                let object = calendar::itip::local_object(&event, calendar::local_sequence(&event), now);
+                let (_, occurrence) = calendar::itip::local_uid(&event);
+                calendar::itip::organizer_notice(&object, notice, occurrence, &me, now)?
+            } else if let Some((target, transport)) = caldav_write(&engine, &account, &calendar_id)? {
+                let uid = calendar::caldav::uid_of(&event_id);
+                let located = calendar::caldav::locate(&engine.db.lock().unwrap(), &account, &target.id, &uid)?
+                    .context("this event's place on the server is not known yet; refresh the calendar and try again")?;
+                let url = target.id.clone();
+                let object = tokio::task::spawn_blocking(move || calendar::caldav::get_object(&transport, &url, &located.href))
+                    .await??
+                    .context("this event is no longer on the server")?
+                    .0;
+                let occurrence = if whole_series {
+                    None
+                } else {
+                    calendar::ics::occurrence_of(&event_id).map(|(_, at)| at)
+                };
+                calendar::itip::organizer_notice(&object, notice, occurrence, &me, now)?
+            } else {
+                anyhow::bail!("this calendar's own server tells the people on its events; nothing is sent from here");
+            };
+            // Only the people the person was shown: anyone else on the stored
+            // event (a copy changed elsewhere since it was opened) would be
+            // mailed without having been named, so nothing is built.
+            if let Some(shown) = p.get("people").and_then(Value::as_array) {
+                let shown: Vec<String> =
+                    shown.iter().filter_map(Value::as_str).map(|addr| addr.trim().to_ascii_lowercase()).collect();
+                let unseen: Vec<&str> = built.to.iter().filter(|addr| !shown.contains(addr)).map(String::as_str).collect();
+                if !unseen.is_empty() {
+                    anyhow::bail!(
+                        "the event also names {}, who was not shown; nothing was sent. Refresh the calendar and try again",
+                        unseen.join(", ")
+                    );
+                }
+            }
+            let subject = match (notice, built.sequence) {
+                (calendar::itip::Notice::Cancel, _) => format!("Cancelled: {}", built.summary),
+                (calendar::itip::Notice::Request, 0) => format!("Invitation: {}", built.summary),
+                (calendar::itip::Notice::Request, _) => format!("Updated invitation: {}", built.summary),
+            };
+            Ok(json!({ "notice": {
+                "method": built.method,
+                "to": built.to,
+                "subject": subject,
+                "sequence": built.sequence,
+                "ics": built.ics,
+            }}))
+        }
         // Which of the person's own events a time overlaps (ADR-0043): read
         // from the events kept here, every account unless one is named. No
         // server is asked.
@@ -6868,7 +7023,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 let created = calendar::Event {
                     id: format!("local:{}", uuid::Uuid::new_v4()),
                     calendar_id: local.id,
-                    change_key: None,
+                    // Its SEQUENCE, which a new event starts at.
+                    change_key: Some("0".into()),
                     is_recurring: false,
                     series_id: None,
                     ..event
@@ -6940,7 +7096,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "a local calendar keeps single events; a repeating event needs an account calendar"
                     );
                 }
-                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &event)?;
+                // Each save is a new version of the event: its SEQUENCE, kept
+                // in the change key, goes up from what is stored rather than
+                // from what the editor opened with, so a notice sent after
+                // this save always supersedes the one before.
+                let db = engine.db.lock().unwrap();
+                let stored = calendar::event_of(&db, &account, &event.calendar_id, &event.id)?;
+                let sequence = stored.as_ref().map(|kept| calendar::local_sequence(kept) + 1).unwrap_or(0);
+                let saved = calendar::Event { change_key: Some(sequence.to_string()), ..event };
+                calendar::put_local_event(&db, &account, &saved)?;
                 return Ok(json!({ "ok": true }));
             }
             if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
@@ -6950,8 +7114,16 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 let seen = event.change_key.clone().unwrap_or_default();
                 let wanted = event.clone();
                 let url = target.id.clone();
+                // The attendees the editor took out. Anyone else on the
+                // server's copy stays, including people the editor never
+                // showed.
+                let removed: Vec<String> = p
+                    .get("removed_attendees")
+                    .and_then(Value::as_array)
+                    .map(|list| list.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                    .unwrap_or_default();
                 let change = tokio::task::spawn_blocking(move || {
-                    calendar::caldav::update(&transport, &url, &located.href, &seen, &wanted, whole_series, now_seconds())
+                    calendar::caldav::update(&transport, &url, &located.href, &seen, &wanted, whole_series, &removed, now_seconds())
                 })
                 .await??;
                 spawn_calendar_sync(engine.clone(), out.clone(), account.clone(), event.start, event.end.max(event.start + 1));
