@@ -996,6 +996,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'labels.list': { labels: [] },
         'categories.list': { categories: [] },
         'spam.lists': { entries: [] },
+        'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
         'localDrafts.list': { drafts: [] },

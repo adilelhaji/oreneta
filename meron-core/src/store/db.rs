@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 49;
+pub const SCHEMA_VERSION: i64 = 50;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -724,6 +724,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     }
     if version < 49 {
         tx.execute_batch(super::SENDER_LISTS_SCHEMA)?;
+        tx.pragma_update(None, "user_version", 49)?;
+    }
+    if version < 50 {
+        tx.execute_batch(crate::privacy::SCHEMA)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

@@ -434,6 +434,10 @@ Estado de la iteración 13 (2026-10-12, por delegación):
   OpenSSL; corregidos `MIME-Version` duplicado, firma armada como mensaje y
   algoritmos no compatibles informados como daño
   ([registro](design/crypto-interop.md)).
+- **#107:** EasyPrivacy fijada con procedencia aplicada en el saneado del
+  núcleo (entidades, CSS, `<style>`), recuento visible con la regla,
+  excepción por mensaje que pregunta y actualización solo a petición y
+  comprobada (ADR-0029, [registro](design/tracking-protection.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

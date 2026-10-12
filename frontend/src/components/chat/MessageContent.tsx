@@ -1,3 +1,4 @@
+import { TrackerNotice } from './TrackerNotice'
 import { useState } from 'react'
 import { Download, Eye, Image } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
@@ -120,6 +121,7 @@ export function MessageContent({
       <ProtectionNotice message={message} />
       <SpamNotice message={message} />
       {message.invitation && <InvitationCard message={message} />}
+      <TrackerNotice message={message} />
 
       <MessageBubbleBody
         message={message}

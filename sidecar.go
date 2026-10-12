@@ -449,6 +449,9 @@ func sidecarCallTimeout(method string) time.Duration {
 	// Rules run on a previewed folder, one server action per step (#50).
 	case "rules.runReviewed":
 		return 10 * time.Minute
+	// Downloading and checking a whole filter list (#107).
+	case "privacy.update":
+		return 2 * time.Minute
 	// Backups derive a key with 600k PBKDF2 rounds, on top of reading or
 	// writing every account, feed and setting.
 	case "backup.export", "backup.import":

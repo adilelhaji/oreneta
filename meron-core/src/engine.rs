@@ -2215,7 +2215,8 @@ pub fn read_cached(
     if msg.message_id.is_empty() || !parse::cached_media_available(&media_root, &msg) {
         return None;
     }
-    attach_html(&mut msg, load_remote_images);
+    let block = crate::privacy::protects(&engine.db.lock().unwrap(), account, &msg.message_id);
+    attach_html(&mut msg, load_remote_images, block);
     Some(msg)
 }
 
@@ -2256,16 +2257,22 @@ pub async fn read_cached_or_fetch(
         let _ = store::save_cached_message(&db, account, folder, uid, &message);
     }
 
-    attach_html(&mut message, load_remote_images);
+    let block = crate::privacy::protects(&engine.db.lock().unwrap(), account, &message.message_id);
+    attach_html(&mut message, load_remote_images, block);
     Ok(message)
 }
 
 /// Turn the stored HTML source into the iframe-ready `body_html` the reader's HTML
 /// mode renders: inject the remote-image CSP gated on the account setting. Plain
 /// messages have no HTML source, so this is a no-op for them.
-pub fn attach_html(message: &mut parse::Message, load_remote_images: bool) {
+/// Prepares a message's HTML for the reader: the remote-image policy, and
+/// tracking protection unless the person let this message load trackers.
+pub fn attach_html(message: &mut parse::Message, load_remote_images: bool, block_trackers: bool) {
+    message.trackers_protected = block_trackers;
     if let Some(html) = message.body_html.take() {
-        message.body_html = Some(parse::prepare_html(&html, load_remote_images));
+        let (html, blocked) = parse::prepare_html_with(&html, load_remote_images, block_trackers);
+        message.body_html = Some(html);
+        message.trackers_blocked = blocked;
     }
 }
 

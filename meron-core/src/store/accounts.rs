@@ -820,6 +820,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("server_rules", "account"),
     // Blocked and allowed senders (#50).
     ("sender_lists", "account"),
+    // Messages allowed to load trackers (ADR-0029).
+    ("tracker_exceptions", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

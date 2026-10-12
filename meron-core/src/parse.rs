@@ -128,6 +128,14 @@ pub struct Message {
     /// calendar unless the person asks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invitation: Option<crate::calendar::itip::Invitation>,
+    /// What tracking protection kept this message from fetching (#107), set
+    /// when it is prepared for reading, never stored.
+    #[serde(default, skip)]
+    pub trackers_blocked: Vec<crate::privacy::Blocked>,
+    /// Whether tracking protection applied: false when the person let this
+    /// message load what the list blocks.
+    #[serde(default, skip)]
+    pub trackers_protected: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -267,6 +275,8 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
             other => other.as_str().to_string(),
         },
         invitation,
+        trackers_blocked: Vec::new(),
+        trackers_protected: false,
     }
 }
 
@@ -373,8 +383,17 @@ fn rewrite_cid_refs(html: &str, cid_keys: &[(String, String)]) -> String {
 /// every other slot so a `data:text/html` href can't navigate the frame to an
 /// un-CSP'd document. `cid:` refs are already rewritten to `/media/<key>` by the
 /// time this runs, so relative URLs must pass through untouched.
-fn sanitize_email_html(source: &str) -> String {
+/// The sanitizer, and with a tracker list (#107) every address the message
+/// would fetch by itself checked against it: blocked images load nothing,
+/// blocked backgrounds and style-sheet addresses are dropped. Values are read
+/// decoded, as the browser would read them, so an entity-encoded address is
+/// caught like any other. Links are left alone.
+fn sanitize_email_html_with(
+    source: &str,
+    trackers: Option<(std::sync::Arc<crate::privacy::FilterSet>, std::sync::Arc<std::sync::Mutex<Vec<crate::privacy::Blocked>>>)>,
+) -> String {
     use std::borrow::Cow;
+    let filter = trackers.clone();
 
     let mut builder = ammonia::Builder::default();
     builder
@@ -410,7 +429,32 @@ fn sanitize_email_html(source: &str) -> String {
         )
         // `/media/<key>` inline-image refs are relative and must pass through.
         .url_relative(ammonia::UrlRelative::PassThrough)
-        .attribute_filter(|element, attribute, value| {
+        .attribute_filter(move |element, attribute, value| {
+            if let Some((set, blocked)) = filter.as_ref() {
+                let mut found = Vec::new();
+                let rewritten: Option<String> = match attribute {
+                    "src" | "background" | "poster" => set.blocking_rule(value).map(|rule| {
+                        found.push(crate::privacy::Blocked { url: value.to_string(), rule: rule.to_string() });
+                        crate::privacy::BLANK_IMAGE.to_string()
+                    }),
+                    "srcset" => {
+                        let kept = crate::privacy::rewrite_srcset(value, set, &mut found);
+                        (!found.is_empty()).then_some(kept)
+                    }
+                    "style" => {
+                        let kept = crate::privacy::rewrite_css(value, set, &mut found);
+                        (!found.is_empty()).then_some(kept)
+                    }
+                    _ => None,
+                };
+                if !found.is_empty() {
+                    blocked.lock().unwrap().extend(found);
+                    let value = rewritten.unwrap_or_default();
+                    // A blank image stays an image; anything else that was all
+                    // tracker goes.
+                    return if value.is_empty() { None } else { Some(Cow::Owned(value)) };
+                }
+            }
             if value.trim_start().to_ascii_lowercase().starts_with("data:") {
                 // Keep `data:image/...` only on `<img src>`; drop it anywhere else
                 // (e.g. an `href`) so it can't become a navigable script document.
@@ -424,7 +468,38 @@ fn sanitize_email_html(source: &str) -> String {
             }
             Some(Cow::Borrowed(value))
         });
-    builder.clean(source).to_string()
+    let cleaned = builder.clean(source).to_string();
+    match trackers {
+        // Style sheets are not attributes: their addresses are checked here.
+        Some((set, blocked)) => rewrite_style_elements(&cleaned, &set, &mut blocked.lock().unwrap()),
+        None => cleaned,
+    }
+}
+
+/// The sanitizer with a given list, for the tracking-protection tests.
+#[cfg(test)]
+pub(crate) fn sanitize_email_html_for_test(
+    source: &str,
+    set: std::sync::Arc<crate::privacy::FilterSet>,
+    blocked: std::sync::Arc<std::sync::Mutex<Vec<crate::privacy::Blocked>>>,
+) -> String {
+    sanitize_email_html_with(source, Some((set, blocked)))
+}
+
+/// Rewrites the contents of every `<style>` element of sanitized HTML.
+fn rewrite_style_elements(html: &str, set: &crate::privacy::FilterSet, blocked: &mut Vec<crate::privacy::Blocked>) -> String {
+    let lower = html.to_ascii_lowercase();
+    let mut out = String::with_capacity(html.len());
+    let mut i = 0;
+    while let Some(open) = lower[i..].find("<style").map(|p| i + p) {
+        let Some(body_start) = lower[open..].find('>').map(|p| open + p + 1) else { break };
+        let body_end = lower[body_start..].find("</style").map(|p| body_start + p).unwrap_or(html.len());
+        out.push_str(&html[i..body_start]);
+        out.push_str(&crate::privacy::rewrite_css(&html[body_start..body_end], set, blocked));
+        i = body_end;
+    }
+    out.push_str(&html[i..]);
+    out
 }
 
 /// Wrap stored HTML for safe iframe rendering: inject a CSP `<meta>` that allows
@@ -434,10 +509,22 @@ fn sanitize_email_html(source: &str) -> String {
 /// WebKitGTK); the `default-src 'none'` CSP still blocks all email JS, so the
 /// CSP also gates remote image/media loads.
 pub fn prepare_html(source: &str, load_remote_images: bool) -> String {
+    prepare_html_with(source, load_remote_images, false).0
+}
+
+/// [`prepare_html`], with the tracker list applied when `block_trackers`, and
+/// what it blocked (#107).
+pub fn prepare_html_with(
+    source: &str,
+    load_remote_images: bool,
+    block_trackers: bool,
+) -> (String, Vec<crate::privacy::Blocked>) {
+    let blocked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let trackers = block_trackers.then(|| (crate::privacy::current(), blocked.clone()));
     // Defence in depth: strip script-bearing markup *before* the CSP `<meta>` is
     // injected, so a CSP bypass alone can't run the email's JS. CSS is kept (the
     // CSP allows `style-src 'unsafe-inline'`); only script vectors are removed.
-    let source = &sanitize_email_html(source);
+    let source = &sanitize_email_html_with(source, trackers);
     let (img, media) = if load_remote_images {
         (
             "'self' data: http: https:",
@@ -462,7 +549,8 @@ pub fn prepare_html(source: &str, load_remote_images: bool) -> String {
          <meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\">\
          <style>img,video{{max-width:100%;height:auto}}img{{cursor:zoom-in}}</style>"
     );
-    inject_head(source, &head)
+    let blocked = std::mem::take(&mut *blocked.lock().unwrap());
+    (inject_head(source, &head), blocked)
 }
 
 /// Insert `head_extra` into the document head: after an existing `<head ...>`, or

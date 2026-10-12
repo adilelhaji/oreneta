@@ -5425,6 +5425,8 @@ pub fn get_cached_message(
         // encrypted is re-parsed on read, so it corrects itself.
         protection: extra["protection"].as_str().unwrap_or_default().to_string(),
         invitation: extra.get("invitation").cloned().and_then(|value| serde_json::from_value(value).ok()),
+        trackers_blocked: Vec::new(),
+        trackers_protected: false,
     }))
 }
 

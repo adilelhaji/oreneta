@@ -3043,6 +3043,43 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "removed": removed }))
         }
 
+        // Tracking protection (#107, ADR-0029). The list is replaced only
+        // when the person asks, from the one fixed source, after it checks out.
+        "privacy.info" => Ok(serde_json::to_value(meron_core::privacy::info())?),
+        "privacy.update" => {
+            let text = tokio::task::spawn_blocking(|| -> anyhow::Result<String> {
+                let agent = meron_core::proxy::agent()?;
+                let mut response = agent
+                    .get(meron_core::privacy::UPDATE_URL)
+                    .call()
+                    .context("the list could not be fetched")?;
+                let text = response
+                    .body_mut()
+                    .with_config()
+                    .limit(meron_core::privacy::MAX_LIST_BYTES as u64)
+                    .read_to_string()
+                    .context("the list could not be read")?;
+                Ok(text)
+            })
+            .await??;
+            let info = meron_core::privacy::install(&text, &meron_core::privacy::filters_dir()?)?;
+            Ok(serde_json::to_value(info)?)
+        }
+        "privacy.reset" => {
+            meron_core::privacy::reset(&meron_core::privacy::filters_dir()?)?;
+            Ok(serde_json::to_value(meron_core::privacy::info())?)
+        }
+        "privacy.allowMessage" => {
+            let allow = p.get("allow").and_then(Value::as_bool).unwrap_or(true);
+            meron_core::privacy::set_exception(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "account")?,
+                &req_str(p, "message_id")?,
+                allow,
+            )?;
+            Ok(json!({ "ok": true }))
+        }
+
         // Personalized mass mail (#90, ADR-0026). The preview and the batch
         // are rendered by the same function from the same inputs.
         "merge.preview" => {

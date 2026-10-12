@@ -549,6 +549,7 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 	// Meeting invitations by mail (#102): the core reads, answers and files
 	// them; each call is the person's own action.
 	case "invite.status", "invite.respond", "invite.cancel", "attachments.list", "search.parse", "search.compose",
+		"privacy.info", "privacy.update", "privacy.reset", "privacy.allowMessage",
 		"categories.list", "categories.save", "categories.counts", "categories.reason", "categories.assign",
 		"awaiting.add", "awaiting.list", "awaiting.setState", "awaiting.ruleOn", "awaiting.remove",
 		"merge.preview", "merge.start", "merge.list", "merge.cancel", "merge.resume",

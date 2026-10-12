@@ -107,8 +107,12 @@ type Message struct {
 	Attachments any    `json:"attachments,omitempty"`
 	// Invitation is the meeting request, cancellation or answer the message
 	// carries (#102), as the core read it. Nothing is answered on its own.
-	Invitation       any    `json:"invitation,omitempty"`
-	OriginalThreadID string `json:"original_thread_id,omitempty"`
+	Invitation any `json:"invitation,omitempty"`
+	// TrackersBlocked lists what tracking protection kept the message from
+	// fetching, and TrackersProtected whether it applied (#107).
+	TrackersBlocked   any    `json:"trackers_blocked,omitempty"`
+	TrackersProtected bool   `json:"trackers_protected,omitempty"`
+	OriginalThreadID  string `json:"original_thread_id,omitempty"`
 	// RecipientOverflow is the count of additional recipients beyond the one shown
 	// on an outbound thread card (for a "+N" hint); 0 for inbound/single-recipient.
 	RecipientOverflow uint32 `json:"recipient_overflow,omitempty"`

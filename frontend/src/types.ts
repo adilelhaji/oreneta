@@ -227,6 +227,10 @@ export type Message = {
   protection?: string
   /** A meeting invitation, cancellation or answer the message carries (#102). */
   invitation?: Invitation
+  /** What tracking protection kept this message from fetching (#107). */
+  trackers_blocked?: { url: string; rule: string }[]
+  /** Whether it applied: false when this message was let load trackers. */
+  trackers_protected?: boolean
   /**
    * Whether this is worth interrupting for, as the core judged it.
    *
