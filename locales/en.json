@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "A group needs a name that no other group has.",
   "accountGroups.new": "New group",
   "accountGroups.showGroup": "Show {name} together",
-  "accountGroups.title": "Account groups"
+  "accountGroups.title": "Account groups",
+  "thunderbird.action": "From Thunderbird…",
+  "thunderbird.check": "Check what would be imported",
+  "thunderbird.chooseFolder": "Choose a profile or mail folder…",
+  "thunderbird.done": "{count, plural, one {# message imported} other {# messages imported}} into the local archive, under Thunderbird.",
+  "thunderbird.empty": "No mail folders were found there.",
+  "thunderbird.folderCount": "{count, plural, one {# new} other {# new}}",
+  "thunderbird.folders": "Folders to import",
+  "thunderbird.imapNote": "Folders of IMAP accounts are copies Thunderbird keeps; that mail is also on its server and the copy may be incomplete, so they are not chosen at first.",
+  "thunderbird.noProfile": "No Thunderbird profile was found on this computer.",
+  "thunderbird.profiles": "Thunderbird profiles",
+  "thunderbird.subtitle": "Into the local archive on this computer. Thunderbird’s files are only read, never changed.",
+  "thunderbird.summary": "{count, plural, one {# message} other {# messages}} to import. {left} already in the archive and {deleted} deleted in Thunderbird are left out.",
+  "thunderbird.title": "Import from Thunderbird"
 }

@@ -66,6 +66,7 @@ import { RestoreStatusRow } from './RestoreStatusRow'
 import { BackupScheduleGroup } from './BackupScheduleGroup'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
 import { MailImportDialog } from './MailImportDialog'
+import { ThunderbirdImportDialog } from './ThunderbirdImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
 import { showToast, ui$, type SetupMode } from '../../states/ui'
 import { accounts$, deleteAccount } from '../../states/accounts'
@@ -1019,7 +1020,10 @@ function GeneralSection() {
             { value: 'american', label: t('settings.composer.grammarAmerican', { defaultValue: 'English (US)' }) },
             { value: 'british', label: t('settings.composer.grammarBritish', { defaultValue: 'English (UK)' }) },
             { value: 'canadian', label: t('settings.composer.grammarCanadian', { defaultValue: 'English (Canada)' }) },
-            { value: 'australian', label: t('settings.composer.grammarAustralian', { defaultValue: 'English (Australia)' }) },
+            {
+              value: 'australian',
+              label: t('settings.composer.grammarAustralian', { defaultValue: 'English (Australia)' }),
+            },
           ]}
           onChange={(value) => settings$.grammarCheck.set(value as typeof grammarCheck)}
         />
@@ -1106,6 +1110,7 @@ function BackupGroup() {
   const { t } = useTranslation()
   const [prompt, setPrompt] = useState<BackupPassphraseMode | null>(null)
   const [busy, setBusy] = useState(false)
+  const [thunderbirdOpen, setThunderbirdOpen] = useState(false)
   const [error, setError] = useState('')
   // The file already chosen for a restore that came back needing a passphrase.
   const [pendingPath, setPendingPath] = useState('')
@@ -1240,19 +1245,30 @@ function BackupGroup() {
             defaultValue: 'Bring .eml and .mbox files into a local archive kept on this computer.',
           })}
           control={
-            <button
-              onClick={() => void startMailImport()}
-              disabled={busy}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Upload size={14} strokeWidth={1.75} />
-              {t('archive.importAction', { defaultValue: 'Import…' })}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setThunderbirdOpen(true)}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Upload size={14} strokeWidth={1.75} />
+                {t('thunderbird.action', { defaultValue: 'From Thunderbird…' })}
+              </button>
+              <button
+                onClick={() => void startMailImport()}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Upload size={14} strokeWidth={1.75} />
+                {t('archive.importAction', { defaultValue: 'Import…' })}
+              </button>
+            </div>
           }
         />
       </SettingsGroup>
       <BackupScheduleGroup />
       <MailImportDialog />
+      {thunderbirdOpen && <ThunderbirdImportDialog onClose={() => setThunderbirdOpen(false)} />}
       <ProfileArchiveDialog />
 
       {prompt && (

@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Grupai vajag nosaukumu, kāds nav nevienai citai grupai.",
   "accountGroups.new": "Jauna grupa",
   "accountGroups.showGroup": "Rādīt kopā: {name}",
-  "accountGroups.title": "Kontu grupas"
+  "accountGroups.title": "Kontu grupas",
+  "thunderbird.action": "No Thunderbird…",
+  "thunderbird.check": "Pārbaudīt, kas tiktu importēts",
+  "thunderbird.chooseFolder": "Izvēlēties profilu vai pasta mapi…",
+  "thunderbird.done": "{count, plural, zero {# ziņas importētas} one {# ziņa importēta} other {# ziņas importētas}} vietējā arhīvā, sadaļā Thunderbird.",
+  "thunderbird.empty": "Tur netika atrasta neviena pasta mape.",
+  "thunderbird.folderCount": "{count, plural, zero {# jaunu} one {# jauna} other {# jaunas}}",
+  "thunderbird.folders": "Importējamās mapes",
+  "thunderbird.imapNote": "IMAP kontu mapes ir kopijas, ko glabā Thunderbird; šis pasts ir arī tā serverī, un kopija var būt nepilnīga, tāpēc sākumā tās nav atlasītas.",
+  "thunderbird.noProfile": "Šajā datorā netika atrasts neviens Thunderbird profils.",
+  "thunderbird.profiles": "Thunderbird profili",
+  "thunderbird.subtitle": "Vietējā arhīvā šajā datorā. Thunderbird faili tiek tikai lasīti, nekad mainīti.",
+  "thunderbird.summary": "{count, plural, zero {# ziņas} one {# ziņa} other {# ziņas}} importēšanai. Izlaistas {left} jau arhīvā esošās un {deleted} Thunderbird izdzēstās.",
+  "thunderbird.title": "Importēt no Thunderbird"
 }

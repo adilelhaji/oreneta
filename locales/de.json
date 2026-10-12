@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Eine Gruppe braucht einen Namen, den keine andere Gruppe hat.",
   "accountGroups.new": "Neue Gruppe",
   "accountGroups.showGroup": "{name} gemeinsam anzeigen",
-  "accountGroups.title": "Kontogruppen"
+  "accountGroups.title": "Kontogruppen",
+  "thunderbird.action": "Aus Thunderbird…",
+  "thunderbird.check": "Prüfen, was importiert würde",
+  "thunderbird.chooseFolder": "Profil oder E-Mail-Ordner wählen…",
+  "thunderbird.done": "{count, plural, one {# Nachricht} other {# Nachrichten}} in das lokale Archiv importiert, unter Thunderbird.",
+  "thunderbird.empty": "Dort wurden keine E-Mail-Ordner gefunden.",
+  "thunderbird.folderCount": "{count, plural, one {# neu} other {# neu}}",
+  "thunderbird.folders": "Zu importierende Ordner",
+  "thunderbird.imapNote": "Ordner von IMAP-Konten sind Kopien, die Thunderbird vorhält; diese E-Mails liegen auch auf seinem Server und die Kopie ist eventuell unvollständig, daher sind sie anfangs nicht ausgewählt.",
+  "thunderbird.noProfile": "Auf diesem Computer wurde kein Thunderbird-Profil gefunden.",
+  "thunderbird.profiles": "Thunderbird-Profile",
+  "thunderbird.subtitle": "In das lokale Archiv auf diesem Computer. Die Dateien von Thunderbird werden nur gelesen, nie verändert.",
+  "thunderbird.summary": "{count, plural, one {# Nachricht} other {# Nachrichten}} zu importieren. {left} bereits im Archiv und {deleted} in Thunderbird gelöscht werden ausgelassen.",
+  "thunderbird.title": "Aus Thunderbird importieren"
 }

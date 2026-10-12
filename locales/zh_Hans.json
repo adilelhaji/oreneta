@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "组需要一个其他组没有用过的名称。",
   "accountGroups.new": "新建组",
   "accountGroups.showGroup": "一起显示 {name}",
-  "accountGroups.title": "账户组"
+  "accountGroups.title": "账户组",
+  "thunderbird.action": "从 Thunderbird…",
+  "thunderbird.check": "检查将导入的内容",
+  "thunderbird.chooseFolder": "选择配置文件或邮件文件夹…",
+  "thunderbird.done": "已将 {count, plural, other {# 封邮件}}导入本地存档的 Thunderbird 下。",
+  "thunderbird.empty": "在那里未找到邮件文件夹。",
+  "thunderbird.folderCount": "{count, plural, other {# 封新邮件}}",
+  "thunderbird.folders": "要导入的文件夹",
+  "thunderbird.imapNote": "IMAP 账户的文件夹是 Thunderbird 保留的副本；这些邮件也在其服务器上，且副本可能不完整，因此默认不选择。",
+  "thunderbird.noProfile": "在这台电脑上未找到 Thunderbird 配置文件。",
+  "thunderbird.profiles": "Thunderbird 配置文件",
+  "thunderbird.subtitle": "导入这台电脑上的本地存档。Thunderbird 的文件只会被读取，不会被更改。",
+  "thunderbird.summary": "将导入 {count, plural, other {# 封邮件}}。已在存档中的 {left} 封和在 Thunderbird 中已删除的 {deleted} 封将被跳过。",
+  "thunderbird.title": "从 Thunderbird 导入"
 }

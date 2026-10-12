@@ -377,6 +377,12 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
 - **#99, grupos de cuentas (2026-10-12, por delegación):** vistas con nombre
   sobre las cuentas elegidas, mostradas con la bandeja unificada y sin
   mover nada (ADR-0040, [registro](design/account-groups.md)).
+- **Importar desde Thunderbird (2026-10-12, por delegación):** perfiles y
+  carpetas al archivo local, con vista previa. No se importan los mensajes
+  que Thunderbird tenía como borrados. PST queda pendiente: falta un lector
+  fiable (ADR-0041, [registro](design/thunderbird-import.md)).
+- **Interfaz en los 19 idiomas:** los textos añadidos en este plan ya están
+  en todos los catálogos.
 - **#99:** perfiles aislados, cada uno en su ventana y proceso, con
   carpetas, llavero y almacenamiento del webview propios (ADR-0016,
   [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,

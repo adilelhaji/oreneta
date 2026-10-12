@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Nhóm cần có tên không trùng với nhóm nào khác.",
   "accountGroups.new": "Nhóm mới",
   "accountGroups.showGroup": "Hiển thị {name} cùng nhau",
-  "accountGroups.title": "Nhóm tài khoản"
+  "accountGroups.title": "Nhóm tài khoản",
+  "thunderbird.action": "Từ Thunderbird…",
+  "thunderbird.check": "Kiểm tra những gì sẽ được nhập",
+  "thunderbird.chooseFolder": "Chọn hồ sơ hoặc thư mục thư…",
+  "thunderbird.done": "Đã nhập {count, plural, other {# thư}} vào kho lưu trữ cục bộ, trong mục Thunderbird.",
+  "thunderbird.empty": "Không tìm thấy thư mục thư nào ở đó.",
+  "thunderbird.folderCount": "{count, plural, other {# mới}}",
+  "thunderbird.folders": "Thư mục cần nhập",
+  "thunderbird.imapNote": "Thư mục của tài khoản IMAP là bản sao do Thunderbird giữ; thư đó cũng có trên máy chủ của nó và bản sao có thể không đầy đủ, vì vậy ban đầu chúng không được chọn.",
+  "thunderbird.noProfile": "Không tìm thấy hồ sơ Thunderbird nào trên máy tính này.",
+  "thunderbird.profiles": "Hồ sơ Thunderbird",
+  "thunderbird.subtitle": "Vào kho lưu trữ cục bộ trên máy tính này. Các tệp của Thunderbird chỉ được đọc, không bao giờ bị thay đổi.",
+  "thunderbird.summary": "{count, plural, other {# thư}} sẽ được nhập. Bỏ qua {left} thư đã có trong kho lưu trữ và {deleted} thư đã xóa trong Thunderbird.",
+  "thunderbird.title": "Nhập từ Thunderbird"
 }

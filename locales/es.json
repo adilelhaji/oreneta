@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Un grupo necesita un nombre que no tenga otro grupo.",
   "accountGroups.new": "Nuevo grupo",
   "accountGroups.showGroup": "Mostrar {name} juntas",
-  "accountGroups.title": "Grupos de cuentas"
+  "accountGroups.title": "Grupos de cuentas",
+  "thunderbird.action": "Desde Thunderbird…",
+  "thunderbird.check": "Comprobar qué se importaría",
+  "thunderbird.chooseFolder": "Elegir un perfil o una carpeta de correo…",
+  "thunderbird.done": "{count, plural, one {# mensaje importado} many {# mensajes importados} other {# mensajes importados}} al archivo local, en Thunderbird.",
+  "thunderbird.empty": "No se encontraron carpetas de correo ahí.",
+  "thunderbird.folderCount": "{count, plural, one {# nuevo} many {# nuevos} other {# nuevos}}",
+  "thunderbird.folders": "Carpetas que importar",
+  "thunderbird.imapNote": "Las carpetas de cuentas IMAP son copias que guarda Thunderbird; ese correo también está en su servidor y la copia puede estar incompleta, así que no se eligen al principio.",
+  "thunderbird.noProfile": "No se encontró ningún perfil de Thunderbird en este ordenador.",
+  "thunderbird.profiles": "Perfiles de Thunderbird",
+  "thunderbird.subtitle": "Al archivo local de este ordenador. Los archivos de Thunderbird solo se leen, nunca se modifican.",
+  "thunderbird.summary": "{count, plural, one {# mensaje} many {# mensajes} other {# mensajes}} para importar. Se omiten {left} que ya están en el archivo y {deleted} eliminados en Thunderbird.",
+  "thunderbird.title": "Importar desde Thunderbird"
 }

@@ -35,6 +35,8 @@ pub mod person_context;
 pub mod pop3;
 pub mod priority;
 pub mod privacy;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod thunderbird;
 pub mod translation;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod profile_archive;

@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "تحتاج المجموعة إلى اسم لا تحمله أي مجموعة أخرى.",
   "accountGroups.new": "مجموعة جديدة",
   "accountGroups.showGroup": "عرض {name} معًا",
-  "accountGroups.title": "مجموعات الحسابات"
+  "accountGroups.title": "مجموعات الحسابات",
+  "thunderbird.action": "من Thunderbird…",
+  "thunderbird.check": "التحقق مما سيُستورَد",
+  "thunderbird.chooseFolder": "اختيار ملف تعريف أو مجلد بريد…",
+  "thunderbird.done": "{count, plural, zero {لم تُستورَد أي رسالة} one {تم استيراد رسالة واحدة} two {تم استيراد رسالتين} few {تم استيراد # رسائل} many {تم استيراد # رسالة} other {تم استيراد # رسالة}} إلى الأرشيف المحلي، ضمن Thunderbird.",
+  "thunderbird.empty": "لم يُعثر على أي مجلدات بريد هناك.",
+  "thunderbird.folderCount": "{count, plural, zero {# جديدة} one {# جديدة} two {# جديدة} few {# جديدة} many {# جديدة} other {# جديدة}}",
+  "thunderbird.folders": "المجلدات المراد استيرادها",
+  "thunderbird.imapNote": "مجلدات حسابات IMAP نسخٌ يحتفظ بها Thunderbird؛ هذا البريد موجود أيضًا على خادمه وقد تكون النسخة ناقصة، لذا لا تُختار في البداية.",
+  "thunderbird.noProfile": "لم يُعثر على ملف تعريف Thunderbird على هذا الحاسوب.",
+  "thunderbird.profiles": "ملفات تعريف Thunderbird",
+  "thunderbird.subtitle": "إلى الأرشيف المحلي على هذا الحاسوب. ملفات Thunderbird تُقرأ فقط ولا تُغيَّر أبدًا.",
+  "thunderbird.summary": "{count, plural, zero {لا رسائل للاستيراد} one {رسالة واحدة للاستيراد} two {رسالتان للاستيراد} few {# رسائل للاستيراد} many {# رسالة للاستيراد} other {# رسالة للاستيراد}}. تُستثنى {left} موجودة مسبقًا في الأرشيف و{deleted} محذوفة في Thunderbird.",
+  "thunderbird.title": "الاستيراد من Thunderbird"
 }

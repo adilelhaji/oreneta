@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "グループには、ほかのグループと重ならない名前が必要です。",
   "accountGroups.new": "新しいグループ",
   "accountGroups.showGroup": "{name} をまとめて表示",
-  "accountGroups.title": "アカウントグループ"
+  "accountGroups.title": "アカウントグループ",
+  "thunderbird.action": "Thunderbird から…",
+  "thunderbird.check": "インポートされる内容を確認",
+  "thunderbird.chooseFolder": "プロファイルまたはメールフォルダーを選択…",
+  "thunderbird.done": "{count, plural, other {# 件のメッセージ}}をローカルアーカイブの Thunderbird の下にインポートしました。",
+  "thunderbird.empty": "そこにはメールフォルダーが見つかりませんでした。",
+  "thunderbird.folderCount": "{count, plural, other {新規 # 件}}",
+  "thunderbird.folders": "インポートするフォルダー",
+  "thunderbird.imapNote": "IMAP アカウントのフォルダーは Thunderbird が保持しているコピーです。そのメールはサーバーにもあり、コピーが不完全な場合もあるため、最初は選択されていません。",
+  "thunderbird.noProfile": "このコンピューターに Thunderbird のプロファイルが見つかりませんでした。",
+  "thunderbird.profiles": "Thunderbird のプロファイル",
+  "thunderbird.subtitle": "このコンピューター上のローカルアーカイブへ。Thunderbird のファイルは読み取るだけで、変更されません。",
+  "thunderbird.summary": "{count, plural, other {# 件のメッセージ}}をインポートします。アーカイブに既にある {left} 件と Thunderbird で削除された {deleted} 件は除外されます。",
+  "thunderbird.title": "Thunderbird からインポート"
 }

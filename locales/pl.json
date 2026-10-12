@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Grupa musi mieć nazwę, której nie ma żadna inna grupa.",
   "accountGroups.new": "Nowa grupa",
   "accountGroups.showGroup": "Pokaż razem: {name}",
-  "accountGroups.title": "Grupy kont"
+  "accountGroups.title": "Grupy kont",
+  "thunderbird.action": "Z Thunderbirda…",
+  "thunderbird.check": "Sprawdź, co zostałoby zaimportowane",
+  "thunderbird.chooseFolder": "Wybierz profil lub folder poczty…",
+  "thunderbird.done": "{count, plural, one {Zaimportowano # wiadomość} few {Zaimportowano # wiadomości} many {Zaimportowano # wiadomości} other {Zaimportowano # wiadomości}} do lokalnego archiwum, w folderze Thunderbird.",
+  "thunderbird.empty": "Nie znaleziono tam żadnych folderów poczty.",
+  "thunderbird.folderCount": "{count, plural, one {# nowa} few {# nowe} many {# nowych} other {# nowej}}",
+  "thunderbird.folders": "Foldery do zaimportowania",
+  "thunderbird.imapNote": "Foldery kont IMAP to kopie przechowywane przez Thunderbirda; ta poczta jest też na jego serwerze, a kopia może być niekompletna, dlatego początkowo nie są zaznaczone.",
+  "thunderbird.noProfile": "Nie znaleziono profilu Thunderbirda na tym komputerze.",
+  "thunderbird.profiles": "Profile Thunderbirda",
+  "thunderbird.subtitle": "Do lokalnego archiwum na tym komputerze. Pliki Thunderbirda są tylko odczytywane, nigdy zmieniane.",
+  "thunderbird.summary": "{count, plural, one {# wiadomość} few {# wiadomości} many {# wiadomości} other {# wiadomości}} do zaimportowania. Pominięto {left} już w archiwum i {deleted} usuniętych w Thunderbirdzie.",
+  "thunderbird.title": "Importuj z Thunderbirda"
 }

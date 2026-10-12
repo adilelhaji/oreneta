@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Μια ομάδα χρειάζεται ένα όνομα που δεν έχει καμία άλλη ομάδα.",
   "accountGroups.new": "Νέα ομάδα",
   "accountGroups.showGroup": "Εμφάνιση της ομάδας {name} μαζί",
-  "accountGroups.title": "Ομάδες λογαριασμών"
+  "accountGroups.title": "Ομάδες λογαριασμών",
+  "thunderbird.action": "Από το Thunderbird…",
+  "thunderbird.check": "Έλεγχος του τι θα εισαχθεί",
+  "thunderbird.chooseFolder": "Επιλογή προφίλ ή φακέλου αλληλογραφίας…",
+  "thunderbird.done": "{count, plural, one {Εισήχθη # μήνυμα} other {Εισήχθησαν # μηνύματα}} στο τοπικό αρχείο, κάτω από το Thunderbird.",
+  "thunderbird.empty": "Δεν βρέθηκαν φάκελοι αλληλογραφίας εκεί.",
+  "thunderbird.folderCount": "{count, plural, one {# νέο} other {# νέα}}",
+  "thunderbird.folders": "Φάκελοι για εισαγωγή",
+  "thunderbird.imapNote": "Οι φάκελοι λογαριασμών IMAP είναι αντίγραφα που διατηρεί το Thunderbird· αυτή η αλληλογραφία βρίσκεται και στον διακομιστή του και το αντίγραφο μπορεί να είναι ελλιπές, γι’ αυτό δεν επιλέγονται αρχικά.",
+  "thunderbird.noProfile": "Δεν βρέθηκε προφίλ Thunderbird σε αυτόν τον υπολογιστή.",
+  "thunderbird.profiles": "Προφίλ Thunderbird",
+  "thunderbird.subtitle": "Στο τοπικό αρχείο σε αυτόν τον υπολογιστή. Τα αρχεία του Thunderbird μόνο διαβάζονται, δεν αλλάζουν ποτέ.",
+  "thunderbird.summary": "{count, plural, one {# μήνυμα} other {# μηνύματα}} προς εισαγωγή. Παραλείπονται {left} που υπάρχουν ήδη στο αρχείο και {deleted} διαγραμμένα στο Thunderbird.",
+  "thunderbird.title": "Εισαγωγή από το Thunderbird"
 }

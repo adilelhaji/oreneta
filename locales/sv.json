@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "En grupp behöver ett namn som ingen annan grupp har.",
   "accountGroups.new": "Ny grupp",
   "accountGroups.showGroup": "Visa {name} tillsammans",
-  "accountGroups.title": "Kontogrupper"
+  "accountGroups.title": "Kontogrupper",
+  "thunderbird.action": "Från Thunderbird…",
+  "thunderbird.check": "Kontrollera vad som skulle importeras",
+  "thunderbird.chooseFolder": "Välj en profil eller e-postmapp…",
+  "thunderbird.done": "{count, plural, one {# meddelande importerat} other {# meddelanden importerade}} till det lokala arkivet, under Thunderbird.",
+  "thunderbird.empty": "Inga e-postmappar hittades där.",
+  "thunderbird.folderCount": "{count, plural, one {# nytt} other {# nya}}",
+  "thunderbird.folders": "Mappar att importera",
+  "thunderbird.imapNote": "Mappar för IMAP-konton är kopior som Thunderbird sparar; den e-posten finns också på dess server och kopian kan vara ofullständig, så de är inte valda från början.",
+  "thunderbird.noProfile": "Ingen Thunderbird-profil hittades på den här datorn.",
+  "thunderbird.profiles": "Thunderbird-profiler",
+  "thunderbird.subtitle": "Till det lokala arkivet på den här datorn. Thunderbirds filer läses bara, ändras aldrig.",
+  "thunderbird.summary": "{count, plural, one {# meddelande} other {# meddelanden}} att importera. {left} som redan finns i arkivet och {deleted} som raderats i Thunderbird utelämnas.",
+  "thunderbird.title": "Importera från Thunderbird"
 }

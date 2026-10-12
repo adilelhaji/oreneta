@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Grubun başka hiçbir grupta olmayan bir adı olmalıdır.",
   "accountGroups.new": "Yeni grup",
   "accountGroups.showGroup": "Birlikte göster: {name}",
-  "accountGroups.title": "Hesap grupları"
+  "accountGroups.title": "Hesap grupları",
+  "thunderbird.action": "Thunderbird’den…",
+  "thunderbird.check": "Nelerin içe aktarılacağını denetle",
+  "thunderbird.chooseFolder": "Profil veya posta klasörü seç…",
+  "thunderbird.done": "{count, plural, one {# ileti} other {# ileti}} yerel arşive, Thunderbird altına aktarıldı.",
+  "thunderbird.empty": "Orada posta klasörü bulunamadı.",
+  "thunderbird.folderCount": "{count, plural, one {# yeni} other {# yeni}}",
+  "thunderbird.folders": "İçe aktarılacak klasörler",
+  "thunderbird.imapNote": "IMAP hesaplarının klasörleri Thunderbird’ün tuttuğu kopyalardır; bu postalar sunucusunda da bulunur ve kopya eksik olabilir, bu yüzden başta seçili değildir.",
+  "thunderbird.noProfile": "Bu bilgisayarda Thunderbird profili bulunamadı.",
+  "thunderbird.profiles": "Thunderbird profilleri",
+  "thunderbird.subtitle": "Bu bilgisayardaki yerel arşive. Thunderbird’ün dosyaları yalnızca okunur, asla değiştirilmez.",
+  "thunderbird.summary": "İçe aktarılacak {count, plural, one {# ileti} other {# ileti}}. Arşivde zaten bulunan {left} ileti ve Thunderbird’de silinmiş {deleted} ileti dışarıda bırakılır.",
+  "thunderbird.title": "Thunderbird’den içe aktar"
 }

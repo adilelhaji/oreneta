@@ -2336,5 +2336,18 @@
   "accountGroups.nameTaken": "Grupil peab olema nimi, mida ühelgi teisel grupil pole.",
   "accountGroups.new": "Uus grupp",
   "accountGroups.showGroup": "Näita koos: {name}",
-  "accountGroups.title": "Kontogrupid"
+  "accountGroups.title": "Kontogrupid",
+  "thunderbird.action": "Thunderbirdist…",
+  "thunderbird.check": "Kontrolli, mida imporditaks",
+  "thunderbird.chooseFolder": "Vali profiil või postikaust…",
+  "thunderbird.done": "{count, plural, one {# kiri imporditi} other {# kirja imporditi}} kohalikku arhiivi, kausta Thunderbird alla.",
+  "thunderbird.empty": "Sealt ei leitud ühtegi postikausta.",
+  "thunderbird.folderCount": "{count, plural, one {# uus} other {# uut}}",
+  "thunderbird.folders": "Imporditavad kaustad",
+  "thunderbird.imapNote": "IMAP-kontode kaustad on koopiad, mida Thunderbird hoiab; need kirjad on ka selle serveris ja koopia võib olla puudulik, seega pole neid algul valitud.",
+  "thunderbird.noProfile": "Selles arvutis ei leitud ühtegi Thunderbirdi profiili.",
+  "thunderbird.profiles": "Thunderbirdi profiilid",
+  "thunderbird.subtitle": "Selle arvuti kohalikku arhiivi. Thunderbirdi faile ainult loetakse, neid ei muudeta kunagi.",
+  "thunderbird.summary": "{count, plural, one {# kiri} other {# kirja}} importida. Välja jäetakse {left} juba arhiivis olevat ja {deleted} Thunderbirdis kustutatut.",
+  "thunderbird.title": "Impordi Thunderbirdist"
 }

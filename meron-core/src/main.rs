@@ -355,6 +355,34 @@ mod tests {
         let db = engine.db.lock().unwrap();
         assert!(store::recent_headers(&db, account, "INBOX", 10).unwrap().is_empty());
         assert_eq!(store::recent_headers(&db, account, "Trash", 10).unwrap().len(), 2);
+        drop(db);
+
+        // Thunderbird (ADR-0041): a profile's folders go to the archive under
+        // Thunderbird/<account>/<folders>; deleted-but-not-compacted mail stays out.
+        let tb = dir.join("tb-profile");
+        let local = tb.join("Mail/Local Folders");
+        std::fs::create_dir_all(local.join("Work.sbd")).unwrap();
+        let message = |id: &str, status: &str| {
+            format!("From - Mon Oct 05 09:00:00 2026\nX-Mozilla-Status: {status}\nFrom: Ana <ana@x.cat>\nSubject: {id}\nMessage-ID: <{id}@tb>\nDate: Mon, 5 Oct 2026 09:00:00 +0000\n\nBody {id}\n\n")
+        };
+        std::fs::write(local.join("Inbox"), message("kept", "0001") + &message("deleted", "0009")).unwrap();
+        std::fs::write(local.join("Inbox.msf"), "").unwrap();
+        std::fs::write(local.join("Work.sbd/Projects"), message("project", "0001")).unwrap();
+        std::fs::write(local.join("Work.sbd/Projects.msf"), "").unwrap();
+        let scanned = call("thunderbird.scan", json!({"path": tb.to_string_lossy()})).await.unwrap();
+        let ids: Vec<String> = scanned["folders"].as_array().unwrap().iter().map(|f| f["id"].as_str().unwrap().to_string()).collect();
+        assert_eq!(ids, ["Mail/Local Folders/Inbox", "Mail/Local Folders/Work.sbd/Projects"]);
+        let preview = call("thunderbird.preview", json!({"path": tb.to_string_lossy(), "folders": ids})).await.unwrap();
+        assert_eq!(preview["folders"][0]["target"], "Thunderbird/Local Folders/Inbox");
+        assert_eq!((preview["folders"][0]["summary"]["imported"].clone(), preview["folders"][0]["deleted"].clone()), (json!(1), json!(1)));
+        assert!(store::recent_headers(&engine.db.lock().unwrap(), account, "Thunderbird/Local Folders/Inbox", 10).unwrap().is_empty(), "a preview stores nothing");
+        call("thunderbird.import", json!({"path": tb.to_string_lossy(), "folders": ids})).await.unwrap();
+        let again = call("thunderbird.import", json!({"path": tb.to_string_lossy(), "folders": ids})).await.unwrap();
+        assert_eq!(again["folders"][1]["summary"]["duplicates"], 1, "importing twice adds nothing");
+        let kept = store::recent_headers(&engine.db.lock().unwrap(), account, "Thunderbird/Local Folders/Inbox", 10).unwrap();
+        assert_eq!(kept.iter().map(|h| h.subject.as_str()).collect::<Vec<_>>(), ["kept"]);
+        assert_eq!(store::recent_headers(&engine.db.lock().unwrap(), account, "Thunderbird/Local Folders/Work/Projects", 10).unwrap().len(), 1);
+        assert!(call("thunderbird.import", json!({"path": tb.to_string_lossy(), "folders": ["../../etc/passwd"]})).await.is_err(), "only folders the scan found are read");
     }
 
     #[tokio::test]
@@ -3711,6 +3739,60 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // Importing .eml/.mbox files into the local archive (ADR-0014). The
         // paths come from the reader's file picker; the files are read here,
         // never sent through the bridge. A preview first, then the import.
+        // Thunderbird (ADR-0041): its profiles, the folders in one, and what
+        // importing the chosen ones into the local archive does or did.
+        "thunderbird.profiles" => {
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(std::path::PathBuf::from).unwrap_or_default();
+            let appdata = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
+            Ok(json!({ "profiles": meron_core::thunderbird::profiles(&meron_core::thunderbird::profile_roots(&home, appdata.as_deref())) }))
+        }
+        "thunderbird.scan" => {
+            let root = std::path::PathBuf::from(req_str(p, "path")?);
+            let folders = tokio::task::spawn_blocking(move || meron_core::thunderbird::scan(&root)).await??;
+            Ok(json!({ "folders": folders }))
+        }
+        "thunderbird.preview" | "thunderbird.import" => {
+            let root = std::path::PathBuf::from(req_str(p, "path")?);
+            let wanted: Vec<String> = serde_json::from_value(p.get("folders").cloned().unwrap_or_default()).context("folders")?;
+            anyhow::ensure!(!wanted.is_empty(), "choose at least one folder");
+            let under = p.get("root").and_then(Value::as_str).map(str::trim).filter(|r| !r.is_empty()).unwrap_or("Thunderbird").to_string();
+            let importing = req.method == "thunderbird.import";
+            if importing {
+                let created = meron_core::archive::ensure_account(&engine.db.lock().unwrap(), now_seconds())?;
+                if created {
+                    let creds = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?;
+                    if let Some(creds) = creds {
+                        engine.accounts.lock().await.insert(meron_core::archive::ACCOUNT.to_string(), creds);
+                    }
+                }
+            }
+            let db = engine.db.clone();
+            let results = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<Value>> {
+                // Only folders this scan finds are read, by the id it gave them.
+                let folders = meron_core::thunderbird::scan(&root)?;
+                let media_root = parse::media_root();
+                let mut results = Vec::new();
+                for id in &wanted {
+                    let folder = folders.iter().find(|f| &f.id == id).with_context(|| format!("{id} is no longer in that folder"))?;
+                    let target = meron_core::thunderbird::target_folder(&under, folder);
+                    let (messages, deleted) = meron_core::thunderbird::read_folder(&root.join(&folder.id))?;
+                    let summary = if importing {
+                        let conn = db.lock().unwrap();
+                        store::ensure_folder(&conn, meron_core::archive::ACCOUNT, &target)?;
+                        meron_core::archive::import(&conn, &target, messages, &media_root)?
+                    } else {
+                        meron_core::archive::preview(&db.lock().unwrap(), &target, &[messages])?
+                    };
+                    results.push(json!({ "id": id, "target": target, "summary": summary, "deleted": deleted }));
+                }
+                Ok(results)
+            })
+            .await??;
+            if importing {
+                emit(out, "mail.synced", json!({ "account": meron_core::archive::ACCOUNT, "folders": true })).await;
+            }
+            Ok(json!({ "folders": results, "account": meron_core::archive::ACCOUNT }))
+        }
         "archive.preview" | "archive.import" => {
             let paths: Vec<String> = serde_json::from_value(p.get("paths").cloned().unwrap_or_default()).context("paths")?;
             if paths.is_empty() {

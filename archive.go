@@ -61,3 +61,18 @@ func (a *App) archiveImport(payload map[string]any) (any, error) {
 	}
 	return answer, nil
 }
+
+// thunderbirdPickFolder asks for a Thunderbird profile, or one of its mail
+// folders, when the profile was not found on its own (ADR-0041).
+func (a *App) thunderbirdPickFolder() (any, error) {
+	dir, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Thunderbird profile or mail folder",
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dir == "" {
+		return map[string]any{"cancelled": true}, nil
+	}
+	return map[string]any{"path": dir}, nil
+}
