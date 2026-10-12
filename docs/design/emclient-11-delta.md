@@ -7,9 +7,10 @@ validador lo exige. La versión 11 se sigue aparte.
   auditoría de backlog.
 - **Estable:** el 2026-10-12, una fuente secundaria (alternativeto.net)
   dice que eM Client 11 salió como estable en octubre de 2026. No está
-  confirmado en www.emclient.com. Si se confirma, cambiar la referencia
-  del ledger a la 11 es **decisión del propietario**. Moverla en silencio
-  ampliaría el alcance comprometido.
+  confirmado en www.emclient.com.
+- **Decisión del propietario (2026-10-12):** la referencia sigue siendo la
+  10.4 hasta que www.emclient.com confirme la 11 estable. Entonces se
+  vuelve a decidir; mientras tanto, esta tabla solo informa.
 
 | Novedad de 11 | Estado en Oreneta |
 |---|---|

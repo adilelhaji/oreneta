@@ -28,6 +28,19 @@ fn an_mbox_splits_into_its_messages_and_unquotes_from_lines() {
 }
 
 #[test]
+fn readpst_output_splits_into_its_messages() {
+    // The shape `readpst` (libpst 0.6.76) writes for an Outlook PST: a quoted
+    // address in the separator, a blank line between messages and `>From`
+    // in a body (docs/design/mail-import.md).
+    let mbox = b"From \"ana@x.test\" Thu Jun  5 16:22:32 2014\nFrom: Ana <ana@x.test>\nSubject: one\nMIME-Version: 1.0\n\nbody\n>From the PST\n\n\nFrom \"bo@x.test\" Thu Jun  5 17:00:00 2014\nSubject: two\n\nsecond\n\n";
+    let messages = split_mbox(mbox);
+    assert_eq!(messages.len(), 2);
+    assert!(String::from_utf8_lossy(&messages[0]).starts_with("From: Ana"));
+    assert!(String::from_utf8_lossy(&messages[0]).contains("\nFrom the PST\n"));
+    assert!(String::from_utf8_lossy(&messages[1]).starts_with("Subject: two"));
+}
+
+#[test]
 fn an_import_stores_messages_as_synced_ones_once_and_skips_what_is_not_mail() {
     let db = conn();
     let conn = db.lock().unwrap();

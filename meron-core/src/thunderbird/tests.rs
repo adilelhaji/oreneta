@@ -75,6 +75,23 @@ fn a_folder_chosen_by_hand_is_read_as_one_account() {
 }
 
 #[test]
+fn a_folder_converted_from_outlook_by_readpst_is_offered_folder_by_folder() {
+    // `readpst -o out/ Outlook.pst` writes one `<folder>.mbox` per folder,
+    // plus calendars and contacts that are not mail.
+    let dir = temp("readpst");
+    let separator = "From \"ana@x.test\" Thu Jun  5 16:22:32 2014\nSubject: hi\n\nbody\n\n";
+    std::fs::write(dir.0.join("Inbox.mbox"), separator).unwrap();
+    std::fs::write(dir.0.join("Sent Items.mbox"), separator).unwrap();
+    std::fs::write(dir.0.join("Calendar.calendar"), "BEGIN:VCALENDAR\nEND:VCALENDAR\n").unwrap();
+    std::fs::write(dir.0.join("Contacts.contacts"), "BEGIN:VCARD\nEND:VCARD\n").unwrap();
+    let found = scan(&dir.0).unwrap();
+    let names: Vec<&str> = found.iter().map(|f| f.path[0].as_str()).collect();
+    assert_eq!(names, ["Inbox.mbox", "Sent Items.mbox"]);
+    let (kept, gone) = read_folder(&dir.0.join("Inbox.mbox")).unwrap();
+    assert_eq!((kept.len(), gone), (1, 0));
+}
+
+#[test]
 fn messages_deleted_in_thunderbird_are_left_out_and_counted() {
     let dir = temp("expunged");
     profile(&dir.0);
