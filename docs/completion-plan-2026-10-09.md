@@ -438,6 +438,10 @@ Estado de la iteración 13 (2026-10-12, por delegación):
   núcleo (entidades, CSS, `<style>`), recuento visible con la regla,
   excepción por mensaje que pregunta y actualización solo a petición y
   comprobada (ADR-0029, [registro](design/tracking-protection.md)).
+- **#105:** gramática en inglés con Harper en un worker, sin red, apagada
+  por omisión; sugerencias como una sola edición que conserva el formato;
+  la fuente deja de pedirse a Google Fonts
+  (ADR-0030, [registro](design/offline-grammar.md), [SOUP](soup.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

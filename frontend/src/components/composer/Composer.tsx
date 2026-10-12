@@ -9,6 +9,7 @@ import { ComposerHeaderFields } from './ComposerHeaderFields'
 import { ComposerToolbar } from './ComposerToolbar'
 import { ComposerAttachments } from './ComposerAttachments'
 import { ComposerFooter } from './ComposerFooter'
+import { GrammarPopover, GrammarStatus } from './GrammarPopover'
 import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
 import { confirmAction, showToast } from '../../states/ui'
@@ -46,6 +47,7 @@ export function Composer({ tabId }: { tabId: string }) {
     submit,
     pgpPassphrase,
     setPgpPassphrase,
+    grammar,
   } = useComposer(tabId)
 
   if (!draft) return null
@@ -202,7 +204,18 @@ export function Composer({ tabId }: { tabId: string }) {
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 py-3" onKeyDown={handleKeyDown}>
         {draft.rich ? (
-          <EditorContent editor={editor} />
+          <>
+            <EditorContent editor={editor} />
+            {editor && grammar.pick && (
+              <GrammarPopover
+                editor={editor}
+                checker={grammar.checker}
+                pick={grammar.pick}
+                onClose={grammar.closePick}
+              />
+            )}
+            <GrammarStatus result={grammar.result} error={grammar.error} />
+          </>
         ) : (
           <textarea
             ref={textRef}

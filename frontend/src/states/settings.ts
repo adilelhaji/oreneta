@@ -207,6 +207,9 @@ export type Settings = {
   undoSendSeconds: number
   /** Whether native spell checking is requested in composer prose fields. */
   spellCheck: boolean
+  /** Offline grammar checking with Harper (#105): off, or the English it
+   * checks against. English only; other text is left alone. */
+  grammarCheck: 'off' | 'american' | 'british' | 'canadian' | 'australian'
   /**
    * App-wide signature HTML, inserted into new messages and replies. Accounts
    * follow this unless they carry their own override (see Account.signature).
@@ -323,6 +326,7 @@ const DB_KEY = {
   markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   spellCheck: 'spell_check',
+  grammarCheck: 'grammar_check',
   signature: 'signature',
   kanbanBoards: 'kanban_boards',
   threadListWidth: 'thread_list_width',
@@ -512,6 +516,8 @@ export const settings$ = observable<Settings>({
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
   spellCheck: true,
+  // Opt-in: it downloads nothing, but it loads a sizable checker on first use.
+  grammarCheck: 'off',
   signature: '',
   kanbanBoards: [],
   threadListWidth: 350,
@@ -866,6 +872,11 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {
       settings$.spellCheck.set(prefs[DB_KEY.spellCheck] as boolean)
+    }
+
+    const grammar = prefs[DB_KEY.grammarCheck]
+    if (grammar === 'off' || grammar === 'american' || grammar === 'british' || grammar === 'canadian' || grammar === 'australian') {
+      settings$.grammarCheck.set(grammar)
     }
 
     if (typeof prefs[DB_KEY.signature] === 'string') {

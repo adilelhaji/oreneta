@@ -1795,6 +1795,39 @@ test('production shell navigates settings, people, tasks and composer without ho
   expect(errors).toEqual([])
 })
 
+// #105: Harper runs in the page from the shipped WebAssembly, in a worker,
+// and nothing typed leaves the machine: every request the page makes is to
+// the app itself.
+test('grammar suggestions run on this computer and apply as one edit', async ({ page }) => {
+  // Before the synthetic bridge reads its preferences.
+  await page.addInitScript(() => {
+    const prefs = JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')
+    sessionStorage.setItem('synthetic-prefs', JSON.stringify({ ...prefs, grammar_check: 'american' }))
+  })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  const outside: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname) && !['data:', 'blob:'].includes(url.protocol)) {
+      outside.push(request.url())
+    }
+  })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  const editor = page.locator('.tiptap[contenteditable="true"]')
+  await expect(editor).toBeVisible()
+  await editor.fill('Thanks for the notes from the meeting. I has a apple for the team.')
+  const issue = page.locator('.oreneta-grammar-issue', { hasText: 'has' })
+  await expect(issue).toBeVisible({ timeout: 30_000 })
+  await issue.click()
+  await page.getByRole('dialog', { name: 'Grammar suggestion' }).getByRole('button', { name: 'have' }).click()
+  await expect(editor).toContainText('I have a apple')
+  expect(outside).toEqual([])
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
 for (const appearance of ['light', 'dark'] as const) {
   test(`fresh profile chooses cobalt ${appearance}, then preserves its choice across reload and OS changes`, async ({
     page,

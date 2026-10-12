@@ -834,6 +834,7 @@ function GeneralSection() {
   const sendShortcut = useValue(settings$.sendShortcut)
   const undoSendSeconds = useValue(settings$.undoSendSeconds)
   const spellCheck = useValue(settings$.spellCheck)
+  const grammarCheck = useValue(settings$.grammarCheck)
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
   const kanbanColumnWidth = useValue(settings$.kanbanColumnWidth)
   const language = useValue(settings$.language)
@@ -999,6 +1000,23 @@ function GeneralSection() {
           hint={t('settings.composer.spellCheckHint')}
           checked={spellCheck}
           onChange={() => settings$.spellCheck.set(!spellCheck)}
+        />
+        <SelectRow
+          icon={<SpellCheck size={16} strokeWidth={1.75} />}
+          title={t('settings.composer.grammar', { defaultValue: 'Grammar suggestions' })}
+          hint={t('settings.composer.grammarHint', {
+            defaultValue:
+              'Checked on this computer with Harper; nothing you write is sent anywhere. English only: other text is left as it is.',
+          })}
+          value={grammarCheck}
+          options={[
+            { value: 'off', label: t('settings.composer.grammarOff', { defaultValue: 'Off' }) },
+            { value: 'american', label: t('settings.composer.grammarAmerican', { defaultValue: 'English (US)' }) },
+            { value: 'british', label: t('settings.composer.grammarBritish', { defaultValue: 'English (UK)' }) },
+            { value: 'canadian', label: t('settings.composer.grammarCanadian', { defaultValue: 'English (Canada)' }) },
+            { value: 'australian', label: t('settings.composer.grammarAustralian', { defaultValue: 'English (Australia)' }) },
+          ]}
+          onChange={(value) => settings$.grammarCheck.set(value as typeof grammarCheck)}
         />
         <SegmentedRow
           icon={<Send size={16} strokeWidth={1.75} />}

@@ -27,6 +27,8 @@ import { getComposeSession, registerComposeSession } from '../../states/composeS
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { ResizableImage } from './composerImage'
+import { GrammarChecker, harperEngine, type GrammarResult } from '../../lib/grammar'
+import { GrammarExtension, type PlacedIssue } from './grammarExtension'
 import {
   clipboardHasImageMarkup,
   createInlineId,
@@ -127,9 +129,31 @@ export function useComposer(tabId: string) {
   // it on the blank line the signature was inserted under.
   const focusAt = useRef(draft?.signature?.html ? ('start' as const) : ('end' as const)).current
 
+  // Grammar suggestions (#105): one checker per composer; what it found, a
+  // failure to start, and the issue the writer clicked, for the composer to show.
+  const grammarChecker = useRef(new GrammarChecker(harperEngine)).current
+  const [grammarResult, setGrammarResult] = useState<GrammarResult | null>(null)
+  const [grammarError, setGrammarError] = useState('')
+  const [grammarPick, setGrammarPick] = useState<{ placed: PlacedIssue; at: { left: number; top: number } } | null>(
+    null,
+  )
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
+      GrammarExtension.configure({
+        checker: grammarChecker,
+        dialect: () => {
+          const chosen = settings$.grammarCheck.peek()
+          return chosen === 'off' ? null : chosen
+        },
+        onResult: (result) => {
+          setGrammarError('')
+          setGrammarResult(result)
+        },
+        onError: (error) => setGrammarError(error instanceof Error ? error.message : String(error)),
+        onPick: (placed, at) => setGrammarPick({ placed, at }),
+      }),
       ResizableImage.configure({
         allowBase64: true,
         HTMLAttributes: {
@@ -701,5 +725,12 @@ export function useComposer(tabId: string) {
     handleKeyDown,
     setLink,
     submit,
+    grammar: {
+      checker: grammarChecker,
+      result: grammarResult,
+      error: grammarError,
+      pick: grammarPick,
+      closePick: () => setGrammarPick(null),
+    },
   }
 }
