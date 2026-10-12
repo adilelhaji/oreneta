@@ -29,6 +29,7 @@ pub mod mail_model;
 pub mod merge;
 pub mod oof;
 pub mod parse;
+pub mod pop3;
 pub mod priority;
 pub mod privacy;
 pub mod translation;

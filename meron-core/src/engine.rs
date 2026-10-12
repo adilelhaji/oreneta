@@ -562,7 +562,7 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
-        if self.ensure_valid_creds(account).await?.is_local() {
+        if self.ensure_valid_creds(account).await?.is_local_store() {
             let mut session = backend::Session::Local(crate::archive::LocalSession::new(self.db.clone(), account));
             return f(&mut session).await;
         }
@@ -668,7 +668,7 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
-        if self.ensure_valid_creds(account).await?.is_local() {
+        if self.ensure_valid_creds(account).await?.is_local_store() {
             let mut session = backend::Session::Local(crate::archive::LocalSession::new(self.db.clone(), account));
             preflight(&mut session).await?;
             return f(&mut session).await;
@@ -753,8 +753,9 @@ pub async fn sync_folders(
     engine: &Arc<Engine>,
     account: &str,
 ) -> anyhow::Result<Vec<imap::Folder>> {
-    if engine.ensure_valid_creds(account).await?.is_local() {
-        // Nothing to sync: the archive's folders are the ones stored here.
+    if engine.ensure_valid_creds(account).await?.is_local_store() {
+        // Nothing to sync: the archive's folders are the ones stored here,
+        // and POP3 has no folders of its own.
         return store::get_folders(&engine.db.lock().unwrap(), account);
     }
     if engine.ensure_valid_creds(account).await?.is_graph() {
@@ -1061,7 +1062,18 @@ pub async fn sync_messages(
     folder: &str,
     limit: u32,
 ) -> anyhow::Result<SyncMessagesResult> {
-    if engine.ensure_valid_creds(account).await?.is_local() {
+    let creds = engine.ensure_valid_creds(account).await?;
+    if creds.is_pop3() && folder == crate::pop3::INBOX {
+        // POP3 mail arrives only in the Inbox, downloaded here (ADR-0035).
+        // One download per account at a time, so two checks never store the
+        // same message twice.
+        let lock = crate::pop3::account_lock(account);
+        let _held = lock.lock().await;
+        let mut client = crate::pop3::connect(&creds).await?;
+        crate::pop3::fetch(&engine.db, account, &mut client, crate::store::now_unix(), &crate::parse::media_root())
+            .await?;
+    }
+    if creds.is_local_store() {
         let messages = store::recent_headers(&engine.db.lock().unwrap(), account, folder, limit as i64)?;
         return Ok(SyncMessagesResult { count: messages.len(), messages });
     }

@@ -3,7 +3,7 @@
 
 import type { SignatureMark } from './lib/signature'
 
-export type AuthType = 'password' | 'gmail_oauth' | 'outlook_oauth' | 'graph_oauth' | 'rss' | 'local_archive'
+export type AuthType = 'password' | 'gmail_oauth' | 'outlook_oauth' | 'graph_oauth' | 'rss' | 'local_archive' | 'pop3'
 
 /** A send-as identity for an account: an owned address and an optional From
  * display name (blank falls back to the account's `sender_name`). */

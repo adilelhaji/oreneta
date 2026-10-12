@@ -22,6 +22,8 @@ export function newAccountForm(email = '') {
     email,
     display_name: '',
     sender_name: '',
+    /// How mail arrives: IMAP, or POP3 downloads (#97).
+    incoming: 'imap' as 'imap' | 'pop3',
     imap_host: '',
     imap_host_touched: false,
     imap_port: '993',

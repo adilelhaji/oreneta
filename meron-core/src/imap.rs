@@ -87,6 +87,13 @@ impl Creds {
     /// The local archive (ADR-0014): no server, no secret, no network.
     pub fn is_local(&self) -> bool { self.auth_type == "local_archive" }
 
+    /// A POP3 account (ADR-0035): mail downloaded into this database.
+    pub fn is_pop3(&self) -> bool { self.auth_type == "pop3" }
+
+    /// Read from this database rather than a server: the archive, and the
+    /// mail a POP3 account has downloaded.
+    pub fn is_local_store(&self) -> bool { self.is_local() || self.is_pop3() }
+
     /// Whether this account is served by the Exchange backend.
     pub fn is_ews(&self) -> bool {
         !self.ews_url.is_empty()
@@ -289,6 +296,7 @@ pub(crate) async fn starttls_socket(tcp: TcpStream) -> Result<TcpStream> {
 pub async fn connect(creds: &Creds) -> Result<Session> {
     if creds.is_graph() { return crate::graph::mail::unsupported(); }
     if creds.is_local() { return crate::archive::unsupported("connect to a server"); }
+    if creds.is_pop3() { return crate::archive::unsupported("use IMAP on a POP3 account"); }
     // STARTTLS connects in cleartext and upgrades after the greeting; implicit
     // TLS wraps the socket up front. Plaintext (neither flag) is for local test
     // servers only.

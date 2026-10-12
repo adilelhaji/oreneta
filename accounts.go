@@ -20,8 +20,12 @@ func (a *App) accountAddPassword(payload map[string]any) (any, error) {
 	if req.Username == "" || req.Password == "" {
 		return nil, errors.New("credentials required")
 	}
+	pop3 := req.Incoming == "pop3"
 	if req.IMAPPort == 0 {
 		req.IMAPPort = 993
+		if pop3 {
+			req.IMAPPort = 995
+		}
 	}
 	if req.SMTPPort == 0 {
 		req.SMTPPort = 465
@@ -58,6 +62,12 @@ func (a *App) accountAddPassword(payload map[string]any) (any, error) {
 		"sender_name":   req.SenderName,
 		"provider":      "custom",
 	}
+	authType := "password"
+	if pop3 {
+		// POP3 mail is downloaded into the app; there is no IMAP to watch.
+		authType = "pop3"
+		connect["auth_type"] = authType
+	}
 	if pin := strings.TrimSpace(req.CertPin); pin != "" {
 		connect["cert_pin"] = pin
 	}
@@ -67,7 +77,9 @@ func (a *App) accountAddPassword(payload map[string]any) (any, error) {
 	if _, err := a.sidecar.Call("account.connect", connect); err != nil {
 		return nil, err
 	}
-	_, _ = a.sidecar.Call("watch.start", map[string]any{"account": id})
+	if !pop3 {
+		_, _ = a.sidecar.Call("watch.start", map[string]any{"account": id})
+	}
 
 	account := Account{
 		ID:                id,
@@ -75,7 +87,7 @@ func (a *App) accountAddPassword(payload map[string]any) (any, error) {
 		DisplayName:       req.DisplayName,
 		SenderName:        req.SenderName,
 		Provider:          "custom",
-		AuthType:          "password",
+		AuthType:          authType,
 		IncludedInUnified: true,
 		IMAPHost:          req.IMAPHost,
 		IMAPPort:          req.IMAPPort,

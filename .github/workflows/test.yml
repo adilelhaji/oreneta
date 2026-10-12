@@ -97,6 +97,17 @@ jobs:
         run: |
           TZ=Asia/Tokyo cargo test --manifest-path meron-core/Cargo.toml --lib calendar::
           TZ=America/Los_Angeles cargo test --manifest-path meron-core/Cargo.toml --lib calendar::
+      # POP3 against a real Dovecot (#97): deletion at QUIT, UIDLs and
+      # dot-stuffing as a server does them, which the fake server cannot vouch for.
+      - name: POP3 against Dovecot
+        run: |
+          sudo apt-get install -y dovecot-pop3d
+          sudo systemctl stop dovecot || true
+          sudo bash meron-core/tests/dovecot-pop3.sh /tmp/oreneta-pop3 11110
+          cargo test --manifest-path meron-core/Cargo.toml --lib pop3::tests::against_dovecot -- --nocapture
+        env:
+          ORENETA_DOVECOT_POP3: 127.0.0.1:11110
+          ORENETA_DOVECOT_DIR: /tmp/oreneta-pop3
       - name: Upload Rust coverage
         if: always()
         uses: actions/upload-artifact@v4

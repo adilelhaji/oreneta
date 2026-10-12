@@ -109,6 +109,7 @@ import { AccountProfileGroup } from './AccountProfileGroup'
 import { useAccountAvatar } from './useAccountAvatar'
 import { AccountAliasesCard } from './AccountAliasesCard'
 import { AccountTogglesSection } from './AccountTogglesSection'
+import { Pop3RetentionGroup } from './Pop3RetentionGroup'
 import { AccountWallpaperCard } from './AccountWallpaperCard'
 import { AvatarCropDialog } from './AvatarCropDialog'
 import { AssistantSettingsSection } from './AssistantSettingsSection'
@@ -1706,6 +1707,7 @@ function AccountPanel({ account }: { account: Account }) {
         <AccountWallpaperCard account={account} />
       </SettingsGroup>
       <AccountTogglesSection account={account} isRSS={isRSS} />
+      {account.auth_type === 'pop3' && <Pop3RetentionGroup accountId={account.id} />}
       {!isRSS && <AccountCalendarsGroup account={account} />}
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}

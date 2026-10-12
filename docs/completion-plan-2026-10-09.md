@@ -475,6 +475,12 @@ Estado de la iteración 14 (2026-10-12, por delegación):
 - La iteración 14 queda completa en lo automatizable; faltan los registros
   OAuth del propietario y N5.
 
+Estado de la iteración 15 (2026-10-12, por delegación):
+- **#97:** cuentas POP3 que descargan a una Bandeja de entrada local, sin
+  duplicados (UIDL más hash). Se conservan en el servidor salvo que se
+  elija borrar, y el borrado solo vale con `QUIT`. Probado con un servidor
+  falso y con Dovecot real en CI (ADR-0035, [registro](design/pop3.md)).
+
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 

@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 52;
+pub const SCHEMA_VERSION: i64 = 53;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -742,6 +742,10 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         if !has {
             tx.execute_batch("ALTER TABLE calendar_events ADD COLUMN meeting TEXT;")?;
         }
+        tx.pragma_update(None, "user_version", 52)?;
+    }
+    if version < 53 {
+        tx.execute_batch(crate::pop3::SCHEMA)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

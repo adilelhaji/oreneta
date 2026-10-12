@@ -132,6 +132,35 @@ export function AccountDialogCustom({
             inputClassName={inputClass}
             labelClassName={fieldLabelClass}
           />
+          <label className={fieldLabelClass}>
+            {t('accounts.fields.incoming', { defaultValue: 'Incoming mail' })}
+            <select
+              value={form.incoming}
+              onChange={(e) => {
+                const incoming = e.target.value === 'pop3' ? 'pop3' : 'imap'
+                setForm((f) => ({
+                  ...f,
+                  incoming,
+                  // The usual port for each, unless one was typed.
+                  imap_port: f.imap_port_touched ? f.imap_port : incoming === 'pop3' ? '995' : '993',
+                }))
+              }}
+              className={inputClass}
+            >
+              <option value="imap">IMAP</option>
+              <option value="pop3">
+                {t('accounts.incoming.pop3', { defaultValue: 'POP3 (downloaded to this computer)' })}
+              </option>
+            </select>
+          </label>
+          {form.incoming === 'pop3' && (
+            <p className="text-caption text-secondary">
+              {t('accounts.incoming.pop3Hint', {
+                defaultValue:
+                  'POP3 has no folders: mail is downloaded into this computer’s Inbox for the account. It stays on the server unless you choose otherwise in the account’s settings.',
+              })}
+            </p>
+          )}
           <div className={serverGridClass}>
             <Field
               label={t('accounts.fields.imapHost')}

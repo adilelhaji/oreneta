@@ -151,6 +151,8 @@ type AddPasswordAccountRequest struct {
 	// per server: the two can be different daemons.
 	CertPin     string `json:"cert_pin"`
 	SMTPCertPin string `json:"smtp_cert_pin"`
+	// "pop3" for a POP3 account (#97, ADR-0035); IMAP otherwise.
+	Incoming string `json:"incoming"`
 }
 
 type AddGmailOAuthRequest struct {

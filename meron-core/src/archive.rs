@@ -152,7 +152,7 @@ pub struct ImportSummary {
     pub skipped: usize,
 }
 
-fn header_block(raw: &[u8]) -> &[u8] {
+pub(crate) fn header_block(raw: &[u8]) -> &[u8] {
     match raw.windows(4).position(|w| w == b"\r\n\r\n") {
         Some(end) => &raw[..end + 4],
         None => match raw.windows(2).position(|w| w == b"\n\n") {

@@ -2185,7 +2185,7 @@ async fn idle_watch(engine: Arc<Engine>, out: Writer, account: String, folder: S
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
-            Some(creds) if creds.is_ews() || creds.is_graph() || creds.is_local() => {
+            Some(creds) if creds.is_ews() || creds.is_graph() || creds.is_local_store() => {
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
@@ -3077,6 +3077,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 allow,
             )?;
             Ok(json!({ "ok": true }))
+        }
+
+        // When a POP3 account deletes from its server (#97, ADR-0035).
+        "pop3.retention" => {
+            let account = req_str(p, "account")?;
+            let db = engine.db.lock().unwrap();
+            if let Some(value) = p.get("retention") {
+                let wanted: meron_core::pop3::Retention = serde_json::from_value(value.clone())?;
+                meron_core::pop3::set_retention(&db, &account, wanted)?;
+            }
+            Ok(serde_json::to_value(meron_core::pop3::retention(&db, &account)?)?)
         }
 
         // Sharing files by link from cloud storage (#108, ADR-0033). Every
@@ -5407,7 +5418,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // can be slow or network-dependent, and later sync/watch calls will
             // surface any mailbox access failure.
             if p.get("validate").and_then(Value::as_bool).unwrap_or(true) {
-                if creds.is_ews() {
+                if creds.is_pop3() {
+                    // Signs in over TLS and leaves at once; nothing is
+                    // downloaded or deleted until the first sync.
+                    let mut client = tokio::time::timeout(Duration::from_secs(20), meron_core::pop3::connect(&creds))
+                        .await
+                        .map_err(|_| anyhow::anyhow!("POP3 validation timed out"))??;
+                    let _ = client.quit().await;
+                    tokio::time::timeout(Duration::from_secs(20), smtp::check_certificate(&creds))
+                        .await
+                        .unwrap_or(Ok(()))?;
+                } else if creds.is_ews() {
                     // Exchange carries mail and submission over one HTTPS
                     // endpoint, so a single round trip validates both.
                     let config = exchange::EwsConfig {
@@ -5464,6 +5485,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             {
                 let db = engine.db.lock().unwrap();
                 store::upsert_account(&db, &id, &meta, &creds)?;
+                if creds.is_pop3() {
+                    // POP3 has no folders: its mail goes to an Inbox kept here.
+                    store::upsert_folders(
+                        &db,
+                        &id,
+                        &[
+                            imap::Folder { name: "INBOX".into(), display_name: "INBOX".into(), ..Default::default() },
+                            imap::Folder {
+                                name: meron_core::archive::TRASH.into(),
+                                display_name: meron_core::archive::TRASH.into(),
+                                special_use: Some("trash".into()),
+                                ..Default::default()
+                            },
+                        ],
+                    )?;
+                }
             }
             secrets::store(&id, &secrets::Secrets::from_creds(&creds))?;
             let has_calendars =
@@ -8478,7 +8515,7 @@ async fn apply_oof_to_arrivals(engine: &Arc<Engine>, account: &str, headers: &[i
     let Ok(creds) = engine.ensure_valid_creds(account).await else {
         return;
     };
-    if creds.is_ews() || creds.is_graph() || creds.is_local() {
+    if creds.is_ews() || creds.is_graph() || creds.is_local_store() {
         return;
     }
     let oof = {
@@ -8627,6 +8664,9 @@ fn sieve_unavailable(creds: &imap::Creds) -> Option<String> {
     }
     if creds.is_local() {
         return Some("a local archive has no server".into());
+    }
+    if creds.is_pop3() {
+        return Some("a POP3 account's rules run here: POP3 has no server rules".into());
     }
     if creds.password.is_empty() || creds.is_oauth() {
         return Some("this account signs in without a password; its provider's own filters are not edited yet".into());
