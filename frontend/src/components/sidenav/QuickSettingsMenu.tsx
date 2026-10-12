@@ -4,11 +4,14 @@ import {
   Columns3,
   Info,
   ListTodo,
+  StickyNote,
+  Paperclip,
   Mail,
   Plus,
   RefreshCw,
   Settings,
   SquareChevronRight,
+  MessagesSquare,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -84,6 +87,9 @@ export function QuickSettingsMenu({
           { key: 'calendar', label: t('calendar.title'), icon: CalendarDays },
           { key: 'people', label: t('people.title'), icon: BookUser },
           { key: 'tasks', label: t('tasks.title'), icon: ListTodo },
+          { key: 'notes', label: t('notes.title', { defaultValue: 'Notes' }), icon: StickyNote },
+          { key: 'attachments', label: t('attachmentsView.title', { defaultValue: 'Attachments' }), icon: Paperclip },
+          { key: 'messaging', label: t('messaging.title', { defaultValue: 'Chat' }), icon: MessagesSquare },
         ].map(({ key, label, icon: Icon }) => (
           <MenuItem
             key={key}
@@ -93,6 +99,9 @@ export function QuickSettingsMenu({
               ui$.calendarOpen.set(key === 'calendar')
               ui$.peopleOpen.set(key === 'people')
               ui$.tasksOpen.set(key === 'tasks')
+              ui$.notesOpen.set(key === 'notes')
+              ui$.attachmentsOpen.set(key === 'attachments')
+              ui$.messagingOpen.set(key === 'messaging')
               onClose()
             }}
           />

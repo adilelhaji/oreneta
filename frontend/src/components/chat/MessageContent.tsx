@@ -1,3 +1,5 @@
+import { TrackerNotice } from './TrackerNotice'
+import { TranslationNotice, useShownMessage } from './TranslationNotice'
 import { useState } from 'react'
 import { Download, Eye, Image } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
@@ -7,6 +9,7 @@ import type { Message } from '../../types'
 import { fileIconFor, formatFileSize, mediaSrc } from './messageHelpers'
 import { MessageBubbleBody } from './MessageBubbleBody'
 import { ProtectionNotice } from './ProtectionNotice'
+import { InvitationCard } from './InvitationCard'
 import { SpamNotice } from './SpamNotice'
 import { VideoAttachment } from './VideoAttachment'
 import type { MessageView } from './useMessageView'
@@ -38,6 +41,8 @@ export function MessageContent({
   // Owned here rather than passed down from the bubble: the preview belongs to
   // the attachment that opened it, and nothing above needs to know about it.
   const [previewing, setPreviewing] = useState<Attachment | null>(null)
+  // A translation is shown in place of the text, never written over it.
+  const shown = useShownMessage(message)
 
   return (
     <>
@@ -118,9 +123,12 @@ export function MessageContent({
           trusted changes how its words should be read. */}
       <ProtectionNotice message={message} />
       <SpamNotice message={message} />
+      {message.invitation && <InvitationCard message={message} />}
+      <TrackerNotice message={message} />
+      <TranslationNotice message={message} />
 
       <MessageBubbleBody
-        message={message}
+        message={shown}
         useHtmlBody={view.useHtmlBody}
         normalizedSearchQuery={view.normalizedSearchQuery}
         activeSearchMatch={view.activeSearchMatch}
@@ -150,8 +158,20 @@ export function MessageContent({
             }`}
           >
             <FileIcon size={16} className="text-accent shrink-0" />
-            <span className="truncate">{file.filename}</span>
-            <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">{formatFileSize(file.size)}</span>
+            <span className="truncate">
+              {file.unavailable === 'tooLarge' ? t('attachments.unavailable.tooLarge') : file.filename}
+            </span>
+            {file.unavailable === 'link' ? (
+              <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">
+                {t('attachments.unavailable.link')}
+              </span>
+            ) : (
+              !file.unavailable && (
+                <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">
+                  {formatFileSize(file.size)}
+                </span>
+              )
+            )}
             {downloadable &&
               // The icon says which of the two clicking does, so nobody is
               // surprised by a save dialog they did not ask for.
@@ -172,7 +192,15 @@ export function MessageContent({
         )
       })}
 
-      {previewing && <AttachmentPreviewDialog attachment={previewing} onClose={() => setPreviewing(null)} />}
+      {previewing && (
+        // Keyed by the file, so a failure shown for one attachment is never
+        // carried over to the next one opened.
+        <AttachmentPreviewDialog
+          key={previewing.key || previewing.filename}
+          attachment={previewing}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
     </>
   )
 }

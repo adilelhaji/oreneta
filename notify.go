@@ -153,6 +153,8 @@ func (a *App) handleSidecarEvent(name string, detail any) {
 		a.notifyNewMail(detail)
 	case "calendar.reminder":
 		a.notifyReminder(detail)
+	case "tasks.reminder":
+		a.notifyTaskReminder(detail)
 	}
 }
 
@@ -334,6 +336,24 @@ func (a *App) notifyReminder(detail any) {
 		body:    body,
 		account: account,
 	})
+}
+
+// notifyTaskReminder raises the OS notification for a task reminder
+// (ADR-0013): the task's title, and its due date when it has one.
+func (a *App) notifyTaskReminder(detail any) {
+	m, ok := detail.(map[string]any)
+	if !ok {
+		return
+	}
+	title, _ := m["title"].(string)
+	if title == "" {
+		title = a.currentNativeLabels().noSubject
+	}
+	var body string
+	if due, ok := m["due_at"].(float64); ok && due > 0 {
+		body = time.Unix(int64(due), 0).Format("2006-01-02")
+	}
+	go a.deliverNotification(notification{title: title, body: body})
 }
 
 func notificationThreadID(account, folder, threadKey string) string {

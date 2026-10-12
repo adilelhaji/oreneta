@@ -850,6 +850,46 @@ func (a *App) saveMessageEml(payload map[string]any) (any, error) {
 	return map[string]any{"saved": true, "path": dest}, nil
 }
 
+// mboxFilename is the save dialog's default name for a folder export.
+func mboxFilename(folder string) string {
+	if folder == "" {
+		folder = "mail"
+	}
+	return strings.TrimSuffix(emlFilename(folder), ".eml") + ".mbox"
+}
+
+// exportFolderMbox writes a folder, or the chosen messages in it, to one
+// mboxrd file the user picks (#112). The sidecar streams it to that path in
+// batches, so a large folder never crosses the JSON protocol.
+func (a *App) exportFolderMbox(payload map[string]any) (any, error) {
+	account, _ := payload["account"].(string)
+	folder, _ := payload["folder"].(string)
+	if account == "" || folder == "" {
+		return nil, errors.New("missing account or folder")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	name, _ := payload["name"].(string)
+	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:                "Export mail",
+		DefaultFilename:      mboxFilename(name),
+		CanCreateDirectories: true,
+		Filters:              []wailsRuntime.FileFilter{{DisplayName: "Mailbox (*.mbox)", Pattern: "*.mbox"}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dest == "" {
+		return map[string]any{"saved": false}, nil // user cancelled
+	}
+	params := map[string]any{"account": account, "folder": folder, "path": dest}
+	if uids, ok := payload["uids"].([]any); ok && len(uids) > 0 {
+		params["uids"] = uids
+	}
+	return a.sidecar.Call("messages.exportMbox", params)
+}
+
 // readAttachment reads an attachment the sidecar already wrote under the media
 // dir (served at /media/<key>) and returns it base64-encoded, for pulling a
 // stored attachment back into the composer (e.g. "Edit as New Message"). The key
@@ -922,10 +962,50 @@ func (a *App) mailSend(payload map[string]any) (any, error) {
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}
-	if _, err := a.sidecar.Call("send", sendParams(req)); err != nil {
+	params := sendParams(req)
+	// A deliberate second try of a message whose first try may already have
+	// reached the recipient. Off unless the interface says so, having told
+	// the reader what sending again could mean.
+	if resend, _ := payload["resend"].(bool); resend {
+		params["resend"] = true
+	}
+	result, err := a.sidecar.Call("send", params)
+	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "queued": false}, nil
+	// The core answers with the outcome, which is not always a plain yes:
+	// a send can be accepted, accepted but unfiled, or of unknown outcome.
+	// Handed through as is, so the interface can say which.
+	out := map[string]any{"ok": true, "queued": false, "outcome": "accepted"}
+	if object, ok := result.(map[string]any); ok {
+		for key, value := range object {
+			out[key] = value
+		}
+	}
+	return out, nil
+}
+
+// mailOutgoingAttempts lists the sends a person still has to settle: those
+// whose outcome nobody knows, and those that went but have no Sent copy.
+func (a *App) mailOutgoingAttempts(payload map[string]any) (any, error) {
+	accountID, _ := payload["account_id"].(string)
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return map[string]any{"attempts": []any{}}, nil
+	}
+	return a.sidecar.Call("mail.outgoingAttempts", map[string]any{"account": accountID})
+}
+
+// mailResolveOutgoing records that a person has looked at an uncertain send
+// and settled it, so it stops being asked about.
+func (a *App) mailResolveOutgoing(payload map[string]any) (any, error) {
+	id, _ := payload["id"].(string)
+	if id == "" {
+		return nil, errors.New("invalid attempt")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call("mail.resolveOutgoing", map[string]any{"id": id})
 }
 
 func (a *App) mailSaveDraft(payload map[string]any) (any, error) {

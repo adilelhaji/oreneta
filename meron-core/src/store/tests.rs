@@ -131,6 +131,62 @@ fn delete_folder_drops_the_row_its_messages_and_its_sync_state() {
 }
 
 #[test]
+fn a_folder_created_here_takes_the_account_delimiter_into_the_tree() {
+    let conn = test_conn();
+    assert_eq!(account_delimiter(&conn, "acct").unwrap(), None);
+    upsert_folders(
+        &conn,
+        "acct",
+        &[
+            Folder {
+                name: "INBOX".to_string(),
+                delimiter: Some(".".to_string()),
+                ..Default::default()
+            },
+            Folder {
+                name: "INBOX.Work".to_string(),
+                delimiter: Some(".".to_string()),
+                ..Default::default()
+            },
+            Folder {
+                name: "Odd".to_string(),
+                delimiter: Some("/".to_string()),
+                ..Default::default()
+            },
+        ],
+    )
+    .unwrap();
+    upsert_folders(
+        &conn,
+        "other",
+        &[Folder {
+            name: "INBOX".to_string(),
+            delimiter: Some("/".to_string()),
+            ..Default::default()
+        }],
+    )
+    .unwrap();
+    // The most common delimiter of this account, not another account's.
+    assert_eq!(account_delimiter(&conn, "acct").unwrap().as_deref(), Some("."));
+
+    // As folders.create stores a new parent and child before the next sync:
+    // with the delimiter, the child is part of the parent's delete subtree.
+    let delimiter = account_delimiter(&conn, "acct").unwrap();
+    for name in ["INBOX.Work.2026", "INBOX.Work.2026.Q1"] {
+        upsert_folders(
+            &conn,
+            "acct",
+            &[Folder { name: name.to_string(), delimiter: delimiter.clone(), ..Default::default() }],
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        child_folders(&conn, "acct", "INBOX.Work.2026").unwrap(),
+        vec!["INBOX.Work.2026.Q1".to_string()]
+    );
+}
+
+#[test]
 fn delimiterless_folder_names_do_not_form_a_delete_subtree() {
     let conn = test_conn();
     upsert_folders(
@@ -1606,6 +1662,134 @@ fn a_page_can_be_narrowed_to_one_label() {
         .map(|header| header.uid)
         .collect::<Vec<_>>();
     assert_eq!(uids, vec![3, 1]);
+}
+
+/// #95: a label is on the conversation (ADR-0002), so it follows the
+/// conversation when its messages move to another folder, stays after the
+/// store is closed and opened again, and never reaches another account's
+/// conversation that happens to share the key.
+/// #89: a conversation moved while snoozed stays findable in the Snoozed
+/// view, under the folder it is in now, rather than vanishing everywhere
+/// until it wakes. A uid key is tied to its folder and is not looked for
+/// elsewhere, where the same uid is another message.
+#[test]
+fn a_snoozed_conversation_moved_meanwhile_is_still_listed_where_it_is() {
+    let conn = test_conn();
+    let now = now_unix();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, date: 100, thread_key: "t-1".into(), subject: "Moved".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 100, subject: "Kept".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    snooze_thread(&conn, "acct", "t-1", "INBOX", now + 3600).unwrap();
+    snooze_thread(&conn, "acct", "uid:2", "INBOX", now + 7200).unwrap();
+    // The move, as a sync records it.
+    conn.execute("DELETE FROM messages WHERE uid = 1", []).unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "Archive",
+        &[
+            MessageHeader { uid: 9, date: 100, thread_key: "t-1".into(), subject: "Moved".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 50, subject: "Another message".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    let listed: Vec<(String, u32, String)> = get_snoozed_headers(&conn, "acct")
+        .unwrap()
+        .into_iter()
+        .map(|h| (h.folder, h.uid, h.subject))
+        .collect();
+    assert_eq!(
+        listed,
+        vec![("Archive".to_string(), 9, "Moved".to_string()), ("INBOX".to_string(), 2, "Kept".to_string())]
+    );
+}
+
+#[test]
+fn a_label_follows_a_move_survives_a_restart_and_stays_in_its_account() {
+    let dir = std::env::temp_dir().join(format!("oreneta-label-restart-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("store.db");
+    let _ = std::fs::remove_file(&path);
+    let only = |conn: &Connection, account: &str, folder: &str| {
+        let filter = RecentFilter { label_id: Some("l-1".into()), ..Default::default() };
+        get_recent_page(conn, account, folder, 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+    {
+        let conn = Connection::open(&path).unwrap();
+        db::run_migrations(&conn).unwrap();
+        replace_labels(&conn, &[label("l-1", "Work")]).unwrap();
+        let message = |uid| MessageHeader { uid, date: 100, thread_key: "t-1".into(), ..Default::default() };
+        upsert_messages(&conn, "acct", "INBOX", &[message(1)]).unwrap();
+        upsert_messages(&conn, "other", "INBOX", &[message(1)]).unwrap();
+        set_thread_labels(&conn, "acct", "t-1", &["l-1".into()]).unwrap();
+        // The move, as a sync sees it: gone from one folder, new in another
+        // with a new uid and the same conversation.
+        conn.execute("DELETE FROM messages WHERE account = 'acct' AND folder = 'INBOX'", []).unwrap();
+        upsert_messages(&conn, "acct", "Archive", &[message(7)]).unwrap();
+        assert_eq!(only(&conn, "acct", "Archive"), vec![7]);
+    }
+    let conn = Connection::open(&path).unwrap();
+    db::run_migrations(&conn).unwrap();
+    assert_eq!(only(&conn, "acct", "Archive"), vec![7]);
+    assert_eq!(only(&conn, "other", "INBOX"), Vec::<u32>::new());
+    assert_eq!(thread_labels(&conn, "other", "t-1").unwrap(), Vec::<String>::new());
+    drop(conn);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// #95: labels and inbox categories (ADR-0023) are separate things. Putting
+/// one on a conversation does not put, take or filter the other.
+#[test]
+fn labels_and_inbox_categories_never_stand_in_for_each_other() {
+    let conn = test_conn();
+    replace_labels(&conn, &[label("work", "Work")]).unwrap();
+    crate::categories::save(
+        &conn,
+        &[crate::categories::Category {
+            id: "work".into(),
+            name: "Work".into(),
+            colour: "#2056dd".into(),
+            match_mode: crate::rules::Match::Any,
+            conditions: vec![],
+        }],
+    )
+    .unwrap();
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, date: 100, thread_key: "t-1".into(), ..Default::default() },
+            MessageHeader { uid: 2, date: 200, thread_key: "t-2".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    set_thread_labels(&conn, "acct", "t-1", &["work".into()]).unwrap();
+    crate::categories::correct_conversation(&conn, "acct", "t-2", Some("work")).unwrap();
+    crate::categories::rejudge(&conn, "acct", true).unwrap();
+    let uids = |filter: RecentFilter| {
+        get_recent_page(&conn, "acct", "INBOX", 50, None, filter)
+            .unwrap()
+            .0
+            .into_iter()
+            .map(|header| header.uid)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(uids(RecentFilter { label_id: Some("work".into()), ..Default::default() }), vec![1]);
+    assert_eq!(uids(RecentFilter { category: Some("work".into()), ..Default::default() }), vec![2]);
+    assert_eq!(thread_labels(&conn, "acct", "t-2").unwrap(), Vec::<String>::new());
 }
 
 #[test]
@@ -3264,7 +3448,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 35);
+    assert_eq!(version, 58);
 
     for table in [
         "accounts",
@@ -3314,7 +3498,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 35);
+    assert_eq!(version, 58);
 }
 
 #[test]
@@ -3342,7 +3526,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 35);
+    assert_eq!(version, 58);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3380,7 +3564,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 35);
+    assert_eq!(version, 58);
 }
 
 #[test]
@@ -5123,6 +5307,7 @@ fn the_book_is_searched_by_name_even_when_no_mail_matches() {
 fn removing_a_source_takes_its_people_with_it_and_nobody_else() {
     let conn = test_conn();
     let source = ContactSource {
+        writable: None,
         id: "src-1".into(),
         kind: "carddav".into(),
         account: String::new(),
@@ -5163,6 +5348,7 @@ fn removing_a_source_takes_its_people_with_it_and_nobody_else() {
 fn a_sync_outcome_is_recorded_and_a_good_one_clears_a_bad_one() {
     let conn = test_conn();
     let source = ContactSource {
+        writable: None,
         id: "src-1".into(),
         kind: "carddav".into(),
         account: String::new(),
@@ -5343,4 +5529,219 @@ fn update_message_gmail_labels_with_an_empty_set_genuinely_clears_the_cache() {
     reconcile_gmail_labels(&conn, "acct", &threads).unwrap();
 
     assert!(thread_labels(&conn, "acct", "t-1").unwrap().is_empty());
+}
+
+#[test]
+fn a_task_on_a_conversation_with_two_messages_at_the_same_time_is_listed_once() {
+    let conn = test_conn();
+    let header = |uid| MessageHeader {
+        uid,
+        from_name: "Ann".into(),
+        subject: "Re: plan".into(),
+        thread_key: "t-1".into(),
+        date: 50,
+        ..Default::default()
+    };
+    upsert_messages(&conn, "acct", "INBOX", &[header(1), header(2)]).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    let tasks = list_tasks(&conn, true).unwrap();
+    assert_eq!(tasks.len(), 1, "one task, one row");
+    assert_eq!(tasks[0].subject, "Re: plan");
+}
+
+#[test]
+fn a_task_follows_its_conversation_to_the_folder_it_moved_to() {
+    let conn = test_conn();
+    let message = |uid, key: &str| MessageHeader {
+        uid,
+        subject: "Renew".into(),
+        thread_key: key.into(),
+        date: 5,
+        ..Default::default()
+    };
+    upsert_messages(&conn, "acct", "Archive", &[message(7, "t-1")]).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    let tasks = list_tasks(&conn, true).unwrap();
+    assert_eq!((tasks[0].folder.as_str(), tasks[0].subject.as_str(), tasks[0].located), ("Archive", "Renew", true));
+
+    // Still in the folder it was made in as well (Gmail labels): that one wins.
+    upsert_messages(&conn, "acct", "INBOX", &[message(3, "t-1")]).unwrap();
+    assert_eq!(list_tasks(&conn, true).unwrap()[0].folder, "INBOX");
+
+    // A uid key names one message in one folder; uid 7 elsewhere is another message.
+    upsert_messages(&conn, "acct", "Archive", &[message(9, "")]).unwrap();
+    save_task(&conn, "acct", "uid:9", "INBOX", None, "", 11).unwrap();
+    let orphan = list_tasks(&conn, true).unwrap().into_iter().find(|t| t.thread_key == "uid:9").unwrap();
+    assert_eq!((orphan.folder.as_str(), orphan.located), ("INBOX", false), "reported as not found, not guessed");
+
+    // Saving again from where it now is records the new folder.
+    save_task(&conn, "acct", "t-1", "Archive", None, "moved", 12).unwrap();
+    let folder: String = conn
+        .query_row("SELECT folder FROM tasks WHERE thread_key = 't-1'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(folder, "Archive");
+}
+
+#[test]
+fn reopening_a_task_says_why_it_cannot_and_a_missing_task_is_an_error() {
+    let conn = test_conn();
+    let first = save_task(&conn, "acct", "t-1", "INBOX", None, "", 10).unwrap();
+    set_task_completed(&conn, first, true, 20).unwrap();
+    save_task(&conn, "acct", "t-1", "INBOX", None, "again", 30).unwrap();
+    let error = set_task_completed(&conn, first, false, 40).unwrap_err().to_string();
+    assert!(error.contains("already has an open task"), "{error}");
+    let error = set_task_completed(&conn, 9999, true, 40).unwrap_err().to_string();
+    assert!(error.contains("no longer exists"), "{error}");
+}
+
+#[test]
+fn removing_an_account_removes_its_tasks_and_no_others() {
+    let conn = test_conn();
+    save_task(&conn, "gone", "t-1", "INBOX", None, "", 10).unwrap();
+    save_task(&conn, "kept", "t-1", "INBOX", None, "", 10).unwrap();
+    crate::store::delete_account(&conn, "gone").unwrap();
+    let left: Vec<String> = list_tasks(&conn, true).unwrap().into_iter().map(|t| t.account).collect();
+    assert_eq!(left, vec!["kept"]);
+}
+
+#[test]
+fn every_table_naming_an_account_is_either_removed_with_it_or_kept_on_purpose() {
+    use crate::store::accounts::{KEPT_ON_ACCOUNT_REMOVAL, REMOVED_WITH_ACCOUNT};
+    let conn = test_conn();
+    let tables: Vec<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    let mut unclassified = Vec::new();
+    for table in tables {
+        let columns: Vec<String> = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let names_account = columns.iter().any(|c| c == "account" || c == "account_id");
+        let classified = REMOVED_WITH_ACCOUNT.iter().any(|(t, _)| *t == table)
+            || KEPT_ON_ACCOUNT_REMOVAL.contains(&table.as_str());
+        if names_account && !classified {
+            unclassified.push(table);
+        }
+    }
+    assert!(
+        unclassified.is_empty(),
+        "decide whether these go with a removed account (ADR-0011): {unclassified:?}"
+    );
+}
+
+#[test]
+fn removing_an_account_takes_its_state_and_keeps_what_the_person_wrote() {
+    let conn = test_conn();
+    let mut counts = Vec::new();
+    for account in ["gone", "kept"] {
+        conn.execute("INSERT INTO accounts(id, email) VALUES(?1, ?1)", params![account]).unwrap();
+        conn.execute(
+            "INSERT INTO contact_sources(id, kind, account, url) VALUES(?1, 'carddav', ?2, 'https://dav.example/')",
+            params![format!("book-{account}"), account],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO people(id, source, account, book, uid, name, organisation, note, photo, updated)
+             VALUES(?1, 'carddav', ?2, 'b', 'u', 'Ann', '', '', '', 0)",
+            params![format!("p-{account}"), account],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO person_emails(person_id, addr, label, position) VALUES(?1, 'ann@example.com', '', 0)",
+            params![format!("p-{account}")],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sender_priority(account, addr, priority) VALUES(?1, 'x@example.com', 1)",
+            params![account],
+        )
+        .unwrap();
+        save_task(&conn, account, "t-1", "INBOX", None, "", 1).unwrap();
+    }
+    conn.execute_batch(
+        "INSERT INTO local_drafts(id, account, revision, deleted, document, updated_at)
+           VALUES('d1', 'gone', 1, 0, '{}', 1), ('d2', 'gone', 2, 1, NULL, 1);",
+    )
+    .unwrap();
+
+    crate::store::schedule_send(&conn, "s1", "gone", 50, "Later", "{}").unwrap();
+    let removal = crate::store::delete_account(&conn, "gone").unwrap();
+    assert_eq!(removal.contact_sources, vec!["book-gone".to_string()]);
+    assert_eq!(removal.kept_scheduled, 1);
+    assert!(
+        crate::store::due_scheduled_sends(&conn, 1_000_000).unwrap().is_empty(),
+        "adding the same address again must not send it on its own"
+    );
+    assert_eq!(removal.kept_drafts, 1, "the unsent draft is kept and counted; the tombstone is not");
+    let drafts: i64 = conn
+        .query_row("SELECT COUNT(*) FROM local_drafts WHERE account = 'gone'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(drafts, 2, "nothing the person wrote is deleted");
+
+    for (table, column) in crate::store::accounts::REMOVED_WITH_ACCOUNT {
+        let left: i64 = conn
+            .query_row(&format!("SELECT COUNT(*) FROM {table} WHERE {column} = 'gone'"), [], |r| r.get(0))
+            .unwrap();
+        counts.push((table, left));
+    }
+    assert!(counts.iter().all(|(_, left)| *left == 0), "{counts:?}");
+    let emails: i64 = conn
+        .query_row("SELECT COUNT(*) FROM person_emails WHERE person_id = 'p-gone'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(emails, 0, "a person's addresses go with them");
+    let other: i64 = conn
+        .query_row("SELECT COUNT(*) FROM people WHERE account = 'kept'", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(other, 1, "another account is untouched");
+}
+
+
+/// #50: blocked and allowed senders, by address or domain, per account; the
+/// address is asked before its domain, and the cached verdicts follow at once.
+#[test]
+fn senders_can_be_blocked_or_allowed_by_address_or_domain() {
+    let conn = test_conn();
+    assert_eq!(sender_pattern(" Promo@Shop.example "), Some("promo@shop.example".into()));
+    assert_eq!(sender_pattern("shop.example"), Some("@shop.example".into()));
+    assert_eq!(sender_pattern("@shop.example"), Some("@shop.example".into()));
+    assert_eq!(sender_pattern("not an address"), None);
+    assert!(set_sender_listed(&conn, "acct", "nonsense", Some(false)).is_err());
+
+    upsert_messages(
+        &conn,
+        "acct",
+        "INBOX",
+        &[
+            MessageHeader { uid: 1, from_addr: "promo@shop.example".into(), subject: "Sale".into(), ..Default::default() },
+            MessageHeader { uid: 2, from_addr: "orders@shop.example".into(), subject: "Your order".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    set_sender_listed(&conn, "acct", "@shop.example", Some(false)).unwrap();
+    set_sender_listed(&conn, "acct", "orders@shop.example", Some(true)).unwrap();
+    assert_eq!(sender_listed(&conn, "acct", "promo@shop.example"), Some(true), "blocked by domain");
+    assert_eq!(sender_listed(&conn, "acct", "Orders@Shop.example"), Some(false), "allowed by address");
+    assert_eq!(sender_listed(&conn, "other", "promo@shop.example"), None, "per account");
+    let spam: Vec<(u32, i64)> = conn
+        .prepare("SELECT uid, spam FROM messages ORDER BY uid")
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(spam, vec![(1, 1), (2, 0)], "the cached verdicts follow the lists at once");
+    assert_eq!(
+        sender_lists(&conn, "acct").unwrap(),
+        vec![("orders@shop.example".to_string(), true), ("@shop.example".to_string(), false)]
+    );
+    set_sender_listed(&conn, "acct", "shop.example", None).unwrap();
+    assert_eq!(sender_listed(&conn, "acct", "promo@shop.example"), None);
 }

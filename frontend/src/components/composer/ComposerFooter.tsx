@@ -1,4 +1,4 @@
-import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type } from 'lucide-react'
+import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type, Languages, Sparkles, Cloud } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
 import type { Template } from '../../states/templates'
@@ -21,6 +21,9 @@ export function ComposerFooter({
   onPickInlineImages,
   onToggleRich,
   onUseTemplate,
+  onTranslate,
+  onRewrite,
+  onShareLink,
   pgpSign,
   pgpEncrypt,
   pgpPassphrase,
@@ -30,6 +33,7 @@ export function ComposerFooter({
   onDiscard,
   onSubmit,
   onSchedule,
+  canSchedule = true,
 }: {
   rich: boolean
   sending: boolean
@@ -41,6 +45,12 @@ export function ComposerFooter({
   onToggleRich: () => void
   /** Puts a kept snippet in at the cursor, or opens a whole-message template. */
   onUseTemplate: (template: Template) => void
+  /** Opens translation of the draft (#106). */
+  onTranslate?: () => void
+  /** Opens the assistant's rewrite of the draft (#52), when it is turned on. */
+  onRewrite?: () => void
+  /** Shares a file by link from cloud storage (#108). */
+  onShareLink?: () => void
   pgpSign: boolean
   pgpEncrypt: boolean
   pgpPassphrase: string
@@ -51,6 +61,8 @@ export function ComposerFooter({
   onSubmit: () => void
   /** Holds the message until `at` instead of sending it now. */
   onSchedule: (at: number) => void
+  /** False where the account cannot schedule (Microsoft Graph, #143). */
+  canSchedule?: boolean
 }) {
   const { t } = useTranslation()
   const draftAutosaveFailed = t('composer.status.draftAutosaveFailed')
@@ -75,6 +87,33 @@ export function ComposerFooter({
           />
         )}
         <TemplateMenu onPick={onUseTemplate} />
+        {onShareLink && (
+          <IconButton
+            icon={Cloud}
+            iconSize={16}
+            label={t('cloud.title', { defaultValue: 'Share a file by link' })}
+            radius="xl"
+            onClick={onShareLink}
+          />
+        )}
+        {onRewrite && (
+          <IconButton
+            icon={Sparkles}
+            iconSize={16}
+            label={t('assistant.rewrite.title', { defaultValue: 'Rewrite with the assistant' })}
+            radius="xl"
+            onClick={onRewrite}
+          />
+        )}
+        {onTranslate && (
+          <IconButton
+            icon={Languages}
+            iconSize={16}
+            label={t('translation.draftTitle', { defaultValue: 'Translate this message' })}
+            radius="xl"
+            onClick={onTranslate}
+          />
+        )}
         <ProtectionComposeControls
           sign={pgpSign}
           encrypt={pgpEncrypt}
@@ -124,8 +163,14 @@ export function ComposerFooter({
           {t('buttons.discard')}
         </button>
         <SendLaterMenu
-          disabled={!canSend || pgpSign || pgpEncrypt}
-          title={pgpSign || pgpEncrypt ? t('crypto.cannotSchedule') : undefined}
+          disabled={!canSend || pgpSign || pgpEncrypt || !canSchedule}
+          title={
+            !canSchedule
+              ? t('composer.cannotScheduleGraph')
+              : pgpSign || pgpEncrypt
+                ? t('crypto.cannotSchedule')
+                : undefined
+          }
           onSchedule={onSchedule}
         />
         <button

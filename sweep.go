@@ -26,57 +26,26 @@ func (a *App) mailSweepPreview(payload map[string]any) (any, error) {
 	return a.sidecar.Call("mail.sweepPreview", params)
 }
 
-// mailSweep moves everything the preview named into the account's trash.
+// mailSweep does the sweep the reader was shown and agreed to.
 //
-// It asks for the preview again rather than trusting a list the interface
-// carried back: between showing it and agreeing to it, mail may have arrived
-// from the same sender, and sweeping a message nobody was shown is the one
-// thing this must not do.
+// The preview the core handed out is what is confirmed, by its review id: the
+// core moves exactly the messages it listed, once, and only while the folder
+// is still the one they were listed in. Mail that arrived since the preview
+// is not touched, and a second confirmation of the same preview is refused
+// rather than repeated. The answer says item by item what went.
 func (a *App) mailSweep(payload map[string]any) (any, error) {
 	accountID, _ := payload["account_id"].(string)
-	if accountID == "" {
-		return nil, errors.New("invalid sweep")
+	reviewID, _ := payload["review_id"].(string)
+	if accountID == "" || reviewID == "" {
+		return nil, errors.New("invalid sweep: confirm a preview, not a sender")
 	}
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}
-
-	preview, err := a.mailSweepPreview(payload)
-	if err != nil {
-		return nil, err
-	}
-	object, _ := preview.(map[string]any)
-	list, _ := object["messages"].([]any)
-	if len(list) == 0 {
-		return map[string]any{"ok": true, "swept": 0}, nil
-	}
-	uids := make([]any, 0, len(list))
-	for _, item := range list {
-		if entry, ok := item.(map[string]any); ok {
-			uids = append(uids, entry["uid"])
-		}
-	}
-
-	trash, err := a.sidecar.Call("folders.byRole", map[string]any{"account": accountID, "role": "trash"})
-	if err != nil {
-		return nil, err
-	}
-	trashObject, _ := trash.(map[string]any)
-	target, _ := trashObject["folder"].(string)
-	if target == "" {
-		return nil, errors.New("This account has no trash folder")
-	}
-
-	folder, _ := object["folder"].(string)
-	if _, err := a.sidecar.Call("messages.move", map[string]any{
-		"account":       accountID,
-		"folder":        folder,
-		"target_folder": target,
-		"uids":          uids,
-	}); err != nil {
-		return nil, err
-	}
-	return map[string]any{"ok": true, "swept": len(uids), "folder": target}, nil
+	return a.sidecar.Call("mail.sweepExecute", map[string]any{
+		"account":   accountID,
+		"review_id": reviewID,
+	})
 }
 
 // mailPriorityReason reports why a conversation is where it is.

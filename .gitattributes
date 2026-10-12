@@ -6,3 +6,6 @@
 # `binary` is `-text -diff`: no conversion, and a byte diff of base64 CMS
 # content would not be readable anyway.
 /meron-core/src/crypto/testdata/** binary
+# The pinned EasyPrivacy snapshot (#107): byte-for-byte as recorded in its
+# README, so its hash holds on every checkout; not diffed line by line.
+/meron-core/src/privacy/easyprivacy.txt binary

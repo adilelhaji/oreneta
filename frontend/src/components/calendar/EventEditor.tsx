@@ -4,11 +4,14 @@ import { Trash2, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import {
   calendar$,
+  canAddMeet,
   closeEditor,
+  meetingName,
   deleteEvent,
   loadSeriesRule,
   resolveNames,
   saveEvent,
+  writableCalendars,
   type EditScope,
   type EventDraft,
   type Frequency,
@@ -17,6 +20,7 @@ import {
 } from '../../states/calendar'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
+import { ConflictNote } from './ConflictNote'
 
 /// Creates or edits one event.
 ///
@@ -76,8 +80,12 @@ export function EventEditor() {
   // event being created, has only one answer.
   const repeats = !isNew && event.is_recurring && Boolean(event.series_id)
   // People who could be told. Only those with an address: an attendee the
-  // server named without one cannot be written to.
-  const invitees = event.attendees.map((person) => person.addr.trim()).filter(Boolean)
+  // server named without one cannot be written to. Only an account's own
+  // calendar (Exchange, Google) can tell them: a local or CalDAV save sends
+  // nothing, so the question is not asked there (ADR-0043).
+  const kind = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
+  const canNotify = kind !== 'local' && kind !== 'caldav'
+  const invitees = canNotify ? event.attendees.map((person) => person.addr.trim()).filter(Boolean) : []
 
   /// Runs an action through the questions it raises, in order: which
   /// occurrences, then whether to tell anyone. Neither is asked when it has
@@ -155,6 +163,51 @@ export function EventEditor() {
             </select>
           </Labelled>
 
+          {/* An online meeting is made only by this choice, on this save (#109). */}
+          {/* A group, not a label: it holds a button and its own labelled
+              checkbox, which a <label> around them would misname. */}
+          <div
+            role="group"
+            aria-label={t('calendar.meeting', { defaultValue: 'Online meeting' })}
+            className="flex w-full flex-col gap-1.5"
+          >
+            <span className="pl-0.5 text-caption font-semibold text-secondary">
+              {t('calendar.meeting', { defaultValue: 'Online meeting' })}
+            </span>
+            {event.meeting && event.add_meeting !== 'none' ? (
+              <div className="flex flex-wrap items-center gap-2 text-caption">
+                <span className="text-primary">{meetingName(event.meeting.provider)}</span>
+                <span className="truncate text-secondary">{event.meeting.url}</span>
+                {event.meeting.provider === 'meet' && canAddMeet(event) && (
+                  <button
+                    type="button"
+                    onClick={() => set({ add_meeting: 'none' })}
+                    className="text-accent underline cursor-pointer"
+                  >
+                    {t('calendar.meetingRemove', { defaultValue: 'Remove it' })}
+                  </button>
+                )}
+              </div>
+            ) : canAddMeet(event) ? (
+              <label className="flex items-center gap-2 text-caption text-secondary">
+                <input
+                  type="checkbox"
+                  checked={event.add_meeting === 'meet'}
+                  onChange={(e) => set({ add_meeting: e.target.checked ? 'meet' : undefined })}
+                  className="accent-accent"
+                />
+                {t('calendar.addMeet', { defaultValue: 'Add a Google Meet when saving' })}
+              </label>
+            ) : (
+              <p className="text-caption text-secondary">
+                {t('calendar.meetingHint', {
+                  defaultValue:
+                    'Here a meeting can be created only on Google calendars. A Zoom, Teams or other link pasted into the location or notes is recognised.',
+                })}
+              </p>
+            )}
+          </div>
+
           <Labelled label={t('calendar.description', { defaultValue: 'Notes' })}>
             <textarea
               value={event.description ?? ''}
@@ -186,6 +239,15 @@ export function EventEditor() {
             {t('calendar.allDay', { defaultValue: 'All day' })}
           </label>
 
+          {/* The person's own events at that time, from the calendars kept
+              here; the event itself does not count. */}
+          <ConflictNote
+            start={event.start}
+            end={event.end}
+            allDay={event.all_day}
+            exclude={[event.id, event.series_id ?? '']}
+          />
+
           {/* The rule shows for a new event and for one whose series can be
               reached; a change to it takes effect when the save applies to the
               whole series, which is what the question on saving decides. */}
@@ -210,7 +272,7 @@ export function EventEditor() {
             )
           )}
 
-          {isNew && calendars.filter((calendar) => calendar.enabled).length > 1 && (
+          {isNew && writableCalendars(calendars).length > 1 && (
             <Labelled label={t('calendar.calendar', { defaultValue: 'Calendar' })}>
               <select
                 value={`${event.accountId} ${event.calendar_id}`}
@@ -220,13 +282,11 @@ export function EventEditor() {
                 }}
                 className={inputClass}
               >
-                {calendars
-                  .filter((calendar) => calendar.enabled)
-                  .map((calendar) => (
-                    <option key={`${calendar.accountId}:${calendar.id}`} value={`${calendar.accountId} ${calendar.id}`}>
-                      {calendar.name}
-                    </option>
-                  ))}
+                {writableCalendars(calendars).map((calendar) => (
+                  <option key={`${calendar.accountId}:${calendar.id}`} value={`${calendar.accountId} ${calendar.id}`}>
+                    {calendar.name}
+                  </option>
+                ))}
               </select>
             </Labelled>
           )}
@@ -354,7 +414,7 @@ function Labelled({ label, children }: { label: string; children: React.ReactNod
 /// already had. Plain controls work the same everywhere; hour and minute are
 /// separate so any time is reachable exactly, without hunting through a list
 /// of every minute in the day.
-function DateAndTime({
+export function DateAndTime({
   value,
   allDay,
   onChange,

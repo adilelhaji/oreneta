@@ -14,9 +14,10 @@ package main
 // Everything else mirrors csp_prod.go. This file is never compiled into a
 // production build (which adds the `production` tag).
 const contentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-	"font-src 'self' https://fonts.gstatic.com; " +
+	"script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; " +
+	"worker-src 'self' blob:; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"font-src 'self'; " +
 	"img-src 'self' data: blob: http: https:; " +
 	"media-src 'self' data: blob: http: https:; " +
 	"connect-src 'self' ws: wss:; " +

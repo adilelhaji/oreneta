@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"regexp"
+	"strings"
 
 	"meron/internal/obf"
 )
@@ -29,44 +31,57 @@ const (
 	googleScopes = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/contacts.readonly"
 )
 
-// Obfuscated Google OAuth credentials baked into release builds.
-//
-// These are intentionally embedded in source: the Flatpak is built on
-// infrastructure we don't control, with no build-time secret injection, so the
-// values have to travel with the public repo. Per Google's installed-app model
-// the client secret is not confidential; the obfuscation (see internal/obf)
-// only defeats plaintext scraping, not a determined extractor.
-//
-// Generate replacements with:  go run ./cmd/obfuscate
-// then paste the printed values here.
-var (
-	googleClientIDObf     = "f1FFXVgbXFZAQFgZWwGpVyUNGAkfQAFVQRgJGE4G6At0ABwFDF8NFx0EBl1HH/tMPRZcCAFCCA0QARtIBFL1UjkAHBtATgAM"
-	googleClientSecretObf = "CioxPD51QlcQNz0fIkvUSwoRQC4vaQM2QC4ydTtzw1Y0DQA="
-
-	// Outlook is a public client (PKCE), so there is no client secret — only the
-	// Application (client) ID. Generate the obfuscated value with the same
-	// obfuscation helper used for Google and paste it here for release builds.
-	outlookClientIDObf = "egQUWl8cWVZYQg1JFxyuWntTX1dbHFtMEEFZG0VUrgx7XBcN"
-)
-
 // The environment wins over the compiled credentials, so a build can be run
 // against a different Google Cloud project — one with other APIs enabled, or
 // a developer's own — without editing tracked source and risking a commit of
 // somebody's credentials. The core already reads these same two variables
 // when it refreshes a token (see `engine.rs`), so setting them covers the
 // whole flow; a release Flatpak sets neither and uses the compiled values.
+//
+// Which compiled credentials exist depends on the build: an internal
+// development build carries the inherited Meron registrations
+// (oauth_inherited.go), a distributable build carries only what its build
+// injects (oauth_distributable.go). A value of the wrong shape counts as
+// absent, so a typo or a truncated injection disables sign-in rather than
+// sending people to a provider error page.
 func googleClientID() string {
-	if fromEnv := os.Getenv("MERON_GOOGLE_CLIENT_ID"); fromEnv != "" {
-		return fromEnv
+	value := os.Getenv("MERON_GOOGLE_CLIENT_ID")
+	if value == "" {
+		value = obf.Decode(googleClientIDObf)
 	}
-	return obf.Decode(googleClientIDObf)
+	if !validGoogleClientID(value) {
+		return ""
+	}
+	return value
 }
 
 func googleClientSecret() string {
-	if fromEnv := os.Getenv("MERON_GOOGLE_CLIENT_SECRET"); fromEnv != "" {
-		return fromEnv
+	value := os.Getenv("MERON_GOOGLE_CLIENT_SECRET")
+	if value == "" {
+		value = obf.Decode(googleClientSecretObf)
 	}
-	return obf.Decode(googleClientSecretObf)
+	if !validClientSecret(value) {
+		return ""
+	}
+	return value
+}
+
+// An installed-app client ID from Google Cloud: "<number>-<id>.apps.googleusercontent.com".
+var googleClientIDPattern = regexp.MustCompile(`^[0-9]+-[0-9a-z]+\.apps\.googleusercontent\.com$`)
+
+// A Microsoft application (client) ID is a GUID.
+var outlookClientIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func validGoogleClientID(value string) bool {
+	return googleClientIDPattern.MatchString(value)
+}
+
+func validClientSecret(value string) bool {
+	return value != "" && len(value) <= 256 && !strings.ContainsAny(value, " \t\r\n")
+}
+
+func validOutlookClientID(value string) bool {
+	return outlookClientIDPattern.MatchString(value)
 }
 
 func gmailOAuthConfigured() bool {
@@ -74,10 +89,11 @@ func gmailOAuthConfigured() bool {
 }
 
 func outlookClientID() string {
-	if outlookClientIDObf == "" {
+	value := obf.Decode(outlookClientIDObf)
+	if !validOutlookClientID(value) {
 		return ""
 	}
-	return obf.Decode(outlookClientIDObf)
+	return value
 }
 
 func outlookOAuthConfigured() bool {

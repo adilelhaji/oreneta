@@ -9,7 +9,13 @@
 //! The provider backends (Exchange today, Google next) map their own answers
 //! onto these types; everything above this line is provider-neutral.
 
+pub mod caldav;
 pub mod google;
+pub mod ics;
+pub mod import;
+pub mod itip;
+pub mod meeting;
+pub mod overlap;
 pub mod route;
 pub mod subscription;
 
@@ -34,6 +40,10 @@ pub enum CalendarKind {
     /// A calendar file fetched from a URL. Read-only: it belongs to whoever
     /// publishes it.
     Subscribed,
+    /// A collection on a CalDAV server (#101, ADR-0018), signed in to with
+    /// its own user name and a password kept in the keychain.
+    #[serde(rename = "caldav")]
+    CalDav,
 }
 
 impl CalendarKind {
@@ -42,6 +52,7 @@ impl CalendarKind {
             CalendarKind::Account => "account",
             CalendarKind::Local => "local",
             CalendarKind::Subscribed => "subscribed",
+            CalendarKind::CalDav => "caldav",
         }
     }
 
@@ -49,6 +60,7 @@ impl CalendarKind {
         match value {
             "local" => CalendarKind::Local,
             "subscribed" => CalendarKind::Subscribed,
+            "caldav" => CalendarKind::CalDav,
             _ => CalendarKind::Account,
         }
     }
@@ -159,6 +171,18 @@ pub struct Event {
     pub organizer: Option<Participant>,
     #[serde(default)]
     pub attendees: Vec<Participant>,
+    /// The online meeting bound to this event, as the server or its text
+    /// says (#109).
+    #[serde(default)]
+    pub meeting: Option<meeting::Meeting>,
+    /// Write-only: a meeting to create with this save (`meet`), or `none` to
+    /// remove the one there. Never read back from a server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub add_meeting: Option<String>,
+    /// Write-only answer: whether a meeting asked for is ready, still being
+    /// set up by the server, or could not be made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meeting_status: Option<String>,
 }
 
 /// How often an event repeats, as asked for when creating one.
@@ -217,7 +241,7 @@ impl Recurrence {
 
     /// The days a weekly rule falls on, defaulting to the day the event starts
     /// when the caller named none.
-    pub fn days_or_start(&self, start: i64) -> Vec<u8> {
+    pub fn days_or_start(&self, start: i64, all_day: bool) -> Vec<u8> {
         if !self.weekdays.is_empty() {
             let mut days: Vec<u8> = self.weekdays.iter().copied().filter(|d| *d < 7).collect();
             days.sort_unstable();
@@ -226,12 +250,26 @@ impl Recurrence {
                 return days;
             }
         }
-        let weekday = chrono::DateTime::from_timestamp(start, 0)
-            .map(|instant| {
-                chrono::Datelike::weekday(&instant).num_days_from_monday() as u8
-            })
+        let weekday = start_date(start, all_day)
+            .map(|date| chrono::Datelike::weekday(&date).num_days_from_monday() as u8)
             .unwrap_or(0);
         vec![weekday]
+    }
+}
+
+/// The calendar date an instant falls on as the person sees it: an all-day
+/// event's stored UTC date, anything else on this machine's clock.
+///
+/// Rules (weekday, day of month, month, end date) are about dates, not
+/// instants. Read in UTC, a weekly meeting at 00:30 on Tuesday in Madrid
+/// (22:30Z Monday) was saved as every Monday, and a series "until the 30th"
+/// written west of UTC ran a day longer.
+pub fn start_date(instant: i64, all_day: bool) -> Option<chrono::NaiveDate> {
+    use chrono::TimeZone as _;
+    if all_day {
+        Some(chrono::DateTime::from_timestamp(instant, 0)?.date_naive())
+    } else {
+        Some(chrono::Local.timestamp_opt(instant, 0).earliest()?.date_naive())
     }
 }
 
@@ -458,42 +496,61 @@ pub fn replace_window(
         params![account, calendar_id, from, to],
     )?;
     for event in events {
-        tx.execute(
-            "INSERT OR REPLACE INTO calendar_events(
-               account, calendar_id, event_id, change_key, subject, location,
-               start_utc, end_utc, all_day, is_recurring, is_cancelled,
-               free_busy, my_response, organizer, attendees, series_id,
-               description, reminder_minutes)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                    ?17, ?18)",
-            params![
-                account,
-                calendar_id,
-                event.id,
-                event.change_key,
-                event.subject,
-                event.location,
-                event.start,
-                event.end,
-                event.all_day as i64,
-                event.is_recurring as i64,
-                event.is_cancelled as i64,
-                event.free_busy,
-                event.my_response,
-                event
-                    .organizer
-                    .as_ref()
-                    .map(serde_json::to_string)
-                    .transpose()?,
-                serde_json::to_string(&event.attendees)?,
-                event.series_id,
-                event.description,
-                event.reminder_minutes,
-            ],
-        )?;
+        insert_event(&tx, account, calendar_id, event)?;
     }
     tx.commit()?;
     Ok(())
+}
+
+fn insert_event(conn: &Connection, account: &str, calendar_id: &str, event: &Event) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO calendar_events(
+           account, calendar_id, event_id, change_key, subject, location,
+           start_utc, end_utc, all_day, is_recurring, is_cancelled,
+           free_busy, my_response, organizer, attendees, series_id,
+           description, reminder_minutes, meeting)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                ?17, ?18, ?19)",
+        params![
+            account,
+            calendar_id,
+            event.id,
+            event.change_key,
+            event.subject,
+            event.location,
+            event.start,
+            event.end,
+            event.all_day as i64,
+            event.is_recurring as i64,
+            event.is_cancelled as i64,
+            event.free_busy,
+            event.my_response,
+            event
+                .organizer
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?,
+            serde_json::to_string(&event.attendees)?,
+            event.series_id,
+            event.description,
+            event.reminder_minutes,
+            event.meeting.as_ref().map(serde_json::to_string).transpose()?,
+        ],
+    )?;
+    Ok(())
+}
+
+/// The stored calendar with this id, if the account has one.
+pub fn calendar_of(conn: &Connection, account: &str, calendar_id: &str) -> Result<Option<Calendar>> {
+    Ok(get_calendars(conn, account)?
+        .into_iter()
+        .find(|calendar| calendar.id == calendar_id))
+}
+
+/// Writes an event of a local calendar. A local calendar has no server: this
+/// row is the event, and sync never replaces it.
+pub fn put_local_event(conn: &Connection, account: &str, event: &Event) -> Result<()> {
+    insert_event(conn, account, &event.calendar_id, event)
 }
 
 /// Cached occurrences overlapping a window, across every enabled calendar of
@@ -503,48 +560,109 @@ pub fn events_in_window(
     account: &str,
     window: (i64, i64),
 ) -> Result<Vec<Event>> {
-    let (from, to) = window;
-    let mut stmt = conn.prepare(
-        "SELECT e.calendar_id, e.event_id, e.change_key, e.subject, e.location,
+    events_where(conn, account, window, None)
+}
+
+/// Every cached occurrence of one calendar, shown or hidden: what an export
+/// of it holds.
+pub fn events_of_calendar(conn: &Connection, account: &str, calendar_id: &str) -> Result<Vec<Event>> {
+    events_where(conn, account, (i64::MIN, i64::MAX), Some(calendar_id))
+}
+
+pub(crate) const EVENT_COLUMNS: &str = "e.calendar_id, e.event_id, e.change_key, e.subject, e.location,
                 e.start_utc, e.end_utc, e.all_day, e.is_recurring, e.is_cancelled,
                 e.free_busy, e.my_response, e.organizer, e.attendees, e.series_id,
-                e.description, e.reminder_minutes
+                e.description, e.reminder_minutes, e.meeting";
+
+fn event_row(row: &rusqlite::Row) -> rusqlite::Result<Event> {
+    event_row_at(row, 0)
+}
+
+/// An event read from [`EVENT_COLUMNS`] starting at column `base`.
+pub(crate) fn event_row_at(row: &rusqlite::Row, base: usize) -> rusqlite::Result<Event> {
+    Ok(Event {
+        calendar_id: row.get(base)?,
+        id: row.get(base + 1)?,
+        change_key: row.get(base + 2)?,
+        subject: row.get(base + 3)?,
+        location: row.get(base + 4)?,
+        start: row.get(base + 5)?,
+        end: row.get(base + 6)?,
+        all_day: row.get::<_, i64>(base + 7)? != 0,
+        is_recurring: row.get::<_, i64>(base + 8)? != 0,
+        is_cancelled: row.get::<_, i64>(base + 9)? != 0,
+        free_busy: row.get::<_, Option<String>>(base + 10)?.unwrap_or_default(),
+        my_response: row.get::<_, Option<String>>(base + 11)?.unwrap_or_default(),
+        organizer: row
+            .get::<_, Option<String>>(base + 12)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
+        attendees: row
+            .get::<_, Option<String>>(base + 13)?
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default(),
+        series_id: row.get(base + 14)?,
+        description: row.get::<_, Option<String>>(base + 15)?.unwrap_or_default(),
+        reminder_minutes: row.get(base + 16)?,
+        recurrence: None,
+        meeting: row
+            .get::<_, Option<String>>(base + 17)?
+            .and_then(|json| serde_json::from_str(&json).ok()),
+        add_meeting: None,
+        meeting_status: None,
+    })
+}
+
+/// Every kept occurrence of the event with this iCalendar UID in an
+/// account's own calendars (subscriptions are someone else's), shown or
+/// hidden, earliest first. Ids name the UID in the forms each kind of
+/// calendar gives them: `uid@start` (CalDAV, files), `local:import:uid@start`
+/// (a local calendar), the series id, or the UID itself.
+pub fn events_with_uid(conn: &Connection, account: &str, uid: &str) -> Result<Vec<Event>> {
+    let pattern = |prefix: &str| format!("{prefix}{}@%", overlap::like_escaped(uid));
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {EVENT_COLUMNS}
          FROM calendar_events e
          JOIN calendars c
            ON c.account = e.account AND c.provider_id = e.calendar_id
-         WHERE e.account = ?1 AND c.enabled = 1
-           AND e.end_utc > ?2 AND e.start_utc < ?3
-         ORDER BY e.start_utc, e.subject",
-    )?;
+         WHERE e.account = ?1 AND c.kind != 'subscribed'
+           AND (e.event_id = ?2 OR e.series_id = ?2
+                OR e.event_id LIKE ?3 ESCAPE '\\' OR e.event_id LIKE ?4 ESCAPE '\\')
+         ORDER BY e.start_utc, e.subject"
+    ))?;
     let events = stmt
-        .query_map(params![account, from, to], |row| {
-            Ok(Event {
-                calendar_id: row.get(0)?,
-                id: row.get(1)?,
-                change_key: row.get(2)?,
-                subject: row.get(3)?,
-                location: row.get(4)?,
-                start: row.get(5)?,
-                end: row.get(6)?,
-                all_day: row.get::<_, i64>(7)? != 0,
-                is_recurring: row.get::<_, i64>(8)? != 0,
-                is_cancelled: row.get::<_, i64>(9)? != 0,
-                free_busy: row.get::<_, Option<String>>(10)?.unwrap_or_default(),
-                my_response: row.get::<_, Option<String>>(11)?.unwrap_or_default(),
-                organizer: row
-                    .get::<_, Option<String>>(12)?
-                    .and_then(|json| serde_json::from_str(&json).ok()),
-                attendees: row
-                    .get::<_, Option<String>>(13)?
-                    .and_then(|json| serde_json::from_str(&json).ok())
-                    .unwrap_or_default(),
-                series_id: row.get(14)?,
-                description: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
-                reminder_minutes: row.get(16)?,
-                recurrence: None,
-            })
-        })?
+        .query_map(params![account, uid, pattern(""), pattern("local:import:")], event_row)?
         .collect::<Result<Vec<_>, _>>()?;
+    Ok(events)
+}
+
+fn events_where(
+    conn: &Connection,
+    account: &str,
+    window: (i64, i64),
+    calendar_id: Option<&str>,
+) -> Result<Vec<Event>> {
+    let (from, to) = window;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {EVENT_COLUMNS}
+         FROM calendar_events e
+         JOIN calendars c
+           ON c.account = e.account AND c.provider_id = e.calendar_id
+         WHERE e.account = ?1
+           AND (?4 IS NULL AND c.enabled = 1 OR e.calendar_id = ?4)
+           AND e.end_utc > ?2 AND e.start_utc < ?3
+         ORDER BY e.start_utc, e.subject"
+    ))?;
+    let events = stmt
+        .query_map(params![account, from, to, calendar_id], event_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    // Any calendar's meeting address in its location or notes counts too.
+    let events = events
+        .into_iter()
+        .map(|mut event| {
+            event.meeting = meeting::of(&event);
+            event
+        })
+        .collect();
     Ok(events)
 }
 
@@ -598,7 +716,8 @@ pub fn due_reminders(conn: &Connection, account: &str, now: i64) -> Result<Vec<E
            AND e.start_utc - (e.reminder_minutes * 60) <= ?2
            AND NOT EXISTS (
                  SELECT 1 FROM calendar_reminders_fired f
-                 WHERE f.account = e.account AND f.event_id = e.event_id)
+                 WHERE f.account = e.account
+                   AND f.event_id IN (e.event_id || '@' || e.start_utc, e.event_id))
          ORDER BY e.start_utc",
     )?;
     let events = stmt
@@ -620,11 +739,22 @@ pub fn due_reminders(conn: &Connection, account: &str, now: i64) -> Result<Vec<E
 }
 
 /// Records that a reminder has been raised, so it is not raised again.
-pub fn mark_reminder_fired(conn: &Connection, account: &str, event_id: &str, now: i64) -> Result<()> {
+///
+/// Recorded for the event *at that start*: an event moved to another time is
+/// a new moment to be reminded of. Keyed on the id alone, a meeting moved
+/// after its reminder was given never reminded again. Records written before
+/// this (the id alone) still count until they expire.
+pub fn mark_reminder_fired(
+    conn: &Connection,
+    account: &str,
+    event_id: &str,
+    start: i64,
+    now: i64,
+) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO calendar_reminders_fired(account, event_id, fired_at)
          VALUES(?1, ?2, ?3)",
-        params![account, event_id, now],
+        params![account, format!("{event_id}@{start}"), now],
     )?;
     Ok(())
 }
@@ -687,6 +817,21 @@ pub fn forget_calendar(conn: &Connection, account: &str, calendar_id: &str) -> R
 }
 
 /// Drops one cached occurrence, after the server accepted its deletion.
+/// Records the version a write left an event at, so the next edit is checked
+/// against it rather than against the version read before this one.
+pub fn set_event_change_key(
+    conn: &Connection,
+    account: &str,
+    event_id: &str,
+    change_key: &str,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE calendar_events SET change_key = ?3 WHERE account = ?1 AND event_id = ?2",
+        params![account, event_id, change_key],
+    )?;
+    Ok(())
+}
+
 pub fn forget_event(conn: &Connection, account: &str, event_id: &str) -> Result<()> {
     conn.execute(
         "DELETE FROM calendar_events WHERE account = ?1 AND event_id = ?2",
@@ -722,6 +867,24 @@ mod tests {
             end,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn an_events_meeting_is_kept_and_any_calendars_meeting_address_is_found() {
+        let conn = store();
+        upsert_calendars(&conn, "acct", &[a_calendar()]).unwrap();
+        let mut google = event("g", 100, 200);
+        google.meeting = Some(meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/abc-defg-hij".into() });
+        put_local_event(&conn, "acct", &google).unwrap();
+        let mut caldav = event("c", 100, 200);
+        caldav.description = "Dial in: https://acme.zoom.us/j/81234?pwd=1".into();
+        put_local_event(&conn, "acct", &caldav).unwrap();
+        put_local_event(&conn, "acct", &event("n", 100, 200)).unwrap();
+        let read = events_in_window(&conn, "acct", (0, 1000)).unwrap();
+        let by = |id: &str| read.iter().find(|e| e.id == id).unwrap().meeting.clone().map(|m| m.provider);
+        assert_eq!(by("g").as_deref(), Some("meet"));
+        assert_eq!(by("c").as_deref(), Some("zoom"));
+        assert_eq!(by("n"), None);
     }
 
     fn a_calendar() -> Calendar {
@@ -793,7 +956,7 @@ mod tests {
         assert_eq!(due[0].id, "soon");
 
         // Raised once: the same query must not offer it again.
-        mark_reminder_fired(&conn, "acct", "soon", now).unwrap();
+        mark_reminder_fired(&conn, "acct", "soon", now + 600, now).unwrap();
         assert!(due_reminders(&conn, "acct", now).unwrap().is_empty());
 
         // And a resync, which replaces the window's rows wholesale, must not
@@ -810,6 +973,40 @@ mod tests {
             due_reminders(&conn, "acct", now).unwrap().is_empty(),
             "a reminder already given is not given again after a sync"
         );
+
+        // Moved to five minutes later: a new moment, reminded of again.
+        replace_window(
+            &conn,
+            "acct",
+            "cal",
+            (0, now + 100_000),
+            &[with_reminder("soon", now + 900, Some(15))],
+        )
+        .unwrap();
+        let due = due_reminders(&conn, "acct", now).unwrap();
+        assert_eq!(due.len(), 1, "a moved meeting reminds again");
+        assert_eq!(due[0].start, now + 900);
+    }
+
+    #[test]
+    fn a_reminder_recorded_before_the_start_was_part_of_the_key_still_counts() {
+        let conn = store();
+        upsert_calendars(&conn, "acct", &[a_calendar()]).unwrap();
+        let now = 1_000_000i64;
+        replace_window(
+            &conn,
+            "acct",
+            "cal",
+            (0, now + 100_000),
+            &[Event { reminder_minutes: Some(15), ..event("soon", now + 600, now + 4200) }],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO calendar_reminders_fired(account, event_id, fired_at) VALUES('acct', 'soon', ?1)",
+            params![now],
+        )
+        .unwrap();
+        assert!(due_reminders(&conn, "acct", now).unwrap().is_empty(), "no repeat after upgrading");
     }
 
     #[test]

@@ -23,6 +23,7 @@ import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import { fileIconFor, formatFileSize } from './messageHelpers'
+import { PersonHistory } from './PersonHistory'
 
 export type ConversationMediaItem = {
   type: 'image' | 'video'
@@ -68,9 +69,13 @@ interface ConversationDetailsPanelProps {
   onComposeTo: (person: Participant) => void
   onViewMessagesWith: (person: Participant) => void
   onClose: () => void
+  /** The open conversation's account: a person's history is this account's only (#86). */
+  accountId?: string
+  onOpenConversation?: (threadId: string, folder: string) => void
+  onOpenEvent?: (start: number) => void
 }
 
-type View = 'overview' | 'media' | 'files'
+type View = 'overview' | 'media' | 'files' | 'person'
 
 export function ConversationDetailsPanel({
   media,
@@ -84,9 +89,13 @@ export function ConversationDetailsPanel({
   onComposeTo,
   onViewMessagesWith,
   onClose,
+  accountId,
+  onOpenConversation,
+  onOpenEvent,
 }: ConversationDetailsPanelProps) {
   const { t } = useTranslation()
   const [view, setView] = useState<View>('overview')
+  const [person, setPerson] = useState<Participant | null>(null)
   const [personMenu, setPersonMenu] = useState<{ x: number; y: number; person: Participant } | null>(null)
 
   useEffect(() => {
@@ -118,7 +127,11 @@ export function ConversationDetailsPanel({
           <div className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0">
               <h3 className="truncate text-sm font-bold text-primary">
-                {view === 'media' ? t('chat.media') : t('chat.files')}
+                {view === 'media'
+                  ? t('chat.media')
+                  : view === 'person' && person
+                    ? t('person.title', { name: person.name || person.email, defaultValue: 'With {name}' })
+                    : t('chat.files')}
               </h3>
               <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
                 {scopeTitle}
@@ -156,6 +169,13 @@ export function ConversationDetailsPanel({
               onOpenFiles={() => setView('files')}
               onComposeTo={onComposeTo}
               onOpenPersonMenu={setPersonMenu}
+            />
+          ) : view === 'person' && person && accountId && onOpenConversation && onOpenEvent ? (
+            <PersonHistory
+              accountId={accountId}
+              address={person.email}
+              onOpenConversation={onOpenConversation}
+              onOpenEvent={onOpenEvent}
             />
           ) : view === 'media' ? (
             media.length === 0 ? (
@@ -273,6 +293,20 @@ export function ConversationDetailsPanel({
           className="fixed z-[81] min-w-[180px] rounded-control border border-border bg-header p-1 shadow-overlay"
           onContextMenu={(event) => event.preventDefault()}
         >
+          {accountId && onOpenConversation && (
+            <MenuItem
+              icon={<MessageSquare size={14} className="text-accent" strokeWidth={1.75} />}
+              label={t('person.history', {
+                name: personMenu.person.name || personMenu.person.email,
+                defaultValue: 'History with {name}',
+              })}
+              onClick={() => {
+                setPerson(personMenu.person)
+                setView('person')
+                setPersonMenu(null)
+              }}
+            />
+          )}
           <MenuItem
             icon={<Search size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.viewMessagesWith', { name: personMenu.person.name || personMenu.person.email })}

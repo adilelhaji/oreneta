@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +33,10 @@ type Sidecar struct {
 	cancel     context.CancelFunc
 	stderr     io.Writer
 	onEvent    func(name string, detail any)
+	// Closed when the process has exited and its output has been read to the
+	// end, so a stop can wait for files to be released (Windows locks them).
+	exited   chan struct{}
+	readDone chan struct{}
 }
 
 type sidecarResponse struct {
@@ -84,8 +89,15 @@ func (s *Sidecar) Start(ctx context.Context) error {
 	s.stdin = stdin
 	s.cancel = cancel
 	s.started = true
-	go s.readLoop(ctx, stdout, cancel)
+	exited := make(chan struct{})
+	readDone := make(chan struct{})
+	s.exited, s.readDone = exited, readDone
 	go func() {
+		defer close(readDone)
+		s.readLoop(ctx, stdout, cancel)
+	}()
+	go func() {
+		defer close(exited)
 		_ = cmd.Wait()
 		s.mu.Lock()
 		s.started = false
@@ -101,12 +113,20 @@ func (s *Sidecar) Start(ctx context.Context) error {
 func sidecarEnv() []string {
 	// Pass storage/media paths explicitly so the Go bridge and Rust sidecar use
 	// the same dev or production profile.
-	env := append(os.Environ(),
+	env := append(withoutOAuthEnv(os.Environ()),
 		"MERON_CORE_DB="+filepath.Join(appConfigDir(), "meron.db"),
 		"MERON_MEDIA_DIR="+mediaDir(),
+		"MERON_MODELS_DIR="+modelsDir(),
+		"MERON_PROFILE="+activeProfile(),
+		// Scheduled backups record the version that wrote them (#173).
+		"MERON_APP_VERSION="+appVersion(),
 	)
-	// Pass the baked OAuth credentials down so the sidecar's refresh path can
-	// read them from the environment without its own deobfuscation.
+	// Pass the OAuth credentials this build accepts down so the sidecar's
+	// refresh path can read them from the environment without its own
+	// deobfuscation. Only these: the process environment's own values are
+	// dropped above, so the sidecar never refreshes with a client that sign-in
+	// refused as malformed, or that this build does not take from the
+	// environment at all (Outlook).
 	if id := googleClientID(); id != "" {
 		env = append(env, "MERON_GOOGLE_CLIENT_ID="+id)
 	}
@@ -117,6 +137,21 @@ func sidecarEnv() []string {
 		env = append(env, "MERON_OUTLOOK_CLIENT_ID="+id)
 	}
 	return env
+}
+
+// withoutOAuthEnv drops the OAuth client variables from an inherited
+// environment; sidecarEnv adds back the validated ones.
+func withoutOAuthEnv(environ []string) []string {
+	kept := make([]string, 0, len(environ))
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		switch name {
+		case "MERON_GOOGLE_CLIENT_ID", "MERON_GOOGLE_CLIENT_SECRET", "MERON_OUTLOOK_CLIENT_ID":
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }
 
 func (s *Sidecar) Close() {
@@ -131,6 +166,37 @@ func (s *Sidecar) Close() {
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 	}
+}
+
+// Stop ends the core and waits until it has exited and its output is read,
+// so its store can be moved. It reports an error if that takes too long.
+func (s *Sidecar) Stop(timeout time.Duration) error {
+	s.mu.Lock()
+	exited, readDone := s.exited, s.readDone
+	s.mu.Unlock()
+	s.Close()
+	deadline := time.After(timeout)
+	for _, done := range []chan struct{}{exited, readDone} {
+		if done == nil {
+			continue
+		}
+		select {
+		case <-done:
+		case <-deadline:
+			return errors.New("the core did not stop in time")
+		}
+	}
+	return nil
+}
+
+// Restart stops the core and starts a fresh one on the same paths. A
+// transport that failed before is cleared: the old process is gone.
+func (s *Sidecar) Restart(ctx context.Context, timeout time.Duration) error {
+	if err := s.Stop(timeout); err != nil {
+		return err
+	}
+	s.readFailed.Store(false)
+	return s.Start(ctx)
 }
 
 func (s *Sidecar) Call(method string, params any) (any, error) {
@@ -321,7 +387,7 @@ func bundledSidecarPathIn(dir string) string {
 func extractEmbeddedSidecar() (string, error) {
 	sum := sha256.Sum256(embeddedSidecar)
 	name := "meron-core-" + hex.EncodeToString(sum[:8]) + sidecarExeSuffix
-	dir := filepath.Join(appCacheDir(), "bin")
+	dir := filepath.Join(rootCacheDir(), "bin")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -383,19 +449,45 @@ func sidecarCallTimeout(method string) time.Duration {
 	// A full-folder STORE + EXPUNGE on a large Trash can take a while.
 	case "messages.emptyFolder":
 		return 60 * time.Second
+	// Rules run on a previewed folder, one server action per step (#50).
+	case "rules.runReviewed":
+		return 10 * time.Minute
+	// Asking a cloud server what it allows and creating a link (#108).
+	case "cloud.check", "cloud.share", "cloud.revoke":
+		return 90 * time.Second
+	// Downloading and checking a whole filter list (#107).
+	case "privacy.update":
+		return 2 * time.Minute
 	// Backups derive a key with 600k PBKDF2 rounds, on top of reading or
 	// writing every account, feed and setting.
 	case "backup.export", "backup.import":
 		return 30 * time.Second
+	// Whole folders and whole profiles go through these: they stream to and
+	// from disk for as long as the data takes, so only a stuck call ends here.
+	case "messages.exportMbox", "archive.import", "calendar.importIcs", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage", "backupSchedule.runNow", "thunderbird.preview", "thunderbird.import", "notes.attach", "notes.saveAttachment", "chat.download":
+		return 2 * time.Hour
 	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete":
 		return 30 * time.Second
 	// A calendar window can span months and lists every enabled calendar, so
 	// it gets the same budget as a folder sync rather than the default.
 	case "calendar.events":
 		return 30 * time.Second
+	// Discovery walks principal, home set and collections on a server that
+	// may be slow; each request is bounded by the core at 30s.
+	case "caldav.discover", "caldav.add", "carddav.discover", "rules.serverStatus", "rules.serverPush", "rules.serverRemove",
+		"tasks.caldavDiscover", "tasks.caldavAdd", "tasks.resolveConflict":
+		return 60 * time.Second
+	// Every bound task list, one change at a time, each request bounded by
+	// the core at 30s.
+	case "tasks.sync":
+		return 5 * time.Minute
 	case "calendar.create", "calendar.update", "calendar.delete",
 		"calendar.createCalendar", "calendar.renameCalendar", "calendar.deleteCalendar",
 		"calendar.createLocal", "calendar.subscribe":
+		return 30 * time.Second
+	// Where a proposal stands may read the event's version from its CalDAV
+	// server (ADR-0043).
+	case "invite.counterStatus", "invite.declineCounter":
 		return 30 * time.Second
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second

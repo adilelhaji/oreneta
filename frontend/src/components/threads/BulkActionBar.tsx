@@ -1,4 +1,4 @@
-import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { copyBlocked, messageChangesBlocked } from '../../lib/mailCapabilities'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive,
@@ -11,14 +11,18 @@ import {
   Star,
   Trash2,
   ListChecks,
+  Tag,
+  Check,
+  Minus,
   X,
+  Zap,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import type { BulkSelectionItem } from '../../states/ui'
 import { clearBulkSelection, setBulkSelection } from '../../states/ui'
-import { accounts$, isSendableAccount } from '../../states/accounts'
+import { accounts$ } from '../../states/accounts'
 import {
   bulkArchiveSelected,
   bulkCopySelectedToFolder,
@@ -34,6 +38,9 @@ import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { FolderMenuTree } from '../menu/FolderMenuTree'
 import { MenuItem } from '../menu/MenuItem'
+import { settings$ } from '../../states/settings'
+import { startQuickAction } from '../../states/quickActions'
+import { bulkLabelSelected, labelCoverage, labels$ } from '../../states/labels'
 
 export function BulkActionBar({
   items,
@@ -48,6 +55,10 @@ export function BulkActionBar({
   const { t } = useTranslation()
   const accounts = useValue(accounts$)
   const foldersByAccount = useValue(mail$.foldersByAccount)
+  const quickActions = useValue(settings$.quickActions)
+  const labels = useValue(labels$.labels)
+  // Read so the marks below follow the list as labels change.
+  useValue(mail$.threads)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [moveOpen, setMoveOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
@@ -59,8 +70,16 @@ export function BulkActionBar({
   const [moveFlyoutPosition, setMoveFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const [copyFlyoutPosition, setCopyFlyoutPosition] = useState<{ x: number; y: number } | null>(null)
   const mailItems = useMemo(() => items.filter((item) => item.kind === 'mail'), [items])
-  const readOnly = items.some((item) => readOnlyTarget(accounts, item.accountId))
-  const mailAccounts = accounts.filter(isSendableAccount)
+  // Every action here changes messages: on Microsoft Graph that needs the
+  // change permission (#141), and copying stays within the same account.
+  const readOnly = items.some((item) => messageChangesBlocked(accounts, item.accountId))
+  const mailAccounts = accounts.filter(
+    (account) =>
+      account.auth_type !== 'rss' &&
+      account.provider !== 'rss' &&
+      account.needs_reconnect !== true &&
+      mailItemsAll(items).every((item) => !copyBlocked(accounts, item.accountId, account.id)),
+  )
   const accountIds = Array.from(new Set(mailItems.map((item) => item.accountId)))
   const singleAccountId = accountIds.length === 1 ? accountIds[0] : ''
   const selectedFolders = new Set(mailItems.map((item) => item.folderId))
@@ -152,7 +171,7 @@ export function BulkActionBar({
     folders: foldersByAccount[account.id] ?? [],
   }))
 
-  const selectedLabel = items.length === 1 ? '1 selected' : `${items.length} selected`
+  const selectedLabel = t('threads.bulk.selectedCount', { count: items.length })
   // Hidden once every row is already selected, so the menu never offers a no-op.
   const selectableItems = allItems ?? []
   const canSelectAll = selectableItems.some((item) => !items.some((selected) => selected.key === item.key))
@@ -210,6 +229,24 @@ export function BulkActionBar({
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
+          {quickActions.length > 0 && (
+            <>
+              {quickActions.map((action, index) => (
+                <MenuItem
+                  key={action.id}
+                  icon={<Zap size={14} className="text-secondary" strokeWidth={1.75} />}
+                  label={action.name}
+                  trailing={<span className="text-2xs text-secondary">Alt+{index + 1}</span>}
+                  disabled={readOnly || mailItems.length === 0}
+                  onClick={() => {
+                    setMenu(null)
+                    startQuickAction(action, mailItems)
+                  }}
+                />
+              ))}
+              <div className="my-1 border-t border-border" />
+            </>
+          )}
           <MenuItem
             icon={<MailOpen size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('threads.actions.markAsRead')}
@@ -246,6 +283,35 @@ export function BulkActionBar({
               void bulkStarSelected(mailItems, false)
             }}
           />
+          {labels.length > 0 && (
+            <>
+              <div className="my-1 border-t border-border" />
+              <p className="px-2 pb-0.5 pt-1 text-2xs font-semibold text-secondary">
+                {t('labels.forSelection', { defaultValue: 'Labels (on all, some or none)' })}
+              </p>
+              {labels.map((label) => {
+                const ids = mailItems.map((item) => item.threadId)
+                const coverage = labelCoverage(ids, label.id)
+                const Mark = coverage === 'all' ? Check : coverage === 'some' ? Minus : Tag
+                return (
+                  <MenuItem
+                    key={label.id}
+                    icon={<Mark size={14} style={{ color: label.colour }} strokeWidth={1.75} />}
+                    label={
+                      coverage === 'all'
+                        ? t('labels.removeFromSelection', { name: label.name, defaultValue: 'Remove “{name}”' })
+                        : t('labels.addToSelection', { name: label.name, defaultValue: 'Add “{name}”' })
+                    }
+                    disabled={readOnly || mailItems.length === 0}
+                    onClick={() => {
+                      setMenu(null)
+                      void bulkLabelSelected(mailItems, label.id, coverage !== 'all')
+                    }}
+                  />
+                )
+              })}
+            </>
+          )}
           <div className="my-1 border-t border-border" />
           <MenuItem
             icon={<Archive size={14} className="text-secondary" strokeWidth={1.75} />}
@@ -361,4 +427,8 @@ export function BulkActionBar({
       )}
     </div>
   )
+}
+
+function mailItemsAll(items: BulkSelectionItem[]): BulkSelectionItem[] {
+  return items.filter((item) => item.kind === 'mail')
 }

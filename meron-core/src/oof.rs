@@ -41,17 +41,45 @@ pub fn looks_automated(mail: &ParsedMail) -> bool {
             return true;
         }
     }
-    mail.headers.get_first_value("List-Id").is_some() || mail.headers.get_first_value("List-Unsubscribe").is_some()
+    // Outlook's own "do not auto-reply to this" (also used by Exchange for
+    // its notifications): OOF or All suppresses out-of-office replies.
+    if let Some(value) = mail.headers.get_first_value("X-Auto-Response-Suppress") {
+        if value
+            .split(',')
+            .map(|token| token.trim().to_ascii_lowercase())
+            .any(|token| token == "oof" || token == "all")
+        {
+            return true;
+        }
+    }
+    looks_like_bounce(mail)
+        || ["List-Id", "List-Unsubscribe", "List-Post"]
+            .iter()
+            .any(|header| mail.headers.get_first_value(header).is_some())
 }
 
-/// The address-local-part convention ("noreply@…", "no-reply@…",
-/// "donotreply@…") that near-universally means nobody reads what is sent
+/// A delivery report (bounce). A null reverse path is how a bounce says it
+/// must not be answered (RFC 3834 §2); answering a bounce of our own reply
+/// would start a loop with the server that produced it.
+fn looks_like_bounce(mail: &ParsedMail) -> bool {
+    if let Some(path) = mail.headers.get_first_value("Return-Path") {
+        let path = path.trim();
+        if path == "<>" || path.is_empty() {
+            return true;
+        }
+    }
+    mail.ctype.mimetype.eq_ignore_ascii_case("multipart/report")
+}
+
+/// The address-local-part conventions ("noreply@…", "no-reply@…",
+/// "donotreply@…", and the delivery-system senders "MAILER-DAEMON@…" and
+/// "postmaster@…") that near-universally mean nobody reads what is sent
 /// there. A heuristic, not a protocol — but one broadly enough relied on
 /// that skipping it would mean confidently auto-replying into the void.
 fn looks_like_noreply_address(addr: &str) -> bool {
     let local = addr.split('@').next().unwrap_or(addr).to_ascii_lowercase();
     let local: String = local.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
-    local == "noreply" || local == "donotreply"
+    local == "noreply" || local == "donotreply" || local == "mailerdaemon" || local == "postmaster"
 }
 
 /// Whether an out-of-office reply should go out for this arriving message,
@@ -131,5 +159,44 @@ mod tests {
         let raw = parsed("From: no-reply@example.com\r\nSubject: Receipt");
         let mail = mailparse::parse_mail(&raw).unwrap();
         assert!(!should_reply(&mail, "no-reply@example.com", "me@example.com"));
+    }
+
+    // #48: bounces and suppression requests.
+
+    #[test]
+    fn does_not_reply_to_a_bounce() {
+        // A null reverse path is how a bounce says "do not answer me"
+        // (RFC 3834 §2): answering a bounce of our own reply is a loop.
+        let null_path = parsed("Return-Path: <>\r\nFrom: ana@example.com\r\nSubject: Undeliverable");
+        let mail = mailparse::parse_mail(&null_path).unwrap();
+        assert!(!should_reply(&mail, "ana@example.com", "me@example.com"));
+        for daemon in ["MAILER-DAEMON@example.com", "postmaster@example.com"] {
+            let raw = parsed(&format!("From: {daemon}\r\nSubject: Delivery Status Notification"));
+            let mail = mailparse::parse_mail(&raw).unwrap();
+            assert!(!should_reply(&mail, daemon, "me@example.com"), "{daemon}");
+        }
+        let report = parsed("From: ana@example.com\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=x\r\nSubject: Returned mail");
+        let mail = mailparse::parse_mail(&report).unwrap();
+        assert!(!should_reply(&mail, "ana@example.com", "me@example.com"));
+    }
+
+    #[test]
+    fn respects_a_request_to_suppress_automatic_replies() {
+        for value in ["OOF", "All", "DR, RN, NRN, OOF, AutoReply"] {
+            let raw = parsed(&format!("From: ana@example.com\r\nX-Auto-Response-Suppress: {value}\r\nSubject: Hi"));
+            let mail = mailparse::parse_mail(&raw).unwrap();
+            assert!(!should_reply(&mail, "ana@example.com", "me@example.com"), "{value}");
+        }
+        // Suppressing only read receipts still gets an out-of-office reply.
+        let raw = parsed("From: ana@example.com\r\nX-Auto-Response-Suppress: RN, NRN\r\nSubject: Hi");
+        let mail = mailparse::parse_mail(&raw).unwrap();
+        assert!(should_reply(&mail, "ana@example.com", "me@example.com"));
+    }
+
+    #[test]
+    fn does_not_reply_to_a_list_identified_only_by_list_post() {
+        let raw = parsed("From: ana@example.com\r\nList-Post: <mailto:team@lists.example.com>\r\nSubject: Hi");
+        let mail = mailparse::parse_mail(&raw).unwrap();
+        assert!(!should_reply(&mail, "ana@example.com", "me@example.com"));
     }
 }

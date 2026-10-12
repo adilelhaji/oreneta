@@ -7,6 +7,14 @@ export function createBaselineBridge(fixture: BaselineFixture) {
   const responses: Record<string, unknown> = {
     'app.prefsSet': null,
     'tasks.list': { tasks: fixture.tasks },
+    // Profiles (ADR-0016): only the one every install has.
+    'profiles.list': {
+      profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
+      active: 'default',
+    },
+    'backup.profileRestoreStatus': { state: 'none' },
+    // Task lists (ADR-0013): the fixed mail list only.
+    'tasks.lists': { lists: [{ id: 'mail', name: '', position: 0, open: fixture.tasks.length }] },
     'mail.saveDraft': { id: 'synthetic-draft' },
     'templates.list': { templates: [] },
     'pgp.secretKeys': { keys: [] },
@@ -28,9 +36,7 @@ export function createBaselineBridge(fixture: BaselineFixture) {
           : command === 'tasks.list'
             ? typeof p.include_completed === 'boolean'
             : command === 'mail.saveDraft'
-              ? p.account_id === fixture.account.id &&
-                p.to === 'morgan@example.test' &&
-                typeof p.body === 'string'
+              ? p.account_id === fixture.account.id && p.to === 'morgan@example.test' && typeof p.body === 'string'
               : Object.keys(p).length === 0)
       if (!Object.hasOwn(responses, command) || !valid) {
         denied.push(command)

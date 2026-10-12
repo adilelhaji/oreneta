@@ -19,7 +19,58 @@ export type Task = {
   subject: string
   from_name: string
   from_addr: string
+  /** Whether the conversation was found in the local cache; `folder_id` is
+   * where it was found. Absent from older cores, which never said. */
+  located?: boolean
+  /** ADR-0013. False for a standalone task, which has no conversation. */
+  linked?: boolean
+  list_id?: string
+  /** A standalone task's own title; empty for one tied to a conversation. */
+  title?: string
+  /** 0 low, 1 normal, 2 high. */
+  priority?: number
+  reminder_at?: number | null
+  revision?: number
+  /** ADR-0039, in a list kept on a server: a change made here not sent yet. */
+  pending?: '' | 'put' | 'delete'
+  /** Why it waits for a choice: 'changed' (here and on the server) or
+   * 'deleted' (on the server); empty when it does not. */
+  conflict?: string
+  /** It repeats; such a task is not edited here yet. */
+  recurring?: boolean
 }
+
+export type TaskList = {
+  id: string
+  name: string
+  position: number
+  open: number
+  /** ADR-0039: the CalDAV collection the list is kept in; empty or absent
+   * for a list kept only here. */
+  remote_url?: string
+  remote_user?: string
+  synced_at?: number | null
+  last_error?: string
+  conflicts?: number
+}
+
+/** One collection a CalDAV server offers. */
+export type RemoteTaskCollection = { url: string; name: string; color?: string | null; writable?: boolean | null }
+
+export type TaskListSync = { id: string; ok: boolean; error?: string }
+
+/** The fields a task is written with (ADR-0013). */
+export type TaskFields = {
+  list_id: string
+  title: string
+  note: string
+  due_at: number | null
+  reminder_at: number | null
+  priority: number
+}
+
+/** The list every task made from a conversation goes to; it cannot be deleted. */
+export const MAIL_LIST = 'mail'
 
 export const tasks$ = observable({
   items: [] as Task[],
@@ -27,7 +78,97 @@ export const tasks$ = observable({
   loading: false,
   /** Whether the list currently includes finished tasks. */
   includeCompleted: false,
+  lists: [] as TaskList[],
+  /** Which list is shown: 'all', or a list's id. */
+  selectedList: 'all',
+  search: '',
+  /** A sync of the lists kept on a server is running. */
+  syncing: false,
 })
+
+/** Whether a list is kept on a CalDAV server (ADR-0039). */
+export function isRemoteList(list: TaskList | undefined): boolean {
+  return !!list?.remote_url
+}
+
+/** A list's name as the reader sees it: the mail list's is translated. */
+export function listName(list: TaskList): string {
+  return list.id === MAIL_LIST ? t('tasks.mailList', { defaultValue: 'Mail follow-up' }) : list.name
+}
+
+/** A task's title: its own, or for one tied to mail, its conversation's subject. */
+export function taskTitle(task: Task): string {
+  return task.title || task.subject || t('tasks.noSubject')
+}
+
+export async function loadTaskLists() {
+  try {
+    const res = await invoke<{ lists?: TaskList[] }>('tasks.lists', {})
+    tasks$.lists.set(res?.lists ?? [])
+  } catch {
+    // Unreadable lists are not no lists; what was shown stays.
+  }
+}
+
+async function listCall(method: string, payload: Record<string, unknown>) {
+  try {
+    const res = await invoke<{ id?: string }>(method, payload)
+    await loadTaskLists()
+    return res
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+    return null
+  }
+}
+
+export async function createTaskList(name: string) {
+  const res = await listCall('tasks.createList', { name })
+  if (res?.id) tasks$.selectedList.set(res.id)
+}
+
+export const renameTaskList = (id: string, name: string) => listCall('tasks.renameList', { id, name })
+
+export async function deleteTaskList(id: string) {
+  await listCall('tasks.deleteList', { id })
+  tasks$.selectedList.set('all')
+  await loadTasks()
+}
+
+export type TaskWrite =
+  | { kind: 'saved' }
+  | { kind: 'failed' }
+  | { kind: 'conflict'; current: (TaskFields & { revision: number }) | null }
+
+/** A standalone task in a list. */
+export async function createTask(fields: TaskFields): Promise<TaskWrite> {
+  try {
+    await invoke('tasks.create', { task: fields })
+    await Promise.all([loadTasks(), loadTaskLists()])
+    return { kind: 'saved' }
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+    return { kind: 'failed' }
+  }
+}
+
+/**
+ * Edits a task from the revision it was read at. If it changed in another
+ * window, nothing is saved and the current copy comes back (ADR-0012).
+ */
+export async function updateTask(id: number, revision: number, fields: TaskFields): Promise<TaskWrite> {
+  try {
+    const res = await invoke<{ conflict?: boolean; current?: (TaskFields & { revision: number }) | null }>(
+      'tasks.update',
+      { id, revision, task: fields },
+    )
+    if (res?.conflict) return { kind: 'conflict', current: res.current ?? null }
+    await Promise.all([loadTasks(), loadTaskLists()])
+    return { kind: 'saved' }
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+    return { kind: 'failed' }
+  }
+}
 
 export async function loadTasks(includeCompleted = tasks$.includeCompleted.get()) {
   tasks$.loading.set(true)
@@ -49,11 +190,20 @@ export async function loadTasks(includeCompleted = tasks$.includeCompleted.get()
  * task, rather than starting from a blank note that would overwrite the
  * real one on save.
  */
-export async function getTask(id: number): Promise<{ due_at: number | null; note: string } | null> {
+export type StoredTask = Partial<TaskFields> & {
+  due_at: number | null
+  note: string
+  revision?: number
+  linked?: boolean
+}
+
+export async function getTask(id: number): Promise<StoredTask | null | 'failed'> {
   try {
     return await invoke('tasks.get', { id })
   } catch {
-    return null
+    // Not the same as "no such task": the caller must not go on as if the
+    // note were blank, or saving would overwrite the real one.
+    return 'failed'
   }
 }
 
@@ -91,4 +241,68 @@ export async function deleteTask(id: number) {
   } catch (error) {
     showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
   }
+}
+
+// ---- Lists kept on a CalDAV server (ADR-0039) ---------------------------------
+
+/** The collections on a server, for choosing one. Throws with the reason. */
+export async function discoverTaskCollections(
+  server: string,
+  username: string,
+  password: string,
+): Promise<RemoteTaskCollection[]> {
+  const res = await invoke<{ calendars?: RemoteTaskCollection[] }>('tasks.caldavDiscover', {
+    server,
+    username,
+    password,
+  })
+  return res?.calendars ?? []
+}
+
+/** A new list bound to a collection, read once. Throws if it could not be. */
+export async function addCalDavTaskList(input: {
+  url: string
+  name: string
+  server: string
+  username: string
+  password: string
+}): Promise<string> {
+  const res = await invoke<{ id?: string }>('tasks.caldavAdd', input)
+  await Promise.all([loadTaskLists(), loadTasks()])
+  if (res?.id) tasks$.selectedList.set(res.id)
+  return res?.id ?? ''
+}
+
+/**
+ * Syncs one list kept on a server, or every one. A failure is kept on the
+ * list (`last_error`) and shown there; it is not a toast, since opening the
+ * Tasks view offline is not something to interrupt anyone about.
+ */
+export async function syncTaskLists(listId?: string): Promise<TaskListSync[]> {
+  tasks$.syncing.set(true)
+  try {
+    const res = await invoke<{ lists?: TaskListSync[] }>('tasks.sync', listId ? { list_id: listId } : {})
+    const results = res?.lists ?? []
+    if (results.length > 0) await Promise.all([loadTaskLists(), loadTasks()])
+    return results
+  } catch (error) {
+    if (listId)
+      showToast(
+        error instanceof Error ? error.message : t('tasks.syncFailed', { defaultValue: 'Sync failed' }),
+        'error',
+      )
+    return []
+  } finally {
+    tasks$.syncing.set(false)
+  }
+}
+
+/** Settles a conflict with one copy, then syncs the list. */
+export async function resolveTaskConflict(id: number, keep: 'mine' | 'server') {
+  try {
+    await invoke('tasks.resolveConflict', { id, keep })
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
+  }
+  await Promise.all([loadTaskLists(), loadTasks()])
 }

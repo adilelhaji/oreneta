@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { accounts$ } from '../../states/accounts'
 import { settings$ } from '../../states/settings'
 import { closeMessageTab, compose$, openComposeTab, updateComposeDraft } from '../../states/compose'
 import { ui$ } from '../../states/ui'
+import { templates$ } from '../../states/templates'
 import type { Account } from '../../types'
 import { Composer } from './Composer'
 import { ConversationTabs } from '../chat/ConversationTabs'
@@ -371,6 +372,57 @@ describe('Composer', () => {
     expect(sent.to).toBe('y@example.com')
   })
 
+  // Acceptance for #29 in the full editor: a send the server never answered
+  // for leaves the composer open, and pressing Send again names the same
+  // message, so the core can refuse to deliver it twice on a hunch.
+  it('keeps one message identity across an unanswered send and a second press', async () => {
+    let sendAnswer: () => any = () => ({
+      ok: false,
+      outcome: 'uncertain',
+      attempt_id: 'allocated-1@example.com',
+      error: 'connection reset',
+    })
+    const base = (window as any).go.main.App.Invoke
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: unknown) => {
+      if (command === 'mail.send') {
+        calls.push({ command, payload })
+        return sendAnswer()
+      }
+      return base(command, payload)
+    }
+    const tabId = openComposeTab({ to: 'x@example.com', subject: 'Hello', text: 'did this go' })!
+    const view = render(<Composer tabId={tabId} />)
+    const pressSend = async () => {
+      await act(async () => {
+        const send = [...view.container.querySelectorAll('button')].find((b) => b.textContent?.includes('Send'))!
+        send.click()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      })
+    }
+
+    await pressSend()
+    const sends = () => calls.filter((call) => call.command === 'mail.send')
+    expect(sends()).toHaveLength(1)
+    expect(sends()[0].payload.message_id).toMatch(/^allocated-\d+@example\.com$/)
+    // Still open, with its words, saying what it knows.
+    expect(compose$.tabs.peek().some((tab) => tab.id === tabId)).toBe(true)
+    expect(view.container.textContent).toContain('never confirmed')
+
+    // Told it was already attempted: still the same message, still open.
+    sendAnswer = () => ({ ok: false, outcome: 'already_attempted', attempt_id: sends()[0].payload.message_id })
+    await pressSend()
+    expect(sends()).toHaveLength(2)
+    expect(sends()[1].payload.message_id).toBe(sends()[0].payload.message_id)
+    expect(sends()[1].payload.resend).toBeUndefined()
+    expect(compose$.tabs.peek().some((tab) => tab.id === tabId)).toBe(true)
+
+    // A plain success closes it, as ever.
+    sendAnswer = () => ({ ok: true, outcome: 'archived' })
+    await pressSend()
+    expect(sends()).toHaveLength(3)
+    expect(compose$.tabs.peek().some((tab) => tab.id === tabId)).toBe(false)
+  })
+
   it('revalidates recipient and account after autosaves drain', async () => {
     const tabId = openComposeTab({ to: 'x@example.com', subject: 'Hello', text: 'hi' })!
     const view = render(<Composer tabId={tabId} />)
@@ -445,6 +497,102 @@ describe('Composer', () => {
     expect(calls.some((call) => call.command === 'mail.send')).toBe(false)
   })
 
+  it('reminds about a mentioned attachment; Go back keeps the draft, Send anyway sends (#39)', async () => {
+    const tabId = openComposeTab({ to: 'x@example.com', subject: 'Report', text: 'Please see the attached report.' })!
+    const view = render(
+      <>
+        <Composer tabId={tabId} />
+        <AppConfirm />
+      </>,
+    )
+    const pressSend = async () => {
+      await act(async () => {
+        const send = [...view.container.querySelectorAll('button')].find((button) =>
+          button.textContent?.includes('Send'),
+        )!
+        send.click()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      })
+    }
+
+    await pressSend()
+    expect(view.getByRole('alertdialog').textContent).toContain('mentions an attachment')
+    await act(async () => {
+      view.getByRole('button', { name: 'Go back' }).click()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(false)
+    expect(compose$.tabs.peek().some((tab) => tab.id === tabId)).toBe(true)
+
+    await pressSend()
+    await act(async () => {
+      view.getByRole('button', { name: 'Send anyway' }).click()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
+  })
+
+  it('does not remind when the mentioned file is attached', async () => {
+    const tabId = openComposeTab({
+      to: 'x@example.com',
+      subject: 'Report',
+      text: 'Please see the attached report.',
+      attachments: [{ id: 'f1', filename: 'report.pdf', mime: 'application/pdf', size: 3, data: 'YWJj' }],
+    })!
+    const view = render(
+      <>
+        <Composer tabId={tabId} />
+        <AppConfirm />
+      </>,
+    )
+    await act(async () => {
+      const send = [...view.container.querySelectorAll('button')].find((button) =>
+        button.textContent?.includes('Send'),
+      )!
+      send.click()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(view.queryByRole('alertdialog')).toBeNull()
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
+  })
+
+  it('a Microsoft Graph sender keeps drafts locally, sends, and cannot schedule (#143)', async () => {
+    accounts$.set([
+      {
+        id: 'graph@example.test',
+        email: 'graph@example.test',
+        display_name: 'Graph',
+        provider: 'outlook',
+        auth_type: 'graph_oauth',
+        graph_send: true,
+      } as unknown as Account,
+    ])
+    const tabId = openComposeTab({
+      accountId: 'graph@example.test',
+      to: 'x@example.com',
+      subject: 'Hello',
+      text: 'hi',
+    })!
+    const view = render(<Composer tabId={tabId} />)
+    await act(async () => {
+      updateComposeDraft(tabId, { text: 'hi there' })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    expect(savedDraftIds()).toEqual([])
+    const later = view.container.querySelector(
+      'button[title="Scheduled sending is not available for Microsoft Graph accounts"]',
+    )
+    expect((later as HTMLButtonElement | null)?.disabled).toBe(true)
+    await act(async () => {
+      const send = [...view.container.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Send')!
+      send.click()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    const sent = calls.find((call) => call.command === 'mail.send')
+    expect(sent?.payload.account_id ?? sent?.payload.accountId ?? sent?.payload.account).toBe('graph@example.test')
+    expect(calls.some((call) => call.command === 'mail.saveDraft')).toBe(false)
+  })
+
   it('shows the new account’s signature in the editor when From changes', async () => {
     const tabId = openComposeTab()!
     render(<Composer tabId={tabId} />)
@@ -473,5 +621,36 @@ describe('Composer', () => {
 
     expect(bodyHtml()).toContain('Hello there')
     expect(bodyHtml()).toContain('From B')
+  })
+
+  // #88: placeholders are filled from the message, the cursor mark goes, and
+  // what cannot be filled stays visible and is said.
+  it('fills a snippet from the message and says what it could not fill', async () => {
+    templates$.loaded.set(true)
+    templates$.templates.set([
+      {
+        id: 's1',
+        kind: 'snippet',
+        name: 'Greeting',
+        subject: '',
+        bodyHtml: '<p>Hi {{to.firstName}}, {{cursor}}thanks. {{me.name}} {{to.nick}}</p>',
+        bodyText: '',
+      },
+    ])
+    const tabId = openComposeTab()!
+    await act(async () => {
+      updateComposeDraft(tabId, { to: '"Rivera, Morgan" <morgan@example.com>' })
+    })
+    const view = render(<Composer tabId={tabId} />)
+    await act(async () => {
+      fireEvent.click(view.getByLabelText('Insert saved text'))
+    })
+    await act(async () => {
+      fireEvent.click(view.getByText('Greeting'))
+    })
+    expect(bodyHtml()).toContain('Hi Morgan, thanks. a {{to.nick}}')
+    expect(bodyHtml()).not.toContain('{{cursor}}')
+    expect(ui$.toast.get()).toContain('{{to.nick}}')
+    expect(ui$.toastTone.get()).toBe('error')
   })
 })

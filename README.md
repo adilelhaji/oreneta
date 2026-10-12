@@ -22,6 +22,9 @@ Meron does, plus:
 
 ## Delivery roadmap
 
+The [completion plan](docs/completion-plan-2026-10-09.md) (2026-10-09) orders the
+remaining work into three declared candidates and sixteen iterations, each with
+its required tests, and defines the verification levels and quality gates.
 The [competitive delivery plan](docs/competitive-delivery-plan.md) and
 [backlog audit](docs/competitive-backlog-audit.md) record the 2026-10-05 execution review.
 The [eM Client parity plan](docs/emclient-parity-plan.md) tracks the frozen
@@ -63,11 +66,19 @@ required to publish — verification only removes the "unverified app" warning
 and the 100-user cap.
 
 Distributing Oreneta publicly with Google sign-in working out of the box is a
-different matter: Gmail is a *restricted* scope, so it needs Google's full
-verification and an annual CASA security assessment. Until someone takes that
-on, public builds should ship without Google sign-in — Gmail still works over
-IMAP with an app password, and Google calendars can be subscribed to read-only
-through their secret `.ics` address.
+different matter: Gmail is a *restricted* scope, so it needs Google's
+verification, and possibly a security assessment (see
+[docs/oauth-registrations.md](docs/oauth-registrations.md) for what is
+confirmed and what is not). Until someone takes that on, public builds should
+ship without Google sign-in — Gmail still works over IMAP with an app
+password, and Google calendars can be subscribed to read-only through their
+secret `.ics` address.
+
+Build anything you distribute with `-tags distributable`. That build compiles
+in none of the inherited values — the Microsoft client ID was inherited too —
+and turns off each sign-in that has no Oreneta-owned client injected at build
+time, instead of falling back to Meron's. The inventory, the injection flags
+and the tests are in [docs/oauth-registrations.md](docs/oauth-registrations.md).
 
 ## License
 

@@ -97,8 +97,58 @@ function pdfjsData() {
   }
 }
 
+// Bergamot (#106, ADR-0031) runs as a classic worker that loads its glue
+// script and WebAssembly by name from its own folder, so the three files are
+// served and shipped as they are, from the installed package: served from
+// node_modules in dev and copied into the build for production.
+function bergamotWorker() {
+  const source = path.resolve('node_modules/@browsermt/bergamot-translator/worker')
+  const files = ['translator-worker.js', 'bergamot-translator-worker.js', 'bergamot-translator-worker.wasm']
+  const type = (file) => (file.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+  return {
+    name: 'bergamot-worker',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const file = req.url?.startsWith('/bergamot/') && req.url.slice('/bergamot/'.length).split('?')[0]
+        if (!file || !files.includes(file)) return next()
+        res.setHeader('Content-Type', type(file))
+        res.end(fs.readFileSync(path.join(source, file)))
+      })
+    },
+    closeBundle() {
+      fs.mkdirSync(path.resolve('dist/bergamot'), { recursive: true })
+      for (const file of files) fs.copyFileSync(path.join(source, file), path.resolve('dist/bergamot', file))
+    },
+  }
+}
+
+// `vite preview` is what the e2e suite runs against: it answers with the exact
+// Content-Security-Policy the production build sends (read from csp_prod.go),
+// so a feature the policy would block in the app fails in a test instead of
+// only on someone's computer.
+export function productionCsp(source = fs.readFileSync(new URL('../csp_prod.go', import.meta.url), 'utf8')) {
+  const decl = source.slice(source.indexOf('const contentSecurityPolicy ='))
+  const end = decl.search(/"\s*\n\s*\n|"\s*\n\s*(func|const|var|\/\/)|"\s*$/)
+  const policy = [...decl.slice(0, end + 1).matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join('')
+  if (!policy.includes('default-src')) throw new Error('csp_prod.go: contentSecurityPolicy not found')
+  return policy
+}
+
+function previewCsp() {
+  return {
+    name: 'preview-csp',
+    configurePreviewServer(server) {
+      const policy = productionCsp()
+      server.middlewares.use((_req, res, next) => {
+        res.setHeader('Content-Security-Policy', policy)
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
   // Linked/hoisted packages must share the renderer's React dispatcher.
   resolve: { dedupe: ['react', 'react-dom'] },
-  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData()],
+  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData(), bergamotWorker(), previewCsp()],
 })

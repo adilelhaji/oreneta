@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -143,20 +144,150 @@ func jsonInt(value any) int {
 	return int(n)
 }
 
-// writePrivateFile writes data to path with owner-only permissions.
+// writePrivateFile replaces path with data, owner-only and all at once.
 //
 // 0600 matters here: even a backup without secrets lists every address the user
 // reads mail for, and an encrypted one is only as private as its passphrase.
-// os.WriteFile's mode argument applies *only when it creates the file*, so
-// overwriting an existing world-readable file would silently keep mode 0644 —
-// the save dialog happily offers existing paths. Removing it first guarantees
-// we are the one creating it. A umask can only tighten 0600 further, never
-// loosen it.
+// The data goes to a new file beside the target (os.CreateTemp creates it 0600,
+// which a umask can only tighten), is flushed to disk, and only then renamed
+// over the target. The rename is what replaces the previous file, so an
+// interruption, a full disk or a failed write leaves the previous backup as it
+// was instead of deleted or half-written, and an existing world-readable file
+// never keeps its mode because it is never written to.
 func writePrivateFile(path string, data []byte) error {
-	// A missing file (the common case) is exactly what we want; any other
-	// failure surfaces from the write below with a better message.
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	dir, name := filepath.Split(path)
+	if dir == "" {
+		dir = "."
+	}
+	temp, err := os.CreateTemp(dir, "."+name+".tmp-*")
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	tempPath := temp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	if _, err := temp.Write(data); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := syncFile(temp); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+// syncFile is (*os.File).Sync, replaceable in tests to fail a write late.
+var syncFile = (*os.File).Sync
+
+// profileArchiveFilename is offered in the save dialog for a full-profile
+// archive (ADR-0017): dated, so successive archives do not replace each other.
+func profileArchiveFilename(now time.Time) string {
+	return fmt.Sprintf("oreneta-profile-%s.oreneta-profile", now.Format("2006-01-02"))
+}
+
+// exportProfileArchive writes the whole profile — store, drafts, local mail,
+// chosen pictures — to one encrypted file the person picks. The core writes
+// it straight to that path; nothing passes through the JSON bridge but the
+// passphrase.
+func (a *App) exportProfileArchive(payload map[string]any) (any, error) {
+	passphrase, _ := payload["passphrase"].(string)
+	if len([]rune(passphrase)) < 8 {
+		return nil, errors.New("the passphrase needs at least 8 characters")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:                "Back up the whole profile",
+		DefaultFilename:      profileArchiveFilename(time.Now()),
+		CanCreateDirectories: true,
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "Oreneta profile (*.oreneta-profile)", Pattern: "*.oreneta-profile"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dest == "" {
+		return map[string]any{"saved": false}, nil // user cancelled
+	}
+	res, err := a.sidecar.Call("profileArchive.export", map[string]any{
+		"path":        dest,
+		"passphrase":  passphrase,
+		"app_version": appVersion(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	a.logf("profileArchive.export: wrote %s", dest)
+	out, _ := res.(map[string]any)
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["path"] = dest
+	return out, nil
+}
+
+// inspectProfileArchive opens an archive in a private folder and checks it
+// whole, without touching the profile in use. The first call picks the file
+// and comes back asking for its passphrase.
+func (a *App) inspectProfileArchive(payload map[string]any) (any, error) {
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	src, _ := payload["path"].(string)
+	if src == "" {
+		chosen, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+			Title: "Check a profile archive",
+			Filters: []wailsRuntime.FileFilter{
+				{DisplayName: "Oreneta profile (*.oreneta-profile)", Pattern: "*.oreneta-profile"},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if chosen == "" {
+			return map[string]any{"cancelled": true}, nil
+		}
+		return map[string]any{"needsPassphrase": true, "path": chosen}, nil
+	}
+	passphrase, _ := payload["passphrase"].(string)
+	res, err := a.sidecar.Call("profileArchive.inspect", map[string]any{"path": src, "passphrase": passphrase})
+	if err != nil {
+		return nil, err
+	}
+	out, _ := res.(map[string]any)
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["path"] = src
+	return out, nil
+}
+
+// backupPickFolder asks where scheduled backups go (#173). The core checks
+// the folder again when the schedule is saved.
+func (a *App) backupPickFolder() (any, error) {
+	dir, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title:                "Folder for scheduled backups",
+		CanCreateDirectories: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dir == "" {
+		return map[string]any{"cancelled": true}, nil
+	}
+	return map[string]any{"path": dir}, nil
 }

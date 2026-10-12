@@ -103,9 +103,16 @@ type Message struct {
 	// Protection is what the message's own structure declares: "pgpEncrypted",
 	// "pgpSigned", "smimeEnveloped" and so on, empty when none. A claim, not a
 	// verdict: whether a signature is good is answered separately.
-	Protection       string `json:"protection,omitempty"`
-	Attachments      any    `json:"attachments,omitempty"`
-	OriginalThreadID string `json:"original_thread_id,omitempty"`
+	Protection  string `json:"protection,omitempty"`
+	Attachments any    `json:"attachments,omitempty"`
+	// Invitation is the meeting request, cancellation or answer the message
+	// carries (#102), as the core read it. Nothing is answered on its own.
+	Invitation any `json:"invitation,omitempty"`
+	// TrackersBlocked lists what tracking protection kept the message from
+	// fetching, and TrackersProtected whether it applied (#107).
+	TrackersBlocked   any    `json:"trackers_blocked,omitempty"`
+	TrackersProtected bool   `json:"trackers_protected,omitempty"`
+	OriginalThreadID  string `json:"original_thread_id,omitempty"`
 	// RecipientOverflow is the count of additional recipients beyond the one shown
 	// on an outbound thread card (for a "+N" hint); 0 for inbound/single-recipient.
 	RecipientOverflow uint32 `json:"recipient_overflow,omitempty"`
@@ -144,6 +151,8 @@ type AddPasswordAccountRequest struct {
 	// per server: the two can be different daemons.
 	CertPin     string `json:"cert_pin"`
 	SMTPCertPin string `json:"smtp_cert_pin"`
+	// "pop3" for a POP3 account (#97, ADR-0035); IMAP otherwise.
+	Incoming string `json:"incoming"`
 }
 
 type AddGmailOAuthRequest struct {

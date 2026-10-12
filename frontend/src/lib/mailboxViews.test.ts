@@ -77,6 +77,11 @@ describe('mailbox view contract', () => {
     expect(parseMailboxViews(future).kind).toBe('unsupported')
     expect(() => changeMailboxColumns(future, null, defaults())).toThrow()
     expect(future).toEqual({ version: 2, unfamiliar: ['keep'] })
+    // A minor later version is later too, not a malformed legacy value that a
+    // change could replace.
+    const minor = { version: 1.5, unfamiliar: ['keep'] }
+    expect(parseMailboxViews(minor).kind).toBe('unsupported')
+    expect(() => changeMailboxColumns(minor, null, defaults())).toThrow()
     expect(() => changeMailboxColumns(null, { accountId: '', folderId: 'x' }, defaults())).toThrow()
     expect(() => changeMailboxColumns(null, null, [])).toThrow()
   })

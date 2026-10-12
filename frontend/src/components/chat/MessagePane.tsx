@@ -23,7 +23,8 @@ import { useConversationScroll } from './useConversationScroll'
 import { ArrowRight } from 'lucide-react'
 import { wallpaperCss } from '../../lib/wallpapers'
 import { clearMediaSession } from '../../lib/mediaSession'
-import { openCorrespondentMail } from '../../states/kanban'
+import { openCorrespondentMail, openMailAccount } from '../../states/kanban'
+import { calendar$, startOfDay } from '../../states/calendar'
 import type { Message, MessageTab } from '../../types'
 
 function threadFromTab(tab: MessageTab, fallback: Message | null): Message {
@@ -282,11 +283,14 @@ export function MessagePane() {
         onOpenContextMenu={setContextMenu}
       />
 
-      {activeAccount?.auth_type === 'graph_oauth' ? (
+      {activeAccount?.auth_type === 'graph_oauth' && !activeAccount.graph_send ? (
         <p role="status" className="border-t border-border px-4 py-3 text-caption text-secondary">
-          {t('accounts.graph.readerNotice', {
-            defaultValue: 'Microsoft Graph — read-only. Sending, editing and attachments are not available yet.',
-          })}
+          {activeAccount.graph_writes
+            ? t('accounts.graph.changesNotice')
+            : t('accounts.graph.readerNotice', {
+                defaultValue:
+                  'Microsoft Graph — read-only. Sending is not available; changes can be allowed in the account settings.',
+              })}
         </p>
       ) : (
         !isRSS && <QuickReplyComposer />
@@ -303,7 +307,8 @@ export function MessagePane() {
 
   return (
     <div
-      className={`relative flex min-w-0 flex-1 flex-col overflow-hidden ${
+      data-message-pane
+      className={`relative flex min-w-0 flex-1 flex-col overflow-hidden min-[769px]:min-w-[360px] ${
         mobilePane === 'conversation' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
     >
@@ -347,6 +352,16 @@ export function MessagePane() {
               openCorrespondentMail(activeThread.account_id, activeThread.folder_id, person.email)
             }
             onClose={() => thread$.mediaOpen.set(false)}
+            accountId={activeThread.account_id}
+            onOpenConversation={(threadId, folder) => {
+              openMailAccount(activeThread.account_id, folder, false)
+              ui$.selectedThread.set(threadId)
+            }}
+            onOpenEvent={(start) => {
+              calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
+              calendar$.view.set('day')
+              ui$.calendarOpen.set(true)
+            }}
           />
         )}
       </div>

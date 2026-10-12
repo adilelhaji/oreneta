@@ -37,6 +37,7 @@ import {
   MessagesSquare,
   Keyboard,
   Archive,
+  ShieldCheck,
   Server,
   CalendarDays,
   Lock,
@@ -51,6 +52,21 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
+import { startMailImport } from '../../states/archive'
+import { ProfilesGroup } from './ProfilesGroup'
+import { AccountGroupsGroup } from './AccountGroupsGroup'
+import { QuickActionsGroup } from '../quick/QuickActionsGroup'
+import { CategoriesGroup } from '../threads/CategoriesGroup'
+import { SenderListsGroup } from './SenderListsGroup'
+import { TrackingProtectionGroup } from './TrackingProtectionGroup'
+import { TranslationModelsGroup } from './TranslationModelsGroup'
+import { CloudStorageGroup } from './CloudStorageGroup'
+import { ProfileArchiveDialog } from './ProfileArchiveDialog'
+import { RestoreStatusRow } from './RestoreStatusRow'
+import { BackupScheduleGroup } from './BackupScheduleGroup'
+import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
+import { MailImportDialog } from './MailImportDialog'
+import { ThunderbirdImportDialog } from './ThunderbirdImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
 import { showToast, ui$, type SetupMode } from '../../states/ui'
 import { accounts$, deleteAccount } from '../../states/accounts'
@@ -96,12 +112,15 @@ import { AccountProfileGroup } from './AccountProfileGroup'
 import { useAccountAvatar } from './useAccountAvatar'
 import { AccountAliasesCard } from './AccountAliasesCard'
 import { AccountTogglesSection } from './AccountTogglesSection'
+import { Pop3RetentionGroup } from './Pop3RetentionGroup'
 import { AccountWallpaperCard } from './AccountWallpaperCard'
 import { AvatarCropDialog } from './AvatarCropDialog'
 import { AssistantSettingsSection } from './AssistantSettingsSection'
 import { BoardPanel } from './BoardSettingsPanel'
 import { pickImageFile } from '../../lib/nativeFilePicker'
 import { invoke } from '../../lib/bridge'
+import { GraphChangesFlow, type GraphChangesState } from '../../lib/graphSetup'
+import { Notice } from '../notice/Notice'
 import { useDialogFocus } from '../../lib/useDialogFocus'
 import { SettingsSearch } from './SettingsSearch'
 
@@ -141,7 +160,11 @@ function isRssAccount(account: Account) {
 // form offers (TLS / STARTTLS / None).
 function serverSummary(account: Account, t: ReturnType<typeof useTranslation>['t']) {
   if (account.auth_type === 'graph_oauth')
-    return `Microsoft Graph — ${t('accounts.graph.readOnly', { defaultValue: 'Read-only' })}`
+    return `Microsoft Graph — ${
+      account.graph_writes
+        ? t('accounts.graph.changesAllowed')
+        : t('accounts.graph.readOnly', { defaultValue: 'Read-only' })
+    }`
   // TLS/STARTTLS are protocol names and stay verbatim; only "none" is prose.
   const security = (tls?: boolean, starttls?: boolean) =>
     starttls ? 'STARTTLS' : tls === false ? t('accounts.security.none') : 'TLS'
@@ -432,6 +455,13 @@ function groupsBySource(
     groups.push({
       label: t('calendar.groupLocal', { defaultValue: 'On this computer' }),
       calendars: local,
+    })
+  }
+  const caldav = calendars.filter((calendar) => calendar.kind === 'caldav')
+  if (caldav.length) {
+    groups.push({
+      label: t('calendar.groupCalDav', { defaultValue: 'CalDAV' }),
+      calendars: caldav,
     })
   }
   const subscribed = calendars.filter((calendar) => calendar.kind === 'subscribed')
@@ -810,6 +840,7 @@ function GeneralSection() {
   const sendShortcut = useValue(settings$.sendShortcut)
   const undoSendSeconds = useValue(settings$.undoSendSeconds)
   const spellCheck = useValue(settings$.spellCheck)
+  const grammarCheck = useValue(settings$.grammarCheck)
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
   const kanbanColumnWidth = useValue(settings$.kanbanColumnWidth)
   const language = useValue(settings$.language)
@@ -976,6 +1007,26 @@ function GeneralSection() {
           checked={spellCheck}
           onChange={() => settings$.spellCheck.set(!spellCheck)}
         />
+        <SelectRow
+          icon={<SpellCheck size={16} strokeWidth={1.75} />}
+          title={t('settings.composer.grammar', { defaultValue: 'Grammar suggestions' })}
+          hint={t('settings.composer.grammarHint', {
+            defaultValue:
+              'Checked on this computer with Harper; nothing you write is sent anywhere. English only: other text is left as it is.',
+          })}
+          value={grammarCheck}
+          options={[
+            { value: 'off', label: t('settings.composer.grammarOff', { defaultValue: 'Off' }) },
+            { value: 'american', label: t('settings.composer.grammarAmerican', { defaultValue: 'English (US)' }) },
+            { value: 'british', label: t('settings.composer.grammarBritish', { defaultValue: 'English (UK)' }) },
+            { value: 'canadian', label: t('settings.composer.grammarCanadian', { defaultValue: 'English (Canada)' }) },
+            {
+              value: 'australian',
+              label: t('settings.composer.grammarAustralian', { defaultValue: 'English (Australia)' }),
+            },
+          ]}
+          onChange={(value) => settings$.grammarCheck.set(value as typeof grammarCheck)}
+        />
         <SegmentedRow
           icon={<Send size={16} strokeWidth={1.75} />}
           title={t('settings.composer.sendMessageWith')}
@@ -1035,6 +1086,14 @@ function GeneralSection() {
       <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}>
         <BackupGroup />
       </div>
+      <AccountGroupsGroup />
+      <ProfilesGroup />
+      <QuickActionsGroup />
+      <CategoriesGroup />
+      <SenderListsGroup />
+      <TrackingProtectionGroup />
+      <TranslationModelsGroup />
+      <CloudStorageGroup />
       <StorageGroup />
       <LogsGroup />
     </div>
@@ -1051,6 +1110,7 @@ function BackupGroup() {
   const { t } = useTranslation()
   const [prompt, setPrompt] = useState<BackupPassphraseMode | null>(null)
   const [busy, setBusy] = useState(false)
+  const [thunderbirdOpen, setThunderbirdOpen] = useState(false)
   const [error, setError] = useState('')
   // The file already chosen for a restore that came back needing a passphrase.
   const [pendingPath, setPendingPath] = useState('')
@@ -1143,7 +1203,73 @@ function BackupGroup() {
             </div>
           }
         />
+        <RestoreStatusRow />
+        <SettingRow
+          title={t('profileArchive.settingsTitle', { defaultValue: 'Whole profile' })}
+          hint={t('profileArchive.settingsHint', {
+            defaultValue:
+              'One encrypted file with the mail kept on this computer, drafts, contacts, tasks, notes, settings and pictures.',
+          })}
+          control={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void startProfileRestore()}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Upload size={14} strokeWidth={1.75} />
+                {t('profileArchive.restore', { defaultValue: 'Restore…' })}
+              </button>
+              <button
+                onClick={() => void startProfileCheck()}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShieldCheck size={14} strokeWidth={1.75} />
+                {t('profileArchive.check', { defaultValue: 'Check…' })}
+              </button>
+              <button
+                onClick={startProfileExport}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Archive size={14} strokeWidth={1.75} />
+                {t('profileArchive.backUp', { defaultValue: 'Back up…' })}
+              </button>
+            </div>
+          }
+        />
+        <SettingRow
+          title={t('archive.settingsTitle', { defaultValue: 'Import mail' })}
+          hint={t('archive.settingsHint', {
+            defaultValue: 'Bring .eml and .mbox files into a local archive kept on this computer.',
+          })}
+          control={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setThunderbirdOpen(true)}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Upload size={14} strokeWidth={1.75} />
+                {t('thunderbird.action', { defaultValue: 'From Thunderbird…' })}
+              </button>
+              <button
+                onClick={() => void startMailImport()}
+                disabled={busy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-active text-primary font-bold text-2xs cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Upload size={14} strokeWidth={1.75} />
+                {t('archive.importAction', { defaultValue: 'Import…' })}
+              </button>
+            </div>
+          }
+        />
       </SettingsGroup>
+      <BackupScheduleGroup />
+      <MailImportDialog />
+      {thunderbirdOpen && <ThunderbirdImportDialog onClose={() => setThunderbirdOpen(false)} />}
+      <ProfileArchiveDialog />
 
       {prompt && (
         <BackupPassphraseDialog
@@ -1401,6 +1527,98 @@ function OpmlGroup({ account }: { account: string }) {
   )
 }
 
+/**
+ * What a Microsoft Graph account may do beyond reading, and the way to allow
+ * it: changing messages (#141) and sending (#143). Each is asked for on its
+ * own; the level shown is the one Microsoft granted.
+ */
+function GraphChangesGroup({ account }: { account: Account }) {
+  const { t } = useTranslation()
+  const [progress, setProgress] = useState<GraphChangesState>({ state: 'idle' })
+  const [asking, setAsking] = useState<'writes' | 'send' | ''>('')
+  const [flow] = useState(
+    () =>
+      new GraphChangesFlow(invoke, setProgress, (id, level) =>
+        accounts$.set(
+          accounts$
+            .peek()
+            .map((item) => (item.id === id ? { ...item, graph_writes: level.writes, graph_send: level.send } : item)),
+        ),
+      ),
+  )
+  useEffect(
+    () => () => {
+      void flow.cancel().catch(console.error)
+    },
+    [flow],
+  )
+  const waiting = progress.state === 'authorizing'
+  const ask = (what: 'writes' | 'send') => {
+    setAsking(what)
+    // The whole level to hold afterwards, so allowing one keeps the other.
+    void flow.begin(account.id, {
+      writes: what === 'writes' || !!account.graph_writes,
+      send: what === 'send' || !!account.graph_send,
+    })
+  }
+  const outcome = (what: 'writes' | 'send') =>
+    asking !== what
+      ? null
+      : waiting
+        ? t('settings.account.graphChanges.waiting')
+        : progress.state === 'notGranted'
+          ? t('settings.account.graphChanges.notGranted')
+          : progress.state === 'failed'
+            ? t('settings.account.graphChanges.failed')
+            : null
+  const control = (what: 'writes' | 'send', granted: boolean, label: string) =>
+    granted ? null : waiting && asking === what ? (
+      <button
+        type="button"
+        onClick={() => void flow.cancel().then(() => setProgress({ state: 'idle' }))}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-hover hover:bg-border text-primary font-bold text-2xs cursor-pointer transition-colors"
+      >
+        {t('buttons.cancel')}
+      </button>
+    ) : (
+      <button
+        type="button"
+        disabled={waiting}
+        onClick={() => ask(what)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-control bg-accent hover:bg-accent-hover text-on-accent font-bold text-2xs cursor-pointer transition-colors disabled:opacity-50"
+      >
+        <KeyRound size={14} strokeWidth={1.75} />
+        {label}
+      </button>
+    )
+  return (
+    <SettingsGroup title={t('settings.account.graphChanges.title')}>
+      <SettingRow
+        title={
+          account.graph_writes
+            ? t('accounts.graph.changesAllowed')
+            : t('accounts.graph.readOnly', { defaultValue: 'Read-only' })
+        }
+        hint={
+          outcome('writes') ??
+          (account.graph_writes
+            ? t('settings.account.graphChanges.allowedHint')
+            : t('settings.account.graphChanges.readOnlyHint'))
+        }
+        control={control('writes', !!account.graph_writes, t('settings.account.graphChanges.allow'))}
+      />
+      <SettingRow
+        title={account.graph_send ? t('settings.account.graphSend.allowed') : t('settings.account.graphSend.title')}
+        hint={
+          outcome('send') ??
+          (account.graph_send ? t('settings.account.graphSend.allowedHint') : t('settings.account.graphSend.hint'))
+        }
+        control={control('send', !!account.graph_send, t('settings.account.graphSend.allow'))}
+      />
+    </SettingsGroup>
+  )
+}
+
 function AccountPanel({ account }: { account: Account }) {
   const { t } = useTranslation()
   const { isRSS, displayName, subtitle } = accountMeta(account, t)
@@ -1496,11 +1714,20 @@ function AccountPanel({ account }: { account: Account }) {
         </SettingsGroup>
       )}
 
+      {account.ews_exchange_online && (
+        // Exchange Online retires EWS and already refuses this app's password
+        // sign-in for it (#46): said here, with the way that keeps working.
+        <Notice tone="warning">{t('settings.account.ewsOnline.notice')}</Notice>
+      )}
+
+      {account.auth_type === 'graph_oauth' && !account.needs_reconnect && <GraphChangesGroup account={account} />}
+
       <AccountProfileGroup account={account} isRSS={isRSS} />
       <SettingsGroup title={t('settings.pages.appearance')}>
         <AccountWallpaperCard account={account} />
       </SettingsGroup>
       <AccountTogglesSection account={account} isRSS={isRSS} />
+      {account.auth_type === 'pop3' && <Pop3RetentionGroup accountId={account.id} />}
       {!isRSS && <AccountCalendarsGroup account={account} />}
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { CalendarDays, Trash2 } from 'lucide-react'
+import { CalendarDays, Download, Trash2, Upload } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import {
   CALENDAR_COLORS,
@@ -11,6 +11,7 @@ import {
   setCalendarEnabled,
   type Calendar,
 } from '../../states/calendar'
+import { canImportInto, exportIcs, importIcs } from '../../states/calendarFiles'
 import { SettingsGroup, SettingRow, ToggleRow } from './AccountSettingsRows'
 import { Field } from '../field/Field'
 
@@ -25,7 +26,11 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
   const color = calendar.color || CALENDAR_COLORS[0]
 
   const renamed = name.trim() && name.trim() !== calendar.name
-  const onlyOne = calendars.filter((c) => c.accountId === calendar.accountId).length === 1
+  // A server keeps at least one calendar per account; that rule is about the
+  // account's own calendars, not about ones merely listed under it.
+  const onlyOne =
+    calendar.kind === 'account' &&
+    calendars.filter((c) => c.accountId === calendar.accountId && c.kind === 'account').length === 1
 
   const run = async (action: Promise<unknown>) => {
     setError('')
@@ -94,6 +99,29 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
         />
       </SettingsGroup>
 
+      <SettingsGroup title={t('calendar.files', { defaultValue: 'Calendar files' })}>
+        <div className="flex flex-wrap gap-2 px-4 py-3.5">
+          {canImportInto(calendar) && (
+            <button
+              type="button"
+              onClick={() => void importIcs(calendar)}
+              className="inline-flex items-center gap-1.5 rounded-control bg-hover px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-active cursor-pointer"
+            >
+              <Upload size={14} strokeWidth={1.75} aria-hidden="true" />
+              {t('calendar.importIcs', { defaultValue: 'Import .ics…' })}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void exportIcs(calendar)}
+            className="inline-flex items-center gap-1.5 rounded-control bg-hover px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-active cursor-pointer"
+          >
+            <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            {t('calendar.exportIcs', { defaultValue: 'Export .ics…' })}
+          </button>
+        </div>
+      </SettingsGroup>
+
       <SettingsGroup title={t('calendar.dangerZone', { defaultValue: 'Remove' })}>
         <div className="px-4 py-3.5">
           {calendar.is_default ? (
@@ -113,10 +141,26 @@ export function CalendarPanel({ calendar }: { calendar: Calendar }) {
               {/* Said plainly: this is the destructive operation on this
                   screen, and its cost is the events, not the calendar. */}
               <p className="text-caption text-primary">
-                {t('calendar.deleteWarning', {
-                  defaultValue: 'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
-                  name: calendar.name,
-                })}
+                {calendar.kind === 'caldav'
+                  ? t('calendar.deleteWarningCalDav', {
+                      defaultValue: 'Stop showing "{name}" here? It stays on its server, with every event on it.',
+                      name: calendar.name,
+                    })
+                  : calendar.kind === 'subscribed'
+                    ? t('calendar.deleteWarningSubscribed', {
+                        defaultValue: 'Unsubscribe from "{name}"? The published calendar is not touched.',
+                        name: calendar.name,
+                      })
+                    : calendar.kind === 'local'
+                      ? t('calendar.deleteWarningLocal', {
+                          defaultValue: 'Remove "{name}" and every event on it? Nothing else has a copy.',
+                          name: calendar.name,
+                        })
+                      : t('calendar.deleteWarning', {
+                          defaultValue:
+                            'Remove "{name}" and every event on it? They go to Deleted Items on the server.',
+                          name: calendar.name,
+                        })}
               </p>
               <div className="flex gap-2">
                 <button

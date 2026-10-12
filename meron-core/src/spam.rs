@@ -42,12 +42,19 @@ pub struct Signals {
     /// Subject words that have recurred in spam-confirmed messages clearly
     /// more than in ham-confirmed ones — see `TRIGGER_MIN_COUNT`/`_RATIO`.
     pub trigger_words: Vec<String>,
+    /// What the reader put the sender on: `Some(true)` blocked, `Some(false)`
+    /// allowed (#50). Their own word outranks everything learned.
+    pub listed: Option<bool>,
 }
 
 /// Why a message is flagged, in terms a person can check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Reason {
+    /// The reader blocked this sender or their domain.
+    YouBlocked,
+    /// The reader allowed this sender or their domain: never suggested.
+    YouAllowed,
     SenderMarkedBefore,
     TriggerWords,
     NothingKnown,
@@ -64,6 +71,11 @@ pub struct Verdict {
 /// Whether an arrival looks like spam by what the reader has taught this
 /// account, and why.
 pub fn verdict(signals: &Signals) -> Verdict {
+    match signals.listed {
+        Some(false) => return Verdict { spam: false, reasons: vec![Reason::YouAllowed] },
+        Some(true) => return Verdict { spam: true, reasons: vec![Reason::YouBlocked] },
+        None => {}
+    }
     let mut reasons = Vec::new();
     let sender_says_spam = signals
         .sender_spam_count

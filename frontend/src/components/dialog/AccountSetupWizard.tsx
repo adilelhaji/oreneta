@@ -116,7 +116,7 @@ export function AccountSetupWizard({
               }}
               aria-invalid={invalid}
               aria-describedby={`${emailId}-hint${invalid ? ` ${emailId}-error` : ''}`}
-              placeholder="nombre@ejemplo.com"
+              placeholder={t('accounts.wizard.emailPlaceholder', { defaultValue: 'name@example.com' })}
               className="w-full rounded-control border border-border bg-raised px-4 py-3 text-title text-primary outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
             <p id={`${emailId}-hint`} className="text-caption leading-relaxed text-secondary">

@@ -283,6 +283,18 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                   {preview.will_transmit ? 'HTTPS after confirmation' : 'Stays on this device'}
                 </span>
               </div>
+              {/* The request exactly as it would leave, byte for byte (#51). */}
+              <details className="border-b border-border/60 px-3 py-2 text-caption text-secondary">
+                <summary className="cursor-pointer">
+                  {t('assistant.exactRequest', {
+                    destination: preview.provider.endpoint,
+                    defaultValue: 'Exact request sent to {destination}',
+                  })}
+                </summary>
+                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-control-sm bg-app p-2 font-mono text-2xs text-primary">
+                  {preview.request_body}
+                </pre>
+              </details>
               <div className="border-b border-border/60 px-3 py-2 text-caption text-secondary">
                 {t('assistant.selectHint', { defaultValue: 'Select the messages to include.' })}
               </div>

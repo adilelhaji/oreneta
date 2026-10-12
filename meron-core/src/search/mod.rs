@@ -10,7 +10,7 @@
 //! `http://example.com/a:b` is a thing people paste into a search box, and a
 //! parser that swallowed `example.com/a` as an unknown field would lose it.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
@@ -25,7 +25,7 @@ pub enum Field {
 }
 
 /// What a message must be for, beyond the words in it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Flag {
     Unread,
@@ -35,8 +35,8 @@ pub enum Flag {
 }
 
 /// One typed search, as the box was read.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Query {
     /// Words with no operator, joined as one phrase — the search as it always
     /// was when nobody types an operator at all.
@@ -233,4 +233,60 @@ pub fn describe(query: &Query) -> Vec<String> {
         parts.push(format!("before:{at}"));
     }
     parts
+}
+
+/// Writes a query back as the text the box takes (#43): the inverse of
+/// [`parse`], so a search edited field by field means exactly what the same
+/// search typed would. `parse(&compose(&q)) == q` for every query `parse`
+/// can produce; the tests hold it to that.
+pub fn compose(query: &Query) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !query.text.trim().is_empty() {
+        parts.push(query.text.trim().to_string());
+    }
+    for (name, terms) in [("from", &query.from), ("to", &query.to), ("subject", &query.subject)] {
+        for term in terms {
+            if let Some(value) = quoted(term) {
+                parts.push(format!("{name}:{value}"));
+            }
+        }
+    }
+    for flag in &query.flags {
+        parts.push(
+            match flag {
+                Flag::Unread => "is:unread",
+                Flag::Read => "is:read",
+                Flag::Starred => "is:starred",
+                Flag::HasAttachment => "has:attachment",
+            }
+            .to_string(),
+        );
+    }
+    if let Some(value) = query.label.as_deref().and_then(quoted) {
+        parts.push(format!("label:{value}"));
+    }
+    if let Some(at) = query.after {
+        parts.push(format!("after:{}", day_of(at)));
+    }
+    if let Some(at) = query.before {
+        parts.push(format!("before:{}", day_of(at)));
+    }
+    parts.join(" ")
+}
+
+/// A value as one token: quoted when it holds a space. Quotes themselves
+/// cannot be written (the box treats every quote as a delimiter), so they
+/// are dropped; an empty value is no term at all.
+fn quoted(value: &str) -> Option<String> {
+    let clean: String = value.chars().filter(|c| *c != '"').collect();
+    let clean = clean.trim();
+    if clean.is_empty() {
+        return None;
+    }
+    Some(if clean.chars().any(char::is_whitespace) { format!("\"{clean}\"") } else { clean.to_string() })
+}
+
+/// The `YYYY-MM-DD` of a UTC-midnight instant, as [`parse_day`] reads it.
+fn day_of(at: i64) -> String {
+    chrono::DateTime::from_timestamp(at, 0).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default()
 }

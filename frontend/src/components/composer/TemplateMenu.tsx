@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FileText, Settings2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { loadTemplates, templates$, type Template } from '../../states/templates'
+import { loadTemplates, searchTemplates, templates$, type Template } from '../../states/templates'
 import { ui$ } from '../../states/ui'
 import { IconButton } from '../button/IconButton'
 import { MenuItem } from '../menu/MenuItem'
@@ -21,6 +21,7 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
   const stored = useValue(templates$.templates)
   const loaded = useValue(templates$.loaded)
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const wrapRef = useRef<HTMLDivElement>(null)
 
   // Fetched when the composer opens rather than when the menu does, so that
@@ -38,8 +39,9 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
     return () => window.removeEventListener('mousedown', onDown)
   }, [open])
 
-  const snippets = stored.filter((template) => template.kind === 'snippet')
-  const messages = stored.filter((template) => template.kind === 'message')
+  const found = searchTemplates(stored, query)
+  const snippets = found.filter((template) => template.kind === 'snippet')
+  const messages = found.filter((template) => template.kind === 'message')
 
   const manage = () => {
     setOpen(false)
@@ -60,6 +62,22 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
         <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-control border border-border bg-chats p-1 shadow-overlay">
           {stored.length === 0 && (
             <p className="px-3 py-2 text-caption leading-snug text-secondary">{t('templates.none')}</p>
+          )}
+          {stored.length > 0 && (
+            <input
+              autoFocus
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={t('templates.search', { defaultValue: 'Search kept text' })}
+              placeholder={t('templates.search', { defaultValue: 'Search kept text' })}
+              className="mb-1 w-full rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            />
+          )}
+          {stored.length > 0 && found.length === 0 && (
+            <p className="px-3 py-2 text-caption text-secondary">
+              {t('templates.noMatch', { defaultValue: 'Nothing kept matches that.' })}
+            </p>
           )}
           {snippets.length > 0 && (
             <p className="px-3 pb-0.5 pt-1.5 text-2xs font-bold uppercase tracking-wide text-secondary">

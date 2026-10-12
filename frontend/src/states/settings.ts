@@ -1,3 +1,5 @@
+import { sanitizeQuickActions, type QuickAction } from './quickActionModel'
+import { profileKey } from '../lib/profile'
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import {
@@ -65,6 +67,12 @@ export type SavedSearch = {
   id: string
   name: string
   query: string
+  /**
+   * Where it was saved (#43): opening it goes back there. Absent on searches
+   * saved before this existed, which keep applying to whatever is open.
+   */
+  account?: string
+  folder?: string
 }
 
 /**
@@ -163,6 +171,8 @@ export type Settings = {
   conversationLayout: ConversationLayout
   /** Searches the reader has kept, in the order they were saved. */
   savedSearches: SavedSearch[]
+  /** Quick Actions (#92): named step lists run over a reviewed selection. */
+  quickActions: QuickAction[]
   /**
    * Whether a message's own typography and widths give way to the app's.
    *
@@ -197,6 +207,9 @@ export type Settings = {
   undoSendSeconds: number
   /** Whether native spell checking is requested in composer prose fields. */
   spellCheck: boolean
+  /** Offline grammar checking with Harper (#105): off, or the English it
+   * checks against. English only; other text is left alone. */
+  grammarCheck: 'off' | 'american' | 'british' | 'canadian' | 'australian'
   /**
    * App-wide signature HTML, inserted into new messages and replies. Accounts
    * follow this unless they carry their own override (see Account.signature).
@@ -246,7 +259,9 @@ export function sanitizeSavedSearches(value: unknown): SavedSearch[] | null {
     const query = typeof candidate.query === 'string' ? candidate.query.trim() : ''
     const id = typeof candidate.id === 'string' ? candidate.id : ''
     if (!name || !query || !id) continue
-    clean.push({ id, name, query })
+    const account = typeof candidate.account === 'string' ? candidate.account : ''
+    const folder = typeof candidate.folder === 'string' ? candidate.folder : ''
+    clean.push(account && folder ? { id, name, query, account, folder } : { id, name, query })
   }
   return clean
 }
@@ -299,6 +314,7 @@ const DB_KEY = {
   sendShortcut: 'send_shortcut',
   conversationLayout: 'conversation_layout',
   savedSearches: 'saved_searches',
+  quickActions: 'quick_actions',
   stickyFilters: 'sticky_filters',
   simplifyMessages: 'simplify_messages',
   listView: 'list_view',
@@ -310,6 +326,7 @@ const DB_KEY = {
   markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   spellCheck: 'spell_check',
+  grammarCheck: 'grammar_check',
   signature: 'signature',
   kanbanBoards: 'kanban_boards',
   threadListWidth: 'thread_list_width',
@@ -364,7 +381,7 @@ export function initialThemeId(): string {
 
 function bootstrapThemeSelection(): Pick<Settings, 'themeId' | 'customThemes'> {
   try {
-    const raw = localStorage.getItem(THEME_CACHE_KEY)
+    const raw = localStorage.getItem(profileKey(THEME_CACHE_KEY))
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>
       return {
@@ -422,7 +439,7 @@ function applyFontSelection(fonts: FontSelection) {
 
 function bootstrapFontSelection(): FontSelection {
   try {
-    const raw = localStorage.getItem(FONT_CACHE_KEY)
+    const raw = localStorage.getItem(profileKey(FONT_CACHE_KEY))
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>
       return {
@@ -455,7 +472,7 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
   root.lang = lang.replace('_', '-')
   root.dir = lang === 'ar' ? 'rtl' : 'ltr'
   try {
-    localStorage.setItem(LANG_CACHE_KEY, lang)
+    localStorage.setItem(profileKey(LANG_CACHE_KEY), lang)
   } catch {
     // Storage unavailable: the attribute is still set, only the cache is skipped.
   }
@@ -463,7 +480,7 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
 
 ;(function bootstrapDocumentLanguage() {
   try {
-    const cached = normalizeI18nLanguage(localStorage.getItem(LANG_CACHE_KEY))
+    const cached = normalizeI18nLanguage(localStorage.getItem(profileKey(LANG_CACHE_KEY)))
     applyDocumentLanguage(cached ?? resolveI18nLanguageFromWebLocale(navigator.language) ?? 'en')
   } catch {
     // Best effort; useAppEffects re-applies once the DB-backed language resolves.
@@ -482,6 +499,7 @@ export const settings$ = observable<Settings>({
   sendShortcut: 'mod_enter',
   conversationLayout: 'traditional',
   savedSearches: [],
+  quickActions: [],
   stickyFilters: false,
   simplifyMessages: false,
   listView: 'table',
@@ -498,6 +516,8 @@ export const settings$ = observable<Settings>({
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
   spellCheck: true,
+  // Opt-in: it downloads nothing, but it loads a sizable checker on first use.
+  grammarCheck: 'off',
   signature: '',
   kanbanBoards: [],
   threadListWidth: 350,
@@ -527,7 +547,7 @@ function syncFonts() {
   }
   applyFontSelection(fonts)
   try {
-    localStorage.setItem(FONT_CACHE_KEY, JSON.stringify(fonts))
+    localStorage.setItem(profileKey(FONT_CACHE_KEY), JSON.stringify(fonts))
   } catch {
     // Storage unavailable: only the next first-paint hint is lost.
   }
@@ -581,7 +601,7 @@ function applyActiveTheme() {
   }
 
   localStorage.setItem(
-    THEME_CACHE_KEY,
+    profileKey(THEME_CACHE_KEY),
     JSON.stringify({
       themeId: settings$.themeId.peek(),
       customThemes: settings$.customThemes.peek(),
@@ -804,6 +824,8 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const saved = sanitizeSavedSearches(prefs[DB_KEY.savedSearches])
     if (saved) settings$.savedSearches.set(saved)
+    const quick = sanitizeQuickActions(prefs[DB_KEY.quickActions])
+    if (quick) settings$.quickActions.set(quick)
 
     if (typeof prefs[DB_KEY.stickyFilters] === 'boolean') {
       settings$.stickyFilters.set(prefs[DB_KEY.stickyFilters] as boolean)
@@ -850,6 +872,11 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {
       settings$.spellCheck.set(prefs[DB_KEY.spellCheck] as boolean)
+    }
+
+    const grammar = prefs[DB_KEY.grammarCheck]
+    if (grammar === 'off' || grammar === 'american' || grammar === 'british' || grammar === 'canadian' || grammar === 'australian') {
+      settings$.grammarCheck.set(grammar)
     }
 
     if (typeof prefs[DB_KEY.signature] === 'string') {

@@ -141,6 +141,10 @@ impl ThreadListQuery {
                 .map(str::to_owned),
             with_attachments: names.contains(&"attachments"),
             priority_only: names.contains(&"priority"),
+            category: names
+                .iter()
+                .find_map(|name| name.strip_prefix("category:"))
+                .map(|id| if id == "none" { String::new() } else { id.to_owned() }),
         }
     }
 
@@ -176,6 +180,9 @@ pub enum MailSource {
         label_id: Option<String>,
         with_attachments: bool,
         priority_only: bool,
+        /// An inbox category, `category:<id>` in the filter (`category:none`
+        /// is Other).
+        category: Option<String>,
     },
     /// Text search across the folder plus Sent, cursor-paginated.
     Search,
@@ -441,6 +448,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
         assert_eq!(
@@ -451,6 +459,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
         assert_eq!(query(json!({"filter": "snoozed"})).source(), MailSource::Snoozed);
@@ -478,6 +487,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
     }
@@ -496,6 +506,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
         // Order and spacing are the caller's business, not the meaning's.
@@ -507,6 +518,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
         // "All" alongside something else says nothing, and must not turn the
@@ -519,6 +531,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
         // Starred on its own stays the whole starred view the side navigation
@@ -539,6 +552,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
         // A name from a later version is ignored rather than narrowing to
@@ -551,6 +565,7 @@ mod tests {
                 label_id: None,
                 with_attachments: false,
                 priority_only: false,
+                category: None,
             }
         );
     }

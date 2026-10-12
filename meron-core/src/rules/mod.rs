@@ -12,6 +12,11 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod managesieve;
+pub mod run;
+pub mod server;
+pub mod sieve;
+
 #[cfg(test)]
 mod tests;
 
@@ -131,7 +136,7 @@ impl Subject<'_> {
 /// every message, and a half-written rule would quietly file the whole mailbox
 /// away; saving such a rule is refused too (see `validate`), so this is the
 /// second of two locks on the same door.
-fn holds(condition: &Condition, subject: &Subject) -> bool {
+pub(crate) fn holds(condition: &Condition, subject: &Subject) -> bool {
     let needle = condition.value.trim().to_lowercase();
     if needle.is_empty() {
         return false;
@@ -182,6 +187,21 @@ pub struct Planned {
 /// reader is shown beforehand is what actually happens — a preview computed by
 /// separate code is a preview that can lie.
 pub fn plan(rules: &[Rule], account: &str, subject: &Subject) -> Vec<Planned> {
+    in_running_order(plan_as_written(rules, account, subject))
+}
+
+/// The plan as it can actually run (#50): a message that has been filed
+/// elsewhere is no longer where a later action would find it, so everything
+/// else happens first and then the one move. A second move could never run
+/// and is not planned. What a preview shows is then exactly what is done.
+fn in_running_order(planned: Vec<Planned>) -> Vec<Planned> {
+    let (moves, mut rest): (Vec<Planned>, Vec<Planned>) =
+        planned.into_iter().partition(|step| matches!(step.action, Action::MoveTo { .. }));
+    rest.extend(moves.into_iter().take(1));
+    rest
+}
+
+fn plan_as_written(rules: &[Rule], account: &str, subject: &Subject) -> Vec<Planned> {
     let mut planned = Vec::new();
     for rule in rules {
         if !rule.enabled {

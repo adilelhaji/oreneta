@@ -666,3 +666,43 @@ fn known_limitation_gnupg_protected_curve25519_secrets_do_not_unlock_here() {
     // whoever asks that a passphrase-protected modern GnuPG key now decrypts.
     assert_eq!(failed, 2, "expected both the primary and the subkey to still fail to unlock");
 }
+
+// ---- Keys and messages made by GnuPG, not by Sequoia (#12) ----------------
+//
+// Every fixture above comes out of `CertBuilder`; a reader's key usually
+// comes out of GnuPG. See testdata/gnupg/README.md for how these were made.
+
+const GNUPG_SECRET: &str = include_str!("testdata/gnupg/fixture_secret.asc");
+const GNUPG_SECRET_AEAD_PREFS: &str = include_str!("testdata/gnupg/fixture_secret_aead_prefs.asc");
+const GNUPG_MESSAGE_SEIPD: &str = include_str!("testdata/gnupg/message_seipd.asc");
+const GNUPG_MESSAGE_AEAD: &str = include_str!("testdata/gnupg/message_aead.asc");
+
+fn inline_message(armoured: &str) -> Vec<u8> {
+    format!("From: fixture@example.test\r\nContent-Type: text/plain\r\n\r\n{armoured}\r\n").into_bytes()
+}
+
+/// The issue's repro: an unprotected EdDSA/cv25519 key straight out of
+/// `gpg --gen-key`, and a message `gpg --encrypt` made for it.
+#[test]
+fn a_gnupg_generated_unprotected_key_opens_a_gnupg_encrypted_message() {
+    let certs = certs_from_armoured(&[GNUPG_SECRET.to_string()]);
+    assert_eq!(certs.len(), 1, "the GnuPG export parses as one certificate");
+    let opened = decrypt_message(&inline_message(GNUPG_MESSAGE_SEIPD), &certs, None)
+        .unwrap_or_else(|err| panic!("GnuPG's own ciphertext should open: {err:?}"));
+    assert!(opened.body.contains("hello from gnupg without aead"), "{}", opened.body);
+    // An empty passphrase, which the interface may send for an unprotected
+    // key, changes nothing.
+    assert!(decrypt_message(&inline_message(GNUPG_MESSAGE_SEIPD), &certs, Some("")).is_ok());
+}
+
+/// GnuPG 2.4 writes a LibrePGP AEAD packet when the key asks for one, which
+/// Sequoia does not read. That is a message in a format this app cannot
+/// open — not a passphrase problem, and the reader must not be asked for one.
+#[test]
+fn a_librepgp_aead_message_is_reported_as_unsupported_not_as_a_passphrase_problem() {
+    let certs = certs_from_armoured(&[GNUPG_SECRET_AEAD_PREFS.to_string()]);
+    assert_eq!(certs.len(), 1);
+    let err = decrypt_message(&inline_message(GNUPG_MESSAGE_AEAD), &certs, None).unwrap_err();
+    assert_ne!(err, DecryptionFailure::NeedsPassphrase, "nothing is locked here");
+    assert!(matches!(err, DecryptionFailure::Unsupported { .. }), "{err:?}");
+}

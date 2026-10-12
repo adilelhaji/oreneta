@@ -94,3 +94,13 @@ fn tokenize_of_empty_text_is_empty() {
     assert!(tokenize("").is_empty());
     assert!(tokenize("   ").is_empty());
 }
+
+/// #50: the reader's own word outranks everything learned, both ways.
+#[test]
+fn a_blocked_or_allowed_sender_decides_and_says_so() {
+    let learned = Signals { sender_spam_count: 9, trigger_words: vec!["prize".into()], ..Default::default() };
+    let allowed = verdict(&Signals { listed: Some(false), ..learned.clone() });
+    assert_eq!(allowed, Verdict { spam: false, reasons: vec![Reason::YouAllowed] });
+    let blocked = verdict(&Signals { listed: Some(true), ..Default::default() });
+    assert_eq!(blocked, Verdict { spam: true, reasons: vec![Reason::YouBlocked] });
+}

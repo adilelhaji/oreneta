@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import type { DragEvent } from 'react'
-import { Mail, MoreHorizontal, EyeOff, CalendarDays, BookUser, ListTodo } from 'lucide-react'
+import {
+  Mail,
+  MoreHorizontal,
+  EyeOff,
+  CalendarDays,
+  BookUser,
+  ListTodo,
+  StickyNote,
+  Paperclip,
+  MessagesSquare,
+  Layers,
+} from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -21,6 +32,7 @@ import { AccountContextMenu } from './AccountContextMenu'
 import { BoardContextMenu } from './BoardContextMenu'
 import { BoardDialog, type BoardDialogState } from './BoardDialog'
 import type { Account } from '../../types'
+import { accountGroups$, showAccountGroup } from '../../states/accountGroups'
 
 export function SideNav() {
   const { t } = useTranslation()
@@ -29,12 +41,16 @@ export function SideNav() {
   const calendarOpen = useValue(ui$.calendarOpen)
   const peopleOpen = useValue(ui$.peopleOpen)
   const tasksOpen = useValue(ui$.tasksOpen)
+  const notesOpen = useValue(ui$.notesOpen)
+  const messagingOpen = useValue(ui$.messagingOpen)
+  const attachmentsOpen = useValue(ui$.attachmentsOpen)
   const hiddenSideNavAccounts = useValue(settings$.hiddenSideNavAccounts)
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
   const foldersByAccount = useValue(mail$.foldersByAccount)
   const activeBoardId = useValue(kanban$.activeBoardId)
   const selectedAccount = useValue(ui$.selectedAccount)
+  const accountGroups = useValue(accountGroups$.groups)
   // Right-click context menu anchored at the cursor for one account.
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const menuAccount = menu ? accounts.find((acc) => acc.id === menu.id) : null
@@ -132,6 +148,9 @@ export function SideNav() {
     ui$.calendarOpen.set(false)
     ui$.peopleOpen.set(false)
     ui$.tasksOpen.set(false)
+    ui$.notesOpen.set(false)
+    ui$.attachmentsOpen.set(false)
+    ui$.messagingOpen.set(false)
     openMailAccount(id, folderId)
   }
 
@@ -160,7 +179,10 @@ export function SideNav() {
                     ? 'bg-accent text-on-accent '
                     : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
                 }`}
-                onClick={() => selectAccount('unified')}
+                onClick={() => {
+                  selectAccount('unified')
+                  showAccountGroup(null)
+                }}
                 onContextMenu={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
@@ -193,6 +215,9 @@ export function SideNav() {
               onClick={() => {
                 ui$.peopleOpen.set(false)
                 ui$.tasksOpen.set(false)
+                ui$.notesOpen.set(false)
+                ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.calendarOpen.set(!calendarOpen)
               }}
               title={t('calendar.title', { defaultValue: 'Calendar' })}
@@ -220,6 +245,9 @@ export function SideNav() {
               onClick={() => {
                 ui$.calendarOpen.set(false)
                 ui$.tasksOpen.set(false)
+                ui$.notesOpen.set(false)
+                ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.peopleOpen.set(!peopleOpen)
               }}
               title={t('people.title')}
@@ -248,11 +276,101 @@ export function SideNav() {
               onClick={() => {
                 ui$.calendarOpen.set(false)
                 ui$.peopleOpen.set(false)
+                ui$.notesOpen.set(false)
+                ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.tasksOpen.set(!tasksOpen)
               }}
               title={t('tasks.title')}
             >
               <ListTodo size={20} strokeWidth={1.75} />
+            </button>
+          </div>
+        )}
+
+        {/* Notes. Kept on this computer and owned by no account (ADR-0015). */}
+        {hasAccounts && (
+          <div className="relative w-full flex justify-center group">
+            <div
+              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+                notesOpen ? 'h-7' : 'h-0 group-hover:h-3'
+              }`}
+            />
+            <button
+              className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
+                notesOpen
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
+              }`}
+              onClick={() => {
+                ui$.calendarOpen.set(false)
+                ui$.peopleOpen.set(false)
+                ui$.tasksOpen.set(false)
+                ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
+                ui$.notesOpen.set(!notesOpen)
+              }}
+              title={t('notes.title', { defaultValue: 'Notes' })}
+            >
+              <StickyNote size={20} strokeWidth={1.75} />
+            </button>
+          </div>
+        )}
+
+        {/* Chat over XMPP (#111, ADR-0036). */}
+        {hasAccounts && (
+          <div className="relative w-full flex justify-center group">
+            <div
+              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+                messagingOpen ? 'h-7' : 'h-0 group-hover:h-3'
+              }`}
+            />
+            <button
+              className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
+                messagingOpen
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
+              }`}
+              onClick={() => {
+                ui$.calendarOpen.set(false)
+                ui$.peopleOpen.set(false)
+                ui$.tasksOpen.set(false)
+                ui$.notesOpen.set(false)
+                ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(!messagingOpen)
+              }}
+              title={t('messaging.title', { defaultValue: 'Chat' })}
+            >
+              <MessagesSquare size={20} strokeWidth={1.75} />
+            </button>
+          </div>
+        )}
+
+        {/* Attachments: every file in the mail kept here, across accounts (#93). */}
+        {hasAccounts && (
+          <div className="relative w-full flex justify-center group">
+            <div
+              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+                attachmentsOpen ? 'h-7' : 'h-0 group-hover:h-3'
+              }`}
+            />
+            <button
+              className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
+                attachmentsOpen
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
+              }`}
+              onClick={() => {
+                ui$.calendarOpen.set(false)
+                ui$.peopleOpen.set(false)
+                ui$.tasksOpen.set(false)
+                ui$.notesOpen.set(false)
+                ui$.messagingOpen.set(false)
+                ui$.attachmentsOpen.set(!attachmentsOpen)
+              }}
+              title={t('attachmentsView.title', { defaultValue: 'Attachments' })}
+            >
+              <Paperclip size={20} strokeWidth={1.75} />
             </button>
           </div>
         )}
@@ -277,6 +395,10 @@ export function SideNav() {
                     onSelect={() => {
                       ui$.calendarOpen.set(false)
                       ui$.peopleOpen.set(false)
+                      ui$.tasksOpen.set(false)
+                      ui$.notesOpen.set(false)
+                      ui$.attachmentsOpen.set(false)
+                      ui$.messagingOpen.set(false)
                       selectKanbanBoard(board.id)
                     }}
                     onContextMenu={(e) => {
@@ -353,6 +475,18 @@ export function SideNav() {
 
       {unifiedMenu && (
         <RailContextMenu x={unifiedMenu.x} y={unifiedMenu.y} onClose={() => setUnifiedMenu(null)}>
+          {accountGroups.map((group) => (
+            <RailMenuItem
+              key={group.id}
+              icon={<Layers size={14} className="text-secondary" strokeWidth={1.75} />}
+              label={t('accountGroups.showGroup', { name: group.name, defaultValue: 'Show {name} together' })}
+              onClick={() => {
+                selectAccount('unified')
+                showAccountGroup(group.id)
+                setUnifiedMenu(null)
+              }}
+            />
+          ))}
           <RailMenuItem
             icon={<EyeOff size={14} className="text-secondary" strokeWidth={1.75} />}
             label={t('sidenav.actions.hideFromSideNav')}

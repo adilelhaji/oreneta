@@ -181,6 +181,22 @@ pub enum SignatureVerdict {
         fingerprint: String,
         addresses: Vec<String>,
     },
+    /// The signature checked out, and the certificate that made it was not
+    /// valid at the time of checking: expired, or not valid yet. Integrity
+    /// holds; the identity claim does not stand on its own, so this is never
+    /// shown as a valid signature (#9). `trusted` says whether the reader
+    /// holds the certificate, which is a separate question again.
+    CertificateNotValid {
+        fingerprint: String,
+        addresses: Vec<String>,
+        /// `expired` or `notYetValid`.
+        reason: String,
+        #[serde(rename = "notBefore")]
+        not_before: i64,
+        #[serde(rename = "notAfter")]
+        not_after: i64,
+        trusted: bool,
+    },
     /// The content does not match the signature over it.
     Bad,
     /// Nothing here can check it: no certificate to check against — missing
@@ -312,6 +328,7 @@ fn embedded_certs(signed_data: &SignedData) -> Vec<Certificate> {
 fn verify_signer_info(
     signer: &SignerInfo,
     content: &[u8],
+    econtent_type: &str,
     embedded: &[Certificate],
     held: &[Certificate],
 ) -> Result<VerifyOutcome> {
@@ -343,6 +360,24 @@ fn verify_signer_info(
         // The content does not match what the signature covers. Tampered, or
         // corrupted in transit — either way, not what was signed.
         return Ok(VerifyOutcome::Tampered);
+    }
+
+    // RFC 5652 §5.3 and §11.1: with signed attributes present, `contentType`
+    // must be one of them and must equal the type of the content actually
+    // carried. Without this, a signature over one kind of content can be
+    // presented as covering another: the digest still matches, the
+    // signature still checks, and the claim about what was signed is false.
+    if let Some(attrs) = &signer.signed_attrs {
+        let signed_type = attrs
+            .iter()
+            .find(|attr| attr.oid.to_string() == OID_CONTENT_TYPE)
+            .and_then(|attr| attr.values.iter().next())
+            .and_then(|value| value.decode_as::<ObjectIdentifier>().ok());
+        match signed_type {
+            None => return Ok(VerifyOutcome::Malformed),
+            Some(oid) if oid.to_string() != econtent_type => return Ok(VerifyOutcome::Tampered),
+            Some(_) => {}
+        }
     }
 
     let signature_oid = signer.signature_algorithm.oid.to_string();
@@ -384,6 +419,7 @@ fn verify_signer_info(
         fingerprint: info.fingerprint,
         addresses: info.addresses,
         trusted,
+        validity: validity_of(signing_cert),
     })
 }
 
@@ -392,10 +428,35 @@ enum VerifyOutcome {
         fingerprint: String,
         addresses: Vec<String>,
         trusted: bool,
+        /// The signing certificate's (notBefore, notAfter), Unix seconds.
+        validity: Option<(i64, i64)>,
     },
     Tampered,
     NoCertificate,
     UnsupportedAlgorithm,
+    /// Required CMS structure missing (a signed-attribute set without its
+    /// `contentType`).
+    Malformed,
+}
+
+/// A certificate's validity interval as Unix seconds, or `None` when it
+/// cannot be read — treated as not valid, never as valid.
+fn validity_of(cert: &Certificate) -> Option<(i64, i64)> {
+    let validity = cert.tbs_certificate().validity();
+    let not_before = validity.not_before.to_unix_duration().as_secs();
+    let not_after = validity.not_after.to_unix_duration().as_secs();
+    Some((i64::try_from(not_before).ok()?, i64::try_from(not_after).ok()?))
+}
+
+/// Whether `now` falls within a certificate's validity, inclusive of both
+/// ends as RFC 5280 §4.1.2.5 says; and if not, which side it fell off.
+fn validity_problem(validity: Option<(i64, i64)>, now: i64) -> Option<&'static str> {
+    match validity {
+        None => Some("expired"),
+        Some((not_before, _)) if now < not_before => Some("notYetValid"),
+        Some((_, not_after)) if now > not_after => Some("expired"),
+        Some(_) => None,
+    }
 }
 
 /// Like [`find_signer`], but also says whether the match came from the
@@ -429,6 +490,28 @@ pub fn verify_signed_data(
     cms_der: &[u8],
     content: Option<&[u8]>,
     held: &[Certificate],
+) -> Option<MessageSignature> {
+    verify_signed_data_at(cms_der, content, held, unix_now())
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs() as i64)
+        .unwrap_or_default()
+}
+
+/// [`verify_signed_data`] with the instant the certificate's validity is
+/// judged at, so tests can check boundaries without depending on the clock.
+///
+/// Validity is judged at the moment of checking, not at the `signingTime`
+/// the message claims: that attribute is written by the signer and proves
+/// nothing about when the signature was made.
+pub fn verify_signed_data_at(
+    cms_der: &[u8],
+    content: Option<&[u8]>,
+    held: &[Certificate],
+    now: i64,
 ) -> Option<MessageSignature> {
     let content_info = ContentInfo::from_der(cms_der).ok()?;
     if content_info.content_type.to_string() != OID_SIGNED_DATA {
@@ -465,19 +548,32 @@ pub fn verify_signed_data(
         });
     };
 
-    let outcome = match verify_signer_info(signer, &content_bytes, &embedded, held) {
+    let econtent_type = signed_data.encap_content_info.econtent_type.to_string();
+    let outcome = match verify_signer_info(signer, &content_bytes, &econtent_type, &embedded, held) {
         Ok(outcome) => outcome,
         Err(_) => return Some(MessageSignature { verdict: SignatureVerdict::Malformed, matches_sender: None }),
     };
 
     let verdict = match outcome {
-        VerifyOutcome::Verified { fingerprint, addresses, trusted: true } => {
-            SignatureVerdict::Good { fingerprint, addresses }
-        }
-        VerifyOutcome::Verified { fingerprint, addresses, trusted: false } => {
-            SignatureVerdict::ValidUntrusted { fingerprint, addresses }
+        VerifyOutcome::Verified { fingerprint, addresses, trusted, validity } => {
+            match validity_problem(validity, now) {
+                Some(reason) => {
+                    let (not_before, not_after) = validity.unwrap_or_default();
+                    SignatureVerdict::CertificateNotValid {
+                        fingerprint,
+                        addresses,
+                        reason: reason.to_string(),
+                        not_before,
+                        not_after,
+                        trusted,
+                    }
+                }
+                None if trusted => SignatureVerdict::Good { fingerprint, addresses },
+                None => SignatureVerdict::ValidUntrusted { fingerprint, addresses },
+            }
         }
         VerifyOutcome::Tampered => SignatureVerdict::Bad,
+        VerifyOutcome::Malformed => SignatureVerdict::Malformed,
         VerifyOutcome::NoCertificate | VerifyOutcome::UnsupportedAlgorithm => SignatureVerdict::NoKey,
     };
     Some(MessageSignature { matches_sender: None, verdict })
@@ -487,7 +583,9 @@ pub fn verify_signed_data(
 /// from. `None` when there is no verified signer to ask about.
 pub fn signer_matches_sender(verdict: &SignatureVerdict, from_addr: &str) -> Option<bool> {
     let addresses = match verdict {
-        SignatureVerdict::Good { addresses, .. } | SignatureVerdict::ValidUntrusted { addresses, .. } => addresses,
+        SignatureVerdict::Good { addresses, .. }
+        | SignatureVerdict::ValidUntrusted { addresses, .. }
+        | SignatureVerdict::CertificateNotValid { addresses, .. } => addresses,
         SignatureVerdict::Bad | SignatureVerdict::NoKey | SignatureVerdict::Malformed => return None,
     };
     let from = from_addr.trim().to_lowercase();
@@ -497,6 +595,11 @@ pub fn signer_matches_sender(verdict: &SignatureVerdict, from_addr: &str) -> Opt
 /// Check the signature on a whole RFC 8551 message, in whichever of the two
 /// shapes it arrived in.
 pub fn verify_message(raw: &[u8], held: &[Certificate]) -> Option<MessageSignature> {
+    verify_message_at(raw, held, unix_now())
+}
+
+/// [`verify_message`] judged at a given instant; see [`verify_signed_data_at`].
+pub fn verify_message_at(raw: &[u8], held: &[Certificate], now: i64) -> Option<MessageSignature> {
     let mail = mailparse::parse_mail(raw).ok()?;
     let protection = super::detect::protection_of(&mail);
 
@@ -505,12 +608,12 @@ pub fn verify_message(raw: &[u8], held: &[Certificate]) -> Option<MessageSignatu
             let part = find_smime_signed_part(&mail)?;
             let (content_part, signature_part) = super::detect::signed_parts(part)?;
             let signature_der = signature_part.get_body_raw().ok()?;
-            verify_signed_data(&signature_der, Some(content_part.raw_bytes), held)
+            verify_signed_data_at(&signature_der, Some(content_part.raw_bytes), held, now)
         }
         super::detect::Protection::SmimeOpaqueSigned => {
             let part = find_opaque_signed_part(&mail)?;
             let body = part.get_body_raw().ok()?;
-            verify_signed_data(&body, None, held)
+            verify_signed_data_at(&body, None, held, now)
         }
         _ => None,
     }?;
@@ -561,11 +664,19 @@ pub fn certs_from_der(stored: &[Vec<u8>]) -> Vec<Certificate> {
 pub enum DecryptionFailure {
     /// Not encrypted to the identity this reader holds.
     NoKey,
-    /// Not readable as CMS `EnvelopedData`, or protected with something this
-    /// does not implement yet (RSAES-OAEP key transport, a content cipher
-    /// other than AES-CBC/3DES-CBC).
+    /// Not readable as CMS `EnvelopedData`.
     Malformed,
+    /// Readable, for this identity, but protected with something this does
+    /// not implement yet, named (#49): told apart from damage, so nobody is
+    /// told a sound message is broken.
+    Unsupported { algorithm: String },
 }
+
+/// `1.2.840.113549.1.9.16.1.23`: `id-ct-authEnvelopedData` (AES-GCM and the
+/// like, RFC 5083).
+const OID_AUTH_ENVELOPED_DATA: &str = "1.2.840.113549.1.9.16.1.23";
+/// `1.2.840.113549.1.1.7`: `id-RSAES-OAEP` key transport.
+const OID_RSAES_OAEP: &str = "1.2.840.113549.1.1.7";
 
 /// `1.2.840.113549.1.7.3`: `id-envelopedData`.
 const OID_ENVELOPED_DATA: &str = "1.2.840.113549.1.7.3";
@@ -601,10 +712,13 @@ fn identifies_recipient(rid: &cms::enveloped_data::RecipientIdentifier, cert: &C
 ///
 /// Only RSAES-PKCS1-v1.5 key transport is unwrapped — the shape every real
 /// S/MIME sender this was tested against actually uses — and only
-/// AES-CBC/3DES-CBC content ciphers; RSAES-OAEP or anything else is reported
-/// as [`DecryptionFailure::Malformed`] rather than guessed at.
+/// AES-CBC/3DES-CBC content ciphers; RSAES-OAEP, AES-GCM or anything else is
+/// named as [`DecryptionFailure::Unsupported`] rather than guessed at.
 pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> Result<Vec<u8>, DecryptionFailure> {
     let content_info = ContentInfo::from_der(cms_der).map_err(|_| DecryptionFailure::Malformed)?;
+    if content_info.content_type.to_string() == OID_AUTH_ENVELOPED_DATA {
+        return Err(DecryptionFailure::Unsupported { algorithm: "AES-GCM (authenticated enveloped data)".into() });
+    }
     if content_info.content_type.to_string() != OID_ENVELOPED_DATA {
         return Err(DecryptionFailure::Malformed);
     }
@@ -612,12 +726,19 @@ pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> 
         content_info.content.decode_as().map_err(|_| DecryptionFailure::Malformed)?;
 
     let mut content_key = None;
+    let mut unsupported_for_us = None;
     for recipient in enveloped.recip_infos.0.iter() {
         let cms::enveloped_data::RecipientInfo::Ktri(ktri) = recipient else { continue };
         if !identifies_recipient(&ktri.rid, &identity.certificate) {
             continue;
         }
-        if ktri.key_enc_alg.oid.to_string() != OID_RSA_ENCRYPTION {
+        let key_alg = ktri.key_enc_alg.oid.to_string();
+        if key_alg != OID_RSA_ENCRYPTION {
+            unsupported_for_us = Some(if key_alg == OID_RSAES_OAEP {
+                "RSAES-OAEP key transport".to_string()
+            } else {
+                format!("key transport {key_alg}")
+            });
             continue;
         }
         if let Ok(key) = identity.private_key.decrypt(Pkcs1v15Encrypt, ktri.enc_key.as_bytes()) {
@@ -625,7 +746,11 @@ pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> 
             break;
         }
     }
-    let content_key = content_key.ok_or(DecryptionFailure::NoKey)?;
+    let content_key = match (content_key, unsupported_for_us) {
+        (Some(key), _) => key,
+        (None, Some(algorithm)) => return Err(DecryptionFailure::Unsupported { algorithm }),
+        (None, None) => return Err(DecryptionFailure::NoKey),
+    };
 
     let enc_info = &enveloped.encrypted_content;
     let ciphertext = enc_info
@@ -648,7 +773,7 @@ pub fn decrypt_enveloped(cms_der: &[u8], identity: &super::pkcs12::Identity) -> 
         }
         OID_DES_EDE3_CBC => super::block_cipher::tdes_cbc_decrypt(&content_key, iv.as_bytes(), ciphertext)
             .map_err(|_| DecryptionFailure::Malformed),
-        _ => Err(DecryptionFailure::Malformed),
+        other => Err(DecryptionFailure::Unsupported { algorithm: format!("content cipher {other}") }),
     }
 }
 

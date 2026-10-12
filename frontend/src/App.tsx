@@ -16,7 +16,13 @@ import { KanbanView } from './components/kanban/KanbanView'
 import { CalendarView } from './components/calendar/CalendarView'
 import { PeopleView } from './components/people/PeopleView'
 import { TasksView } from './components/tasks/TasksView'
+import { NotesView } from './components/notes/NotesView'
+import { MessagingView } from './components/messaging/MessagingView'
+import { AttachmentsView } from './components/attachments/AttachmentsView'
 import { TaskDialog } from './components/tasks/TaskDialog'
+import { QuickActionDialog } from './components/quick/QuickActionDialog'
+import { AwaitingDialog } from './components/awaiting/AwaitingDialog'
+import { MergeDialog } from './components/merge/MergeDialog'
 import { MessagePane } from './components/chat/MessagePane'
 import { AboutDialog } from './components/dialog/AboutDialog'
 import { ChangelogDialog } from './components/dialog/ChangelogDialog'
@@ -54,6 +60,9 @@ export default function App() {
   const calendarOpen = useValue(ui$.calendarOpen)
   const peopleOpen = useValue(ui$.peopleOpen)
   const tasksOpen = useValue(ui$.tasksOpen)
+  const notesOpen = useValue(ui$.notesOpen)
+  const attachmentsOpen = useValue(ui$.attachmentsOpen)
+  const messagingOpen = useValue(ui$.messagingOpen)
   const taskEditor = useValue(ui$.taskEditor)
   const setupOpen = useValue(ui$.setupOpen)
   const settingsOpen = useValue(ui$.settingsOpen)
@@ -88,7 +97,7 @@ export default function App() {
         <ErrorBoundary label="side navigation">
           <SideNav />
         </ErrorBoundary>
-        {!peopleOpen && !calendarOpen && !tasksOpen && !activeBoardId && (
+        {!peopleOpen && !calendarOpen && !tasksOpen && !notesOpen && !attachmentsOpen && !messagingOpen && !activeBoardId && (
           <ErrorBoundary label="mail navigation">
             <MailNavigation />
           </ErrorBoundary>
@@ -105,6 +114,18 @@ export default function App() {
           <ErrorBoundary label="tasks">
             <TasksView />
           </ErrorBoundary>
+        ) : notesOpen ? (
+          <ErrorBoundary label="notes">
+            <NotesView />
+          </ErrorBoundary>
+        ) : attachmentsOpen ? (
+          <ErrorBoundary label="attachments">
+            <AttachmentsView />
+          </ErrorBoundary>
+        ) : messagingOpen ? (
+          <ErrorBoundary label="messaging">
+            <MessagingView />
+          </ErrorBoundary>
         ) : (
         <ErrorBoundary label="thread list">
           {activeBoardId ? (
@@ -114,7 +135,7 @@ export default function App() {
           )}
         </ErrorBoundary>
         )}
-        {calendarOpen || peopleOpen || tasksOpen ? null : !activeBoardId ? (
+        {calendarOpen || peopleOpen || tasksOpen || notesOpen || attachmentsOpen || messagingOpen ? null : !activeBoardId ? (
           <ErrorBoundary label="conversation">
             <MessagePane />
           </ErrorBoundary>
@@ -151,7 +172,11 @@ export default function App() {
         {scheduledSendsOpen && <ScheduledSendsDialog />}
         {ruleLogOpen && <RuleLogDialog />}
         {catalogueOpen && <DesignCatalogue />}
-        {taskEditor && <TaskDialog />}
+        {/* Keyed by the task, so moving from one to another starts from that one's fields. */}
+        {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
+        <QuickActionDialog />
+        <AwaitingDialog />
+        <MergeDialog />
         {sweepTarget && (
           <SweepDialog
             accountId={sweepTarget.accountId}

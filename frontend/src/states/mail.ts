@@ -1,4 +1,10 @@
-import { readOnlyTarget as matchesReadOnlyTarget, isReadOnlyMail } from '../lib/mailCapabilities'
+import {
+  readOnlyTarget as matchesReadOnlyTarget,
+  isReadOnlyMail,
+  messageChangesBlocked,
+  copyBlocked,
+  keepsServerDrafts,
+} from '../lib/mailCapabilities'
 import { observable } from '@legendapp/state'
 import type { Account, Folder, Message } from '../types'
 import { invoke } from '../lib/bridge'
@@ -13,6 +19,7 @@ import {
   type BulkSelectionItem,
 } from './ui'
 import { accounts$, unifiedAccounts } from './accounts'
+import { accountGroups$, inUnifiedScope } from './accountGroups'
 import { kanban$, forgetDeletedMailViewFolder, removeKanbanColumnsForFolder } from './kanban'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
 import { isUnifiedStarred, unifiedFolderRole, unifiedFolders } from '../lib/unifiedFolders'
@@ -24,6 +31,12 @@ import { requestAccountSync, type SyncRequestOutcome } from './connectivity'
 
 function readOnlyTarget(accounts: Account[], id: string): boolean {
   return matchesReadOnlyTarget(accounts, id) || matchesReadOnlyTarget(accounts, findLocalThread(id)?.account_id ?? '')
+}
+
+/** Message changes (read, flag, move, archive, delete) — on Graph only with
+ * the change permission (#141). Managing the mailbox uses readOnlyTarget. */
+function changesBlocked(accounts: Account[], id: string): boolean {
+  return messageChangesBlocked(accounts, id) || messageChangesBlocked(accounts, findLocalThread(id)?.account_id ?? '')
 }
 
 /** What the core made of a typed search, for showing back. */
@@ -518,6 +531,27 @@ export async function saveMessageAsEml(message: Message) {
   }
 }
 
+// Export a folder, or the chosen messages in it, as one .mbox file (#112).
+// The bridge asks where to save it and the core streams the original bytes
+// there, so it needs the server for an online account.
+export async function exportFolderMbox(accountId: string, folderId: string, name: string, uids?: number[]) {
+  try {
+    const res = await invoke<{ saved: boolean; exported?: number }>('mail.exportMbox', {
+      account: accountId,
+      folder: folderId,
+      name,
+      ...(uids?.length ? { uids } : {}),
+    })
+    if (res?.saved) {
+      showToast(
+        t('threads.actions.exported', { count: res.exported ?? 0, defaultValue: '{count, plural, one {Exported # message} other {Exported # messages}}' }),
+      )
+    }
+  } catch {
+    showToast(t('threads.actions.couldNotExport', { defaultValue: 'Could not export the folder' }))
+  }
+}
+
 // Copy a keyed image onto the system clipboard. The webview's native "Copy
 // Image" is inert in the Wails webview, so the bridge shells out to the same
 // clipboard helpers used for pasting.
@@ -789,11 +823,20 @@ type ThreadSearchStage = 'auto' | 'cache' | 'live'
 // id nor a single-line search box carries one). Both the loader and the list
 // build the key from the same fields, so the list can tell "these rows are for
 // what I'm showing" from "these rows are the previous view's".
-export function threadListViewKey(account: string, folder: string, query: string, filter: string, sort: string) {
+export function threadListViewKey(
+  account: string,
+  folder: string,
+  query: string,
+  filter: string,
+  sort: string,
+  group: string | null = accountGroups$.active.peek(),
+) {
   // The ordering is part of the view. Without it here, changing the sort would
   // leave the previous order's rows on screen looking settled, because the
-  // list would believe it was already showing the view it had loaded.
-  return [account, folder, query, filter, sort].join('\n')
+  // list would believe it was already showing the view it had loaded. So is
+  // the account group: each one is its own unified view (#99).
+  const scope = account === 'unified' && group ? `unified#${group}` : account
+  return [scope, folder, query, filter, sort].join('\n')
 }
 
 /**
@@ -1016,8 +1059,11 @@ export async function loadThreads(refresh = true, searchStage: ThreadSearchStage
   ) {
     const selectedThread = previousThreads.find((thread) => thread.thread_id === currentSelected)
     if (selectedThread) {
-      allThreads = [...allThreads, selectedThread]
-      allThreads.sort((a, b) => b.date - a.date)
+      // Back where it was, without re-sorting: these views are not all in
+      // date order (snoozed is by when each comes back), and sorting the page
+      // by date would reorder every row to keep one.
+      const at = Math.min(previousThreads.indexOf(selectedThread), allThreads.length)
+      allThreads = [...allThreads.slice(0, at), selectedThread, ...allThreads.slice(at)]
     }
   }
 
@@ -1402,7 +1448,7 @@ export async function loadMoreMessages(threadId: string) {
 }
 
 export async function markThreadRead(threadId: string) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   if (!threadId) return
   const previousThreads = mail$.threads.get()
   const previousMessages = mail$.messages.get()
@@ -1458,7 +1504,7 @@ export async function markThreadRead(threadId: string) {
 // server-side. Marking every message unread would reopen the thread at its
 // oldest message and shed the count again as the reader scrolls down.
 export async function markThreadUnread(threadId: string) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   if (!threadId) return
   const threadMessages = mail$.messages.get().filter((message) => message.thread_id === threadId)
   const newestMessage = threadMessages.reduce<Message | null>(
@@ -1497,7 +1543,7 @@ export async function markThreadUnread(threadId: string) {
 }
 
 export async function starThread(threadId: string, starred: boolean) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   if (!threadId) return
 
   // Optimistic update
@@ -1614,7 +1660,7 @@ async function refreshThreadLocation(accountId?: string, refresh = false) {
 }
 
 export async function moveThreadToFolder(threadId: string, targetFolderId: string, options: { undo?: boolean } = {}) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   if (!threadId || !targetFolderId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -1644,7 +1690,7 @@ export async function moveThreadToFolder(threadId: string, targetFolderId: strin
 }
 
 export async function copyThreadToFolder(threadId: string, targetAccountId: string, targetFolderId: string) {
-  if (readOnlyTarget(accounts$.peek(), threadId) || readOnlyTarget(accounts$.peek(), targetAccountId)) return
+  if (copyBlocked(accounts$.peek(), findLocalThread(threadId)?.account_id ?? threadId, targetAccountId)) return
   if (!threadId || !targetAccountId || !targetFolderId) return
   const sourceThread = findLocalThread(threadId)
   try {
@@ -1664,7 +1710,7 @@ export async function copyThreadToFolder(threadId: string, targetAccountId: stri
   }
 }
 
-function uniqueThreadItems(items: BulkSelectionItem[]) {
+export function uniqueThreadItems(items: BulkSelectionItem[]) {
   const byThread = new Map<string, BulkSelectionItem>()
   for (const item of items) {
     if (!item.threadId || item.kind !== 'mail') continue
@@ -1673,72 +1719,127 @@ function uniqueThreadItems(items: BulkSelectionItem[]) {
   return [...byThread.values()]
 }
 
+/**
+ * Run a bulk action one conversation at a time (#34).
+ *
+ * A failure undoes only that conversation's optimistic change: the ones before
+ * it happened on the server and stay done, and the rest are not attempted.
+ * Running them one by one also keeps each item's own undo snapshot from
+ * capturing — and later restoring — another item's change.
+ */
+export async function runBulk(
+  targets: BulkSelectionItem[],
+  apply: (item: BulkSelectionItem) => Promise<void>,
+  options: { removesLocally?: boolean } = {},
+): Promise<{ done: number; error?: unknown }> {
+  let done = 0
+  for (const item of targets) {
+    const rollback = options.removesLocally ? removeThreadLocally(item.threadId).rollback : undefined
+    try {
+      await apply(item)
+      done++
+    } catch (error) {
+      rollback?.()
+      return { done, error }
+    }
+  }
+  return { done }
+}
+
+/** What a stopped bulk action says: how many were done, of how many, and why it stopped. */
+export function bulkFailure(done: number, total: number, error: unknown, fallback: string): string {
+  const reason = error instanceof Error && error.message ? error.message : fallback
+  return done === 0 ? reason : t('mail.toast.bulkPartial', { done, total, reason })
+}
+
 export async function bulkMarkSelectedRead(items: BulkSelectionItem[]) {
-  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
-  await Promise.all(targets.map((item) => markThreadRead(item.threadId)))
+  const { done, error } = await runBulk(targets, (item) => markThreadRead(item.threadId))
   clearBulkSelection()
-  showToast(t('mail.toast.markedReadCount', { count: targets.length }))
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.markReadFailed')), 'error')
+  else showToast(t('mail.toast.markedReadCount', { count: targets.length }))
 }
 
 export async function bulkMarkSelectedUnread(items: BulkSelectionItem[]) {
-  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
-  await Promise.all(targets.map((item) => markThreadUnread(item.threadId)))
+  const { done, error } = await runBulk(targets, (item) => markThreadUnread(item.threadId))
   clearBulkSelection()
-  showToast(t('mail.toast.markedUnreadCount', { count: targets.length }))
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.markUnreadFailed')), 'error')
+  else showToast(t('mail.toast.markedUnreadCount', { count: targets.length }))
 }
 
 export async function bulkStarSelected(items: BulkSelectionItem[], starred: boolean) {
-  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
-  await Promise.all(targets.map((item) => starThread(item.threadId, starred)))
+  const { done, error } = await runBulk(targets, (item) => starThread(item.threadId, starred))
   clearBulkSelection()
-  showToast(starred ? t('mail.toast.starredSelected') : t('mail.toast.unstarredSelected'))
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.starFailed')), 'error')
+  else showToast(starred ? t('mail.toast.starredSelected') : t('mail.toast.unstarredSelected'))
 }
 
 export async function bulkArchiveSelected(items: BulkSelectionItem[]) {
-  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items).filter((item) => !item.draft && !item.trash)
   if (targets.length === 0) return
-  const rollbacks: Array<() => void> = []
-  try {
-    for (const item of targets) {
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
       const sourceThread = findLocalThread(item.threadId)
-      rollbacks.push(removeThreadLocally(item.threadId).rollback)
       const res = await invoke('mail.archive', { thread_id: item.threadId })
       assertMoveAffected(res, 'Archive')
       applyMutationFolderUnreads(res as MutationResult)
       if (sourceThread?.account_id) void refreshAccountFoldersCache(sourceThread.account_id, false)
-    }
-    await refreshThreadLocation(undefined, true)
-    clearBulkSelection()
-    showToast(t('mail.toast.archivedCount', { count: targets.length }))
-  } catch (error) {
-    for (const rollback of rollbacks.reverse()) rollback()
-    showToast(error instanceof Error ? error.message : t('mail.toast.archiveFailed'), 'error')
-  }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(undefined, true)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.archiveFailed')), 'error')
+  else showToast(t('mail.toast.archivedCount', { count: targets.length }))
 }
 
 export async function bulkMoveSelectedToFolder(items: BulkSelectionItem[], targetFolderId: string) {
-  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items).filter((item) => item.folderId !== targetFolderId)
   if (targets.length === 0) return
-  const rollbacks: Array<() => void> = []
-  try {
-    for (const item of targets) {
-      rollbacks.push(removeThreadLocally(item.threadId).rollback)
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
       const res = await invoke('mail.move', { thread_id: item.threadId, target_folder_id: targetFolderId })
       assertMoveAffected(res)
       applyMutationFolderUnreads(res as MutationResult)
-    }
-    await refreshThreadLocation(targets[0]?.accountId, true)
-    clearBulkSelection()
-    showToast(t('mail.toast.movedCount', { count: targets.length }))
-  } catch (error) {
-    for (const rollback of rollbacks.reverse()) rollback()
-    showToast(error instanceof Error ? error.message : t('mail.toast.moveFailed'), 'error')
-  }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(targets[0]?.accountId, true)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.moveFailed')), 'error')
+  else showToast(t('mail.toast.movedCount', { count: targets.length }))
+}
+
+/**
+ * One conversation archived, for a Quick Action step (#92): throws on
+ * failure so the action can report it, and leaves the list refresh to the
+ * caller, which knows when the whole run is over.
+ */
+export async function archiveThreadStep(threadId: string) {
+  const res = await invoke('mail.archive', { thread_id: threadId })
+  assertMoveAffected(res, 'Archive')
+  applyMutationFolderUnreads(res as MutationResult)
+}
+
+/** One conversation moved, for a Quick Action step (#92). Throws on failure. */
+export async function moveThreadStep(threadId: string, targetFolderId: string) {
+  const res = await invoke('mail.move', { thread_id: threadId, target_folder_id: targetFolderId })
+  assertMoveAffected(res)
+  applyMutationFolderUnreads(res as MutationResult)
+}
+
+/** After a run of steps: the lists show where things ended up. */
+export async function refreshAfterSteps(accountId?: string) {
+  await refreshThreadLocation(accountId, true)
 }
 
 export async function bulkCopySelectedToFolder(
@@ -1746,33 +1847,26 @@ export async function bulkCopySelectedToFolder(
   targetAccountId: string,
   targetFolderId: string,
 ) {
-  if (
-    readOnlyTarget(accounts$.peek(), targetAccountId) ||
-    items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))
-  )
-    return
+  if (items.some((item) => copyBlocked(accounts$.peek(), item.accountId, targetAccountId))) return
   const targets = uniqueThreadItems(items)
   if (targets.length === 0) return
-  try {
-    for (const item of targets) {
-      const res = await invoke('mail.copy', {
-        thread_id: item.threadId,
-        target_account_id: targetAccountId,
-        target_folder_id: targetFolderId,
-      })
-      assertCopyAffected(res)
-    }
-    await refreshThreadLocation(targets[0]?.accountId, true)
-    if (targetAccountId !== targets[0]?.accountId) void loadFolders(targetAccountId, false)
-    clearBulkSelection()
-    showToast(t('mail.toast.copiedCount', { count: targets.length }))
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : t('mail.toast.copyFailed'), 'error')
-  }
+  const { done, error } = await runBulk(targets, async (item) => {
+    const res = await invoke('mail.copy', {
+      thread_id: item.threadId,
+      target_account_id: targetAccountId,
+      target_folder_id: targetFolderId,
+    })
+    assertCopyAffected(res)
+  })
+  if (!error) await refreshThreadLocation(targets[0]?.accountId, true)
+  if (done > 0 && targetAccountId !== targets[0]?.accountId) void loadFolders(targetAccountId, false)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.copyFailed')), 'error')
+  else showToast(t('mail.toast.copiedCount', { count: targets.length }))
 }
 
 export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
-  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  if (items.some((item) => changesBlocked(accounts$.peek(), item.accountId))) return
   const targets = uniqueThreadItems(items)
   if (targets.length === 0) return
   const permanentTargets = targets.filter(
@@ -1791,24 +1885,22 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
     if (!confirmed) return
   }
 
-  const rollbacks: Array<() => void> = []
-  try {
-    for (const item of targets) {
-      rollbacks.push(removeThreadLocally(item.threadId).rollback)
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
       const res = await invoke('mail.delete', {
         thread_id: item.threadId,
         ...(item.folderId ? { folder: item.folderId } : {}),
       })
       assertDeleteAffected(res)
       applyMutationFolderUnreads(res as MutationResult)
-    }
-    await refreshThreadLocation(undefined, true)
-    clearBulkSelection()
-    showToast(t('mail.toast.deletedCount', { count: targets.length }))
-  } catch (error) {
-    for (const rollback of rollbacks.reverse()) rollback()
-    showToast(error instanceof Error ? error.message : t('mail.toast.deleteFailed'), 'error')
-  }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(undefined, true)
+  clearBulkSelection()
+  if (error) showToast(bulkFailure(done, targets.length, error, t('mail.toast.deleteFailed')), 'error')
+  else showToast(t('mail.toast.deletedCount', { count: targets.length }))
 }
 
 /**
@@ -1855,7 +1947,7 @@ export async function markThreadJunk(threadId: string, junk = true) {
 }
 
 export async function archiveThread(threadId: string) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   if (!threadId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -1887,7 +1979,7 @@ export async function archiveThread(threadId: string) {
 }
 
 export async function deleteThread(threadId: string, options: { permanent?: boolean } = {}) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   if (!threadId) return
   const sourceThread = findLocalThread(threadId)
   const sourceFolder = sourceThread?.folder_id ?? ''
@@ -2039,6 +2131,9 @@ export async function discardSavedDraftCopy(
   options: { throwOnError?: boolean; failureMessage?: string } = {},
 ): Promise<boolean> {
   if (!draft.accountId && !draft.threadId) return true
+  // Nothing was written to a Microsoft Graph account's Drafts folder (#143).
+  if (draft.accountId && !keepsServerDrafts(accounts$.peek().find((account) => account.id === draft.accountId)))
+    return true
 
   const previousThreads = mail$.threads.get()
   const previousMessages = mail$.messages.get()
@@ -2106,7 +2201,7 @@ export async function discardSavedDraftCopy(
 // Drafts are discarded permanently (engine expunges them); other messages go to
 // Trash. The confirm/toast wording reflects which.
 export async function deleteMessage(message: Message) {
-  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
+  if (changesBlocked(accounts$.peek(), message.account_id)) return
   if (!message?.id) return
 
   // Local-only optimistic send (still sending, or failed): it has no
@@ -2174,7 +2269,7 @@ export async function deleteMessage(message: Message) {
  * and the eleven "thanks" above it do not belong in the same place.
  */
 export async function archiveMessage(message: Message) {
-  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
+  if (changesBlocked(accounts$.peek(), message.account_id)) return
   if (!message?.id || isLocalSendId(message.id)) return
 
   const threadId = message.thread_id
@@ -2223,7 +2318,7 @@ export async function markAllRead() {
         (a) =>
           isReadOnlyMail(a) &&
           (a.id === ui$.selectedAccount.peek() ||
-            (ui$.selectedAccount.peek() === 'unified' && a.included_in_unified !== false)),
+            (ui$.selectedAccount.peek() === 'unified' && inUnifiedScope(a))),
       )
   )
     return
@@ -2290,7 +2385,8 @@ export async function markAccountInboxRead(accountId: string) {
   const inbox = accountFolders.find((folder) => folderMatches(folder, accountId, 'inbox'))
   const folderId = inbox?.id || 'inbox'
   const accountUnread = inbox?.unread ?? 0
-  const includedInUnified = accounts$.get().find((account) => account.id === accountId)?.included_in_unified !== false
+  const owner = accounts$.get().find((account) => account.id === accountId)
+  const includedInUnified = !!owner && inUnifiedScope(owner)
   const previousThreads = mail$.threads.get()
   const previousMessages = mail$.messages.get()
   const previousFolders = mail$.folders.get()
@@ -2359,7 +2455,7 @@ export async function markAccountInboxRead(accountId: string) {
 }
 
 export async function markMessagesRead(threadId: string, messageIds: string[]) {
-  if (readOnlyTarget(accounts$.peek(), threadId)) return
+  if (changesBlocked(accounts$.peek(), threadId)) return
   const uniqueIds = Array.from(new Set(messageIds.filter(Boolean)))
   if (!threadId || uniqueIds.length === 0) return
 
@@ -2466,7 +2562,7 @@ export async function markMessagesRead(threadId: string, messageIds: string[]) {
 }
 
 export async function markMessageReadState(message: Message, seen: boolean) {
-  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
+  if (changesBlocked(accounts$.peek(), message.account_id)) return
   if (!message?.id || !message.thread_id) return
   if (message.unread === !seen) return
 
@@ -2508,7 +2604,7 @@ export async function markMessageReadState(message: Message, seen: boolean) {
 }
 
 export async function starMessage(message: Message, starred: boolean) {
-  if (readOnlyTarget(accounts$.peek(), message.account_id)) return
+  if (changesBlocked(accounts$.peek(), message.account_id)) return
   if (!message?.id || !message.thread_id) return
 
   const nextMessages = mail$.messages.get().map((item) => (item.id === message.id ? { ...item, starred } : item))
@@ -2556,7 +2652,7 @@ export async function syncMail() {
   const contextKey = () => JSON.stringify([
     ui$.selectedAccount.peek(), ui$.selectedFolder.peek(), ui$.query.peek(),
     filterKey(ui$.filters.peek()), sortParam(settings$.listSort.peek()), kanban$.activeBoardId.peek(),
-    accounts$.peek().filter((account) => selectedAcc === 'unified' ? account.included_in_unified !== false : account.id === selectedAcc).map((account) => account.id),
+    accounts$.peek().filter((account) => selectedAcc === 'unified' ? inUnifiedScope(account) : account.id === selectedAcc).map((account) => account.id),
   ])
   const initialContext = contextKey()
 

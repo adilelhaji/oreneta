@@ -13,6 +13,7 @@ import { isRssAccount } from '../../lib/threadActions'
 import type { Message } from '../../types'
 import { ThreadListItem } from '../threads/ThreadListItem'
 import type { ThreadContextMenuController } from '../threads/ThreadContextMenu'
+import { canChangeMessages } from '../../lib/mailCapabilities'
 
 export function KanbanThreadCard({
   boardId,
@@ -54,7 +55,8 @@ export function KanbanThreadCard({
   const draggableId = starredFeed ? thread.id : thread.thread_id
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: draggableId,
-    disabled: account?.auth_type === 'graph_oauth',
+    // Dragging moves the thread: on Graph only with the change permission (#141).
+    disabled: !canChangeMessages(account),
     // A unified column's cards are draggable too: the card carries the thread's
     // real account/folder, which the drop resolves as the move's origin.
     data: { type: 'thread', threadId: thread.thread_id, source: column },

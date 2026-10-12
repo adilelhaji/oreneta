@@ -30,7 +30,14 @@ export const isFilterMode = (value: unknown): value is FilterMode => value === '
 /** The one narrowing a single-valued surface holds, as a set. */
 export const facetsOf = (mode: FilterMode): FilterFacet[] => (mode === 'all' ? [] : [mode])
 
-export type FilterFacet = 'unread' | 'starred' | 'snoozed' | 'attachments' | 'priority' | `label:${string}`
+export type FilterFacet =
+  | 'unread'
+  | 'starred'
+  | 'snoozed'
+  | 'attachments'
+  | 'priority'
+  | `label:${string}`
+  | `category:${string}`
 
 export const FILTER_FACETS: FilterFacet[] = ['priority', 'unread', 'starred', 'attachments', 'snoozed']
 
@@ -43,7 +50,9 @@ const isFilterFacet = (value: unknown): value is FilterFacet =>
   // A label facet names the label it means. The id is not checked here: a
   // label the reader has since deleted is dropped by whoever knows the label
   // set, not by a string test.
-  (typeof value === 'string' && value.startsWith('label:') && value.length > 'label:'.length)
+  (typeof value === 'string' && value.startsWith('label:') && value.length > 'label:'.length) ||
+  // An inbox category (ADR-0023); `category:none` is Other.
+  (typeof value === 'string' && value.startsWith('category:') && value.length > 'category:'.length)
 
 /**
  * The set as the core reads it: sorted and comma-joined, `all` when empty.
@@ -57,6 +66,18 @@ export function filterKey(filters: FilterFacet[]): string {
 }
 
 export const hasFilter = (filters: FilterFacet[], facet: FilterFacet) => filters.includes(facet)
+
+/**
+ * Whether the list can show a next page (#30, #34).
+ *
+ * A filtered view pages on the cursor the core mints for that same filter, so
+ * a filter is no reason to stop at the first page — only the starred view,
+ * which is one unpaginated page, is.
+ */
+export function canLoadMoreThreads(cursor: string, query: string, filters: FilterFacet[]): boolean {
+  if (!cursor) return false
+  return !!query.trim() || filterKey(filters) !== 'starred'
+}
 
 /**
  * Turns one facet on or off.
@@ -152,10 +173,21 @@ export const ui$ = observable({
   // exclusivity, for the same reason: a task is about a message, but the
   // list of them is not mail itself.
   tasksOpen: false,
+  notesOpen: false,
+  attachmentsOpen: false,
+  /** Chat over XMPP (#111). */
+  messagingOpen: false,
   // The task the "convert to task" dialog is open on, if any — the thread it
   // was opened from, and the existing task's fields when editing one already
   // open on that thread (absent when creating a new one).
-  taskEditor: null as { threadId: string; id: number; dueAt: number | null; note: string } | null,
+  // threadId is empty for a standalone task, which may name its list (ADR-0013).
+  taskEditor: null as {
+    threadId: string
+    id: number
+    dueAt: number | null
+    note: string
+    listId?: string
+  } | null,
   selectedAccount: '',
   selectedFolder: 'inbox',
   selectedThread: '',

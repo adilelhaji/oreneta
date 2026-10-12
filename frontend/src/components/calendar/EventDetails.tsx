@@ -1,5 +1,6 @@
 import { useValue } from '@legendapp/state/react'
-import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2, User, Users, X } from 'lucide-react'
+import { AlignLeft, Bell, CalendarDays, Clock, MapPin, Repeat, SquarePen, Trash2, User, Users, Video, X } from 'lucide-react'
+import { openExternal } from '../../lib/native'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { useEffect, useState } from 'react'
@@ -13,10 +14,13 @@ import {
   closeDetails,
   deleteEvent,
   editEvent,
+  meetingName,
   type CalendarEvent,
   type Participant,
 } from '../../states/calendar'
 import { ScopeAsk } from './ScopeAsk'
+import { isAnswerableInvitation } from '../../lib/calendarInvitation'
+import { accounts$ } from '../../states/accounts'
 
 /// An event at full size, to read rather than to edit.
 ///
@@ -51,6 +55,7 @@ export function EventDetails() {
       live = false
     }
   }, [event?.id, extra?.id])
+  const accounts = useValue(accounts$)
   useEscapeKey(closeDetails, Boolean(event))
   if (!event) return null
 
@@ -59,15 +64,20 @@ export function EventDetails() {
   // never wrong, only incomplete.
   const attendees = extra?.id === event.id && extra.attendees.length > 0 ? extra.attendees : event.attendees
   const description = extra?.id === event.id && extra.description ? extra.description : event.description
-  // An invitation to answer: someone else convened it and this account is on
-  // the list. An event of one's own has nobody to answer to.
-  const invitation = attendees.length > 0 && Boolean(event.my_response)
   const answered = !/^(none|noresponse|needsaction|unknown)/i.test(event.my_response)
   const calendar = calendars.find(
     (candidate) => candidate.accountId === event.accountId && candidate.id === event.calendar_id,
   )
   const color = eventColor(event, calendars)
   const readOnly = Boolean(calendar?.read_only)
+  // An invitation to answer: someone else convened it and this account is on
+  // the list. An event of one's own has nobody to answer to.
+  const invitation = isAnswerableInvitation(
+    event,
+    attendees.length,
+    accounts.find((account) => account.id === event.accountId),
+    readOnly,
+  )
 
   return (
     <div
@@ -135,6 +145,18 @@ export function EventDetails() {
             )}
           </Row>
 
+          {event.meeting && (
+            <Row icon={<Video size={14} strokeWidth={1.75} />}>
+              <button
+                type="button"
+                onClick={() => openExternal(event.meeting!.url)}
+                title={event.meeting.url}
+                className="rounded-control-sm bg-accent px-2.5 py-1 text-caption font-semibold text-on-accent cursor-pointer"
+              >
+                {t('calendar.join', { name: meetingName(event.meeting.provider), defaultValue: 'Join {name}' })}
+              </button>
+            </Row>
+          )}
           {event.location && (
             <Row icon={<MapPin size={14} strokeWidth={1.75} />}>
               <span className="text-primary">{event.location}</span>

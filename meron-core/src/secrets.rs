@@ -55,15 +55,47 @@ impl Secrets {
 
 /// `MERON_KEYRING` escape hatches, all opt-in and none set in normal use:
 ///
-///   * `off` — no keychain at all: operations become no-ops and `load` returns
-///     empty secrets (tests/headless CI). Within a single sidecar run secrets
-///     stay in memory, so only cross-restart persistence is lost.
+///   * `off` — no keychain at all (tests/headless CI). Secrets are kept in
+///     this process's memory, so anything that stores a secret and reads it
+///     back within one run — a contact source syncing with its password, a
+///     send signing with an imported key — works as it would with a keychain;
+///     only cross-restart persistence is lost.
 ///   * `service` — force the D-Bus Secret Service even inside Flatpak, for
 ///     sandboxes that can reach the host service directly.
 ///   * `file` — force the local file keyring, skipping D-Bus entirely. The
 ///     supported workaround when a desktop has no working secret storage.
 fn keyring_disabled() -> bool {
     std::env::var_os("MERON_KEYRING").is_some_and(|v| v == "off")
+}
+
+/// The stand-in keychain for `MERON_KEYRING=off`: the same blobs the real
+/// backends would hold, for the life of the process and no longer.
+fn off_mode_entries() -> &'static std::sync::Mutex<std::collections::HashMap<String, String>> {
+    static ENTRIES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> =
+        std::sync::OnceLock::new();
+    ENTRIES.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn off_mode_store(account: &str, blob: &str) {
+    off_mode_entries()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(account.to_string(), blob.to_string());
+}
+
+fn off_mode_load(account: &str) -> Option<String> {
+    off_mode_entries()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(account)
+        .cloned()
+}
+
+fn off_mode_delete(account: &str) {
+    off_mode_entries()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(account);
 }
 
 // Linux talks to the keychain through `backend_*` below, which builds its own
@@ -177,21 +209,39 @@ fn use_portal_keyring() -> bool {
     false
 }
 
+/// The keychain name for an entry of this app profile (#99, ADR-0016). The
+/// default profile keeps the names it always had; another profile's entries
+/// carry its id, so two profiles with the same account never share secrets
+/// or a store key.
+fn scoped(account: &str) -> String {
+    scoped_for(std::env::var("MERON_PROFILE").ok().as_deref(), account)
+}
+
+fn scoped_for(profile: Option<&str>, account: &str) -> String {
+    match profile.map(str::trim) {
+        None | Some("") | Some("default") => account.to_string(),
+        Some(profile) => format!("profile:{profile}/{account}"),
+    }
+}
+
 /// Store (or replace) an account's secrets in the OS keychain.
 pub fn store(account: &str, secrets: &Secrets) -> Result<()> {
+    let blob = serde_json::to_string(secrets)?;
     if keyring_disabled() {
+        off_mode_store(account, &blob);
         return Ok(());
     }
-    let blob = serde_json::to_string(secrets)?;
-    backend_store(account, &blob)
+    backend_store(&scoped(account), &blob)
 }
 
 /// Load an account's secrets, or defaults if no entry exists.
 pub fn load(account: &str) -> Result<Secrets> {
-    if keyring_disabled() {
-        return Ok(Secrets::default());
-    }
-    match backend_load(account)? {
+    let blob = if keyring_disabled() {
+        off_mode_load(account)
+    } else {
+        backend_load(&scoped(account))?
+    };
+    match blob {
         Some(blob) => Ok(serde_json::from_str(&blob).unwrap_or_default()),
         None => Ok(Secrets::default()),
     }
@@ -202,17 +252,17 @@ pub fn load(account: &str) -> Result<Secrets> {
 pub(crate) fn graph_record_load(key: &str) -> Result<Option<String>> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_load(key)
+    backend_load(&scoped(key))
 }
 pub(crate) fn graph_record_store(key: &str, value: &str) -> Result<()> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_store(key, value)
+    backend_store(&scoped(key), value)
 }
 pub(crate) fn graph_record_delete(key: &str) -> Result<()> {
     anyhow::ensure!(key.starts_with("__oreneta_graph_v1_"), "invalid Graph key");
     anyhow::ensure!(!keyring_disabled(), "Graph secure storage unavailable");
-    backend_delete(key)
+    backend_delete(&scoped(key))
 }
 
 // ---- Backends ---------------------------------------------------------------
@@ -494,12 +544,12 @@ pub fn db_key() -> Result<Option<String>> {
     if keyring_disabled() {
         return Ok(None);
     }
-    match backend_load(DB_KEY_ACCOUNT).context("read db key from keychain")? {
+    match backend_load(&scoped(DB_KEY_ACCOUNT)).context("read db key from keychain")? {
         Some(key) if is_hex_key(&key) => Ok(Some(key)),
         // Missing (first run) or a malformed entry: mint and persist a fresh key.
         Some(_) | None => {
             let key = generate_db_key();
-            backend_store(DB_KEY_ACCOUNT, &key).context("store db key in keychain")?;
+            backend_store(&scoped(DB_KEY_ACCOUNT), &key).context("store db key in keychain")?;
             Ok(Some(key))
         }
     }
@@ -521,12 +571,41 @@ fn is_hex_key(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// Remove an account's secrets from the keychain. A missing entry is not an error.
-pub fn delete(account: &str) -> Result<()> {
+/// Whether secrets are kept in memory only (`MERON_KEYRING=off`).
+pub fn keyring_off() -> bool {
+    keyring_disabled()
+}
+
+/// Removes this profile's store key: the last step of deleting a profile,
+/// after which its store cannot be read again.
+pub fn delete_db_key() -> Result<()> {
     if keyring_disabled() {
         return Ok(());
     }
-    backend_delete(account)
+    backend_delete(&scoped(DB_KEY_ACCOUNT))
+}
+
+/// Remove an account's secrets from the keychain. A missing entry is not an error.
+pub fn delete(account: &str) -> Result<()> {
+    if keyring_disabled() {
+        off_mode_delete(account);
+        return Ok(());
+    }
+    backend_delete(&scoped(account))
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::scoped_for;
+
+    #[test]
+    fn the_default_profile_keeps_its_names_and_others_are_kept_apart() {
+        assert_eq!(scoped_for(None, "ana@x.cat"), "ana@x.cat");
+        assert_eq!(scoped_for(Some("default"), "ana@x.cat"), "ana@x.cat");
+        assert_eq!(scoped_for(Some(""), "__meron_db_key__"), "__meron_db_key__");
+        assert_eq!(scoped_for(Some("work"), "ana@x.cat"), "profile:work/ana@x.cat");
+        assert_ne!(scoped_for(Some("work"), "__meron_db_key__"), scoped_for(Some("home"), "__meron_db_key__"));
+    }
 }
 
 #[cfg(test)]
@@ -581,6 +660,28 @@ mod chunk_tests {
         let chunks = split_blob(&blob);
         assert!(chunks.iter().all(|c| fits_in_credential(c)));
         assert_eq!(chunks.concat(), blob);
+    }
+}
+
+#[cfg(test)]
+mod off_mode_tests {
+    use super::{off_mode_delete, off_mode_load, off_mode_store};
+
+    /// The stand-in keychain behaves like one for the life of the process:
+    /// what is stored is read back, replaced on a second store, and gone
+    /// after a delete. The environment switch itself is process-wide and is
+    /// exercised by the integration suite, which runs with it set.
+    #[test]
+    fn keyring_off_entries_round_trip_within_the_process() {
+        assert_eq!(off_mode_load("off-mode-test"), None);
+        off_mode_store("off-mode-test", r#"{"password":"first"}"#);
+        assert_eq!(off_mode_load("off-mode-test").as_deref(), Some(r#"{"password":"first"}"#));
+        off_mode_store("off-mode-test", r#"{"password":"second"}"#);
+        assert_eq!(off_mode_load("off-mode-test").as_deref(), Some(r#"{"password":"second"}"#));
+        assert_eq!(off_mode_load("off-mode-other"), None, "entries are per account");
+        off_mode_delete("off-mode-test");
+        assert_eq!(off_mode_load("off-mode-test"), None);
+        off_mode_delete("off-mode-test");
     }
 }
 

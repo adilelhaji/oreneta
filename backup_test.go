@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -75,6 +76,28 @@ func TestWritePrivateFileTightensAnExistingFilesMode(t *testing.T) {
 	}
 	if string(data) != "fresh" {
 		t.Errorf("contents = %q, want %q", data, "fresh")
+	}
+}
+
+// A write that fails part-way (here at the flush, as a full disk would) keeps
+// the previous backup byte for byte and leaves nothing else beside it.
+func TestWritePrivateFileKeepsThePreviousBackupWhenTheWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "oreneta-backup.json")
+	if err := os.WriteFile(path, []byte("previous backup"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { syncFile = (*os.File).Sync })
+	syncFile = func(*os.File) error { return errors.New("no space left on device") }
+
+	if err := writePrivateFile(path, []byte("new backup")); err == nil {
+		t.Fatal("writePrivateFile() succeeded with a failing flush")
+	}
+	if data, _ := os.ReadFile(path); string(data) != "previous backup" {
+		t.Fatalf("previous backup = %q", data)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+		t.Fatalf("left behind: %v", entries)
 	}
 }
 

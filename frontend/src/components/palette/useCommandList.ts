@@ -1,6 +1,6 @@
 import { useTranslation } from '../../lib/i18n'
 import { settingsDestinations } from '../../lib/settingsDestinations'
-import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { messageChangesBlocked, readOnlyTarget, sendBlocked } from '../../lib/mailCapabilities'
 import { useMemo } from 'react'
 import {
   Archive,
@@ -63,6 +63,8 @@ import {
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { RAIL_SHORTCUT_IDS, type ShortcutId } from '../../lib/shortcuts'
 import type { Command } from './paletteCommands'
+import { merge$ } from '../../states/merge'
+import { awaiting$ } from '../../states/awaiting'
 
 // Builds the full, ordered command list from current app state. Each entry's
 // `run` closes the palette first, then performs its action. Returns a memoized
@@ -105,6 +107,20 @@ export function useCommandList(): Command[] {
         keywords: 'write new email reply',
         shortcut: 'compose.new',
         run: run(() => openComposeTab()),
+      },
+      {
+        id: 'compose.mailing',
+        label: t('commands.compose.mailing', { defaultValue: 'Personalized mailing…' }),
+        icon: icon(Users),
+        keywords: 'mail merge mass bulk personalized newsletter',
+        run: run(() => merge$.open.set(true)),
+      },
+      {
+        id: 'mail.awaiting',
+        label: t('commands.mail.awaiting', { defaultValue: 'Waiting for replies…' }),
+        icon: icon(MailCheck),
+        keywords: 'follow up pending answer reply reminder',
+        run: run(() => awaiting$.open.set(true)),
       },
       {
         id: 'mail.sync',
@@ -345,16 +361,11 @@ export function useCommandList(): Command[] {
         }),
       ),
     )
-    const writeCommands = new Set([
-      'compose.new',
-      'mail.markAllRead',
-      'reply.focus',
-      'compose.replyFull',
-      'thread.archive',
-      'thread.star',
-      'thread.unread',
-      'thread.delete',
-    ])
+    // Sending and folder-wide changes are not supported on Microsoft Graph;
+    // changing a message is, once the reader allowed it (#141).
+    const writeCommands = new Set(['mail.markAllRead'])
+    const sendCommands = new Set(['reply.focus', 'compose.replyFull'])
+    const messageCommands = new Set(['thread.archive', 'thread.star', 'thread.unread', 'thread.delete'])
     return list.map((command) => {
       if (command.kind === 'setting') return command
       const keywordId = command.id.startsWith('theme.')
@@ -373,7 +384,9 @@ export function useCommandList(): Command[] {
       const unavailable = (currentAccounts: typeof accounts) =>
         command.id === 'compose.new'
           ? !currentAccounts.some(isSendableAccount)
-          : writeCommands.has(command.id) && readOnlyTarget(currentAccounts, target)
+          : (writeCommands.has(command.id) && readOnlyTarget(currentAccounts, target)) ||
+            (sendCommands.has(command.id) && sendBlocked(currentAccounts, target)) ||
+            (messageCommands.has(command.id) && messageChangesBlocked(currentAccounts, target))
       const disabled = unavailable(accounts)
       return {
         ...command,

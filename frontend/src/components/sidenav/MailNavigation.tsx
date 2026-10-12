@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { ChevronRight, Mail } from 'lucide-react'
+import { ChevronRight, Layers, Mail } from 'lucide-react'
 import { accounts$ } from '../../states/accounts'
+import { accountGroups$, inUnifiedScope, showAccountGroup, type AccountGroup } from '../../states/accountGroups'
 import { mail$, inboxUnread } from '../../states/mail'
 import { settings$ } from '../../states/settings'
 import { clearBulkSelection, ui$ } from '../../states/ui'
@@ -76,16 +77,22 @@ export function MailNavigationView({
   selectedAccount,
   selectedFolder,
   unifiedVisible,
+  groups = [],
+  activeGroup = null,
   onAccount,
   onFolder,
+  onGroup = () => {},
 }: {
   accounts: Account[]
   folders: Folder[]
   selectedAccount: string
   selectedFolder: string
   unifiedVisible: boolean
+  groups?: AccountGroup[]
+  activeGroup?: string | null
   onAccount: (id: string) => void
   onFolder: (id: string) => void
+  onGroup?: (id: string) => void
 }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -101,13 +108,27 @@ export function MailNavigationView({
           <button
             type="button"
             className="mail-account-destination"
-            aria-current={selectedAccount === 'unified' ? 'true' : undefined}
+            aria-current={selectedAccount === 'unified' && !activeGroup ? 'true' : undefined}
             onClick={() => onAccount('unified')}
           >
             <Mail size={16} strokeWidth={1.75} />
             <span>{t('kanban.columns.unifiedInbox')}</span>
           </button>
         )}
+        {/* Account groups (#99): each shows its own accounts together. */}
+        {groups.map((group) => (
+          <button
+            key={group.id}
+            type="button"
+            className="mail-account-destination"
+            title={t('accountGroups.showGroup', { name: group.name, defaultValue: 'Show {name} together' })}
+            aria-current={selectedAccount === 'unified' && activeGroup === group.id ? 'true' : undefined}
+            onClick={() => onGroup(group.id)}
+          >
+            <Layers size={16} strokeWidth={1.75} />
+            <span>{group.name}</span>
+          </button>
+        ))}
         {accounts.map((account) => (
           <button
             key={account.id}
@@ -163,6 +184,8 @@ export function MailNavigation() {
   const { t } = useTranslation()
   const accounts = useValue(accounts$)
   const selectedAccount = useValue(ui$.selectedAccount)
+  const groups = useValue(accountGroups$.groups)
+  const activeGroup = useValue(accountGroups$.active)
   const selectedFolder = useValue(ui$.selectedFolder)
   const byAccount = useValue(mail$.foldersByAccount)
   const hidden = useValue(settings$.hiddenSideNavAccounts)
@@ -172,9 +195,7 @@ export function MailNavigation() {
     selectedAccount === 'unified'
       ? unifiedFolders(
           t,
-          accounts
-            .filter((account) => account.included_in_unified !== false)
-            .reduce((total, account) => total + inboxUnread(byAccount[account.id]), 0),
+          accounts.filter(inUnifiedScope).reduce((total, account) => total + inboxUnread(byAccount[account.id]), 0),
         )
       : (byAccount[selectedAccount] ?? []).filter((folder) => folder.account_id === selectedAccount)
 
@@ -192,8 +213,21 @@ export function MailNavigation() {
       selectedAccount={selectedAccount}
       selectedFolder={selectedFolder}
       unifiedVisible={showUnified || selectedAccount === 'unified'}
+      groups={groups}
+      activeGroup={activeGroup}
       onAccount={(account) => {
+        if (account === 'unified' && activeGroup) {
+          showAccountGroup(null)
+          return
+        }
         if (account !== selectedAccount) navigate(account, 'inbox')
+      }}
+      onGroup={(group) => {
+        if (selectedAccount === 'unified' && group === activeGroup) return
+        clearBulkSelection()
+        ui$.selectedThread.set('')
+        if (selectedAccount !== 'unified') navigate('unified', 'inbox')
+        showAccountGroup(group)
       }}
       onFolder={(folder) => {
         if (folder !== selectedFolder) navigate(selectedAccount, folder)

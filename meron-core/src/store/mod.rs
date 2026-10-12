@@ -16,7 +16,7 @@
 
 mod db;
 
-pub use db::{app_dir, now_unix, open};
+pub use db::{app_dir, now_unix, open, SCHEMA_VERSION};
 
 #[allow(dead_code)]
 pub fn open_at(path: impl AsRef<std::path::Path>) -> Result<Connection> {
@@ -46,8 +46,15 @@ use crate::parse::{Attachment, Message};
 pub const DEFAULT_RSS_SYNC_INTERVAL_MINUTES: u64 = 60;
 
 mod accounts;
+pub mod local_people;
+pub mod task_lists;
+pub mod person_links;
+pub mod notes;
+pub mod note_attachments;
+pub mod attachment_list;
 mod settings;
 pub mod local_drafts;
+pub mod outgoing;
 
 pub use accounts::*;
 pub use settings::*;
@@ -125,6 +132,22 @@ pub fn delete_folder(conn: &Connection, account: &str, name: &str) -> Result<usi
 /// server-reported delimiter. A NULL/empty delimiter means the server exposed
 /// no hierarchy for this mailbox; punctuation in another mailbox's name must
 /// not turn it into a destructive delete target.
+/// The hierarchy delimiter the server reported for this account's folders, the
+/// most common one if they disagree. A folder created here is not listed until
+/// the next sync, and storing it without a delimiter would leave it outside the
+/// tree until then: its children would not count as its subtree on delete.
+pub fn account_delimiter(conn: &Connection, account: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT delimiter FROM folders
+             WHERE account = ?1 AND delimiter IS NOT NULL AND delimiter <> ''
+             GROUP BY delimiter ORDER BY COUNT(*) DESC, delimiter LIMIT 1",
+            params![account],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 pub fn child_folders(conn: &Connection, account: &str, name: &str) -> Result<Vec<String>> {
     let delimiter: Option<String> = conn
         .query_row(
@@ -456,6 +479,8 @@ pub struct RecentFilter {
     pub with_attachments: bool,
     /// Only what is worth interrupting for.
     pub priority_only: bool,
+    /// Only conversations in this inbox category ('' is Other), when set.
+    pub category: Option<String>,
 }
 
 impl RecentFilter {
@@ -521,6 +546,9 @@ pub fn get_recent_page_sorted(
            -- judged is not a message judged unimportant. The backfill is what
            -- keeps this from hiding anything, and it needs no server.
            AND (?10 = 0 OR priority = 1)
+           -- A category is judged per conversation and folder, so every
+           -- message of a conversation carries it (ADR-0023).
+           AND (?12 IS NULL OR category = ?12)
            -- A label is on the conversation, so the row is matched by the key
            -- it shares with the rest of its thread, not by its own uid.
            AND (?8 IS NULL OR EXISTS (
@@ -559,7 +587,8 @@ pub fn get_recent_page_sorted(
             filter.label_id.as_deref(),
             filter.with_attachments as i64,
             filter.priority_only as i64,
-            has_cursor
+            has_cursor,
+            filter.category.as_deref()
         ],
         |row| {
             let uid = row.get(0)?;
@@ -1502,22 +1531,32 @@ pub fn newest_thread_uids(
 /// Read from wherever the thread was when it was set aside, so the list can
 /// show what it actually is rather than a bare subject line.
 pub fn get_snoozed_headers(conn: &Connection, account: &str) -> Result<Vec<MessageHeader>> {
+    // A snoozed conversation is found wherever it now is (#89): moved to
+    // another folder while it waits, it is still listed, under the folder it
+    // is in. Only a key made from a uid is tied to its folder, since a uid
+    // means nothing anywhere else.
     let mut stmt = conn.prepare(
-        "SELECT m.uid, m.subject, m.from_name, m.from_addr, m.date, m.seen, m.starred,
-                m.thread_key, json_extract(m.json, '$.to')
-           FROM snoozed_threads s
-           JOIN messages m
-             ON m.account = s.account
-            AND m.folder = s.folder
-            AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = s.thread_key
-          WHERE s.account = ?1 AND m.uid <> 0
-            AND m.date = (
-                  SELECT MAX(m2.date) FROM messages m2
-                   WHERE m2.account = m.account AND m2.folder = m.folder
-                     AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = s.thread_key)
-          ORDER BY s.until",
+        "WITH found AS (
+           SELECT m.uid, m.subject, m.from_name, m.from_addr, m.date, m.seen, m.starred,
+                  m.thread_key, json_extract(m.json, '$.to') AS recipients, m.folder, s.until,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY s.thread_key
+                    ORDER BY (m.folder = s.folder) DESC, m.date DESC, m.uid DESC) AS n
+             FROM snoozed_threads s
+             JOIN messages m
+               ON m.account = s.account AND m.uid <> 0
+              AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = s.thread_key
+              AND (s.thread_key NOT LIKE 'uid:%' OR m.folder = s.folder)
+            WHERE s.account = ?1
+         )
+         SELECT uid, subject, from_name, from_addr, date, seen, starred, thread_key, recipients, folder
+           FROM found WHERE n = 1 ORDER BY until",
     )?;
-    let rows = stmt.query_map(params![account], message_header_from_row)?;
+    let rows = stmt.query_map(params![account], |row| {
+        let mut header = message_header_from_row(row)?;
+        header.folder = row.get(9)?;
+        Ok(header)
+    })?;
     Ok(rows.filter_map(Result::ok).collect())
 }
 
@@ -2128,7 +2167,79 @@ pub fn spam_signals(conn: &Connection, account: &str, from_addr: &str, subject: 
         sender_spam_count,
         sender_ham_count,
         trigger_words: spam_trigger_words(conn, account, subject),
+        listed: sender_listed(conn, account, from_addr),
     }
+}
+
+// ---- Blocked and allowed senders (#50) ----------------------------------------
+
+pub const SENDER_LISTS_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS sender_lists (
+  account TEXT NOT NULL,
+  pattern TEXT NOT NULL,   -- an address, or @domain
+  allow   INTEGER NOT NULL,
+  PRIMARY KEY (account, pattern)
+);
+";
+
+/// An address as written, or a domain as `@domain`; `None` when it is
+/// neither.
+pub fn sender_pattern(text: &str) -> Option<String> {
+    let text = text.trim().trim_matches(['<', '>']).to_lowercase();
+    let valid = |domain: &str| domain.contains('.') && !domain.contains(|c: char| c.is_whitespace() || c == '@');
+    match text.split_once('@') {
+        Some(("", domain)) if valid(domain) => Some(format!("@{domain}")),
+        Some((local, domain)) if !local.is_empty() && valid(domain) && !local.contains(char::is_whitespace) => Some(text.clone()),
+        None if valid(&text) => Some(format!("@{text}")),
+        _ => None,
+    }
+}
+
+/// Whether the reader blocked (`true`) or allowed (`false`) a sender. The
+/// address is asked before its domain, so one person can be allowed from a
+/// domain that is blocked, or the other way round.
+pub fn sender_listed(conn: &Connection, account: &str, from_addr: &str) -> Option<bool> {
+    let addr = from_addr.trim().to_lowercase();
+    if addr.is_empty() {
+        return None;
+    }
+    let domain = addr.rsplit_once('@').map(|(_, d)| format!("@{d}")).unwrap_or_default();
+    let lookup = |pattern: &str| -> Option<bool> {
+        conn.query_row(
+            "SELECT allow FROM sender_lists WHERE account = ?1 AND pattern = ?2",
+            params![account, pattern],
+            |r| r.get::<_, bool>(0),
+        )
+        .optional()
+        .ok()
+        .flatten()
+        .map(|allow| !allow)
+    };
+    lookup(&addr).or_else(|| if domain.is_empty() { None } else { lookup(&domain) })
+}
+
+/// Puts a sender or domain on the allowed (`Some(true)`) or blocked
+/// (`Some(false)`) list, or takes it off with `None`, and re-judges the
+/// account so what is already here reflects it at once.
+pub fn set_sender_listed(conn: &Connection, account: &str, text: &str, allow: Option<bool>) -> Result<String> {
+    let pattern = sender_pattern(text)
+        .ok_or_else(|| anyhow::anyhow!("write an address, or a domain such as @example.com"))?;
+    match allow {
+        Some(allow) => conn.execute(
+            "INSERT OR REPLACE INTO sender_lists(account, pattern, allow) VALUES(?1, ?2, ?3)",
+            params![account, pattern, allow],
+        )?,
+        None => conn.execute("DELETE FROM sender_lists WHERE account = ?1 AND pattern = ?2", params![account, pattern])?,
+    };
+    rejudge_spam(conn, account, false)?;
+    Ok(pattern)
+}
+
+/// The lists, as (pattern, allowed).
+pub fn sender_lists(conn: &Connection, account: &str) -> Result<Vec<(String, bool)>> {
+    let mut stmt = conn.prepare("SELECT pattern, allow FROM sender_lists WHERE account = ?1 ORDER BY allow DESC, pattern")?;
+    let rows = stmt.query_map([account], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// The sender and subject of the newest message of one conversation — what a
@@ -2318,6 +2429,23 @@ pub struct TaskCard {
     pub subject: String,
     pub from_name: String,
     pub from_addr: String,
+    /// Whether the conversation was found in the local cache. `folder` is
+    /// where it was found, which is where the task was made unless the
+    /// conversation has moved since.
+    pub located: bool,
+    /// ADR-0013: its list, its own title (empty for a linked task, which
+    /// shows its conversation's subject), priority, reminder and revision.
+    pub list_id: String,
+    pub title: String,
+    pub priority: i64,
+    pub reminder_at: Option<i64>,
+    pub revision: i64,
+    /// ADR-0039, for a task in a list kept on a server: a change made here
+    /// not yet sent (`put`, or `delete` for one deleted here), and why it
+    /// waits for the person to choose a copy (empty when it does not).
+    pub pending: String,
+    pub conflict: String,
+    pub recurring: bool,
 }
 
 /// Creates a task on this conversation, or edits the one already open on it.
@@ -2338,9 +2466,10 @@ pub fn save_task(
     conn.execute(
         "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at)
          VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-         ON CONFLICT(account, thread_key) WHERE completed_at IS NULL DO UPDATE SET
+         ON CONFLICT(account, thread_key) WHERE completed_at IS NULL AND thread_key <> '' DO UPDATE SET
            note = excluded.note,
-           due_at = excluded.due_at",
+           due_at = excluded.due_at,
+           folder = excluded.folder",
         params![account, thread_key, folder, note, due_at, now],
     )?;
     conn.query_row(
@@ -2358,11 +2487,29 @@ pub fn save_task(
 /// two open tasks on one conversation, and that constraint error is the
 /// honest answer here, not a case to paper over.
 pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64) -> Result<()> {
+    task_lists::check_editable(conn, id)?;
     let completed_at: Option<i64> = completed.then_some(now);
-    conn.execute(
-        "UPDATE tasks SET completed_at = ?2 WHERE id = ?1",
+    let changed = match conn.execute(
+        "UPDATE tasks SET completed_at = ?2 WHERE id = ?1 AND pending <> 'delete'",
         params![id, completed_at],
-    )?;
+    ) {
+        Ok(changed) => changed,
+        // Reopening a task while another is open on the same conversation.
+        // The raw constraint message ("UNIQUE constraint failed: tasks...")
+        // told the reader nothing they could act on.
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.code == rusqlite::ErrorCode::ConstraintViolation =>
+        {
+            anyhow::bail!(
+                "this conversation already has an open task; finish or delete that one before reopening this one"
+            )
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if changed == 0 {
+        anyhow::bail!("this task no longer exists");
+    }
+    task_lists::touched(conn, id)?;
     Ok(())
 }
 
@@ -2381,8 +2528,20 @@ pub fn get_task(conn: &Connection, id: i64) -> Result<Option<(Option<i64>, Strin
 }
 
 /// Removes a task outright — "never mind, this was not one."
+///
+/// A task that is also on a server (ADR-0039) is kept, hidden, until the
+/// next sync deletes it there: deleting it here first would lose the
+/// version the server's copy must be deleted from.
 pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+    let tombstoned = conn.execute(
+        "UPDATE tasks SET pending = 'delete', sync_seq = sync_seq + 1
+          WHERE id = ?1 AND remote_etag <> ''
+            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '')",
+        params![id],
+    )?;
+    if tombstoned == 0 {
+        conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+    }
     Ok(())
 }
 
@@ -2395,18 +2554,37 @@ pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
 /// subject/sender rather than vanishing: the reader made the task, and a
 /// gap in the local cache is not a reason to lose it.
 pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<TaskCard>> {
-    let where_clause = if include_completed { "" } else { "WHERE t.completed_at IS NULL" };
+    // A task deleted here and not yet on the server is hidden, unless the
+    // server changed it meanwhile and the person has to choose (ADR-0039).
+    let where_clause = if include_completed {
+        "WHERE (task.pending <> 'delete' OR task.conflict <> '')"
+    } else {
+        "WHERE task.completed_at IS NULL AND (task.pending <> 'delete' OR task.conflict <> '')"
+    };
+    // One message stands for the conversation: in the folder the task was
+    // made in if it is still there, otherwise wherever it has moved to
+    // (archived, filed), latest first, ties broken by uid. A join on "the
+    // latest date" listed a task twice when two messages shared that date,
+    // and a conversation moved elsewhere came back blank and opened the
+    // folder it had left. A `uid:` key names a message in one folder only,
+    // so it is never looked for elsewhere.
     let sql = format!(
-        "SELECT t.id, t.account, t.folder, t.thread_key, t.note, t.due_at, t.completed_at, t.created_at,
-                COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, '')
-           FROM tasks t
-           LEFT JOIN messages m
-             ON m.account = t.account AND m.folder = t.folder
-            AND COALESCE(NULLIF(m.thread_key, ''), 'uid:' || m.uid) = t.thread_key
-            AND m.date = (SELECT MAX(m2.date) FROM messages m2
-                            WHERE m2.account = m.account AND m2.folder = m.folder
-                              AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = t.thread_key)
-          {where_clause}
+        "SELECT t.id, t.account, COALESCE(m.folder, t.folder), t.thread_key, t.note, t.due_at,
+                t.completed_at, t.created_at,
+                COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, ''),
+                m.id IS NOT NULL, t.list_id, t.title, t.priority, t.reminder_at, t.revision,
+                t.pending, t.conflict, t.recurring
+           FROM (SELECT task.*, COALESCE(
+                   (SELECT m2.id FROM messages m2
+                     WHERE m2.account = task.account AND m2.folder = task.folder
+                       AND COALESCE(NULLIF(m2.thread_key, ''), 'uid:' || m2.uid) = task.thread_key
+                     ORDER BY m2.date DESC, m2.uid DESC LIMIT 1),
+                   (SELECT m2.id FROM messages m2
+                     WHERE m2.account = task.account AND task.thread_key NOT LIKE 'uid:%'
+                       AND m2.thread_key = task.thread_key
+                     ORDER BY m2.date DESC, m2.uid DESC LIMIT 1)) AS message_id
+                   FROM tasks task {where_clause}) t
+           LEFT JOIN messages m ON m.id = t.message_id
           ORDER BY (t.completed_at IS NOT NULL), t.due_at IS NULL, t.due_at ASC, t.completed_at DESC, t.created_at DESC"
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -2423,9 +2601,20 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
             subject: row.get(8)?,
             from_name: row.get(9)?,
             from_addr: row.get(10)?,
+            located: row.get(11)?,
+            list_id: row.get(12)?,
+            title: row.get(13)?,
+            priority: row.get(14)?,
+            reminder_at: row.get(15)?,
+            revision: row.get(16)?,
+            pending: row.get(17)?,
+            conflict: row.get(18)?,
+            recurring: row.get(19)?,
         })
     })?;
-    Ok(rows.filter_map(Result::ok).collect())
+    // A row that cannot be read is an error to report, not a task to drop
+    // silently from the list.
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// The open task's id and due date, if any, on each of these conversations —
@@ -2532,7 +2721,7 @@ pub struct BookOrigin {
 }
 
 impl BookOrigin {
-    fn person_id(&self, uid: &str) -> String {
+    pub fn person_id(&self, uid: &str) -> String {
         format!("{}:{}:{}:{}", self.source, self.account, self.book, uid)
     }
 }
@@ -2545,6 +2734,8 @@ pub struct StoredPerson {
     pub person: crate::contacts::person::Person,
     /// Media key of the cached picture, empty when there is none.
     pub photo_key: String,
+    /// The version it was read at (ADR-0012); a write names it.
+    pub version: String,
 }
 
 /// Replace everything in one book with what a sync just read.
@@ -2564,6 +2755,32 @@ pub fn replace_book(
     people: &[(crate::contacts::person::Person, String)],
     now: i64,
 ) -> Result<usize> {
+    let rows: Vec<SyncedRow> = people
+        .iter()
+        .map(|(person, photo_key)| SyncedRow {
+            person: person.clone(),
+            photo_key: photo_key.clone(),
+            href: String::new(),
+            version: String::new(),
+        })
+        .collect();
+    replace_book_rows(conn, origin, &rows, now)
+}
+
+/// One synced contact with where it lives and the version it was read at.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SyncedRow {
+    pub person: crate::contacts::person::Person,
+    pub photo_key: String,
+    /// The card's URL on its server, empty for a source that has none.
+    pub href: String,
+    /// The card's ETag, empty when the server gave none.
+    pub version: String,
+}
+
+/// [`replace_book`], keeping each card's URL and version so it can be written
+/// back (ADR-0012).
+pub fn replace_book_rows(conn: &Connection, origin: &BookOrigin, people: &[SyncedRow], now: i64) -> Result<usize> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "DELETE FROM person_emails WHERE person_id IN
@@ -2584,8 +2801,8 @@ pub fn replace_book(
     {
         let mut person_stmt = tx.prepare(
             "INSERT OR REPLACE INTO people
-               (id, source, account, book, uid, name, organisation, note, photo, updated)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+               (id, source, account, book, uid, name, organisation, note, photo, updated, href, version)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         )?;
         let mut email_stmt = tx.prepare(
             "INSERT OR REPLACE INTO person_emails(person_id, addr, label, position)
@@ -2596,7 +2813,8 @@ pub fn replace_book(
              VALUES(?1, ?2, ?3, ?4)",
         )?;
 
-        for (index, (person, photo_key)) in people.iter().enumerate() {
+        for (index, row) in people.iter().enumerate() {
+            let (person, photo_key) = (&row.person, &row.photo_key);
             // A book that gives nobody a uid — some exports do — still has
             // people in it. Their position stands in, which is stable for as
             // long as the book is, and a re-sync replaces the lot anyway.
@@ -2617,6 +2835,8 @@ pub fn replace_book(
                 person.note,
                 photo_key,
                 now,
+                row.href,
+                row.version,
             ])?;
             for (position, email) in person.emails.iter().enumerate() {
                 email_stmt.execute(params![id, email.addr, email.label, position as i64])?;
@@ -2629,6 +2849,117 @@ pub fn replace_book(
     }
     tx.commit()?;
     Ok(written)
+}
+
+/// A synced contact as stored: where it came from, where its card lives and
+/// the version it was read at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncedPerson {
+    pub origin: BookOrigin,
+    pub person: crate::contacts::person::Person,
+    pub href: String,
+    pub version: String,
+}
+
+pub fn synced_person(conn: &Connection, id: &str) -> Result<Option<SyncedPerson>> {
+    let row = conn
+        .query_row(
+            "SELECT source, account, book, uid, name, organisation, note, href, version
+               FROM people WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(SyncedPerson {
+                    origin: BookOrigin { source: row.get(0)?, account: row.get(1)?, book: row.get(2)? },
+                    person: crate::contacts::person::Person {
+                        uid: row.get(3)?,
+                        name: row.get(4)?,
+                        organisation: row.get(5)?,
+                        note: row.get(6)?,
+                        ..Default::default()
+                    },
+                    href: row.get(7)?,
+                    version: row.get(8)?,
+                })
+            },
+        )
+        .optional()?;
+    let Some(mut found) = row else { return Ok(None) };
+    let (emails, phones) = attachments_for(conn, &[id.to_string()])?;
+    found.person.emails = emails.get(id).cloned().unwrap_or_default();
+    found.person.phones = phones.get(id).cloned().unwrap_or_default();
+    Ok(Some(found))
+}
+
+/// Records one synced contact as the server now holds it, after a write
+/// there. Returns its id.
+pub fn put_synced_person(conn: &Connection, origin: &BookOrigin, row: &SyncedRow, now: i64) -> Result<String> {
+    let tx = conn.unchecked_transaction()?;
+    let id = origin.person_id(row.person.uid.trim());
+    let photo: String = tx
+        .query_row("SELECT photo FROM people WHERE id = ?1", params![id], |r| r.get(0))
+        .optional()?
+        .unwrap_or_default();
+    tx.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
+    tx.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
+    tx.execute(
+        "INSERT OR REPLACE INTO people
+           (id, source, account, book, uid, name, organisation, note, photo, updated, href, version)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        params![
+            id,
+            origin.source,
+            origin.account,
+            origin.book,
+            row.person.uid.trim(),
+            row.person.name,
+            row.person.organisation,
+            row.person.note,
+            photo,
+            now,
+            row.href,
+            row.version
+        ],
+    )?;
+    for (position, email) in row.person.emails.iter().enumerate() {
+        tx.execute(
+            "INSERT OR IGNORE INTO person_emails(person_id, addr, label, position) VALUES(?1, ?2, ?3, ?4)",
+            params![id, email.addr.trim().to_lowercase(), email.label, position as i64],
+        )?;
+    }
+    for (position, phone) in row.person.phones.iter().enumerate() {
+        tx.execute(
+            "INSERT OR IGNORE INTO person_phones(person_id, number, label, position) VALUES(?1, ?2, ?3, ?4)",
+            params![id, phone.number, phone.label, position as i64],
+        )?;
+    }
+    tx.commit()?;
+    Ok(id)
+}
+
+/// Drops one contact from the local copy, after its card was deleted.
+pub fn forget_person(conn: &Connection, id: &str) -> Result<()> {
+    person_links::unlink(conn, id)?;
+    conn.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
+    conn.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
+    conn.execute("DELETE FROM people WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+/// Whether the server lets this account write to a source's book: `None`
+/// when it did not say.
+pub fn set_contact_source_writable(conn: &Connection, id: &str, writable: Option<bool>) -> Result<()> {
+    conn.execute(
+        "UPDATE contact_sources SET writable = ?2 WHERE id = ?1",
+        params![id, writable.map(i64::from)],
+    )?;
+    Ok(())
+}
+
+/// Every source's write permission, by id.
+pub fn contact_sources_writable(conn: &Connection) -> Result<HashMap<String, Option<bool>>> {
+    let mut stmt = conn.prepare("SELECT id, writable FROM contact_sources")?;
+    let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?.map(|v| v != 0))))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// Read the addresses and phones belonging to a set of people, in one pass each.
@@ -2694,7 +3025,7 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
     let needle = query.trim().to_lowercase();
     let like = format!("%{}%", escape_like(needle.clone()));
     let mut stmt = conn.prepare(
-        "SELECT id, source, account, book, uid, name, organisation, note, photo
+        "SELECT id, source, account, book, uid, name, organisation, note, photo, version
            FROM people
           WHERE ?1 = ''
              OR lower(name) LIKE ?2 ESCAPE '\\'
@@ -2721,6 +3052,7 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
                 photo: None,
             },
             photo_key: row.get(8)?,
+            version: row.get(9)?,
         })
     })?;
     let mut people: Vec<StoredPerson> = rows.flatten().collect();
@@ -2750,11 +3082,14 @@ pub struct ContactSource {
     pub ctag: String,
     pub last_sync_at: i64,
     pub last_error: String,
+    /// Whether the server lets this account write to the book; `None` when it
+    /// has not said (ADR-0012).
+    pub writable: Option<bool>,
 }
 
 pub fn contact_sources(conn: &Connection) -> Result<Vec<ContactSource>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, account, url, username, name, enabled, ctag, last_sync_at, last_error
+        "SELECT id, kind, account, url, username, name, enabled, ctag, last_sync_at, last_error, writable
            FROM contact_sources ORDER BY created_at, name",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -2769,6 +3104,7 @@ pub fn contact_sources(conn: &Connection) -> Result<Vec<ContactSource>> {
             ctag: row.get(7)?,
             last_sync_at: row.get(8)?,
             last_error: row.get(9)?,
+            writable: row.get::<_, Option<i64>>(10)?.map(|value| value != 0),
         })
     })?;
     Ok(rows.flatten().collect())
@@ -4157,7 +4493,7 @@ fn message_header_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MessageH
 }
 
 /// Parse a cached `$.to` JSON array into recipients, tolerating null/garbage.
-fn parse_recipients_json(json: Option<String>) -> Vec<crate::imap::Recipient> {
+pub(crate) fn parse_recipients_json(json: Option<String>) -> Vec<crate::imap::Recipient> {
     json.and_then(|s| serde_json::from_str::<Vec<crate::imap::Recipient>>(&s).ok())
         .unwrap_or_default()
 }
@@ -4632,6 +4968,27 @@ pub fn delete_quick_reply_drafts_in_thread(
     Ok(deleted)
 }
 
+/// Which of `uids` the cache still holds in `folder`, in the order given.
+/// What a confirmed sweep checks after its move, to say item by item what
+/// went and what did not.
+pub fn existing_message_uids(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    uids: &[u32],
+) -> Result<Vec<u32>> {
+    let mut stmt = conn.prepare(
+        "SELECT 1 FROM messages WHERE account = ?1 AND folder = ?2 AND uid = ?3 LIMIT 1",
+    )?;
+    let mut present = Vec::new();
+    for uid in uids {
+        if stmt.exists(params![account, folder, *uid])? {
+            present.push(*uid);
+        }
+    }
+    Ok(present)
+}
+
 pub fn delete_messages_by_uid(
     conn: &Connection,
     account: &str,
@@ -5098,6 +5455,9 @@ pub fn get_cached_message(
         // overwhelming majority of mail is also the truth. A message that was
         // encrypted is re-parsed on read, so it corrects itself.
         protection: extra["protection"].as_str().unwrap_or_default().to_string(),
+        invitation: extra.get("invitation").cloned().and_then(|value| serde_json::from_value(value).ok()),
+        trackers_blocked: Vec::new(),
+        trackers_protected: false,
     }))
 }
 
@@ -5121,6 +5481,7 @@ pub fn save_cached_message(
         "body_html": message.body_html,
         "body_is_rendered": message.body_is_rendered,
         "protection": message.protection,
+        "invitation": message.invitation,
         "attachments": attachments_json,
     })
     .to_string();

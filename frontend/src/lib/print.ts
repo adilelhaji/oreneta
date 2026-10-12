@@ -22,6 +22,8 @@ export function printConversation(args: {
   toLabel: string
   ccLabel: string
   attachmentsLabel: string
+  allowRemoteImages?: boolean
+  incompleteNotice?: string
 }): Promise<void> {
   const html = buildPrintDocument({ ...args, printedAt: new Date() })
 
@@ -30,6 +32,10 @@ export function printConversation(args: {
     // Off-screen rather than `display: none`: a frame that was never laid out
     // has no pages to print.
     frame.setAttribute('aria-hidden', 'true')
+    // The frame shares the app's origin so its print dialog can be opened
+    // from here, but runs no script at all: mail is written by strangers, and a
+    // script slipping past the clean-up would otherwise act as the app (#35).
+    frame.setAttribute('sandbox', 'allow-same-origin allow-modals')
     frame.style.position = 'fixed'
     frame.style.right = '100%'
     frame.style.bottom = '100%'

@@ -78,3 +78,13 @@ func (a *App) tasksDelete(payload map[string]any) (any, error) {
 	}
 	return a.sidecar.Call("tasks.delete", map[string]any{"id": int64(id)})
 }
+
+// tasksPassthrough carries the list and standalone-task commands (ADR-0013)
+// to the core unchanged: the revision check, the mail list's protection and
+// the conflict answer are all the core's.
+func (a *App) tasksPassthrough(method string, payload map[string]any) (any, error) {
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	return a.sidecar.Call(method, payload)
+}

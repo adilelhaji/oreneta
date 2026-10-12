@@ -524,6 +524,10 @@ fn config_dir() -> PathBuf {
 
 // ---- Migrations -------------------------------------------------------------
 
+/// The schema this build writes: the last migration below. A store from a
+/// newer build is refused rather than opened (a restored archive included).
+pub const SCHEMA_VERSION: i64 = 58;
+
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
 /// Pending steps run inside one IMMEDIATE transaction that also bumps
@@ -643,6 +647,129 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 35 {
         tx.execute_batch(super::local_drafts::SCHEMA)?;
         tx.pragma_update(None, "user_version", 35)?;
+    }
+    if version < 36 {
+        tx.execute_batch(super::outgoing::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 36)?;
+    }
+    if version < 37 {
+        // The version a contact was read at: an ETag for CardDAV, a revision
+        // for the local book. A write carries it so a change made elsewhere is
+        // never overwritten (ADR-0012). Empty until the next read fills it.
+        // Checked first: a database whose recorded version was set back
+        // (as a repair or a test does) must not fail on a column it has.
+        let has_version: bool = tx
+            .prepare("SELECT 1 FROM pragma_table_info('people') WHERE name = 'version'")?
+            .exists([])?;
+        if !has_version {
+            tx.execute_batch("ALTER TABLE people ADD COLUMN version TEXT NOT NULL DEFAULT '';")?;
+        }
+        tx.pragma_update(None, "user_version", 37)?;
+    }
+    if version < 38 {
+        // Where a synced contact's card lives on its server, so it can be
+        // written back; and whether the server lets this account write to
+        // the book at all (NULL: it did not say). ADR-0012.
+        let has = |table: &str, column: &str| -> rusqlite::Result<bool> {
+            tx.prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = '{column}'"))?
+                .exists([])
+        };
+        if !has("people", "href")? {
+            tx.execute_batch("ALTER TABLE people ADD COLUMN href TEXT NOT NULL DEFAULT '';")?;
+        }
+        if !has("contact_sources", "writable")? {
+            tx.execute_batch("ALTER TABLE contact_sources ADD COLUMN writable INTEGER;")?;
+        }
+        tx.pragma_update(None, "user_version", 38)?;
+    }
+    if version < 39 {
+        super::task_lists::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 39)?;
+    }
+    if version < 40 {
+        super::person_links::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 40)?;
+    }
+    if version < 41 {
+        tx.execute_batch(crate::archive::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 41)?;
+    }
+    if version < 42 {
+        super::notes::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 42)?;
+    }
+    if version < 43 {
+        crate::calendar::caldav::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 43)?;
+    }
+    if version < 44 {
+        tx.execute_batch(crate::calendar::itip::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 44)?;
+    }
+    if version < 45 {
+        crate::categories::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 45)?;
+    }
+    if version < 46 {
+        tx.execute_batch(crate::awaiting::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 46)?;
+    }
+    if version < 47 {
+        tx.execute_batch(crate::merge::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 47)?;
+    }
+    if version < 48 {
+        tx.execute_batch(crate::rules::server::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 48)?;
+    }
+    if version < 49 {
+        tx.execute_batch(super::SENDER_LISTS_SCHEMA)?;
+        tx.pragma_update(None, "user_version", 49)?;
+    }
+    if version < 50 {
+        tx.execute_batch(crate::privacy::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 50)?;
+    }
+    if version < 51 {
+        tx.execute_batch(crate::cloud::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 51)?;
+    }
+    if version < 52 {
+        // The online meeting bound to an event (#109).
+        let has = tx
+            .prepare("SELECT 1 FROM pragma_table_info('calendar_events') WHERE name = 'meeting'")?
+            .exists([])?;
+        if !has {
+            tx.execute_batch("ALTER TABLE calendar_events ADD COLUMN meeting TEXT;")?;
+        }
+        tx.pragma_update(None, "user_version", 52)?;
+    }
+    if version < 53 {
+        tx.execute_batch(crate::pop3::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 53)?;
+    }
+    if version < 54 {
+        tx.execute_batch(crate::chat::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 54)?;
+    }
+    if version < 55 {
+        tx.execute_batch(crate::backup_schedule::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 55)?;
+    }
+    if version < 56 {
+        // Task lists kept on a CalDAV server (ADR-0039).
+        crate::task_sync::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 56)?;
+    }
+    if version < 57 {
+        // Files attached to notes (ADR-0042).
+        tx.execute_batch(super::note_attachments::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 57)?;
+    }
+    if version < 58 {
+        // Group chats and files in chat (ADR-0044).
+        crate::chat::migrate_groups(&tx)?;
+        tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 
     tx.commit()?;

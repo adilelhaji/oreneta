@@ -51,3 +51,7 @@ frontend/startup-results/
 frontend/startup-report/
 native-startup-results/
 integration-results/
+
+# Coverage reports produced by the test jobs (see docs/verification-infrastructure.md)
+coverage/
+frontend/coverage/

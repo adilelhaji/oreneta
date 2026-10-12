@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"strings"
+
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Calendar bridge methods. These are pass-throughs: the core owns the model,
@@ -363,4 +365,71 @@ func (a *App) calendarSubscribe(payload map[string]any) (any, error) {
 	return a.sidecar.Call("calendar.subscribe", map[string]any{
 		"account": req.AccountID, "name": req.Name, "url": req.URL,
 	})
+}
+
+// calendarImportIcs brings a .ics file into a local or CalDAV calendar. The
+// first call picks the file and answers with the core's preview of it; the
+// second, with `confirm`, imports.
+func (a *App) calendarImportIcs(payload map[string]any) (any, error) {
+	account, _ := payload["account"].(string)
+	calendarID, _ := payload["calendar"].(string)
+	if account == "" || calendarID == "" {
+		return nil, errors.New("missing calendar")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	path, _ := payload["path"].(string)
+	if path == "" {
+		chosen, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+			Title:   "Import calendar file",
+			Filters: []wailsRuntime.FileFilter{{DisplayName: "Calendar (*.ics)", Pattern: "*.ics"}},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if chosen == "" {
+			return map[string]any{"cancelled": true}, nil
+		}
+		path = chosen
+	}
+	confirm, _ := payload["confirm"].(bool)
+	res, err := a.sidecar.Call("calendar.importIcs", map[string]any{
+		"account": account, "calendar": calendarID, "path": path, "confirm": confirm,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out, _ := res.(map[string]any)
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["path"] = path
+	return out, nil
+}
+
+// calendarExportIcs writes a calendar's events to a .ics file the person picks.
+func (a *App) calendarExportIcs(payload map[string]any) (any, error) {
+	account, _ := payload["account"].(string)
+	calendarID, _ := payload["calendar"].(string)
+	if account == "" || calendarID == "" {
+		return nil, errors.New("missing calendar")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	name, _ := payload["name"].(string)
+	dest, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:                "Export calendar",
+		DefaultFilename:      strings.TrimSuffix(emlFilename(name), ".eml") + ".ics",
+		CanCreateDirectories: true,
+		Filters:              []wailsRuntime.FileFilter{{DisplayName: "Calendar (*.ics)", Pattern: "*.ics"}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dest == "" {
+		return map[string]any{"saved": false}, nil
+	}
+	return a.sidecar.Call("calendar.exportIcs", map[string]any{"account": account, "calendar": calendarID, "path": dest})
 }

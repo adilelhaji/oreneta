@@ -27,6 +27,8 @@ use tokio::sync::Mutex;
 use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
 use meron_core::protocol::{Request, ping_response, ready_event};
+use meron_core::store::outgoing;
+use meron_core::sweep_review;
 use meron_core::{
     assistant, backup, cached_conversations, calendar, changelog, exchange, imap, mail_model, parse, priority, proxy, rss, rules,
     search, secrets, smtp, spam, store, thread_list, thread_read, unified,
@@ -170,6 +172,117 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BackgroundSyncCancelled, is_transient_sync_error, retry_background_sync};
+    use super::{merge_outcome, scheduled_outcome_of, scheduled_send_precheck, sent_late, strip_send_secrets, ScheduledOutcome};
+    use meron_core::store::outgoing::{AttemptKind, AttemptState, OutgoingAttempt};
+
+    fn earlier(state: AttemptState, error: &str) -> OutgoingAttempt {
+        OutgoingAttempt {
+            id: "s-1".to_string(),
+            account: "acct".to_string(),
+            kind: AttemptKind::Scheduled,
+            message_id: String::new(),
+            subject: "Later".to_string(),
+            recipients: "bob@example.com".to_string(),
+            payload: "{}".to_string(),
+            state,
+            error: error.to_string(),
+            archive_error: String::new(),
+            created_at: 1,
+            updated_at: 2,
+        }
+    }
+
+    /// H03 from #29: a scheduled row still present after the server accepted
+    /// its message is a crash between sending and forgetting, and must be
+    /// reported as sent — never sent again. An unanswered try stays
+    /// unanswered. Only a refusal, or nothing at all, is tried.
+    #[test]
+    fn a_scheduled_row_whose_attempt_already_went_is_not_sent_twice() {
+        assert!(scheduled_send_precheck(None).is_none(), "never tried: send it");
+        assert!(scheduled_send_precheck(Some(&earlier(AttemptState::Rejected, "550 no"))).is_none());
+        assert!(scheduled_send_precheck(Some(&earlier(AttemptState::Resolved, ""))).is_none());
+
+        assert!(matches!(
+            scheduled_send_precheck(Some(&earlier(AttemptState::Accepted, ""))),
+            Some(ScheduledOutcome::Sent)
+        ));
+        assert!(matches!(
+            scheduled_send_precheck(Some(&earlier(AttemptState::Archived, ""))),
+            Some(ScheduledOutcome::Sent)
+        ));
+        match scheduled_send_precheck(Some(&earlier(AttemptState::Uncertain, "connection reset"))) {
+            Some(ScheduledOutcome::Uncertain(reason)) => assert_eq!(reason, "connection reset"),
+            other => panic!("an unanswered try stays unanswered, got {}", describe(other)),
+        }
+        // The reason is supplied when the record has none.
+        match scheduled_send_precheck(Some(&earlier(AttemptState::Uncertain, ""))) {
+            Some(ScheduledOutcome::Uncertain(reason)) => assert!(reason.contains("stopped"), "{reason}"),
+            other => panic!("got {}", describe(other)),
+        }
+        // #89: still sending means sending now, in this process (startup
+        // turned a dead process's rows uncertain before the watch began).
+        // The second caller leaves the row to the first.
+        assert!(matches!(
+            scheduled_send_precheck(Some(&earlier(AttemptState::Sending, ""))),
+            Some(ScheduledOutcome::InFlight)
+        ));
+    }
+
+    /// #89: the watch and "send now" (or a held reply let go) reaching the
+    /// same message at once. The one that finds it already attempted must
+    /// not report it sent and drop its row: the first may still be refused.
+    #[test]
+    fn an_already_attempted_answer_is_not_taken_for_a_sent_message() {
+        let answer = |state: &str| {
+            serde_json::json!({ "ok": false, "outcome": "already_attempted", "state": state, "error": "" })
+        };
+        assert!(matches!(scheduled_outcome_of(&answer("sending")), ScheduledOutcome::InFlight));
+        assert!(matches!(scheduled_outcome_of(&answer("accepted")), ScheduledOutcome::Sent));
+        assert!(matches!(scheduled_outcome_of(&answer("archived")), ScheduledOutcome::Sent));
+        assert!(matches!(scheduled_outcome_of(&answer("uncertain")), ScheduledOutcome::Uncertain(_)));
+        assert!(matches!(
+            scheduled_outcome_of(&serde_json::json!({ "ok": true, "outcome": "accepted" })),
+            ScheduledOutcome::Sent
+        ));
+        assert!(matches!(
+            scheduled_outcome_of(&serde_json::json!({ "ok": false, "outcome": "uncertain", "error": "reset" })),
+            ScheduledOutcome::Uncertain(reason) if reason == "reset"
+        ));
+    }
+
+    /// #90: a mailing's message is accepted, refused, deferred (the batch
+    /// waits) or uncertain (never sent again on its own) by its answer.
+    #[test]
+    fn a_mailing_message_settles_from_its_send_answer() {
+        use meron_core::merge::Outcome;
+        let ok = |v: serde_json::Value| merge_outcome(Ok(v));
+        assert!(matches!(ok(serde_json::json!({ "ok": true, "outcome": "archived" })), Outcome::Accepted));
+        assert!(matches!(ok(serde_json::json!({ "ok": false, "outcome": "uncertain", "error": "reset" })), Outcome::Uncertain(_)));
+        assert!(matches!(
+            ok(serde_json::json!({ "ok": false, "outcome": "already_attempted", "state": "sending" })),
+            Outcome::Uncertain(_)
+        ));
+        assert!(matches!(merge_outcome(Err(anyhow::anyhow!("451 4.7.1 try again later"))), Outcome::Deferred(_)));
+        assert!(matches!(merge_outcome(Err(anyhow::anyhow!("550 no such user"))), Outcome::Rejected(_)));
+    }
+
+    #[test]
+    fn a_scheduled_message_is_stored_without_a_passphrase_and_late_is_said() {
+        let mut message = serde_json::json!({ "to": "bob@example.com", "passphrase": "secret", "sign": true });
+        strip_send_secrets(&mut message);
+        assert_eq!(message, serde_json::json!({ "to": "bob@example.com", "sign": true }));
+        assert!(!sent_late(1_000, 1_000 + 60), "the watch ticks every minute: that is on time");
+        assert!(sent_late(1_000, 1_000 + 3_600));
+    }
+
+    fn describe(outcome: Option<ScheduledOutcome>) -> String {
+        match outcome {
+            None => "None".to_string(),
+            Some(ScheduledOutcome::Sent) => "Sent".to_string(),
+            Some(ScheduledOutcome::Uncertain(reason)) => format!("Uncertain({reason})"),
+            Some(ScheduledOutcome::InFlight) => "InFlight".to_string(),
+        }
+    }
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     struct GraphTestHost;
@@ -177,6 +290,502 @@ mod tests {
         fn open_db(&self) -> anyhow::Result<rusqlite::Connection> { meron_core::store::open_at(":memory:") }
         fn apply_secret(&self, _: &rusqlite::Connection, _: &str, _: &mut meron_core::imap::Creds) {}
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
+    }
+    #[tokio::test]
+    async fn an_mbox_is_imported_into_the_local_archive_and_read_with_the_ordinary_mail_commands() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oreneta-archive-dispatch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // SAFETY: tests in this binary that touch the media root use their own directory.
+        unsafe { std::env::set_var("MERON_MEDIA_DIR", dir.join("media")) };
+        let mbox = dir.join("old.mbox");
+        std::fs::write(
+            &mbox,
+            "From ana@x.cat Mon Oct  5 09:00:00 2026\nFrom: Ana <ana@x.cat>\nSubject: Budget\nDate: Mon, 5 Oct 2026 09:00:00 +0000\nMessage-ID: <a@x>\n\nNumbers attached.\n\n\
+             From bo@x.cat Mon Oct  5 10:00:00 2026\nFrom: Bo <bo@x.cat>\nSubject: Re: Budget\nDate: Mon, 5 Oct 2026 10:00:00 +0000\nMessage-ID: <b@x>\nIn-Reply-To: <a@x>\nReferences: <a@x>\n\nThanks.\n",
+        )
+        .unwrap();
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let paths = json!([mbox.to_string_lossy()]);
+
+        let preview = call("archive.preview", json!({"paths": paths})).await.unwrap();
+        assert_eq!(preview["summary"]["imported"], 2);
+        assert!(store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT).unwrap().is_none(), "a preview creates nothing");
+
+        let imported = call("archive.import", json!({"paths": paths})).await.unwrap();
+        assert_eq!((imported["summary"]["imported"].clone(), imported["created"].clone()), (json!(2), json!(true)));
+        let again = call("archive.import", json!({"paths": paths})).await.unwrap();
+        assert_eq!(again["summary"]["duplicates"], 2, "a second import adds nothing");
+
+        let account = meron_core::archive::ACCOUNT;
+        let listed = call("account.list", json!({})).await.unwrap();
+        let archive = listed["accounts"].as_array().unwrap().iter().find(|a| a["id"] == account).cloned().unwrap();
+        assert_eq!(archive["needs_reconnect"], false);
+        let folders = call("folders.list", json!({"account": account})).await.unwrap();
+        let text = folders.to_string();
+        assert!(text.contains("INBOX") && text.contains("Trash"), "{text}");
+
+        let thread_key = store::recent_headers(&engine.db.lock().unwrap(), account, "INBOX", 10).unwrap()[0].thread_key.clone();
+        let thread = call("messages.thread", json!({"account": account, "folder": "INBOX", "thread_key": thread_key, "limit": 20})).await.unwrap();
+        let rendered = thread.to_string();
+        assert!(rendered.contains("Numbers attached") && rendered.contains("Thanks"), "both messages read, no server: {rendered}");
+
+        // Exporting the folder writes the same messages back out as mboxrd.
+        let out = dir.join("export.mbox");
+        let exported = call("messages.exportMbox", json!({"account": account, "folder": "INBOX", "path": out.to_string_lossy()})).await.unwrap();
+        assert_eq!(exported["exported"], 2);
+        let back = meron_core::archive::split_mbox(&std::fs::read(&out).unwrap());
+        assert_eq!(back.len(), 2);
+        assert!(String::from_utf8_lossy(&back[1]).contains("Message-ID: <b@x>"));
+        assert!(!dir.join("export.mbox.part").exists());
+        let first_uid = store::recent_headers(&engine.db.lock().unwrap(), account, "INBOX", 10).unwrap().iter().map(|h| h.uid).min().unwrap();
+        let one = call("messages.exportMbox", json!({"account": account, "folder": "INBOX", "path": out.to_string_lossy(), "uids": [first_uid]})).await.unwrap();
+        assert_eq!(one["exported"], 1);
+        let nowhere = dir.join("missing").join("x.mbox");
+        assert!(call("messages.exportMbox", json!({"account": account, "folder": "INBOX", "path": nowhere.to_string_lossy()})).await.is_err());
+
+        // Deleting moves to the archive's Trash, like any account.
+        call("messages.delete", json!({"account": account, "folder": "INBOX", "thread_key": thread_key})).await.unwrap();
+        let db = engine.db.lock().unwrap();
+        assert!(store::recent_headers(&db, account, "INBOX", 10).unwrap().is_empty());
+        assert_eq!(store::recent_headers(&db, account, "Trash", 10).unwrap().len(), 2);
+        drop(db);
+
+        // Thunderbird (ADR-0041): a profile's folders go to the archive under
+        // Thunderbird/<account>/<folders>; deleted-but-not-compacted mail stays out.
+        let tb = dir.join("tb-profile");
+        let local = tb.join("Mail/Local Folders");
+        std::fs::create_dir_all(local.join("Work.sbd")).unwrap();
+        let message = |id: &str, status: &str| {
+            format!("From - Mon Oct 05 09:00:00 2026\nX-Mozilla-Status: {status}\nFrom: Ana <ana@x.cat>\nSubject: {id}\nMessage-ID: <{id}@tb>\nDate: Mon, 5 Oct 2026 09:00:00 +0000\n\nBody {id}\n\n")
+        };
+        std::fs::write(local.join("Inbox"), message("kept", "0001") + &message("deleted", "0009")).unwrap();
+        std::fs::write(local.join("Inbox.msf"), "").unwrap();
+        std::fs::write(local.join("Work.sbd/Projects"), message("project", "0001")).unwrap();
+        std::fs::write(local.join("Work.sbd/Projects.msf"), "").unwrap();
+        let scanned = call("thunderbird.scan", json!({"path": tb.to_string_lossy()})).await.unwrap();
+        let ids: Vec<String> = scanned["folders"].as_array().unwrap().iter().map(|f| f["id"].as_str().unwrap().to_string()).collect();
+        assert_eq!(ids, ["Mail/Local Folders/Inbox", "Mail/Local Folders/Work.sbd/Projects"]);
+        let preview = call("thunderbird.preview", json!({"path": tb.to_string_lossy(), "folders": ids})).await.unwrap();
+        assert_eq!(preview["folders"][0]["target"], "Thunderbird/Local Folders/Inbox");
+        assert_eq!((preview["folders"][0]["summary"]["imported"].clone(), preview["folders"][0]["deleted"].clone()), (json!(1), json!(1)));
+        assert!(store::recent_headers(&engine.db.lock().unwrap(), account, "Thunderbird/Local Folders/Inbox", 10).unwrap().is_empty(), "a preview stores nothing");
+        call("thunderbird.import", json!({"path": tb.to_string_lossy(), "folders": ids})).await.unwrap();
+        let again = call("thunderbird.import", json!({"path": tb.to_string_lossy(), "folders": ids})).await.unwrap();
+        assert_eq!(again["folders"][1]["summary"]["duplicates"], 1, "importing twice adds nothing");
+        let kept = store::recent_headers(&engine.db.lock().unwrap(), account, "Thunderbird/Local Folders/Inbox", 10).unwrap();
+        assert_eq!(kept.iter().map(|h| h.subject.as_str()).collect::<Vec<_>>(), ["kept"]);
+        assert_eq!(store::recent_headers(&engine.db.lock().unwrap(), account, "Thunderbird/Local Folders/Work/Projects", 10).unwrap().len(), 1);
+        assert!(call("thunderbird.import", json!({"path": tb.to_string_lossy(), "folders": ["../../etc/passwd"]})).await.is_err(), "only folders the scan found are read");
+    }
+
+    #[tokio::test]
+    async fn a_vcard_file_is_previewed_imported_once_and_exported_with_its_origin() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Ana Prat\r\nEMAIL:ana@x.cat\r\nEND:VCARD\r\n\
+                   BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bo Ray\r\nEND:VCARD\r\n\
+                   BEGIN:VCARD\r\nVERSION:3.0\r\nNOTE:nobody\r\nEND:VCARD\r\n";
+        let preview = call("people.importPreview", json!({"vcf": vcf})).await.unwrap();
+        assert_eq!((preview["people"].as_array().unwrap().len(), preview["skipped"].clone()), (2, json!(1)));
+        assert!(call("people.list", json!({"query": ""})).await.unwrap()["people"].as_array().unwrap().is_empty(), "a preview stores nothing");
+
+        let first = call("people.import", json!({"vcf": vcf})).await.unwrap();
+        assert_eq!((first["imported"].clone(), first["duplicates"].clone()), (json!(2), json!(0)));
+        let again = call("people.import", json!({"vcf": vcf})).await.unwrap();
+        assert_eq!((again["imported"].clone(), again["duplicates"].clone()), (json!(0), json!(2)), "importing twice does not double the book");
+
+        let exported = call("people.exportVcf", json!({})).await.unwrap();
+        assert_eq!(exported["count"], 2);
+        let text = exported["vcf"].as_str().unwrap();
+        assert!(text.contains("FN:Ana Prat") && text.contains("X-ORENETA-SOURCE:local"));
+    }
+
+    #[tokio::test]
+    async fn task_lists_hold_standalone_tasks_beside_mail_ones() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let home = call("tasks.createList", json!({"name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let task = json!({"list_id": home, "title": "Fix the tap", "priority": 2, "due_at": 100});
+        let id = call("tasks.create", json!({"task": task})).await.unwrap()["id"].as_i64().unwrap();
+        call("tasks.save", json!({"thread_id": "acct#INBOX#7", "note": "reply"})).await.unwrap();
+
+        let listed = call("tasks.list", json!({})).await.unwrap();
+        let rows = listed["tasks"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        let standalone = rows.iter().find(|row| row["id"] == id).unwrap();
+        assert_eq!((standalone["linked"].clone(), standalone["thread_id"].clone()), (json!(false), json!("")));
+        assert_eq!(standalone["title"], "Fix the tap");
+        assert!(rows.iter().any(|row| row["linked"] == true && row["list_id"] == "mail"));
+
+        let lists = call("tasks.lists", json!({})).await.unwrap();
+        assert_eq!(lists["lists"].as_array().unwrap().len(), 2);
+
+        let edited = json!({"list_id": home, "title": "Fix the kitchen tap", "priority": 1});
+        assert_eq!(call("tasks.update", json!({"id": id, "revision": 1, "task": edited})).await.unwrap()["revision"], 2);
+        let stale = call("tasks.update", json!({"id": id, "revision": 1, "task": edited})).await.unwrap();
+        assert_eq!(stale["conflict"], true);
+        assert_eq!(stale["current"]["title"], "Fix the kitchen tap");
+
+        assert!(call("tasks.deleteList", json!({"id": "mail"})).await.is_err());
+        call("tasks.deleteList", json!({"id": home})).await.unwrap();
+        assert_eq!(call("tasks.list", json!({})).await.unwrap()["tasks"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_task_list_on_a_server_that_cannot_be_reached_keeps_its_tasks_and_says_why() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        // Nothing listens on port 9: the first read fails, so nothing is added.
+        let url = "http://127.0.0.1:9/ana/tasks/";
+        let added = call("tasks.caldavAdd", json!({"url": url, "name": "Dav", "server": "http://127.0.0.1:9/", "username": "ana", "password": "pw"})).await;
+        assert!(added.is_err());
+        assert_eq!(call("tasks.lists", json!({})).await.unwrap()["lists"].as_array().unwrap().len(), 1);
+
+        let id = meron_core::task_sync::add_list(&engine.db.lock().unwrap(), "Dav", url, "", "ana", 1).unwrap();
+        let task = json!({"list_id": id, "title": "Kept here"});
+        let task_id = call("tasks.create", json!({"task": task})).await.unwrap()["id"].as_i64().unwrap();
+        let synced = call("tasks.sync", json!({})).await.unwrap();
+        assert_eq!(synced["lists"][0]["ok"], false);
+        let lists = call("tasks.lists", json!({})).await.unwrap();
+        let bound = lists["lists"].as_array().unwrap().iter().find(|l| l["id"] == id.as_str()).unwrap().clone();
+        assert_eq!(bound["remote_url"], url);
+        assert!(!bound["last_error"].as_str().unwrap().is_empty());
+        let listed = call("tasks.list", json!({})).await.unwrap();
+        let row = listed["tasks"].as_array().unwrap().iter().find(|t| t["id"] == task_id).unwrap().clone();
+        assert_eq!((row["pending"].clone(), row["conflict"].clone()), (json!("put"), json!("")));
+        assert!(call("tasks.resolveConflict", json!({"id": task_id, "keep": "mine"})).await.is_err(), "no conflict to settle");
+        call("tasks.deleteList", json!({"id": id})).await.unwrap();
+        assert!(call("tasks.list", json!({})).await.unwrap()["tasks"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_profile_archive_is_written_and_inspected_without_touching_the_store_in_use() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oreneta-profile-dispatch-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        call("notes.create", json!({"note": {"title": "In the archive", "html": "<p>x</p>"}})).await.unwrap();
+        let path = dir.join("p.oreneta-profile");
+        let written = call("profileArchive.export", json!({"path": path.to_string_lossy(), "passphrase": "long enough pass", "app_version": "9.9.9"})).await.unwrap();
+        assert_eq!(written["summary"]["app_version"], "9.9.9");
+        assert!(written["summary"].get("db_key").is_none());
+
+        let inspected = call("profileArchive.inspect", json!({"path": path.to_string_lossy(), "passphrase": "long enough pass"})).await.unwrap();
+        assert_eq!(inspected["summary"]["schema_version"], store::SCHEMA_VERSION);
+        assert!(inspected.to_string().find("db_key").is_none(), "the store key never leaves the core");
+        assert!(call("profileArchive.inspect", json!({"path": path.to_string_lossy(), "passphrase": "wrong one!"})).await.is_err());
+        let titles = call("notes.list", json!({})).await.unwrap();
+        assert_eq!(titles["notes"][0]["title"], "In the archive");
+
+        // Scheduled backups (#173), in this test so that no other archive is
+        // written at the same moment.
+        let status = call("backupSchedule.status", json!({})).await.unwrap();
+        assert_eq!(status["schedule"]["enabled"], false);
+        let folder = dir.join("scheduled");
+        std::fs::create_dir_all(&folder).unwrap();
+        let schedule = json!({"enabled": true, "folder": folder.to_string_lossy(), "every_hours": 24, "keep": 3, "max_bytes": null});
+        let _ = secrets::delete(meron_core::backup_schedule::SECRET_KEY);
+        assert!(call("backupSchedule.save", json!({"schedule": schedule})).await.is_err(), "no password, not on");
+        assert!(call("backupSchedule.save", json!({"schedule": schedule, "password": "short"})).await.is_err());
+        let saved = call("backupSchedule.save", json!({"schedule": schedule, "password": "long enough pass"})).await.unwrap();
+        assert_eq!(saved["password_saved"], true);
+        assert!(saved.to_string().find("long enough pass").is_none(), "the password never comes back");
+        let ran = call("backupSchedule.runNow", json!({})).await.unwrap();
+        assert_eq!(ran["backups"].as_array().unwrap().len(), 1);
+        assert_eq!(ran["backups"][0]["verified"], true);
+        // A manual backup waits for a scheduled one, and the other way round.
+        let held = meron_core::backup_schedule::capture_lock().unwrap();
+        let busy = call("profileArchive.export", json!({"path": dir.join("q.oreneta-profile").to_string_lossy(), "passphrase": "long enough pass"})).await;
+        assert!(busy.unwrap_err().to_string().contains("another backup"));
+        assert!(call("backupSchedule.runNow", json!({})).await.is_err());
+        drop(held);
+        let _ = secrets::delete(meron_core::backup_schedule::SECRET_KEY);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn an_ics_file_is_previewed_imported_once_and_exported_from_a_local_calendar() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oreneta-ics-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let account = "acct@example.test";
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let file = dir.join("in.ics");
+        std::fs::write(&file, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n\
+BEGIN:VEVENT\r\nUID:a@x\r\nDTSTART:20300110T090000Z\r\nDTEND:20300110T100000Z\r\nSUMMARY:Dentist\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:b@x\r\nDTSTART:20300111T090000Z\r\nDTEND:20300111T100000Z\r\nSUMMARY:Plumber\r\nEND:VEVENT\r\n\
+END:VCALENDAR\r\n").unwrap();
+        let params = json!({"account": account, "calendar": home, "path": file.to_string_lossy()});
+
+        let preview = call("calendar.importIcs", params.clone()).await.unwrap();
+        assert_eq!((preview["summary"]["added"].clone(), preview["imported"].clone()), (json!(2), json!(false)));
+        assert!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().is_empty(), "a preview stores nothing");
+
+        let mut confirm = params.clone();
+        confirm["confirm"] = json!(true);
+        assert_eq!(call("calendar.importIcs", confirm.clone()).await.unwrap()["summary"]["added"], 2);
+        let again = call("calendar.importIcs", confirm).await.unwrap();
+        assert_eq!((again["summary"]["added"].clone(), again["summary"]["duplicates"].clone()), (json!(0), json!(2)));
+
+        let out = dir.join("out.ics");
+        let exported = call("calendar.exportIcs", json!({"account": account, "calendar": home, "path": out.to_string_lossy()})).await.unwrap();
+        assert_eq!(exported["events"], 2);
+        let written = std::fs::read_to_string(&out).unwrap();
+        assert!(written.contains("SUMMARY:Dentist") && written.contains("SUMMARY:Plumber"));
+        assert!(!dir.join("out.ics.part").exists());
+
+        // A subscription cannot take imported events.
+        let refused = call("calendar.importIcs", json!({"account": account, "calendar": "missing", "path": file.to_string_lossy()})).await;
+        assert!(refused.is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn an_invitation_is_answered_kept_in_a_calendar_and_removed_when_cancelled() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let account = "bo@example.com";
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let request = |sequence: i64, method: &str| format!(
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:{method}\r\nBEGIN:VEVENT\r\nUID:meet@example.com\r\nSEQUENCE:{sequence}\r\n\
+DTSTART:20300110T090000Z\r\nDTEND:20300110T100000Z\r\nSUMMARY:Planning\r\nORGANIZER;CN=Ana:mailto:ana@example.com\r\n\
+ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+
+        let answered = call("invite.respond", json!({
+            "account": account, "ics": request(2, "REQUEST"), "response": "accept",
+            "me_name": "Bo", "me_addr": "Bo@Example.com", "calendar": home,
+        })).await.unwrap();
+        assert_eq!(answered["reply"]["to"], "ana@example.com");
+        assert_eq!(answered["reply"]["subject"], "Accepted: Planning");
+        assert!(answered["reply"]["ics"].as_str().unwrap().contains("ATTENDEE;PARTSTAT=ACCEPTED;CN=Bo:mailto:bo@example.com"));
+        let kept = calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap();
+        assert_eq!((kept.len(), kept[0].subject.as_str()), (1, "Planning"));
+
+        let status = call("invite.status", json!({"account": account, "uid": "meet@example.com"})).await.unwrap();
+        assert_eq!((status["answer"]["response"].clone(), status["calendars"].clone()), (json!("accept"), json!([home.clone()])));
+
+        let old = call("invite.respond", json!({
+            "account": account, "ics": request(1, "REQUEST"), "response": "decline", "me_addr": "bo@example.com", "calendar": home,
+        })).await;
+        assert!(old.unwrap_err().to_string().contains("newer version"), "an older invitation sends nothing");
+        assert_eq!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().len(), 1);
+
+        // The kept event is in the person's schedule, except for itself (ADR-0043).
+        let (nine, ten) = (1_894_266_000i64, 1_894_269_600i64);
+        let busy = call("calendar.conflicts", json!({"start": nine, "end": ten})).await.unwrap();
+        assert!(busy["conflicts"].as_array().unwrap().iter().any(|c| c["account"] == account && c["subject"] == "Planning"));
+        let itself = call("calendar.conflicts", json!({"start": nine, "end": ten, "exclude": ["meet@example.com"]})).await.unwrap();
+        assert!(!itself["conflicts"].as_array().unwrap().iter().any(|c| c["account"] == account && c["subject"] == "Planning"));
+
+        // Proposing another time: to the organizer, only for the current version.
+        let proposed = call("invite.counter", json!({
+            "account": account, "ics": request(2, "REQUEST"), "me_name": "Bo", "me_addr": "bo@example.com",
+            "start": nine + 4 * 3600, "end": ten + 4 * 3600, "comment": "After lunch?",
+        })).await.unwrap();
+        assert_eq!((proposed["proposal"]["to"].clone(), proposed["proposal"]["subject"].clone()), (json!("ana@example.com"), json!("New time proposed: Planning")));
+        let counter_ics = proposed["proposal"]["ics"].as_str().unwrap().to_owned();
+        assert!(counter_ics.contains("METHOD:COUNTER") && counter_ics.contains("SEQUENCE:2") && counter_ics.contains("DTSTART:20300110T130000Z"));
+        let stale = call("invite.counter", json!({
+            "account": account, "ics": request(1, "REQUEST"), "me_addr": "bo@example.com", "start": nine, "end": ten,
+        })).await;
+        assert!(stale.unwrap_err().to_string().contains("newer version"));
+
+        // The organizer's side: information only until the event is theirs here.
+        let ana = "ana@example.com";
+        let status = call("invite.counterStatus", json!({"account": ana, "me_addr": ana, "ics": counter_ics})).await.unwrap();
+        assert_eq!((status["organizer"].clone(), status["outdated"].clone()), (json!(false), json!(false)));
+        assert!(call("invite.declineCounter", json!({"account": ana, "me_addr": ana, "ics": counter_ics})).await.is_err(), "nothing is sent for a meeting not kept here");
+        let ana_home = call("calendar.createLocal", json!({"account": ana, "name": "Ana"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        calendar::put_local_event(&engine.db.lock().unwrap(), ana, &calendar::Event {
+            id: format!("local:import:meet@example.com@{nine}"),
+            calendar_id: ana_home.clone(),
+            subject: "Planning".into(),
+            start: nine,
+            end: ten,
+            organizer: Some(calendar::Participant { name: "Ana".into(), addr: ana.into(), response: String::new() }),
+            ..Default::default()
+        }).unwrap();
+        let status = call("invite.counterStatus", json!({"account": ana, "me_addr": ana, "ics": counter_ics})).await.unwrap();
+        assert_eq!((status["organizer"].clone(), status["event"]["calendar_id"].clone(), status["outdated"].clone()), (json!(true), json!(ana_home), json!(false)));
+        let declined = call("invite.declineCounter", json!({
+            "account": ana, "me_name": "Ana", "me_addr": ana, "ics": counter_ics, "comment": "The room is taken",
+        })).await.unwrap();
+        assert_eq!(declined["reply"]["to"], "bo@example.com");
+        let refusal = declined["reply"]["ics"].as_str().unwrap();
+        assert!(refusal.contains("METHOD:DECLINECOUNTER") && refusal.contains("SEQUENCE:2") && refusal.contains("COMMENT:The room is taken"));
+
+        assert!(call("invite.cancel", json!({"account": account, "ics": request(3, "REQUEST")})).await.is_err(), "only a cancellation removes");
+        let cancelled = call("invite.cancel", json!({"account": account, "ics": request(3, "CANCEL")})).await.unwrap();
+        assert_eq!(cancelled["removed"], 1);
+        assert!(calendar::events_of_calendar(&engine.db.lock().unwrap(), account, &home).unwrap().is_empty());
+        let status = call("invite.status", json!({"account": account, "uid": "meet@example.com"})).await.unwrap();
+        assert_eq!(status["answer"]["response"], "cancelled");
+        let after = call("invite.counter", json!({
+            "account": account, "ics": request(3, "REQUEST"), "me_addr": "bo@example.com", "start": nine, "end": ten,
+        })).await;
+        assert!(after.unwrap_err().to_string().contains("cancelled"), "a cancelled meeting takes no proposal");
+    }
+
+    #[tokio::test]
+    async fn notes_are_written_searched_and_trashed_through_the_dispatcher() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let created = call("notes.create", json!({"note": {"title": "Ideas", "html": "<p>Ship <b>notes</b></p><script>x</script>", "tags": ["work"]}})).await.unwrap();
+        let id = created["note"]["id"].as_str().unwrap().to_owned();
+        assert_eq!(created["note"]["html"], "<p>Ship <b>notes</b></p>");
+
+        let listed = call("notes.list", json!({"search": "ship"})).await.unwrap();
+        assert_eq!(listed["notes"][0]["preview"], "Ship notes");
+        assert_eq!(listed["tags"], json!([{"tag": "work", "count": 1}]));
+
+        let saved = call("notes.update", json!({"id": id, "revision": 1, "note": {"title": "Ideas", "html": "<p>v2</p>"}})).await.unwrap();
+        assert_eq!((saved["status"].clone(), saved["note"]["revision"].clone()), (json!("saved"), json!(2)));
+        let stale = call("notes.update", json!({"id": id, "revision": 1, "note": {"title": "Ideas", "html": "<p>v1 again</p>"}})).await.unwrap();
+        assert_eq!((stale["status"].clone(), stale["stored"]["text"].clone()), (json!("conflict"), json!("v2")));
+
+        call("notes.trash", json!({"id": id})).await.unwrap();
+        assert!(call("notes.list", json!({})).await.unwrap()["notes"].as_array().unwrap().is_empty());
+        assert_eq!(call("notes.list", json!({"trash": true})).await.unwrap()["notes"].as_array().unwrap().len(), 1);
+        call("notes.restore", json!({"id": id})).await.unwrap();
+        call("notes.trash", json!({"id": id})).await.unwrap();
+        call("notes.purge", json!({"id": id})).await.unwrap();
+        assert!(call("notes.get", json!({"id": id})).await.unwrap()["note"].is_null());
+    }
+
+    #[tokio::test]
+    async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &request(method, params), &writer).await }
+        };
+
+        let created = call("people.save", json!({"person": {"name": "Ann", "emails": [{"addr": "ann@example.com"}]}}))
+            .await
+            .unwrap();
+        let id = created["id"].as_str().unwrap().to_owned();
+        assert_eq!(created["version"], "1");
+        let listed = call("people.list", json!({"query": "ann"})).await.unwrap();
+        assert_eq!(listed["people"][0]["editable"], true);
+        assert_eq!(listed["people"][0]["version"], "1");
+
+        // Two windows opened at version 1; the first one saves.
+        call("people.save", json!({"id": id, "version": "1", "person": {"name": "Ann Lee"}})).await.unwrap();
+        let stale = call("people.save", json!({"id": id, "version": "1", "person": {"name": "Annie"}}))
+            .await
+            .unwrap();
+        assert_eq!(stale["conflict"], true);
+        assert_eq!(stale["current"]["name"], "Ann Lee", "the reader is shown what is there now");
+
+        // An edit that does not say which version it was made from is refused.
+        assert!(call("people.save", json!({"id": id, "person": {"name": "X"}})).await.is_err());
+
+        let gone = call("people.delete", json!({"id": id, "version": "2"})).await.unwrap();
+        assert_eq!(gone["ok"], true);
+        let listed = call("people.list", json!({"query": ""})).await.unwrap();
+        assert!(listed["people"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_local_calendar_keeps_its_events_without_a_server() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let account = "imap@example.test";
+        // No calendar route at all: anything that reached a server would fail.
+        let local = dispatch(&engine, &request("calendar.createLocal", json!({"account": account, "name": "Home"})), &writer)
+            .await.unwrap()["id"].as_str().unwrap().to_owned();
+        let event = |id: &str, subject: &str| json!({
+            "id": id, "calendar_id": local, "subject": subject, "start": 1_791_799_200i64, "end": 1_791_802_800i64,
+            "all_day": false, "is_recurring": false, "is_cancelled": false, "free_busy": "", "my_response": "",
+            "description": "", "attendees": [],
+        });
+
+        let created = dispatch(&engine, &request("calendar.create", json!({"account": account, "event": event("", "Dentist")})), &writer)
+            .await.expect("a local event is saved");
+        let id = created["event"]["id"].as_str().unwrap().to_owned();
+        assert!(id.starts_with("local:"));
+        let stored = || calendar::events_in_window(&engine.db.lock().unwrap(), account, (0, i64::MAX)).unwrap();
+        assert_eq!(stored().iter().map(|e| e.subject.as_str()).collect::<Vec<_>>(), vec!["Dentist"]);
+
+        dispatch(&engine, &request("calendar.update", json!({"account": account, "event": event(&id, "Dentist (moved)")})), &writer)
+            .await.expect("a local event is edited");
+        assert_eq!(stored()[0].subject, "Dentist (moved)");
+        assert_eq!(stored().len(), 1, "edited in place, not added");
+
+        let mut repeating = event("", "Gym");
+        repeating["recurrence"] = json!({"freq": "weekly", "interval": 1, "weekdays": [], "until": null, "count": null});
+        let refused = dispatch(&engine, &request("calendar.create", json!({"account": account, "event": repeating})), &writer).await;
+        assert!(refused.is_err_and(|e| e.to_string().contains("single events")));
+
+        dispatch(&engine, &request("calendar.delete", json!({"account": account, "event": id, "calendar": local})), &writer)
+            .await.expect("a local event is deleted");
+        assert!(stored().is_empty());
+
+        // A subscription is the publisher's: writing to it is refused by name.
+        calendar::upsert_calendars(&engine.db.lock().unwrap(), account, &[calendar::Calendar {
+            id: "sub:1".into(), name: "Holidays".into(), kind: calendar::CalendarKind::Subscribed, enabled: true,
+            ..Default::default()
+        }]).unwrap();
+        let mut published = event("", "Party");
+        published["calendar_id"] = json!("sub:1");
+        let refused = dispatch(&engine, &request("calendar.create", json!({"account": account, "event": published})), &writer).await;
+        assert!(refused.is_err_and(|e| e.to_string().contains("Holidays is a subscribed calendar")));
     }
     #[tokio::test]
     async fn local_draft_rpc_is_local_and_preserves_conflicts() {
@@ -218,6 +827,84 @@ mod tests {
         let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
+    }
+    #[tokio::test]
+    async fn graph_writes_pass_the_guard_only_where_granted_and_supported() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let (account,other)=("graph@example.test","other@example.test");
+        for id in [account,other] {
+            engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[id]).unwrap();
+        }
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true})).unwrap();
+        // Supported and granted: past the guard (they fail later, with no
+        // Graph profile in this test, but not as "read-only").
+        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account,"uid":1,"target_folder":"INBOX.x"})),&writer).await.unwrap_err();
+            assert!(!error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
+        assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
+        // Still unsupported, granted or not.
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+            let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
+            assert!(error.to_string().contains("read-only"),"{method}: {error}");
+        }
+        // Not to another account, and not for an account without the grant.
+        let error=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":other,"target_folder":"x","uid":1})),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        let error=dispatch(&engine,&request("messages.markRead",json!({"account":other,"uid":1})),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"));
+        let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
+        let writes:Vec<(String,bool)>=list["accounts"].as_array().unwrap().iter().map(|a|(a["id"].as_str().unwrap().to_owned(),a["graph_writes"].as_bool().unwrap())).collect();
+        assert!(writes.contains(&(account.to_owned(),true)) && writes.contains(&(other.to_owned(),false)));
+    }
+    #[test]
+    fn graph_send_failures_are_uncertain_only_when_microsoft_may_have_accepted() {
+        use super::{classify_graph_send_error, smtp};
+        use meron_core::graph::{Error, ErrorKind};
+        let classify = |kind, status| {
+            classify_graph_send_error(anyhow::Error::new(Error { kind, status, retry_after_seconds: None }))
+        };
+        for (kind, status) in [(ErrorKind::Uncertain, None), (ErrorKind::Unavailable, Some(504)), (ErrorKind::Unavailable, Some(500))] {
+            assert!(smtp::is_uncertain(&classify(kind, status)), "{kind:?}");
+        }
+        for (kind, status) in [
+            (ErrorKind::AccessDenied, Some(403)),
+            (ErrorKind::Throttled, Some(429)),
+            (ErrorKind::Reauthenticate, Some(401)),
+            (ErrorKind::InvalidResponse, Some(400)),
+            (ErrorKind::TooLarge, None),
+            (ErrorKind::ConsentRequired, None),
+        ] {
+            assert!(!smtp::is_uncertain(&classify(kind, status)), "{kind:?}");
+        }
+        assert!(classify(ErrorKind::TooLarge, None).to_string().contains("too large to send through Microsoft Graph"));
+        assert!(classify(ErrorKind::ConsentRequired, None).to_string().contains("allow it in the account settings"));
+    }
+    #[tokio::test]
+    async fn graph_send_passes_the_guard_only_with_the_send_grant() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let account="graph@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[account]).unwrap();
+        let send=json!({"account":account,"to":"b@example.test","subject":"Hi","body":"x","message_id":"m-graph@example.test"});
+        let error=dispatch(&engine,&request("send",send.clone()),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("read-only"),"{error}");
+        // Changes alone do not allow sending.
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true,"send":false})).unwrap();
+        assert!(dispatch(&engine,&request("send",send.clone()),&writer).await.unwrap_err().to_string().contains("read-only"));
+        store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":false,"send":true})).unwrap();
+        let error=dispatch(&engine,&request("send",send),&writer).await.unwrap_err();
+        assert!(!error.to_string().contains("read-only"),"{error}");
+        // Scheduling is still not offered for Graph.
+        assert!(dispatch(&engine,&request("mail.scheduleSend",json!({"account":account})),&writer).await.unwrap_err().to_string().contains("read-only"));
+        let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
+        assert_eq!(list["accounts"][0]["graph_send"],true);
     }
     #[test]
     fn graph_failures_do_not_enter_imap_retry_policy() {
@@ -710,6 +1397,16 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                 .await;
             }
 
+            // A reply waited for that has not come by the time asked: a
+            // notice here, never a message to anyone (#45).
+            let due = {
+                let db = engine.db.lock().unwrap();
+                meron_core::awaiting::due_reminders(&db, now).unwrap_or_default()
+            };
+            for item in due {
+                emit(&out, "mail.awaitingDue", json!({ "item": item })).await;
+            }
+
             // And the other half of the same promise: messages written to go
             // later. The row is only dropped once the message has actually
             // gone, so a crash between sending and forgetting costs a repeat
@@ -744,8 +1441,8 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                         continue;
                     }
                 };
-                match perform_send(&engine, &message).await {
-                    Ok(_) => {
+                match send_scheduled(&engine, &row, &message, false).await {
+                    Ok(ScheduledOutcome::Sent) => {
                         {
                             let db = engine.db.lock().unwrap();
                             let _ = store::cancel_scheduled_send(&db, &row.id);
@@ -757,9 +1454,24 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                                 "id": row.id,
                                 "account": row.account,
                                 "subject": row.subject,
+                                // Gone later than asked, because the app was
+                                // not running at the hour: said, not hidden.
+                                "late": sent_late(row.due_at, now),
                             }),
                         )
                         .await;
+                    }
+                    Ok(ScheduledOutcome::InFlight) => {}
+                    Ok(ScheduledOutcome::Uncertain(reason)) => {
+                        // Not a refusal and not a success: nobody knows. It
+                        // is not tried again, which could deliver it twice,
+                        // and it is not dropped, which could lose it. It
+                        // stays in the list for a person, marked as unknown.
+                        {
+                            let db = engine.db.lock().unwrap();
+                            let _ = store::give_up_on_send(&db, &row.id, &reason, now);
+                        }
+                        emit(&out, "mail.scheduledSendFailed", uncertain_send_json(&row, &reason)).await;
                     }
                     Err(err) => {
                         let reason = format!("{err:#}");
@@ -813,7 +1525,7 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                         let db = engine.db.lock().unwrap();
                         // Recorded before it is announced: a reminder given
                         // twice is worse than one lost to a crash in between.
-                        if calendar::mark_reminder_fired(&db, &account, &event.id, now).is_err() {
+                        if calendar::mark_reminder_fired(&db, &account, &event.id, event.start, now).is_err() {
                             continue;
                         }
                     }
@@ -833,10 +1545,477 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                     .await;
                 }
             }
+            // Task reminders (ADR-0013): local, so not tied to an account.
+            let due = store::task_lists::due_reminders(&engine.db.lock().unwrap(), now).unwrap_or_default();
+            for (id, title, due_at) in due {
+                if store::task_lists::mark_reminded(&engine.db.lock().unwrap(), id, now).is_err() {
+                    continue;
+                }
+                emit(&out, "tasks.reminder", json!({ "id": id, "title": title, "due_at": due_at })).await;
+            }
             let db = engine.db.lock().unwrap();
             let _ = calendar::forget_old_reminders(&db, now);
         }
     });
+}
+
+/// The local calendar a write is addressed to, or None when it belongs to the
+/// account's server. A subscribed calendar is refused: it belongs to whoever
+/// publishes it. Local calendars used to be offered in the editor and then
+/// sent to the account's server, which has never heard of them, so saving an
+/// event there always failed.
+fn local_calendar_write(
+    engine: &Engine,
+    account: &str,
+    calendar_id: &str,
+) -> anyhow::Result<Option<calendar::Calendar>> {
+    let found = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?;
+    match found {
+        Some(calendar) if calendar.kind == calendar::CalendarKind::Local => Ok(Some(calendar)),
+        Some(calendar) if calendar.kind == calendar::CalendarKind::Subscribed => {
+            anyhow::bail!("{} is a subscribed calendar and cannot be changed here", calendar.name)
+        }
+        _ => Ok(None),
+    }
+}
+
+/// A CalDAV calendar of an account, and a transport signed in to it.
+fn caldav_target(
+    engine: &Engine,
+    account: &str,
+    calendar_id: &str,
+) -> anyhow::Result<(calendar::Calendar, meron_core::carddav::http::UreqTransport)> {
+    let (found, sign_in) = {
+        let db = engine.db.lock().unwrap();
+        (
+            calendar::calendar_of(&db, account, calendar_id)?,
+            calendar::caldav::sign_in(&db, account, calendar_id)?,
+        )
+    };
+    let (Some(found), Some((_, username))) = (found, sign_in) else {
+        anyhow::bail!("that calendar is no longer here");
+    };
+    let password = meron_core::secrets::load(&calendar::caldav::secret_key(account, calendar_id))?.password;
+    Ok((found, meron_core::carddav::http::UreqTransport { username, password }))
+}
+
+/// The CalDAV calendar an edit is for, when it is one, refusing a read-only
+/// one before anything is sent.
+fn caldav_write(
+    engine: &Engine,
+    account: &str,
+    calendar_id: &str,
+) -> anyhow::Result<Option<(calendar::Calendar, meron_core::carddav::http::UreqTransport)>> {
+    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?
+        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+    if !is_caldav {
+        return Ok(None);
+    }
+    let (found, transport) = caldav_target(engine, account, calendar_id)?;
+    if found.read_only {
+        anyhow::bail!("{} is read-only on its server", found.name);
+    }
+    Ok(Some((found, transport)))
+}
+
+const CALDAV_CONFLICT: &str =
+    "this event was changed or removed on the server since it was opened; nothing was saved, and the calendar is being refreshed";
+
+/// The calendars of an account that hold an invitation's event: CalDAV ones
+/// by where the UID lives, local ones by the ids imported events take.
+fn invitation_calendars(db: &rusqlite::Connection, account: &str, uid: &str) -> anyhow::Result<Vec<String>> {
+    let mut found: Vec<String> = db
+        .prepare("SELECT calendar_id FROM caldav_objects WHERE account = ?1 AND uid = ?2")?
+        .query_map(rusqlite::params![account, uid], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let local: Vec<String> = db
+        .prepare(
+            "SELECT DISTINCT calendar_id FROM calendar_events WHERE account = ?1 AND event_id LIKE ?2 ESCAPE '\\'",
+        )?
+        .query_map(rusqlite::params![account, local_import_pattern(uid)], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    found.extend(local);
+    found.sort();
+    found.dedup();
+    Ok(found)
+}
+
+fn local_import_pattern(uid: &str) -> String {
+    format!("local:import:{}@%", like_escaped(uid))
+}
+
+/// Text matched literally by a LIKE with `ESCAPE '\\'`.
+fn like_escaped(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+/// Where a proposal of another time stands for this account: the event it
+/// is about when this account organizes it in a calendar kept here, the
+/// event's current SEQUENCE when it can be read, and whether the proposal
+/// was made against an older version.
+struct CounterStanding {
+    event: Option<calendar::Event>,
+    sequence: Option<i64>,
+    outdated: bool,
+}
+
+async fn counter_standing(
+    engine: &Arc<Engine>,
+    account: &str,
+    me: &str,
+    proposal: &calendar::itip::Invitation,
+) -> anyhow::Result<CounterStanding> {
+    let event = calendar::itip::organized_event(
+        &engine.db.lock().unwrap(),
+        account,
+        me,
+        &proposal.uid,
+        proposal.recurrence_id,
+    )?;
+    let Some(event) = event else {
+        return Ok(CounterStanding { event: None, sequence: None, outdated: false });
+    };
+    // Occurrences keep no SEQUENCE. A CalDAV calendar has the object on its
+    // server, which is read; a local calendar has no version to compare, and
+    // a server that cannot be reached leaves it unknown rather than guessed.
+    let mut sequence = None;
+    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, &event.calendar_id)?
+        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+    if is_caldav {
+        if let Ok((target, transport)) = caldav_target(engine, account, &event.calendar_id) {
+            let located = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, &proposal.uid)?;
+            if let Some(located) = located {
+                let url = target.id.clone();
+                sequence = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::get_object(&transport, &url, &located.href)
+                        .ok()
+                        .flatten()
+                        .and_then(|(object, _)| calendar::itip::sequence_of(&object))
+                })
+                .await
+                .unwrap_or(None);
+            }
+        }
+    }
+    let outdated = calendar::itip::is_outdated(proposal, sequence);
+    Ok(CounterStanding { event: Some(event), sequence, outdated })
+}
+
+/// Puts an answered invitation in a calendar, or brings the copy there up
+/// to this version. A copy at a later version is left alone.
+async fn keep_invitation(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    calendar_id: &str,
+    invitation: &calendar::itip::Invitation,
+    me: &str,
+    response: calendar::Response,
+) -> anyhow::Result<()> {
+    let object = calendar::itip::as_event(invitation, me, response);
+    let found = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?
+        .context("that calendar is no longer here")?;
+    match found.kind {
+        calendar::CalendarKind::Local => {
+            let item = calendar::import::Item { uid: invitation.uid.clone(), object, repeats: invitation.repeats };
+            let (events, _) = calendar::import::local_events(&item, calendar_id, now_seconds())?;
+            let db = engine.db.lock().unwrap();
+            db.execute(
+                "DELETE FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id LIKE ?3 ESCAPE '\\'",
+                rusqlite::params![account, calendar_id, local_import_pattern(&invitation.uid)],
+            )?;
+            for event in &events {
+                calendar::put_local_event(&db, account, event)?;
+            }
+            Ok(())
+        }
+        calendar::CalendarKind::CalDav => {
+            let (target, transport) = caldav_write(engine, account, calendar_id)?.context("that calendar is no longer here")?;
+            let located = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, &invitation.uid)?;
+            let uid = invitation.uid.clone();
+            let sequence = invitation.sequence;
+            let url = target.id.clone();
+            let saved = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<calendar::caldav::Located>> {
+                use meron_core::carddav::client::Written;
+                let href = match located {
+                    Some(found) => found.href,
+                    None => calendar::caldav::new_href(&url, &uid)?,
+                };
+                // Whatever is there now decides: nothing, the same or an older
+                // version (replaced), or a newer one (kept).
+                let written = match calendar::caldav::get_object(&transport, &url, &href)? {
+                    None => calendar::caldav::put_object(&transport, &url, &href, &object, None)?,
+                    Some((current, etag)) => {
+                        if calendar::itip::sequence_of(&current).unwrap_or(0) > sequence {
+                            return Ok(None);
+                        }
+                        calendar::caldav::put_object(&transport, &url, &href, &object, Some(&etag))?
+                    }
+                };
+                match written {
+                    Written::Saved { etag } => Ok(Some(calendar::caldav::Located { uid, href, etag: etag.unwrap_or_default() })),
+                    Written::Conflict => anyhow::bail!(CALDAV_CONFLICT),
+                }
+            })
+            .await??;
+            if let Some(located) = saved {
+                calendar::caldav::remember(&engine.db.lock().unwrap(), account, &target.id, &[located])?;
+            }
+            spawn_calendar_sync(engine.clone(), out.clone(), account.to_string(), invitation.start, invitation.end.max(invitation.start + 1));
+            Ok(())
+        }
+        _ => anyhow::bail!("{} cannot take events from invitations; choose a local or CalDAV calendar", found.name),
+    }
+}
+
+/// Takes an invitation's event out of the calendars holding it (or of the
+/// one named). Returns how many calendars it was removed from.
+async fn remove_invitation(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    uid: &str,
+    only: Option<&str>,
+) -> anyhow::Result<usize> {
+    let holding: Vec<String> = invitation_calendars(&engine.db.lock().unwrap(), account, uid)?
+        .into_iter()
+        .filter(|id| only.is_none_or(|only| only == id))
+        .collect();
+    for calendar_id in &holding {
+        let kind = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?.map(|found| found.kind);
+        match kind {
+            Some(calendar::CalendarKind::Local) => {
+                engine.db.lock().unwrap().execute(
+                    "DELETE FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id LIKE ?3 ESCAPE '\\'",
+                    rusqlite::params![account, calendar_id, local_import_pattern(uid)],
+                )?;
+            }
+            Some(calendar::CalendarKind::CalDav) => {
+                let (target, transport) = caldav_write(engine, account, calendar_id)?.context("that calendar is no longer here")?;
+                let Some(located) = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, uid)? else { continue };
+                let url = target.id.clone();
+                let href = located.href.clone();
+                tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+                    use meron_core::carddav::client::Written;
+                    let Some((_, etag)) = calendar::caldav::get_object(&transport, &url, &href)? else { return Ok(()) };
+                    match calendar::caldav::delete_object(&transport, &url, &href, &etag)? {
+                        Written::Saved { .. } => Ok(()),
+                        Written::Conflict => anyhow::bail!(CALDAV_CONFLICT),
+                    }
+                })
+                .await??;
+                let db = engine.db.lock().unwrap();
+                calendar::caldav::forget(&db, account, &target.id, uid)?;
+                calendar::forget_series(&db, account, uid)?;
+                db.execute(
+                    "DELETE FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id LIKE ?3 ESCAPE '\\'",
+                    rusqlite::params![account, target.id, format!("{}@%", like_escaped(uid))],
+                )?;
+            }
+            _ => {}
+        }
+    }
+    if !holding.is_empty() {
+        let now = now_seconds();
+        spawn_calendar_sync(engine.clone(), out.clone(), account.to_string(), now - 86_400 * 31, now + 86_400 * 366);
+    }
+    Ok(holding.len())
+}
+
+/// The source a CardDAV contact belongs to, and a transport signed in to it.
+fn carddav_target(
+    engine: &Engine,
+    book: &str,
+) -> anyhow::Result<(store::ContactSource, meron_core::carddav::http::UreqTransport)> {
+    let source = {
+        let db = engine.db.lock().unwrap();
+        if store::contact_sources_writable(&db)?.get(book).copied().flatten() == Some(false) {
+            anyhow::bail!("the server says this address book is read-only for this account");
+        }
+        store::contact_source(&db, book)?.context("that address book is no longer set up")?
+    };
+    let password = meron_core::secrets::load(&source.id).map(|secrets| secrets.password).unwrap_or_default();
+    let transport = meron_core::carddav::http::UreqTransport { username: source.username.clone(), password };
+    Ok((source, transport))
+}
+
+/// Edits a CardDAV contact from the version it was read at (ADR-0012).
+async fn carddav_save(
+    engine: &Arc<Engine>,
+    stored: Option<&store::SyncedPerson>,
+    read_at: &str,
+    person: meron_core::contacts::person::Person,
+) -> anyhow::Result<Value> {
+    let stored = stored.context("no such contact")?.clone();
+    if stored.href.is_empty() {
+        anyhow::bail!("this contact's place on the server is not known yet; sync the address book and try again");
+    }
+    let (source, transport) = carddav_target(engine, &stored.origin.book)?;
+    let read_at = read_at.to_string();
+    let now = now_seconds();
+    let (book_url, href, uid) = (source.url.clone(), stored.href.clone(), stored.person.uid.clone());
+    let outcome = tokio::task::spawn_blocking(move || {
+        meron_core::carddav::write::save_existing(&transport, &book_url, &href, &read_at, &uid, &person, now)
+    })
+    .await??;
+    record_carddav_outcome(engine, &stored.origin, outcome, Some(&stored.origin.person_id(&stored.person.uid)))
+}
+
+async fn carddav_create(
+    engine: &Arc<Engine>,
+    source: &store::ContactSource,
+    person: meron_core::contacts::person::Person,
+) -> anyhow::Result<Value> {
+    let (source, transport) = carddav_target(engine, &source.id)?;
+    let book_url = source.url.clone();
+    let outcome =
+        tokio::task::spawn_blocking(move || meron_core::carddav::write::save_new(&transport, &book_url, &person)).await??;
+    let origin = store::BookOrigin { source: source.kind.clone(), account: source.account.clone(), book: source.id.clone() };
+    record_carddav_outcome(engine, &origin, outcome, None)
+}
+
+async fn carddav_delete(
+    engine: &Arc<Engine>,
+    id: &str,
+    stored: &store::SyncedPerson,
+    read_at: &str,
+) -> anyhow::Result<Value> {
+    if stored.href.is_empty() {
+        anyhow::bail!("this contact's place on the server is not known yet; sync the address book and try again");
+    }
+    let (source, transport) = carddav_target(engine, &stored.origin.book)?;
+    let (book_url, href, read_at) = (source.url.clone(), stored.href.clone(), read_at.to_string());
+    let outcome = tokio::task::spawn_blocking(move || {
+        meron_core::carddav::write::delete_existing(&transport, &book_url, &href, &read_at)
+    })
+    .await??;
+    record_carddav_outcome(engine, &stored.origin, outcome, Some(id))
+}
+
+/// Brings the local copy in line with what the server now holds, and answers
+/// the editor in the same shape as the local book does.
+fn record_carddav_outcome(
+    engine: &Engine,
+    origin: &store::BookOrigin,
+    outcome: meron_core::carddav::write::Outcome,
+    id: Option<&str>,
+) -> anyhow::Result<Value> {
+    use meron_core::carddav::write::Outcome;
+    let db = engine.db.lock().unwrap();
+    match outcome {
+        Outcome::Saved { href, version, person } => {
+            let id = store::put_synced_person(
+                &db,
+                origin,
+                &store::SyncedRow { person, photo_key: String::new(), href, version: version.clone() },
+                now_seconds(),
+            )?;
+            Ok(json!({ "ok": true, "id": id, "version": version }))
+        }
+        Outcome::Deleted => {
+            if let Some(id) = id {
+                store::forget_person(&db, id)?;
+            }
+            Ok(json!({ "ok": true }))
+        }
+        Outcome::Conflict { current } => Ok(json!({
+            "ok": false,
+            "conflict": true,
+            "current": current.map(|(person, version)| json!({
+                "id": id.unwrap_or_default(),
+                "name": person.name,
+                "organisation": person.organisation,
+                "note": person.note,
+                "emails": person.emails,
+                "phones": person.phones,
+                "version": version,
+            })),
+        })),
+    }
+}
+
+/// A person as the editor sends it: any field may be left out.
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct PersonInput {
+    name: String,
+    organisation: String,
+    note: String,
+    emails: Vec<LabelledInput>,
+    phones: Vec<LabelledInput>,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct LabelledInput {
+    #[serde(alias = "number")]
+    addr: String,
+    label: String,
+}
+
+impl PersonInput {
+    fn into_person(self) -> meron_core::contacts::person::Person {
+        use meron_core::contacts::person::{EmailAddress, Person, PhoneNumber};
+        Person {
+            name: self.name,
+            organisation: self.organisation,
+            note: self.note,
+            emails: self.emails.into_iter().map(|e| EmailAddress { addr: e.addr, label: e.label }).collect(),
+            phones: self.phones.into_iter().map(|p| PhoneNumber { number: p.addr, label: p.label }).collect(),
+            ..Default::default()
+        }
+    }
+}
+
+/// The bridge's answer to a write to the local address book.
+fn local_write_json(write: store::local_people::Write) -> Value {
+    match write {
+        store::local_people::Write::Saved { id, version } => json!({ "ok": true, "id": id, "version": version }),
+        store::local_people::Write::Conflict { current } => json!({
+            "ok": false,
+            "conflict": true,
+            "current": current.map(|stored| json!({
+                "id": stored.id,
+                "name": stored.person.name,
+                "organisation": stored.person.organisation,
+                "note": stored.person.note,
+                "emails": stored.person.emails,
+                "phones": stored.person.phones,
+                "version": stored.version,
+            })),
+        }),
+    }
+}
+
+/// The transport a bound task list signs in with: its user name, and the
+/// password kept in the keychain for it (ADR-0039).
+fn task_transport(
+    binding: &meron_core::task_sync::Binding,
+) -> anyhow::Result<meron_core::carddav::http::UreqTransport> {
+    let secrets = meron_core::secrets::load(&meron_core::task_sync::secret_key(&binding.list_id))?;
+    Ok(meron_core::carddav::http::UreqTransport { username: binding.username.clone(), password: secrets.password })
+}
+
+/// Syncs one bound task list, answering what happened rather than failing:
+/// the reason is also kept on the list for the Tasks view to show.
+async fn sync_task_list(engine: &Arc<Engine>, binding: meron_core::task_sync::Binding) -> Value {
+    let id = binding.list_id.clone();
+    let outcome = match task_transport(&binding) {
+        Err(error) => Err(error),
+        Ok(transport) => {
+            let db = engine.db.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::sync(&db, &transport, &binding.list_id, now_seconds())
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+        }
+    };
+    match outcome {
+        Ok(report) => json!({ "id": id, "ok": true, "report": report }),
+        Err(error) => json!({ "id": id, "ok": false, "error": format!("{error:#}") }),
+    }
 }
 
 fn spawn_calendar_sync(
@@ -890,6 +2069,13 @@ fn spawn_calendar_sync(
 /// not to pay for it.
 /// Now, as epoch seconds. A clock that cannot be read is treated as the epoch,
 /// which shows as "never synced" rather than as a plausible wrong time.
+/// Sweeps previewed and not yet confirmed. Process-wide: a review is a thing
+/// the interface was shown, not a thing the store knows.
+fn sweep_reviews() -> &'static sweep_review::Registry {
+    static REVIEWS: std::sync::OnceLock<sweep_review::Registry> = std::sync::OnceLock::new();
+    REVIEWS.get_or_init(sweep_review::Registry::new)
+}
+
 fn now_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -928,11 +2114,30 @@ async fn sync_calendar_window(
                     continue;
                 };
                 let id = calendar.id.clone();
-                let body =
-                    tokio::task::spawn_blocking(move || calendar::subscription::fetch(&url))
-                        .await??;
-                let (events, skipped) =
-                    calendar::subscription::parse_window(&body, &id, from, to)?;
+                // One subscription that cannot be fetched or read is that
+                // calendar's problem: it keeps the events it last had, and the
+                // calendars after it are still refreshed. Returning the error
+                // here stopped the whole account's sync at the first one.
+                let fetched = match tokio::task::spawn_blocking(move || {
+                    calendar::subscription::fetch(&url)
+                })
+                .await
+                {
+                    Ok(Ok(body)) => calendar::subscription::parse_window(&body, &id, from, to),
+                    Ok(Err(err)) => Err(err),
+                    Err(err) => Err(err.into()),
+                };
+                let (events, skipped) = match fetched {
+                    Ok(parsed) => parsed,
+                    Err(err) => {
+                        meron_core::mlog!(
+                            meron_core::log::Level::Warn,
+                            "calendar",
+                            "{id}: subscription not refreshed: {err:#}"
+                        );
+                        continue;
+                    }
+                };
                 if skipped > 0 {
                     meron_core::mlog!(
                         meron_core::log::Level::Warn,
@@ -942,6 +2147,43 @@ async fn sync_calendar_window(
                 }
                 let db = engine.db.lock().unwrap();
                 calendar::replace_window(&db, account, &id, (from, to), &events)?;
+                calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
+            }
+            // A CalDAV calendar that cannot be read keeps its last window,
+            // like a subscription, and the others are still refreshed.
+            calendar::CalendarKind::CalDav => {
+                let id = calendar.id.clone();
+                let (_, transport) = match caldav_target(engine, account, &id) {
+                    Ok(found) => found,
+                    Err(err) => {
+                        meron_core::mlog!(meron_core::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
+                        continue;
+                    }
+                };
+                let url = id.clone();
+                let fetched = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::fetch_window(&transport, &url, from, to)
+                })
+                .await;
+                let objects = match fetched {
+                    Ok(Ok(objects)) => objects,
+                    Ok(Err(err)) => {
+                        meron_core::mlog!(meron_core::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
+                        continue;
+                    }
+                    Err(err) => return Err(err.into()),
+                };
+                let (events, located, skipped) = calendar::caldav::events_from(&objects, &id, from, to);
+                if skipped > 0 {
+                    meron_core::mlog!(
+                        meron_core::log::Level::Warn,
+                        "calendar",
+                        "{id}: {skipped} event(s) on the server could not be read"
+                    );
+                }
+                let db = engine.db.lock().unwrap();
+                calendar::replace_window(&db, account, &id, (from, to), &events)?;
+                calendar::caldav::remember(&db, account, &id, &located)?;
                 calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
             }
             calendar::CalendarKind::Account => {
@@ -1159,7 +2401,7 @@ async fn idle_watch(engine: Arc<Engine>, out: Writer, account: String, folder: S
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
-            Some(creds) if creds.is_ews() || creds.is_graph() => {
+            Some(creds) if creds.is_ews() || creds.is_graph() || creds.is_local_store() => {
                 engine.watched.lock().unwrap().remove(&key);
                 break;
             }
@@ -1370,7 +2612,19 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
             };
             let url = source.url.clone();
             tokio::task::spawn_blocking(move || {
-                meron_core::carddav::client::fetch_book(&transport, &url)
+                let cards = meron_core::carddav::client::fetch_cards(&transport, &url)?;
+                // Asked each sync: a share can be made read-only at any time.
+                let writable = meron_core::carddav::client::book_writable(&transport, &url).unwrap_or(None);
+                let rows = cards
+                    .into_iter()
+                    .map(|card| store::SyncedRow {
+                        person: card.person,
+                        photo_key: String::new(),
+                        href: card.href,
+                        version: card.etag,
+                    })
+                    .collect::<Vec<_>>();
+                anyhow::Ok((rows, Some(writable)))
             })
             .await?
         }
@@ -1384,7 +2638,13 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
                     Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
                 } else {
                     tokio::task::spawn_blocking(move || {
-                        meron_core::contacts::google::fetch_connections(&token)
+                        meron_core::contacts::google::fetch_connections(&token).map(|people| {
+                            let rows = people
+                                .into_iter()
+                                .map(|person| store::SyncedRow { person, ..Default::default() })
+                                .collect::<Vec<_>>();
+                            (rows, None)
+                        })
                     })
                     .await?
                 }
@@ -1398,15 +2658,17 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
     let now = chrono::Utc::now().timestamp();
     let db = engine.db.lock().unwrap();
     match fetched {
-        Ok(people) => {
+        Ok((rows, writable)) => {
             let origin = store::BookOrigin {
                 source: source.kind.clone(),
                 account: source.account.clone(),
                 book: source.id.clone(),
             };
             // Photos are not cached yet; the key stays empty until they are.
-            let rows: Vec<_> = people.into_iter().map(|person| (person, String::new())).collect();
-            store::replace_book(&db, &origin, &rows, now)?;
+            store::replace_book_rows(&db, &origin, &rows, now)?;
+            if let Some(writable) = writable {
+                store::set_contact_source_writable(&db, id, writable)?;
+            }
             store::mark_contact_source_synced(&db, id, "", "", now)?;
             Ok(())
         }
@@ -1422,6 +2684,26 @@ async fn main() {
     // Tag panics consistently on stderr, which the desktop bridge copies into
     // meron.log; a panic in a worker task would otherwise be easy to miss.
     meron_core::log::install_panic_hook();
+    // Deleting another profile (ADR-0038): run once inside it, remove every
+    // keychain entry its store names, and exit. Never the default profile.
+    if std::env::args().any(|arg| arg == "--purge-profile") {
+        let profile = std::env::var("MERON_PROFILE").unwrap_or_default();
+        let result = if profile.trim().is_empty() || profile == "default" {
+            Err(anyhow::anyhow!("only another, named profile can be purged"))
+        } else {
+            store::open().and_then(|conn| meron_core::profile_purge::purge(&conn))
+        };
+        match result {
+            Ok(purged) => {
+                println!("{}", json!({ "purged": purged }));
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!("meron-core: could not purge profile {profile}: {err:#}");
+                std::process::exit(1);
+            }
+        }
+    }
     let out: Writer = Arc::new(Mutex::new(tokio::io::stdout()));
     let engine = match Engine::new(Box::new(DesktopHost)) {
         Ok(engine) => Arc::new(engine),
@@ -1454,8 +2736,41 @@ async fn main() {
 
     // Reminders are watched for as long as the core runs, not per account:
     // the query already knows which accounts have anything due.
+    // Before anything can be sent: a send the last process died in the
+    // middle of has an outcome nobody knows, and must be marked as such
+    // before the scheduled watch could mistake its row for one never tried.
+    {
+        let db = engine.db.lock().unwrap();
+        let now = now_seconds();
+        match outgoing::mark_interrupted_uncertain(&db, now) {
+            Ok(0) => {}
+            Ok(n) => eprintln!("meron-core: {n} send(s) interrupted by the last shutdown are marked as uncertain"),
+            Err(err) => eprintln!("meron-core: could not reconcile interrupted sends: {err:#}"),
+        }
+        let _ = outgoing::prune_settled(&db, now - OUTGOING_HISTORY_SECONDS);
+        // A mailing that was sending is paused, and its message on the way
+        // settled from its attempt (#90): carrying on is the person's call.
+        if let Err(err) = meron_core::merge::recover(&db, now) {
+            eprintln!("meron-core: could not reconcile mailings: {err:#}");
+        }
+    }
+
+    // Chat accounts connect at startup (#111).
+    let chat_ids: Vec<String> = meron_core::chat::accounts(&engine.db.lock().unwrap())
+        .map(|accounts| accounts.into_iter().map(|a| a.id).collect())
+        .unwrap_or_default();
+    for id in chat_ids {
+        if let Err(err) = start_chat(&engine, out.clone(), &id) {
+            eprintln!("meron-core: chat account {id}: {err:#}");
+        }
+    }
+
+    // A model download the last run did not finish leaves nothing usable.
+    meron_core::translation::clean_partial(&meron_core::translation::models_dir());
+
     spawn_reminder_watch(engine.clone(), out.clone());
     spawn_deferred_watch(engine.clone(), out.clone());
+    spawn_backup_schedule(engine.clone(), out.clone());
 
     emit(&out, "ready", ready_event()).await;
 
@@ -1535,6 +2850,11 @@ async fn prepare_recent_cache(
             eprintln!("meron-core: judging {account}: {err:#}");
         }
     }
+    if filter.category.is_some() {
+        if let Err(err) = meron_core::categories::rejudge(&engine.db.lock().unwrap(), account, true) {
+            eprintln!("meron-core: placing {account}: {err:#}");
+        }
+    }
 }
 
 async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::Result<Value> {
@@ -1558,7 +2878,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let manager = engine.graph_auth.clone();
             let client = req_str(p, "client_id")?;
             let redirect = req_str(p, "redirect_uri")?;
-            let begin = tokio::task::spawn_blocking(move || manager.begin(selected, &client, &redirect, route)).await??;
+            // `writes` asks for message changes on an existing account (#141).
+            // and `send` asks for sending (#143).
+            let level = meron_core::graph::auth::Level {
+                writes: p.get("writes").and_then(Value::as_bool).unwrap_or(false),
+                send: p.get("send").and_then(Value::as_bool).unwrap_or(false),
+            };
+            let begin = tokio::task::spawn_blocking(move || manager.begin_level(selected, &client, &redirect, route, level)).await??;
             Ok(serde_json::to_value(begin)?)
         }
         "graph.authPoll" => {
@@ -1671,20 +2997,16 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 p.get("provider").cloned().context("missing assistant provider")?,
             )?;
             let action = req_str(p, "action")?;
+            let instruction = p.get("instruction").and_then(Value::as_str).unwrap_or("").to_string();
             let context: Vec<assistant::ContextItem> = serde_json::from_value(
                 p.get("context").cloned().context("missing assistant context")?,
             )?;
-            Ok(serde_json::to_value(assistant::prepare(provider, &action, &context)?)?)
+            Ok(serde_json::to_value(assistant::prepare(provider, &action, &instruction, &context)?)?)
         }
 
         "assistant.execute" => {
             let request: assistant::ExecuteRequest = serde_json::from_value(p.clone())?;
-            let result = tokio::task::spawn_blocking(move || {
-                let agent = proxy::agent()?;
-                assistant::execute(&agent, request)
-            })
-            .await??;
-            Ok(result)
+            assistant::execute_cancellable(proxy::agent()?, request).await
         }
 
         "assistant.cancel" => assistant::cancel(&req_str(p, "execution_id")?),
@@ -1753,14 +3075,29 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
             let from_addr = req_str(p, "from")?;
             let keep = p.get("keep_newest").and_then(Value::as_u64).unwrap_or(1) as u32;
-            let candidates = {
+            let (candidates, uidvalidity) = {
                 let db = engine.db.lock().unwrap();
-                store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?
+                (
+                    store::sweep_candidates(&db, &account, &folder, &from_addr, keep)?,
+                    store::get_folder_state(&db, &account, &folder)?.map(|(validity, _)| validity).unwrap_or(0),
+                )
             };
+            // The list is what gets confirmed, not the question that produced
+            // it: the review names these messages, in this folder as it is now,
+            // and confirming it later acts on them and nothing that arrived since.
+            let review_id = sweep_reviews().issue(
+                &account,
+                &folder,
+                uidvalidity,
+                candidates.iter().map(|candidate| candidate.uid).collect(),
+                now_seconds(),
+            );
             Ok(json!({
                 "from": from_addr,
                 "folder": folder,
                 "keepNewest": keep,
+                "reviewId": review_id,
+                "uidvalidity": uidvalidity,
                 "messages": candidates
                     .iter()
                     .map(|candidate| json!({
@@ -1769,6 +3106,78 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "date": candidate.date,
                     }))
                     .collect::<Vec<_>>(),
+            }))
+        }
+
+        // Does the sweep that was previewed: those messages, once, and only
+        // while the folder is still the folder they were previewed in.
+        //
+        // The answer is item by item. A move that fails part-way, or a
+        // message another client took first, leaves reviewed messages behind,
+        // and the reader is told which rather than shown a count that says
+        // everything went.
+        "mail.sweepExecute" => {
+            let account = req_str(p, "account")?;
+            let review_id = req_str(p, "review_id")?;
+            let review = sweep_reviews().take(&review_id, &account, now_seconds())?;
+            {
+                let db = engine.db.lock().unwrap();
+                let current = store::get_folder_state(&db, &account, &review.folder)?.map(|(validity, _)| validity);
+                sweep_review::check_folder_unchanged(&review, current)?;
+            }
+            if review.uids.is_empty() {
+                return Ok(json!({
+                    "ok": true,
+                    "swept": 0,
+                    "unresolved": [],
+                    "folder": review.folder,
+                    "complete": true,
+                }));
+            }
+            // The trash as the cache knows it, or as the server names it when
+            // the folder list has not been read yet — the same lookup a
+            // delete makes, so a sweep never goes to a different place.
+            let cached_trash = store::folder_for_role(&engine.db.lock().unwrap(), &account, "trash")?;
+            let target = match cached_trash {
+                Some(trash) => trash,
+                None => engine
+                    .with_write_session(&account, |session| {
+                        Box::pin(async move {
+                            let trash = session.find_trash_folder().await?;
+                            anyhow::Ok(trash)
+                        })
+                    })
+                    .await?
+                    .context("this account has no trash folder")?,
+            };
+            // The move itself is the ordinary one, with the reviewed UIDs and
+            // nothing recomputed; its own failure is reported after the
+            // per-item check below, which is what the reader needs to see.
+            let move_request = Request {
+                id: req.id,
+                method: "messages.move".to_string(),
+                params: json!({
+                    "account": account,
+                    "folder": review.folder,
+                    "target_folder": target,
+                    "uids": review.uids,
+                }),
+            };
+            let moved = Box::pin(dispatch(engine, &move_request, out)).await;
+            let remaining = {
+                let db = engine.db.lock().unwrap();
+                store::existing_message_uids(&db, &account, &review.folder, &review.uids)?
+            };
+            let outcome = sweep_review::SweepOutcome::from_remaining(&review.uids, &remaining);
+            let error = moved.err().map(|err| format!("{err:#}"));
+            Ok(json!({
+                "ok": error.is_none(),
+                "swept": outcome.swept.len(),
+                "sweptUids": outcome.swept,
+                "unresolved": outcome.unresolved,
+                "folder": target,
+                "complete": outcome.complete() && error.is_none(),
+                "error": error,
             }))
         }
 
@@ -1816,6 +3225,607 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true, "judged": judged }))
         }
 
+        // The reader's rules on the account's server (#94, ADR-0027), through
+        // ManageSieve. Nothing goes to the server until the person pushes.
+        "rules.serverStatus" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if let Some(reason) = sieve_unavailable(&creds) {
+                return Ok(json!({ "available": false, "reason": reason }));
+            }
+            let last = rules::server::state(&engine.db.lock().unwrap(), &account)?;
+            let (mut session, caps) = match rules::managesieve::connect(&creds).await {
+                Ok(open) => open,
+                Err(err) => return Ok(json!({ "available": false, "reason": format!("{err:#}") })),
+            };
+            let status = rules::managesieve::status(&mut session, caps.clone(), last.as_ref().map(|s| s.script_hash.as_str())).await?;
+            session.logout().await?;
+            let plan = server_rule_plan(engine, &account, &caps.sieve);
+            Ok(json!({ "available": true, "status": status, "plan": plan, "state": last }))
+        }
+        "rules.serverPush" => {
+            let account = req_str(p, "account")?;
+            let overwrite = p.get("overwrite").and_then(Value::as_bool).unwrap_or(false);
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if let Some(reason) = sieve_unavailable(&creds) {
+                anyhow::bail!(reason);
+            }
+            let last = rules::server::state(&engine.db.lock().unwrap(), &account)?;
+            let (mut session, caps) = rules::managesieve::connect(&creds).await?;
+            let plan = server_rule_plan(engine, &account, &caps.sieve);
+            let pushed = rules::managesieve::push(
+                &mut session,
+                &plan.script,
+                last.as_ref().map(|s| s.script_hash.as_str()),
+                overwrite,
+            )
+            .await?;
+            session.logout().await?;
+            if let rules::managesieve::Pushed::Stored { hash, active, .. } = &pushed {
+                rules::server::save(
+                    &engine.db.lock().unwrap(),
+                    &account,
+                    &rules::server::State {
+                        script_hash: hash.clone(),
+                        included: plan.included.clone(),
+                        active: *active,
+                        pushed_at: now_seconds(),
+                    },
+                )?;
+            }
+            Ok(json!({ "pushed": pushed, "plan": plan }))
+        }
+        "rules.serverRemove" => {
+            let account = req_str(p, "account")?;
+            let creds = engine.ensure_valid_creds(&account).await?;
+            if let Some(reason) = sieve_unavailable(&creds) {
+                anyhow::bail!(reason);
+            }
+            let (mut session, _) = rules::managesieve::connect(&creds).await?;
+            let removed = rules::managesieve::remove(&mut session).await?;
+            session.logout().await?;
+            // Only once it is off the server do the rules run here again.
+            rules::server::clear(&engine.db.lock().unwrap(), &account)?;
+            Ok(json!({ "removed": removed }))
+        }
+
+        // Tracking protection (#107, ADR-0029). The list is replaced only
+        // when the person asks, from the one fixed source, after it checks out.
+        "privacy.info" => Ok(serde_json::to_value(meron_core::privacy::info())?),
+        "privacy.update" => {
+            let text = tokio::task::spawn_blocking(|| -> anyhow::Result<String> {
+                let agent = meron_core::proxy::agent()?;
+                let mut response = agent
+                    .get(meron_core::privacy::UPDATE_URL)
+                    .call()
+                    .context("the list could not be fetched")?;
+                let text = response
+                    .body_mut()
+                    .with_config()
+                    .limit(meron_core::privacy::MAX_LIST_BYTES as u64)
+                    .read_to_string()
+                    .context("the list could not be read")?;
+                Ok(text)
+            })
+            .await??;
+            let info = meron_core::privacy::install(&text, &meron_core::privacy::filters_dir()?)?;
+            Ok(serde_json::to_value(info)?)
+        }
+        "privacy.reset" => {
+            meron_core::privacy::reset(&meron_core::privacy::filters_dir()?)?;
+            Ok(serde_json::to_value(meron_core::privacy::info())?)
+        }
+        "privacy.allowMessage" => {
+            let allow = p.get("allow").and_then(Value::as_bool).unwrap_or(true);
+            meron_core::privacy::set_exception(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "account")?,
+                &req_str(p, "message_id")?,
+                allow,
+            )?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Chat over XMPP (#111, ADR-0036). Messages are sent only when the
+        // person sends them; one whose fate is unknown is never resent alone.
+        "chat.accounts" => Ok(serde_json::to_value(meron_core::chat::accounts(&engine.db.lock().unwrap())?)?),
+        "chat.status" => Ok(json!(chat_status().lock().unwrap().clone())),
+        "chat.save" => {
+            let account: meron_core::chat::ChatAccount =
+                serde_json::from_value(p.get("account").cloned().context("missing account")?)?;
+            meron_core::chat::save_account(&engine.db.lock().unwrap(), &account, now_seconds())?;
+            if let Some(password) = p.get("password").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                secrets::store(
+                    &meron_core::chat::secret_key(&account.id),
+                    &secrets::Secrets { password: password.to_string(), ..Default::default() },
+                )?;
+            }
+            start_chat(&engine, out.clone(), &account.id)?;
+            Ok(json!({ "ok": true }))
+        }
+        "chat.remove" => {
+            let id = req_str(p, "id")?;
+            stop_chat(&id);
+            let room_keys = meron_core::chat::room_secret_keys(&engine.db.lock().unwrap(), &id)?;
+            for key in room_keys {
+                let _ = secrets::delete(&key);
+            }
+            meron_core::chat::remove_account(&engine.db.lock().unwrap(), &id)?;
+            let _ = secrets::delete(&meron_core::chat::secret_key(&id));
+            chat_status().lock().unwrap().remove(&id);
+            Ok(json!({ "ok": true }))
+        }
+        "chat.conversations" => Ok(serde_json::to_value(meron_core::chat::conversations(
+            &engine.db.lock().unwrap(),
+            &req_str(p, "account")?,
+        )?)?),
+        "chat.history" => Ok(serde_json::to_value(meron_core::chat::history(
+            &engine.db.lock().unwrap(),
+            &req_str(p, "account")?,
+            &req_str(p, "conversation")?,
+            p.get("limit").and_then(Value::as_i64).unwrap_or(200),
+        )?)?),
+        "chat.markRead" => {
+            meron_core::chat::mark_read(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "account")?,
+                &req_str(p, "conversation")?,
+                now_seconds(),
+            )?;
+            Ok(json!({ "ok": true }))
+        }
+        "chat.send" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?.trim().to_lowercase();
+            let body = req_str(p, "body")?;
+            let me = meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            // To a room, it goes as a group message under the person's nickname there.
+            let room = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?;
+            let mut message = meron_core::chat::ChatMessage::chat(
+                &account,
+                &conversation,
+                &id,
+                "out",
+                room.as_ref().map(|r| r.nick.as_str()).unwrap_or(&me.jid),
+                &body,
+                now_seconds(),
+                "sending",
+            );
+            if room.is_some() {
+                message.kind = meron_core::chat::KIND_GROUP.into();
+            }
+            meron_core::chat::queue_message(&engine.db.lock().unwrap(), &message)?;
+            chat_dispatch(&engine, &message);
+            Ok(json!({ "id": id }))
+        }
+        "chat.retry" => {
+            // Only by the person's choice, with the same id, so a copy that did
+            // arrive is recognised as the same message.
+            let account = req_str(p, "account")?;
+            let id = req_str(p, "id")?;
+            let message = meron_core::chat::outgoing(&engine.db.lock().unwrap(), &account, &id)?;
+            anyhow::ensure!(
+                matches!(message.state.as_str(), "uncertain" | "failed"),
+                "only a message whose sending failed or is uncertain can be sent again"
+            );
+            meron_core::chat::set_state(&engine.db.lock().unwrap(), &account, &id, "sending")?;
+            chat_dispatch(&engine, &message);
+            Ok(json!({ "ok": true }))
+        }
+        // Group chats (ADR-0044): joined by the person, joined again on each
+        // connection, left by the person.
+        "chat.rooms" => {
+            let account = req_str(p, "account")?;
+            let rooms = meron_core::chat::rooms(&engine.db.lock().unwrap(), &account)?;
+            let states = chat_room_status().lock().unwrap().clone();
+            let rooms: Vec<Value> = rooms
+                .into_iter()
+                .map(|room| {
+                    let mut value = serde_json::to_value(&room).unwrap_or(Value::Null);
+                    let state = states.get(&(account.clone(), room.room.clone())).cloned().unwrap_or(json!({ "state": "offline" }));
+                    value["state"] = state["state"].clone();
+                    value["detail"] = state["detail"].clone();
+                    value
+                })
+                .collect();
+            Ok(json!(rooms))
+        }
+        "chat.join" => {
+            let account = req_str(p, "account")?;
+            let room = meron_core::chat::check_room(&req_str(p, "room")?)?;
+            let nick = meron_core::chat::check_nick(&req_str(p, "nick")?)?;
+            meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let key = meron_core::chat::room_secret_key(&account, &room);
+            // A password typed now, or the one an invitation brought.
+            let password = match p.get("password").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                Some(typed) => {
+                    store_room_password(&account, &room, typed)?;
+                    Some(typed.to_string())
+                }
+                None => secrets::load(&key).ok().map(|s| s.password).filter(|s| !s.is_empty()),
+            };
+            meron_core::chat::save_room(&engine.db.lock().unwrap(), &account, &room, &nick, password.is_some(), now_seconds())?;
+            let sent = chat_sessions().lock().unwrap().get(&account).is_some_and(|tx| {
+                tx.send(meron_core::chat::xmpp::Command::Join { room: room.clone(), nick, password }).is_ok()
+            });
+            Ok(json!({ "room": room, "connected": sent }))
+        }
+        "chat.leave" => {
+            let account = req_str(p, "account")?;
+            let room = req_str(p, "room")?;
+            if let Some(joined) = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &room)? {
+                if let Some(tx) = chat_sessions().lock().unwrap().get(&account) {
+                    let _ = tx.send(meron_core::chat::xmpp::Command::Leave { room: room.clone(), nick: joined.nick });
+                }
+            }
+            meron_core::chat::leave_room(&engine.db.lock().unwrap(), &account, &room)?;
+            let _ = secrets::delete(&meron_core::chat::room_secret_key(&account, &room));
+            chat_room_status().lock().unwrap().remove(&(account, room));
+            Ok(json!({ "ok": true }))
+        }
+        "chat.invitations" => Ok(serde_json::to_value(meron_core::chat::invitations(
+            &engine.db.lock().unwrap(),
+            &req_str(p, "account")?,
+        )?)?),
+        "chat.dismissInvitation" => {
+            let account = req_str(p, "account")?;
+            let room = req_str(p, "room")?;
+            let db = engine.db.lock().unwrap();
+            meron_core::chat::dismiss_invitation(&db, &account, &room)?;
+            if meron_core::chat::room(&db, &account, &room)?.is_none() {
+                let _ = secrets::delete(&meron_core::chat::room_secret_key(&account, &room));
+            }
+            Ok(json!({ "ok": true }))
+        }
+        // Files (ADR-0044): put on the server's upload service and sent as a
+        // link; saved from a link only when the person asks, over HTTPS.
+        "chat.sendFile" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?.trim().to_lowercase();
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let upload_id = req_str(p, "upload_id")?;
+            // Asked only on a live connection: a question queued on a dead
+            // stream might go out later, when nobody is watching.
+            let online = chat_status().lock().unwrap().get(&account).is_some_and(|s| s["state"] == "online");
+            anyhow::ensure!(online, "this chat account is not connected; nothing was sent");
+            let meta = std::fs::metadata(&path).context("the file cannot be read")?;
+            anyhow::ensure!(meta.is_file(), "only a file can be sent");
+            let name = path.file_name().and_then(|n| n.to_str()).context("the file has no name")?.to_string();
+            let group = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?.is_some();
+            let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let upload = meron_core::chat::xmpp::Upload {
+                id: upload_id.clone(),
+                conversation,
+                group,
+                path,
+                name,
+                size: meta.len(),
+                cancel: cancel.clone(),
+            };
+            chat_uploads().lock().unwrap().insert(upload_id.clone(), cancel);
+            let sent = chat_sessions()
+                .lock()
+                .unwrap()
+                .get(&account)
+                .is_some_and(|tx| tx.send(meron_core::chat::xmpp::Command::Upload(upload)).is_ok());
+            if !sent {
+                chat_uploads().lock().unwrap().remove(&upload_id);
+                anyhow::bail!("this chat account is not connected; nothing was sent");
+            }
+            Ok(json!({ "started": upload_id }))
+        }
+        "chat.cancelUpload" => {
+            if let Some(flag) = chat_uploads().lock().unwrap().get(&req_str(p, "upload_id")?) {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "chat.download" => {
+            let link = req_str(p, "url")?;
+            let dest = std::path::PathBuf::from(req_str(p, "path")?);
+            meron_core::chat::files::https_only(&link)?;
+            let result = tokio::task::spawn_blocking(move || {
+                let agent = meron_core::chat::files::agent(&[])?;
+                meron_core::chat::files::download(&agent, &link, &dest).map_err(anyhow::Error::from)
+            })
+            .await??;
+            Ok(json!({ "saved": true, "bytes": result }))
+        }
+
+        // When a POP3 account deletes from its server (#97, ADR-0035).
+        "pop3.retention" => {
+            let account = req_str(p, "account")?;
+            let db = engine.db.lock().unwrap();
+            if let Some(value) = p.get("retention") {
+                let wanted: meron_core::pop3::Retention = serde_json::from_value(value.clone())?;
+                meron_core::pop3::set_retention(&db, &account, wanted)?;
+            }
+            Ok(serde_json::to_value(meron_core::pop3::retention(&db, &account)?)?)
+        }
+
+        // Sharing files by link from cloud storage (#108, ADR-0033). Every
+        // upload and link is the person's own action.
+        // Scheduled profile backups (#173, ADR-0037): off by default; the
+        // password stays in the keychain and never comes back out.
+        "backupSchedule.status" => backup_schedule_status(engine),
+        "backupSchedule.save" => {
+            let schedule: meron_core::backup_schedule::Schedule = serde_json::from_value(
+                p.get("schedule").cloned().ok_or_else(|| anyhow::anyhow!("missing schedule"))?,
+            )?;
+            if let Some(password) = p.get("password").and_then(Value::as_str).filter(|p| !p.is_empty()) {
+                anyhow::ensure!(password.chars().count() >= 8, "the backup password needs at least 8 characters");
+                secrets::store(
+                    meron_core::backup_schedule::SECRET_KEY,
+                    &secrets::Secrets { password: password.to_string(), ..Default::default() },
+                )?;
+            }
+            if schedule.enabled {
+                anyhow::ensure!(
+                    backup_password()?.is_some(),
+                    "set a password for the backups before turning them on"
+                );
+            }
+            meron_core::backup_schedule::save(&engine.db.lock().unwrap(), &schedule, &store::app_dir())?;
+            backup_schedule_status(engine)
+        }
+        "backupSchedule.runNow" => {
+            run_scheduled_backup(engine).await?;
+            backup_schedule_status(engine)
+        }
+        "cloud.providers" => Ok(json!(meron_core::cloud::PROVIDERS
+            .iter()
+            .map(|(id, name, usable)| json!({ "id": id, "name": name, "usable": usable }))
+            .collect::<Vec<_>>())),
+        "cloud.list" => Ok(serde_json::to_value(meron_core::cloud::list(&engine.db.lock().unwrap())?)?),
+        "cloud.save" => {
+            let account: meron_core::cloud::CloudAccount =
+                serde_json::from_value(p.get("account").cloned().context("missing account")?)?;
+            meron_core::cloud::save(&engine.db.lock().unwrap(), &account, now_seconds())?;
+            if let Some(password) = p.get("password").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                meron_core::secrets::store(
+                    &meron_core::cloud::secret_key(&account.id),
+                    &meron_core::secrets::Secrets { password: password.to_string(), ..Default::default() },
+                )?;
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "cloud.check" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let caps = tokio::task::spawn_blocking(move || meron_core::cloud::capabilities(&account, &password)).await?;
+            Ok(match caps {
+                Ok(caps) => json!({ "capabilities": caps }),
+                Err(err) => json!({ "error": { "message": err.to_string(), "detail": err } }),
+            })
+        }
+        "cloud.remove" => {
+            let id = req_str(p, "id")?;
+            meron_core::cloud::remove(&engine.db.lock().unwrap(), &id)?;
+            let _ = meron_core::secrets::delete(&meron_core::cloud::secret_key(&id));
+            Ok(json!({ "ok": true }))
+        }
+        "cloud.upload" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let upload_id = req_str(p, "upload_id")?;
+            spawn_cloud_upload(out.clone(), account, password, path, upload_id.clone());
+            Ok(json!({ "started": upload_id }))
+        }
+        "cloud.cancel" => {
+            if let Some(flag) = cloud_uploads().lock().unwrap().get(&req_str(p, "upload_id")?) {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "cloud.share" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let path = req_str(p, "path")?;
+            let want: meron_core::cloud::LinkRequest =
+                serde_json::from_value(p.get("link").cloned().unwrap_or(json!({})))?;
+            let result = tokio::task::spawn_blocking(move || {
+                let caps = meron_core::cloud::capabilities(&account, &password)?;
+                meron_core::cloud::share(&account, &password, &path, &want, &caps)
+            })
+            .await?;
+            Ok(match result {
+                Ok(link) => json!({ "link": link }),
+                Err(err) => json!({ "error": { "message": err.to_string(), "detail": err } }),
+            })
+        }
+        "cloud.revoke" => {
+            let (account, password) = cloud_account(&engine, p)?;
+            let share_id = req_str(p, "share_id")?;
+            tokio::task::spawn_blocking(move || meron_core::cloud::revoke(&account, &password, &share_id)).await??;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Translation models (#106, ADR-0031). Fetched only when asked, from
+        // the one source in the bundled registry, and checked before use.
+        "translation.status" => {
+            let mut status = serde_json::to_value(meron_core::translation::status(
+                &meron_core::translation::models_dir(),
+                meron_core::translation::DEFAULT_QUOTA_BYTES,
+            ))?;
+            status["downloading"] = json!(translation_downloads()
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(key, d)| (key.clone(), json!({ "done": d.done.load(std::sync::atomic::Ordering::Relaxed), "total": d.total })))
+                .collect::<serde_json::Map<_, _>>());
+            Ok(status)
+        }
+        "translation.download" => {
+            let pair = translation_pair(p)?;
+            spawn_translation_download(out.clone(), pair);
+            Ok(json!({ "started": pair.key() }))
+        }
+        "translation.cancel" => {
+            let pair = translation_pair(p)?;
+            if let Some(d) = translation_downloads().lock().unwrap().get(&pair.key()) {
+                d.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "translation.remove" => {
+            let pair = translation_pair(p)?;
+            anyhow::ensure!(
+                !translation_downloads().lock().unwrap().contains_key(&pair.key()),
+                "that model is still downloading"
+            );
+            meron_core::translation::remove(&meron_core::translation::models_dir(), pair)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Personalized mass mail (#90, ADR-0026). The preview and the batch
+        // are rendered by the same function from the same inputs.
+        "merge.preview" => {
+            let me = meron_core::merge::Sender {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                email: req_str(p, "from").unwrap_or_default(),
+            };
+            let preview = meron_core::merge::preview(
+                &req_str(p, "recipients").unwrap_or_default(),
+                &req_str(p, "subject").unwrap_or_default(),
+                &req_str(p, "body").unwrap_or_default(),
+                &me,
+            );
+            Ok(serde_json::to_value(preview)?)
+        }
+        "merge.start" => {
+            let account = req_str(p, "account")?;
+            let from = req_str(p, "from")?;
+            let subject = req_str(p, "subject").unwrap_or_default();
+            let me = meron_core::merge::Sender { name: req_str(p, "me_name").unwrap_or_default(), email: from.clone() };
+            let preview = meron_core::merge::preview(
+                &req_str(p, "recipients").unwrap_or_default(),
+                &subject,
+                &req_str(p, "body").unwrap_or_default(),
+                &me,
+            );
+            let reviewed = p.get("reviewed").and_then(Value::as_u64).context("missing param: reviewed")? as usize;
+            let spacing = p.get("spacing").and_then(Value::as_i64).unwrap_or(meron_core::merge::DEFAULT_SPACING);
+            let id = uuid::Uuid::new_v4().simple().to_string();
+            meron_core::merge::create(
+                &engine.db.lock().unwrap(),
+                &id,
+                &account,
+                &from,
+                &subject,
+                &preview,
+                reviewed,
+                spacing,
+                now_seconds(),
+            )?;
+            spawn_merge(engine.clone(), out.clone(), id.clone());
+            Ok(json!({ "id": id }))
+        }
+        "merge.list" => Ok(json!({ "batches": meron_core::merge::batches(&engine.db.lock().unwrap())? })),
+        "merge.cancel" => {
+            meron_core::merge::cancel(&engine.db.lock().unwrap(), &req_str(p, "id")?, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+        "merge.resume" => {
+            let id = req_str(p, "id")?;
+            let retry = p.get("retry_rejected").and_then(Value::as_bool).unwrap_or(false);
+            meron_core::merge::resume(&engine.db.lock().unwrap(), &id, retry)?;
+            spawn_merge(engine.clone(), out.clone(), id);
+            Ok(json!({ "ok": true }))
+        }
+
+        // Waiting for a reply (#45, ADR-0025). Answers are read from the mail
+        // each time; nothing is ever sent on the person's behalf.
+        "awaiting.add" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id).context("invalid thread_id")?;
+            let remind_at = p.get("remind_at").and_then(Value::as_i64);
+            let db = engine.db.lock().unwrap();
+            let item = meron_core::awaiting::add(&db, &parsed.account, &parsed.thread_key, remind_at, now_seconds())?;
+            Ok(json!({ "item": item }))
+        }
+        "awaiting.list" => {
+            let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
+            let settled = p.get("include_settled").and_then(Value::as_bool).unwrap_or(false);
+            let db = engine.db.lock().unwrap();
+            Ok(json!({ "items": meron_core::awaiting::list(&db, account.as_deref(), settled, now_seconds())? }))
+        }
+        "awaiting.setState" => {
+            let db = engine.db.lock().unwrap();
+            meron_core::awaiting::set_state(&db, &req_str(p, "account")?, &req_str(p, "message_id")?, &req_str(p, "state")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "awaiting.ruleOn" => {
+            let is_answer = p.get("is_answer").and_then(Value::as_bool).context("missing param: is_answer")?;
+            let db = engine.db.lock().unwrap();
+            meron_core::awaiting::rule_on(
+                &db,
+                &req_str(p, "account")?,
+                &req_str(p, "message_id")?,
+                &req_str(p, "candidate")?,
+                is_answer,
+            )?;
+            Ok(json!({ "ok": true }))
+        }
+        "awaiting.remove" => {
+            let db = engine.db.lock().unwrap();
+            meron_core::awaiting::remove(&db, &req_str(p, "account")?, &req_str(p, "message_id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Inbox categories (#91, ADR-0023): the reader's tabs, where each
+        // conversation is and why, and the reader's corrections. All local.
+        "categories.list" => {
+            let db = engine.db.lock().unwrap();
+            Ok(json!({ "categories": meron_core::categories::list(&db)? }))
+        }
+        "categories.save" => {
+            let categories: Vec<meron_core::categories::Category> =
+                serde_json::from_value(p.get("categories").cloned().unwrap_or(Value::Null))
+                    .context("categories are not in the expected shape")?;
+            let db = engine.db.lock().unwrap();
+            meron_core::categories::save(&db, &categories)?;
+            Ok(json!({ "categories": meron_core::categories::list(&db)? }))
+        }
+        "categories.counts" => {
+            let account = req_str(p, "account")?;
+            let folder = req_str(p, "folder")?;
+            let db = engine.db.lock().unwrap();
+            Ok(serde_json::to_value(meron_core::categories::counts(&db, &account, &folder)?)?)
+        }
+        "categories.reason" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id).context("invalid thread_id")?;
+            let db = engine.db.lock().unwrap();
+            let verdict = meron_core::categories::reason(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?
+                .context("no such conversation")?;
+            let sender = store::thread_priority_signals(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?
+                .map(|(sender, _)| sender)
+                .unwrap_or_default();
+            Ok(json!({ "category": verdict.category, "reason": verdict.reason, "sender": sender }))
+        }
+        // `category` is an id, '' for Other, or null to hand it back to the
+        // rules; `scope` is "conversation" or "sender".
+        "categories.assign" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id).context("invalid thread_id")?;
+            let category = p.get("category").and_then(Value::as_str);
+            let db = engine.db.lock().unwrap();
+            match p.get("scope").and_then(Value::as_str).unwrap_or("conversation") {
+                "conversation" => meron_core::categories::correct_conversation(
+                    &db, &parsed.account, &parsed.thread_key, category,
+                )?,
+                "sender" => {
+                    let (sender, _) =
+                        store::thread_priority_signals(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?
+                            .context("no such conversation")?;
+                    meron_core::categories::correct_sender(&db, &parsed.account, &sender, category)?
+                }
+                other => anyhow::bail!("unknown scope {other}"),
+            }
+            meron_core::categories::rejudge(&db, &parsed.account, true)?;
+            let verdict = meron_core::categories::reason(&db, &parsed.account, &parsed.folder, &parsed.thread_key)?;
+            Ok(json!({ "ok": true, "verdict": verdict }))
+        }
+
         // Why a conversation looks like spam by what the reader has taught
         // this account, and what it would take to say otherwise. Same
         // "only when asked" shape as `mail.priorityReason` — computing this
@@ -1838,6 +3848,20 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "reasons": verdict.reasons,
                 "sender": sender,
             }))
+        }
+
+        // Senders and domains the reader blocked or allowed (#50). A block
+        // makes the suggestion certain; it still moves nothing by itself.
+        "spam.lists" => {
+            let account = req_str(p, "account")?;
+            let lists = store::sender_lists(&engine.db.lock().unwrap(), &account)?;
+            Ok(json!({ "entries": lists.into_iter().map(|(pattern, allow)| json!({ "pattern": pattern, "allow": allow })).collect::<Vec<_>>() }))
+        }
+        "spam.setListed" => {
+            let account = req_str(p, "account")?;
+            let allow = p.get("allow").and_then(Value::as_bool);
+            let pattern = store::set_sender_listed(&engine.db.lock().unwrap(), &account, &req_str(p, "pattern")?, allow)?;
+            Ok(json!({ "ok": true, "pattern": pattern }))
         }
 
         // Records what the reader decided about one conversation: spam
@@ -1878,7 +3902,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     .iter()
                     .map(|task| json!({
                         "id": task.id,
-                        "thread_id": mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key),
+                        "thread_id": if task.thread_key.is_empty() {
+                            String::new()
+                        } else {
+                            mail_model::format_thread_id(&task.account, &task.folder, &task.thread_key)
+                        },
                         "account_id": task.account,
                         "folder_id": task.folder,
                         "note": task.note,
@@ -1888,6 +3916,16 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "subject": task.subject,
                         "from_name": task.from_name,
                         "from_addr": task.from_addr,
+                        "located": task.located,
+                        "linked": !task.thread_key.is_empty(),
+                        "list_id": task.list_id,
+                        "title": task.title,
+                        "priority": task.priority,
+                        "reminder_at": task.reminder_at,
+                        "revision": task.revision,
+                        "pending": task.pending,
+                        "conflict": task.conflict,
+                        "recurring": task.recurring,
                     }))
                     .collect::<Vec<_>>(),
             }))
@@ -1926,10 +3964,328 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "tasks.get" => {
             let id = req_i64(p, "id")?;
             let db = engine.db.lock().unwrap();
-            let task = store::get_task(&db, id)?;
-            Ok(match task {
-                Some((due_at, note)) => json!({ "due_at": due_at, "note": note }),
+            Ok(match store::task_lists::get(&db, id)? {
+                Some((task, revision, linked)) => json!({
+                    "due_at": task.due_at, "note": task.note, "list_id": task.list_id, "title": task.title,
+                    "reminder_at": task.reminder_at, "priority": task.priority, "revision": revision,
+                    "linked": linked,
+                }),
                 None => Value::Null,
+            })
+        }
+
+        // Importing .eml/.mbox files into the local archive (ADR-0014). The
+        // paths come from the reader's file picker; the files are read here,
+        // never sent through the bridge. A preview first, then the import.
+        // Thunderbird (ADR-0041): its profiles, the folders in one, and what
+        // importing the chosen ones into the local archive does or did.
+        "thunderbird.profiles" => {
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(std::path::PathBuf::from).unwrap_or_default();
+            let appdata = std::env::var_os("APPDATA").map(std::path::PathBuf::from);
+            Ok(json!({ "profiles": meron_core::thunderbird::profiles(&meron_core::thunderbird::profile_roots(&home, appdata.as_deref())) }))
+        }
+        "thunderbird.scan" => {
+            let root = std::path::PathBuf::from(req_str(p, "path")?);
+            let folders = tokio::task::spawn_blocking(move || meron_core::thunderbird::scan(&root)).await??;
+            Ok(json!({ "folders": folders }))
+        }
+        "thunderbird.preview" | "thunderbird.import" => {
+            let root = std::path::PathBuf::from(req_str(p, "path")?);
+            let wanted: Vec<String> = serde_json::from_value(p.get("folders").cloned().unwrap_or_default()).context("folders")?;
+            anyhow::ensure!(!wanted.is_empty(), "choose at least one folder");
+            let under = p.get("root").and_then(Value::as_str).map(str::trim).filter(|r| !r.is_empty()).unwrap_or("Thunderbird").to_string();
+            let importing = req.method == "thunderbird.import";
+            if importing {
+                let created = meron_core::archive::ensure_account(&engine.db.lock().unwrap(), now_seconds())?;
+                if created {
+                    let creds = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?;
+                    if let Some(creds) = creds {
+                        engine.accounts.lock().await.insert(meron_core::archive::ACCOUNT.to_string(), creds);
+                    }
+                }
+            }
+            let db = engine.db.clone();
+            let results = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<Value>> {
+                // Only folders this scan finds are read, by the id it gave them.
+                let folders = meron_core::thunderbird::scan(&root)?;
+                let media_root = parse::media_root();
+                let mut results = Vec::new();
+                for id in &wanted {
+                    let folder = folders.iter().find(|f| &f.id == id).with_context(|| format!("{id} is no longer in that folder"))?;
+                    let target = meron_core::thunderbird::target_folder(&under, folder);
+                    let (messages, deleted) = meron_core::thunderbird::read_folder(&root.join(&folder.id))?;
+                    let summary = if importing {
+                        let conn = db.lock().unwrap();
+                        store::ensure_folder(&conn, meron_core::archive::ACCOUNT, &target)?;
+                        meron_core::archive::import(&conn, &target, messages, &media_root)?
+                    } else {
+                        meron_core::archive::preview(&db.lock().unwrap(), &target, &[messages])?
+                    };
+                    results.push(json!({ "id": id, "target": target, "summary": summary, "deleted": deleted }));
+                }
+                Ok(results)
+            })
+            .await??;
+            if importing {
+                emit(out, "mail.synced", json!({ "account": meron_core::archive::ACCOUNT, "folders": true })).await;
+            }
+            Ok(json!({ "folders": results, "account": meron_core::archive::ACCOUNT }))
+        }
+        "archive.preview" | "archive.import" => {
+            let paths: Vec<String> = serde_json::from_value(p.get("paths").cloned().unwrap_or_default()).context("paths")?;
+            if paths.is_empty() {
+                anyhow::bail!("no files to import");
+            }
+            let folder = p
+                .get("folder")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .unwrap_or(meron_core::archive::DEFAULT_FOLDER)
+                .to_string();
+            let files = {
+                let paths = paths.clone();
+                tokio::task::spawn_blocking(move || {
+                    paths
+                        .iter()
+                        .map(|path| meron_core::archive::read_file(std::path::Path::new(path)))
+                        .collect::<anyhow::Result<Vec<_>>>()
+                })
+                .await??
+            };
+            if req.method == "archive.preview" {
+                let summary = meron_core::archive::preview(&engine.db.lock().unwrap(), &folder, &files)?;
+                return Ok(json!({ "summary": summary, "folder": folder }));
+            }
+            let created = meron_core::archive::ensure_account(&engine.db.lock().unwrap(), now_seconds())?;
+            if created {
+                let creds = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?;
+                if let Some(creds) = creds {
+                    engine.accounts.lock().await.insert(meron_core::archive::ACCOUNT.to_string(), creds);
+                }
+            }
+            let media_root = parse::media_root();
+            let summary = {
+                let engine = engine.clone();
+                let folder = folder.clone();
+                tokio::task::spawn_blocking(move || {
+                    let db = engine.db.lock().unwrap();
+                    meron_core::archive::import(&db, &folder, files.into_iter().flatten().collect(), &media_root)
+                })
+                .await??
+            };
+            emit(out, "mail.synced", json!({ "account": meron_core::archive::ACCOUNT, "folder": folder, "synced": summary.imported })).await;
+            Ok(json!({ "summary": summary, "folder": folder, "account": meron_core::archive::ACCOUNT, "created": created }))
+        }
+
+        // Lists and standalone tasks (ADR-0013).
+        "tasks.lists" => {
+            let lists = store::task_lists::lists(&engine.db.lock().unwrap())?;
+            Ok(json!({ "lists": lists }))
+        }
+        // Standalone notes (#104, ADR-0015): local only, no account.
+        "notes.list" => {
+            let query: store::notes::Query = serde_json::from_value(p.clone()).unwrap_or_default();
+            let db = engine.db.lock().unwrap();
+            store::notes::tidy_trash(&db, now_seconds())?;
+            let notes = store::notes::list(&db, &query)?;
+            let tags: Vec<Value> = store::notes::tags(&db)?
+                .into_iter()
+                .map(|(tag, count)| json!({ "tag": tag, "count": count }))
+                .collect();
+            Ok(json!({ "notes": notes, "tags": tags }))
+        }
+        "notes.get" => {
+            let note = store::notes::get(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "note": note }))
+        }
+        "notes.create" => {
+            let fields: store::notes::NoteFields =
+                serde_json::from_value(p.get("note").cloned().unwrap_or_default())?;
+            let note = store::notes::create(&engine.db.lock().unwrap(), &fields, now_seconds())?;
+            Ok(json!({ "note": note }))
+        }
+        "notes.update" => {
+            let fields: store::notes::NoteFields =
+                serde_json::from_value(p.get("note").cloned().unwrap_or_default())?;
+            let written = store::notes::update(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "id")?,
+                req_i64(p, "revision")?,
+                &fields,
+                now_seconds(),
+            )?;
+            Ok(serde_json::to_value(written)?)
+        }
+        "notes.pin" => {
+            let pinned = p.get("pinned").and_then(Value::as_bool).unwrap_or(false);
+            store::notes::set_pinned(&engine.db.lock().unwrap(), &req_str(p, "id")?, pinned, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.trash" => {
+            store::notes::trash(&engine.db.lock().unwrap(), &req_str(p, "id")?, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.restore" => {
+            store::notes::restore(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.purge" => {
+            store::notes::purge(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        // Files attached to notes (ADR-0042), kept in the store.
+        "notes.attachments" => {
+            Ok(json!({ "attachments": store::note_attachments::list(&engine.db.lock().unwrap(), &req_str(p, "note_id")?)? }))
+        }
+        "notes.attach" => {
+            let note = req_str(p, "note_id")?;
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let db = engine.db.clone();
+            let attached = tokio::task::spawn_blocking(move || {
+                store::note_attachments::attach(&db.lock().unwrap(), &note, &path, now_seconds())
+            })
+            .await??;
+            Ok(json!({ "attachment": attached }))
+        }
+        "notes.removeAttachment" => {
+            store::note_attachments::remove(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.saveAttachment" => {
+            let id = req_str(p, "id")?;
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let db = engine.db.clone();
+            let bytes = tokio::task::spawn_blocking(move || store::note_attachments::save(&db.lock().unwrap(), &id, &path)).await??;
+            Ok(json!({ "saved": true, "bytes": bytes }))
+        }
+        "tasks.createList" => {
+            let id = store::task_lists::create_list(&engine.db.lock().unwrap(), &req_str(p, "name")?, now_seconds())?;
+            Ok(json!({ "ok": true, "id": id }))
+        }
+        "tasks.renameList" => {
+            store::task_lists::rename_list(&engine.db.lock().unwrap(), &req_str(p, "id")?, &req_str(p, "name")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        // Deleting a list kept on a server deletes it here only: its tasks,
+        // and its password. Nothing on the server is touched (ADR-0039).
+        "tasks.deleteList" => {
+            let id = req_str(p, "id")?;
+            let bound = {
+                let db = engine.db.lock().unwrap();
+                let bound = meron_core::task_sync::binding(&db, &id)?.is_some();
+                store::task_lists::delete_list(&db, &id)?;
+                bound
+            };
+            if bound {
+                meron_core::secrets::delete(&meron_core::task_sync::secret_key(&id))?;
+            }
+            Ok(json!({ "ok": true }))
+        }
+        // Task lists kept on a CalDAV server (ADR-0039): find the
+        // collections, bind a new list to one, sync, settle a conflict.
+        "tasks.caldavDiscover" => {
+            let server = req_str(p, "server")?;
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: req_str(p, "username").unwrap_or_default(),
+                password: req_str(p, "password").unwrap_or_default(),
+            };
+            let found =
+                tokio::task::spawn_blocking(move || meron_core::task_sync::discover(&transport, &server)).await??;
+            Ok(json!({ "calendars": found }))
+        }
+        "tasks.caldavAdd" => {
+            let username = req_str(p, "username").unwrap_or_default();
+            let password = req_str(p, "password").unwrap_or_default();
+            let id = meron_core::task_sync::add_list(
+                &engine.db.lock().unwrap(),
+                p.get("name").and_then(Value::as_str).unwrap_or_default(),
+                &req_str(p, "url")?,
+                p.get("server").and_then(Value::as_str).unwrap_or_default(),
+                &username,
+                now_seconds(),
+            )?;
+            let key = meron_core::task_sync::secret_key(&id);
+            meron_core::secrets::store(&key, &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() })?;
+            let transport = meron_core::carddav::http::UreqTransport { username, password };
+            let db = engine.db.clone();
+            let list = id.clone();
+            let first = tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::sync(&db, &transport, &list, now_seconds())
+            })
+            .await?;
+            match first {
+                Ok(report) => Ok(json!({ "ok": true, "id": id, "report": report })),
+                // A list that could not be read once is not added: the
+                // dialog stays open with the reason.
+                Err(error) => {
+                    store::task_lists::delete_list(&engine.db.lock().unwrap(), &id)?;
+                    meron_core::secrets::delete(&key)?;
+                    Err(error)
+                }
+            }
+        }
+        // Syncs one bound list, or every one. A list that fails keeps what
+        // it had and records why; the others go on.
+        "tasks.sync" => {
+            let wanted = p.get("list_id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string);
+            let bindings = meron_core::task_sync::bindings(&engine.db.lock().unwrap())?;
+            let mut results = Vec::new();
+            for binding in bindings.into_iter().filter(|b| wanted.as_ref().is_none_or(|id| *id == b.list_id)) {
+                results.push(sync_task_list(engine, binding).await);
+            }
+            Ok(json!({ "lists": results }))
+        }
+        "tasks.resolveConflict" => {
+            let id = req_i64(p, "id")?;
+            let keep = meron_core::task_sync::Keep::parse(&req_str(p, "keep")?)
+                .context("keep must be mine or server")?;
+            let list_id: String = engine
+                .db
+                .lock()
+                .unwrap()
+                .query_row("SELECT list_id FROM tasks WHERE id = ?1", rusqlite::params![id], |row| row.get(0))
+                .map(Some)
+                .or_else(|error| match error {
+                    rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                    error => Err(error),
+                })?
+                .context("this task no longer exists")?;
+            let binding = meron_core::task_sync::binding(&engine.db.lock().unwrap(), &list_id)?
+                .context("this list is not kept on a server")?;
+            let transport = task_transport(&binding)?;
+            let db = engine.db.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::resolve_conflict(&db, &transport, id, keep, now_seconds())
+            })
+            .await??;
+            let synced = sync_task_list(engine, binding).await;
+            Ok(json!({ "ok": true, "sync": synced }))
+        }
+        "tasks.create" => {
+            let fields: store::task_lists::TaskFields =
+                serde_json::from_value(p.get("task").cloned().context("missing param: task")?).context("task")?;
+            let id = store::task_lists::create(&engine.db.lock().unwrap(), &fields, now_seconds())?;
+            Ok(json!({ "ok": true, "id": id, "revision": 1 }))
+        }
+        // An edit names the revision it was made from; a different one saves
+        // nothing and answers with what is there now (ADR-0012).
+        "tasks.update" => {
+            let id = req_i64(p, "id")?;
+            let revision = req_i64(p, "revision")?;
+            let fields: store::task_lists::TaskFields =
+                serde_json::from_value(p.get("task").cloned().context("missing param: task")?).context("task")?;
+            Ok(match store::task_lists::update(&engine.db.lock().unwrap(), id, revision, &fields)? {
+                store::task_lists::Edit::Saved { revision } => json!({ "ok": true, "revision": revision }),
+                store::task_lists::Edit::Conflict { current, revision } => json!({
+                    "ok": false,
+                    "conflict": true,
+                    "current": current.map(|task| json!({
+                        "list_id": task.list_id, "title": task.title, "note": task.note,
+                        "due_at": task.due_at, "reminder_at": task.reminder_at, "priority": task.priority,
+                        "revision": revision,
+                    })),
+                }),
             })
         }
 
@@ -1981,6 +4337,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let account = req_str(p, "account").unwrap_or_default();
             let id = format!("carddav-{}", uuid::Uuid::new_v4());
             let source = store::ContactSource {
+                writable: None,
                 id: id.clone(),
                 kind: "carddav".into(),
                 account,
@@ -2030,6 +4387,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 store::upsert_contact_source(
                     &engine.db.lock().unwrap(),
                     &store::ContactSource {
+                        writable: None,
                         id: id.clone(),
                         kind: "google".into(),
                         account: account.clone(),
@@ -2493,7 +4851,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "people.list" => {
             let query = req_str(p, "query").unwrap_or_default();
             let limit = req_u32(p, "limit").unwrap_or(500);
-            let found = store::find_people(&engine.db.lock().unwrap(), &query, limit)?;
+            let (found, writable, links) = {
+                let db = engine.db.lock().unwrap();
+                (
+                    store::find_people(&db, &query, limit)?,
+                    store::contact_sources_writable(&db)?,
+                    store::person_links::links(&db)?,
+                )
+            };
             Ok(json!({
                 "people": found
                     .iter()
@@ -2508,9 +4873,191 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "photo": stored.photo_key,
                         "emails": stored.person.emails,
                         "phones": stored.person.phones,
+                        "version": stored.version,
+                        // Linked by the reader with the same person elsewhere.
+                        "link": links.get(&stored.id),
+                        // The local book, and CardDAV books the server has not
+                        // said are read-only (ADR-0012). Google and Exchange
+                        // stay read-only here.
+                        "editable": stored.origin.source == "local"
+                            || (stored.origin.source == "carddav"
+                                && writable.get(&stored.origin.book).copied().flatten() != Some(false)),
                     }))
                     .collect::<Vec<_>>()
             }))
+        }
+
+        // Creates a person in the local book, or edits one from the version
+        // it was read at. A different version saves nothing and answers with
+        // the copy that is there now, for the reader to choose (ADR-0012).
+        "people.save" => {
+            let id = p.get("id").and_then(Value::as_str).filter(|id| !id.is_empty());
+            let version = p.get("version").and_then(Value::as_str);
+            if id.is_some() && version.is_none() {
+                anyhow::bail!("an edit must say which version it was made from");
+            }
+            let input: PersonInput =
+                serde_json::from_value(p.get("person").cloned().context("missing param: person")?)
+                    .context("person")?;
+            let person = input.into_person();
+            let stored = match id {
+                Some(id) => store::synced_person(&engine.db.lock().unwrap(), id)?,
+                None => None,
+            };
+            let book = p.get("book").and_then(Value::as_str).filter(|book| !book.is_empty() && *book != "local");
+            match (&stored, book) {
+                (Some(stored), _) if stored.origin.source == "carddav" => {
+                    carddav_save(&engine, Some(stored), version.unwrap_or_default(), person).await
+                }
+                (Some(stored), _) if stored.origin.source != "local" => {
+                    anyhow::bail!("this address book is read-only here")
+                }
+                (None, Some(book)) if id.is_none() => {
+                    let source = store::contact_source(&engine.db.lock().unwrap(), book)?
+                        .context("that address book is no longer set up")?;
+                    if source.kind != "carddav" {
+                        anyhow::bail!("this address book is read-only here");
+                    }
+                    carddav_create(&engine, &source, person).await
+                }
+                _ => {
+                    let write =
+                        store::local_people::save(&engine.db.lock().unwrap(), id, version, &person, now_seconds())?;
+                    Ok(local_write_json(write))
+                }
+            }
+        }
+
+        // People who share an address and may be one person: suggestions,
+        // never acted on alone (ADR-0012).
+        "people.duplicates" => {
+            let db = engine.db.lock().unwrap();
+            let groups = store::person_links::suggestions(&db)?;
+            let everyone = store::find_people(&db, "", u32::MAX)?;
+            let describe = |id: &String| {
+                everyone.iter().find(|stored| &stored.id == id).map(|stored| json!({
+                    "id": stored.id, "name": stored.person.name, "source": stored.origin.source,
+                    "book": stored.origin.book, "emails": stored.person.emails,
+                }))
+            };
+            Ok(json!({
+                "groups": groups.iter().map(|ids| ids.iter().filter_map(describe).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            }))
+        }
+        "people.link" => {
+            let ids: Vec<String> = serde_json::from_value(p.get("ids").cloned().unwrap_or_default()).context("ids")?;
+            let link = store::person_links::link(&engine.db.lock().unwrap(), &ids)?;
+            Ok(json!({ "ok": true, "link": link }))
+        }
+        "people.unlink" => {
+            store::person_links::unlink(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "people.dismissDuplicate" => {
+            let ids: Vec<String> = serde_json::from_value(p.get("ids").cloned().unwrap_or_default()).context("ids")?;
+            store::person_links::dismiss(&engine.db.lock().unwrap(), &ids)?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // A .vcf of the people asked for (all when none are named), each
+        // saying where it came from (ADR-0012).
+        "people.exportVcf" => {
+            let wanted: Option<Vec<String>> = p
+                .get("ids")
+                .and_then(Value::as_array)
+                .map(|ids| ids.iter().filter_map(Value::as_str).map(str::to_string).collect());
+            let everyone = store::find_people(&engine.db.lock().unwrap(), "", u32::MAX)?;
+            let mut vcf = String::new();
+            let mut count = 0;
+            for stored in everyone {
+                if wanted.as_ref().is_some_and(|ids| !ids.contains(&stored.id)) {
+                    continue;
+                }
+                let uid = if stored.person.uid.is_empty() { stored.id.clone() } else { stored.person.uid.clone() };
+                vcf.push_str(&meron_core::contacts::vcard_write::export_card(&stored.person, &uid, &stored.origin.source));
+                count += 1;
+            }
+            Ok(json!({ "vcf": vcf, "count": count }))
+        }
+
+        // What a .vcf would bring in, before anything is stored.
+        "people.importPreview" => {
+            let found = meron_core::contacts::vcard_import::preview(req_str(p, "vcf")?.as_bytes())?;
+            Ok(json!({
+                "people": found.people.iter().map(|person| json!({
+                    "name": person.name, "organisation": person.organisation, "emails": person.emails,
+                })).collect::<Vec<_>>(),
+                "skipped": found.skipped,
+            }))
+        }
+
+        // Stores a .vcf's people in the local book or a CardDAV book. One at a
+        // time; a person already there (same name and first address) is
+        // skipped, and the first failure stops the run and is reported with
+        // how far it got.
+        "people.import" => {
+            let vcf = req_str(p, "vcf")?;
+            let book = p.get("book").and_then(Value::as_str).filter(|b| !b.is_empty() && *b != "local").map(str::to_string);
+            let found = meron_core::contacts::vcard_import::preview(vcf.as_bytes())?;
+            let mut existing: Vec<meron_core::contacts::person::Person> = store::find_people(&engine.db.lock().unwrap(), "", u32::MAX)?
+                .into_iter()
+                .filter(|stored| match &book {
+                    Some(book) => &stored.origin.book == book,
+                    None => stored.origin.source == "local",
+                })
+                .map(|stored| stored.person)
+                .collect();
+            let source = match &book {
+                Some(book) => Some(
+                    store::contact_source(&engine.db.lock().unwrap(), book)?
+                        .filter(|source| source.kind == "carddav")
+                        .context("that address book cannot be written to")?,
+                ),
+                None => None,
+            };
+            let (mut imported, mut duplicates) = (0usize, 0usize);
+            let mut stopped: Option<String> = None;
+            for person in found.people {
+                if meron_core::contacts::vcard_import::already_there(&person, &existing) {
+                    duplicates += 1;
+                    continue;
+                }
+                let result = match &source {
+                    Some(source) => carddav_create(&engine, source, person.clone()).await.map(|_| ()),
+                    None => store::local_people::save(&engine.db.lock().unwrap(), None, None, &person, now_seconds())
+                        .map(|_| ()),
+                };
+                match result {
+                    Ok(()) => {
+                        imported += 1;
+                        existing.push(person);
+                    }
+                    Err(error) => {
+                        stopped = Some(format!("{error:#}"));
+                        break;
+                    }
+                }
+            }
+            Ok(json!({
+                "imported": imported,
+                "duplicates": duplicates,
+                "skipped": found.skipped,
+                "stopped": stopped,
+            }))
+        }
+
+        "people.delete" => {
+            let id = req_str(p, "id")?;
+            let version = req_str(p, "version")?;
+            let stored = store::synced_person(&engine.db.lock().unwrap(), &id)?;
+            match stored {
+                Some(stored) if stored.origin.source == "carddav" => carddav_delete(&engine, &id, &stored, &version).await,
+                Some(stored) if stored.origin.source != "local" => anyhow::bail!("this address book is read-only here"),
+                _ => {
+                    let write = store::local_people::delete(&engine.db.lock().unwrap(), &id, &version)?;
+                    Ok(local_write_json(write))
+                }
+            }
         }
 
         // Text the writer keeps because they write it often: a snippet
@@ -2753,6 +5300,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let limit = p.get("limit").and_then(Value::as_i64).unwrap_or(200).clamp(1, 1000);
             // Rules as sent when given, so an unsaved draft can be tried
             // before it is trusted with a mailbox; the stored ones otherwise.
+            let from_stored = p.get("rules").and_then(Value::as_array).is_none();
             let candidates: Vec<rules::Rule> = match p.get("rules").and_then(Value::as_array) {
                 Some(values) => values
                     .iter()
@@ -2767,11 +5315,18 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 store::recent_headers(&db, &account, &folder, limit)?
             };
             let mut hits = Vec::new();
+            let mut reviewed = Vec::new();
             for header in &headers {
                 let planned = rules::plan(&candidates, &account, &rule_subject(header));
                 if planned.is_empty() {
                     continue;
                 }
+                reviewed.push(rules::run::ReviewedMessage {
+                    uid: header.uid,
+                    subject: header.subject.clone(),
+                    from: header.from_addr.clone(),
+                    steps: planned.clone(),
+                });
                 hits.push(json!({
                     "uid": header.uid,
                     "subject": header.subject,
@@ -2787,7 +5342,89 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         .collect::<Vec<_>>(),
                 }));
             }
-            Ok(json!({ "examined": headers.len(), "matches": hits }))
+            // The stored rules' preview can be run as it stands (#50): the
+            // review names these messages and these steps, nothing more.
+            let review_id = if from_stored && !reviewed.is_empty() {
+                let uidvalidity = store::get_folder_state(&engine.db.lock().unwrap(), &account, &folder)?
+                    .map(|(validity, _)| validity)
+                    .unwrap_or(0);
+                Some(rule_runs().issue(
+                    &account,
+                    &folder,
+                    uidvalidity,
+                    &rules::run::fingerprint(&candidates),
+                    reviewed,
+                    now_seconds(),
+                ))
+            } else {
+                None
+            };
+            Ok(json!({ "examined": headers.len(), "matches": hits, "reviewId": review_id }))
+        }
+
+        // Runs a previewed set of rule actions on mail already in a folder,
+        // exactly as shown, and says what happened to each step (#50).
+        "rules.runReviewed" => {
+            let account = req_str(p, "account")?;
+            let review_id = req_str(p, "review_id")?;
+            let folder = req_str(p, "folder").map(|f| canon_folder(&f)).unwrap_or_else(|_| "INBOX".into());
+            let rules_now = stored_rules(engine);
+            let validity = store::get_folder_state(&engine.db.lock().unwrap(), &account, &folder)?
+                .map(|(v, _)| v)
+                .unwrap_or(0);
+            let run = rule_runs()
+                .take(&review_id, &account, validity, &rules::run::fingerprint(&rules_now), now_seconds())
+                .map_err(|err| anyhow::anyhow!("{err}"))?;
+            if run.folder != folder {
+                anyhow::bail!("this run was previewed for another folder");
+            }
+            let mut report = Vec::new();
+            let (mut done, mut failed) = (0usize, 0usize);
+            for message in &run.messages {
+                let mut steps = Vec::new();
+                let mut stopped = false;
+                for step in &message.steps {
+                    if stopped {
+                        steps.push(json!({ "action": action_label(&step.action), "ok": false, "error": "not run: an earlier step failed" }));
+                        continue;
+                    }
+                    // Boxed: an action runs through `dispatch`, which this is in.
+                    let result =
+                        Box::pin(run_rule_action(engine, out, &account, &run.folder, message.uid, &step.action)).await;
+                    let outcome = match &result {
+                        Ok(()) => "done".to_string(),
+                        Err(err) => format!("failed: {err:#}"),
+                    };
+                    {
+                        let db = engine.db.lock().unwrap();
+                        let _ = store::log_rule_action(
+                            &db,
+                            &store::RuleLogEntry {
+                                at: now_seconds(),
+                                account: account.clone(),
+                                rule_id: step.rule_id.clone(),
+                                rule_name: step.rule_name.clone(),
+                                folder: run.folder.clone(),
+                                uid: message.uid,
+                                subject: message.subject.clone(),
+                                from_addr: message.from.clone(),
+                                action: action_label(&step.action),
+                                outcome,
+                            },
+                        );
+                    }
+                    match result {
+                        Ok(()) => steps.push(json!({ "action": action_label(&step.action), "ok": true })),
+                        Err(err) => {
+                            stopped = true;
+                            steps.push(json!({ "action": action_label(&step.action), "ok": false, "error": format!("{err:#}") }));
+                        }
+                    }
+                }
+                if stopped { failed += 1 } else { done += 1 }
+                report.push(json!({ "uid": message.uid, "subject": message.subject, "steps": steps }));
+            }
+            Ok(json!({ "done": done, "failed": failed, "messages": report }))
         }
 
         // What the rules have actually done. A mailbox that changes by itself
@@ -2836,7 +5473,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             if due_at <= now_seconds() {
                 anyhow::bail!("a message cannot be scheduled for a moment already past");
             }
-            let message = p.get("message").cloned().context("missing param: message")?;
+            let mut message = p.get("message").cloned().context("missing param: message")?;
+            // A key's passphrase is never written down with the message: it
+            // would sit in the store until the hour came.
+            strip_send_secrets(&mut message);
             if req_str(&message, "to").unwrap_or_default().trim().is_empty() {
                 anyhow::bail!("a scheduled message needs a recipient");
             }
@@ -2856,12 +5496,40 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // reader can still find, change their mind about, or be told failed.
         "mail.scheduledSends" => {
             let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
-            let rows = store::scheduled_sends(&engine.db.lock().unwrap(), account.as_deref())?;
-            Ok(json!({ "messages": rows.iter().map(scheduled_send_json).collect::<Vec<_>>() }))
+            let db = engine.db.lock().unwrap();
+            let rows = store::scheduled_sends(&db, account.as_deref())?;
+            let messages = rows
+                .iter()
+                .map(|row| {
+                    let uncertain = outgoing::attempt(&db, &row.id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|attempt| attempt.state == outgoing::AttemptState::Uncertain);
+                    scheduled_send_json(row, uncertain)
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({ "messages": messages }))
         }
 
         // Calls a scheduled send off and hands the message back, so its words
         // return to the composer instead of being taken away.
+        // Sends whose outcome nobody knows, and sent messages without a
+        // Sent copy. Listed so a person can look at them; nothing here is
+        // retried on its own.
+        "mail.outgoingAttempts" => {
+            let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
+            let rows = outgoing::unsettled(&engine.db.lock().unwrap(), account.as_deref())?;
+            Ok(json!({ "attempts": rows.iter().map(outgoing::OutgoingAttempt::to_json).collect::<Vec<_>>() }))
+        }
+
+        // A person has settled an uncertain send, whichever way. The record
+        // stays, marked as looked at; only the doubt is cleared.
+        "mail.resolveOutgoing" => {
+            let id = req_str(p, "id")?;
+            let resolved = outgoing::resolve(&engine.db.lock().unwrap(), &id, now_seconds())?;
+            Ok(json!({ "ok": true, "resolved": resolved }))
+        }
+
         "mail.cancelScheduledSend" => {
             let id = req_str(p, "id")?;
             let cancelled = store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
@@ -2886,11 +5554,19 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let row = row.context("no such scheduled message")?;
             let message: Value = serde_json::from_str(&row.payload)
                 .context("this scheduled message can no longer be read")?;
-            match perform_send(engine, &message).await {
-                Ok(_) => {
+            // Sending again a message whose earlier try may have gone is a
+            // decision, not a retry; the interface says so explicitly.
+            let resend = p.get("resend").and_then(Value::as_bool).unwrap_or(false);
+            match send_scheduled(engine, &row, &message, resend).await {
+                Ok(ScheduledOutcome::Sent) => {
                     store::cancel_scheduled_send(&engine.db.lock().unwrap(), &id)?;
-                    Ok(json!({ "ok": true }))
+                    Ok(json!({ "ok": true, "outcome": "sent" }))
                 }
+                Ok(ScheduledOutcome::Uncertain(reason)) => {
+                    store::give_up_on_send(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
+                    Ok(json!({ "ok": false, "outcome": "uncertain", "id": id, "error": reason }))
+                }
+                Ok(ScheduledOutcome::InFlight) => Ok(json!({ "ok": false, "outcome": "in_flight", "id": id })),
                 Err(err) => {
                     let reason = format!("{err:#}");
                     store::record_send_failure(&engine.db.lock().unwrap(), &id, &reason, now_seconds())?;
@@ -2902,6 +5578,69 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // Serialize accounts, prefs, feeds and settings to a backup document
         // (see `backup`). The passphrase-based key derivation is deliberately
         // slow, so this runs on the blocking pool rather than the reactor.
+        // The full-profile archive (#171, ADR-0017). The store is held only
+        // while it is copied; packing and encrypting run without it.
+        "profileArchive.export" => {
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let passphrase = req_str(p, "passphrase")?;
+            let app_version = p.get("app_version").and_then(Value::as_str).unwrap_or_default().to_string();
+            let engine = engine.clone();
+            let summary = tokio::task::spawn_blocking(move || {
+                // Never at the same time as a scheduled backup (#173).
+                let _capture = meron_core::backup_schedule::capture_lock()?;
+                let media_root = meron_core::parse::media_root();
+                let work_dir = store::app_dir().join("backup-work");
+                let options = meron_core::profile_archive::ExportOptions {
+                    media_root: &media_root,
+                    work_dir: &work_dir,
+                    app_version: &app_version,
+                    now: now_seconds(),
+                    // Debug-build tests would spend minutes in scrypt at the real cost.
+                    work_factor: if cfg!(test) { 10 } else { meron_core::profile_archive::WORK_FACTOR },
+                };
+                meron_core::profile_archive::export_with(
+                    |dest, key| meron_core::profile_archive::take_snapshot(&engine.db.lock().unwrap(), dest, key),
+                    &path,
+                    &passphrase,
+                    &options,
+                )
+            })
+            .await??;
+            Ok(json!({ "saved": true, "summary": summary }))
+        }
+        // Readies an archive to replace this profile (#172). The profile in
+        // use is untouched; the bridge activates it with the core stopped.
+        "profileArchive.stage" => {
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let passphrase = req_str(p, "passphrase")?;
+            let summary = tokio::task::spawn_blocking(move || {
+                let machine_key = meron_core::secrets::db_key()?;
+                meron_core::profile_archive::prepare_restore(
+                    &path,
+                    &passphrase,
+                    &store::app_dir(),
+                    machine_key.as_deref(),
+                    now_seconds(),
+                )
+            })
+            .await??;
+            Ok(json!({ "ready": true, "summary": summary }))
+        }
+        // Opens an archive in a private folder, checks every entry and the
+        // store inside, and describes it. Nothing in use is touched.
+        "profileArchive.inspect" => {
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let passphrase = req_str(p, "passphrase")?;
+            let summary = tokio::task::spawn_blocking(move || {
+                let staging = store::app_dir().join("restore-staging").join(uuid::Uuid::new_v4().to_string());
+                let result = meron_core::profile_archive::stage(&path, &passphrase, &staging)
+                    .and_then(|manifest| meron_core::profile_archive::summary(&manifest, &staging));
+                let _ = std::fs::remove_dir_all(&staging);
+                result
+            })
+            .await??;
+            Ok(json!({ "summary": summary }))
+        }
         "backup.export" => {
             let include_secrets = p
                 .get("include_secrets")
@@ -3038,16 +5777,32 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     continue;
                 };
                 if let Some(obj) = account.as_object_mut() {
+                    // The local archive has nothing to reconnect (ADR-0014).
+                    if obj.get("auth_type").and_then(Value::as_str) == Some("local_archive") {
+                        obj.insert("needs_reconnect".into(), json!(false));
+                        continue;
+                    }
                     if obj.get("auth_type").and_then(Value::as_str)==Some("graph_oauth") {
                         let status=meron_core::graph::mail::status(&engine.db.lock().unwrap(),&id);
                         let reconnect=status.as_ref().map_or(true,|s|matches!(s.error.as_deref(),Some("reauthenticate"|"consent_required"|"access_denied")));
                         obj.insert("needs_reconnect".into(),json!(reconnect));
+                        // Whether its grant allows message changes (#141).
+                        obj.insert("graph_writes".into(),json!(meron_core::graph::mail::writes_enabled(&engine.db.lock().unwrap(),&id)));
+                        obj.insert("graph_send".into(),json!(meron_core::graph::mail::send_enabled(&engine.db.lock().unwrap(),&id)));
                         continue;
                     }
                     let needs_reconnect = live_accounts
                         .get(&id)
                         .is_none_or(|creds| !creds_have_required_secret(creds));
                     obj.insert("needs_reconnect".to_string(), json!(needs_reconnect));
+                    // An EWS account pointed at Exchange Online (#46): EWS is
+                    // retired there, and this client's Basic sign-in already
+                    // was. Said in settings with the way forward.
+                    if let Some(url) = obj.get("ews_url").and_then(Value::as_str) {
+                        if meron_core::exchange::is_exchange_online(url) {
+                            obj.insert("ews_exchange_online".to_string(), json!(true));
+                        }
+                    }
                 }
             }
             Ok(json!({ "accounts": accounts }))
@@ -3319,7 +6074,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // can be slow or network-dependent, and later sync/watch calls will
             // surface any mailbox access failure.
             if p.get("validate").and_then(Value::as_bool).unwrap_or(true) {
-                if creds.is_ews() {
+                if creds.is_pop3() {
+                    // Signs in over TLS and leaves at once; nothing is
+                    // downloaded or deleted until the first sync.
+                    let mut client = tokio::time::timeout(Duration::from_secs(20), meron_core::pop3::connect(&creds))
+                        .await
+                        .map_err(|_| anyhow::anyhow!("POP3 validation timed out"))??;
+                    let _ = client.quit().await;
+                    tokio::time::timeout(Duration::from_secs(20), smtp::check_certificate(&creds))
+                        .await
+                        .unwrap_or(Ok(()))?;
+                } else if creds.is_ews() {
                     // Exchange carries mail and submission over one HTTPS
                     // endpoint, so a single round trip validates both.
                     let config = exchange::EwsConfig {
@@ -3376,6 +6141,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             {
                 let db = engine.db.lock().unwrap();
                 store::upsert_account(&db, &id, &meta, &creds)?;
+                if creds.is_pop3() {
+                    // POP3 has no folders: its mail goes to an Inbox kept here.
+                    store::upsert_folders(
+                        &db,
+                        &id,
+                        &[
+                            imap::Folder { name: "INBOX".into(), display_name: "INBOX".into(), ..Default::default() },
+                            imap::Folder {
+                                name: meron_core::archive::TRASH.into(),
+                                display_name: meron_core::archive::TRASH.into(),
+                                special_use: Some("trash".into()),
+                                ..Default::default()
+                            },
+                        ],
+                    )?;
+                }
             }
             secrets::store(&id, &secrets::Secrets::from_creds(&creds))?;
             let has_calendars =
@@ -3495,10 +6276,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "calendar.subscribe" => {
             let account = req_str(p, "account")?;
             let name = req_str(p, "name")?;
-            let url = req_str(p, "url")?;
-            if !url.starts_with("https://") && !url.starts_with("http://") {
-                anyhow::bail!("a subscription needs an http(s) URL");
-            }
+            let url = calendar::subscription::normalize_url(&req_str(p, "url")?)?;
             let probe_url = url.clone();
             let body = tokio::task::spawn_blocking(move || {
                 calendar::subscription::fetch(&probe_url)
@@ -3521,6 +6299,397 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }],
             )?;
             Ok(json!({ "id": id }))
+        }
+
+        // The search box's own grammar, for a builder that edits a search
+        // field by field (#43): read into parts, and written back as text.
+        "search.parse" => {
+            let query = req_str(p, "query").unwrap_or_default();
+            Ok(json!({ "query": search::parse(&query) }))
+        }
+        "search.compose" => {
+            let query: search::Query = serde_json::from_value(p.get("query").cloned().unwrap_or_default())?;
+            Ok(json!({ "text": search::compose(&query) }))
+        }
+
+        // Every attachment of the mail kept here (#93, ADR-0020). A file whose
+        // bytes are no longer on disk (the cache is pruned) is listed without
+        // a key: the interface offers its message instead of a dead link.
+        // The reader's sidebar: one person's history in one account (#86).
+        "context.person" => {
+            let mut context = meron_core::person_context::person(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "account")?,
+                &req_str(p, "address")?,
+                now_seconds(),
+            )?;
+            let root = meron_core::parse::media_root();
+            for item in &mut context.files {
+                if item.key.as_ref().is_some_and(|key| !root.join(key).is_file()) {
+                    item.key = None;
+                }
+                item.thread_id = if item.thread_key.is_empty() {
+                    format!("{}#{}#{}", item.account, item.folder, item.uid)
+                } else {
+                    mail_model::format_thread_id(&item.account, &item.folder, &item.thread_key)
+                };
+            }
+            Ok(serde_json::to_value(context)?)
+        }
+        "attachments.list" => {
+            let query: store::attachment_list::Query = serde_json::from_value(p.clone()).unwrap_or_default();
+            let mut page = store::attachment_list::list(&engine.db.lock().unwrap(), &query)?;
+            let root = meron_core::parse::media_root();
+            for item in &mut page.items {
+                if item.key.as_ref().is_some_and(|key| !root.join(key).is_file()) {
+                    item.key = None;
+                }
+                item.thread_id = if item.thread_key.is_empty() {
+                    format!("{}#{}#{}", item.account, item.folder, item.uid)
+                } else {
+                    mail_model::format_thread_id(&item.account, &item.folder, &item.thread_key)
+                };
+            }
+            Ok(serde_json::to_value(page)?)
+        }
+
+        // Meeting invitations that arrived by mail (#102, ADR-0019). Each of
+        // these runs only because the person asked; reading an invitation
+        // never answers it.
+        "invite.status" => {
+            let account = req_str(p, "account")?;
+            let uid = req_str(p, "uid")?;
+            let db = engine.db.lock().unwrap();
+            let answer = calendar::itip::answer_of(&db, &account, &uid)?;
+            let calendars = invitation_calendars(&db, &account, &uid)?;
+            Ok(json!({ "answer": answer, "calendars": calendars }))
+        }
+        "invite.respond" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let response = calendar::Response::parse(&req_str(p, "response")?).context("unknown answer")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let target = req_str(p, "calendar").unwrap_or_default();
+            let invitation = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            let kept = calendar::itip::answer_of(&engine.db.lock().unwrap(), &account, &invitation.uid)?;
+            if calendar::itip::is_outdated(&invitation, kept.as_ref().map(|answer| answer.sequence)) {
+                anyhow::bail!("a newer version of this invitation was already answered; nothing was sent");
+            }
+            let now = now_seconds();
+            let reply = calendar::itip::reply(&invitation, &me, response, now)?;
+            if !target.is_empty() {
+                if response == calendar::Response::Decline {
+                    remove_invitation(&engine, &out, &account, &invitation.uid, Some(&target)).await?;
+                } else {
+                    keep_invitation(&engine, &out, &account, &target, &invitation, &me.addr, response).await?;
+                }
+            }
+            calendar::itip::record(
+                &engine.db.lock().unwrap(),
+                &account,
+                &invitation.uid,
+                &calendar::itip::Answer {
+                    sequence: invitation.sequence,
+                    response: format!("{response:?}").to_ascii_lowercase(),
+                    calendar_id: target,
+                    answered_at: now,
+                },
+            )?;
+            let organizer = invitation.organizer.clone().context("this invitation names no organizer to answer")?;
+            let verb = match response {
+                calendar::Response::Accept => "Accepted",
+                calendar::Response::Tentative => "Tentative",
+                calendar::Response::Decline => "Declined",
+            };
+            Ok(json!({ "reply": {
+                "to": organizer.addr,
+                "subject": format!("{verb}: {}", invitation.summary),
+                "ics": reply,
+            }}))
+        }
+        "invite.cancel" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let invitation = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            if invitation.method != "CANCEL" {
+                anyhow::bail!("only a cancellation removes an event");
+            }
+            let removed = remove_invitation(&engine, &out, &account, &invitation.uid, None).await?;
+            calendar::itip::record(
+                &engine.db.lock().unwrap(),
+                &account,
+                &invitation.uid,
+                &calendar::itip::Answer {
+                    sequence: invitation.sequence,
+                    response: "cancelled".into(),
+                    calendar_id: String::new(),
+                    answered_at: now_seconds(),
+                },
+            )?;
+            Ok(json!({ "removed": removed }))
+        }
+        // Proposing another time, and the organizer's side of it (RFC 5546
+        // §3.2.7–3.2.8, ADR-0043). Like answers, each builds what is to be
+        // sent and the frontend sends it as an ordinary message; nothing
+        // goes out unless a button was pressed.
+        "invite.counter" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let start = req_i64(p, "start")?;
+            let end = req_i64(p, "end")?;
+            let comment = req_str(p, "comment").unwrap_or_default();
+            let invitation = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            let kept = calendar::itip::answer_of(&engine.db.lock().unwrap(), &account, &invitation.uid)?;
+            if calendar::itip::is_outdated(&invitation, kept.as_ref().map(|answer| answer.sequence)) {
+                anyhow::bail!("a newer version of this invitation was already answered; nothing was sent");
+            }
+            if kept.as_ref().is_some_and(|answer| answer.response == "cancelled" && answer.sequence >= invitation.sequence) {
+                anyhow::bail!("this meeting was cancelled; there is no time to propose");
+            }
+            let proposal = calendar::itip::counter(&invitation, &me, start, end, &comment, now_seconds())?;
+            let organizer = invitation.organizer.clone().context("this invitation names no organizer to propose to")?;
+            Ok(json!({ "proposal": {
+                "to": organizer.addr,
+                "subject": format!("New time proposed: {}", invitation.summary),
+                "ics": proposal,
+            }}))
+        }
+        "invite.counterStatus" => {
+            let account = req_str(p, "account")?;
+            let me = req_str(p, "me_addr")?.to_ascii_lowercase();
+            let ics = req_str(p, "ics")?;
+            let proposal = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            let standing = counter_standing(&engine, &account, &me, &proposal).await?;
+            Ok(json!({
+                "organizer": standing.event.is_some(),
+                "event": standing.event,
+                "sequence": standing.sequence,
+                "outdated": standing.outdated,
+            }))
+        }
+        "invite.declineCounter" => {
+            let account = req_str(p, "account")?;
+            let ics = req_str(p, "ics")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let comment = req_str(p, "comment").unwrap_or_default();
+            let proposal = calendar::itip::parse(&ics).context("this is not an invitation")?;
+            if proposal.method != "COUNTER" {
+                anyhow::bail!("only a proposal of another time can be declined this way");
+            }
+            let standing = counter_standing(&engine, &account, &me.addr, &proposal).await?;
+            if standing.event.is_none() {
+                anyhow::bail!("this meeting is not one you organize in a calendar kept here; nothing was sent");
+            }
+            if standing.outdated {
+                anyhow::bail!("the meeting has changed since this time was proposed; nothing was sent");
+            }
+            let refusal = calendar::itip::decline_counter(&proposal, &me, &comment, now_seconds())?;
+            let proposer = proposal.attendees.first().context("this proposal names nobody who proposed it")?;
+            Ok(json!({ "reply": {
+                "to": proposer.addr,
+                "subject": format!("Proposed time declined: {}", proposal.summary),
+                "ics": refusal,
+            }}))
+        }
+        // Which of the person's own events a time overlaps (ADR-0043): read
+        // from the events kept here, every account unless one is named. No
+        // server is asked.
+        "calendar.conflicts" => {
+            let start = req_i64(p, "start")?;
+            let end = req_i64(p, "end")?;
+            let all_day = p.get("all_day").and_then(Value::as_bool).unwrap_or(false);
+            let offset = p.get("offset").and_then(Value::as_i64).unwrap_or(0);
+            let account = p.get("account").and_then(Value::as_str).filter(|a| !a.is_empty()).map(str::to_string);
+            let exclude: Vec<String> = p
+                .get("exclude")
+                .and_then(Value::as_array)
+                .map(|list| list.iter().filter_map(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string).collect())
+                .unwrap_or_default();
+            let found = calendar::overlap::overlapping(
+                &engine.db.lock().unwrap(),
+                account.as_deref(),
+                start,
+                end,
+                all_day,
+                offset,
+                &exclude,
+            )?;
+            Ok(json!({ "conflicts": found }))
+        }
+
+        // A .ics file into a local or CalDAV calendar (#101): previewed first
+        // (`confirm` false), and never added twice.
+        "calendar.importIcs" => {
+            let account = req_str(p, "account")?;
+            let calendar_id = req_str(p, "calendar")?;
+            let path = req_str(p, "path")?;
+            let confirm = p.get("confirm").and_then(Value::as_bool).unwrap_or(false);
+            let size = std::fs::metadata(&path).with_context(|| format!("open {path}"))?.len();
+            if size as usize > calendar::import::MAX_FILE_BYTES {
+                anyhow::bail!("this file is larger than a calendar file may be (20 MB)");
+            }
+            let text = String::from_utf8_lossy(&std::fs::read(&path)?).into_owned();
+            let items = calendar::import::split(&text)?;
+            let target = calendar::calendar_of(&engine.db.lock().unwrap(), &account, &calendar_id)?
+                .context("that calendar is no longer here")?;
+            let mut summary = calendar::import::Summary::default();
+            match target.kind {
+                calendar::CalendarKind::Local => {
+                    let now = now_seconds();
+                    let db = engine.db.lock().unwrap();
+                    for item in &items {
+                        let (events, skipped) = match calendar::import::local_events(item, &calendar_id, now) {
+                            Ok(found) => found,
+                            Err(_) => {
+                                summary.skipped += 1;
+                                continue;
+                            }
+                        };
+                        summary.skipped += skipped;
+                        let fresh: Vec<&calendar::Event> = events
+                            .iter()
+                            .filter(|event| {
+                                !db.prepare("SELECT 1 FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id = ?3")
+                                    .and_then(|mut stmt| stmt.exists(rusqlite::params![account, calendar_id, event.id]))
+                                    .unwrap_or(false)
+                            })
+                            .collect();
+                        if fresh.is_empty() {
+                            if !events.is_empty() {
+                                summary.duplicates += 1;
+                            }
+                            continue;
+                        }
+                        summary.added += 1;
+                        summary.series += item.repeats as usize;
+                        if confirm {
+                            for event in fresh {
+                                calendar::put_local_event(&db, &account, event)?;
+                            }
+                        }
+                    }
+                }
+                calendar::CalendarKind::CalDav => {
+                    let (target, transport) = caldav_write(&engine, &account, &calendar_id)?
+                        .context("that calendar is no longer here")?;
+                    let known: Vec<bool> = {
+                        let db = engine.db.lock().unwrap();
+                        items
+                            .iter()
+                            .map(|item| calendar::caldav::locate(&db, &account, &target.id, &item.uid).map(|l| l.is_some()))
+                            .collect::<anyhow::Result<_>>()?
+                    };
+                    let url = target.id.clone();
+                    let plan: Vec<(calendar::import::Item, bool)> = items.into_iter().zip(known).collect();
+                    let (result, located) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+                        let mut summary = calendar::import::Summary::default();
+                        let mut located = Vec::new();
+                        for (item, known) in plan {
+                            if known {
+                                summary.duplicates += 1;
+                                continue;
+                            }
+                            if !confirm {
+                                summary.added += 1;
+                                summary.series += item.repeats as usize;
+                                continue;
+                            }
+                            let href = calendar::caldav::new_href(&url, &item.uid)?;
+                            match calendar::caldav::put_object(&transport, &url, &href, &item.object, None)? {
+                                meron_core::carddav::client::Written::Saved { etag } => {
+                                    summary.added += 1;
+                                    summary.series += item.repeats as usize;
+                                    located.push(calendar::caldav::Located { uid: item.uid, href, etag: etag.unwrap_or_default() });
+                                }
+                                // Something already lives at that address: the
+                                // same event, imported before.
+                                meron_core::carddav::client::Written::Conflict => summary.duplicates += 1,
+                            }
+                        }
+                        Ok((summary, located))
+                    })
+                    .await??;
+                    summary = result;
+                    if confirm {
+                        calendar::caldav::remember(&engine.db.lock().unwrap(), &account, &target.id, &located)?;
+                        let now = now_seconds();
+                        spawn_calendar_sync(engine.clone(), out.clone(), account.clone(), now - 86_400 * 31, now + 86_400 * 366);
+                    }
+                }
+                _ => anyhow::bail!("{} cannot take imported events; choose a local or CalDAV calendar", target.name),
+            }
+            Ok(json!({ "summary": summary, "imported": confirm }))
+        }
+
+        // A calendar's events, as the calendar holds them here, to a .ics
+        // file. Written beside the target and renamed when complete.
+        "calendar.exportIcs" => {
+            let account = req_str(p, "account")?;
+            let calendar_id = req_str(p, "calendar")?;
+            let path = req_str(p, "path")?;
+            let events = calendar::events_of_calendar(&engine.db.lock().unwrap(), &account, &calendar_id)?;
+            let body = calendar::ics::export(&events, now_seconds());
+            let partial = format!("{path}.part");
+            std::fs::write(&partial, body.as_bytes()).with_context(|| format!("write {path}"))?;
+            std::fs::rename(&partial, &path).with_context(|| format!("finish {path}"))?;
+            Ok(json!({ "saved": true, "events": events.len() }))
+        }
+
+        // CalDAV (#101, ADR-0018): find the calendars on a server, then keep
+        // the ones chosen under an account.
+        "caldav.discover" => {
+            let server = req_str(p, "server")?;
+            let transport = meron_core::carddav::http::UreqTransport {
+                username: req_str(p, "username").unwrap_or_default(),
+                password: req_str(p, "password").unwrap_or_default(),
+            };
+            let found = tokio::task::spawn_blocking(move || calendar::caldav::discover(&transport, &server)).await??;
+            Ok(json!({ "calendars": found }))
+        }
+        "caldav.add" => {
+            let account = req_str(p, "account")?;
+            let username = req_str(p, "username").unwrap_or_default();
+            let password = req_str(p, "password").unwrap_or_default();
+            let chosen: Vec<calendar::caldav::RemoteCalendar> = p
+                .get("calendars")
+                .and_then(Value::as_array)
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|item| {
+                            Some(calendar::caldav::RemoteCalendar {
+                                url: item.get("url")?.as_str()?.to_string(),
+                                name: item.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+                                color: item.get("color").and_then(Value::as_str).map(str::to_string),
+                                writable: item.get("writable").and_then(Value::as_bool),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if chosen.is_empty() {
+                anyhow::bail!("choose at least one calendar");
+            }
+            for remote in &chosen {
+                meron_core::secrets::store(
+                    &calendar::caldav::secret_key(&account, &remote.url),
+                    &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() },
+                )?;
+            }
+            let ids = calendar::caldav::add_calendars(&engine.db.lock().unwrap(), &account, &chosen, &username)?;
+            Ok(json!({ "ids": ids }))
         }
 
         // Answering a meeting invitation. Unlike every other calendar write,
@@ -3648,7 +6817,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     .find(|calendar| calendar.id == id)
                     .is_some_and(|calendar| !calendar.read_only)
             };
-            calendar::route::delete_calendar(&engine, &account, &id, owned).await?;
+            let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), &account, &id)?
+                .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+            if is_caldav {
+                // Removing a CalDAV calendar here stops showing it; the
+                // collection stays on its server, where it belongs.
+                let _ = meron_core::secrets::delete(&calendar::caldav::secret_key(&account, &id));
+            } else {
+                calendar::route::delete_calendar(&engine, &account, &id, owned).await?;
+            }
             // Its events go with it: they lived on the calendar the server
             // just removed.
             calendar::forget_calendar(&engine.db.lock().unwrap(), &account, &id)?;
@@ -3669,8 +6846,55 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 p.get("event").cloned().context("missing param: event")?,
             )
             .context("event")?;
+            // Local and CalDAV calendars have nobody to make a meeting with
+            // (#109); Exchange is refused where it is routed.
+            if event.add_meeting.as_deref().is_some_and(|m| m != "none")
+                && (local_calendar_write(&engine, &account, &event.calendar_id)?.is_some()
+                    || caldav_write(&engine, &account, &event.calendar_id)?.is_some())
+            {
+                anyhow::bail!("online meetings can be added here only to Google calendars");
+            }
             if event.end < event.start {
                 anyhow::bail!("an event cannot end before it starts");
+            }
+            if let Some(local) = local_calendar_write(&engine, &account, &event.calendar_id)? {
+                // A local calendar keeps single events: there is no server to
+                // expand a rule, and storing one unexpanded would show it once.
+                if event.recurrence.is_some() {
+                    anyhow::bail!(
+                        "a local calendar keeps single events; a repeating event needs an account calendar"
+                    );
+                }
+                let created = calendar::Event {
+                    id: format!("local:{}", uuid::Uuid::new_v4()),
+                    calendar_id: local.id,
+                    change_key: None,
+                    is_recurring: false,
+                    series_id: None,
+                    ..event
+                };
+                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &created)?;
+                return Ok(json!({ "event": serde_json::to_value(created)? }));
+            }
+            if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
+                let wanted = event.clone();
+                let url = target.id.clone();
+                let (uid, change) = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::create(&transport, &url, &wanted, now_seconds())
+                })
+                .await??;
+                let calendar::caldav::Change::Saved { href, etag } = change else {
+                    anyhow::bail!("the server already holds an event at that address; nothing was saved");
+                };
+                calendar::caldav::remember(
+                    &engine.db.lock().unwrap(),
+                    &account,
+                    &target.id,
+                    &[calendar::caldav::Located { uid: uid.clone(), href, etag: etag.unwrap_or_default() }],
+                )?;
+                spawn_calendar_sync(engine.clone(), out.clone(), account, event.start, event.end.max(event.start + 1));
+                let created = calendar::Event { id: format!("{uid}@{}", event.start), ..event };
+                return Ok(json!({ "event": serde_json::to_value(created)? }));
             }
             // Telling the people on an event is never assumed: the caller says
             // so only after the reader has confirmed it.
@@ -3692,6 +6916,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 p.get("event").cloned().context("missing param: event")?,
             )
             .context("event")?;
+            // Local and CalDAV calendars have nobody to make a meeting with
+            // (#109); Exchange is refused where it is routed.
+            if event.add_meeting.as_deref().is_some_and(|m| m != "none")
+                && (local_calendar_write(&engine, &account, &event.calendar_id)?.is_some()
+                    || caldav_write(&engine, &account, &event.calendar_id)?.is_some())
+            {
+                anyhow::bail!("online meetings can be added here only to Google calendars");
+            }
             if event.end < event.start {
                 anyhow::bail!("an event cannot end before it starts");
             }
@@ -3702,8 +6934,47 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .get("scope")
                 .and_then(Value::as_str)
                 .is_some_and(|scope| scope == "series");
+            if local_calendar_write(&engine, &account, &event.calendar_id)?.is_some() {
+                if event.recurrence.is_some() {
+                    anyhow::bail!(
+                        "a local calendar keeps single events; a repeating event needs an account calendar"
+                    );
+                }
+                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &event)?;
+                return Ok(json!({ "ok": true }));
+            }
+            if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
+                let uid = calendar::caldav::uid_of(&event.id);
+                let located = calendar::caldav::locate(&engine.db.lock().unwrap(), &account, &target.id, &uid)?
+                    .context("this event's place on the server is not known yet; refresh the calendar and try again")?;
+                let seen = event.change_key.clone().unwrap_or_default();
+                let wanted = event.clone();
+                let url = target.id.clone();
+                let change = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::update(&transport, &url, &located.href, &seen, &wanted, whole_series, now_seconds())
+                })
+                .await??;
+                spawn_calendar_sync(engine.clone(), out.clone(), account.clone(), event.start, event.end.max(event.start + 1));
+                match change {
+                    calendar::caldav::Change::Saved { href, etag } => {
+                        calendar::caldav::remember(
+                            &engine.db.lock().unwrap(),
+                            &account,
+                            &target.id,
+                            &[calendar::caldav::Located { uid, href, etag: etag.unwrap_or_default() }],
+                        )?;
+                        return Ok(json!({ "ok": true }));
+                    }
+                    calendar::caldav::Change::Conflict => anyhow::bail!(CALDAV_CONFLICT),
+                }
+            }
             let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
-            calendar::route::update_event(&engine, &account, &event, whole_series, notify).await?;
+            let version =
+                calendar::route::update_event(&engine, &account, &event, whole_series, notify)
+                    .await?;
+            if let (Some(version), false) = (version, whole_series) {
+                calendar::set_event_change_key(&engine.db.lock().unwrap(), &account, &event.id, &version)?;
+            }
             spawn_calendar_sync(
                 engine.clone(),
                 out.clone(),
@@ -3731,6 +7002,48 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .and_then(Value::as_str)
                 .is_some_and(|scope| scope == "series");
             let series_id = p.get("series").and_then(Value::as_str);
+            if local_calendar_write(&engine, &account, &calendar_id)?.is_some() {
+                calendar::forget_event(&engine.db.lock().unwrap(), &account, &id)?;
+                return Ok(json!({ "ok": true }));
+            }
+            if let Some((target, transport)) = caldav_write(&engine, &account, &calendar_id)? {
+                let uid = calendar::caldav::uid_of(&id);
+                let (located, all_day) = {
+                    let db = engine.db.lock().unwrap();
+                    let located = calendar::caldav::locate(&db, &account, &target.id, &uid)?;
+                    let all_day: bool = db
+                        .query_row(
+                            "SELECT all_day FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id = ?3",
+                            rusqlite::params![account, target.id, id],
+                            |row| row.get::<_, i64>(0),
+                        )
+                        .map(|v| v != 0)
+                        .unwrap_or(false);
+                    (located, all_day)
+                };
+                let located = located.context("this event's place on the server is not known yet; refresh the calendar and try again")?;
+                let seen = change_key.map(str::to_string).unwrap_or_else(|| located.etag.clone());
+                let occurrence_only = !whole_series && series_id.is_some();
+                let (url, href, event_id) = (target.id.clone(), located.href.clone(), id.clone());
+                let change = tokio::task::spawn_blocking(move || {
+                    calendar::caldav::delete(&transport, &url, &href, &seen, &event_id, all_day, occurrence_only)
+                })
+                .await??;
+                if change == calendar::caldav::Change::Conflict {
+                    let now = now_seconds();
+                    spawn_calendar_sync(engine.clone(), out.clone(), account, now - 86_400 * 31, now + 86_400 * 366);
+                    anyhow::bail!(CALDAV_CONFLICT);
+                }
+                let db = engine.db.lock().unwrap();
+                if occurrence_only {
+                    calendar::forget_event(&db, &account, &id)?;
+                } else {
+                    calendar::forget_series(&db, &account, &uid)?;
+                    calendar::forget_event(&db, &account, &id)?;
+                    calendar::caldav::forget(&db, &account, &target.id, &uid)?;
+                }
+                return Ok(json!({ "ok": true }));
+            }
             calendar::route::delete_event(
                 &engine,
                 &account,
@@ -3791,16 +7104,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 })
                 .await?;
 
-            let folder = imap::Folder {
-                name,
-                display_name,
-                delimiter: None,
-                ..Default::default()
-            };
-            {
+            let folder = {
                 let db = engine.db.lock().unwrap();
+                let folder = imap::Folder {
+                    name,
+                    display_name,
+                    delimiter: store::account_delimiter(&db, &account)?,
+                    ..Default::default()
+                };
                 store::upsert_folders(&db, &account, std::slice::from_ref(&folder))?;
-            }
+                folder
+            };
             Ok(json!({ "folders": serde_json::to_value(vec![folder])? }))
         }
 
@@ -4015,6 +7329,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     label_id,
                     with_attachments,
                     priority_only,
+                    category,
                 } => {
                     // Asking for what has an attachment is asking a question
                     // about every message, and some of them have never been
@@ -4038,6 +7353,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             eprintln!("meron-core: judging {account}: {err:#}");
                         }
                     }
+                    // A category tab must not hide mail nobody has placed yet.
+                    if category.is_some() {
+                        let db = engine.db.lock().unwrap();
+                        if let Err(err) = meron_core::categories::rejudge(&db, &account, true) {
+                            eprintln!("meron-core: placing {account}: {err:#}");
+                        }
+                    }
                     store::get_recent_page_sorted(
                         &engine.db.lock().unwrap(),
                         &account,
@@ -4050,6 +7372,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                             label_id,
                             with_attachments,
                             priority_only,
+                            category: category.clone(),
                         },
                         request.sort(),
                     )?
@@ -4310,6 +7633,88 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 .write_all(&message.raw)
                 .with_context(|| format!("write message export {path}"))?;
             Ok(json!({ "saved": true, "size": message.raw.len() }))
+        }
+
+        // A whole folder, or the chosen messages, as one mboxrd file (#112).
+        // Written beside the target and renamed into place, so a failure half
+        // way never leaves a truncated file under the chosen name.
+        "messages.exportMbox" => {
+            let account = req_str(p, "account")?;
+            let folder =
+                canon_folder(&req_str(p, "folder").unwrap_or_else(|_| "INBOX".to_string()));
+            let path = req_str(p, "path")?;
+            let chosen: Vec<u32> = p
+                .get("uids")
+                .and_then(Value::as_array)
+                .map(|uids| uids.iter().filter_map(|uid| uid.as_u64()).map(|uid| uid as u32).collect())
+                .unwrap_or_default();
+            let mut uids = if chosen.is_empty() {
+                let listed = folder.clone();
+                engine
+                    .with_read_session(&account, |session| {
+                        let folder = listed.clone();
+                        Box::pin(async move { session.list_all_uids(&folder).await })
+                    })
+                    .await?
+                    .into_iter()
+                    .collect::<Vec<u32>>()
+            } else {
+                chosen
+            };
+            uids.sort_unstable();
+            uids.dedup();
+
+            let partial = format!("{path}.part");
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(0o600);
+            }
+            let written: anyhow::Result<(usize, u64)> = async {
+                let file = options
+                    .open(&partial)
+                    .with_context(|| format!("open mailbox export {path}"))?;
+                let mut output = std::io::BufWriter::new(file);
+                let stamp = chrono::Utc::now().timestamp();
+                let (mut exported, mut size) = (0usize, 0u64);
+                for batch in uids.chunks(50) {
+                    let batch = batch.to_vec();
+                    let fetched = folder.clone();
+                    let messages = engine
+                        .with_read_session(&account, |session| {
+                            let folder = fetched.clone();
+                            let batch = batch.clone();
+                            Box::pin(async move {
+                                session.fetch_raw_messages_for_copy(&folder, &batch).await
+                            })
+                        })
+                        .await?;
+                    for message in messages {
+                        meron_core::archive::write_mbox_entry(&mut output, &message.raw, stamp)
+                            .with_context(|| format!("write mailbox export {path}"))?;
+                        exported += 1;
+                        size += message.raw.len() as u64;
+                    }
+                }
+                output
+                    .into_inner()
+                    .map_err(|error| error.into_error())
+                    .and_then(|file| file.sync_all())
+                    .with_context(|| format!("write mailbox export {path}"))?;
+                std::fs::rename(&partial, &path)
+                    .with_context(|| format!("finish mailbox export {path}"))?;
+                Ok((exported, size))
+            }
+            .await;
+            match written {
+                Ok((exported, size)) => Ok(json!({ "saved": true, "exported": exported, "size": size })),
+                Err(error) => {
+                    let _ = std::fs::remove_file(&partial);
+                    Err(error)
+                }
+            }
         }
 
         "messages.read" => {
@@ -4881,6 +8286,30 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 }));
             }
 
+            // Within one account, a server that can copy on its own does so
+            // (Microsoft Graph, #141): the bytes never travel through here,
+            // and its session has already brought both folders up to date.
+            let graph_account = store::load_account(&engine.db.lock().unwrap(), &account)?
+                .is_some_and(|creds| creds.is_graph());
+            if graph_account && account == target_account {
+                let native = engine
+                    .with_write_session(&account, |session| {
+                        let (folder, target_folder, uids) =
+                            (folder.clone(), target_folder.clone(), uids.clone());
+                        Box::pin(async move { session.copy_within(&folder, &target_folder, &uids).await })
+                    })
+                    .await?;
+                if let Some(copied) = native {
+                    return Ok(json!({
+                        "ok": true,
+                        "copied": copied,
+                        "source_folder": folder,
+                        "target_account": target_account,
+                        "target_folder": target_folder
+                    }));
+                }
+            }
+
             let raw_messages = engine
                 .with_read_session(&account, |session| {
                     let folder = folder.clone();
@@ -5185,19 +8614,31 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             for dependent in &dependents {
                 engine.accounts.lock().await.remove(dependent);
                 engine.clear_pool(dependent);
-                let db = engine.db.lock().unwrap();
-                store::delete_account(&db, dependent)?;
+                let removal = store::delete_account(&engine.db.lock().unwrap(), dependent)?;
+                for source in removal.contact_sources.iter().chain(&removal.calendar_secrets) {
+                    let _ = secrets::delete(source);
+                }
             }
             engine.accounts.lock().await.remove(&id);
             // Drop any warm sessions: their creds are gone and must not be reused.
             engine.clear_pool(&id);
-            {
-                let db = engine.db.lock().unwrap();
-                store::delete_account(&db, &id)?;
+            let removal = store::delete_account(&engine.db.lock().unwrap(), &id)?;
+            // An address book's password is kept under the book's own id,
+            // and a CalDAV calendar's under its own key.
+            for source in removal.contact_sources.iter().chain(&removal.calendar_secrets) {
+                let _ = secrets::delete(source);
             }
             parse::remove_account_media(&parse::media_root(), &id);
             let _ = secrets::delete(&id);
-            Ok(json!({ "ok": true }))
+            // What the person wrote stays (ADR-0011); the caller says so.
+            Ok(json!({
+                "ok": true,
+                "kept": {
+                    "drafts": removal.kept_drafts,
+                    "scheduled": removal.kept_scheduled,
+                    "attempts": removal.kept_attempts,
+                },
+            }))
         }
 
         // Add a shared mailbox: an Exchange account the reader has been
@@ -5787,7 +9228,9 @@ async fn apply_rules_to_arrivals(
     arrivals: &[imap::MessageHeader],
 ) -> std::collections::HashSet<u32> {
     let mut handled = std::collections::HashSet::new();
-    let rules = stored_rules(engine);
+    // Rules the account's server already applies are not applied twice (#94).
+    let on_server = rules::server::on_server(&engine.db.lock().unwrap(), account);
+    let rules: Vec<rules::Rule> = stored_rules(engine).into_iter().filter(|r| !on_server.contains(&r.id)).collect();
     if rules.is_empty() || arrivals.is_empty() {
         return handled;
     }
@@ -5846,7 +9289,7 @@ async fn apply_oof_to_arrivals(engine: &Arc<Engine>, account: &str, headers: &[i
     let Ok(creds) = engine.ensure_valid_creds(account).await else {
         return;
     };
-    if creds.is_ews() || creds.is_graph() {
+    if creds.is_ews() || creds.is_graph() || creds.is_local_store() {
         return;
     }
     let oof = {
@@ -5927,14 +9370,545 @@ fn failed_send_json(row: &store::ScheduledSend, reason: &str) -> Value {
         "account": row.account,
         "subject": row.subject,
         "error": reason,
+        "uncertain": false,
     })
+}
+
+/// A scheduled message that may or may not have gone. Told apart from a
+/// refusal so the interface does not offer "send now" as if nothing had
+/// happened.
+fn uncertain_send_json(row: &store::ScheduledSend, reason: &str) -> Value {
+    json!({
+        "id": row.id,
+        "account": row.account,
+        "subject": row.subject,
+        "error": reason,
+        "uncertain": true,
+    })
+}
+
+/// How long settled send history is kept before it is forgotten. Doubt is
+/// never forgotten on a timer; see `outgoing::prune_settled`.
+const OUTGOING_HISTORY_SECONDS: i64 = 30 * 24 * 60 * 60;
+
+/// How one try at a scheduled message ended, for the watch and for
+/// "send now" alike.
+enum ScheduledOutcome {
+    /// Accepted by the server (whether or not the Sent copy was filed).
+    Sent,
+    /// Transmitted without an answer, or already transmitted by an earlier
+    /// try nobody recorded the end of. Carries the reason to show.
+    Uncertain(String),
+    /// Another caller is sending this very message right now (the watch and
+    /// "send now" at once, or a held reply let go as the watch reached it).
+    /// Nothing is settled yet: the row stays, and the one sending settles it.
+    InFlight,
+}
+
+/// What a send's answer means for its scheduled row. An "already attempted"
+/// answer is not a success: the earlier attempt may still be in flight, or
+/// may yet be refused, and dropping the row then would lose the message.
+fn scheduled_outcome_of(result: &Value) -> ScheduledOutcome {
+    let error = || result.get("error").and_then(Value::as_str).unwrap_or("outcome unknown").to_string();
+    match result.get("outcome").and_then(Value::as_str) {
+        Some("uncertain") => ScheduledOutcome::Uncertain(error()),
+        Some("already_attempted") => match result.get("state").and_then(Value::as_str) {
+            Some("accepted") | Some("archived") => ScheduledOutcome::Sent,
+            Some("sending") => ScheduledOutcome::InFlight,
+            _ => ScheduledOutcome::Uncertain(if result.get("error").and_then(Value::as_str).unwrap_or("").is_empty() {
+                "an earlier try of this message may already have gone".to_string()
+            } else {
+                error()
+            }),
+        },
+        _ => ScheduledOutcome::Sent,
+    }
+}
+
+/// Previewed rule runs waiting to be confirmed (#50).
+fn rule_runs() -> &'static rules::run::Registry {
+    static RUNS: std::sync::OnceLock<rules::run::Registry> = std::sync::OnceLock::new();
+    RUNS.get_or_init(Default::default)
+}
+
+/// Why an account's rules cannot run on its server through ManageSieve.
+fn sieve_unavailable(creds: &imap::Creds) -> Option<String> {
+    if creds.is_ews() || creds.is_graph() {
+        return Some("Exchange keeps its own server rules, which Oreneta does not edit yet".into());
+    }
+    if creds.is_local() {
+        return Some("a local archive has no server".into());
+    }
+    if creds.is_pop3() {
+        return Some("a POP3 account's rules run here: POP3 has no server rules".into());
+    }
+    if creds.password.is_empty() || creds.is_oauth() {
+        return Some("this account signs in without a password; its provider's own filters are not edited yet".into());
+    }
+    None
+}
+
+/// The script for an account from the stored rules, given what its server
+/// supports, with labels linked to this account's keywords.
+fn server_rule_plan(engine: &Arc<Engine>, account: &str, extensions: &[String]) -> rules::sieve::Plan {
+    let rules = stored_rules(engine);
+    let links = store::label_links(&engine.db.lock().unwrap()).unwrap_or_default();
+    let keyword = |label: &str| {
+        links.iter().find(|l| l.label_id == label && l.account_id == account).map(|l| l.remote_name.clone())
+    };
+    rules::sieve::plan(&rules, account, extensions, &keyword)
+}
+
+/// Batches with a worker sending them now, so carrying on twice cannot start
+/// a second one (#90).
+fn cloud_account(engine: &Engine, p: &Value) -> anyhow::Result<(meron_core::cloud::CloudAccount, String)> {
+    let account = meron_core::cloud::get(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+    let password = meron_core::secrets::load(&meron_core::cloud::secret_key(&account.id))?.password;
+    anyhow::ensure!(!password.is_empty(), "this cloud storage has no app password saved");
+    Ok((account, password))
+}
+
+fn cloud_uploads() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// Uploads in the background, reporting progress about every 256 KB and the
+/// end once, with what went wrong.
+fn spawn_cloud_upload(
+    out: Writer,
+    account: meron_core::cloud::CloudAccount,
+    password: String,
+    path: std::path::PathBuf,
+    upload_id: String,
+) {
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    cloud_uploads().lock().unwrap().insert(upload_id.clone(), cancel.clone());
+    let total = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<u64>();
+    let progress_out = out.clone();
+    let progress_id = upload_id.clone();
+    tokio::spawn(async move {
+        while let Some(done) = rx.recv().await {
+            emit(&progress_out, "cloud.progress", json!({ "upload_id": progress_id, "done": done, "total": total })).await;
+        }
+    });
+    tokio::spawn(async move {
+        let result = tokio::task::spawn_blocking(move || {
+            let mut last = 0u64;
+            meron_core::cloud::upload(&account, &password, &path, &cancel, &mut |done| {
+                if done == total || done - last >= 256 * 1024 {
+                    last = done;
+                    let _ = tx.send(done);
+                }
+            })
+        })
+        .await;
+        cloud_uploads().lock().unwrap().remove(&upload_id);
+        let detail = match result {
+            Ok(Ok(remote)) => json!({ "upload_id": upload_id, "path": remote }),
+            Ok(Err(err)) => json!({ "upload_id": upload_id, "error": { "message": err.to_string(), "detail": err } }),
+            Err(err) => json!({ "upload_id": upload_id, "error": { "message": err.to_string() } }),
+        };
+        emit(&out, "cloud.uploaded", detail).await;
+    });
+}
+
+fn chat_sessions() -> &'static std::sync::Mutex<std::collections::HashMap<String, tokio::sync::mpsc::UnboundedSender<meron_core::chat::xmpp::Command>>> {
+    static SESSIONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, tokio::sync::mpsc::UnboundedSender<meron_core::chat::xmpp::Command>>>> =
+        std::sync::OnceLock::new();
+    SESSIONS.get_or_init(Default::default)
+}
+
+/// Each chat account's last known connection state, for the app to show.
+fn chat_status() -> &'static std::sync::Mutex<std::collections::HashMap<String, Value>> {
+    static STATUS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Value>>> =
+        std::sync::OnceLock::new();
+    STATUS.get_or_init(Default::default)
+}
+
+fn stop_chat(id: &str) {
+    if let Some(tx) = chat_sessions().lock().unwrap().remove(id) {
+        let _ = tx.send(meron_core::chat::xmpp::Command::Stop);
+    }
+}
+
+/// (Re)starts an account's chat connection.
+/// The scheduled backups' password, if one is saved.
+fn backup_password() -> anyhow::Result<Option<String>> {
+    let password = secrets::load(meron_core::backup_schedule::SECRET_KEY)?.password;
+    Ok(Some(password).filter(|p| !p.is_empty()))
+}
+
+fn backup_schedule_status(engine: &Arc<Engine>) -> anyhow::Result<Value> {
+    let status = meron_core::backup_schedule::status(&engine.db.lock().unwrap())?;
+    let mut value = serde_json::to_value(status)?;
+    value["password_saved"] = json!(backup_password().ok().flatten().is_some());
+    value["running"] = json!(BACKUP_RUNNING.load(std::sync::atomic::Ordering::SeqCst));
+    Ok(value)
+}
+
+static BACKUP_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// One scheduled backup, written and checked off the reactor.
+async fn run_scheduled_backup(engine: &Arc<Engine>) -> anyhow::Result<meron_core::backup_schedule::Outcome> {
+    let password = backup_password()?.unwrap_or_default();
+    let db = engine.db.clone();
+    BACKUP_RUNNING.store(true, std::sync::atomic::Ordering::SeqCst);
+    let result = tokio::task::spawn_blocking(move || {
+        meron_core::backup_schedule::run(
+            &db,
+            &store::app_dir(),
+            &meron_core::parse::media_root(),
+            &password,
+            &std::env::var("MERON_APP_VERSION").unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string()),
+            now_seconds(),
+            if cfg!(test) { 10 } else { meron_core::profile_archive::WORK_FACTOR },
+        )
+    })
+    .await;
+    BACKUP_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    result?
+}
+
+/// Checks every few minutes whether a scheduled backup is due (#173). The
+/// first check waits a little, so a missed run never slows startup.
+fn spawn_backup_schedule(engine: Arc<Engine>, out: Writer) {
+    if let Err(err) = meron_core::backup_schedule::recover(&engine.db.lock().unwrap()) {
+        eprintln!("meron-core: could not tidy scheduled backups: {err:#}");
+    }
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        let mut ticker = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            ticker.tick().await;
+            let due = {
+                let db = engine.db.lock().unwrap();
+                meron_core::backup_schedule::status(&db)
+                    .ok()
+                    .and_then(|s| s.next_run)
+                    .is_some_and(|at| at <= now_seconds())
+            };
+            if !due {
+                continue;
+            }
+            emit(&out, "backup.scheduled", json!({ "state": "running" })).await;
+            let result = run_scheduled_backup(&engine).await;
+            if let Err(err) = &result {
+                eprintln!("meron-core: scheduled backup failed: {err:#}");
+            }
+            let status = backup_schedule_status(&engine).unwrap_or(Value::Null);
+            emit(&out, "backup.scheduled", json!({ "state": if result.is_ok() { "done" } else { "failed" }, "status": status })).await;
+        }
+    });
+}
+
+fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()> {
+    stop_chat(id);
+    let account = meron_core::chat::account(&engine.db.lock().unwrap(), id)?;
+    let password = secrets::load(&meron_core::chat::secret_key(id))?.password;
+    anyhow::ensure!(!password.is_empty(), "this chat account has no password saved");
+    let connector = meron_core::chat::xmpp::connector(&account, false)?;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    chat_sessions().lock().unwrap().insert(id.to_string(), tx);
+    // Events leave the session through a channel to the async writer.
+    let (etx, mut erx) = tokio::sync::mpsc::unbounded_channel::<(String, Value)>();
+    tokio::spawn(async move {
+        while let Some((name, mut detail)) = erx.recv().await {
+            let account = detail["account"].as_str().unwrap_or_default().to_string();
+            match name.as_str() {
+                "chat.status" if !account.is_empty() => {
+                    chat_status().lock().unwrap().insert(account, detail.clone());
+                }
+                "chat.room" => {
+                    let room = detail["room"].as_str().unwrap_or_default().to_string();
+                    chat_room_status().lock().unwrap().insert((account, room), detail.clone());
+                }
+                "chat.uploaded" => {
+                    chat_uploads().lock().unwrap().remove(detail["upload_id"].as_str().unwrap_or_default());
+                }
+                // An invitation's room password goes to the keychain; the app
+                // only hears that there is one.
+                "chat.invitation" => {
+                    if let Some(password) = detail.get("password").and_then(Value::as_str).filter(|p| !p.is_empty()) {
+                        let room = detail["room"].as_str().unwrap_or_default().to_string();
+                        if let Err(err) = store_room_password(&account, &room, password) {
+                            eprintln!("meron-core: could not keep a room password: {err:#}");
+                        }
+                    }
+                    if let Some(map) = detail.as_object_mut() {
+                        map.remove("password");
+                    }
+                }
+                _ => {}
+            }
+            emit(&out, &name, detail).await;
+        }
+    });
+    let emit_fn: meron_core::chat::xmpp::Emit = Arc::new(move |name: &str, detail: Value| {
+        let _ = etx.send((name.to_string(), detail));
+    });
+    let account_id = id.to_string();
+    let options = meron_core::chat::xmpp::Options {
+        room_password: Arc::new(move |room: &str| {
+            secrets::load(&meron_core::chat::room_secret_key(&account_id, room))
+                .ok()
+                .map(|s| s.password)
+                .filter(|p| !p.is_empty())
+        }),
+        file_roots: Vec::new(),
+    };
+    tokio::spawn(meron_core::chat::xmpp::run(account, password, engine.db.clone(), connector, rx, emit_fn, options));
+    Ok(())
+}
+
+/// Hands a message to its account's connection; with none, it failed.
+fn chat_dispatch(engine: &Arc<Engine>, message: &meron_core::chat::ChatMessage) {
+    let sent = chat_sessions().lock().unwrap().get(&message.account).is_some_and(|tx| {
+        tx.send(meron_core::chat::xmpp::Command::Send {
+            conversation: message.conversation.clone(),
+            id: message.id.clone(),
+            body: message.body.clone(),
+            group: message.kind == meron_core::chat::KIND_GROUP,
+            file: message.file_url.clone(),
+        })
+        .is_ok()
+    });
+    if !sent {
+        let _ = meron_core::chat::set_state(&engine.db.lock().unwrap(), &message.account, &message.id, "failed");
+    }
+}
+
+/// Each room's last known state (joining, joined, out, error), by account
+/// and room, for the app to show.
+fn chat_room_status() -> &'static std::sync::Mutex<std::collections::HashMap<(String, String), Value>> {
+    static STATUS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<(String, String), Value>>> =
+        std::sync::OnceLock::new();
+    STATUS.get_or_init(Default::default)
+}
+
+/// Chat uploads running, each with its cancel flag.
+fn chat_uploads() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// A room's password goes to the keychain, never to the store.
+fn store_room_password(account: &str, room: &str, password: &str) -> anyhow::Result<()> {
+    secrets::store(
+        &meron_core::chat::room_secret_key(account, room),
+        &secrets::Secrets { password: password.to_string(), ..Default::default() },
+    )
+}
+
+struct TranslationDownload {
+    cancel: std::sync::atomic::AtomicBool,
+    done: std::sync::atomic::AtomicU64,
+    total: u64,
+}
+
+fn translation_downloads() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<TranslationDownload>>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<TranslationDownload>>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+fn translation_pair(p: &Value) -> anyhow::Result<&'static meron_core::translation::Pair> {
+    let (from, to) = (req_str(p, "from")?, req_str(p, "to")?);
+    meron_core::translation::pair(&from, &to).with_context(|| format!("there is no model from {from} to {to}"))
+}
+
+/// One download per model at a time; progress is reported about every
+/// megabyte and the end, with what went wrong, once.
+fn spawn_translation_download(out: Writer, pair: &'static meron_core::translation::Pair) {
+    let key = pair.key();
+    let state = Arc::new(TranslationDownload {
+        cancel: std::sync::atomic::AtomicBool::new(false),
+        done: std::sync::atomic::AtomicU64::new(0),
+        total: pair.size(),
+    });
+    {
+        let mut running = translation_downloads().lock().unwrap();
+        if running.contains_key(&key) {
+            return;
+        }
+        running.insert(key.clone(), state.clone());
+    }
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(u64, u64)>();
+    let progress_out = out.clone();
+    let progress_key = key.clone();
+    tokio::spawn(async move {
+        while let Some((done, total)) = rx.recv().await {
+            emit(&progress_out, "translation.progress", json!({ "key": progress_key, "done": done, "total": total })).await;
+        }
+    });
+    tokio::spawn(async move {
+        let worker = state.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            let mut last = 0u64;
+            meron_core::translation::download(
+                &meron_core::translation::models_dir(),
+                pair,
+                &meron_core::translation::Http,
+                &worker.cancel,
+                meron_core::translation::DEFAULT_QUOTA_BYTES,
+                &mut |done, total| {
+                    worker.done.store(done, std::sync::atomic::Ordering::Relaxed);
+                    if done == 0 || done == total || done - last >= 1024 * 1024 {
+                        last = done;
+                        let _ = tx.send((done, total));
+                    }
+                },
+            )
+        })
+        .await;
+        translation_downloads().lock().unwrap().remove(&key);
+        let error = match result {
+            Ok(Ok(())) => Value::Null,
+            Ok(Err(err)) => json!({ "message": err.to_string(), "detail": err }),
+            Err(err) => json!({ "message": err.to_string(), "detail": { "code": "disk", "message": err.to_string() } }),
+        };
+        emit(&out, "translation.done", json!({ "key": key, "error": error })).await;
+    });
+}
+
+fn merge_running() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// What one send's answer means for a mailing's message.
+fn merge_outcome(result: anyhow::Result<Value>) -> meron_core::merge::Outcome {
+    use meron_core::merge::Outcome;
+    match result {
+        Ok(answer) => match scheduled_outcome_of(&answer) {
+            ScheduledOutcome::Sent => Outcome::Accepted,
+            ScheduledOutcome::Uncertain(reason) => Outcome::Uncertain(reason),
+            ScheduledOutcome::InFlight => Outcome::Uncertain("another send of this message was under way".into()),
+        },
+        Err(err) => {
+            let reason = format!("{err:#}");
+            if meron_core::merge::is_deferral(&reason) {
+                Outcome::Deferred(reason)
+            } else {
+                Outcome::Rejected(reason)
+            }
+        }
+    }
+}
+
+/// Sends a mailing's messages one at a time, spaced, for as long as it is
+/// sending. Each message settles from its own answer before the next goes.
+fn spawn_merge(engine: Arc<Engine>, out: Writer, id: String) {
+    if !merge_running().lock().unwrap().insert(id.clone()) {
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            let (next, batch) = {
+                let db = engine.db.lock().unwrap();
+                let next = meron_core::merge::claim_next(&db, &id, now_seconds());
+                (next, meron_core::merge::batch(&db, &id))
+            };
+            let (Ok(Some(item)), Ok(Some(batch))) = (next, batch) else { break };
+            let to = if item.name.trim().is_empty() {
+                item.to.clone()
+            } else {
+                format!("\"{}\" <{}>", item.name.replace('"', ""), item.to)
+            };
+            let request = json!({
+                "account": batch.account,
+                "from": batch.from,
+                "to": to,
+                "subject": item.subject,
+                "body": item.body,
+                "message_id": item.message_id,
+                "attempt_id": item.message_id,
+            });
+            let outcome = merge_outcome(perform_send(&engine, &request).await);
+            {
+                let db = engine.db.lock().unwrap();
+                if let Err(err) = meron_core::merge::settle(&db, &id, item.index, outcome, now_seconds()) {
+                    eprintln!("meron-core: recording a mailing's message: {err:#}");
+                }
+            }
+            emit(&out, "merge.changed", json!({ "id": id })).await;
+            tokio::time::sleep(std::time::Duration::from_secs(batch.spacing.max(0) as u64)).await;
+        }
+        merge_running().lock().unwrap().remove(&id);
+        emit(&out, "merge.changed", json!({ "id": id })).await;
+    });
+}
+
+/// A scheduled message sent more than five minutes after its hour went late:
+/// the app was not running, or the computer was asleep.
+fn sent_late(due_at: i64, now: i64) -> bool {
+    now - due_at > 300
+}
+
+/// Removes what must never be stored with a message waiting to go.
+fn strip_send_secrets(message: &mut Value) {
+    if let Some(object) = message.as_object_mut() {
+        object.remove("passphrase");
+    }
+}
+
+/// What a scheduled row's earlier attempt, if any, already settles.
+///
+/// Pure, so the rule can be tested without a server: a row whose attempt
+/// was accepted has gone, however the process ended afterwards; one whose
+/// attempt is uncertain stays uncertain; anything else is tried.
+fn scheduled_send_precheck(earlier: Option<&outgoing::OutgoingAttempt>) -> Option<ScheduledOutcome> {
+    let earlier = earlier?;
+    match earlier.state {
+        outgoing::AttemptState::Accepted | outgoing::AttemptState::Archived => Some(ScheduledOutcome::Sent),
+        // Startup turns every attempt a dead process left "sending" into
+        // "uncertain" before the watch starts, so one still sending now is in
+        // flight in this process: the caller that started it settles it.
+        outgoing::AttemptState::Sending => Some(ScheduledOutcome::InFlight),
+        outgoing::AttemptState::Uncertain => Some(ScheduledOutcome::Uncertain(if earlier.error.is_empty() {
+            "the application stopped while this message was being sent".to_string()
+        } else {
+            earlier.error.clone()
+        })),
+        outgoing::AttemptState::Rejected | outgoing::AttemptState::Resolved => None,
+    }
+}
+
+/// Sends a scheduled message once, looking first at what an earlier try
+/// already settled. A row still present after an accepted send is a crash
+/// between sending and forgetting, not a message that never went: it is
+/// reported as sent, never sent again.
+async fn send_scheduled(
+    engine: &Arc<Engine>,
+    row: &store::ScheduledSend,
+    message: &Value,
+    resend: bool,
+) -> anyhow::Result<ScheduledOutcome> {
+    if !resend {
+        let earlier = outgoing::attempt(&engine.db.lock().unwrap(), &row.id)?;
+        if let Some(settled) = scheduled_send_precheck(earlier.as_ref()) {
+            return Ok(settled);
+        }
+    }
+    let mut request = message.clone();
+    if let Some(object) = request.as_object_mut() {
+        object.insert("attempt_id".to_string(), Value::String(row.id.clone()));
+        object.insert("attempt_kind".to_string(), Value::String("scheduled".to_string()));
+        object.insert("resend".to_string(), Value::Bool(resend));
+    }
+    let result = perform_send(engine, &request).await?;
+    Ok(scheduled_outcome_of(&result))
 }
 
 /// One scheduled message as the interface reads it.
 ///
 /// The payload is left out: it is the message itself, sometimes with megabytes
 /// of attachment, and a list of what is waiting has no use for it.
-fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
+fn scheduled_send_json(row: &store::ScheduledSend, uncertain: bool) -> Value {
     json!({
         "id": row.id,
         "account": row.account,
@@ -5949,6 +9923,9 @@ fn scheduled_send_json(row: &store::ScheduledSend) -> Value {
         // Whether the watch has stopped trying, so the interface can say so
         // rather than leave a failed message looking merely late.
         "gaveUp": row.attempts >= store::MAX_SEND_ATTEMPTS,
+        // Whether it stopped because nobody knows if the message went: the
+        // one case where "send now" is not the obvious next thing.
+        "uncertain": uncertain,
     })
 }
 
@@ -5962,6 +9939,118 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
         meron_core::graph::mail::guard_command(&engine.db.lock().unwrap(),"send",p)?;
         let account = req_str(p, "account")?;
         let to = req_str(p, "to")?;
+        // Every send is written down before it goes and settled after, so a
+        // crash, a lost connection or a failed Sent copy can be told apart
+        // from a refusal later. The id is the scheduled row's for a scheduled
+        // message and the Message-ID for an immediate one, so trying the
+        // same message again finds its own earlier attempt.
+        let attempt_kind = match p.get("attempt_kind").and_then(Value::as_str) {
+            Some("scheduled") => outgoing::AttemptKind::Scheduled,
+            _ => outgoing::AttemptKind::Now,
+        };
+        let attempt_id = {
+            let explicit = req_str(p, "attempt_id").unwrap_or_default();
+            let message_id = req_str(p, "message_id").unwrap_or_default();
+            if !explicit.trim().is_empty() {
+                explicit.trim().to_string()
+            } else if !message_id.trim().is_empty() {
+                message_id.trim().to_string()
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            }
+        };
+        let resend = p.get("resend").and_then(Value::as_bool).unwrap_or(false);
+        {
+            let db = engine.db.lock().unwrap();
+            // The same message tried again while its earlier attempt may
+            // already have reached the recipient is not retried on a hunch:
+            // the caller has to say so, having told the reader what it means.
+            if let Some(earlier) = outgoing::attempt(&db, &attempt_id)? {
+                if earlier.state.may_have_gone() && !resend {
+                    return Ok(json!({
+                        "ok": false,
+                        "outcome": "already_attempted",
+                        "attempt_id": attempt_id,
+                        "state": earlier.state.as_str(),
+                        "error": earlier.error,
+                    }));
+                }
+            }
+            outgoing::begin_attempt(
+                &db,
+                &attempt_id,
+                &account,
+                attempt_kind,
+                &req_str(p, "message_id").unwrap_or_default(),
+                p,
+                now_seconds(),
+            )?;
+        }
+        match perform_send_transaction(engine, p, &account, &to).await {
+            Ok(SendTransaction { raw, archived_by_server }) => {
+                {
+                    let db = engine.db.lock().unwrap();
+                    outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
+                }
+                // Finalize the Sent view. For Gmail/Outlook defaults this only
+                // refreshes the provider-created copy; other accounts get Meron's
+                // best-effort APPEND plus refresh. The mail already left, so
+                // Sent-folder issues are recorded, never reported as "send failed".
+                let outcome = match append_to_sent(engine, &account, &raw).await {
+                    Ok(()) => {
+                        outgoing::mark_archived(&engine.db.lock().unwrap(), &attempt_id, now_seconds())?;
+                        "archived"
+                    }
+                    Err(err) if archived_by_server => {
+                        // The server filed its own copy; only the local view
+                        // failed to refresh, which the next sync will mend.
+                        eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
+                        outgoing::mark_archived(&engine.db.lock().unwrap(), &attempt_id, now_seconds())?;
+                        "archived"
+                    }
+                    Err(err) => {
+                        eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
+                        outgoing::mark_archive_failed(
+                            &engine.db.lock().unwrap(),
+                            &attempt_id,
+                            &format!("{err:#}"),
+                            now_seconds(),
+                        )?;
+                        "accepted"
+                    }
+                };
+                Ok(json!({ "ok": true, "outcome": outcome, "attempt_id": attempt_id }))
+            }
+            Err(err) if smtp::is_uncertain(&err) => {
+                let reason = format!("{err:#}");
+                outgoing::mark_uncertain(&engine.db.lock().unwrap(), &attempt_id, &reason, now_seconds())?;
+                Ok(json!({ "ok": false, "outcome": "uncertain", "attempt_id": attempt_id, "error": reason }))
+            }
+            Err(err) => {
+                outgoing::mark_rejected(&engine.db.lock().unwrap(), &attempt_id, &format!("{err:#}"), now_seconds())?;
+                Err(err)
+            }
+        }
+}
+
+/// What a completed transaction hands back: the message as it should be
+/// filed in Sent, and whether the server already filed it itself.
+struct SendTransaction {
+    raw: Vec<u8>,
+    archived_by_server: bool,
+}
+
+/// Builds, protects and transmits one message. Everything up to the server's
+/// answer; nothing about recording it, which [`perform_send`] does around
+/// this so the record is kept whichever way this returns.
+async fn perform_send_transaction(
+    engine: &Arc<Engine>,
+    p: &Value,
+    account: &str,
+    to: &str,
+) -> anyhow::Result<SendTransaction> {
+        let account = account.to_string();
+        let to = to.to_string();
         let cc = req_str(p, "cc").unwrap_or_default();
         let bcc = req_str(p, "bcc").unwrap_or_default();
         let subject = req_str(p, "subject").unwrap_or_default();
@@ -6090,24 +10179,30 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             }
         };
         let creds = engine.ensure_valid_creds(&account).await?;
+        if creds.is_local() {
+            anyhow::bail!("the local archive cannot send mail: choose one of your accounts as the sender");
+        }
         let (from_addr, sender_name) =
             resolve_send_from(engine, &account, &creds, &requested_from)?;
-        if creds.is_ews() {
-            // Exchange submits the MIME itself and files the Sent copy in
-            // the same call, so there is no separate append.
+        if creds.is_ews() || creds.is_graph() {
+            // Exchange and Microsoft Graph (#143) submit the MIME themselves
+            // and file the Sent copy, so there is no separate append.
             //
             // The Bcc header is written into the message here, unlike the
             // SMTP path: SMTP carries blind recipients in the envelope,
             // while Exchange has only the MIME to read them from. It
             // strips the header before delivering, so recipients still do
             // not see the list.
-            let raw = smtp::build_message(
+            //
+            // Signing and encryption are applied here too. Before, this branch
+            // built the MIME without them, so a message the sender asked to
+            // encrypt went to Exchange in the clear.
+            let raw = smtp::build_submission(
                 &sender_name,
                 &from_addr,
                 &to,
                 &cc,
                 &bcc,
-                true,
                 &subject,
                 &body,
                 &html,
@@ -6116,25 +10211,23 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                 &references,
                 &reply_to,
                 &message_id,
+                protection.as_ref(),
             )?;
             engine
                 .with_write_session(&account, |session| {
                     let raw = raw.clone();
                     Box::pin(async move { session.send_mime(raw).await })
                 })
-                .await?;
-            // The server files its own copy, so this only refreshes the
-            // local Sent view — the upload is suppressed for Exchange in
-            // `should_append_sent_copy`.
-            if let Err(err) = append_to_sent(engine, &account, &raw).await {
-                eprintln!("meron-core: Sent refresh failed for {account}: {err:#}");
-            }
-            return Ok(json!({ "ok": true }));
+                .await
+                .map_err(if creds.is_graph() { classify_graph_send_error } else { classify_ews_send_error })?;
+            // The server files its own copy, so the caller's Sent step only
+            // refreshes the local view — the upload is suppressed for
+            // Exchange in `should_append_sent_copy`.
+            return Ok(SendTransaction { raw, archived_by_server: true });
         }
-        // What the sender asked for, with the keys it needs. Built before the
-        // Exchange branch above would have returned, so a request to protect a
-        // message on an account that cannot do it fails loudly rather than
-        // sending it in the clear.
+        // What the sender asked for, with the keys it needs: built before
+        // either branch, and applied by both, so no path sends in the clear
+        // what was meant to be protected.
         let raw = smtp::send(
             &creds,
             &from_addr,
@@ -6153,15 +10246,54 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             protection.as_ref(),
         )
         .await?;
-        // Finalize the Sent view. For Gmail/Outlook defaults this only
-        // refreshes the provider-created copy; other accounts get Meron's
-        // best-effort APPEND plus refresh. The mail already left via SMTP,
-        // so Sent-folder issues should not surface as "send failed".
-        if let Err(err) = append_to_sent(engine, &account, &raw).await {
-            eprintln!("meron-core: APPEND to Sent failed for {account}: {err:#}");
+        Ok(SendTransaction { raw, archived_by_server: false })
+}
+
+/// An Exchange submission that failed without a verdict.
+///
+/// EWS submits and files in one call, so there is no data phase to watch:
+/// a SOAP fault or a refused request is a refusal, while a connection that
+/// broke or a reply that never came after the request went out leaves the
+/// same doubt as a lost SMTP reply, and is marked the same way.
+fn classify_ews_send_error(err: anyhow::Error) -> anyhow::Error {
+    let transport_lost = err.chain().any(|cause| {
+        cause.downcast_ref::<std::io::Error>().is_some()
+            || cause.downcast_ref::<tokio::time::error::Elapsed>().is_some()
+            || cause
+                .downcast_ref::<ureq::Error>()
+                .is_some_and(|e| matches!(e, ureq::Error::Io(_) | ureq::Error::Timeout(_)))
+    });
+    if transport_lost {
+        err.context(smtp::UncertainSend)
+    } else {
+        err
+    }
+}
+
+/// A Microsoft Graph submission that failed (#143).
+///
+/// sendMail answers 202 when it accepts a message. A connection lost after
+/// the request went out, or a 5xx (a gateway can time out after Microsoft
+/// accepted it), leaves the outcome unknown: marked like a lost SMTP reply and
+/// never retried. A 4xx, a throttle or a message refused before sending as too
+/// large is a refusal: nothing was accepted.
+fn classify_graph_send_error(err: anyhow::Error) -> anyhow::Error {
+    use meron_core::graph::ErrorKind;
+    let kind = err
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<meron_core::graph::Error>())
+        .map(|e| e.kind);
+    match kind {
+        Some(ErrorKind::Uncertain | ErrorKind::Unavailable) => err.context(smtp::UncertainSend),
+        Some(ErrorKind::TooLarge) => err.context(format!(
+            "too large to send through Microsoft Graph (limit {} MB including attachments)",
+            meron_core::graph::MAX_SEND_REQUEST / (1024 * 1024)
+        )),
+        Some(ErrorKind::ConsentRequired) => {
+            err.context("this account does not allow sending yet; allow it in the account settings")
         }
-        Ok(json!({ "ok": true }))
-    
+        _ => err,
+    }
 }
 
 fn req_str(params: &Value, key: &str) -> anyhow::Result<String> {

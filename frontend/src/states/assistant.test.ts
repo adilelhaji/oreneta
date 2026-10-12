@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
-import { assistant$, hydrateAssistant, parseAssistantResponse, resetAssistantProvider, sanitizeAssistantConfig } from './assistant'
+import { assistant$, assistantEnabled$, hydrateAssistant, parseAssistantResponse, resetAssistantProvider, sanitizeAssistantConfig } from './assistant'
 
 describe('assistant provider state', () => {
   beforeEach(() => {
@@ -35,5 +35,21 @@ describe('assistant provider state', () => {
       warnings: ['Some provider sources were malformed and were ignored.', 'Some provider task suggestions were malformed and were ignored.'],
     })
     expect(parseAssistantResponse('plain provider response')).toEqual({ text: 'plain provider response', sources: [], tasks: [], warnings: [] })
+  })
+
+  it('is off until turned on, and remembers that it was', () => {
+    hydrateAssistant({})
+    expect(assistantEnabled$.get()).toBe(false)
+    hydrateAssistant({ assistant_enabled: 'on' })
+    expect(assistantEnabled$.get()).toBe(true)
+    hydrateAssistant({ assistant_enabled: 'yes please' })
+    expect(assistantEnabled$.get()).toBe(false)
+  })
+
+  it('reads JSON a model fenced as code, and nothing beyond text, sources and tasks', () => {
+    const result = parseAssistantResponse(
+      '```json\n{"text":"Done","actions":[{"send":"x@evil.test"}],"sources":[{"account_id":"a1","message_id":"m1"}]}\n```',
+    )
+    expect(result).toEqual({ text: 'Done', sources: [{ account_id: 'a1', message_id: 'm1' }], tasks: [], warnings: [] })
   })
 })

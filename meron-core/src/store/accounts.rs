@@ -767,36 +767,135 @@ pub fn shared_mailboxes_of(conn: &Connection, parent_id: &str) -> Result<Vec<Str
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-pub fn delete_account(conn: &Connection, id: &str) -> Result<()> {
+/// Per-account tables removed with the account (ADR-0011), by the column
+/// that names the account. `store::tests` fails if a table with an account
+/// column is in neither this list nor [`KEPT_ON_ACCOUNT_REMOVAL`].
+pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
+    ("accounts", "id"),
+    ("folders", "account"),
+    ("tasks", "account"),
+    ("messages", "account"),
+    ("mail_search_hits", "account"),
+    ("folder_state", "account"),
+    ("ews_item_ids", "account"),
+    ("graph_profiles", "account"),
+    ("graph_folders", "account"),
+    ("graph_items", "account"),
+    ("graph_memberships", "account"),
+    ("graph_delta", "account"),
+    ("graph_rounds", "account"),
+    ("graph_staged_items", "account"),
+    ("graph_round_links", "account"),
+    ("calendar_events", "account"),
+    ("calendars", "account"),
+    ("calendar_reminders_fired", "account"),
+    ("subscriptions", "account"),
+    ("observed_mail_identities", "account"),
+    ("account_secrets", "account_id"),
+    ("snoozed_threads", "account"),
+    ("thread_labels", "account"),
+    ("label_links", "account_id"),
+    ("rules", "account"),
+    ("rule_log", "account"),
+    ("correspondents", "account"),
+    ("sender_priority", "account"),
+    ("sender_spam", "account"),
+    ("spam_triggers", "account"),
+    ("spam_judgments", "account"),
+    ("oof_replied", "account"),
+    ("contact_sources", "account"),
+    ("people", "account"),
+    // The local archive's original messages (ADR-0014).
+    ("archive_messages", "account"),
+    ("caldav_objects", "account"),
+    ("invitation_answers", "account"),
+    // Inbox categories (ADR-0023): the reader's corrections for this account.
+    ("category_threads", "account"),
+    ("category_senders", "account"),
+    // Waiting for a reply (ADR-0025).
+    ("awaiting_replies", "account"),
+    // Personalized mailings (ADR-0026); their messages go just before.
+    ("merge_batches", "account"),
+    // Which rules run on the account's server (ADR-0027).
+    ("server_rules", "account"),
+    // Blocked and allowed senders (#50).
+    ("sender_lists", "account"),
+    // Messages allowed to load trackers (ADR-0029).
+    ("tracker_exceptions", "account"),
+    // What a POP3 account downloaded, and when it deletes from the server (#97).
+    ("pop3_seen", "account"),
+    ("pop3_policy", "account"),
+];
+
+/// What the person wrote, kept when the account is removed (ADR-0011): an
+/// unsent draft, a scheduled send, and the record of a send whose outcome
+/// may be uncertain (#29). None of it is ever sent once the account is gone.
+pub const KEPT_ON_ACCOUNT_REMOVAL: &[&str] = &["local_drafts", "scheduled_sends", "outgoing_attempts"];
+
+/// What an account removal left behind and took with it.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct AccountRemoval {
+    /// Contact sources removed with the account; their passwords live in the
+    /// keyring under these ids and are the caller's to delete.
+    pub contact_sources: Vec<String>,
+    /// Keychain entries of the account's CalDAV calendars (ADR-0018), also
+    /// the caller's to delete.
+    pub calendar_secrets: Vec<String>,
+    pub kept_drafts: i64,
+    pub kept_scheduled: i64,
+    pub kept_attempts: i64,
+}
+
+pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
     let tx = conn.unchecked_transaction()?;
-    tx.execute("DELETE FROM accounts WHERE id = ?1", params![id])?;
-    tx.execute("DELETE FROM folders WHERE account = ?1", params![id])?;
-    tx.execute("DELETE FROM messages WHERE account = ?1", params![id])?;
-    tx.execute(
-        "DELETE FROM mail_search_hits WHERE account = ?1",
-        params![id],
-    )?;
-    tx.execute("DELETE FROM folder_state WHERE account = ?1", params![id])?;
-    tx.execute("DELETE FROM ews_item_ids WHERE account = ?1", params![id])?;
-    for table in ["graph_profiles", "graph_folders", "graph_items", "graph_memberships", "graph_delta", "graph_rounds", "graph_staged_items", "graph_round_links"] {
-        tx.execute(&format!("DELETE FROM {table} WHERE account = ?1"), params![id])?;
+    let mut removal = AccountRemoval::default();
+    {
+        let mut stmt = tx.prepare("SELECT id FROM contact_sources WHERE account = ?1")?;
+        removal.contact_sources = stmt
+            .query_map(params![id], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
     }
+    removal.calendar_secrets = crate::calendar::caldav::calendar_ids(&tx, id)?
+        .iter()
+        .map(|calendar| crate::calendar::caldav::secret_key(id, calendar))
+        .collect();
     tx.execute(
-        "DELETE FROM calendar_events WHERE account = ?1",
+        "DELETE FROM person_links WHERE person_id IN (SELECT id FROM people WHERE account = ?1)",
         params![id],
     )?;
-    tx.execute("DELETE FROM calendars WHERE account = ?1", params![id])?;
-    tx.execute("DELETE FROM subscriptions WHERE account = ?1", params![id])?;
+    // A person's addresses and numbers have no account column of their own.
+    for child in ["person_emails", "person_phones"] {
+        tx.execute(
+            &format!("DELETE FROM {child} WHERE person_id IN (SELECT id FROM people WHERE account = ?1)"),
+            params![id],
+        )?;
+    }
+    // A mailing's messages have no account column of their own (ADR-0026).
     tx.execute(
-        "DELETE FROM observed_mail_identities WHERE account = ?1",
+        "DELETE FROM merge_items WHERE batch_id IN (SELECT id FROM merge_batches WHERE account = ?1)",
         params![id],
     )?;
+    for (table, column) in REMOVED_WITH_ACCOUNT {
+        tx.execute(&format!("DELETE FROM {table} WHERE {column} = ?1"), params![id])?;
+    }
+    // An account's id is its address, so adding the same address again would
+    // otherwise send these on its own, at whatever hour they come due. They
+    // stay, given up, for the person to send or delete by hand.
     tx.execute(
-        "DELETE FROM account_secrets WHERE account_id = ?1",
-        params![id],
+        "UPDATE scheduled_sends SET attempts = ?2, last_error = ?3 WHERE account = ?1",
+        params![
+            id,
+            crate::store::MAX_SEND_ATTEMPTS,
+            "the account was removed, so this was not sent"
+        ],
     )?;
+    let count = |sql: &str| -> rusqlite::Result<i64> { tx.query_row(sql, params![id], |row| row.get(0)) };
+    // A deleted draft is a tombstone, not something to tell the person about.
+    removal.kept_drafts = count("SELECT COUNT(*) FROM local_drafts WHERE account = ?1 AND deleted = 0")?;
+    removal.kept_scheduled = count("SELECT COUNT(*) FROM scheduled_sends WHERE account = ?1")?;
+    removal.kept_attempts = count("SELECT COUNT(*) FROM outgoing_attempts WHERE account = ?1")?;
     tx.commit()?;
-    Ok(())
+    Ok(removal)
 }
 
 /// Load mail accounts (engine = 'mail') and their connection creds for IMAP/IDLE.

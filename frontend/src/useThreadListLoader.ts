@@ -4,6 +4,7 @@ import { kanban$ } from './states/kanban'
 import { loadThreads } from './states/mail'
 import { settings$, sortParam } from './states/settings'
 import { filterKey, ui$ } from './states/ui'
+import { accountGroups$ } from './states/accountGroups'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -15,6 +16,7 @@ export function useThreadListLoader() {
   const filter = filterKey(useValue(ui$.filters))
   const sort = sortParam(useValue(settings$.listSort))
   const board = useValue(kanban$.activeBoardId)
+  const group = useValue(accountGroups$.active)
 
   useEffect(() => {
     // Mail rows wait while a board owns the reader. Closing it reloads them.
@@ -27,5 +29,5 @@ export function useThreadListLoader() {
       void loadThreads()
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [account, folder, query, filter, sort, board])
+  }, [account, folder, query, filter, sort, board, group])
 }

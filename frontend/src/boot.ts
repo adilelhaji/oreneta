@@ -4,8 +4,9 @@ import { hydrateSettings, SETTINGS_DB_KEYS } from './states/settings'
 import { restoreUiSession, UI_SESSION_KEYS, ui$ } from './states/ui'
 import { ensureDefaultKanbanBoard, restoreKanbanSession, KANBAN_SESSION_KEYS } from './states/kanban'
 import { accounts$ } from './states/accounts'
-import { openMailtoCompose, pruneComposerMedia } from './states/compose'
+import { openMailtoCompose } from './states/compose'
 import { ASSISTANT_PREF_KEYS, hydrateAssistant } from './states/assistant'
+import { ACCOUNT_GROUP_KEYS, hydrateAccountGroups } from './states/accountGroups'
 
 // App bootstrap: load the system check, accounts, and persisted settings in
 // parallel, seed the initial selection, and drain any mailto: links the OS
@@ -15,12 +16,19 @@ export async function boot() {
     invoke<SystemCheck>('system.check'),
     invoke<{ accounts: Account[] }>('account.list'),
     invoke<{ prefs: Record<string, unknown> }>('app.prefsGet', {
-      keys: [...SETTINGS_DB_KEYS, ...UI_SESSION_KEYS, ...KANBAN_SESSION_KEYS, ...ASSISTANT_PREF_KEYS],
+      keys: [
+        ...SETTINGS_DB_KEYS,
+        ...UI_SESSION_KEYS,
+        ...KANBAN_SESSION_KEYS,
+        ...ASSISTANT_PREF_KEYS,
+        ...ACCOUNT_GROUP_KEYS,
+      ],
     }).catch(() => ({ prefs: {} })),
   ])
   const prefs = prefsResult.prefs || {}
   hydrateSettings(prefs)
   hydrateAssistant(prefs)
+  hydrateAccountGroups(prefs)
   ui$.system.set(systemResult)
   accounts$.set(accountResult.accounts)
   restoreUiSession(prefs, accountResult.accounts)
@@ -35,7 +43,8 @@ export async function boot() {
     }
   }
 
-  // Reclaim inline-image files orphaned by drafts that were discarded or sent in
-  // a previous session. Runs after compose tabs are hydrated at module load.
-  pruneComposerMedia()
+  // Inline-image files orphaned by drafts discarded or sent in a previous
+  // session are reclaimed by restoreLocalDrafts, once it knows every draft
+  // the local store still holds — not here, where only the localStorage
+  // copy is known and a stored draft's images would be taken for orphans.
 }

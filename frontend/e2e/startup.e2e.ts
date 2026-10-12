@@ -1,4 +1,7 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { createFixture } from '../baseline/fixtures'
 import { defaultCustomInput, deriveThemeTokens } from '../src/lib/themes'
 
@@ -23,7 +26,248 @@ type SetupOptions = {
   updatesSupported?: boolean
   syncHealth?: boolean
   manualRefresh?: boolean
+  /** Translation models the synthetic core says are installed (#106). */
+  installedModels?: string[]
 }
+
+// The registry the core ships, so the models the app is told about are real.
+const translationRegistry = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../meron-core/src/translation/registry.json', import.meta.url)), 'utf8'),
+) as Record<string, Record<string, { name: string; size: number; expectedSha256Hash: string }>>
+function translationStatus(installed: string[] = []) {
+  const pairs = Object.entries(translationRegistry).map(([key, parts]) => {
+    const files = Object.entries(parts).map(([part, f]) => ({
+      part,
+      name: f.name,
+      size: f.size,
+      sha256: f.expectedSha256Hash,
+    }))
+    return {
+      from: key.slice(0, 2),
+      to: key.slice(2),
+      files,
+      size: files.reduce((n, f) => n + f.size, 0),
+      installed: installed.includes(key),
+    }
+  })
+  return {
+    pairs,
+    languages: [...new Set(pairs.flatMap((p) => [p.from, p.to]))].sort(),
+    used: pairs.filter((p) => p.installed).reduce((n, p) => n + p.size, 0),
+    quota: 1024 ** 3,
+    source: 'https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/',
+    downloading: {},
+  }
+}
+
+// Automated accessibility audit of the production entry: onboarding, and the
+// mail workspace with an account, in both appearances. Critical and serious
+// WCAG 2.1 A/AA violations fail the run; the complete result, moderate and
+// minor findings included, is attached so #37 can read it. An automated audit
+// checks what a rule can check — names, roles, contrast, structure — and is
+// not the keyboard, focus and screen-reader evidence #37 still requires.
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  test(`accessibility audit: ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, theme })
+    // Inbox categories (#91): tabs with counts and their coverage line.
+    await page.addInitScript(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['categories.list'] = {
+        categories: [{ id: 'news', name: 'Newsletters', colour: '#2056dd', matchMode: 'any', conditions: [] }],
+      }
+      replies['categories.counts'] = {
+        counts: [{ category: 'news', conversations: 2, unread: 1 }, { category: '', conversations: 3, unread: 0 }],
+        conversations: 5,
+        messages: 8,
+      }
+    })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Inbox categories' })).toBeVisible()
+    const blocking: string[] = []
+    const audit = async (screen: string) => {
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      const body = JSON.stringify(
+        {
+          screen,
+          theme,
+          url: results.url,
+          violations: results.violations.map((violation) => ({
+            id: violation.id,
+            impact: violation.impact,
+            help: violation.help,
+            nodes: violation.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+          })),
+          passes: results.passes.length,
+          incomplete: results.incomplete.map((rule) => rule.id),
+        },
+        null,
+        2,
+      )
+      // Attached to the report and written beside the screenshots, so the
+      // uploaded evidence carries the full audit without opening the report.
+      await info.attach(`axe-${screen}-${theme}`, { body, contentType: 'application/json' })
+      writeFileSync(info.outputPath(`axe-${screen}.json`), body)
+      for (const violation of results.violations) {
+        if (violation.impact === 'critical' || violation.impact === 'serious') {
+          blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${violation.nodes.length} node(s)`)
+        }
+      }
+    }
+    await audit('mailbox')
+    // The conversation pane with a message open, which is where most of the
+    // day is spent.
+    const row = page.getByRole('row').first()
+    if (await row.isVisible()) {
+      await row.click()
+      await audit('conversation')
+    }
+    // The address book with a local contact open, then its editor (ADR-0012).
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.replies['people.list'] = {
+        people: [
+          {
+            id: 'local::local:synthetic',
+            source: 'local',
+            account: '',
+            book: 'local',
+            name: 'Synthetic Contact',
+            organisation: 'Example Org',
+            note: '',
+            photo: '',
+            emails: [{ addr: 'synthetic@example.test', label: '' }],
+            phones: [],
+            version: '1',
+            editable: true,
+          },
+        ],
+      }
+    })
+    await page.getByTitle('People', { exact: true }).click()
+    await page.getByRole('option', { name: /Synthetic Contact/ }).click()
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible()
+    await audit('people')
+    await page.getByRole('button', { name: 'Edit', exact: true }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await info.attach(`people-editor-${theme}`, {
+      body: await page.screenshot({ path: info.outputPath('people-editor.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await audit('people-editor')
+    await page.keyboard.press('Escape')
+    // Tasks with lists, a standalone task, and its editor (ADR-0013).
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['tasks.lists'] = {
+        lists: [
+          { id: 'mail', name: '', position: 0, open: 0 },
+          { id: 'list:home', name: 'Home', position: 1, open: 1 },
+        ],
+      }
+      replies['tasks.list'] = {
+        tasks: [
+          {
+            id: 2, thread_id: '', account_id: '', folder_id: '', note: 'Washer is in the drawer', due_at: null,
+            completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+            list_id: 'list:home', title: 'Fix the tap', priority: 2, reminder_at: null, revision: 1,
+          },
+        ],
+      }
+      replies['tasks.get'] = {
+        title: 'Fix the tap', note: 'Washer is in the drawer', due_at: null, list_id: 'list:home',
+        priority: 2, reminder_at: null, revision: 1, linked: false,
+      }
+    })
+    await page.getByTitle('Tasks', { exact: true }).click()
+    await expect(page.getByText('Fix the tap')).toBeVisible()
+    await audit('tasks')
+    await page.getByText('Fix the tap').click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await info.attach(`task-editor-${theme}`, {
+      body: await page.screenshot({ path: info.outputPath('task-editor.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await audit('task-editor')
+    await page.keyboard.press('Escape')
+    // Notes: the list with a tagged, pinned note and that note open (ADR-0015).
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      const note = {
+        id: 'note:synthetic', title: 'Synthetic note', html: '<p>Kept on this computer.</p>',
+        text: 'Kept on this computer.', tags: ['ideas'], pinned: true, revision: 1, created_at: 0,
+        updated_at: 1760000000, deleted_at: null,
+      }
+      replies['notes.list'] = {
+        notes: [{ ...note, preview: note.text }],
+        tags: [{ tag: 'ideas', count: 1 }],
+      }
+      replies['notes.get'] = { note }
+    })
+    await page.getByTitle('Notes', { exact: true }).click()
+    await page.getByRole('button', { name: /Synthetic note/ }).click()
+    await expect(page.getByLabel('Title')).toHaveValue('Synthetic note')
+    await info.attach(`notes-${theme}`, {
+      body: await page.screenshot({ path: info.outputPath('notes.png'), animations: 'disabled' }),
+      contentType: 'image/png',
+    })
+    await audit('notes')
+    // Attachments across accounts, with coverage said (#93).
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.replies['attachments.list'] = {
+        items: [
+          {
+            account: 'synthetic@example.test', folder: 'INBOX', uid: 2, thread_key: 'k', thread_id: 'synthetic@example.test#INBOX#2',
+            subject: 'Quarterly numbers', from_name: 'Synthetic Sender', from_addr: 'sender@example.test', date: 1760000000,
+            index: 0, filename: 'report.pdf', mime: 'application/pdf', size: 90000, key: null, kind: 'pdf', unavailable: '',
+          },
+        ],
+        total: 1,
+        coverage: { messages: 10, downloaded: 7 },
+      }
+    })
+    await page.getByTitle('Attachments', { exact: true }).click()
+    await expect(page.getByText('report.pdf')).toBeVisible()
+    await audit('attachments')
+    // Chat over XMPP (#111): a conversation with each kind of send state.
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+      replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+      replies['chat.conversations'] = [
+        { conversation: 'pau@chat.test', last_body: '¿Sigues ahí?', last_stamp: 1760000120, last_direction: 'out', unread: 1 },
+      ]
+      replies['chat.history'] = [
+        { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'Hola Ana', stamp: 1760000000, state: 'received' },
+        { account: 'c1', conversation: 'pau@chat.test', id: 's1', stanza_id: null, direction: 'out', sender: 'ana@chat.test', body: 'Hola', stamp: 1760000060, state: 'delivered' },
+        { account: 'c1', conversation: 'pau@chat.test', id: 's2', stanza_id: null, direction: 'out', sender: 'ana@chat.test', body: '¿Sigues ahí?', stamp: 1760000120, state: 'uncertain' },
+      ]
+    })
+    await page.getByTitle('Chat', { exact: true }).click()
+    await page.getByRole('button', { name: /pau@chat.test/ }).click()
+    await expect(page.getByText('May not have arrived')).toBeVisible()
+    await audit('chat')
+    expect(blocking).toEqual([])
+    expect(errors).toEqual([])
+  })
+}
+
+test('accessibility audit: onboarding', async ({ page }, info) => {
+  const errors = await prepareStartup(page)
+  await page.goto('/')
+  await expect(page.getByRole('textbox', { name: 'Email Address', exact: true })).toBeVisible()
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+  const body = JSON.stringify(results.violations, null, 2)
+  await info.attach('axe-onboarding', { body, contentType: 'application/json' })
+  writeFileSync(info.outputPath('axe-onboarding.json'), body)
+  const blocking = results.violations
+    .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+    .map((violation) => `${violation.id} (${violation.impact}) on ${violation.nodes.length} node(s)`)
+  expect(blocking).toEqual([])
+  expect(errors).toEqual([])
+})
 
 test('onboarding remains keyboard reachable in a short zoom-equivalent viewport', async ({ page }) => {
   const errors = await prepareStartup(page)
@@ -736,7 +980,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
   }
   await page.addInitScript(
-    ({ accounts, folders, template, options, threads, messages }) => {
+    ({ accounts, folders, template, options, threads, messages, translation }) => {
       const calls: string[] = []
       const requests: Array<{ command: string; payload: Record<string, unknown> }> = []
       const unexpected: string[] = []
@@ -756,7 +1000,16 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'mail.folderList': { folders },
         'mail.threadList': { threads: [], next_cursor: '', pagination: 'conversation-v1' },
         'tasks.list': { tasks: [] },
+        'tasks.lists': { lists: [] },
+        'notes.list': { notes: [], tags: [] },
+        'backup.profileRestoreStatus': { state: 'none' },
+        'attachments.list': { items: [], total: 0, coverage: { messages: 0, downloaded: 0 } },
+        'profiles.list': {
+          profiles: [{ id: 'default', name: '', created_at: 0, active: true, has_data: true }],
+          active: 'default',
+        },
         'people.list': { people: [] },
+        'people.duplicates': { groups: [] },
         'calendar.list': { calendars: [] },
         'storage.usage': { cacheBytes: 0, dbBytes: 0 },
         'oof.get': { kind: 'imap', settings: { enabled: false, startAt: 0, endAt: 0, subject: '', body: '' } },
@@ -792,7 +1045,44 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'i18n.setNativeLabels': { ok: true },
         'composer.pruneMedia': { removed: 0 },
         'labels.list': { labels: [] },
+        'categories.list': { categories: [] },
+        'spam.lists': { entries: [] },
+        'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
+        'translation.status': translation,
+        'cloud.list': [],
+        // The event editor and invitation cards check the person's own schedule (ADR-0043).
+        'calendar.conflicts': { conflicts: [] },
+        'invite.counterStatus': { organizer: false, event: null, sequence: null, outdated: false },
+        'notes.attachments': { attachments: [] },
+        'backupSchedule.status': {
+          schedule: { enabled: false, folder: '', every_hours: 24, keep: 7, max_bytes: null },
+          last_attempt: null,
+          last_success: null,
+          last_error: null,
+          next_run: null,
+          backups: [],
+          password_saved: false,
+          running: false,
+        },
+        'chat.accounts': [],
+        'chat.status': {},
+        'chat.conversations': [],
+        'chat.history': [],
+        'chat.markRead': { ok: true },
+        // Group chats and their invitations (ADR-0044).
+        'chat.rooms': [],
+        'chat.invitations': [],
+        'cloud.providers': [
+          { id: 'nextcloud', name: 'Nextcloud', usable: true },
+          { id: 'owncloud', name: 'ownCloud', usable: true },
+          { id: 'dropbox', name: 'Dropbox', usable: false },
+        ],
         'mail.scheduledSends': { messages: [] },
+        'mail.outgoingAttempts': { attempts: [] },
+        'localDrafts.list': { drafts: [] },
+        'localDrafts.get': { draft: null },
+        'localDrafts.save': { applied: true, revision: 1, deleted: false },
+        'localDrafts.delete': { applied: true, revision: 2, deleted: true },
         'tray.setUnread': { ok: true },
         'update.status': {
           state: 'idle',
@@ -1021,6 +1311,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       messages: options.navigation ? fixture.messages : [],
       template: fixture.account,
       options,
+      translation: translationStatus(options.installedModels),
     },
   )
   return errors
@@ -1041,6 +1332,29 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       expect(errors).toEqual([])
     })
   }
+}
+
+// A thread list widened on a large screen is remembered in pixels. On a
+// narrower window it must give way before the reader does: at 769 and 1025
+// pixels a remembered 560-pixel list left the reader 150 to 185 pixels.
+for (const width of [769, 1024, 1025, 1440]) {
+  test(`a remembered wide thread list leaves the reader room at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, preferences: { thread_list_width: 560 } })
+    await page.goto('/')
+    const list = page.locator('[data-thread-list]')
+    const reader = page.locator('[data-message-pane]')
+    await expect(list).toBeVisible()
+    await expect(reader).toBeVisible()
+    const listBox = (await list.boundingBox())!
+    const readerBox = (await reader.boundingBox())!
+    expect(listBox.width).toBeGreaterThanOrEqual(280 - 1)
+    expect(readerBox.width).toBeGreaterThanOrEqual(360 - 1)
+    expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(width + 1)
+    // Where there is room, the remembered width is kept.
+    if (width >= 1440) expect(Math.round(listBox.width)).toBe(560)
+    expect(errors).toEqual([])
+  })
 }
 
 test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
@@ -1560,6 +1874,106 @@ test('production shell navigates settings, people, tasks and composer without ho
   await expect(page.getByText(/Something went wrong/)).toHaveCount(0)
   expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
   expect(errors).toEqual([])
+})
+
+// #105: Harper runs in the page from the shipped WebAssembly, in a worker,
+// and nothing typed leaves the machine: every request the page makes is to
+// the app itself.
+test('grammar suggestions run on this computer and apply as one edit', async ({ page }) => {
+  // Before the synthetic bridge reads its preferences.
+  await page.addInitScript(() => {
+    const prefs = JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')
+    sessionStorage.setItem('synthetic-prefs', JSON.stringify({ ...prefs, grammar_check: 'american' }))
+  })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  const outside: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname) && !['data:', 'blob:'].includes(url.protocol)) {
+      outside.push(request.url())
+    }
+  })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  const editor = page.locator('.tiptap[contenteditable="true"]')
+  await expect(editor).toBeVisible()
+  await editor.fill('Thanks for the notes from the meeting. I has a apple for the team.')
+  const issue = page.locator('.oreneta-grammar-issue', { hasText: 'has' })
+  await expect(issue).toBeVisible({ timeout: 30_000 })
+  await issue.click()
+  await page.getByRole('dialog', { name: 'Grammar suggestion' }).getByRole('button', { name: 'have' }).click()
+  await expect(editor).toContainText('I have a apple')
+  expect(outside).toEqual([])
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The real Spanish→English model (scripts/fetch-translation-test-model.mjs),
+// handed to the app from where the Go bridge would serve it.
+const translationModels = fileURLToPath(new URL('../.translation-models/', import.meta.url))
+
+test('a draft is translated on this computer by the shipped Bergamot, reviewed, and added below', async ({
+  page,
+}) => {
+  test.skip(!existsSync(`${translationModels}esen`), 'no translation model fetched')
+  const errors = await prepareStartup(page, true, { navigation: true, installedModels: ['esen'] })
+  const served: string[] = []
+  await page.route('**/models/esen/*', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!
+    served.push(name)
+    await route.fulfill({ body: readFileSync(`${translationModels}esen/${name}`), contentType: 'application/octet-stream' })
+  })
+  const outside: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname) && !['data:', 'blob:'].includes(url.protocol)) {
+      outside.push(request.url())
+    }
+  })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  const editor = page.locator('.tiptap[contenteditable="true"]')
+  await expect(editor).toBeVisible()
+  await editor.fill('Hola Marta, te mando el presupuesto revisado para la cocina esta tarde.')
+  await page.getByRole('button', { name: 'Translate this message' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Translate this message' })
+  await expect(dialog.getByLabel('From')).toHaveValue('es')
+  await expect(dialog.getByLabel('into')).toHaveValue('en')
+  await dialog.getByRole('button', { name: 'Translate' }).click()
+  const preview = dialog.getByRole('region', { name: 'Translation' })
+  await expect(preview).toContainText(/budget/i, { timeout: 60_000 })
+  // Nothing changed until asked.
+  await expect(editor).toHaveText('Hola Marta, te mando el presupuesto revisado para la cocina esta tarde.')
+  await dialog.getByRole('button', { name: 'Add below what I wrote' }).click()
+  await expect(editor).toContainText('Hola Marta, te mando el presupuesto')
+  await expect(editor).toContainText(/budget/i)
+  expect(served.sort()).toEqual(['lex.50.50.esen.s2t.bin', 'model.esen.intgemm.alphas.bin', 'vocab.esen.spm'])
+  expect(outside).toEqual([])
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+test('the assistant is not offered until it is turned on', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Translate this message' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Rewrite with the assistant' })).toHaveCount(0)
+  expect(errors).toEqual([])
+
+  await page.evaluate(() => {
+    const prefs = JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')
+    sessionStorage.setItem('synthetic-prefs', JSON.stringify({ ...prefs, assistant_enabled: 'on' }))
+  })
+  await page.reload()
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  await expect(page.getByRole('button', { name: 'Rewrite with the assistant' })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
 })
 
 for (const appearance of ['light', 'dark'] as const) {

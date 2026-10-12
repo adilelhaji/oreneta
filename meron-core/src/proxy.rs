@@ -415,6 +415,13 @@ pub fn agent_for(cfg: Option<&ProxyConfig>) -> Result<ureq::Agent> {
     let Some(cfg) = cfg else {
         return Ok(ureq::Agent::new_with_defaults());
     };
+    Ok(ureq::Agent::new_with_config(
+        ureq::Agent::config_builder().proxy(Some(ureq_proxy(cfg)?)).build(),
+    ))
+}
+
+/// The proxy as ureq takes it, for callers that configure their own agent.
+pub fn ureq_proxy(cfg: &ProxyConfig) -> Result<ureq::Proxy> {
     let protocol = match cfg.kind {
         ProxyKind::Http => ureq::ProxyProtocol::Http,
         // Socks5h: the proxy resolves the hostname, matching the mail path.
@@ -432,12 +439,9 @@ pub fn agent_for(cfg: Option<&ProxyConfig>) -> Result<ureq::Agent> {
     if !cfg.username.is_empty() {
         builder = builder.username(&cfg.username).password(&cfg.password);
     }
-    let proxy = builder
+    builder
         .build()
-        .with_context(|| format!("invalid proxy {}", cfg.endpoint()))?;
-    Ok(ureq::Agent::new_with_config(
-        ureq::Agent::config_builder().proxy(Some(proxy)).build(),
-    ))
+        .with_context(|| format!("invalid proxy {}", cfg.endpoint()))
 }
 
 #[cfg(test)]

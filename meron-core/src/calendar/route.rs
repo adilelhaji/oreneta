@@ -118,6 +118,10 @@ pub async fn create_event(
 ) -> Result<Event> {
     match route_with_token(engine, account).await? {
         (Route::Exchange, _) => {
+            anyhow::ensure!(
+                event.add_meeting.as_deref().is_none_or(|m| m == "none"),
+                "online meetings can be added here only to Google calendars"
+            );
             let event = event.clone();
             engine
                 .with_write_session(account, |session| {
@@ -187,19 +191,24 @@ pub async fn update_event(
     event: &Event,
     whole_series: bool,
     notify: bool,
-) -> Result<()> {
+) -> Result<Option<String>> {
     // Everyone on it must be nameable before the list is written, or writing
     // it would remove those who are not.
     let event = &with_addresses(engine, account, event).await?;
     match route_with_token(engine, account).await? {
         (Route::Exchange, _) => {
+            anyhow::ensure!(
+                event.add_meeting.as_deref().is_none_or(|m| m == "none"),
+                "online meetings can be added here only to Google calendars"
+            );
             let event = event.clone();
             engine
                 .with_write_session(account, |session| {
                     let event = event.clone();
                     Box::pin(async move { session.update_event(&event, whole_series, notify).await })
                 })
-                .await
+                .await?;
+            Ok(None)
         }
         (Route::Google, token) => {
             let event = event.clone();

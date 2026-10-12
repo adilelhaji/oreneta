@@ -84,13 +84,25 @@ func loadDotEnvLocal() {
 // path and blocks `..` traversal out of the media root.
 func mediaHandler() http.Handler {
 	fs := http.StripPrefix("/media/", http.FileServer(http.Dir(mediaDir())))
+	models := http.StripPrefix("/models/", http.FileServer(http.Dir(modelsDir())))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/media/") {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/media/"):
+			fs.ServeHTTP(w, r)
+		// Translation models, read by the in-app translator (#106). A
+		// download in progress sits in a dot folder and is never handed out.
+		case strings.HasPrefix(r.URL.Path, "/models/") && !strings.Contains(r.URL.Path, "/."):
+			models.ServeHTTP(w, r)
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		fs.ServeHTTP(w, r)
 	})
+}
+
+// modelsDir holds downloaded translation models (#106). They belong to the
+// installation, not a profile: the same files serve every profile.
+func modelsDir() string {
+	return filepath.Join(rootCacheDir(), "translation-models")
 }
 
 // mediaDir is where the mail sidecar writes attachment files and the asset
@@ -146,11 +158,26 @@ func fileSize(path string) int64 {
 	return 0
 }
 
+// appConfigDir holds the active profile's store, log and preferences
+// (ADR-0016). The default profile is the directory every install already
+// has; other profiles live beneath it, under profiles/<id>.
 func appConfigDir() string {
+	return profileDir(rootConfigDir(), activeProfile())
+}
+
+// appCacheDir holds the active profile's attachment cache.
+func appCacheDir() string {
+	return profileDir(rootCacheDir(), activeProfile())
+}
+
+// rootConfigDir is shared by every profile: it holds the profile list.
+func rootConfigDir() string {
 	return filepath.Join(configHome(), appDirName())
 }
 
-func appCacheDir() string {
+// rootCacheDir is shared by every profile: the sidecar binary and downloaded
+// updates belong to the installation, not to a profile.
+func rootCacheDir() string {
 	return filepath.Join(cacheHome(), appDirName())
 }
 
@@ -161,11 +188,17 @@ func appDirName() string {
 	return "oreneta"
 }
 
+// appUniqueID is the single-instance lock: one per profile, so two profiles
+// can be open at once but the same profile cannot (ADR-0016).
 func appUniqueID() string {
+	id := "io.github.adilelhaji.oreneta"
 	if isWailsDevLaunch() {
-		return "io.github.adilelhaji.oreneta-dev"
+		id += "-dev"
 	}
-	return "io.github.adilelhaji.oreneta"
+	if profile := activeProfile(); profile != defaultProfileID {
+		id += ".profile." + profile
+	}
+	return id
 }
 
 func isWailsDevLaunch() bool {

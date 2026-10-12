@@ -100,3 +100,13 @@ describe('simplifying a message', () => {
     expect(simplified).toContain('width="600"')
   })
 })
+
+describe('tracking pixels in the conversation view (#35)', () => {
+  it('are dropped, as in the reader tab', () => {
+    const prepared = prepareBubbleHtml(
+      '<p>Hi</p><img width="1" height="1" src="https://t.example/x.gif"><img src="https://cdn.example/a.png">',
+    )
+    expect(prepared).not.toContain('t.example/x.gif')
+    expect(prepared).toContain('cdn.example/a.png')
+  })
+})

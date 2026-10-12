@@ -1,5 +1,6 @@
 import { invoke } from './bridge'
 import type { Contact, Person } from '../types'
+import { formatRecipient } from './recipients'
 
 // Recipient autocomplete suggestions, drawn from the senders of cached messages
 // by the sidecar. `accountId` scopes the lookup to one account (pass "" for a
@@ -22,7 +23,8 @@ export async function suggestContacts(accountId: string, query: string, limit = 
 export function formatContact(c: Contact): string {
   const name = c.name.trim()
   if (name && name.toLowerCase() !== c.addr.toLowerCase()) {
-    return `${name} <${c.addr}>`
+    // Quoted when the name carries a separator, so "Doe, John" stays one chip.
+    return formatRecipient({ name, address: c.addr, status: 'ok', raw: '' })
   }
   return c.addr
 }

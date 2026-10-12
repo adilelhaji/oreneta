@@ -1,8 +1,8 @@
 import { Sparkles } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { assistant$ } from '../../states/assistant'
-import { SelectRow, SettingRow, SettingsGroup, TextRow } from './AccountSettingsRows'
+import { assistant$, assistantEnabled$ } from '../../states/assistant'
+import { SelectRow, SettingRow, SettingsGroup, TextRow, ToggleRow } from './AccountSettingsRows'
 
 export function AssistantSettingsSection() {
   const { t } = useTranslation()
@@ -10,9 +10,20 @@ export function AssistantSettingsSection() {
   const endpoint = useValue(assistant$.endpoint)
   const model = useValue(assistant$.model)
   const local = mode === 'local'
+  const enabled = useValue(assistantEnabled$)
 
   return (
     <SettingsGroup title={t('settings.assistant.title', { defaultValue: 'Assistant privacy' })}>
+      <ToggleRow
+        icon={<Sparkles size={16} strokeWidth={1.75} />}
+        title={t('settings.assistant.enabled', { defaultValue: 'Offer the assistant' })}
+        hint={t('settings.assistant.enabledHint', {
+          defaultValue:
+            'Off by default. When on, the assistant appears in conversations and the composer; each request still shows exactly what would be sent and waits for your confirmation.',
+        })}
+        checked={enabled}
+        onChange={() => assistantEnabled$.set(!enabled)}
+      />
       <SelectRow
         icon={<Sparkles size={16} strokeWidth={1.75} />}
         title={t('settings.assistant.mode', { defaultValue: 'Provider mode' })}

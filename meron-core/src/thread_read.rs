@@ -263,7 +263,8 @@ pub async fn read_thread_page(
     for (header, slot) in headers.iter().zip(slots) {
         let mut cached = slot.cached;
         if bake_html_policy && let Some(message) = cached.as_mut() {
-            attach_html(message, load_remote_images);
+            let block = crate::privacy::protects(&engine.db.lock().unwrap(), account, &message.message_id);
+            attach_html(message, load_remote_images, block);
         }
         // Newly synced envelope rows do not have json.message_id yet, so the
         // SQL-level cross-folder dedupe cannot collapse a self-addressed
@@ -490,6 +491,12 @@ pub fn thread_message_json(
         "attachments": cached
             .map(|message| serde_json::to_value(&message.attachments).unwrap_or_else(|_| json!([])))
             .unwrap_or_else(|| json!([])),
+        // A meeting invitation the message carries (#102), described only.
+        "invitation": cached.and_then(|message| message.invitation.as_ref()),
+        // Tracking protection (#107): what was kept from loading, and whether
+        // it applied to this message at all.
+        "trackers_blocked": cached.map(|message| message.trackers_blocked.clone()).unwrap_or_default(),
+        "trackers_protected": cached.is_some_and(|message| message.trackers_protected),
     })
 }
 

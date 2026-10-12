@@ -1,15 +1,47 @@
-import { useEffect } from 'react'
-import { CalendarClock, Check, ListTodo, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  Bell,
+  CalendarClock,
+  Check,
+  Flag,
+  ListTodo,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Repeat,
+  Search,
+  Trash2,
+  AlertTriangle,
+} from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
-import { deleteTask, loadTasks, setTaskCompleted, tasks$, type Task } from '../../states/tasks'
+import {
+  MAIL_LIST,
+  createTaskList,
+  deleteTask,
+  deleteTaskList,
+  isRemoteList,
+  listName,
+  loadTaskLists,
+  loadTasks,
+  renameTaskList,
+  resolveTaskConflict,
+  setTaskCompleted,
+  syncTaskLists,
+  taskTitle,
+  tasks$,
+  type Task,
+  type TaskList,
+} from '../../states/tasks'
 import { openMailAccount } from '../../states/kanban'
-import { ui$ } from '../../states/ui'
+import { confirmAction, showToast, ui$ } from '../../states/ui'
+import { Button } from '../button/Button'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
+import { CalDavTaskListDialog } from './CalDavTaskListDialog'
 
 const DUE_TONE: Record<ReturnType<typeof dueStatus>, string> = {
   overdue: 'text-danger ',
@@ -51,12 +83,89 @@ export function TasksView() {
   const loaded = useValue(tasks$.loaded)
   const loading = useValue(tasks$.loading)
   const includeCompleted = useValue(tasks$.includeCompleted)
+  const lists = useValue(tasks$.lists)
+  const selectedList = useValue(tasks$.selectedList)
+  const search = useValue(tasks$.search)
+  const [newList, setNewList] = useState<string | null>(null)
+  const [addingCalDav, setAddingCalDav] = useState(false)
+  const syncing = useValue(tasks$.syncing)
+  const listsById = new Map(lists.map((list) => [list.id, list]))
 
   useEffect(() => {
     if (!loaded) void loadTasks()
   }, [loaded])
+  useEffect(() => {
+    // Lists kept on a server are synced each time the view opens (ADR-0039).
+    void loadTaskLists().then(() => {
+      if (tasks$.lists.get().some(isRemoteList)) void syncTaskLists()
+    })
+  }, [])
+
+  const needle = search.trim().toLowerCase()
+  const shown = items.filter(
+    (task) =>
+      (selectedList === 'all' || (task.list_id ?? MAIL_LIST) === selectedList) &&
+      (!needle ||
+        [taskTitle(task), task.note, task.from_name, task.from_addr].some((text) =>
+          text?.toLowerCase().includes(needle),
+        )),
+  )
+  const current = lists.find((list) => list.id === selectedList)
+
+  const newTask = () =>
+    ui$.taskEditor.set({
+      threadId: '',
+      id: 0,
+      dueAt: null,
+      note: '',
+      listId: selectedList === 'all' ? MAIL_LIST : selectedList,
+    })
+
+  const renameList = async () => {
+    if (!current) return
+    const name = window.prompt(t('tasks.renameList', { defaultValue: 'Rename list' }), current.name)
+    if (name?.trim()) await renameTaskList(current.id, name)
+  }
+
+  const removeList = async () => {
+    if (!current) return
+    const confirmed = await confirmAction({
+      title: t('tasks.deleteListTitle', { defaultValue: 'Delete list?' }),
+      message: isRemoteList(current)
+        ? t('tasks.deleteRemoteListText', {
+            name: current.name,
+            defaultValue:
+              '{name} and its tasks will be removed from this computer, with its saved password. Nothing is deleted on the server: the tasks stay there.',
+          })
+        : t('tasks.deleteListText', {
+            name: current.name,
+            count: current.open,
+            defaultValue: '{name} and every task in it will be deleted.',
+          }),
+      confirmLabel: t('buttons.delete'),
+      tone: 'danger',
+    })
+    if (confirmed) await deleteTaskList(current.id)
+  }
 
   const open = (task: Task) => {
+    // A standalone task has no conversation to go to; opening it edits it.
+    if (task.linked === false) {
+      ui$.taskEditor.set({ threadId: '', id: task.id, dueAt: task.due_at, note: task.note })
+      return
+    }
+    // Opening a folder the conversation is not in showed an empty reader and
+    // no reason. Say so instead, and stay on the list.
+    if (task.located === false) {
+      showToast(
+        t('tasks.notFound', {
+          defaultValue:
+            'This conversation is no longer in the local copy of your mail (moved or deleted). The task is kept.',
+        }),
+        'error',
+      )
+      return
+    }
     ui$.tasksOpen.set(false)
     openMailAccount(task.account_id, task.folder_id, false)
     ui$.selectedThread.set(task.thread_id)
@@ -76,23 +185,118 @@ export function TasksView() {
           <ListTodo size={20} strokeWidth={1.75} />
           {t('tasks.title')}
         </h1>
-        <label className="flex items-center gap-1.5 text-caption text-secondary">
-          <input
-            type="checkbox"
-            checked={includeCompleted}
-            onChange={(event) => void loadTasks(event.target.checked)}
-          />
-          {t('tasks.showCompleted')}
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-1.5 text-caption text-secondary">
+            <input
+              type="checkbox"
+              checked={includeCompleted}
+              onChange={(event) => void loadTasks(event.target.checked)}
+            />
+            {t('tasks.showCompleted')}
+          </label>
+          <Button variant="secondary" size="sm" onClick={newTask}>
+            <Plus size={14} strokeWidth={1.75} />
+            {t('tasks.newTask', { defaultValue: 'New task' })}
+          </Button>
+        </div>
       </header>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
+        <div role="tablist" aria-label={t('tasks.lists', { defaultValue: 'Lists' })} className="flex flex-wrap gap-1.5">
+          {[
+            { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
+            ...lists.map((list) => ({ id: list.id, label: listName(list), open: list.open })),
+          ].map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedList === entry.id}
+              onClick={() => tasks$.selectedList.set(entry.id)}
+              className={clsx(
+                'rounded-control-sm px-2.5 py-1 text-caption font-semibold transition-colors cursor-pointer',
+                selectedList === entry.id ? 'bg-accent text-on-accent' : 'text-secondary hover:bg-hover',
+              )}
+            >
+              {entry.label}
+              {entry.open > 0 && <span className="ml-1 tabular-nums">{entry.open}</span>}
+            </button>
+          ))}
+        </div>
+        {newList === null ? (
+          <button
+            type="button"
+            onClick={() => setNewList('')}
+            className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+          >
+            + {t('tasks.newList', { defaultValue: 'New list' })}
+          </button>
+        ) : (
+          <form
+            className="flex items-center gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (newList.trim()) void createTaskList(newList)
+              setNewList(null)
+            }}
+          >
+            <input
+              autoFocus
+              value={newList}
+              aria-label={t('tasks.newListName', { defaultValue: 'New list name' })}
+              onChange={(event) => setNewList(event.target.value)}
+              onBlur={() => !newList.trim() && setNewList(null)}
+              className="w-36 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            />
+          </form>
+        )}
+        <button
+          type="button"
+          onClick={() => setAddingCalDav(true)}
+          className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+        >
+          + {t('tasks.addCalDavList', { defaultValue: 'CalDAV task list…' })}
+        </button>
+        {current && current.id !== MAIL_LIST && (
+          <span className="ml-auto flex gap-1">
+            <button
+              type="button"
+              onClick={() => void renameList()}
+              className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+            >
+              {t('tasks.renameList', { defaultValue: 'Rename list' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => void removeList()}
+              className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-danger-soft hover:text-danger cursor-pointer"
+            >
+              {t('tasks.deleteList', { defaultValue: 'Delete list' })}
+            </button>
+          </span>
+        )}
+        <div className="flex min-w-40 flex-1 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-1.5 focus-within:border-accent min-[600px]:max-w-64 min-[600px]:flex-none">
+          <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
+          <input
+            value={search}
+            onChange={(event) => tasks$.search.set(event.target.value)}
+            placeholder={t('tasks.search', { defaultValue: 'Search tasks' })}
+            aria-label={t('tasks.search', { defaultValue: 'Search tasks' })}
+            className="min-w-0 flex-1 bg-transparent text-caption text-primary placeholder-secondary outline-none"
+          />
+        </div>
+      </div>
+      {current && isRemoteList(current) && (
+        <SyncStatus list={current} syncing={syncing} onSync={() => void syncTaskLists(current.id)} />
+      )}
+      {addingCalDav && <CalDavTaskListDialog onClose={() => setAddingCalDav(false)} />}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!loaded && loading ? (
           <LoadingState title={t('tasks.loading')} />
-        ) : items.length === 0 ? (
+        ) : shown.length === 0 ? (
           <EmptyState title={t('tasks.emptyTitle')} text={t('tasks.emptyText')} />
         ) : (
           <ul className="mx-auto flex max-w-2xl flex-col gap-1.5 p-4">
-            {items.map((task) => {
+            {shown.map((task) => {
               const done = !!task.completed_at
               return (
                 <li
@@ -127,13 +331,44 @@ export function TasksView() {
                         done ? 'text-secondary line-through' : 'text-primary',
                       )}
                     >
-                      {task.subject || t('tasks.noSubject')}
+                      {task.priority === 2 && (
+                        <Flag
+                          size={12}
+                          strokeWidth={2}
+                          className="mr-1 inline text-danger"
+                          aria-label={t('tasks.priorityHigh', { defaultValue: 'High' })}
+                        />
+                      )}
+                      {taskTitle(task)}
                     </span>
                     <span className="block wrap-anywhere text-caption text-secondary">
-                      {task.from_name || task.from_addr}
-                      {task.note && ` · ${task.note}`}
+                      {task.linked === false
+                        ? task.note
+                        : [task.from_name || task.from_addr, task.note].filter(Boolean).join(' · ')}
                     </span>
-                    {!done && task.due_at && <DueChip dueAt={task.due_at} />}
+                    <span className="flex flex-wrap items-center gap-3">
+                      {!done && task.due_at && <DueChip dueAt={task.due_at} />}
+                      {task.recurring && (
+                        <span className="flex items-center gap-1 text-2xs text-secondary">
+                          <Repeat size={12} strokeWidth={1.75} aria-hidden="true" />
+                          {t('tasks.repeatsReadOnly', { defaultValue: 'Repeats · edit it in the app that made it' })}
+                        </span>
+                      )}
+                      {task.pending === 'put' && !task.conflict && isRemoteList(listsById.get(task.list_id ?? '')) && (
+                        <span className="text-2xs text-secondary">
+                          {t('tasks.notSentYet', { defaultValue: 'Not on the server yet' })}
+                        </span>
+                      )}
+                      {!done && task.reminder_at && (
+                        <span className="flex items-center gap-1 text-2xs text-secondary">
+                          <Bell size={12} strokeWidth={1.75} aria-hidden="true" />
+                          {new Date(task.reminder_at * 1000).toLocaleString(undefined, {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}
+                        </span>
+                      )}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -156,12 +391,94 @@ export function TasksView() {
                   >
                     <Trash2 size={14} strokeWidth={1.75} />
                   </button>
+                  {task.conflict && <ConflictBar task={task} />}
                 </li>
               )
             })}
           </ul>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Where a list kept on a server is, when it last synced, and why the last
+ * sync failed if it did (ADR-0039). */
+function SyncStatus({ list, syncing, onSync }: { list: TaskList; syncing: boolean; onSync: () => void }) {
+  const { t } = useTranslation()
+  let host = list.remote_url ?? ''
+  try {
+    host = new URL(host).host
+  } catch {
+    // Shown as stored.
+  }
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2 text-caption text-secondary">
+      <span className="min-w-0 flex-1 wrap-anywhere">
+        {t('tasks.keptOn', { host, defaultValue: 'Kept on {host}.' })}{' '}
+        {list.synced_at
+          ? t('tasks.lastSynced', {
+              time: new Date(list.synced_at * 1000).toLocaleString(undefined, {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              }),
+              defaultValue: 'Last synced {time}.',
+            })
+          : t('tasks.neverSynced', { defaultValue: 'Not synced yet.' })}
+        {(list.conflicts ?? 0) > 0 &&
+          ` ${t('tasks.conflictsWaiting', {
+            count: list.conflicts,
+            defaultValue:
+              'Tasks waiting for a choice: {count}. The list’s other changes are sent once they are settled.',
+          })}`}
+      </span>
+      {list.last_error && (
+        <span role="alert" className="basis-full wrap-anywhere text-danger">
+          {t('tasks.syncError', {
+            error: list.last_error,
+            defaultValue: 'The last sync failed: {error}. Nothing here was lost; changes are sent on the next sync.',
+          })}
+        </span>
+      )}
+      <Button variant="secondary" size="sm" onClick={onSync} disabled={syncing}>
+        <RefreshCw size={14} strokeWidth={1.75} className={syncing ? 'animate-spin' : undefined} />
+        {syncing ? t('tasks.syncing', { defaultValue: 'Syncing…' }) : t('tasks.sync', { defaultValue: 'Sync' })}
+      </Button>
+    </div>
+  )
+}
+
+/** A task changed here and on the server (or deleted there): nothing is
+ * overwritten until the person chooses a copy. */
+function ConflictBar({ task }: { task: Task }) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = useState(false)
+  const settle = async (keep: 'mine' | 'server') => {
+    setBusy(true)
+    await resolveTaskConflict(task.id, keep)
+    setBusy(false)
+  }
+  const reason =
+    task.conflict === 'deleted'
+      ? t('tasks.conflictDeleted', { defaultValue: 'Changed here, deleted on the server.' })
+      : task.pending === 'delete'
+        ? t('tasks.conflictDeletedHere', { defaultValue: 'Deleted here, changed on the server.' })
+        : t('tasks.conflictChanged', { defaultValue: 'Changed here and on the server.' })
+  return (
+    <div className="flex basis-full flex-wrap items-center gap-2 rounded-control bg-warning-soft px-2.5 py-1.5 text-caption text-primary">
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 font-semibold">
+        <AlertTriangle size={14} strokeWidth={1.75} className="shrink-0 text-warning" aria-hidden="true" />
+        <span className="rounded-control-sm border border-warning/40 px-1.5 text-2xs text-warning">
+          {t('tasks.conflictBadge', { defaultValue: 'Conflict' })}
+        </span>
+        <span className="font-normal">{reason}</span>
+      </span>
+      <Button variant="secondary" size="sm" disabled={busy} onClick={() => void settle('mine')}>
+        {t('tasks.keepMine', { defaultValue: 'Keep mine' })}
+      </Button>
+      <Button variant="ghost" size="sm" disabled={busy} onClick={() => void settle('server')}>
+        {t('tasks.takeServers', { defaultValue: 'Take the server’s' })}
+      </Button>
     </div>
   )
 }

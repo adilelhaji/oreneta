@@ -30,3 +30,13 @@ describe('bareAddr', () => {
     expect(bareAddr('no-at-sign')).toBe('no-at-sign')
   })
 })
+
+describe('a display name with a comma in it (#39)', () => {
+  it('is one person, not two broken addresses', () => {
+    expect(splitAddressList('"Doe, John" <j@example.com>, b@y.com')).toEqual(['"Doe, John" <j@example.com>', 'b@y.com'])
+  })
+
+  it('keeps an Outlook-style semicolon list apart', () => {
+    expect(splitAddressList('a@x.com; "Pérez; Ana" <ana@y.com>')).toEqual(['a@x.com', '"Pérez; Ana" <ana@y.com>'])
+  })
+})

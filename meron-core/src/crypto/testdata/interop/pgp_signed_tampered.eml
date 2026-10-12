@@ -1,0 +1,24 @@
+From: Pau Interop <pau@example.test>
+To: fixture@example.test
+Subject: Signed with GnuPG
+MIME-Version: 1.0
+Content-Type: multipart/signed; boundary="b1"; micalg=pgp-sha256; protocol="application/pgp-signature"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Hello from GnuPG!
+
+--b1
+Content-Type: application/pgp-signature; name="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iIcEABYIAC8WIQRbf56dctdGuIRgDbCFySSKP0a42AUCaswy1REccGF1QGV4YW1w
+bGUudGVzdAAKCRCFySSKP0a42AqXAP0TRo/Mkw+fZ6zD/fSFNgk2rmHn1nFau9mH
+pd5aaoRViQD+LaBbC+yjCZEh2fh69aAhUV35eQLaQw4KP5yq3wqgjAg=
+=ITj9
+-----END PGP SIGNATURE-----
+
+--b1--

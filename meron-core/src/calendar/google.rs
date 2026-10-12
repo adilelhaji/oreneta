@@ -93,6 +93,76 @@ struct GoogleEvent {
     attendees: Vec<GoogleAttendee>,
     #[serde(default)]
     reminders: Option<GoogleReminders>,
+    #[serde(rename = "hangoutLink", default)]
+    hangout_link: Option<String>,
+    #[serde(rename = "conferenceData", default)]
+    conference_data: Option<ConferenceData>,
+}
+
+/// The meeting Google keeps on an event (#109).
+#[derive(Deserialize, Default)]
+struct ConferenceData {
+    #[serde(rename = "entryPoints", default)]
+    entry_points: Vec<EntryPoint>,
+    #[serde(rename = "conferenceSolution", default)]
+    solution: Option<Solution>,
+    #[serde(rename = "createRequest", default)]
+    create_request: Option<CreateRequest>,
+}
+
+#[derive(Deserialize)]
+struct EntryPoint {
+    #[serde(rename = "entryPointType", default)]
+    kind: String,
+    #[serde(default)]
+    uri: String,
+}
+
+#[derive(Deserialize)]
+struct Solution {
+    #[serde(default)]
+    key: Option<SolutionKey>,
+}
+
+#[derive(Deserialize)]
+struct SolutionKey {
+    #[serde(rename = "type", default)]
+    kind: String,
+}
+
+#[derive(Deserialize)]
+struct CreateRequest {
+    #[serde(default)]
+    status: Option<CreateStatus>,
+}
+
+#[derive(Deserialize)]
+struct CreateStatus {
+    #[serde(rename = "statusCode", default)]
+    code: String,
+}
+
+/// The meeting Google bound to an event, and whether one asked for is ready.
+fn google_meeting(
+    data: Option<&ConferenceData>,
+    hangout: Option<&str>,
+) -> (Option<super::meeting::Meeting>, Option<String>) {
+    let status = data
+        .and_then(|d| d.create_request.as_ref())
+        .and_then(|r| r.status.as_ref())
+        .map(|s| s.code.clone());
+    let video = data.and_then(|d| d.entry_points.iter().find(|e| e.kind == "video" && e.uri.starts_with("https://")));
+    let provider = match data.and_then(|d| d.solution.as_ref()).and_then(|s| s.key.as_ref()).map(|k| k.kind.as_str()) {
+        Some("hangoutsMeet") | None => "meet".to_string(),
+        // An add-on (Zoom, Teams…) installed in Google Calendar: name it by
+        // its address.
+        Some(_) => video
+            .and_then(|e| super::meeting::detect(&e.uri))
+            .map(|m| m.provider)
+            .unwrap_or_else(|| "other".into()),
+    };
+    let url = video.map(|e| e.uri.clone()).or_else(|| hangout.map(str::to_string));
+    (url.map(|url| super::meeting::Meeting { provider, url }), status)
 }
 
 #[derive(Deserialize)]
@@ -148,6 +218,10 @@ struct CreatedEvent {
     id: String,
     #[serde(default)]
     etag: Option<String>,
+    #[serde(rename = "hangoutLink", default)]
+    hangout_link: Option<String>,
+    #[serde(rename = "conferenceData", default)]
+    conference_data: Option<ConferenceData>,
 }
 
 #[derive(Deserialize)]
@@ -161,6 +235,19 @@ struct CreatedCalendar {
 /// One authenticated call. Blocking, like the rest of this crate's HTTP;
 /// callers wrap it in `spawn_blocking`.
 fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -> Result<String> {
+    call_with(token, method, url, body, None)
+}
+
+/// [`call`] with an optional `If-Match`: the write happens only if the event
+/// is still the version that was read, and is refused with 412 otherwise.
+fn call_with(
+    token: &str,
+    method: &str,
+    url: &str,
+    body: Option<serde_json::Value>,
+    if_match: Option<&str>,
+) -> Result<String> {
+    let url = &test_base(url);
     let agent = crate::proxy::agent()?;
     let authorization = format!("Bearer {token}");
 
@@ -187,8 +274,7 @@ fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -
             .build()
             .call()
             .with_context(|| format!("{method} {url}"))?,
-        ("DELETE", _) => agent
-            .delete(url)
+        ("DELETE", _) => with_if_match(agent.delete(url), if_match)
             .header("Authorization", &authorization)
             .config()
             .http_status_as_error(false)
@@ -206,8 +292,7 @@ fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -
             .build()
             .send(payload.as_str())
             .with_context(|| format!("{method} {url}"))?,
-        ("PATCH", Some(_)) => agent
-            .patch(url)
+        ("PATCH", Some(_)) => with_if_match(agent.patch(url), if_match)
             .header("Authorization", &authorization)
             .header("Content-Type", "application/json")
             .config()
@@ -230,6 +315,33 @@ fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -
     Ok(text)
 }
 
+fn with_if_match<B>(request: ureq::RequestBuilder<B>, if_match: Option<&str>) -> ureq::RequestBuilder<B> {
+    match if_match.filter(|tag| !tag.is_empty()) {
+        Some(tag) => request.header("If-Match", tag),
+        None => request,
+    }
+}
+
+// Tests point the client at a local server, per thread, so they can see the
+// requests it makes and answer them. Never set outside tests.
+#[cfg(test)]
+thread_local! {
+    static TEST_BASE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn test_base(url: &str) -> String {
+    TEST_BASE.with(|base| match base.borrow().as_deref() {
+        Some(base) => url.replacen(API, base, 1),
+        None => url.to_string(),
+    })
+}
+
+#[cfg(not(test))]
+fn test_base(url: &str) -> String {
+    url.to_string()
+}
+
 /// What to tell the user about a refused call.
 ///
 /// The one refusal worth naming is a token that predates the calendar
@@ -243,6 +355,11 @@ fn explain(status: u16, body: &str) -> String {
     if needs_consent {
         return "this account has not granted calendar access yet — reconnect it \
                 to sign in again and allow the calendar"
+            .to_string();
+    }
+    if status == 412 {
+        return "this event was changed elsewhere since it was opened; nothing was \
+                saved — open it again to see the latest version"
             .to_string();
     }
     format!("Google Calendar answered {status}: {message}")
@@ -360,44 +477,163 @@ fn updates_query(notify: bool) -> &'static str {
 
 /// Creates an event and returns it with the id the server assigned.
 pub fn create_event(token: &str, event: &Event, notify: bool) -> Result<Event> {
+    let mut body = event_body(event, true)?;
+    let meeting = meeting_request(event, &meeting_key(event))?;
+    if let Some(conference) = &meeting {
+        body["conferenceData"] = conference.clone();
+    }
     let url = format!(
-        "{API}/calendars/{}/events?{}",
+        "{API}/calendars/{}/events?{}{}",
         urlencode(&event.calendar_id),
         updates_query(notify),
+        if meeting.is_some() { "&conferenceDataVersion=1" } else { "" },
     );
-    let created: CreatedEvent = serde_json::from_str(&call(
-        token,
-        "POST",
-        &url,
-        Some(event_body(event)?),
-    )?)
-    .context("parse created event")?;
+    let created: CreatedEvent = serde_json::from_str(&call(token, "POST", &url, Some(body))?)
+        .context("parse created event")?;
+    let (found, status) = google_meeting(created.conference_data.as_ref(), created.hangout_link.as_deref());
     Ok(Event {
         id: created.id,
         change_key: created.etag,
+        meeting_status: meeting.as_ref().map(|_| meeting_status(found.as_ref(), status.as_deref())),
+        meeting: found,
+        add_meeting: None,
         ..event.clone()
     })
+}
+
+/// The key a new event's meeting request is made from: the same event asked
+/// for twice asks for the same meeting.
+fn meeting_key(event: &Event) -> String {
+    if !event.id.is_empty() {
+        return event.id.clone();
+    }
+    format!("{}\0{}\0{}\0{}", event.subject, event.start, event.end, event.calendar_id)
+}
+
+/// What to send for an asked-for meeting: a Meet to create, `null` to remove
+/// the one there, or nothing to leave it as it is.
+fn meeting_request(event: &Event, key: &str) -> Result<Option<serde_json::Value>> {
+    match event.add_meeting.as_deref() {
+        None => Ok(None),
+        Some("none") => Ok(Some(serde_json::Value::Null)),
+        Some("meet") => {
+            if event.meeting.as_ref().is_some_and(|m| m.provider == "meet") {
+                // There is one already: asking again would make a second.
+                return Ok(None);
+            }
+            Ok(Some(serde_json::json!({
+                "createRequest": {
+                    "requestId": super::meeting::request_id(&event.calendar_id, key),
+                    "conferenceSolutionKey": { "type": "hangoutsMeet" },
+                }
+            })))
+        }
+        Some(other) => anyhow::bail!("{other} meetings cannot be created here"),
+    }
+}
+
+/// Ready, still being set up, or refused (an account without Meet).
+fn meeting_status(found: Option<&super::meeting::Meeting>, status: Option<&str>) -> String {
+    match (found, status) {
+        (Some(_), _) => "ready",
+        (None, Some("pending")) => "pending",
+        _ => "failed",
+    }
+    .to_string()
 }
 
 /// Updates an event in place. PATCH rather than PUT: only the fields this
 /// client owns are sent, so anything Google keeps that Meron does not model —
 /// conferencing links, reminders, colours — survives the edit.
-pub fn update_event(token: &str, event: &Event, whole_series: bool, notify: bool) -> Result<()> {
+pub fn update_event(
+    token: &str,
+    event: &Event,
+    whole_series: bool,
+    notify: bool,
+) -> Result<Option<String>> {
     // Changing the series means changing the master it was expanded from;
     // changing this one means changing the instance, which Google records as
     // an exception and leaves the rest of the series alone.
-    let target = match (whole_series, event.series_id.as_deref()) {
-        (true, Some(series)) => series,
-        _ => event.id.as_str(),
+    let (target, mut body, version) = match (whole_series, event.series_id.as_deref()) {
+        (true, Some(series)) => {
+            // The occurrence being edited is not where the series starts.
+            // Writing its date onto the master moved the start of the series
+            // to it, and every earlier occurrence was gone. The master keeps
+            // its own first date and takes the new time of day and length.
+            let master_url = format!(
+                "{API}/calendars/{}/events/{}",
+                urlencode(&event.calendar_id),
+                urlencode(series),
+            );
+            #[derive(Deserialize)]
+            struct Master {
+                start: Option<EventDateTime>,
+                #[serde(default)]
+                etag: Option<String>,
+            }
+            let master: Master = serde_json::from_str(&call(token, "GET", &master_url, None)?)
+                .context("read the series")?;
+            let first = master
+                .start
+                .as_ref()
+                .and_then(instant)
+                .context("the series has no start")?;
+            let anchored = anchored_to_series(event, first).context("place the series")?;
+            (series, event_body(&anchored, true)?, master.etag)
+        }
+        // An occurrence cannot carry a rule of its own; only the series can.
+        (false, Some(_)) => (event.id.as_str(), event_body(event, false)?, event.change_key.clone()),
+        _ => (event.id.as_str(), event_body(event, true)?, event.change_key.clone()),
     };
+    // A meeting added or removed with this save (#109); left out, the one
+    // there stays, since this is a PATCH.
+    let meeting = meeting_request(event, target)?;
+    if let Some(conference) = &meeting {
+        body["conferenceData"] = conference.clone();
+    }
     let url = format!(
-        "{API}/calendars/{}/events/{}?{}",
+        "{API}/calendars/{}/events/{}?{}{}",
         urlencode(&event.calendar_id),
         urlencode(target),
         updates_query(notify),
+        if meeting.is_some() { "&conferenceDataVersion=1" } else { "" },
     );
-    call(token, "PATCH", &url, Some(event_body(event)?))?;
-    Ok(())
+    // Sent with the version it was read at, so an edit made elsewhere in
+    // between is refused (412) rather than silently overwritten.
+    let answer = call_with(token, "PATCH", &url, Some(body), version.as_deref())?;
+    if whole_series && event.series_id.is_some() {
+        // The new version is the master's; the occurrence on screen has its
+        // own, which the sync that follows brings.
+        return Ok(None);
+    }
+    Ok(serde_json::from_str::<CreatedEvent>(&answer)
+        .ok()
+        .and_then(|updated| updated.etag))
+}
+
+/// The edited occurrence's times moved onto the series' first date: same
+/// time of day (in this machine's zone, which is the zone the series is
+/// written in) and same length.
+fn anchored_to_series(event: &Event, series_start: i64) -> Option<Event> {
+    use chrono::TimeZone as _;
+    let length = (event.end - event.start).max(0);
+    let start = if event.all_day {
+        // All-day dates are UTC dates throughout this module.
+        let date = chrono::DateTime::from_timestamp(series_start, 0)?.date_naive();
+        date.and_hms_opt(0, 0, 0)?.and_utc().timestamp()
+    } else {
+        let date = chrono::Local.timestamp_opt(series_start, 0).earliest()?.date_naive();
+        let time = chrono::Local.timestamp_opt(event.start, 0).earliest()?.time();
+        chrono::Local
+            .from_local_datetime(&date.and_time(time))
+            .earliest()?
+            .timestamp()
+    };
+    Some(Event {
+        start,
+        end: start + length,
+        ..event.clone()
+    })
 }
 
 /// Answers a meeting invitation.
@@ -412,18 +648,32 @@ pub fn respond(
     event_id: &str,
     response: super::Response,
 ) -> Result<()> {
-    #[derive(Deserialize)]
-    struct Current {
-        #[serde(default)]
-        attendees: Vec<serde_json::Value>,
-    }
     let url = format!(
         "{API}/calendars/{}/events/{}",
         urlencode(calendar_id),
         urlencode(event_id),
     );
+    // The list is read and written back, so the write is made conditional on
+    // the version read: someone added in between is kept by reading again,
+    // once, rather than dropped.
+    match answer_once(token, &url, response) {
+        Err(err) if format!("{err:#}").contains("changed elsewhere") => {
+            answer_once(token, &url, response)
+        }
+        other => other,
+    }
+}
+
+fn answer_once(token: &str, url: &str, response: super::Response) -> Result<()> {
+    #[derive(Deserialize)]
+    struct Current {
+        #[serde(default)]
+        attendees: Vec<serde_json::Value>,
+        #[serde(default)]
+        etag: Option<String>,
+    }
     let current: Current =
-        serde_json::from_str(&call(token, "GET", &url, None)?).context("read event to answer")?;
+        serde_json::from_str(&call(token, "GET", url, None)?).context("read event to answer")?;
 
     let mut attendees = current.attendees;
     let mut answered = false;
@@ -442,11 +692,12 @@ pub fn respond(
         anyhow::bail!("this account is not on the invitation");
     }
 
-    call(
+    call_with(
         token,
         "PATCH",
-        &url,
+        url,
         Some(serde_json::json!({ "attendees": attendees })),
+        current.etag.as_deref(),
     )?;
     Ok(())
 }
@@ -518,32 +769,42 @@ pub fn delete_calendar(token: &str, calendar_id: &str, owned: bool) -> Result<()
 /// A repeating event needs one: the rule is expanded *in* a zone, and without
 /// it a weekly meeting at nine would wander by an hour when the clocks change.
 /// Google refuses to create a series without it, which is the right refusal.
-fn local_timezone() -> String {
-    if let Ok(name) = std::env::var("TZ") {
-        let name = name.trim_start_matches(':').trim();
-        if !name.is_empty() {
-            return name.to_string();
-        }
-    }
-    // The conventional way to recover the name on Unix: the zone file the
-    // system points at is named after its zone.
-    if let Ok(target) = std::fs::read_link("/etc/localtime") {
-        let path = target.to_string_lossy();
-        if let Some(index) = path.find("zoneinfo/") {
-            let name = &path[index + "zoneinfo/".len()..];
-            if !name.is_empty() {
-                return name.to_string();
-            }
-        }
-    }
-    // Not knowing is survivable: UTC is a real zone, and the instants are
-    // right either way — only the expansion of a rule across a clock change
-    // would differ.
-    "UTC".to_string()
+pub(crate) fn local_timezone() -> String {
+    zone_name(
+        std::env::var("TZ").ok(),
+        std::fs::read_link("/etc/localtime").ok(),
+        iana_time_zone::get_timezone().ok(),
+    )
+}
+
+/// The first IANA name among the candidates: `TZ`, the zone file
+/// `/etc/localtime` points at, and the platform's own answer. Windows has
+/// neither of the first two, and returned "UTC" here, so a Google series
+/// written there moved an hour at every clock change. A `TZ` in POSIX form
+/// (`CET-1CEST`) is not a name Google accepts and is passed over.
+fn zone_name(
+    tz: Option<String>,
+    localtime: Option<std::path::PathBuf>,
+    platform: Option<String>,
+) -> String {
+    let from_tz = tz.map(|name| name.trim_start_matches(':').trim().to_string());
+    let from_file = localtime.and_then(|target| {
+        let path = target.to_string_lossy().into_owned();
+        path.find("zoneinfo/")
+            .map(|index| path[index + "zoneinfo/".len()..].to_string())
+    });
+    [from_tz, from_file, platform]
+        .into_iter()
+        .flatten()
+        .find(|name| !name.is_empty() && name.parse::<chrono_tz::Tz>().is_ok())
+        // Not knowing is survivable: UTC is a real zone, and the instants are
+        // right either way; only the expansion of a rule across a clock
+        // change would differ.
+        .unwrap_or_else(|| "UTC".to_string())
 }
 
 /// The request body for a create or update.
-fn event_body(event: &Event) -> Result<serde_json::Value> {
+fn event_body(event: &Event, with_rule: bool) -> Result<serde_json::Value> {
     // Both keys are always sent, the unused one as null.
     //
     // An update is a PATCH, so anything left out keeps the value the server
@@ -579,7 +840,7 @@ fn event_body(event: &Event) -> Result<serde_json::Value> {
             }),
         )
     };
-    Ok(serde_json::json!({
+    let mut body = serde_json::json!({
         "summary": event.subject,
         "location": event.location.clone().unwrap_or_default(),
         "description": event.description,
@@ -596,12 +857,6 @@ fn event_body(event: &Event) -> Result<serde_json::Value> {
         // Explicit either way: sending overrides when there is a reminder, and
         // an empty override list when there is none, so removing a reminder
         // actually removes it rather than falling back to the calendar's.
-        // Only on a create: changing an existing series' rule is a different
-        // question ("this one or all of them?") and is not asked here yet.
-        "recurrence": match event.recurrence.as_ref().and_then(|rule| rrule(rule, event.start)) {
-            Some(line) => serde_json::json!([line]),
-            None => serde_json::Value::Null,
-        },
         "reminders": match event.reminder_minutes {
             Some(minutes) => serde_json::json!({
                 "useDefault": false,
@@ -609,7 +864,16 @@ fn event_body(event: &Event) -> Result<serde_json::Value> {
             }),
             None => serde_json::json!({ "useDefault": false, "overrides": [] }),
         },
-    }))
+    });
+    // A rule is sent only when there is one to send. This is a PATCH: a null
+    // here cleared the series' rule whenever the editor had not loaded it,
+    // turning a series into its first occurrence.
+    if with_rule {
+        if let Some(line) = event.recurrence.as_ref().and_then(|rule| rrule(rule, event.start, event.all_day)) {
+            body["recurrence"] = serde_json::json!([line]);
+        }
+    }
+    Ok(body)
 }
 
 /// Who is on an event, and its notes.
@@ -748,7 +1012,7 @@ fn parse_until(text: &str) -> Option<i64> {
 ///
 /// One line of iCalendar, which is what Google stores; the server expands it
 /// and hands back occurrences, so this is the only direction a rule travels.
-fn rrule(rule: &super::Recurrence, start: i64) -> Option<String> {
+pub(crate) fn rrule(rule: &super::Recurrence, start: i64, all_day: bool) -> Option<String> {
     use super::{Frequency, Recurrence as Rule};
     let mut parts = vec![match rule.freq {
         Frequency::Daily => "FREQ=DAILY".to_string(),
@@ -763,7 +1027,7 @@ fn rrule(rule: &super::Recurrence, start: i64) -> Option<String> {
     if rule.freq == Frequency::Weekly {
         parts.push(format!(
             "BYDAY={}",
-            rule.days_or_start(start)
+            rule.days_or_start(start, all_day)
                 .into_iter()
                 .map(|day| Rule::RRULE_DAYS[day as usize])
                 .collect::<Vec<_>>()
@@ -776,7 +1040,9 @@ fn rrule(rule: &super::Recurrence, start: i64) -> Option<String> {
             // UNTIL is inclusive and compared against the whole instant, so it
             // is set to the end of that day — otherwise a series "until the
             // 30th" stops on the 29th.
-            let end = chrono::DateTime::from_timestamp(until, 0)?;
+            // The editor stores the end date as the last minute of that
+            // day on this machine's clock.
+            let end = super::start_date(until, false)?;
             parts.push(format!("UNTIL={}", end.format("%Y%m%dT235959Z")));
         }
         (None, Some(count)) => parts.push(format!("COUNT={}", count.max(1))),
@@ -814,7 +1080,11 @@ fn to_event(source: GoogleEvent, calendar_id: &str) -> Option<Event> {
         })
         .collect();
 
+    let (meeting, _) = google_meeting(source.conference_data.as_ref(), source.hangout_link.as_deref());
     Some(Event {
+        meeting,
+        add_meeting: None,
+        meeting_status: None,
         id: source.id,
         calendar_id: calendar_id.to_string(),
         change_key: source.etag,
@@ -844,8 +1114,8 @@ fn to_event(source: GoogleEvent, calendar_id: &str) -> Option<Event> {
         }),
         is_cancelled: source.status == "cancelled",
         free_busy: match source.transparency.as_deref() {
-            Some("transparent") => "Free".to_string(),
-            _ => "Busy".to_string(),
+            Some("transparent") => "free".to_string(),
+            _ => "busy".to_string(),
         },
         my_response,
         organizer,
@@ -898,6 +1168,292 @@ fn urlencode(value: &str) -> String {
 mod tests {
     use super::*;
 
+    /// One request as the local server saw it.
+    #[derive(Debug, Clone)]
+    struct Seen {
+        method: String,
+        path: String,
+        if_match: Option<String>,
+        body: String,
+    }
+
+    /// Answers the given responses in order, one per connection, from a
+    /// loopback server, and points this thread's client at it.
+    fn serve(responses: Vec<(u16, String)>) -> std::sync::Arc<std::sync::Mutex<Vec<Seen>>> {
+        use std::io::{BufRead as _, BufReader, Read as _, Write as _};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/calendar/v3", listener.local_addr().unwrap());
+        TEST_BASE.with(|slot| *slot.borrow_mut() = Some(base));
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let record = seen.clone();
+        std::thread::spawn(move || {
+            for (status, body) in responses {
+                let Ok((stream, _)) = listener.accept() else { return };
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                let mut parts = line.split_whitespace();
+                let method = parts.next().unwrap_or_default().to_string();
+                let path = parts.next().unwrap_or_default().to_string();
+                let (mut length, mut if_match) = (0usize, None);
+                loop {
+                    let mut header = String::new();
+                    reader.read_line(&mut header).unwrap();
+                    let header = header.trim_end();
+                    if header.is_empty() {
+                        break;
+                    }
+                    let (name, value) = header.split_once(':').unwrap();
+                    match name.to_ascii_lowercase().as_str() {
+                        "content-length" => length = value.trim().parse().unwrap(),
+                        "if-match" => if_match = Some(value.trim().to_string()),
+                        _ => {}
+                    }
+                }
+                let mut content = vec![0; length];
+                reader.read_exact(&mut content).unwrap();
+                record.lock().unwrap().push(Seen {
+                    method,
+                    path,
+                    if_match,
+                    body: String::from_utf8(content).unwrap(),
+                });
+                let mut stream = stream;
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
+            }
+        });
+        seen
+    }
+
+    fn stored(change_key: Option<&str>, series: Option<&str>) -> Event {
+        Event {
+            id: "occurrence-1".into(),
+            calendar_id: "primary".into(),
+            change_key: change_key.map(str::to_string),
+            subject: "Review".into(),
+            location: None,
+            start: 1_791_799_200,
+            end: 1_791_802_800,
+            all_day: false,
+            is_recurring: series.is_some(),
+            series_id: series.map(str::to_string),
+            recurrence: None,
+            description: String::new(),
+            reminder_minutes: None,
+            is_cancelled: false,
+            free_busy: String::new(),
+            my_response: String::new(),
+            organizer: None,
+            attendees: Vec::new(),
+            meeting: None,
+            add_meeting: None,
+            meeting_status: None,
+        }
+    }
+
+    #[test]
+    fn a_meet_is_created_with_the_event_only_when_asked_and_bound_to_it() {
+        let seen = serve(vec![(
+            200,
+            r#"{"id":"ev1","etag":"\"v1\"","hangoutLink":"https://meet.google.com/abc-defg-hij",
+                "conferenceData":{"entryPoints":[{"entryPointType":"video","uri":"https://meet.google.com/abc-defg-hij"},
+                {"entryPointType":"phone","uri":"tel:+1-555"}],"conferenceSolution":{"key":{"type":"hangoutsMeet"}},
+                "createRequest":{"status":{"statusCode":"success"}}}}"#
+                .into(),
+        )]);
+        let mut event = stored(None, None);
+        event.id = String::new();
+        event.add_meeting = Some("meet".into());
+        let created = create_event("token", &event, false).unwrap();
+        assert_eq!(
+            created.meeting,
+            Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/abc-defg-hij".into() })
+        );
+        assert_eq!(created.meeting_status.as_deref(), Some("ready"));
+        let seen = seen.lock().unwrap();
+        assert!(seen[0].path.contains("conferenceDataVersion=1"), "{}", seen[0].path);
+        let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
+        let request = &body["conferenceData"]["createRequest"];
+        assert_eq!(request["conferenceSolutionKey"]["type"], "hangoutsMeet");
+        // Retrying the same save asks for the same meeting.
+        assert_eq!(request["requestId"], super::super::meeting::request_id("primary", &meeting_key(&event)));
+
+        // Not asked: nothing about meetings is sent.
+        drop(seen);
+        let seen = serve(vec![(200, r#"{"id":"ev2"}"#.into())]);
+        let plain = create_event("token", &stored(None, None), false).unwrap();
+        assert_eq!(plain.meeting_status, None);
+        let seen = seen.lock().unwrap();
+        assert!(!seen[0].path.contains("conferenceDataVersion"));
+        assert!(!seen[0].body.contains("conferenceData"));
+    }
+
+    #[test]
+    fn a_meet_google_cannot_make_is_said_not_assumed() {
+        let _seen = serve(vec![(
+            200,
+            r#"{"id":"ev1","conferenceData":{"createRequest":{"status":{"statusCode":"failure"}}}}"#.into(),
+        )]);
+        let mut event = stored(None, None);
+        event.add_meeting = Some("meet".into());
+        let created = create_event("token", &event, false).unwrap();
+        assert_eq!(created.meeting, None);
+        assert_eq!(created.meeting_status.as_deref(), Some("failed"));
+
+        let _seen = serve(vec![(
+            200,
+            r#"{"id":"ev1","conferenceData":{"createRequest":{"status":{"statusCode":"pending"}}}}"#.into(),
+        )]);
+        assert_eq!(create_event("token", &event, false).unwrap().meeting_status.as_deref(), Some("pending"));
+    }
+
+    #[test]
+    fn an_edit_keeps_the_meeting_adds_one_once_or_removes_it_when_asked() {
+        // Keeps: a plain edit sends nothing about it, and PATCH leaves it.
+        let seen = serve(vec![(200, r#"{"etag":"\"v2\""}"#.into())]);
+        let mut event = stored(Some("\"v1\""), None);
+        event.meeting = Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/x".into() });
+        update_event("token", &event, false, false).unwrap();
+        assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
+
+        // Asking for a Meet on an event that has one makes no second one.
+        let seen = serve(vec![(200, r#"{"etag":"\"v3\""}"#.into())]);
+        event.add_meeting = Some("meet".into());
+        update_event("token", &event, false, false).unwrap();
+        assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
+
+        // Removing it sends null, with the version that makes Google read it.
+        let seen = serve(vec![(200, r#"{"etag":"\"v4\""}"#.into())]);
+        event.add_meeting = Some("none".into());
+        update_event("token", &event, false, false).unwrap();
+        let seen = seen.lock().unwrap();
+        assert!(seen[0].path.contains("conferenceDataVersion=1"));
+        let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
+        assert!(body["conferenceData"].is_null() && body.as_object().unwrap().contains_key("conferenceData"));
+
+        // Another kind is refused before anything is sent.
+        event.add_meeting = Some("zoom".into());
+        assert!(update_event("token", &event, false, false).is_err());
+    }
+
+    #[test]
+    fn an_add_on_meeting_google_holds_is_named_by_its_address() {
+        let data: ConferenceData = serde_json::from_str(
+            r#"{"entryPoints":[{"entryPointType":"video","uri":"https://us02web.zoom.us/j/81234"}],
+                "conferenceSolution":{"key":{"type":"addOn"}}}"#,
+        )
+        .unwrap();
+        let (meeting, _) = google_meeting(Some(&data), None);
+        assert_eq!(meeting.unwrap().provider, "zoom");
+    }
+
+    #[test]
+    fn an_edit_is_sent_with_the_version_it_was_read_at() {
+        let seen = serve(vec![(200, r#"{"id":"occurrence-1","etag":"\"v2\""}"#.into())]);
+        let version = update_event("token", &stored(Some("\"v1\""), None), false, false).unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].method, "PATCH");
+        assert_eq!(seen[0].if_match.as_deref(), Some("\"v1\""));
+        assert_eq!(version.as_deref(), Some("\"v2\""), "the new version is reported back");
+    }
+
+    #[test]
+    fn an_edit_made_elsewhere_in_between_is_not_overwritten() {
+        let _seen = serve(vec![(412, r#"{"error":{"message":"Precondition Failed"}}"#.into())]);
+        let err = update_event("token", &stored(Some("\"v1\""), None), false, false).unwrap_err();
+        assert!(format!("{err:#}").contains("changed elsewhere"), "{err:#}");
+    }
+
+    #[test]
+    fn a_series_edit_does_not_claim_the_occurrences_version_for_the_master() {
+        let seen = serve(vec![
+            (200, r#"{"etag":"\"master\"","start":{"dateTime":"2026-10-05T09:00:00Z"}}"#.into()),
+            (200, r#"{"id":"master"}"#.into()),
+        ]);
+        update_event("token", &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
+        let seen = seen.lock().unwrap();
+        assert!(seen[1].path.contains("/events/master"));
+        assert_eq!(seen[1].if_match.as_deref(), Some("\"master\""), "the master's own version, never the occurrence's");
+    }
+
+    #[test]
+    fn a_series_edit_keeps_the_series_first_date_and_its_rule() {
+        use chrono::TimeZone as _;
+        let local = |y, m, d, h| {
+            chrono::Local
+                .from_local_datetime(&chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, 0, 0).unwrap())
+                .earliest()
+                .unwrap()
+                .timestamp()
+        };
+        // The series began on 5 October at 09:00. The occurrence on 19
+        // October is edited to 10:00–11:30 and saved for the whole series.
+        let master_start = rfc3339(local(2026, 10, 5, 9)).unwrap();
+        let seen = serve(vec![
+            (200, format!(r#"{{"etag":"\"master-v3\"","start":{{"dateTime":"{master_start}"}}}}"#)),
+            (200, r#"{"id":"master","etag":"\"master-v4\""}"#.into()),
+        ]);
+        let mut occurrence = stored(Some("\"occurrence\""), Some("master"));
+        occurrence.start = local(2026, 10, 19, 10);
+        occurrence.end = occurrence.start + 90 * 60;
+        occurrence.recurrence = None; // the editor had not loaded the rule
+
+        let version = update_event("token", &occurrence, true, false).unwrap();
+        assert_eq!(version, None, "the master's version is not the occurrence's");
+
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].method, "GET");
+        assert!(seen[1].path.contains("/events/master"));
+        assert_eq!(seen[1].if_match.as_deref(), Some("\"master-v3\""), "the master is written at the version read");
+        let body: serde_json::Value = serde_json::from_str(&seen[1].body).unwrap();
+        let start = chrono::DateTime::parse_from_rfc3339(body["start"]["dateTime"].as_str().unwrap()).unwrap();
+        let end = chrono::DateTime::parse_from_rfc3339(body["end"]["dateTime"].as_str().unwrap()).unwrap();
+        assert_eq!(start.timestamp(), local(2026, 10, 5, 10), "first date kept, new time of day");
+        assert_eq!(end.timestamp() - start.timestamp(), 90 * 60);
+        assert!(body.get("recurrence").is_none(), "no rule sent means the rule is kept, not cleared");
+    }
+
+    #[test]
+    fn an_occurrence_edit_never_carries_a_rule() {
+        let seen = serve(vec![(200, r#"{"id":"occurrence-1","etag":"\"v2\""}"#.into())]);
+        let mut occurrence = stored(Some("\"v1\""), Some("master"));
+        occurrence.recurrence = Some(super::super::Recurrence {
+            freq: super::super::Frequency::Weekly,
+            interval: 1,
+            weekdays: vec![1],
+            until: None,
+            count: None,
+        });
+        update_event("token", &occurrence, false, false).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].body).unwrap();
+        assert!(body.get("recurrence").is_none());
+    }
+
+    #[test]
+    fn an_answer_keeps_whoever_joined_while_it_was_being_written() {
+        // Read v1 with one attendee; the write is refused because someone was
+        // added; read again (v2, two attendees) and write that list.
+        let seen = serve(vec![
+            (200, r#"{"etag":"\"v1\"","attendees":[{"email":"me@x","self":true}]}"#.into()),
+            (412, r#"{"error":{"message":"Precondition Failed"}}"#.into()),
+            (200, r#"{"etag":"\"v2\"","attendees":[{"email":"me@x","self":true},{"email":"new@x"}]}"#.into()),
+            (200, r#"{}"#.into()),
+        ]);
+        respond("token", "primary", "event-1", super::super::Response::Accept).unwrap();
+        let seen = seen.lock().unwrap();
+        let methods: Vec<&str> = seen.iter().map(|request| request.method.as_str()).collect();
+        assert_eq!(methods, vec!["GET", "PATCH", "GET", "PATCH"]);
+        assert_eq!(seen[1].if_match.as_deref(), Some("\"v1\""));
+        assert_eq!(seen[3].if_match.as_deref(), Some("\"v2\""));
+        assert!(seen[3].body.contains("new@x"), "the attendee added in between is kept");
+        assert!(seen[3].body.contains("\"responseStatus\":\"accepted\""));
+    }
+
     #[test]
     fn a_rule_read_back_says_what_was_written() {
         use super::super::Frequency;
@@ -926,19 +1482,37 @@ mod tests {
     #[test]
     fn a_rule_becomes_one_line_of_icalendar() {
         use super::super::{Frequency, Recurrence};
-        // Thursday 27 August 2026.
-        let start = chrono::DateTime::parse_from_rfc3339("2026-08-27T12:00:00Z")
-            .unwrap()
-            .timestamp();
+        // Thursday 27 August 2026 at noon on this machine's clock.
+        let start = {
+            use chrono::TimeZone as _;
+            chrono::Local
+                .from_local_datetime(
+                    &chrono::NaiveDate::from_ymd_opt(2026, 8, 27).unwrap().and_hms_opt(12, 0, 0).unwrap(),
+                )
+                .earliest()
+                .unwrap()
+                .timestamp()
+        };
 
         let fortnightly = Recurrence {
             freq: Frequency::Weekly,
             interval: 2,
             weekdays: vec![1, 3],
-            until: Some(start + 60 * 24 * 3600),
+            // As the editor stores "until 26 October": the last minute of
+            // that day on this machine's clock.
+            until: Some({
+                use chrono::TimeZone as _;
+                chrono::Local
+                    .from_local_datetime(
+                        &chrono::NaiveDate::from_ymd_opt(2026, 10, 26).unwrap().and_hms_opt(23, 59, 0).unwrap(),
+                    )
+                    .earliest()
+                    .unwrap()
+                    .timestamp()
+            }),
             count: None,
         };
-        let line = rrule(&fortnightly, start).expect("rrule");
+        let line = rrule(&fortnightly, start, false).expect("rrule");
         assert!(line.starts_with("RRULE:FREQ=WEEKLY"), "{line}");
         assert!(line.contains("INTERVAL=2"), "{line}");
         assert!(line.contains("BYDAY=TU,TH"), "{line}");
@@ -955,7 +1529,7 @@ mod tests {
             until: None,
             count: Some(10),
         };
-        let line = rrule(&ten_days, start).expect("rrule");
+        let line = rrule(&ten_days, start, false).expect("rrule");
         assert_eq!(line, "RRULE:FREQ=DAILY;COUNT=10");
 
         // Weekly with no days named falls on the day the event starts.
@@ -966,7 +1540,49 @@ mod tests {
             until: None,
             count: None,
         };
-        assert_eq!(rrule(&weekly, start).expect("rrule"), "RRULE:FREQ=WEEKLY;BYDAY=TH");
+        assert_eq!(rrule(&weekly, start, false).expect("rrule"), "RRULE:FREQ=WEEKLY;BYDAY=TH");
+    }
+
+    #[test]
+    fn a_rule_falls_on_the_days_and_end_date_the_person_sees() {
+        use super::super::{Frequency, Recurrence};
+        use chrono::TimeZone as _;
+        let local = |y, m, d, h, min| {
+            chrono::Local
+                .from_local_datetime(
+                    &chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, min, 0).unwrap(),
+                )
+                .earliest()
+                .unwrap()
+                .timestamp()
+        };
+        let weekly = |until| Recurrence { freq: Frequency::Weekly, interval: 1, weekdays: vec![], until, count: None };
+        // Tuesday 13 October 2026 at 00:30 on this machine's clock: east of
+        // UTC that is still Monday in UTC, and was saved as every Monday.
+        let line = rrule(&weekly(None), local(2026, 10, 13, 0, 30), false).unwrap();
+        assert_eq!(line, "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        // Late on Tuesday: west of UTC that is already Wednesday in UTC.
+        let line = rrule(&weekly(None), local(2026, 10, 13, 23, 30), false).unwrap();
+        assert_eq!(line, "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        // An all-day date is a UTC date already, whatever the machine.
+        let tuesday = chrono::DateTime::parse_from_rfc3339("2026-10-13T00:00:00Z").unwrap().timestamp();
+        assert_eq!(rrule(&weekly(None), tuesday, true).unwrap(), "RRULE:FREQ=WEEKLY;BYDAY=TU");
+        // "Until 30 October" is stored as 23:59 that day on this clock.
+        let line = rrule(&weekly(Some(local(2026, 10, 30, 23, 59))), tuesday, true).unwrap();
+        assert!(line.ends_with("UNTIL=20261030T235959Z"), "{line}");
+    }
+
+    #[test]
+    fn the_zone_a_series_is_written_in_is_an_iana_name() {
+        let path = |p: &str| Some(std::path::PathBuf::from(p));
+        let name = |n: &str| Some(n.to_string());
+        assert_eq!(zone_name(name(":Europe/Madrid"), None, None), "Europe/Madrid");
+        assert_eq!(zone_name(None, path("/usr/share/zoneinfo/Asia/Tokyo"), None), "Asia/Tokyo");
+        // Windows: no TZ, no zone file; the platform answers.
+        assert_eq!(zone_name(None, None, name("Europe/Berlin")), "Europe/Berlin");
+        // A POSIX TZ is passed over for the next candidate.
+        assert_eq!(zone_name(name("CET-1CEST"), None, name("Europe/Paris")), "Europe/Paris");
+        assert_eq!(zone_name(None, None, None), "UTC");
     }
 
     #[test]
@@ -977,7 +1593,7 @@ mod tests {
             all_day: false,
             ..Default::default()
         };
-        let body = event_body(&timed).expect("body");
+        let body = event_body(&timed, true).expect("body");
         assert!(body["start"]["dateTime"].is_string());
         assert!(
             body["start"]["timeZone"].is_string(),
@@ -992,7 +1608,7 @@ mod tests {
             all_day: true,
             ..timed
         };
-        let body = event_body(&all_day).expect("body");
+        let body = event_body(&all_day, true).expect("body");
         assert!(body["start"]["date"].is_string());
         assert!(body["start"]["dateTime"].is_null());
         assert!(body["end"]["dateTime"].is_null());
@@ -1030,7 +1646,7 @@ mod tests {
         assert_eq!(event.my_response, "accepted", "this mailbox's own answer");
         assert_eq!(event.attendees.len(), 2);
         assert_eq!(event.organizer.as_ref().unwrap().name, "La Cap");
-        assert_eq!(event.free_busy, "Busy");
+        assert_eq!(event.free_busy, "busy", "the same words as Exchange");
     }
 
     #[test]

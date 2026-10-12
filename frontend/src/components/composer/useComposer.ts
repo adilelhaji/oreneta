@@ -10,6 +10,7 @@ import {
   compose$,
   newDraftMessageId,
   sendComposed,
+  allocateMessageIdentity,
   appendSentMessage,
   saveComposedDraft,
   updateComposeDraft,
@@ -24,7 +25,10 @@ import { formatDeferredWhen } from '../../lib/date'
 import { pickFiles, pickImageFiles } from '../../lib/nativeFilePicker'
 import { getComposeSession, registerComposeSession } from '../../states/composeSessions'
 import { accounts$, isSendableAccount } from '../../states/accounts'
+import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { ResizableImage } from './composerImage'
+import { GrammarChecker, harperEngine, type GrammarResult } from '../../lib/grammar'
+import { GrammarExtension, type PlacedIssue } from './grammarExtension'
 import {
   clipboardHasImageMarkup,
   createInlineId,
@@ -36,6 +40,7 @@ import {
   textToHtml,
   type NativeClipboardImage,
 } from './composerHelpers'
+import { shouldRemindAttachment } from '../../lib/attachmentReminder'
 
 // All of the Composer's behaviour: the tiptap editor, attachment handling
 // (paste/drop/file-picker, inline images), rich/plain toggling, autosave, and
@@ -124,9 +129,31 @@ export function useComposer(tabId: string) {
   // it on the blank line the signature was inserted under.
   const focusAt = useRef(draft?.signature?.html ? ('start' as const) : ('end' as const)).current
 
+  // Grammar suggestions (#105): one checker per composer; what it found, a
+  // failure to start, and the issue the writer clicked, for the composer to show.
+  const grammarChecker = useRef(new GrammarChecker(harperEngine)).current
+  const [grammarResult, setGrammarResult] = useState<GrammarResult | null>(null)
+  const [grammarError, setGrammarError] = useState('')
+  const [grammarPick, setGrammarPick] = useState<{ placed: PlacedIssue; at: { left: number; top: number } } | null>(
+    null,
+  )
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
+      GrammarExtension.configure({
+        checker: grammarChecker,
+        dialect: () => {
+          const chosen = settings$.grammarCheck.peek()
+          return chosen === 'off' ? null : chosen
+        },
+        onResult: (result) => {
+          setGrammarError('')
+          setGrammarResult(result)
+        },
+        onError: (error) => setGrammarError(error instanceof Error ? error.message : String(error)),
+        onPick: (placed, at) => setGrammarPick({ placed, at }),
+      }),
       ResizableImage.configure({
         allowBase64: true,
         HTMLAttributes: {
@@ -265,6 +292,9 @@ export function useComposer(tabId: string) {
       if (session.savesStopped) return
       const current = compose$.tabs.peek().find((t) => t.id === tabId)?.compose
       if (!current?.accountId) return
+      // A Microsoft Graph account keeps drafts only in the local store (#143):
+      // nothing is written to its Drafts folder, and nothing claims it was.
+      if (!keepsServerDrafts(accounts$.peek().find((account) => account.id === current.accountId))) return
 
       // Autosaves overlap: a send-as change starts one immediately, and another
       // edit (a change of account, say) can start the next before it lands. Only
@@ -560,9 +590,27 @@ export function useComposer(tabId: string) {
     if (
       !subject &&
       !(await confirmAction({
-        title: 'No subject',
-        message: 'Send this message without a subject?',
-        confirmLabel: 'Send',
+        title: t('composer.noSubject.title'),
+        message: t('composer.noSubject.message'),
+        confirmLabel: t('composer.noSubject.send'),
+        cancelLabel: t('composer.attachmentReminder.goBack'),
+      }))
+    ) {
+      session.savesStopped = false
+      setSending(false)
+      return
+    }
+    // A reminder, not a block: "Send anyway" sends. Read from the latest copy,
+    // since the subject prompt above is another wait with the fields editable.
+    const beforeReminder = latestDraft()
+    if (
+      beforeReminder &&
+      shouldRemindAttachment(beforeReminder, t('composer.attachmentReminder.keywords')) &&
+      !(await confirmAction({
+        title: t('composer.attachmentReminder.title'),
+        message: t('composer.attachmentReminder.message'),
+        confirmLabel: t('composer.attachmentReminder.sendAnyway'),
+        cancelLabel: t('composer.attachmentReminder.goBack'),
       }))
     ) {
       session.savesStopped = false
@@ -614,8 +662,13 @@ export function useComposer(tabId: string) {
         finishClosingMessageTab(tabId)
         return
       }
+      // One identity per tab, allocated the first time Send is pressed and
+      // kept after an unanswered send: pressing Send again then names the
+      // same message, which is how the core knows not to deliver it twice.
+      session.messageId ??= await allocateMessageIdentity(current.accountId, false)
       await sendComposed({
         ...message,
+        messageId: session.messageId,
         protection:
           current.pgpSign || current.pgpEncrypt
             ? { sign: current.pgpSign, encrypt: current.pgpEncrypt, passphrase: pgpPassphrase || undefined }
@@ -672,5 +725,12 @@ export function useComposer(tabId: string) {
     handleKeyDown,
     setLink,
     submit,
+    grammar: {
+      checker: grammarChecker,
+      result: grammarResult,
+      error: grammarError,
+      pick: grammarPick,
+      closePick: () => setGrammarPick(null),
+    },
   }
 }

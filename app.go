@@ -92,6 +92,13 @@ func (a *App) Startup(ctx context.Context) {
 	cleanupUpdateCache()
 	a.startTray()
 	a.logf("startup: core path=%s", coreBinaryPath())
+	// A restore cut short by a crash or power loss is undone before the core
+	// opens the store, so it never sees half of each profile.
+	if recovered, err := recoverInterruptedRestore(appConfigDir()); err != nil {
+		a.logf("restore: could not undo an interrupted restore: %v", err)
+	} else if recovered {
+		a.logf("restore: an interrupted restore was undone; the previous profile is back")
+	}
 	a.sidecar = NewSidecar(coreBinaryPath(), a.logWriter())
 	a.sidecar.onEvent = a.handleSidecarEvent
 	if err := a.sidecar.Start(ctx); err != nil {
@@ -119,6 +126,10 @@ func (a *App) onSystemResumed() {
 }
 
 func (a *App) HandleSecondInstanceLaunch(args []string) {
+	// Another window asked to open this profile: it is already open here.
+	if profile, _ := profileFromArgs(args, func(string) string { return "" }); profile != "" && a.ctx != nil {
+		showAndRaiseMainWindow(a.ctx)
+	}
 	for _, raw := range mailtoURLs(args) {
 		a.openMailtoURL(raw)
 	}
@@ -261,7 +272,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.gmailBegin()
 	case "oauth.graphBegin":
 		account, _ := payload["account"].(string)
-		return a.graphBrowser().begin(account, outlookClientID())
+		writes, _ := payload["writes"].(bool)
+		send, _ := payload["send"].(bool)
+		return a.graphBrowser().beginWith(account, outlookClientID(), writes, send)
 	case "oauth.graphPoll":
 		attempt, _ := payload["attempt"].(string)
 		return a.graphBrowser().poll(attempt)
@@ -295,6 +308,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.calendarDelete(payload)
 	case "calendar.createLocal":
 		return a.calendarCreateLocal(payload)
+	case "calendar.importIcs":
+		return a.calendarImportIcs(payload)
+	case "calendar.exportIcs":
+		return a.calendarExportIcs(payload)
 	case "calendar.subscribe":
 		return a.calendarSubscribe(payload)
 	case "calendar.createCalendar":
@@ -386,6 +403,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.oofSet(payload)
 	case "pgp.verify":
 		return a.pgpVerify(payload)
+	case "caldav.discover":
+		return a.carddavCall("caldav.discover", payload, "server")
+	case "caldav.add":
+		return a.carddavCall("caldav.add", payload, "account")
 	case "carddav.discover":
 		return a.carddavDiscover(payload)
 	case "carddav.add":
@@ -402,6 +423,28 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.carddavList(payload)
 	case "people.list":
 		return a.peopleList(payload)
+	case "people.save", "people.delete", "people.duplicates", "people.link", "people.unlink", "people.dismissDuplicate":
+		return a.peopleWrite(command, payload)
+	case "archive.import":
+		return a.archiveImport(payload)
+	case "cloud.pickFile":
+		return a.cloudPickFile()
+	case "chat.pickFile":
+		return a.chatPickFile()
+	case "chat.saveFileAs":
+		return a.chatSaveFileAs(payload)
+	case "backupSchedule.pickFolder":
+		return a.backupPickFolder()
+	case "thunderbird.pickFolder":
+		return a.thunderbirdPickFolder()
+	case "notes.pickAttachment":
+		return a.notesPickAttachment()
+	case "notes.saveAttachmentAs":
+		return a.notesSaveAttachmentAs(payload)
+	case "people.exportVcf":
+		return a.peopleExportVcf(payload)
+	case "people.importVcf":
+		return a.peopleImportVcf(payload)
 	case "templates.list":
 		return a.templatesList(payload)
 	case "templates.save":
@@ -424,6 +467,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.mailCancelScheduledSend(payload)
 	case "mail.sendScheduledNow":
 		return a.mailSendScheduledNow(payload)
+	case "mail.outgoingAttempts":
+		return a.mailOutgoingAttempts(payload)
+	case "mail.resolveOutgoing":
+		return a.mailResolveOutgoing(payload)
 	case "mail.markStarred":
 		return a.markStarred(payload)
 	case "mail.markAllRead":
@@ -440,6 +487,32 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.saveAttachment(payload)
 	case "mail.saveEml":
 		return a.saveMessageEml(payload)
+	case "backup.profileExport":
+		return a.exportProfileArchive(payload)
+	case "backup.profileInspect":
+		return a.inspectProfileArchive(payload)
+	case "backup.profileRestorePrepare":
+		return a.prepareProfileRestore(payload)
+	case "backup.profileRestoreActivate":
+		return a.activateProfileRestore()
+	case "backup.profileRestoreUndo":
+		return a.undoProfileRestore()
+	case "backup.profileRestoreKeep":
+		return map[string]any{"ok": true}, keepRestore(appConfigDir())
+	case "backup.profileRestoreStatus":
+		return a.profileRestoreStatus()
+	case "profiles.list":
+		return a.profilesList()
+	case "profiles.create":
+		return a.profilesCreate(payload)
+	case "profiles.rename":
+		return a.profilesRename(payload)
+	case "profiles.delete":
+		return a.profilesDelete(payload)
+	case "profiles.open":
+		return a.profilesOpen(payload)
+	case "mail.exportMbox":
+		return a.exportFolderMbox(payload)
 	case "mail.copyImage":
 		return a.copyImage(payload)
 	case "mail.readAttachment":
@@ -485,6 +558,38 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.tasksSetCompleted(payload)
 	case "tasks.delete":
 		return a.tasksDelete(payload)
+	case "tasks.lists", "tasks.createList", "tasks.renameList", "tasks.deleteList", "tasks.create", "tasks.update":
+		return a.tasksPassthrough(command, payload)
+	// Task lists kept on a CalDAV server (ADR-0039): the core finds, binds,
+	// syncs and settles conflicts; the password goes to the keychain there.
+	case "tasks.caldavDiscover", "tasks.caldavAdd", "tasks.sync", "tasks.resolveConflict":
+		return a.tasksPassthrough(command, payload)
+	// Meeting invitations by mail (#102): the core reads, answers and files
+	// them; each call is the person's own action.
+	case "invite.status", "invite.respond", "invite.cancel", "attachments.list", "search.parse", "search.compose",
+		"privacy.info", "privacy.update", "privacy.reset", "privacy.allowMessage",
+		"categories.list", "categories.save", "categories.counts", "categories.reason", "categories.assign",
+		"awaiting.add", "awaiting.list", "awaiting.setState", "awaiting.ruleOn", "awaiting.remove",
+		"merge.preview", "merge.start", "merge.list", "merge.cancel", "merge.resume",
+		"rules.serverStatus", "rules.serverPush", "rules.serverRemove", "rules.runReviewed", "spam.lists", "spam.setListed",
+		"translation.status", "translation.download", "translation.cancel", "translation.remove",
+		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
+		"cloud.share", "cloud.revoke", "pop3.retention",
+		// Proposing another time and the organizer's side of it, and the
+		// local schedule check behind both (ADR-0043).
+		"invite.counter", "invite.counterStatus", "invite.declineCounter", "calendar.conflicts",
+		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
+		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
+		"notes.attachments", "notes.attach", "notes.removeAttachment",
+		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",
+		"chat.markRead", "chat.send", "chat.retry", "context.person",
+		// Group chats and files in chat (ADR-0044).
+		"chat.rooms", "chat.join", "chat.leave", "chat.invitations", "chat.dismissInvitation",
+		"chat.sendFile", "chat.cancelUpload":
+		return a.tasksPassthrough(command, payload)
+	// Standalone notes (#104): local only; the core decides everything.
+	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":
+		return a.tasksPassthrough(command, payload)
 	case "mail.archive":
 		return a.mailArchive(payload)
 	case "mail.delete":

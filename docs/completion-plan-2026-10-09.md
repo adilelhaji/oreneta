@@ -1,0 +1,672 @@
+# Plan para completar Oreneta frente a eM Client, con verificación por capas
+
+Revisión: **2026-10-09**. Código auditado: `9ac12e603121dcc00bb91d5e5a7914b6245e75a7`
+(main, CI verde en las siete suites: [run 37448687522](https://github.com/adilelhaji/oreneta/actions/runs/37448687522)).
+Referencia estable: **eM Client 10.4.5674.0 para Windows**, sin cambios.
+
+Este documento actualiza la secuencia del [plan competitivo](competitive-delivery-plan.md)
+del 2026-10-05 con lo entregado desde entonces y la convierte en una lista ordenada
+de iteraciones hasta tres candidatos con alcance declarado. Cada iteración lleva
+sus entregas de prueba; la sección 5 define qué significa «bien testeado» y qué
+infraestructura de verificación falta construir. No sustituye la
+[matriz de paridad](emclient-parity-plan.md) ni la [auditoría de issues](competitive-backlog-audit.md),
+y no aprueba ninguna arquitectura nueva. Los números y estados proceden de GitHub,
+del ledger y de una inspección del código; **no son evidencia de aceptación**.
+
+## 1. Estado actual en cifras
+
+| Indicador | Valor (2026-10-09) |
+|---|---|
+| Issues abiertas | 81 (79 del programa de paridad + #181 zoom nativo + #188 paquete Store) |
+| PRs abiertas | 0 |
+| Ledger de aceptación (#22) | 39 filas: **0 verified**, 4 implemented-unverified, 8 partial, 27 unassessed |
+| Manifiesto del backlog | 50 entregas: 40 unassessed, 5 implemented-unverified, 5 partial |
+| Entregado desde la auditoría del 05-10 | 15 PRs fusionadas (#151–#187) |
+| Tamaño del código | Frontend ≈48 k líneas TS/TSX, motor Rust ≈68 k, app Go ≈10 k |
+| Binario validado | Ninguno para el SHA actual; el ejecutable local es anterior (#114/#147) |
+
+### Cobertura de pruebas existente, por capa
+
+| Capa | Qué hay | Cuánto | Dónde corre |
+|---|---|---|---|
+| Unitarias Rust (motor) | Protocolo IMAP/SMTP/EWS, parser MIME, store, Graph, crypto, calendario | ≈890 tests | job `rust` |
+| Unitarias Go (app de escritorio) | Cuentas, rutas, notificaciones, actualizaciones, pegado, S/MIME, Graph OAuth | 164 funciones de test en 33 ficheros | jobs `go`, `go-windows` |
+| Unitarias y de componente TS | Estados, lib, componentes, fixtures baseline | ≈915 casos en 93 ficheros | job `frontend` (bun test) |
+| Entrada de producción | Arranque y navegación con bridge Wails simulado, 1440/1024/600 px, claro/oscuro, zoom | `frontend/e2e/startup.e2e.ts` + `frontend/baseline/` (Playwright) | job `frontend` |
+| Integración aislada | Flujo IMAP/SMTP real contra maddy en Docker, 39 subtests, 12 resultados de usuario, IDLE ×3 | `integration_test.go` + informe JSON | job `integration` |
+| Móvil | Tests Kotlin shared/ui | 61 ficheros | job `mobile` |
+| Política de CI | Gate de release, ledger, aceptación, validación Windows | 64 tests Node | job `workflow-policy` |
+| Nativo Windows | Arranque, reinicio, elección Graph, zoom con rueda y teclado | `scripts/test-windows-startup.ps1` | `windows-validation.yml`, **manual** |
+| Rendimiento | Generador determinista 1k/10k/100k, orden y filtro | `scripts/perf/` | local, sin CI |
+| Proveedor real | Procedimiento documentado, **no ejecutado** | [provider-acceptance.md](provider-acceptance.md) | ninguno |
+
+### Huecos de verificación que el plan debe cerrar
+
+- **Sin medida de cobertura** en ninguna capa; no se puede exigir que no baje.
+- **Go sin tests dedicados** en ficheros con lógica: `mail.go` (981 líneas), `oauth.go`
+  (499), `sidecar.go` (407), `calendar.go` (366), más `sweep.go`, `rules.go`, `junk.go`,
+  `pgp.go`, `smime.go`, `feeds.go`. Parte está cubierta de forma indirecta por
+  `app_*_test.go`.
+- **Rust con módulos grandes sin tests inline**: `rss.rs` (1792 líneas, 0 tests),
+  `backend.rs` (595, 0), `thread_list.rs` y `thread_read.rs` (≈600 cada uno, 4–5 tests),
+  `unified.rs` (2). `backup.rs` depende solo de `backup/tests.rs`.
+- **Integración solo IMAP/SMTP**: no hay servidor EWS, Graph, CalDAV ni CardDAV en
+  CI. `ews-smoketest.py` existe pero solo contra un Exchange real y a mano.
+- **Nativo Windows limitado al arranque**: ningún flujo de correo (añadir cuenta,
+  leer, responder, recuperar borrador) se ejecuta en el binario real.
+- **Accesibilidad sin comprobación automática**: los tests de producción miran foco
+  y teclado, pero no ejecutan un auditor de contraste/roles.
+- **Rendimiento sin dispositivo de referencia** y sin umbrales calibrados.
+- **Ninguna fila `verified`** del ledger: toda evidencia es sintética.
+
+### Lo que se entregó entre el 05-10 y el 09-10
+
+- Diseño: controles compartidos (#152), selección de tabla (#154), lector (#156),
+  foco de diálogos (#158), columnas configurables y ADR-0009 (#160), coherencia de
+  pantallas secundarias (#177), jerarquía visual del buzón (#187).
+- Operación: búsqueda de ajustes ES/EN (#163), salud de sincronización por cuenta
+  (#165, #168), almacén durable de borradores (#169, PR #174), lector espera al
+  iframe (#175).
+- Evidencia: ADR-0010 recuperación completa local (#146), informe de aceptación
+  IMAP/SMTP por operación (#184), validación de entrada Win32 y zoom nativo (#180,
+  #182, #183).
+
+Todo ello es **parcial** respecto a sus issues padre (#33–#39, #149, #150, #145,
+#147): fixtures sintéticos y pruebas de componente, sin evidencia nativa ni de
+proveedor real.
+
+## 2. Comparación capacidad por capacidad
+
+Resultado de inspeccionar el código actual, no de probarlo contra eM Client.
+«Existe» significa que hay implementación y tests automáticos; «sin evidencia»
+que falta la verificación nativa/proveedor que exige el ledger; «ausente» que no
+hay código para la función.
+
+### Existe, falta aceptación nativa/proveedor
+
+| Capacidad | Dónde | Issue que cierra la aceptación |
+|---|---|---|
+| Correo IMAP/SMTP/EWS: carpetas, sync, envío, flags, mover | `meron-core/src/{imap,smtp,exchange}.rs` | #98/#145, #46/#48 |
+| Graph **solo lectura** (carpetas, delta, cuerpos) | `meron-core/src/graph/` | #141 acciones, #142 adjuntos, #143 envío |
+| Buzón: columnas, densidad, selección, paginación, vistas guardadas | `frontend/src/components/threads/` | #30, #34, #36 |
+| Búsqueda con operadores y filtros rápidos | `SearchUnderstoodBar`, `QuickFilterBar`, `SavedSearchMenu`, `search/` | #31, #43 |
+| Lector: HTML aislado, zoom, acciones por mensaje, impresión | `components/chat/`, `lib/print*.ts` | #35 |
+| Redacción: firmas, plantillas, corrector, adjuntos, envío programado, undo, snooze | `components/composer/`, `states/{scheduledSends,sendQueue}` | #39/#170, #40, #88, #89, #45 |
+| Reglas locales, spam idempotente, etiquetas, prioridad | `rules/`, `spam/`, `labels.go`, `priority/` | #50, #95 |
+| Calendario: agenda/semana/mes, edición, recurrencia, Google, Exchange, suscripciones `.ics` | `components/calendar/`, `calendar/` | #100, #101 |
+| Invitaciones y disponibilidad (parcial, Exchange) | `EventDetails.tsx`, `exchange.rs` | #102 |
+| Personas (CardDAV), tareas enlazadas a mensaje, kanban, RSS | `carddav/`, `tasks.go`, `components/{people,tasks,kanban}` | #28, #41, #42 |
+| PGP y S/MIME | `crypto/`, `pgp.go`, `smime.go` | #9, #12, #49 |
+| Asistente con proveedor explícito y resultados revisables | `assistant.rs`, ADR-0006/0007 | #51, #52 |
+| Privacidad: imágenes remotas, diagnóstico redactado, copia de configuración | `readerHtml.ts`, `applog.go`, `backup.go` | #54, #107 |
+| Escritorio: notificaciones, bandeja, mailto, proxy, atajos, actualizaciones, OOF | raíz Go | #114/#147, #181 |
+| Ajustes buscables ES/EN y salud de cuentas | #163, #165 | #149, #150 |
+
+### Ausente en el código (requiere implementación, y en algunos casos decisión)
+
+| Capacidad eM Client | Issue | Decisión previa |
+|---|---|---|
+| Categorías de bandeja con corrección del usuario | #91 | No |
+| Notas independientes con sincronización | #104 | **Sí**: almacenamiento e identidad |
+| Listas de tareas completas y sincronizadas | #103 | **Sí**: conflicto con tarea única por hilo |
+| POP3 | #97 | **Sí**: retención e identidad |
+| Importación/exportación (mbox, eml, pst) y archivos locales | #112 | Formatos a soportar |
+| Correo personalizado masivo | #90 | No |
+| Macros de acción rápida | #92 | No |
+| QuickText | #88 | No |
+| Espacio de todos los adjuntos | #93 | No |
+| Favoritos y colores de carpeta, arrastre seguro | #87 | No |
+| Barra lateral contextual (agenda, persona, historial de archivos) | #86 | No |
+| CalDAV | #101 | No |
+| Reglas en servidor y reenvío/vacaciones por proveedor | #94 | Por proveedor |
+| Grupos de cuentas y perfiles aislados | #99 | **Sí**: modelo de perfil |
+| Graph: escritura, adjuntos, envío, calendario, contactos, delegación | #141–#143, #47, #48 | ADR-0004 ya aprobada |
+| Copia completa cifrada: captura, restauración aislada, programación | #171–#173 | ADR-0010 ya aprobada |
+| Gramática y traducción sin conexión | #105, #106 | ADR-0001 ya aprobada |
+| Adjuntos en nube y reuniones en línea | #108, #109 | **Sí**: proveedores y consentimiento |
+| Chat (directo, grupo, canal) | #110 → #111 | **Sí**: límites del adaptador |
+| Paquete Microsoft Store validado | #188 | Identidad de Partner Center |
+
+Nota: la vista «chat» actual de Oreneta es un modo de conversación de correo
+heredado de Meron, no el chat de eM Client; no cuenta para C26.
+
+## 3. Qué significa «completar la app»
+
+Definimos tres candidatos acumulativos. Cada uno tiene un alcance declarado y se
+puede entregar a usuarios por separado; «completa» en sentido de paridad es el
+tercero. Ninguno se considera alcanzado hasta que sus filas del ledger estén
+`verified`.
+
+| Candidato | Alcance | Puertas del plan anterior |
+|---|---|---|
+| **C-A: Correo Windows profesional** | Varias cuentas IMAP/M365/EWS, leer, buscar, responder con archivos, borradores recuperables, organización básica, instalación y actualización comprobadas | R0 + R1 |
+| **C-B: Agenda e información personal** | C-A + invitaciones completas, contactos editables, tareas y notas completas, importación y copia completa | R2 |
+| **C-C: Paridad estable Windows** | C-B + automatización, categorías, privacidad/idioma, integraciones, chat, POP3, perfiles; macOS/Linux con evidencia propia | R3 + R4 |
+
+## 4. Secuencia de iteraciones con sus pruebas
+
+Timeboxes de dos semanas con **una entrega principal** por iteración, sus pruebas
+en la misma PR y una línea de evidencia (#22) por entrega. Las iteraciones se
+ordenan por riesgo y por dependencia; no son promesas de fecha. La **iteración 0**
+construye la infraestructura de prueba que las demás necesitan; sin ella, las
+iteraciones 3–4 (Graph) y 8 (calendario) solo podrían probarse con mocks.
+Accesibilidad (#37), privacidad (#54) y rendimiento (#53) se revisan en cada
+iteración, no al final. Los niveles de prueba (N1–N6) se definen en la sección 5.
+
+### Iteración 0: infraestructura de verificación
+
+| Entrega | Resultado | Issue |
+|---|---|---|
+| Cobertura medida en CI | `cargo llvm-cov`, `go test -cover`, cobertura de bun; informe por paquete subido como artefacto; sin umbral todavía | #53 (nueva hija) |
+| Servidor CalDAV/CardDAV en integración | Contenedor Radicale junto a maddy; fixture de calendario y contactos sintéticos | #101/#41 (nueva hija) |
+| Simulador Graph en integración | Servidor HTTP local con respuestas grabadas (carpetas, delta, 429, 401, continuación); los fixtures Rust actuales pasan a correr contra él | #47 (nueva hija) |
+| Harness EWS reproducible | Convertir `ews-smoketest.py` en un test Go con etiqueta `ews` que use grabaciones SOAP cuando no hay servidor; ejecución real solo manual | #46/#98 (nueva hija) |
+| Flujos nativos Windows | Extender `test-windows-startup.ps1` con un segundo script de flujos: añadir cuenta IMAP contra maddy local, leer, responder, cerrar y recuperar borrador | #147 (nueva hija) |
+| Auditor de accesibilidad | `@axe-core/playwright` en `startup.e2e.ts` y baseline; fallos críticos bloquean, el resto se reporta | #37 |
+
+Criterio de salida: las ocho suites existentes siguen verdes, el informe de
+cobertura aparece en cada PR y la validación Windows incluye al menos un flujo
+de correo completo.
+
+Estado (2026-10-09): cobertura en CI, auditoría axe (con una violación seria real
+corregida en el tema oscuro) y Radicale con cinco casos CardDAV entregados; el
+simulador Graph se difiere a la iteración 3 sobre los servidores falsos ya
+existentes, las grabaciones EWS esperan la dependencia 6 y el script de flujos
+nativos queda diseñado sin ejecutar. Detalle y límites en
+[verification-infrastructure.md](verification-infrastructure.md). La iteración 1
+empezó por #29 ([contrato](design/outgoing-mail-recovery.md)).
+
+### C-A: correo Windows (R0/R1)
+
+| It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Salida comprobable |
+|---|---|---|---|---|
+| 1 | **Integridad P0** | #27 sweep acotado, #29 envío incierto durable, #28 contactos ante sync parcial, #9/#12 crypto | N1: reproducción de cada riesgo como test que falla antes y pasa después; N3: envío interrumpido contra maddy (corte tras DATA, reinicio del sidecar) y CardDAV parcial contra Radicale; N1 crypto con claves generadas por GnuPG/OpenSSL en el test | Cada riesgo con reproducción automatizada y corrección fusionada; decisiones #24/#25 solo donde bloqueen |
+| 2 | **Borradores y redacción completos** | #170, #39, #40 | N1 store de borradores (concurrencia, disco lleno, registro corrupto); N2 editor con reinicio simulado, pestañas múltiples, adjuntos; N4 flujo nativo «escribir, cerrar app, reabrir» | Reinicio, fallo de disco y pestañas múltiples sin pérdida; vistas previas por tipo y error |
+| 3 | **Graph escritura** | #141 acciones, #142 adjuntos | N1 Rust por operación (éxito, 429 con Retry-After, 401 revocado, respuesta parcial, cancelación); N3 contra el simulador Graph; N2 UI deshabilita lo no soportado también por teclado y en lote | Flags/mover/borrar con resultado recuperable; adjuntos acotados |
+| 4 | **Graph envío y continuidad Exchange** | #143, #46, #48 | N3 envío con desconexión entre `createMessage` y `send`, verificando que no se duplica; harness EWS con grabaciones para delegación y OOF; N5 una ejecución autorizada contra M365 si hay cuenta | Envío con resultado incierto durable; exposición EWS Online documentada por cuenta/operación |
+| 5 | **Shell de correo cerrado** | #33, #34, #35, #36, #87, #30 | N2 producción en 599/600/601, 768/769, 1024/1025, 1440 y zoom 200 %; capturas baseline claro/oscuro comparadas; N3 orden estable con llegadas concurrentes contra maddy; N6 axe sin errores críticos | Flujo completo de lectura/organización en app nativa; favoritos, colores y arrastre; orden estable entre páginas |
+| 6 | **Candidato instalable** | #144, #147, #181, #148, #188 (solo validación), #145 | N4 instalar, actualizar desde la versión anterior, desinstalar y restaurar perfil sintético; N6 medidas 1k/10k/100k en el dispositivo de referencia; N5 filas live IMAP y M365 con el procedimiento de [provider-acceptance.md](provider-acceptance.md) | Ejecutable de SHA exacto con manifiesto; filas S01 y de proveedor a `verified` donde haya evidencia; piloto #55 decidido |
+
+Criterio de salida C-A: los ocho flujos de #32 aplicables (todos menos
+invitaciones) completados en el binario nativo con cuentas de prueba autorizadas,
+ninguna fila obligatoria de correo en `partial`, cobertura de `mail.go`,
+`oauth.go`, `sidecar.go`, `imap.rs`, `smtp.rs`, `exchange.rs` y `graph/` no
+inferior a la de la iteración 0 y sin ficheros Go de lógica de correo sin test.
+
+Estado de la iteración 1 (2026-10-10): las cinco issues tienen su slice
+entregada en la rama con pruebas y documento de contrato. #29 resultado incierto
+durable ([contrato](design/outgoing-mail-recovery.md)); #27 barrido sobre la
+revisión ([contrato](design/sweep-review.md)); #28 CardDAV completo o nada
+([contrato](design/carddav-complete-sync.md)); #12 claves y mensajes de GnuPG
+([análisis](design/pgp-gnupg-interop.md)); #9 validez y `contentType` S/MIME
+([contrato](design/smime-validity.md)). Quedan abiertos en cada issue los
+criterios que exigen proveedor real, evidencia nativa o decisiones de
+arquitectura (diario durable de barridos, cadena y revocación S/MIME, AEAD de
+LibrePGP), registrados en cada documento.
+
+Estado de la iteración 2 (2026-10-10): #170 lleva el editor completo al
+almacén local, con adjuntos, revisiones, conflicto visible, tombstone al cerrar
+y migración desde localStorage
+([contrato](design/editor-draft-recovery.md)). De #39 se entregan los
+destinatarios con coma en el nombre en respuestas y contactos, y el aviso de
+adjunto olvidado ([contrato](design/composition-safety.md)). De #40, el escape
+de plantillas de texto y la vista previa de PDF que no redibujaba la página 1
+ni conservaba el documento al re-renderizar
+([contrato](design/template-preview-safety.md)). Siguen abiertos el flujo
+nativo «escribir, cerrar y reabrir» (N4), la durabilidad de la respuesta
+rápida, la correspondencia de imágenes insertadas con sus bytes y la medición
+de memoria de vistas previas en el dispositivo de referencia (N6).
+
+Estado de la iteración 3 (2026-10-10): #141 permite cambiar mensajes en Graph
+(leído, marca, mover, copiar dentro de la cuenta, borrar) tras un permiso
+`Mail.ReadWrite` pedido aparte, con lote resuelto antes de enviar, parada en el
+primer fallo, resultado incierto sin repetición y reconciliación por delta
+([contrato](design/graph-message-actions.md)). #142 lee los adjuntos y las
+imágenes en línea por MIME con el analizador de IMAP, acota el tamaño y nombra
+los adjuntos de nube como no disponibles
+([contrato](design/graph-attachments.md)). El simulador Graph sigue siendo el
+servidor de bucle local con respuestas en línea. La certificación con un
+inquilino real (#98) y la evidencia nativa siguen pendientes.
+
+Estado de la iteración 4 (2026-10-10): #143 envía desde cuentas Graph con
+`Mail.Send` pedido aparte, con el MIME de Exchange, intento durable de #29,
+límite de 4 MB y resultado incierto sin repetición
+([contrato](design/graph-sending.md)). Al revisarlo apareció que la rama EWS
+enviaba en claro un mensaje marcado para cifrar o firmar; corregido. De #48 se
+verificó que un buzón compartido no guarda la contraseña del delegado, y se
+corrigieron las respuestas automáticas locales: no contestan a rebotes,
+respetan `X-Auto-Response-Suppress` e incluyen el día final completo
+([verificación](design/delegation-and-automatic-replies.md)). #46 queda como
+estudio con calendario verificado, matriz EWS/Graph y marca de las cuentas EWS
+que apuntan a Exchange Online ([estudio](design/ews-online-exposure.md)). El
+cliente EWS solo usa Basic, así que ya no funcionaba contra Exchange Online.
+Calendario, contactos, directorio y buzones compartidos por Graph quedan como
+rebanadas propuestas pendientes de decisión.
+
+Estado de la iteración 5 (2026-10-10): una auditoría del shell contra la rama
+encontró nueve defectos, cada uno reproducido con una prueba y corregido
+([registro](design/mail-shell-defects.md)). Lote que deshacía lo ya hecho y
+lote concurrente (#34); impresión con imágenes remotas, sin `sandbox` y con
+mensajes omitidos sin aviso (#35); vistas filtradas sin «cargar más» (#30);
+cabecera que prometía un orden no aplicado, pospuestos reordenados, ancho de
+lista que dejaba el lector en 149 px y versión de vistas sobrescrita (#36);
+texto secundario ilegible en temas personalizados (#33); carpeta nueva fuera
+del árbol hasta sincronizar (#87). Siguen abiertos las capturas de referencia
+comparadas (N2), el orden estable con llegadas concurrentes contra maddy (N3),
+el flujo nativo (N4), y favoritos, colores y arrastre de #87. El orden por
+columna en búsqueda, destacados, pospuestos y unificada con feeds queda como
+decisión del núcleo (ADR-0003).
+
+Estado de la iteración 6 (2026-10-10): solo avanza lo que no necesita Windows
+nativo, registros propios ni decisiones del responsable. #144: una compilación
+con `-tags distributable` no compila ningún registro OAuth heredado y desactiva
+cada inicio de sesión sin cliente propio inyectado. Los valores mal formados
+cuentan como ausentes y el núcleo recibe solo los aceptados. CI comprueba que
+el binario no lleva los valores heredados
+([inventario y contrato](oauth-registrations.md)). #147: el paquete de
+actualización se verifica otra vez antes de instalarlo, y la sustitución del
+ejecutable portable rechaza archivos dañados o ajenos y vuelve atrás si falla
+([contrato](design/update-install-safety.md)). #145: la guía de aceptación ya
+describe lo que Graph hace desde las iteraciones 3 y 4. Queda para el
+responsable:
+- crear registros propios y decidir la verificación de Google;
+- compilar las versiones publicadas con `distributable`;
+- firma, identidad de Partner Center y evidencia nativa (#147, #188, #148);
+- el mecanismo de zoom (#181);
+- la política de privacy.html: dice que nada sale salvo hacia los servidores
+  de correo, pero el asistente puede enviar contenido a un proveedor remoto que
+  configura el usuario.
+
+### C-B: agenda e información personal (R2)
+
+| It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
+|---|---|---|---|---|
+| 7 | **Copia completa y restauración** | #171, #172, #173, #113 | N1 formato versionado (contraseña incorrecta, corrupción byte a byte, versión futura, interrupción a mitad); N3 captura con escrituras concurrentes del sidecar; N4 restauración nativa en perfil aislado y activación reversible | ADR-0010 ya aprobada |
+| 8 | **Calendario e invitaciones** | #100, #101 (CalDAV), #102 | N3 contra Radicale (recurrencia, zonas horarias, conflicto de ETag) y harness EWS (invitar, aceptar, cancelar, free/busy); N1 iTIP con fixtures RFC 5546; N2 vistas con fechas límite (cambio de hora, años bisiestos) | Ninguna |
+| 9 | **Contactos y tareas** | #41, #42, #103 | N3 CardDAV edición con conflicto y deduplicación; N1 modelo de tareas con migración desde tarea enlazada; N2 flujos de recuperación | Modelo de tareas completas (ADR nueva) |
+| 10 | **Notas, importación y perfiles** | #104, #112, #99 | N1 importación mbox/eml con corpus malformado (cabeceras rotas, codificaciones mixtas, adjuntos truncados) y propiedad de ida y vuelta exportar→importar; N3 aislamiento entre perfiles (credenciales, caché, borradores); N4 cambio de perfil nativo | Almacenamiento de notas, formatos de importación, modelo de perfil (tres ADR) |
+
+Estado de la iteración 7 (2026-10-11): lo que existe es la copia de
+configuración de ADR-0008, no la del perfil completo. Se corrigió que una copia
+fallida borrara la anterior: ahora se escribe aparte y se renombra al terminar.
+La captura y la restauración del perfil completo esperan decisiones del
+responsable ([decisiones](design/full-profile-archive-decisions.md)): cifrado
+por bloques para perfiles grandes, límites del inventario, secretos opcionales,
+clave de la base restaurada en Windows, y límites y copias programadas.
+
+Estado de la iteración 8 (2026-10-11): una auditoría del calendario encontró
+defectos que se reprodujeron con pruebas y se corrigieron
+([registro](design/calendar-subscriptions.md)):
+- suscripciones `.ics` leídas según RFC 5545 (excepciones, `DURATION`, hora
+  flotante, zonas de Windows, días completos al este de UTC, eventos que
+  cruzan la ventana, `webcal://`), y una suscripción rota ya no detiene las
+  demás;
+- Google no sobrescribe cambios ajenos (`If-Match`), y editar toda la serie ya
+  no la recorta ni borra su regla;
+- reglas con el día de la semana y la fecha final que ve la persona, y nombre
+  de zona IANA también en Windows;
+- días completos de Exchange en su fecha;
+- vista semanal correcta los días de cambio de hora;
+- sin botones de respuesta para el organizador;
+- eventos en calendarios locales;
+- recordatorio de nuevo si el evento se mueve;
+- ventanas de Exchange con más ocurrencias de las que caben en una respuesta.
+
+CI ejecuta las pruebas de calendario también en Tokio y Los Ángeles. Siguen
+pendientes:
+- adaptador CalDAV, modelo iTIP, cola sin conexión e importación/exportación
+  ICS (cada uno con su ADR, como piden #101 y #102);
+- en Exchange: política de conflictos, edición de series, patrones mensuales
+  relativos (necesitan cambiar el fork de `ews-rs`) y zona en las escrituras,
+  con evidencia de proveedor;
+- libre/ocupado y el flujo completo de invitación en Exchange y Google (N5).
+
+Estado de la iteración 8 (continuación, 2026-10-11, por delegación):
+- **#101 CalDAV:** descubrimiento, lectura por ventana y escritura con ETag,
+  incluidas excepciones y EXDATE, probadas contra Radicale (ADR-0018,
+  [registro](design/caldav.md)); importar y exportar `.ics` sin duplicados.
+- **#102 invitaciones por correo:** se leen y se contestan solo al pulsar,
+  con respuesta iTIP al organizador y el evento en un calendario local o
+  CalDAV (ADR-0019). Pendiente: contrapropuesta, disponibilidad y N5.
+
+Estado de la iteración 9 (2026-10-11):
+- **#42:** la validación de las tareas enlazadas encontró y corrigió seis
+  defectos, cada uno con su prueba
+  ([registro](design/message-linked-tasks.md)): tareas duplicadas, hilos
+  movidos de carpeta, nota borrada al fallar la lectura, error crudo al
+  reabrir y tareas de cuentas eliminadas.
+- **Pendiente:** decidir qué hacer con otras 17 tablas que quedan al eliminar
+  una cuenta.
+- **#41 y #103:** no hay código; esperan la aprobación de sus propuestas
+  ([contactos](design/contact-editing-decisions.md),
+  [tareas](design/full-tasks-decisions.md)).
+
+Estado de la iteración 9 (cierre de código, 2026-10-11):
+- **Contactos:** libreta local, edición en CardDAV con ETag (probada contra
+  Radicale), importar y exportar vCard, y duplicados enlazables
+  ([registro](design/local-address-book.md)).
+- **Tareas:** listas, tareas sueltas, prioridad y recordatorios
+  ([registro](design/task-lists.md)).
+- **Pendiente:** la escritura en Google y Exchange (ADR-0012) y la
+  sincronización de tareas (ADR-0013).
+
+Estado de la iteración 10 (2026-10-11, decisiones por delegación):
+- **#112:** archivo local con importación EML/MBOX (ADR-0014) y exportación
+  de una carpeta a MBOX con ida y vuelta probada
+  ([registro](design/mail-import.md)). Pendiente: Thunderbird/Postbox y PST.
+- **#104:** notas locales con texto enriquecido, imágenes, etiquetas,
+  búsqueda, conflicto por revisión y papelera (ADR-0015,
+  [registro](design/notes.md)). Pendiente: adjuntos de archivo y
+  sincronización con proveedores.
+- **#171 y #172:** copia completa del perfil cifrada con age (ADR-0017),
+  comprobación sin tocar el perfil en uso, y restauración preparada aparte,
+  activada con diario y reversible ([registro](design/profile-archive.md)).
+  Pendiente: N4 en Windows.
+- **#173 (2026-10-12, por delegación):** copias programadas del perfil,
+  apagadas por omisión, comprobadas antes de contar, con retención que
+  nunca borra la última buena ni archivos ajenos (ADR-0037,
+  [registro](design/scheduled-backups.md)).
+- **#103 (2026-10-12, por delegación):** una lista de tareas se puede
+  enlazar con una colección CalDAV (VTODO): cambios locales pendientes,
+  enviados con versión, lectura todo o nada y conflictos sin fusión
+  silenciosa (ADR-0039, [registro](design/caldav-tasks.md)). Pendiente:
+  Google Tasks, Graph To Do, EWS y N5 con proveedores reales.
+- **#99 (2026-10-12, por delegación):** un perfil con datos se puede
+  borrar escribiendo su nombre, si no está abierto. Antes, su núcleo borra
+  sus entradas del llavero (ADR-0038, [registro](design/profiles.md)).
+- **#99, grupos de cuentas (2026-10-12, por delegación):** vistas con nombre
+  sobre las cuentas elegidas, mostradas con la bandeja unificada y sin
+  mover nada (ADR-0040, [registro](design/account-groups.md)).
+- **Importar desde Thunderbird (2026-10-12, por delegación):** perfiles y
+  carpetas al archivo local, con vista previa. No se importan los mensajes
+  que Thunderbird tenía como borrados. PST queda pendiente: falta un lector
+  fiable (ADR-0041, [registro](design/thunderbird-import.md)).
+- **Interfaz en los 19 idiomas:** los textos añadidos en este plan ya están
+  en todos los catálogos.
+- **#104, archivos en las notas (2026-10-12, por delegación):** se guardan
+  con la nota dentro del perfil, de modo que la copia completa los
+  incluye. Hasta 25 MB por archivo (ADR-0042,
+  [registro](design/note-attachments.md)).
+- **#99:** perfiles aislados, cada uno en su ventana y proceso, con
+  carpetas, llavero y almacenamiento del webview propios (ADR-0016,
+  [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,
+  grupos de cuentas y la verificación en Windows (N4).
+
+Criterio de salida C-B: flujo de invitación completo verificado en Exchange y
+Google (N5); restauración ensayada en Windows (N4); importación de al menos
+mbox/eml con corpus de regresión versionado en el repositorio.
+
+### C-C: paridad estable y otras plataformas (R3/R4)
+
+| It. | Entrega principal | Issues | Pruebas obligatorias en la PR | Decisión previa |
+|---|---|---|---|---|
+| 11 | **Organización avanzada** | #91 categorías, #92 macros, #93 adjuntos, #43 vistas vivas, #95 etiquetas | N1 clasificación determinista con corrección del usuario persistente; N3 macros solo sobre el conjunto revisado (regresión de #27); N2 vistas vivas que no amplían el lote | Ninguna |
+| 12 | **Automatización y envío avanzado** | #94, #88, #89, #90, #45 | N3 reglas de servidor por proveedor (Sieve contra maddy, EWS inbox rules grabadas); N1 masivo con resultado parcial por destinatario; N3 undo/programado con reinicio a mitad | Capacidades por proveedor |
+| 13 | **Privacidad e idioma** | #107, #105, #106, #49, #50 | N1 bloqueo de trackers con corpus de HTML real anonimizado; N1 gramática/traducción con modelos empaquetados y comprobación de ausencia de red (test que falla si hay socket); N5 interoperabilidad crypto con Thunderbird/Outlook en cuentas de prueba | ADR-0001 ya aprobada |
+| 14 | **Integraciones y asistente** | #51, #52, #108, #109 | N1 contexto del asistente: test que falla si sale un campo no consentido; N3 proveedores de nube con simulador y revocación | Proveedores y consentimiento (ADR) |
+| 15 | **Chat y POP3** | #110 → #111, #97 | N3 POP3 contra maddy (UIDL, reconexión, borrado diferido, sin duplicados tras reinicio); chat según el adaptador aprobado | Dos ADR |
+| 16 | **Plataformas y evolución** | #115, #116, #117, #86, #22/#21 | N4 macOS con runner propio para arranque y un flujo de correo; Linux con `startup:verify` sobre WebKitGTK; ledger completo | Ninguna |
+
+Estado de la iteración 11 (2026-10-11, por delegación):
+- **#93:** lista de todos los adjuntos con filtros, cobertura explícita y
+  enlace al mensaje, sin índice de contenido (ADR-0020,
+  [registro](design/attachments.md)).
+- **#43:** constructor de búsquedas que lee y escribe con la gramática del
+  núcleo (ida y vuelta probada), y búsquedas guardadas con su cuenta y
+  carpeta (ADR-0021, [registro](design/search-builder.md)).
+- **#92:** acciones rápidas con pasos seguros (leer, destacar, archivar o
+  mover al final), conjunto fijado al confirmar, informe por paso y
+  Alt+1…9 (ADR-0022, [registro](design/quick-actions.md)).
+- **#91:** categorías de bandeja definidas por la persona, con motivo
+  visible, correcciones por conversación y remitente que sobreviven a la
+  sincronización, Todo y Otros siempre presentes y recuentos con cobertura
+  (ADR-0023, [registro](design/inbox-categories.md)).
+- **#95:** inventario de etiquetas, categorías y anotaciones por flujo,
+  con su prueba; etiquetar en lote sin pisar otras etiquetas; pruebas de
+  movimiento, reinicio, aislamiento y separación. Exchange e IMAP quedan
+  pendientes de evidencia real ([registro](design/labels-certification.md)).
+
+Estado de la iteración 12 (2026-10-12, por delegación):
+- **#89:** una respuesta en su periodo para deshacer ya no se pierde al
+  cerrar; dos envíos simultáneos no se dan por enviados; se avisa de que
+  hace falta la app y de los envíos tardíos; los pospuestos movidos siguen a
+  la vista (ADR-0024, [registro](design/send-lifecycle.md)).
+- **#45:** esperar respuesta a lo enviado, con la respuesta reconocida por
+  `In-Reply-To`, conversación y remitente (nunca por el asunto), dudas que
+  decide la persona y un recordatorio que solo avisa dentro de la app
+  (ADR-0025, [registro](design/awaiting-replies.md)).
+- **#88:** texto guardado con búsqueda, marcadores rellenados desde el
+  mensaje (lo que no se puede rellenar se queda y se avisa) y `{{cursor}}`;
+  la sincronización de firmas con proveedores queda pendiente de evidencia
+  real ([registro](design/quicktext-placeholders.md)).
+- **#90:** envíos personalizados, cada mensaje solo para su destinatario,
+  vista previa completa que es exactamente lo enviado, problemas que
+  impiden enviar, resultado por destinatario, pausa ante límites y ningún
+  reintento a ciegas (ADR-0026, [registro](design/personalized-mailings.md)).
+- **#94:** inventario por proveedor y reglas en el servidor por ManageSieve,
+  con traducción exacta o la regla entera se queda aquí, sin pisar copias
+  cambiadas ni apagar otros scripts y sin aplicar dos veces. Gmail, EWS y
+  Graph quedan bloqueados por permisos y evidencia
+  (ADR-0027, [registro](design/server-rules.md)).
+
+Estado de la iteración 13 (2026-10-12, por delegación):
+- **#50:** remitentes bloqueados y permitidos que deciden la sugerencia sin
+  mover nada; plan de reglas que es lo que se ejecuta (corrige acciones tras
+  «mover» que se mostraban y no se hacían); ejecución sobre el correo
+  existente tal como se revisó, con informe por paso
+  (ADR-0028, [registro](design/spam-lists-and-rule-runs.md)).
+- **#49:** OpenPGP y S/MIME comprobados en ambos sentidos contra GnuPG y
+  OpenSSL; corregidos `MIME-Version` duplicado, firma armada como mensaje y
+  algoritmos no compatibles informados como daño
+  ([registro](design/crypto-interop.md)).
+- **#107:** EasyPrivacy fijada con procedencia aplicada en el saneado del
+  núcleo (entidades, CSS, `<style>`), recuento visible con la regla,
+  excepción por mensaje que pregunta y actualización solo a petición y
+  comprobada (ADR-0029, [registro](design/tracking-protection.md)).
+- **#105:** gramática en inglés con Harper en un worker, sin red, apagada
+  por omisión; sugerencias como una sola edición que conserva el formato;
+  la fuente deja de pedirse a Google Fonts
+  (ADR-0030, [registro](design/offline-grammar.md), [SOUP](soup.md)).
+- **#106:** traducción con Bergamot en un worker; modelos de Mozilla de un
+  registro fijo con hashes, descargados por el núcleo solo a petición y tras
+  ver tamaño y origen, comprobados y colocados de forma atómica; en el
+  lector, con el original a un clic; en el composer, revisada antes de
+  usarla (ADR-0031, [registro](design/offline-translation.md)).
+- Las pruebas e2e corren ahora con la CSP de producción; así se vio que
+  WebAssembly y sus workers estaban bloqueados.
+- La iteración 13 queda completa en lo automatizable; falta N5 (interoperabilidad
+  con Thunderbird/Outlook en cuentas de prueba) en la verificación final.
+
+Estado de la iteración 14 (2026-10-12, por delegación):
+- **#51/#52 (estable):** el asistente está apagado por omisión, y lo que se
+  revisa es el cuerpo exacto que se envía, atado al token. Se corrigen:
+  - el formato, que no entendía ningún proveedor real;
+  - los cuerpos de error que acababan en el registro;
+  - la cancelación, que no paraba una petición en curso.
+
+  Se añade reescribir el borrador con revisión, y hay una prueba que falla
+  si sale un campo no revisado
+  (ADR-0032, [registro](design/assistant-consent.md)).
+- **#108:** enlaces de solo lectura desde Nextcloud y ownCloud, con destino,
+  progreso, cancelación, contraseña y caducidad. Se respeta lo que exige el
+  servidor, y un enlace más abierto de lo pedido se retira. Dropbox,
+  OneDrive y Google Drive quedan bloqueados por los registros OAuth
+  (ADR-0033, [registro](design/cloud-links.md)).
+- **#109:** la reunión va unida a su evento: se lee del servidor y se
+  reconocen los enlaces de Meet, Zoom, Teams, Webex, Jitsi, GoTo y Whereby
+  en cualquier calendario, con «Unirse». Google Meet se crea, se mantiene y
+  se quita solo al elegirlo, sin duplicados. Los demás quedan bloqueados por
+  sus registros (ADR-0034, [registro](design/online-meetings.md)).
+- La iteración 14 queda completa en lo automatizable; faltan los registros
+  OAuth del propietario y N5.
+
+Estado de la iteración 15 (2026-10-12, por delegación):
+- **#97:** cuentas POP3 que descargan a una Bandeja de entrada local, sin
+  duplicados (UIDL más hash). Se conservan en el servidor salvo que se
+  elija borrar, y el borrado solo vale con `QUIT`. Probado con un servidor
+  falso y con Dovecot real en CI (ADR-0035, [registro](design/pop3.md)).
+- **#110/#111:** matriz de proveedores y decisión: XMPP primero, por ser un
+  estándar abierto sin registro ni gasto. Chat directo con identidad por
+  `origin-id`, sin duplicados entre directo, carbons y archivo. Los estados
+  de envío avanzan solo hacia delante y lo incierto no se reenvía solo.
+  Probado con Prosody real en CI. Grupos, archivos y otros proveedores
+  quedan pendientes (ADR-0036, [registro](design/chat.md)).
+
+Estado de la iteración 16 (2026-10-12, por delegación):
+- **#86:** «Historial con …» en el panel de la conversación: conversaciones,
+  reuniones próximas y archivos de esa persona en esa cuenta, cada uno
+  abriendo su origen. Coincide por dirección completa y dice cuánto
+  correo hay aquí ([registro](design/contextual-sidebar.md)).
+- **#115:** el binario de producción arranca dos veces en un perfil nuevo
+  sobre WebKitGTK (Linux) y WKWebView (macOS) con la CSP de producción, en
+  CI y con capturas. El runner de macOS de GitHub no cuesta nada porque el
+  repositorio es público. Llavero, notificaciones, impresión, IME e
+  instalación firmada en macOS siguen sin evidencia: hacen falta un Mac y
+  la firma del propietario ([registro](design/desktop-platforms.md)).
+- **#116:** inventario móvil aparte. Hay correo, OAuth, RSS y copia de
+  seguridad; faltan calendario, libreta de contactos, tareas, notas,
+  cifrado, POP3 y chat. El alcance móvil lo decide el propietario
+  ([registro](design/mobile-inventory.md)).
+- **#117:** delta de eM Client 11 frente a Oreneta. Una fuente secundaria
+  dice que la 11 ya es estable, pero no está confirmado en emclient.com.
+  Mover la referencia del ledger (10.4.5674.0) lo decide el propietario
+  ([registro](design/emclient-11-delta.md)).
+- **Ledger:** las filas de lo entregado en las iteraciones 13 a 16 tienen
+  su estado y su ejecución verde de CI. Ninguna pasa a `verified`: falta la
+  evidencia nativa y de proveedor de la verificación final.
+- **#102, lo pendiente de ADR-0019:** proponer otra hora (COUNTER) desde la
+  tarjeta de una invitación, y como organizador ver la propuesta, rechazarla
+  (DECLINECOUNTER) o abrirla en el editor con la hora propuesta. Guardar en
+  calendarios locales y CalDAV no avisa a los asistentes, y se dice. El
+  editor y las tarjetas avisan de las coincidencias con la agenda propia,
+  sin red. La disponibilidad de otras personas desde los servidores queda
+  bloqueada (ADR-0043, [registro](design/counter-proposals.md)).
+- **#111, lo pendiente de ADR-0036:** grupos XMPP (MUC): unirse por
+  dirección con apodo y contraseña en el llavero, historia al entrar y
+  archivo de la sala, entrar otra vez al reconectar, el eco propio sin
+  duplicar, el apodo de quien habla, salir, e invitaciones que solo se
+  ofrecen. Archivos por HTTP File Upload: límite del servidor antes de
+  subir, solo HTTPS, progreso y cancelación, y el enlace como OOB; lo
+  recibido se guarda solo al pedirlo. Probado con Prosody real en CI, con
+  dos personas en una sala y un archivo por HTTPS
+  (ADR-0044, [registro](design/chat.md)).
+
+Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
+`verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
+
+### Modo de ejecución acordado el 2026-10-11
+
+El responsable eligió dos cosas:
+- **Decisiones de arquitectura.** Las que quedan las toma el agente con la
+  opción más prudente. Cada una se registra como ADR «aceptada por
+  delegación», con sus alternativas, y el responsable la revisa al final. Se
+  consulta antes solo lo que implique gasto, publicar algo o usar datos
+  reales.
+- **Verificación.** Se mantienen las pruebas automáticas en cada cambio (N1 a
+  N3 y N6-a11y en CI). La verificación nativa en Windows (N4) y con
+  proveedores reales (N5) se hace una sola vez, sobre la versión final.
+
+Siguen bloqueados hasta que el responsable aporte los recursos:
+- los registros OAuth propios;
+- la firma de la aplicación;
+- la identidad de Partner Center;
+- un equipo Windows;
+- cuentas de prueba.
+
+## 5. Estrategia de verificación
+
+### Niveles y qué prueba cada uno
+
+| Nivel | Qué es | Herramienta | Cuándo corre |
+|---|---|---|---|
+| **N1 Unitario** | Lógica pura por módulo: parsers, estados, store, contratos de error | `cargo test`, `go test`, `bun test` | Cada PR |
+| **N2 Componente y entrada de producción** | UI con bridge simulado: foco, teclado, anchos, temas, zoom, idioma | bun test + Playwright (`startup.e2e.ts`, `baseline/`) | Cada PR |
+| **N3 Integración aislada** | Sidecar real contra servidores locales (maddy, Radicale, simulador Graph, grabaciones EWS) | `go test -tags integration` + informe JSON | Cada PR |
+| **N4 Nativo** | Binario real de Windows (y después macOS/Linux): instalación, flujos, recuperación | `windows-validation.yml` + scripts PowerShell | Por iteración y por candidato |
+| **N5 Proveedor real** | Cuentas de prueba autorizadas: Gmail, Workspace, M365, EWS on-prem | Procedimiento de `provider-acceptance.md`, evidencia en el ledger | Por candidato |
+| **N6 No funcional** | Rendimiento 1k/10k/100k, memoria, accesibilidad (axe), contraste | `scripts/perf/`, axe en Playwright, dispositivo de referencia | N6-a11y cada PR; N6-perf por iteración |
+
+### Qué significa «bien testeado» para una slice
+
+Una PR solo se fusiona si cumple todo lo siguiente; los padres solo cierran
+cuando además hay N4/N5 aplicable.
+
+1. **Cada caso de aceptación del issue tiene un test con su nombre** y el test
+   falla sin el cambio (demostrado en la PR cuando es una corrección).
+2. **Las seis familias de casos** están cubiertas: éxito, límite, error,
+   interrupción/recuperación, aislamiento entre cuentas y regresión de defectos
+   anteriores. Si una familia no aplica, la PR lo dice.
+3. **Ninguna ruta de escritura hacia un proveedor sin test de resultado
+   incierto**: desconexión entre petición y confirmación, reintento y
+   deduplicación.
+4. **Cobertura por paquete no baja** respecto a main; un descenso exige
+   justificación explícita en la PR.
+5. **Ningún test se omite, desactiva o marca como flaky** para obtener verde;
+   un test inestable se corrige o se elimina con su issue.
+6. **Entrada de producción** para todo cambio visual: 600/1024/1440, claro/oscuro,
+   español e inglés, teclado y 200 % de zoom, con captura subida como artefacto.
+7. **Evidencia nombrada por SHA** en el ledger: estado real alcanzado
+   (`implemented-unverified`, `partial` o `verified`), nunca inferido de un mock.
+
+### Infraestructura que falta y orden de construcción
+
+| Pieza | Por qué | Iteración |
+|---|---|---|
+| Cobertura en CI con informe por paquete | Para poder exigir que no baje | 0 |
+| Radicale en el job `integration` | CalDAV/CardDAV sin cuenta real; necesario para #28, #41, #101 | 0 |
+| Simulador Graph local con grabaciones | Única forma de probar 429/401/continuación de forma repetible; necesario para #141–#143 | 0 |
+| Harness EWS con grabaciones SOAP | Reproducir sin servidor lo que `ews-smoketest.py` hace a mano; necesario para #46, #48, #102 | 0 |
+| Script de flujos nativos Windows | Pasar de «arranca» a «funciona»; necesario para #147 y todo N4 | 0, ampliado en 2, 6, 7, 10 |
+| axe en Playwright | Accesibilidad automática mínima para #37 | 0 |
+| Corpus de regresión de correo real anonimizado | HTML ancho, trackers, codificaciones, adjuntos raros; alimenta N1 del lector e importación | 5, 10, 13 |
+| Dispositivo Windows de referencia con medidas repetidas | Calibrar umbrales de #53 y memoria de #148 | 6 |
+| Runner macOS | N4 para #115 | 16 |
+| Tests Go para `mail.go`, `oauth.go`, `sidecar.go`, `calendar.go` | Lógica de puente sin test dedicado hoy | 1–2 (correo), 4 (OAuth), 8 (calendario) |
+| Tests Rust para `rss.rs`, `backend.rs`, `thread_list.rs`, `thread_read.rs`, `unified.rs` | Módulos grandes con 0–5 tests | 5 (listas), 11 (RSS y unificado) |
+
+### Puertas de calidad
+
+| Puerta | Condición |
+|---|---|
+| **Por PR** | Siete suites verdes en el SHA exacto, cobertura no inferior, N2 con capturas si hay cambio visual, revisión técnica y de producto |
+| **Por iteración** | `windows-validation.yml` lanzado sobre el merge commit final; ledger actualizado; N6-perf registrado si la iteración toca listas, caché o arranque |
+| **Por candidato** | Filas N5 ejecutadas con cuentas autorizadas; instalación, actualización y recuperación nativas; comparación de flujos de #32 aplicables; ninguna fila obligatoria del candidato por debajo de `verified` |
+| **Para publicar** | Gate de `verify-release.yml` + firma + decisión humana separada; este plan no la concede |
+
+## 6. Dependencias que solo el responsable puede resolver
+
+Estas no se desbloquean escribiendo código; conviene abrirlas ya porque
+condicionan la iteración 6 y posteriores.
+
+1. **Credenciales OAuth propias** (Google y Microsoft) para #144; sin ellas no hay
+   candidato distribuible con inicio de sesión ni filas N5 de Gmail/M365.
+2. **Cuentas de prueba dedicadas** por proveedor (IMAP genérico, Gmail, Workspace,
+   M365, EWS on-prem) y autorización escrita de operaciones y destinatarios, para
+   #145/#98. Sin ellas el ledger no puede pasar de `implemented-unverified`.
+3. **Equipo Windows de referencia** para evidencia nativa (#147, #148, #181) y
+   política de firma/Application Control; identidad de Partner Center para #188.
+4. **Cinco decisiones de arquitectura** en forma de ADR antes de su iteración:
+   tareas completas (#103), notas (#104), perfiles (#99), POP3 (#97), chat (#110);
+   más proveedores de nube/reuniones (#108/#109).
+5. **Participantes del piloto** (#55): protocolo listo en C-A, inscripción aparte.
+6. **Un servidor Exchange de pruebas** (o grabaciones autorizadas de uno) para el
+   harness EWS de la iteración 0.
+
+## 7. Reglas de ejecución que se mantienen
+
+- Una slice por PR, con `Closes #N` solo si cubre todos los criterios; los padres
+  quedan abiertos hasta cumplir todo.
+- Tests de éxito, límite, error, interrupción, aislamiento y regresión; CI del SHA
+  exacto antes del merge commit; comprobación de main después.
+- Actualizar #22 y #21 al cerrar cada iteración, separando implementado, probado
+  con fixtures, verificado nativo y verificado proveedor.
+- Nada de este plan publica versiones, modifica cuentas o contrata servicios.
+
+## 8. Primera acción recomendada
+
+Empezar por la **iteración 0** en paralelo con **#29** (envío incierto durable).
+La iteración 0 es pequeña por pieza y desbloquea las pruebas de Graph, calendario
+y nativas; #29 es el riesgo de pérdida de datos con más impacto y #143 y #170
+dependen de su contrato. Abrir a la vez las solicitudes externas del apartado 6
+para que la iteración 6 no quede bloqueada por falta de credenciales, cuentas o
+dispositivo.

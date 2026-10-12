@@ -3,7 +3,7 @@
 
 import type { SignatureMark } from './lib/signature'
 
-export type AuthType = 'password' | 'gmail_oauth' | 'outlook_oauth' | 'graph_oauth' | 'rss'
+export type AuthType = 'password' | 'gmail_oauth' | 'outlook_oauth' | 'graph_oauth' | 'rss' | 'local_archive' | 'pop3'
 
 /** A send-as identity for an account: an owned address and an optional From
  * display name (blank falls back to the account's `sender_name`). */
@@ -53,6 +53,13 @@ export type Account = {
   paused?: boolean
   /** True when account metadata was restored but the OS keychain secret is missing. */
   needs_reconnect?: boolean
+  /** Microsoft Graph only: whether the grant Microsoft returned allows
+   * message changes (read, flag, move, delete; #141). */
+  graph_writes?: boolean
+  /** Microsoft Graph only: whether the grant allows sending (Mail.Send; #143). */
+  graph_send?: boolean
+  /** An EWS account pointed at Exchange Online, where EWS is retired (#46). */
+  ews_exchange_online?: boolean
   /** RSS automatic sync interval in minutes (default 60). */
   rss_sync_interval_minutes?: number
   feed_url?: string
@@ -132,6 +139,12 @@ export type Person = {
   photo: string
   emails: { addr: string; label: string }[]
   phones: { number: string; label: string }[]
+  /** The version it was read at; a write names it (ADR-0012). */
+  version?: string
+  /** Whether this book can be written to from here (ADR-0012). */
+  editable?: boolean
+  /** The reader's link to the same person in other books, if any. */
+  link?: string | null
 }
 
 export type Attachment = {
@@ -142,6 +155,9 @@ export type Attachment = {
   key: string | null
   /** Remote image URL (RSS inline images); null/absent for local attachments. */
   url?: string | null
+  /** Why there are no bytes to open (#142): 'link' for a cloud attachment,
+   * 'tooLarge' when the message is over the size read. Absent otherwise. */
+  unavailable?: string
 }
 
 export type ComposerAttachment = {
@@ -209,6 +225,12 @@ export type Message = {
    * separate answer, so the interface must not present this as one.
    */
   protection?: string
+  /** A meeting invitation, cancellation or answer the message carries (#102). */
+  invitation?: Invitation
+  /** What tracking protection kept this message from fetching (#107). */
+  trackers_blocked?: { url: string; rule: string }[]
+  /** Whether it applied: false when this message was let load trackers. */
+  trackers_protected?: boolean
   /**
    * Whether this is worth interrupting for, as the core judged it.
    *
@@ -238,8 +260,10 @@ export type Message = {
    * rendered as a "+N" hint. Absent/0 for inbound or single-recipient threads. */
   recipient_overflow?: number
   /** Local send lifecycle for an optimistically-rendered outgoing message.
-   * Absent on messages loaded from the engine (treated as already sent). */
-  send_status?: 'queued' | 'sending' | 'sent' | 'failed'
+   * Absent on messages loaded from the engine (treated as already sent).
+   * `uncertain` is a message the server took in full and never answered
+   * for: it may have gone, and only the reader can settle it. */
+  send_status?: 'queued' | 'sending' | 'sent' | 'failed' | 'uncertain'
 }
 
 // Editable state for a compose/reply draft living inside a compose tab.
@@ -329,4 +353,25 @@ export type SystemCheck = {
   outlook_oauth_configured: boolean
   database_path: string
   log_path?: string
+}
+
+/** A meeting invitation read from a message (iMIP, #102). */
+export type Invitation = {
+  method: string
+  uid: string
+  sequence: number
+  recurrence_id?: number | null
+  summary: string
+  location?: string | null
+  start: number
+  end: number
+  all_day: boolean
+  repeats: boolean
+  organizer?: { name: string; addr: string; response: string } | null
+  attendees: { name: string; addr: string; response: string }[]
+  /** What the sender wrote with it (COMMENT): a proposal's or a refusal's words. */
+  comment?: string | null
+  /** STATUS:CANCELLED on the event itself. */
+  cancelled?: boolean
+  ics: string
 }

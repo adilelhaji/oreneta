@@ -3,7 +3,6 @@
 //! mobile FFI host. Platform differences (where the SQLite DB lives, where
 //! per-account secrets are stored) are injected via the [`EngineHost`] trait.
 
-use anyhow::Context as _;
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -41,6 +40,35 @@ fn oauth_defaults() -> OAuthDefaults {
         .read()
         .map(|defaults| defaults.clone())
         .unwrap_or_default()
+}
+
+/// The OAuth client a token refresh must use: the account's own, else the one
+/// the host configured, else the one the desktop shell passed in the
+/// environment. An empty value is no client: a build without its own
+/// registration (see the Go `distributable` build) passes none, and the refresh
+/// stops here with a reason the person can act on instead of asking the
+/// provider with an empty client.
+pub(crate) fn refresh_client_id(
+    auth_type: &str,
+    stored: &str,
+    defaults: &OAuthDefaults,
+    from_env: Option<String>,
+) -> anyhow::Result<String> {
+    let configured = match auth_type {
+        "outlook_oauth" => defaults.outlook_client_id.trim(),
+        _ => defaults.google_client_id.trim(),
+    };
+    let from_env = from_env.unwrap_or_default();
+    let candidate = [stored.trim(), configured, from_env.trim()]
+        .into_iter()
+        .find(|value| !value.is_empty());
+    match candidate {
+        Some(value) => Ok(value.to_string()),
+        None => anyhow::bail!(
+            "{} sign-in is not available in this build of Oreneta, so this account cannot renew its access. Add the mailbox with a password (IMAP/SMTP or Exchange) instead.",
+            if auth_type == "outlook_oauth" { "Microsoft" } else { "Google" }
+        ),
+    }
 }
 
 /// Engine state: per-account credentials plus the on-disk store.
@@ -150,7 +178,7 @@ pub fn pool_debug(account: &str, what: &str) {
 }
 
 pub fn creds_have_required_secret(creds: &imap::Creds) -> bool {
-    if creds.is_graph() { return true; }
+    if creds.is_graph() || creds.is_local() { return true; }
     if creds.is_oauth() {
         creds
             .refresh_token
@@ -169,7 +197,7 @@ fn load_and_secret_one(conn: &Connection, host: &dyn EngineHost, id: &str) -> Op
         .ok()?
         .into_iter()
         .find(|(row_id, _)| row_id == id)?;
-    if !creds.is_graph() { host.apply_secret(conn, id, &mut creds); }
+    if !creds.is_graph() && !creds.is_local() { host.apply_secret(conn, id, &mut creds); }
     creds_have_required_secret(&creds).then_some(creds)
 }
 
@@ -261,7 +289,7 @@ impl Engine {
                 shared_mailboxes.push((id, creds.delegate_account_id));
                 continue;
             }
-            if !creds.is_graph() { host.apply_secret(&conn, &id, &mut creds); }
+            if !creds.is_graph() && !creds.is_local() { host.apply_secret(&conn, &id, &mut creds); }
             if !creds_have_required_secret(&creds) {
                 eprintln!("meron-core: account {id} needs reconnect; no stored secret found");
                 continue;
@@ -342,7 +370,7 @@ impl Engine {
                 .and_then(|rows| rows.into_iter().find(|(id, _)| id == account));
             if let Some((id, mut creds)) = loaded {
                 if creds.delegate_account_id.is_empty() {
-                    if !creds.is_graph() { self.host
+                    if !creds.is_graph() && !creds.is_local() { self.host
                         .apply_secret(&self.db.lock().unwrap(), &id, &mut creds); }
                     if creds_have_required_secret(&creds) {
                         accounts.insert(id, creds);
@@ -362,7 +390,7 @@ impl Engine {
             .get_mut(account)
             .ok_or_else(|| anyhow::anyhow!("account needs reconnect: {account}"))?;
 
-        if creds.is_graph() { return Ok(creds.clone()); }
+        if creds.is_graph() || creds.is_local() { return Ok(creds.clone()); }
         if creds.is_oauth() {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -410,26 +438,12 @@ impl Engine {
                 } else {
                     default_token_url.to_string()
                 };
-                let client_id = if creds.oauth_client_id.trim().is_empty() {
-                    let configured = match creds.auth_type.as_str() {
-                        "outlook_oauth" => oauth_defaults.outlook_client_id.trim(),
-                        _ => oauth_defaults.google_client_id.trim(),
-                    };
-                    if configured.is_empty() {
-                        std::env::var(default_client_id_env).with_context(|| {
-                            match creds.auth_type.as_str() {
-                                "outlook_oauth" => {
-                                    "MERON_OUTLOOK_CLIENT_ID is required for Outlook OAuth refresh"
-                                }
-                                _ => "MERON_GOOGLE_CLIENT_ID is required for Gmail OAuth refresh",
-                            }
-                        })?
-                    } else {
-                        configured.to_string()
-                    }
-                } else {
-                    creds.oauth_client_id.trim().to_string()
-                };
+                let client_id = refresh_client_id(
+                    &creds.auth_type,
+                    &creds.oauth_client_id,
+                    &oauth_defaults,
+                    std::env::var(default_client_id_env).ok(),
+                )?;
                 let client_secret = if creds.oauth_client_secret.trim().is_empty() {
                     let configured = oauth_defaults.google_client_secret.trim();
                     if !configured.is_empty() {
@@ -548,8 +562,14 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
+        if self.ensure_valid_creds(account).await?.is_local_store() {
+            let mut session = backend::Session::Local(crate::archive::LocalSession::new(self.db.clone(), account));
+            return f(&mut session).await;
+        }
         if self.ensure_valid_creds(account).await?.is_graph() {
-            if !retry { return crate::graph::mail::unsupported(); }
+            if !retry && !graph_may_write(&self.db.lock().unwrap(), account) {
+                return crate::graph::mail::unsupported();
+            }
             let mut session=backend::Session::Graph(self.graph_mail.session(account)?);
             return f(&mut session).await;
         }
@@ -648,7 +668,21 @@ impl Engine {
         F: FnMut(&mut backend::Session) -> SessionOp<'_, T> + Send,
         T: Send,
     {
-        if self.ensure_valid_creds(account).await?.is_graph() { return crate::graph::mail::unsupported(); }
+        if self.ensure_valid_creds(account).await?.is_local_store() {
+            let mut session = backend::Session::Local(crate::archive::LocalSession::new(self.db.clone(), account));
+            preflight(&mut session).await?;
+            return f(&mut session).await;
+        }
+        if self.ensure_valid_creds(account).await?.is_graph() {
+            if !graph_may_write(&self.db.lock().unwrap(), account) {
+                return crate::graph::mail::unsupported();
+            }
+            // Graph has no connection to warm up: the preflight runs on the
+            // same per-account session, and the change is never retried.
+            let mut session = backend::Session::Graph(self.graph_mail.session(account)?);
+            preflight(&mut session).await?;
+            return f(&mut session).await;
+        }
         if let Some(mut session) = self.take_pooled(account) {
             let ready =
                 match tokio::time::timeout(POOLED_READ_TIMEOUT, preflight(&mut session)).await {
@@ -719,6 +753,11 @@ pub async fn sync_folders(
     engine: &Arc<Engine>,
     account: &str,
 ) -> anyhow::Result<Vec<imap::Folder>> {
+    if engine.ensure_valid_creds(account).await?.is_local_store() {
+        // Nothing to sync: the archive's folders are the ones stored here,
+        // and POP3 has no folders of its own.
+        return store::get_folders(&engine.db.lock().unwrap(), account);
+    }
     if engine.ensure_valid_creds(account).await?.is_graph() {
         return engine.graph_mail.session(account)?.sync_tree().await;
     }
@@ -792,6 +831,13 @@ pub async fn write_gmail_label_change(
 
 /// Delete messages on the server. Returns `None` for a permanent expunge
 /// (Drafts, or items already in Trash), or `Some(trash)` when moved to Trash.
+/// A preflight for a Graph write session: changes (#141) or sending (#143).
+/// Which operation is allowed is decided per command by the dispatch guard,
+/// and every request checks the grant itself.
+fn graph_may_write(conn: &rusqlite::Connection, account: &str) -> bool {
+    crate::graph::mail::writes_enabled(conn, account) || crate::graph::mail::send_enabled(conn, account)
+}
+
 pub async fn delete_to_trash(
     engine: &Engine,
     account: &str,
@@ -1016,6 +1062,21 @@ pub async fn sync_messages(
     folder: &str,
     limit: u32,
 ) -> anyhow::Result<SyncMessagesResult> {
+    let creds = engine.ensure_valid_creds(account).await?;
+    if creds.is_pop3() && folder == crate::pop3::INBOX {
+        // POP3 mail arrives only in the Inbox, downloaded here (ADR-0035).
+        // One download per account at a time, so two checks never store the
+        // same message twice.
+        let lock = crate::pop3::account_lock(account);
+        let _held = lock.lock().await;
+        let mut client = crate::pop3::connect(&creds).await?;
+        crate::pop3::fetch(&engine.db, account, &mut client, crate::store::now_unix(), &crate::parse::media_root())
+            .await?;
+    }
+    if creds.is_local_store() {
+        let messages = store::recent_headers(&engine.db.lock().unwrap(), account, folder, limit as i64)?;
+        return Ok(SyncMessagesResult { count: messages.len(), messages });
+    }
     if engine.ensure_valid_creds(account).await?.is_graph() {
         let batch=engine.graph_mail.session(account)?.sync_folder(folder,limit).await?;
         return Ok(SyncMessagesResult{count:batch.messages.len(),messages:batch.messages});
@@ -2166,7 +2227,8 @@ pub fn read_cached(
     if msg.message_id.is_empty() || !parse::cached_media_available(&media_root, &msg) {
         return None;
     }
-    attach_html(&mut msg, load_remote_images);
+    let block = crate::privacy::protects(&engine.db.lock().unwrap(), account, &msg.message_id);
+    attach_html(&mut msg, load_remote_images, block);
     Some(msg)
 }
 
@@ -2207,16 +2269,22 @@ pub async fn read_cached_or_fetch(
         let _ = store::save_cached_message(&db, account, folder, uid, &message);
     }
 
-    attach_html(&mut message, load_remote_images);
+    let block = crate::privacy::protects(&engine.db.lock().unwrap(), account, &message.message_id);
+    attach_html(&mut message, load_remote_images, block);
     Ok(message)
 }
 
 /// Turn the stored HTML source into the iframe-ready `body_html` the reader's HTML
 /// mode renders: inject the remote-image CSP gated on the account setting. Plain
 /// messages have no HTML source, so this is a no-op for them.
-pub fn attach_html(message: &mut parse::Message, load_remote_images: bool) {
+/// Prepares a message's HTML for the reader: the remote-image policy, and
+/// tracking protection unless the person let this message load trackers.
+pub fn attach_html(message: &mut parse::Message, load_remote_images: bool, block_trackers: bool) {
+    message.trackers_protected = block_trackers;
     if let Some(html) = message.body_html.take() {
-        message.body_html = Some(parse::prepare_html(&html, load_remote_images));
+        let (html, blocked) = parse::prepare_html_with(&html, load_remote_images, block_trackers);
+        message.body_html = Some(html);
+        message.trackers_blocked = blocked;
     }
 }
 
@@ -2303,6 +2371,27 @@ mod tests {
         fn store_secret(&self, _conn: &Connection, _account: &str, _secrets: &secrets::Secrets) -> anyhow::Result<()> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn refresh_fails_closed_without_an_oauth_client() {
+        use super::{OAuthDefaults, refresh_client_id};
+        let none = OAuthDefaults::default();
+        for (auth, provider) in [("gmail_oauth", "Google"), ("outlook_oauth", "Microsoft")] {
+            for env in [None, Some(String::new()), Some("  ".to_string())] {
+                let error = refresh_client_id(auth, "", &none, env).unwrap_err().to_string();
+                assert!(error.starts_with(&format!("{provider} sign-in is not available")), "{error}");
+            }
+        }
+        // In order: the account's own client, the host's, the environment's.
+        let host = OAuthDefaults {
+            google_client_id: "host-google".into(),
+            outlook_client_id: "host-outlook".into(),
+            ..OAuthDefaults::default()
+        };
+        assert_eq!(refresh_client_id("gmail_oauth", " own ", &host, Some("env".into())).unwrap(), "own");
+        assert_eq!(refresh_client_id("outlook_oauth", "", &host, Some("env".into())).unwrap(), "host-outlook");
+        assert_eq!(refresh_client_id("gmail_oauth", "", &none, Some(" env ".into())).unwrap(), "env");
     }
 
     const MAX_IDLE: Duration = Duration::from_secs(120);

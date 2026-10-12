@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { Message } from '../types'
 import {
+  restoreQuickReplyForThread,
+  stashQuickReplyForThread,
   cancelQuickReplyDraftSave,
   activateConversationTab,
   closeMessageTab,
@@ -25,11 +27,18 @@ import {
   sendReply,
   withoutHydratedQuickReplyDraft,
   undoSend,
+  HELD_SEND_MARGIN_SECONDS,
+  retrySend,
+  resendUncertainSend,
+  sendComposed,
+  UncertainSendError,
 } from './compose'
+import { outgoing$, settleOutgoingAttempt } from './outgoingAttempts'
 import { accounts$ } from './accounts'
 import { settings$ } from './settings'
-import { ui$ } from './ui'
+import { settleConfirm, ui$ } from './ui'
 import { mail$ } from './mail'
+import { flushQueuedSends, heldCopies } from './sendQueue'
 
 const message = (overrides: Partial<Message> = {}): Message => ({
   id: 'm1',
@@ -706,6 +715,160 @@ describe('quick reply draft sharing', () => {
     expect(compose$.quickReplyDraftSaved.get()).toBe(false)
   })
 
+  it('a quick reply that mentions an attachment it lacks is asked about once; going back keeps it (#39)', async () => {
+    const thread = message({
+      id: 'root',
+      account_id: 'acc-1',
+      thread_id: 't-1',
+      folder_id: 'INBOX',
+      from_addr: 'them@example.com',
+      message_id: 'root@example.com',
+      date: 1000,
+    })
+    mail$.threads.set([thread])
+    mail$.messages.set([thread])
+    ui$.selectedThread.set('t-1')
+    compose$.quickReplySignature.set(null)
+    settings$.signature.set('')
+    compose$.composer.set('Sending the attached invoice')
+
+    const first = sendReply()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(ui$.confirm.peek()?.message).toContain('mentions an attachment')
+    settleConfirm(false)
+    await first
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(false)
+    expect(compose$.composer.peek()).toBe('Sending the attached invoice')
+
+    const second = sendReply()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    settleConfirm(true)
+    await second
+    expect(calls.some((call) => call.command === 'mail.send')).toBe(true)
+  })
+
+  /// Acceptance for #29: an ambiguous outcome is persisted and is not
+  /// automatically retried as a confirmed rejection. The bubble says the
+  /// outcome is unknown, keeps what it would need to send again, and the
+  /// only way to send again is on purpose.
+  it('a send the server never answered for is neither sent nor failed, and is not retried on its own', async () => {
+    const thread = message({
+      id: 'root',
+      account_id: 'acc-1',
+      thread_id: 't-1',
+      folder_id: 'INBOX',
+      from_addr: 'them@example.com',
+      message_id: 'root@example.com',
+      date: 1000,
+    })
+    mail$.threads.set([thread])
+    mail$.messages.set([thread])
+    ui$.selectedThread.set('t-1')
+    compose$.composer.set('Did this go?')
+    settings$.signature.set('')
+    outgoing$.attempts.set([])
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+      calls.push({ command, payload })
+      if (command === 'mail.allocateIdentity') return { message_id: 'sent@example.com' }
+      if (command === 'mail.send') {
+        return payload.resend
+          ? { ok: true, outcome: 'archived', attempt_id: 'sent@example.com' }
+          : { ok: false, outcome: 'uncertain', attempt_id: 'sent@example.com', error: 'connection reset' }
+      }
+      if (command === 'mail.outgoingAttempts') return { attempts: [] }
+      return {}
+    }
+
+    await sendReply()
+
+    const bubble = () => mail$.messages.peek().find((m) => m.id.startsWith('sent-'))!
+    expect(bubble().send_status).toBe('uncertain')
+    expect(calls.filter((c) => c.command === 'mail.send')).toHaveLength(1)
+    expect(ui$.toastTone.peek()).toBe('error')
+
+    // Clicking retry, as on a failed bubble, does nothing: this is not failed.
+    await retrySend(bubble().id)
+    expect(calls.filter((c) => c.command === 'mail.send')).toHaveLength(1)
+    expect(bubble().send_status).toBe('uncertain')
+
+    // Sending again on purpose says so to the core, with the same message.
+    await resendUncertainSend(bubble().id)
+    const sends = calls.filter((c) => c.command === 'mail.send')
+    expect(sends).toHaveLength(2)
+    const second = sends[1].payload as { resend?: boolean; message_id?: string; body?: string }
+    expect(second.resend).toBe(true)
+    expect(second.message_id).toBe('sent@example.com')
+    expect(second.body).toBe('Did this go?')
+    expect(bubble().send_status).toBe('sent')
+  })
+
+  it('a bubble of unknown outcome is settled from the waiting list by the attempt it stands for', async () => {
+    const thread = message({
+      id: 'root',
+      account_id: 'acc-1',
+      thread_id: 't-1',
+      folder_id: 'INBOX',
+      from_addr: 'them@example.com',
+      message_id: 'root@example.com',
+      date: 1000,
+    })
+    mail$.threads.set([thread])
+    mail$.messages.set([thread])
+    ui$.selectedThread.set('t-1')
+    compose$.composer.set('Did this go?')
+    settings$.signature.set('')
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+      calls.push({ command, payload })
+      if (command === 'mail.allocateIdentity') return { message_id: 'sent@example.com' }
+      if (command === 'mail.send') return { ok: false, outcome: 'already_attempted', attempt_id: 'sent@example.com' }
+      if (command === 'mail.outgoingAttempts') return { attempts: [] }
+      return {}
+    }
+    await sendReply()
+    const bubble = () => mail$.messages.peek().find((m) => m.id.startsWith('sent-'))!
+    expect(bubble().send_status).toBe('uncertain')
+
+    // The reader marks it settled in the list; the bubble follows.
+    await settleOutgoingAttempt('sent@example.com')
+    expect(bubble().send_status).toBe('sent')
+    expect(calls.some((c) => c.command === 'mail.resolveOutgoing')).toBe(true)
+    // And nothing was sent again on anyone's behalf.
+    expect(calls.filter((c) => c.command === 'mail.send')).toHaveLength(1)
+  })
+
+  it('the full composer is told an unsettled outcome apart from a refusal', async () => {
+    const composed = {
+      accountId: 'acc-1',
+      to: 'bob@example.com',
+      subject: 'Hello',
+      rich: false,
+      content: 'hi',
+      attachments: [],
+    }
+    ;(window as any).go.main.App.Invoke = async (command: string) => {
+      calls.push({ command, payload: {} })
+      if (command === 'mail.send')
+        return { ok: false, outcome: 'uncertain', attempt_id: '<x@example.com>', error: 'reset' }
+      return { attempts: [] }
+    }
+    let caught: unknown
+    try {
+      await sendComposed(composed)
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(UncertainSendError)
+    expect((caught as UncertainSendError).attemptId).toBe('<x@example.com>')
+    ;(window as any).go.main.App.Invoke = async (command: string) => {
+      calls.push({ command, payload: {} })
+      if (command === 'mail.send') return { ok: false, outcome: 'rejected', error: '550 no such user' }
+      return {}
+    }
+    await expect(sendComposed(composed)).rejects.toThrow('550 no such user')
+    ;(window as any).go.main.App.Invoke = async () => ({ ok: true, outcome: 'archived' })
+    await expect(sendComposed(composed)).resolves.toBeUndefined()
+  })
+
   it('undoing a held send keeps one draft, not two', async () => {
     const thread = message({
       id: 'root',
@@ -746,6 +909,91 @@ describe('quick reply draft sharing', () => {
     expect(compose$.quickReplyDraftSaved.get()).toBe(true)
     // Nothing was sent.
     expect(calls.some((c) => c.command === 'mail.send')).toBe(false)
+  })
+
+  // #89: a reply in its grace period is also kept by the core, under its own
+  // Message-ID, so quitting or crashing in those seconds cannot lose it.
+  describe('held replies are kept by the core', () => {
+    afterEach(() => {
+      settings$.undoSendSeconds.set(0)
+      flushQueuedSends()
+      heldCopies.clear()
+    })
+    const heldReply = async (seconds: number) => {
+      const thread = message({
+        id: 'held-root',
+        account_id: 'acc-1',
+        thread_id: 't-held',
+        folder_id: 'INBOX',
+        from_addr: 'them@example.com',
+        message_id: 'held-root@example.com',
+        date: 1000,
+      })
+      mail$.threads.set([thread])
+      mail$.messages.set([thread])
+      ui$.selectedThread.set('t-held')
+      compose$.composer.set('Held reply')
+      settings$.signature.set('')
+      settings$.undoSendSeconds.set(seconds)
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+        calls.push({ command, payload })
+        if (command === 'mail.allocateIdentity') return { message_id: '<held@example.com>' }
+        if (command === 'mail.send') return { ok: true, outcome: 'archived' }
+        return {}
+      }
+      await sendReply()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return mail$.messages.get().find((m) => m.id.startsWith('sent-'))!
+    }
+    const commands = () =>
+      calls
+        .map((c) => c.command)
+        .filter(
+          (c) => c.startsWith('mail.') && c !== 'mail.allocateIdentity' && !c.includes('Draft') && !c.includes('draft'),
+        )
+
+    it('keeps a stored copy of a held reply and removes it when the reply is taken back', async () => {
+      const before = Math.floor(Date.now() / 1000)
+      const bubble = await heldReply(30)
+      const stored = calls.find((c) => c.command === 'mail.scheduleSend')?.payload as any
+      expect(stored?.id).toBe(stored?.message?.message_id)
+      expect(stored?.id).toBeTruthy()
+      // Due only after the grace period and a margin: the reply's own timer
+      // lets it go first, and the copy goes on its own only if the app is gone.
+      expect(stored.due_at).toBeGreaterThanOrEqual(before + 30 + HELD_SEND_MARGIN_SECONDS)
+      expect(heldCopies.has(stored.id)).toBe(true)
+
+      undoSend(bubble.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.cancelScheduledSend'])
+      expect((calls.find((c) => c.command === 'mail.cancelScheduledSend')?.payload as any).id).toBe(stored.id)
+      expect(heldCopies.has(stored.id)).toBe(false)
+    })
+
+    it('removes the stored copy before sending a held reply whose time is up', async () => {
+      await heldReply(0.01)
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.cancelScheduledSend', 'mail.send'])
+    })
+
+    it('on closing, sends the stored copy, which stays stored until it has gone', async () => {
+      await heldReply(30)
+      flushQueuedSends()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.sendScheduledNow'])
+    })
+
+    it('leaves the stored copy to the core when the core cannot be reached as the time comes', async () => {
+      await heldReply(0.01)
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+        calls.push({ command, payload })
+        if (command === 'mail.cancelScheduledSend') throw new Error('engine unavailable')
+        return {}
+      }
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      // No second send beside the stored one.
+      expect(commands()).toEqual(['mail.scheduleSend', 'mail.cancelScheduledSend'])
+    })
   })
 
   it('keeps the consumed draft guarded while the post-send discard is still in flight', async () => {
@@ -1517,5 +1765,40 @@ describe('signature in the quick reply', () => {
     settings$.signature.set('<p>different</p>')
 
     expect(compose$.composer.get()).toBe('t2\n\nfrom u2')
+  })
+})
+
+describe('quick replies where no server draft keeps them (#143)', () => {
+  it('are kept per thread for Graph accounts, and left to server drafts elsewhere', () => {
+    accounts$.set([
+      { id: 'graph@example.test', auth_type: 'graph_oauth', graph_send: true } as any,
+      { id: 'imap@example.test', auth_type: 'password' } as any,
+    ])
+    compose$.composerAttachments.set([])
+    compose$.quickReplySignature.set(null)
+
+    compose$.composer.set('Half-written answer')
+    stashQuickReplyForThread('graph-thread', 'graph@example.test')
+    compose$.composer.set('Something for an IMAP thread')
+    stashQuickReplyForThread('imap-thread', 'imap@example.test')
+
+    compose$.composer.set('')
+    expect(restoreQuickReplyForThread('imap-thread')).toBe(false)
+    expect(restoreQuickReplyForThread('graph-thread')).toBe(true)
+    expect(compose$.composer.peek()).toBe('Half-written answer')
+    // Taken back once: a sent or cleared reply does not come back later.
+    expect(restoreQuickReplyForThread('graph-thread')).toBe(false)
+  })
+
+  it('an emptied box forgets what was kept', () => {
+    accounts$.set([{ id: 'graph@example.test', auth_type: 'graph_oauth', graph_send: true } as any])
+    compose$.quickReplySignature.set(null)
+    compose$.composerAttachments.set([])
+    compose$.composer.set('Draft')
+    stashQuickReplyForThread('t', 'graph@example.test')
+    restoreQuickReplyForThread('t')
+    compose$.composer.set('')
+    stashQuickReplyForThread('t', 'graph@example.test')
+    expect(restoreQuickReplyForThread('t')).toBe(false)
   })
 })

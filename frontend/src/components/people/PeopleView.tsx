@@ -1,18 +1,48 @@
 import { useEffect, useRef } from 'react'
-import { ArrowLeft, BookUser, Building2, Copy, Mail, Phone, Search, SquarePen } from 'lucide-react'
+import {
+  ArrowLeft,
+  BookUser,
+  Building2,
+  Copy,
+  Download,
+  Mail,
+  Pencil,
+  Phone,
+  Search,
+  SquarePen,
+  Trash2,
+  Upload,
+  UserPlus,
+} from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { openComposeTab } from '../../states/compose'
-import { loadPeople, people$, sourceLabel } from '../../states/people'
-import { showToast, ui$ } from '../../states/ui'
+import {
+  deletePerson,
+  draftOf,
+  emptyDraft,
+  exportVcf,
+  loadPeople,
+  people$,
+  collapseLinked,
+  loadDuplicates,
+  sourceLabel,
+  startVcfImport,
+  unlinkPerson,
+} from '../../states/people'
+import { confirmAction, showToast, ui$ } from '../../states/ui'
 import type { Person } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { IconButton } from '../button/IconButton'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
+import { Button } from '../button/Button'
+import { PersonEditor } from './PersonEditor'
+import { VcfImportDialog } from './VcfImportDialog'
+import { DuplicatesDialog } from './DuplicatesDialog'
 
 /**
  * The address book, as a place rather than as a dropdown.
@@ -23,12 +53,17 @@ import { CompactNavigation } from '../sidenav/CompactNavigation'
  * came from, because a person from a CardDAV server and one from Google are
  * two rows on purpose and the reader should be able to tell which is which.
  *
- * Read-only, and it looks it: there is no edit button that turns out not to
- * save. Editing lives where the book does until writing back exists here.
+ * Only the local book is written to from here (ADR-0012): its people have an
+ * edit and a delete button. A synced book's people have neither — there is no
+ * edit button that turns out not to save. Editing those lives where the book
+ * does until writing back to it exists.
  */
 export function PeopleView() {
   const { t } = useTranslation()
-  const people = useValue(people$.people)
+  const everyone = useValue(people$.people)
+  // People linked as one show once (ADR-0012).
+  const people = collapseLinked(everyone)
+  const duplicates = useValue(people$.duplicates)
   const loaded = useValue(people$.loaded)
   const loading = useValue(people$.loading)
   const query = useValue(people$.query)
@@ -41,6 +76,9 @@ export function PeopleView() {
   useEffect(() => {
     if (!loaded) void loadPeople()
   }, [loaded])
+  useEffect(() => {
+    void loadDuplicates()
+  }, [])
 
   // Searching re-asks the core rather than filtering what is loaded: the list
   // is capped, and a person past the cap would otherwise be unfindable.
@@ -49,7 +87,8 @@ export function PeopleView() {
     return () => clearTimeout(timer)
   }, [query])
 
-  const selected = people.find((person) => person.id === selectedId) ?? null
+  const selected = everyone.find((person) => person.id === selectedId) ?? null
+  const copies = selected?.link ? everyone.filter((person) => person.link === selected.link) : []
   useEffect(() => {
     if (!focusNavigation.current || !lastSelection.current) return
     focusNavigation.current = false
@@ -67,6 +106,22 @@ export function PeopleView() {
     openComposeTab({ accountId: from.id, to: person.name ? `${person.name} <${addr}>` : addr })
   }
 
+  const removePerson = async (person: Person) => {
+    const confirmed = await confirmAction({
+      title: t('people.deleteTitle', { defaultValue: 'Delete contact?' }),
+      message: t('people.deleteText', {
+        name: person.name || person.emails[0]?.addr || '',
+        defaultValue:
+          person.source === 'carddav'
+            ? '{name} will be deleted from the address book on its server, for every app that reads it.'
+            : '{name} will be deleted from the address book on this computer.',
+      }),
+      confirmLabel: t('buttons.delete'),
+      tone: 'danger',
+    })
+    if (confirmed) await deletePerson(person)
+  }
+
   const copy = (text: string) => {
     void navigator.clipboard?.writeText(text).then(() => showToast(t('people.copied')))
   }
@@ -81,10 +136,33 @@ export function PeopleView() {
       >
         <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-header px-4 py-3">
           <CompactNavigation />
-          <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
-            <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
-            {t('people.title')}
-          </h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
+              <BookUser size={20} strokeWidth={1.75} aria-hidden="true" />
+              {t('people.title')}
+            </h1>
+            <div className="flex items-center gap-1">
+              <IconButton
+                icon={Upload}
+                iconSize={14}
+                size="sm"
+                label={t('people.import', { defaultValue: 'Import contacts' })}
+                onClick={() => void startVcfImport()}
+              />
+              <IconButton
+                icon={Download}
+                iconSize={14}
+                size="sm"
+                label={t('people.export', { defaultValue: 'Export contacts' })}
+                // What the list shows: everybody, or the people a search found.
+                onClick={() => void exportVcf(query ? people.map((person) => person.id) : undefined)}
+              />
+              <Button variant="secondary" size="sm" onClick={() => people$.editing.set({ draft: emptyDraft() })}>
+                <UserPlus size={14} strokeWidth={1.75} />
+                {t('people.newContact', { defaultValue: 'New contact' })}
+              </Button>
+            </div>
+          </div>
           <div className="flex min-w-0 items-center gap-2 rounded-control border border-border bg-chats px-2.5 py-2 focus-within:border-accent">
             <Search size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
             <input
@@ -95,6 +173,18 @@ export function PeopleView() {
               className="min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none"
             />
           </div>
+          {duplicates.length > 0 && (
+            <button
+              type="button"
+              onClick={() => people$.duplicatesOpen.set(true)}
+              className="self-start rounded-control-sm px-2 py-1 text-caption font-semibold text-accent hover:bg-hover cursor-pointer"
+            >
+              {t('people.duplicatesCount', {
+                count: duplicates.length,
+                defaultValue: '{count, plural, one {# possible duplicate} other {# possible duplicates}}',
+              })}
+            </button>
+          )}
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {!loaded && loading ? (
@@ -109,7 +199,9 @@ export function PeopleView() {
               {people.map((person) => {
                 const active = person.id === selectedId
                 return (
-                  <li key={person.id}>
+                  // The option is the listbox's child as far as assistive
+                  // technology is concerned; the list item is only layout.
+                  <li key={person.id} role="none">
                     <button
                       type="button"
                       role="option"
@@ -136,7 +228,11 @@ export function PeopleView() {
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-ui font-semibold text-primary">{person.name}</span>
-                        <span className="block truncate text-caption text-secondary">
+                        {/* On the selected row's tinted background the secondary
+                            colour falls just under 4.5:1, so it uses the primary. */}
+                        <span
+                          className={clsx('block truncate text-caption', active ? 'text-primary' : 'text-secondary')}
+                        >
                           {person.organisation || person.emails[0]?.addr || ''}
                         </span>
                       </span>
@@ -173,7 +269,50 @@ export function PeopleView() {
                 {t('buttons.back')}
               </button>
             </div>
-            <PersonCard person={selected} onWrite={(addr) => writeTo(selected, addr)} onCopy={copy} />
+            <PersonCard
+              person={selected}
+              onWrite={(addr) => writeTo(selected, addr)}
+              onCopy={copy}
+              onEdit={() =>
+                people$.editing.set({
+                  id: selected.id,
+                  version: selected.version,
+                  serverBook: selected.source === 'carddav' ? selected.book : undefined,
+                  draft: draftOf(selected),
+                })
+              }
+              onDelete={() => void removePerson(selected)}
+            />
+            {copies.length > 1 && (
+              <section className="mx-auto w-full max-w-2xl px-4 pb-6 min-[769px]:px-6">
+                <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">
+                  {t('people.linkedCopies', { defaultValue: 'Linked copies' })}
+                </h2>
+                <ul className="overflow-hidden rounded-control border border-border">
+                  {copies.map((copy) => (
+                    <li
+                      key={copy.id}
+                      className="flex flex-wrap items-center gap-2 border-b border-border bg-chats px-3 py-2 last:border-b-0"
+                    >
+                      <button
+                        type="button"
+                        aria-current={copy.id === selected.id}
+                        onClick={() => people$.selectedId.set(copy.id)}
+                        className="min-w-0 flex-1 text-left text-ui text-primary cursor-pointer"
+                      >
+                        {copy.name}{' '}
+                        <span className="text-caption text-secondary">
+                          · {t(`people.source.${sourceLabel(copy.source)}`)}
+                        </span>
+                      </button>
+                      <Button variant="ghost" size="sm" onClick={() => void unlinkPerson(copy.id)}>
+                        {t('people.unlink', { defaultValue: 'Unlink' })}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -181,6 +320,9 @@ export function PeopleView() {
           </div>
         )}
       </section>
+      <PersonEditor />
+      <VcfImportDialog />
+      <DuplicatesDialog />
     </div>
   )
 }
@@ -189,10 +331,14 @@ function PersonCard({
   person,
   onWrite,
   onCopy,
+  onEdit,
+  onDelete,
 }: {
   person: Person
   onWrite: (addr: string) => void
   onCopy: (text: string) => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
   const { t } = useTranslation()
   const source = sourceLabel(person.source)
@@ -214,8 +360,20 @@ function PersonCard({
             </p>
           )}
           {/* Where they came from, as a fact rather than an icon. */}
-          <p className="mt-1 text-caption text-secondary/80">{t(`people.source.${source}`)}</p>
+          <p className="mt-1 text-caption text-secondary">{t(`people.source.${source}`)}</p>
         </div>
+        {person.editable && (
+          <div className="flex gap-1">
+            <IconButton
+              icon={Pencil}
+              iconSize={14}
+              size="sm"
+              label={t('people.edit', { defaultValue: 'Edit' })}
+              onClick={onEdit}
+            />
+            <IconButton icon={Trash2} iconSize={14} size="sm" label={t('buttons.delete')} onClick={onDelete} />
+          </div>
+        )}
       </header>
 
       {person.emails.length > 0 && (

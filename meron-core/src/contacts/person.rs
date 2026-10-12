@@ -100,9 +100,10 @@ fn label_for(property: &Property, all: &[Property]) -> String {
 ///
 /// Only reached when the card has no `FN`, which is required from vCard 3.0 on
 /// but routinely missing from what 2.1 exporters produce.
-fn name_from_structured(value: &str) -> String {
-    // Split on unescaped semicolons, then unescape each component: a surname
-    // containing a semicolon is escaped precisely so it is not a separator.
+/// A structured value's components, split on unescaped semicolons, each
+/// unescaped: a component containing a semicolon escapes it precisely so it is
+/// not a separator.
+fn structured_parts(value: &str) -> Vec<String> {
     let mut parts: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut chars = value.chars().peekable();
@@ -119,6 +120,11 @@ fn name_from_structured(value: &str) -> String {
         }
     }
     parts.push(current);
+    parts
+}
+
+fn name_from_structured(value: &str) -> String {
+    let parts = structured_parts(value);
     let field = |index: usize| parts.get(index).map(|part| unescape(part)).unwrap_or_default();
 
     // Prefix, given, middle, family, suffix — the order somebody is addressed
@@ -207,13 +213,12 @@ pub fn person_from_properties(properties: &[Property]) -> Person {
             "ORG" if person.organisation.is_empty() => {
                 // ORG is a hierarchy — company;department — and the first part
                 // is the answer to "who do they work for".
-                person.organisation = property
-                    .value
-                    .split(';')
-                    .next()
-                    .unwrap_or_default()
-                    .trim()
-                    .to_string();
+                // Split on the raw value: an escaped semicolon is part of the
+                // name ("Acme\\; Ltd"), not the start of a department.
+                person.organisation = structured_parts(&property.raw)
+                    .first()
+                    .map(|part| unescape(part).trim().to_string())
+                    .unwrap_or_default();
             }
             "NOTE" if person.note.is_empty() => person.note = property.value.trim().to_string(),
             "EMAIL" => {

@@ -21,6 +21,7 @@ import {
   toggleBulkSelection,
   ui$,
   type BulkSelectionItem,
+  canLoadMoreThreads,
 } from '../../states/ui'
 import { thread$ } from '../../states/thread'
 import { settings$, sortParam } from '../../states/settings'
@@ -45,7 +46,12 @@ import {
   markThreadUnread,
   snoozeChoices,
   snoozeThread,
+  exportFolderMbox,
+  isInboxFolder,
 } from '../../states/mail'
+import { categories$, dropStaleFacet } from '../../states/categories'
+import { CategoryTabs } from './CategoryTabs'
+import { canExportMail } from '../../lib/mailCapabilities'
 import type { Message } from '../../types'
 import { clsx } from '../../lib/utils'
 import { isRssAccount } from '../../lib/threadActions'
@@ -61,11 +67,13 @@ import { ScheduledSendsBar } from './ScheduledSendsBar'
 import { QuickFilterBar } from './QuickFilterBar'
 import { SearchUnderstoodBar } from './SearchUnderstoodBar'
 import { SavedSearchMenu } from './SavedSearchMenu'
+import { SearchBuilder } from './SearchBuilder'
 import { ThreadContextMenu, useThreadContextMenu } from './ThreadContextMenu'
 import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
-import { ThreadTable } from './ThreadTable'
+import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
+import { accountGroups$ } from '../../states/accountGroups'
 
 type ThreadListProps = {
   width?: number
@@ -88,6 +96,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   const filters = useValue(ui$.filters)
   const listView = useValue(settings$.listView)
   const listSort = useValue(settings$.listSort)
+  const threadsPagination = useValue(mail$.threadsPagination)
   const threadsCursor = useValue(mail$.threadsCursor)
   const threadsLoadingMore = useValue(mail$.threadsLoadingMore)
   // The rows on hand belong to the view they were loaded for. Until that is the
@@ -95,9 +104,10 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // true from the first paint of a navigation, which is a frame or more before
   // the effect that starts the load.
   const threadsLoadedKey = useValue(mail$.threadsLoadedKey)
+  const accountGroup = useValue(accountGroups$.active)
   const threadsLoading =
     threadsLoadedKey !==
-    threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort))
+    threadListViewKey(selectedAccount, selectedFolder, query, filterKey(filters), sortParam(listSort), accountGroup)
   const threadMenu = useThreadContextMenu(accounts)
   // Starred is a folder of the unified view whose rows span every account. It
   // lists ordinary threads, so it shares this list's selection, context menu and
@@ -106,7 +116,11 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   // Headings only where they mean something. Under any other ordering they
   // would repeat down the page saying nothing, and a search is its own kind of
   // list — the reader asked for relevance, not for a calendar.
-  const groupByDates = listSort.key === 'date' && !query.trim() && !isStarredView
+  const snoozedByWakeTime = filters.includes('snoozed') && selectedAccount !== 'unified'
+  const groupByDates =
+    appliedListSort(listSort, threadsPagination, { snoozedByWakeTime })?.key === 'date' &&
+    !query.trim() &&
+    !isStarredView
   const dateGroups = useMemo(
     () =>
       groupByDates
@@ -169,18 +183,35 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
           folders.find((folder) => folder.id === selectedFolder),
           folders,
         )
+  // A folder of one account whose original messages can be read (#112).
+  const exportable =
+    !isStarredView &&
+    selectedAccount !== 'unified' &&
+    canExportMail(accounts.find((account) => account.id === selectedAccount))
   const hasUnread = isRSSAccount
     ? filteredThreads.some((thread) => thread.unread)
     : folderUnread(folders, selectedFolder) > 0 || filteredThreads.some((thread) => thread.unread)
-  // A search pages on the cursor the core mints for it, whatever the filter chip
-  // says — a query is answered by a search, not by a filtered listing. Without a
-  // cursor (feeds, starred) there is nothing more to load.
-  const canLoadMore = !!threadsCursor && (!!query.trim() || filters.length === 0)
+  // A search pages on the cursor the core mints for it, and so does a filtered
+  // listing. Without a cursor (feeds, starred) there is nothing more to load.
+  const canLoadMore = canLoadMoreThreads(threadsCursor, query, filters)
   const feedRowsDraggable = !isStarredView && isRSSAccount
   // The folder switcher needs a folder list to offer. That is an account's real
   // folders, or — in the unified view — the synthetic per-role list, where each
   // entry means "every account's own Sent/Archive/…". An RSS account has no
   // folders at all: its "inbox" is the whole feed set.
+  // Category tabs belong to an inbox, the unified one included (ADR-0023).
+  // Elsewhere, or while searching, a category facet would narrow the list
+  // with nothing on screen saying so, so it is dropped.
+  const categoryList = useValue(categories$.list)
+  const showCategoryTabs =
+    categoryList.length > 0 &&
+    !isRSSAccount &&
+    !isStarredView &&
+    !query.trim() &&
+    (selectedAccount === 'unified' ? selectedFolder === 'inbox' : isInboxFolder(selectedFolder, selectedAccount))
+  useEffect(() => {
+    dropStaleFacet(showCategoryTabs)
+  }, [showCategoryTabs, categoryList])
   const showFolderSwitcher = !isRSSAccount && !!selectedFolder && (selectedAccount === 'unified' || !!activeAccount)
   // Empty-state copy, which the folder switcher made it possible to land on for
   // any folder: "your inbox is empty" only holds in the inbox, and neither
@@ -312,7 +343,9 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
   return (
     <section
       data-thread-list
-      className={`relative flex w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:w-[var(--thread-list-width)] ${
+      // The remembered width is a preference, not a claim on the window: on a
+      // narrow one the list gives way (down to 280px) before the reader does.
+      className={`relative flex w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:w-[var(--thread-list-width)] min-[769px]:min-w-[280px] min-[769px]:shrink ${
         mobilePane === 'threads' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
       onKeyDownCapture={(event) => {
@@ -388,6 +421,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
               )}
             </div>
 
+            {!isRSSAccount && <SearchBuilder query={query} />}
             <SavedSearchMenu query={query} />
 
             {!searchExpanded && (
@@ -447,6 +481,21 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                             )
                         : undefined
                     }
+                    onExportFolder={
+                      exportable
+                        ? () =>
+                            void exportFolderMbox(
+                              selectedAccount,
+                              selectedFolder,
+                              folderLabel(
+                                { accountId: selectedAccount, folderId: selectedFolder },
+                                folders,
+                                accounts,
+                                t,
+                              ),
+                            )
+                        : undefined
+                    }
                     onSync={syncMail}
                     syncing={busy}
                     allLabel={isRSSAccount ? t('filters.allFeeds') : t('filters.all')}
@@ -493,6 +542,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
 
       {/* Not in the starred view, which is starred-only by definition, and not
           while searching, where the query is the narrowing. */}
+      {showCategoryTabs && <CategoryTabs />}
       {!isStarredView && !query.trim() && <QuickFilterBar hideSnoozed={isRSSAccount} />}
       <SearchUnderstoodBar />
 

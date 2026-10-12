@@ -1,3 +1,4 @@
+import { startQuickAction } from '../../states/quickActions'
 import { useEffect } from 'react'
 import {
   clearBulkSelection,
@@ -244,6 +245,27 @@ export function AppHotkeys() {
       ) {
         event.preventDefault()
         return
+      }
+
+      // Alt+1…9 runs the Quick Action in that place on the selection (#92),
+      // through its confirmation: a keystroke never changes mail unseen.
+      if (
+        !action &&
+        event.altKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        /^Digit[1-9]$/.test(event.code) &&
+        !isTyping(event.target) &&
+        !modalOpen() &&
+        selectedBulkItems().length > 0
+      ) {
+        const quick = settings$.quickActions.peek()[Number(event.code.slice(5)) - 1]
+        if (quick) {
+          event.preventDefault()
+          startQuickAction(quick, selectedBulkItems())
+          return
+        }
       }
 
       if (!action) return

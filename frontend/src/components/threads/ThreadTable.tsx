@@ -5,9 +5,32 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { formatThreadDate } from '../../lib/date'
 import { settings$, type ListSort, type SortKey } from '../../states/settings'
+import { mail$ } from '../../states/mail'
+import { ui$ } from '../../states/ui'
 import type { Account, Message } from '../../types'
 import { LabelChips } from './LabelChips'
 import { resolveMailboxColumns } from '../../lib/mailboxViews'
+
+const NEWEST_FIRST: ListSort = { key: 'date', dir: 'desc' }
+
+/**
+ * The order the rows on screen are actually in, or null when it is none of the
+ * columns.
+ *
+ * Only a conversation page (`conversation-v1`) is ordered by the core with the
+ * chosen sort. Search, starred, and a unified view that includes a feed are
+ * merged newest first whatever was chosen, and one account's snoozed view is
+ * ordered by when each conversation comes back. Claiming the chosen column
+ * there would describe an order the rows are not in.
+ */
+export function appliedListSort(
+  chosen: ListSort,
+  pagination: string,
+  { snoozedByWakeTime = false }: { snoozedByWakeTime?: boolean } = {},
+): ListSort | null {
+  if (pagination === 'conversation-v1') return chosen
+  return snoozedByWakeTime ? null : NEWEST_FIRST
+}
 
 const COLUMNS: { key: SortKey; labelKey: string; className: string }[] = [
   { key: 'sender', labelKey: 'table.sender', className: 'w-[27%]' },
@@ -51,7 +74,12 @@ export function ThreadTable({
   onToggleSelect?: (thread: Message) => void
 }) {
   const { t } = useTranslation()
-  const sort = useValue(settings$.listSort)
+  const chosenSort = useValue(settings$.listSort)
+  const pagination = useValue(mail$.threadsPagination)
+  const filters = useValue(ui$.filters)
+  const snoozedByWakeTime = filters.includes('snoozed') && accountId !== 'unified'
+  const sort = appliedListSort(chosenSort, pagination, { snoozedByWakeTime })
+  const fixedOrder = pagination !== 'conversation-v1'
   const rawViews = useValue(settings$.mailboxViews)
   const configured = resolveMailboxColumns(rawViews, { accountId, folderId })
   const columns = configured
@@ -70,8 +98,8 @@ export function ThreadTable({
 
   const reorder = (key: SortKey) => {
     const next: ListSort =
-      sort.key === key
-        ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+      chosenSort.key === key
+        ? { key, dir: chosenSort.dir === 'asc' ? 'desc' : 'asc' }
         : // A first click on a column asks for the reading that column is
           // usually wanted in: newest first for a date, A to Z for words.
           { key, dir: key === 'date' ? 'desc' : 'asc' }
@@ -94,8 +122,8 @@ export function ThreadTable({
             </th>
           )}
           {columns.map((column) => {
-            const active = sort.key === column.key
-            const Arrow = sort.dir === 'asc' ? ArrowUp : ArrowDown
+            const active = sort?.key === column.key
+            const Arrow = sort?.dir === 'asc' ? ArrowUp : ArrowDown
             return (
               <th
                 key={column.key}
@@ -104,7 +132,7 @@ export function ThreadTable({
                   column.key === 'account'
                     ? undefined
                     : active
-                      ? sort.dir === 'asc'
+                      ? sort?.dir === 'asc'
                         ? 'ascending'
                         : 'descending'
                       : 'none'
@@ -119,6 +147,7 @@ export function ThreadTable({
                   <button
                     type="button"
                     onClick={() => reorder(column.key as SortKey)}
+                    title={fixedOrder ? t(sort ? 'table.fixedOrder' : 'table.snoozedOrder') : undefined}
                     className={clsx(
                       'flex min-h-8 w-full items-center gap-1 px-2 py-1.5 text-caption font-semibold transition-colors cursor-pointer hover:bg-hover',
                       active ? 'text-accent' : 'text-secondary',

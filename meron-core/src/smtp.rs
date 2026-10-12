@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result};
 use async_smtp::authentication::{Credentials, Mechanism};
+use async_smtp::commands::{DataCommand, MailCommand, RcptCommand};
 use async_smtp::error::Error as SmtpError;
 use async_smtp::{EmailAddress, Envelope, SendableEmail, SmtpClient, SmtpTransport};
 use base64::Engine as _;
@@ -234,7 +235,7 @@ pub enum Protection {
 }
 
 impl Protection {
-    fn apply(&self, raw: &[u8]) -> Result<Vec<u8>> {
+    pub fn apply(&self, raw: &[u8]) -> Result<Vec<u8>> {
         match self {
             Protection::Pgp { what, signing_key, passphrase, recipients, recipient_addresses } => {
                 crate::crypto::pgp::protect_message(
@@ -275,6 +276,56 @@ impl Protection {
             }
         }
     }
+}
+
+/// The MIME for a server that submits the message itself (Exchange, Microsoft
+/// Graph). Blind recipients stay in the headers, because that is the only
+/// place such a server reads them from (it strips them before delivery), and
+/// signing or encryption is applied exactly as on the SMTP path: a message
+/// meant to be protected never goes out in the clear.
+#[allow(clippy::too_many_arguments)]
+pub fn build_submission(
+    sender_name: &str,
+    from: &str,
+    to: &str,
+    cc: &str,
+    bcc: &str,
+    subject: &str,
+    body: &str,
+    html: &str,
+    attachments: &[AttachmentInput],
+    in_reply_to: &str,
+    references: &str,
+    reply_to: &str,
+    message_id: &str,
+    protect: Option<&Protection>,
+) -> Result<Vec<u8>> {
+    let raw = build_message(
+        sender_name, from, to, cc, bcc, true, subject, body, html, attachments, in_reply_to, references, reply_to,
+        message_id,
+    )?;
+    match protect {
+        Some(protection) => protection.apply(&raw),
+        None => Ok(raw),
+    }
+}
+
+/// An attachment's Content-Type, its parameters written as parameters: an
+/// invitation's answer goes as `text/calendar; method=REPLY`, and a mail
+/// reader recognises it by that parameter (RFC 6047).
+fn attachment_type(mime: &str) -> ContentType<'static> {
+    let mut parts = mime.split(';');
+    let base = parts.next().unwrap_or("application/octet-stream").trim();
+    let mut content_type = ContentType::new(if base.is_empty() { "application/octet-stream".to_string() } else { base.to_string() });
+    for part in parts {
+        if let Some((key, value)) = part.split_once('=') {
+            let (key, value) = (key.trim(), value.trim().trim_matches('"'));
+            if !key.is_empty() && !value.is_empty() {
+                content_type = content_type.attribute(key.to_ascii_lowercase(), value.to_string());
+            }
+        }
+    }
+    content_type
 }
 
 pub fn build_message(
@@ -372,7 +423,7 @@ pub fn build_message(
             // Content-Type in BODYSTRUCTURE as `()` rather than the `NIL`
             // RFC 3501 actually requires there, which every strict parser —
             // including the one this app's own IMAP client uses — rejects.
-            let content_type = ContentType::new(att.mime.clone()).attribute("name", att.filename.clone());
+            let content_type = attachment_type(&att.mime).attribute("name", att.filename.clone());
             builder = builder.attachment(content_type, &att.filename, bytes);
         }
     }
@@ -402,6 +453,7 @@ pub async fn send(
     protect: Option<&Protection>,
 ) -> Result<Vec<u8>> {
     if creds.is_graph() { return crate::graph::mail::unsupported(); }
+    if creds.is_local() { return crate::archive::unsupported("send mail"); }
     // Caller passes the chosen send-as address (primary or a verified alias),
     // already validated against the account; fall back to the IMAP login.
     let from = if from_addr.trim().is_empty() {
@@ -617,24 +669,158 @@ async fn transport(creds: &Creds, from: &str, recipients: &[String], raw: &[u8])
         }
     }
 
+    submit(&mut transport, from, recipients, raw).await?;
+    let _ = with_timeout(Duration::from_secs(10), "smtp quit", transport.quit()).await;
+    Ok(())
+}
+
+/// A send whose outcome the server never reported.
+///
+/// The whole message was handed over and the connection failed before the
+/// reply that would have accepted or refused it. The server may well have
+/// queued it: RFC 5321 lets it accept a message it never got to acknowledge.
+/// Sending again on the strength of this error is how a recipient gets two
+/// copies, so it is marked rather than folded into an ordinary failure, and
+/// the caller decides what to do with the doubt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UncertainSend;
+
+impl std::fmt::Display for UncertainSend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the server did not say whether it accepted the message")
+    }
+}
+
+impl std::error::Error for UncertainSend {}
+
+/// Whether an error from [`send`] leaves the message's fate unknown.
+///
+/// Every other failure means the message did not go: the server refused it
+/// or was never reached. Only this one may mean it did.
+pub fn is_uncertain(err: &anyhow::Error) -> bool {
+    // The marker is attached as context, which anyhow's own downcast walks
+    // through; `chain()` would only show the context wrapper, not its type.
+    err.downcast_ref::<UncertainSend>().is_some()
+}
+
+fn uncertain(err: anyhow::Error) -> anyhow::Error {
+    err.context(UncertainSend)
+}
+
+/// The SMTP transaction proper, one phase at a time, so a failure can say
+/// whether the message had left yet.
+///
+/// Up to and including the `DATA` command every refusal is definitive:
+/// nothing of the message has been transmitted, and trying again is safe.
+/// From the first byte of the message on, a lost connection or a missing
+/// reply means the server may already hold it, which [`UncertainSend`]
+/// marks; only an explicit negative reply to the end of data is a refusal.
+///
+/// The envelope and data phases are driven here rather than through the
+/// library's one-shot `send`, which cannot report which phase failed.
+async fn submit<S>(transport: &mut SmtpTransport<S>, from: &str, recipients: &[String], raw: &[u8]) -> Result<()>
+where
+    S: tokio::io::AsyncBufRead + tokio::io::AsyncWrite + Unpin,
+{
+    let sender = EmailAddress::new(from.to_string()).context("from address")?;
     let mut envelope_addrs = Vec::new();
     for addr in recipients {
         envelope_addrs.push(EmailAddress::new(addr.clone()).context("recipient address")?);
     }
-    let envelope = Envelope::new(
-        Some(EmailAddress::new(from.to_string()).context("from address")?),
-        envelope_addrs,
-    )
-    .context("envelope")?;
+    // Validated as a whole before anything is said to the server: an
+    // envelope the library would reject is not one to start a transaction on.
+    let envelope = Envelope::new(Some(sender.clone()), envelope_addrs.clone()).context("envelope")?;
+
+    // Messages are 7-bit on the wire (mail_builder encodes anything else),
+    // so the body can go through the stream's command writer. A message that
+    // is not valid UTF-8 cannot, and goes through the library's send instead;
+    // its failures after the connection is up are all treated as uncertain,
+    // because that path cannot say which phase they came from.
+    let Some(data) = DataBody::new(raw) else {
+        let sent = with_timeout(
+            SMTP_DATA_TIMEOUT,
+            "smtp send",
+            transport.send(SendableEmail::new(envelope, raw.to_vec())),
+        )
+        .await;
+        return match sent {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(err)) if is_refusal(&err) => Err(anyhow::Error::new(err).context("smtp send")),
+            Ok(Err(err)) => Err(uncertain(anyhow::Error::new(err).context("smtp send"))),
+            Err(err) => Err(uncertain(err)),
+        };
+    };
+
+    let stream = transport.get_mut();
     with_timeout(
-        SMTP_DATA_TIMEOUT,
-        "smtp send",
-        transport.send(SendableEmail::new(envelope, raw.to_vec())),
+        SMTP_COMMAND_TIMEOUT,
+        "smtp mail from",
+        stream.command(MailCommand::new(Some(sender), vec![])),
     )
     .await?
-    .context("smtp send")?;
-    let _ = with_timeout(Duration::from_secs(10), "smtp quit", transport.quit()).await;
-    Ok(())
+    .context("smtp MAIL FROM")?;
+    for addr in envelope_addrs {
+        with_timeout(
+            SMTP_COMMAND_TIMEOUT,
+            "smtp rcpt to",
+            stream.command(RcptCommand::new(addr, vec![])),
+        )
+        .await?
+        .context("smtp RCPT TO")?;
+    }
+    with_timeout(SMTP_COMMAND_TIMEOUT, "smtp data", stream.command(DataCommand))
+        .await?
+        .context("smtp DATA")?;
+
+    // From here the message is leaving. A write that fails part-way may
+    // still have delivered the terminator from a kernel buffer; a reply that
+    // never comes may follow an acceptance the server could not get out.
+    match with_timeout(SMTP_DATA_TIMEOUT, "smtp send", stream.send_command(data)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => return Err(uncertain(anyhow::Error::new(err).context("smtp send"))),
+        Err(err) => return Err(uncertain(err)),
+    }
+    match with_timeout(SMTP_DATA_TIMEOUT, "smtp send", stream.read_response()).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(err)) if is_refusal(&err) => Err(anyhow::Error::new(err).context("smtp send")),
+        Ok(Err(err)) => Err(uncertain(anyhow::Error::new(err).context("smtp send"))),
+        Err(err) => Err(uncertain(err)),
+    }
+}
+
+/// An explicit negative reply: the server answered, and the answer was no.
+fn is_refusal(err: &SmtpError) -> bool {
+    matches!(err, SmtpError::Transient(_) | SmtpError::Permanent(_))
+}
+
+/// The message as it goes on the wire after `DATA`: every line that begins
+/// with a dot gets a second one (RFC 5321 §4.5.2), and the whole thing ends
+/// with the lone dot that tells the server it has it all.
+struct DataBody(String);
+
+impl DataBody {
+    /// `None` when the message is not valid UTF-8, which the command writer
+    /// cannot carry; see [`submit`] for what happens then.
+    fn new(raw: &[u8]) -> Option<Self> {
+        let text = std::str::from_utf8(raw).ok()?;
+        let body = text.strip_suffix("\r\n").unwrap_or(text);
+        let mut out = String::with_capacity(body.len() + 8);
+        for line in body.split("\r\n") {
+            if line.starts_with('.') {
+                out.push('.');
+            }
+            out.push_str(line);
+            out.push_str("\r\n");
+        }
+        out.push_str(".\r\n");
+        Some(Self(out))
+    }
+}
+
+impl std::fmt::Display for DataBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 /// Build one out-of-office auto-reply — deliberately much simpler than
@@ -723,6 +909,44 @@ fn bare_id(token: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_server_submission_asked_to_encrypt_is_encrypted_not_sent_in_the_clear() {
+        use super::{Protection, build_submission};
+        let certs = crate::crypto::pgp::certs_from_armoured(&[include_str!(
+            "crypto/testdata/gnupg/fixture_secret.asc"
+        )
+        .to_string()]);
+        let addresses: Vec<String> = certs
+            .iter()
+            .flat_map(|cert| cert.userids().filter_map(|u| u.userid().email().ok().flatten().map(|e| e.to_lowercase())))
+            .collect();
+        assert!(!addresses.is_empty());
+        let protection = Protection::Pgp {
+            what: crate::crypto::pgp::Protect { sign: false, encrypt: true },
+            signing_key: None,
+            passphrase: None,
+            recipients: certs,
+            recipient_addresses: addresses.clone(),
+        };
+        let raw = build_submission(
+            "Ana", "ana@example.com", &addresses[0], "", "hidden@example.com", "Plan", "the secret body", "", &[], "",
+            "", "", "<m@example.com>", Some(&protection),
+        )
+        .unwrap();
+        let text = String::from_utf8_lossy(&raw);
+        assert!(text.contains("-----BEGIN PGP MESSAGE-----"), "{text}");
+        assert!(!text.contains("the secret body"), "{text}");
+        // The server still reads the blind copy from the headers.
+        assert!(text.contains("hidden@example.com"));
+
+        let plain = build_submission(
+            "Ana", "ana@example.com", "b@example.com", "", "", "Plan", "plain body", "", &[], "", "", "",
+            "<m2@example.com>", None,
+        )
+        .unwrap();
+        assert!(String::from_utf8_lossy(&plain).contains("plain body"));
+    }
+
     use super::{
         as_smtp_cert_error, bare_addr, bare_id, build_message, build_oof_reply, parse_addrs, split_name_addr,
     };
@@ -813,6 +1037,23 @@ mod tests {
         )
         .expect_err("must fail instead of sending without the attachment");
         assert!(err.to_string().contains("broken.bin"), "{err:#}");
+    }
+
+    #[test]
+    fn an_invitation_answer_is_sent_with_its_method_as_a_parameter() {
+        let atts = vec![super::AttachmentInput {
+            filename: "reply.ics".into(),
+            mime: "text/calendar; method=REPLY; charset=utf-8".into(),
+            data: "QkVHSU46VkNBTEVOREFS".into(),
+            inline_id: String::new(),
+        }];
+        let raw = build_message("Bo", "bo@x.com", "ana@y.com", "", "", false, "Accepted: Planning", "Accepted.", "", &atts, "", "", "", "")
+            .expect("built");
+        let text = String::from_utf8_lossy(&raw).to_string();
+        let parsed = mailparse::parse_mail(&raw).expect("parses");
+        let part = parsed.subparts.iter().find(|p| p.ctype.mimetype == "text/calendar").unwrap_or_else(|| panic!("{text}"));
+        assert_eq!(part.ctype.params.get("method").map(String::as_str), Some("REPLY"));
+        assert_eq!(part.ctype.params.get("name").map(String::as_str), Some("reply.ics"));
     }
 
     #[test]
@@ -1058,5 +1299,181 @@ mod tests {
         assert!(html_out.contains("/media/acct/Sent/1/0.png"), "{html_out}");
         assert!(html_out.contains("/media/acct/Sent/1/1.png"), "{html_out}");
         assert_eq!(msg.attachments.len(), 2);
+    }
+
+    /// What a submission server says and does, from the client's point of
+    /// view, once the message is on its way.
+    #[derive(Clone, Copy)]
+    enum AfterData {
+        Accept,
+        Refuse,
+        HangUp,
+    }
+
+    /// Minimal submission server: greets, accepts EHLO, MAIL and RCPT (or
+    /// refuses the recipient), takes the message after DATA and then does as
+    /// told. Hands back what it was sent, so a test can look at the wire.
+    async fn serve_submission(
+        listener: tokio::net::TcpListener,
+        refuse_recipient: bool,
+        after_data: AfterData,
+        transcript: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    ) {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let Ok((sock, _)) = listener.accept().await else {
+            return;
+        };
+        let (reader, mut writer) = sock.into_split();
+        if writer.write_all(b"220 test ESMTP\r\n").await.is_err() {
+            return;
+        }
+        let mut lines = tokio::io::BufReader::new(reader).lines();
+        let mut in_data = false;
+        while let Ok(Some(line)) = lines.next_line().await {
+            if in_data {
+                transcript.lock().unwrap().push(line.clone());
+                if line == "." {
+                    in_data = false;
+                    let reply: &[u8] = match after_data {
+                        AfterData::Accept => b"250 2.0.0 queued as 1\r\n",
+                        AfterData::Refuse => b"554 5.7.1 message refused by policy\r\n",
+                        AfterData::HangUp => return,
+                    };
+                    if writer.write_all(reply).await.is_err() {
+                        return;
+                    }
+                }
+                continue;
+            }
+            transcript.lock().unwrap().push(line.clone());
+            let verb = line.split(' ').next().unwrap_or_default().to_uppercase();
+            let reply: &[u8] = match verb.as_str() {
+                "EHLO" | "HELO" => b"250-test\r\n250 OK\r\n",
+                "MAIL" => b"250 2.1.0 OK\r\n",
+                "RCPT" if refuse_recipient => b"550 5.1.1 no such user\r\n",
+                "RCPT" => b"250 2.1.5 OK\r\n",
+                "DATA" => {
+                    in_data = true;
+                    b"354 go ahead\r\n"
+                }
+                "QUIT" => b"221 bye\r\n",
+                _ => b"250 OK\r\n",
+            };
+            if writer.write_all(reply).await.is_err() {
+                return;
+            }
+        }
+    }
+
+    fn plain_creds(port: u16) -> crate::imap::Creds {
+        crate::imap::Creds {
+            host: String::new(),
+            port: 0,
+            user: "alice@test".to_string(),
+            // No secret: the client skips AUTH, which the fake server does
+            // not offer either.
+            password: String::new(),
+            tls: false,
+            starttls: false,
+            smtp_host: "127.0.0.1".to_string(),
+            smtp_port: port,
+            smtp_tls: false,
+            smtp_starttls: false,
+            auth_type: "password".to_string(),
+            access_token: None,
+            refresh_token: None,
+            token_expires_at: 0,
+            oauth_client_id: String::new(),
+            oauth_client_secret: String::new(),
+            oauth_token_url: String::new(),
+            oauth_scope: String::new(),
+            proxy: crate::proxy::ProxyChoice::Direct,
+            cert_pin: None,
+            smtp_cert_pin: None,
+            ews_url: String::new(),
+            delegate_account_id: String::new(),
+            target_mailbox: String::new(),
+        }
+    }
+
+    /// Runs one submission against the fake server and returns the result
+    /// alongside everything the server received.
+    async fn submit_against(
+        refuse_recipient: bool,
+        after_data: AfterData,
+        raw: &[u8],
+    ) -> (anyhow::Result<()>, Vec<String>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let transcript = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        tokio::spawn(serve_submission(listener, refuse_recipient, after_data, transcript.clone()));
+        let result = super::transport(&plain_creds(port), "alice@test", &["bob@test".to_string()], raw).await;
+        let lines = transcript.lock().unwrap().clone();
+        (result, lines)
+    }
+
+    const RAW: &[u8] = b"From: alice@test\r\nTo: bob@test\r\nSubject: hi\r\n\r\nhello\r\n.hidden dot\r\n";
+
+    /// The whole message went and the connection died before the reply: the
+    /// server may have it, so the error must say the outcome is unknown.
+    #[tokio::test]
+    async fn a_lost_connection_after_the_message_is_an_uncertain_send() {
+        let (result, lines) = submit_against(false, AfterData::HangUp, RAW).await;
+        let err = result.expect_err("no reply is not a success");
+        assert!(super::is_uncertain(&err), "{err:#}");
+        assert_eq!(lines.last().map(String::as_str), Some("."), "the terminator was transmitted: {lines:?}");
+    }
+
+    /// The server answered the end of data with a refusal: definitive, and
+    /// safe to try again later.
+    #[tokio::test]
+    async fn a_refusal_after_the_message_is_not_uncertain() {
+        let (result, _) = submit_against(false, AfterData::Refuse, RAW).await;
+        let err = result.expect_err("a 554 is a failure");
+        assert!(!super::is_uncertain(&err), "{err:#}");
+        assert!(format!("{err:#}").contains("refused by policy"), "{err:#}");
+    }
+
+    /// A recipient refused before DATA: nothing of the message has left.
+    #[tokio::test]
+    async fn a_refused_recipient_is_not_uncertain_and_sends_no_data() {
+        let (result, lines) = submit_against(true, AfterData::Accept, RAW).await;
+        let err = result.expect_err("a 550 is a failure");
+        assert!(!super::is_uncertain(&err), "{err:#}");
+        assert!(format!("{err:#}").contains("no such user"), "{err:#}");
+        assert!(!lines.iter().any(|line| line.eq_ignore_ascii_case("DATA")), "{lines:?}");
+    }
+
+    /// The accepted path: envelope, data, dot-stuffed body, terminator.
+    #[tokio::test]
+    async fn an_accepted_message_goes_dot_stuffed_and_terminated() {
+        let (result, lines) = submit_against(false, AfterData::Accept, RAW).await;
+        result.expect("accepted");
+        let verbs: Vec<String> = lines
+            .iter()
+            .map(|line| line.split(' ').next().unwrap_or_default().to_uppercase())
+            .collect();
+        let position = |verb: &str| verbs.iter().position(|v| v == verb).unwrap_or_else(|| panic!("{verb} in {lines:?}"));
+        assert!(position("MAIL") < position("RCPT") && position("RCPT") < position("DATA"));
+        assert!(lines.contains(&"..hidden dot".to_string()), "a leading dot is doubled: {lines:?}");
+        assert!(lines.contains(&"hello".to_string()));
+        assert_eq!(lines.iter().filter(|line| *line == ".").count(), 1, "one terminator: {lines:?}");
+    }
+
+    #[test]
+    fn data_body_stuffs_dots_and_ends_with_a_lone_dot() {
+        let body = super::DataBody::new(b"a\r\n.b\r\n..c\r\n").unwrap().0;
+        assert_eq!(body, "a\r\n..b\r\n...c\r\n.\r\n");
+        // A message without a final line ending still ends properly.
+        assert_eq!(super::DataBody::new(b"a\r\n.b").unwrap().0, "a\r\n..b\r\n.\r\n");
+        // Raw 8-bit bytes cannot go through the text writer.
+        assert!(super::DataBody::new(b"caf\xe9").is_none());
+    }
+
+    #[test]
+    fn the_uncertain_marker_survives_added_context() {
+        let err = super::uncertain(anyhow::anyhow!("io: connection reset")).context("send for acct");
+        assert!(super::is_uncertain(&err));
+        assert!(!super::is_uncertain(&anyhow::anyhow!("smtp send: permanent: 554 no")));
     }
 }

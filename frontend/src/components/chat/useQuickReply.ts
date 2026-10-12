@@ -7,10 +7,12 @@ import {
   discardQuickReplyDraftIfEmpty,
   isQuickReplyBlank,
   quickReplyCaretOffset,
+  restoreQuickReplyForThread,
   saveQuickReplyDraft,
   scheduleQuickReplyDraftSave,
   seedQuickReplySignature,
   sendReply,
+  stashQuickReplyForThread,
 } from '../../states/compose'
 import { getActiveThread } from '../../states/mail'
 import { showToast, ui$ } from '../../states/ui'
@@ -46,6 +48,7 @@ export function useQuickReply() {
   const replyFocus = useValue(ui$.replyFocus)
   const lastImagePasteAtRef = useRef(0)
   const lastHydratedThreadRef = useRef('')
+  const lastAccountRef = useRef('')
   const suppressNextDraftSaveRef = useRef(false)
   const [sendingReply, setSendingReply] = useState(false)
 
@@ -87,7 +90,10 @@ export function useQuickReply() {
     const previous = lastHydratedThreadRef.current
     if (previous === activeThreadId) return
     cancelQuickReplyDraftSave()
+    // Kept for the thread being left when no server draft will keep it.
+    stashQuickReplyForThread(previous, lastAccountRef.current)
     lastHydratedThreadRef.current = activeThreadId
+    lastAccountRef.current = activeThread?.account_id ?? ''
     suppressNextDraftSaveRef.current = true
     compose$.quickReplyDraftId.set('')
     compose$.quickReplyDraftSaved.set(false)
@@ -95,6 +101,7 @@ export function useQuickReply() {
     // Starts the new thread's box on the replying account's signature rather
     // than blank — the box is what gets sent, so it shows what will go out.
     seedQuickReplySignature()
+    restoreQuickReplyForThread(activeThreadId)
   }, [activeThreadId])
 
   // Save or discard the current quick reply after text changes. Keyed on

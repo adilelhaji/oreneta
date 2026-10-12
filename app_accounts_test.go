@@ -76,6 +76,33 @@ func TestAccountAddPasswordForwardsAcceptedCertificate(t *testing.T) {
 	}
 }
 
+// A POP3 account is sent to the core as one, on the POP3 port, and nothing
+// starts an IMAP watcher for it (#97).
+func TestAccountAddPasswordSetsUpPOP3(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{"ok": true}})
+	res, err := app.accountAddPassword(map[string]any{
+		"email":     "user@example.com",
+		"imap_host": "pop.example.com",
+		"smtp_host": "smtp.example.com",
+		"username":  "user@example.com",
+		"password":  "secret",
+		"incoming":  "pop3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := writer.calls[0].Params
+	if params["auth_type"] != "pop3" || params["port"] != float64(995) && params["port"] != uint16(995) {
+		t.Fatalf("params = %#v", params)
+	}
+	if len(writer.calls) != 1 {
+		t.Fatalf("calls = %#v, want no watch.start", writer.calls)
+	}
+	if res.(map[string]any)["account"].(Account).AuthType != "pop3" {
+		t.Fatalf("account = %#v", res)
+	}
+}
+
 // Accounts on servers with a normal certificate must not carry a pin at all —
 // an empty one would be persisted and read back as "pinned to nothing".
 func TestAccountAddPasswordOmitsEmptyCertificatePin(t *testing.T) {

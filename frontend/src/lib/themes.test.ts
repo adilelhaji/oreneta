@@ -9,6 +9,7 @@ import {
   TOKEN_CSS_VAR,
   cssVarStyle,
   builtinTheme,
+  contrastShortfalls,
   defaultCustomInput,
   deriveThemeTokens,
   isCustomThemeId,
@@ -88,6 +89,9 @@ describe('cobalt defaults', () => {
       }
       expect(contrastRatio(t.accentText, t.accent)!).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(t.accentText, t.accentHover)!).toBeGreaterThanOrEqual(4.5)
+      // The selected folder and account are accent text on the active
+      // background; the automated audit flagged the dark pair at 4.42:1.
+      expect(contrastRatio(t.accent, t.bgActive)!).toBeGreaterThanOrEqual(4.5)
       for (const [fg, bg] of [
         [t.success, t.successSoft],
         [t.warning, t.warningSoft],
@@ -143,6 +147,71 @@ describe('cobalt defaults', () => {
 })
 
 describe('deriveThemeTokens', () => {
+  it('derives readable secondary text for an unedited custom theme', () => {
+    for (const appearance of ['light', 'dark'] as const) {
+      const t = deriveThemeTokens(defaultCustomInput(appearance))
+      // The fixed blend this replaced gave 3.43:1 on the light app background
+      // and 2.94:1 on a selected row.
+      for (const bg of [t.bgApp, t.bgChat, t.bgChats, t.bgActive])
+        expect(contrastRatio(t.textSecondary, bg)!).toBeGreaterThanOrEqual(4.5)
+      expect(contrastShortfalls(t)).toEqual([])
+    }
+  })
+
+  it('keeps secondary text readable whenever the chosen text itself is', () => {
+    const palettes: CustomThemeInput[] = [
+      SAMPLE_INPUT,
+      {
+        appearance: 'light',
+        bgApp: '#e8e0d0',
+        surface: '#f5efe3',
+        sideNav: '#333333',
+        accent: '#7a3e00',
+        text: '#2b2b2b',
+      },
+      {
+        appearance: 'dark',
+        bgApp: '#202020',
+        surface: '#2a2a2a',
+        sideNav: '#111111',
+        accent: '#ffb000',
+        text: '#d0d0d0',
+      },
+      {
+        appearance: 'dark',
+        bgApp: '#000000',
+        surface: '#0a0a0a',
+        sideNav: '#000000',
+        accent: '#66ccff',
+        text: '#ffffff',
+      },
+    ]
+    for (const input of palettes) {
+      const t = deriveThemeTokens(input)
+      expect(contrastShortfalls(t).some((s) => s.pair === 'text')).toBe(false)
+      for (const bg of [t.bgApp, t.bgChat, t.bgChats, t.bgActive])
+        expect(contrastRatio(t.textSecondary, bg)!).toBeGreaterThanOrEqual(4.5)
+      // Still secondary: never the primary colour unless nothing else reads.
+      expect(t.textSecondary).not.toBe(t.textPrimary)
+    }
+  })
+
+  it('names what the chosen colours themselves leave unreadable', () => {
+    const t = deriveThemeTokens({
+      appearance: 'dark',
+      bgApp: '#101b2e',
+      surface: '#152137',
+      sideNav: '#0b162b',
+      accent: '#3b5bdb',
+      text: '#6b7280',
+    })
+    const shortfalls = contrastShortfalls(t)
+    expect(shortfalls.map((s) => s.pair)).toEqual(['text', 'accent'])
+    for (const s of shortfalls) expect(s.ratio).toBeLessThan(4.5)
+    // With nothing readable to fade toward, secondary text is the text itself.
+    expect(t.textSecondary).toBe(t.textPrimary)
+  })
+
   it('produces valid colors for every color slot', () => {
     for (const appearance of ['light', 'dark'] as const) {
       const tokens = deriveThemeTokens({ ...SAMPLE_INPUT, appearance })

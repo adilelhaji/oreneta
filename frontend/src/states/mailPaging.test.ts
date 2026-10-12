@@ -170,6 +170,18 @@ describe('mailbox pagination view contract', () => {
     expect(getActiveThread()).toBeNull()
   })
 
+  it('keeps a snoozed page in its wake-time order when it keeps the open row', async () => {
+    // Snoozed is ordered by when each conversation comes back, not by date.
+    const dated = (id: string, date: number) => ({ ...row(id), date })
+    ui$.filters.set(['snoozed'])
+    respond = () => ({ threads: [dated('soon', 1), dated('open', 3), dated('later', 2)] })
+    await loadThreads()
+    ui$.selectedThread.set('open')
+    respond = () => ({ threads: [dated('soon', 1), dated('later', 2)] })
+    await loadThreads(false)
+    expect(mail$.threads.get().map((r) => r.thread_id)).toEqual(['soon', 'open', 'later'])
+  })
+
   it('reloads an incompatible conversation cursor without grafting a first page', async () => {
     respond = () => ({ threads: [row('old')], next_cursor: 'conv1:old', pagination: 'conversation-v1' })
     await loadThreads()

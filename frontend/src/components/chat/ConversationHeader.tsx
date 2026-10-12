@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
+import { assistantEnabled$ } from '../../states/assistant'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
@@ -39,7 +40,7 @@ import { ConversationSubject } from './ConversationSubject'
 import { ReadingHeaderSummary } from './ReadingHeaderSummary'
 import { isConversation, summariseThread } from './readingHeader'
 import { accountIdentities, accounts$ } from '../../states/accounts'
-import { readOnlyTarget } from '../../lib/mailCapabilities'
+import { messageChangesBlocked, readOnlyTarget, sendBlocked } from '../../lib/mailCapabilities'
 import { AssistantReviewDialog } from './AssistantReviewDialog'
 
 // The conversation header: back/close affordances, sender info, the desktop
@@ -78,6 +79,10 @@ export function ConversationHeader({
   const messagesCursor = useValue(mail$.messagesCursor)
   const accounts = useValue(accounts$)
   const readOnly = readOnlyTarget(accounts, activeThread.account_id)
+  // Star, read state, archive and trash change messages: on Graph they need
+  // the change permission (#141). Writing to the sender is sending.
+  const changesBlocked = messageChangesBlocked(accounts, activeThread.account_id)
+  const sendingBlocked = sendBlocked(accounts, activeThread.account_id)
   const ownAddresses = accounts
     .filter((account) => account.id === activeThread.account_id)
     .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
@@ -85,6 +90,8 @@ export function ConversationHeader({
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  // Off until turned on in Settings (#51).
+  const assistantEnabled = useValue(assistantEnabled$)
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -254,25 +261,27 @@ export function ConversationHeader({
               width more than they do. */}
           {!threadSearchOpen && (
             <>
-              <IconButton
-                icon={Sparkles}
-                label={t('assistant.open', { defaultValue: 'Review with assistant' })}
-                onClick={() => setAssistantOpen(true)}
-                className="hidden min-[1200px]:flex"
-              />
+              {assistantEnabled && (
+                <IconButton
+                  icon={Sparkles}
+                  label={t('assistant.open', { defaultValue: 'Review with assistant' })}
+                  onClick={() => setAssistantOpen(true)}
+                  className="hidden min-[1200px]:flex"
+                />
+              )}
               {/* The two that give way first when the pane is narrow. They
                   stay in the menu below, so nothing becomes unreachable —
                   only less immediate. */}
               <IconButton
                 icon={Star}
-                disabled={readOnly}
+                disabled={changesBlocked}
                 label={activeThread.starred ? t('chat.unstar') : t('chat.star')}
                 className={clsx('hidden min-[860px]:flex', activeThread.starred && 'text-warning')}
                 onClick={() => void starThread(activeThread.thread_id, !activeThread.starred)}
               />
               <IconButton
                 icon={activeThread.unread ? MailOpen : Mail}
-                disabled={readOnly}
+                disabled={changesBlocked}
                 label={activeThread.unread ? t('threads.actions.markAsRead') : t('threads.actions.markAsUnread')}
                 className="hidden min-[860px]:flex"
                 onClick={() =>
@@ -286,13 +295,13 @@ export function ConversationHeader({
                   <LabelPicker threadId={activeThread.thread_id} applied={activeThread.labels ?? []} />
                   <IconButton
                     icon={Archive}
-                    disabled={readOnly}
+                    disabled={changesBlocked}
                     label={t('threads.actions.archiveThread')}
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   <IconButton
                     icon={Trash2}
-                    disabled={readOnly}
+                    disabled={changesBlocked}
                     label={t('threads.actions.moveToTrash')}
                     onClick={() => void deleteThread(activeThread.thread_id)}
                   />
@@ -347,6 +356,11 @@ export function ConversationHeader({
                       // were written: a printout of one message out of twelve
                       // is a printout of a fragment.
                       messages: mail$.messages.peek().filter((message) => message.thread_id === activeThread.thread_id),
+                      // The printout loads what the reader would, and says
+                      // when older messages were not loaded (#35).
+                      allowRemoteImages:
+                        accounts.find((account) => account.id === activeThread.account_id)?.load_remote_images ?? false,
+                      incompleteNotice: mail$.messagesCursor.peek() ? t('print.incomplete') : undefined,
                       printedLabel: t('print.printedOn'),
                       toLabel: t('print.to'),
                       ccLabel: t('print.cc'),
@@ -358,7 +372,7 @@ export function ConversationHeader({
                   <Printer size={16} className="shrink-0" strokeWidth={1.75} /> {t('print.action')}
                 </button>
                 <button
-                  disabled={readOnly}
+                  disabled={changesBlocked}
                   onClick={() => {
                     void starThread(activeThread.thread_id, !activeThread.starred)
                     setActionsMenuOpen(false)
@@ -375,7 +389,7 @@ export function ConversationHeader({
                 {!isRSS && (
                   <>
                     <button
-                      disabled={readOnly}
+                      disabled={changesBlocked}
                       onClick={() => {
                         void archiveThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
@@ -385,7 +399,7 @@ export function ConversationHeader({
                       <Archive size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.archiveThread')}
                     </button>
                     <button
-                      disabled={readOnly}
+                      disabled={changesBlocked}
                       onClick={() => {
                         void deleteThread(activeThread.thread_id)
                         setActionsMenuOpen(false)
@@ -447,7 +461,7 @@ export function ConversationHeader({
           <MenuItem
             icon={<SquarePen size={14} className="text-accent" strokeWidth={1.75} />}
             label={t('chat.newMessageTo', { email: senderEmail })}
-            disabled={!senderEmail || readOnly}
+            disabled={!senderEmail || sendingBlocked}
             onClick={() => {
               openComposeTab({ accountId: activeThread.account_id, to: senderRecipient })
               setSenderMenu(null)
