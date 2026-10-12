@@ -6,6 +6,7 @@ import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
 import { onChatEvent } from './states/messaging'
+import { onBackupScheduled } from './states/backupSchedule'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
@@ -402,6 +403,23 @@ export function useAppEffects() {
       onTranslationEvent('translation.done', detail),
     )
 
+    // Scheduled backups (#173): a failure is said even with Settings closed;
+    // the earlier backups are still there.
+    const offBackupScheduled = eventsOn(
+      'backup.scheduled',
+      (detail: { state?: string; status?: { last_error?: string | null } | null }) => {
+        onBackupScheduled(detail as Parameters<typeof onBackupScheduled>[0])
+        if (detail?.state === 'failed')
+          showToast(
+            t('backupSchedule.failedToast', {
+              error: detail.status?.last_error || '',
+              defaultValue: 'The scheduled backup failed: {error}. Earlier backups are kept.',
+            }),
+            'error',
+          )
+      },
+    )
+
     // Chat (#111): a conversation changed, or a connection did.
     const offChatChanged = eventsOn('chat.changed', (detail: { account?: string; conversation?: string }) =>
       onChatEvent('chat.changed', detail),
@@ -515,6 +533,7 @@ export function useAppEffects() {
       if (typeof offCloudUploaded === 'function') offCloudUploaded()
       if (typeof offChatChanged === 'function') offChatChanged()
       if (typeof offChatStatus === 'function') offChatStatus()
+      if (typeof offBackupScheduled === 'function') offBackupScheduled()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

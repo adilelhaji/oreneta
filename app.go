@@ -429,6 +429,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.archiveImport(payload)
 	case "cloud.pickFile":
 		return a.cloudPickFile()
+	case "backupSchedule.pickFolder":
+		return a.backupPickFolder()
 	case "people.exportVcf":
 		return a.peopleExportVcf(payload)
 	case "people.importVcf":
@@ -559,6 +561,7 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"translation.status", "translation.download", "translation.cancel", "translation.remove",
 		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
 		"cloud.share", "cloud.revoke", "pop3.retention",
+		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
 		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",
 		"chat.markRead", "chat.send", "chat.retry", "context.person":
 		return a.tasksPassthrough(command, payload)

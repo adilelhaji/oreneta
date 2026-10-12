@@ -361,7 +361,11 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
 - **#171 y #172:** copia completa del perfil cifrada con age (ADR-0017),
   comprobación sin tocar el perfil en uso, y restauración preparada aparte,
   activada con diario y reversible ([registro](design/profile-archive.md)).
-  Pendiente: copias programadas (#173) y N4 en Windows.
+  Pendiente: N4 en Windows.
+- **#173 (2026-10-12, por delegación):** copias programadas del perfil,
+  apagadas por omisión, comprobadas antes de contar, con retención que
+  nunca borra la última buena ni archivos ajenos (ADR-0037,
+  [registro](design/scheduled-backups.md)).
 - **#99:** perfiles aislados, cada uno en su ventana y proceso, con
   carpetas, llavero y almacenamiento del webview propios (ADR-0016,
   [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,

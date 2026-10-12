@@ -62,6 +62,7 @@ import { TranslationModelsGroup } from './TranslationModelsGroup'
 import { CloudStorageGroup } from './CloudStorageGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
+import { BackupScheduleGroup } from './BackupScheduleGroup'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
 import { MailImportDialog } from './MailImportDialog'
 import { BackupPassphraseDialog, type BackupPassphraseMode } from './BackupPassphraseDialog'
@@ -1248,6 +1249,7 @@ function BackupGroup() {
           }
         />
       </SettingsGroup>
+      <BackupScheduleGroup />
       <MailImportDialog />
       <ProfileArchiveDialog />
 

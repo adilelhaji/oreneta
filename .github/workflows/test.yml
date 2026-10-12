@@ -263,7 +263,8 @@ jobs:
           bun scripts/i18n/catalog.ts generate
           (cd frontend && bun run build)
           cargo build --manifest-path meron-core/Cargo.toml
-          go build -tags "desktop,production" -o build/bin/oreneta .
+          # wails build adds this framework on macOS; a plain go build must too.
+          CGO_LDFLAGS="-framework UniformTypeIdentifiers" go build -tags "desktop,production" -o build/bin/oreneta .
       - name: Start natively twice
         run: bash scripts/test-desktop-startup.sh build/bin/oreneta native-startup-macos
         env:

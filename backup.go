@@ -275,3 +275,19 @@ func (a *App) inspectProfileArchive(payload map[string]any) (any, error) {
 	out["path"] = src
 	return out, nil
 }
+
+// backupPickFolder asks where scheduled backups go (#173). The core checks
+// the folder again when the schedule is saved.
+func (a *App) backupPickFolder() (any, error) {
+	dir, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title:                "Folder for scheduled backups",
+		CanCreateDirectories: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if dir == "" {
+		return map[string]any{"cancelled": true}, nil
+	}
+	return map[string]any{"path": dir}, nil
+}

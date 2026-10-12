@@ -118,6 +118,8 @@ func sidecarEnv() []string {
 		"MERON_MEDIA_DIR="+mediaDir(),
 		"MERON_MODELS_DIR="+modelsDir(),
 		"MERON_PROFILE="+activeProfile(),
+		// Scheduled backups record the version that wrote them (#173).
+		"MERON_APP_VERSION="+appVersion(),
 	)
 	// Pass the OAuth credentials this build accepts down so the sidecar's
 	// refresh path can read them from the environment without its own
@@ -462,7 +464,7 @@ func sidecarCallTimeout(method string) time.Duration {
 		return 30 * time.Second
 	// Whole folders and whole profiles go through these: they stream to and
 	// from disk for as long as the data takes, so only a stuck call ends here.
-	case "messages.exportMbox", "archive.import", "calendar.importIcs", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage":
+	case "messages.exportMbox", "archive.import", "calendar.importIcs", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage", "backupSchedule.runNow":
 		return 2 * time.Hour
 	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete":
 		return 30 * time.Second

@@ -510,6 +510,9 @@ pub fn hold_restored(conn: &Connection) -> Result<()> {
         ],
     )?;
     conn.execute("DELETE FROM account_secrets", [])?;
+    // Its password is not in the archive, and its folder may be another
+    // computer's: scheduled backups are turned on again by the person.
+    conn.execute("UPDATE backup_schedule SET enabled = 0", [])?;
     Ok(())
 }
 

@@ -446,6 +446,30 @@ mod tests {
         assert!(call("profileArchive.inspect", json!({"path": path.to_string_lossy(), "passphrase": "wrong one!"})).await.is_err());
         let titles = call("notes.list", json!({})).await.unwrap();
         assert_eq!(titles["notes"][0]["title"], "In the archive");
+
+        // Scheduled backups (#173), in this test so that no other archive is
+        // written at the same moment.
+        let status = call("backupSchedule.status", json!({})).await.unwrap();
+        assert_eq!(status["schedule"]["enabled"], false);
+        let folder = dir.join("scheduled");
+        std::fs::create_dir_all(&folder).unwrap();
+        let schedule = json!({"enabled": true, "folder": folder.to_string_lossy(), "every_hours": 24, "keep": 3, "max_bytes": null});
+        let _ = secrets::delete(meron_core::backup_schedule::SECRET_KEY);
+        assert!(call("backupSchedule.save", json!({"schedule": schedule})).await.is_err(), "no password, not on");
+        assert!(call("backupSchedule.save", json!({"schedule": schedule, "password": "short"})).await.is_err());
+        let saved = call("backupSchedule.save", json!({"schedule": schedule, "password": "long enough pass"})).await.unwrap();
+        assert_eq!(saved["password_saved"], true);
+        assert!(saved.to_string().find("long enough pass").is_none(), "the password never comes back");
+        let ran = call("backupSchedule.runNow", json!({})).await.unwrap();
+        assert_eq!(ran["backups"].as_array().unwrap().len(), 1);
+        assert_eq!(ran["backups"][0]["verified"], true);
+        // A manual backup waits for a scheduled one, and the other way round.
+        let held = meron_core::backup_schedule::capture_lock().unwrap();
+        let busy = call("profileArchive.export", json!({"path": dir.join("q.oreneta-profile").to_string_lossy(), "passphrase": "long enough pass"})).await;
+        assert!(busy.unwrap_err().to_string().contains("another backup"));
+        assert!(call("backupSchedule.runNow", json!({})).await.is_err());
+        drop(held);
+        let _ = secrets::delete(meron_core::backup_schedule::SECRET_KEY);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2534,6 +2558,7 @@ async fn main() {
 
     spawn_reminder_watch(engine.clone(), out.clone());
     spawn_deferred_watch(engine.clone(), out.clone());
+    spawn_backup_schedule(engine.clone(), out.clone());
 
     emit(&out, "ready", ready_event()).await;
 
@@ -3171,6 +3196,33 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         // Sharing files by link from cloud storage (#108, ADR-0033). Every
         // upload and link is the person's own action.
+        // Scheduled profile backups (#173, ADR-0037): off by default; the
+        // password stays in the keychain and never comes back out.
+        "backupSchedule.status" => backup_schedule_status(engine),
+        "backupSchedule.save" => {
+            let schedule: meron_core::backup_schedule::Schedule = serde_json::from_value(
+                p.get("schedule").cloned().ok_or_else(|| anyhow::anyhow!("missing schedule"))?,
+            )?;
+            if let Some(password) = p.get("password").and_then(Value::as_str).filter(|p| !p.is_empty()) {
+                anyhow::ensure!(password.chars().count() >= 8, "the backup password needs at least 8 characters");
+                secrets::store(
+                    meron_core::backup_schedule::SECRET_KEY,
+                    &secrets::Secrets { password: password.to_string(), ..Default::default() },
+                )?;
+            }
+            if schedule.enabled {
+                anyhow::ensure!(
+                    backup_password()?.is_some(),
+                    "set a password for the backups before turning them on"
+                );
+            }
+            meron_core::backup_schedule::save(&engine.db.lock().unwrap(), &schedule, &store::app_dir())?;
+            backup_schedule_status(engine)
+        }
+        "backupSchedule.runNow" => {
+            run_scheduled_backup(engine).await?;
+            backup_schedule_status(engine)
+        }
         "cloud.providers" => Ok(json!(meron_core::cloud::PROVIDERS
             .iter()
             .map(|(id, name, usable)| json!({ "id": id, "name": name, "usable": usable }))
@@ -5011,6 +5063,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let app_version = p.get("app_version").and_then(Value::as_str).unwrap_or_default().to_string();
             let engine = engine.clone();
             let summary = tokio::task::spawn_blocking(move || {
+                // Never at the same time as a scheduled backup (#173).
+                let _capture = meron_core::backup_schedule::capture_lock()?;
                 let media_root = meron_core::parse::media_root();
                 let work_dir = store::app_dir().join("backup-work");
                 let options = meron_core::profile_archive::ExportOptions {
@@ -8861,6 +8915,75 @@ fn stop_chat(id: &str) {
 }
 
 /// (Re)starts an account's chat connection.
+/// The scheduled backups' password, if one is saved.
+fn backup_password() -> anyhow::Result<Option<String>> {
+    let password = secrets::load(meron_core::backup_schedule::SECRET_KEY)?.password;
+    Ok(Some(password).filter(|p| !p.is_empty()))
+}
+
+fn backup_schedule_status(engine: &Arc<Engine>) -> anyhow::Result<Value> {
+    let status = meron_core::backup_schedule::status(&engine.db.lock().unwrap())?;
+    let mut value = serde_json::to_value(status)?;
+    value["password_saved"] = json!(backup_password().ok().flatten().is_some());
+    value["running"] = json!(BACKUP_RUNNING.load(std::sync::atomic::Ordering::SeqCst));
+    Ok(value)
+}
+
+static BACKUP_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// One scheduled backup, written and checked off the reactor.
+async fn run_scheduled_backup(engine: &Arc<Engine>) -> anyhow::Result<meron_core::backup_schedule::Outcome> {
+    let password = backup_password()?.unwrap_or_default();
+    let db = engine.db.clone();
+    BACKUP_RUNNING.store(true, std::sync::atomic::Ordering::SeqCst);
+    let result = tokio::task::spawn_blocking(move || {
+        meron_core::backup_schedule::run(
+            &db,
+            &store::app_dir(),
+            &meron_core::parse::media_root(),
+            &password,
+            &std::env::var("MERON_APP_VERSION").unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string()),
+            now_seconds(),
+            if cfg!(test) { 10 } else { meron_core::profile_archive::WORK_FACTOR },
+        )
+    })
+    .await;
+    BACKUP_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    result?
+}
+
+/// Checks every few minutes whether a scheduled backup is due (#173). The
+/// first check waits a little, so a missed run never slows startup.
+fn spawn_backup_schedule(engine: Arc<Engine>, out: Writer) {
+    if let Err(err) = meron_core::backup_schedule::recover(&engine.db.lock().unwrap()) {
+        eprintln!("meron-core: could not tidy scheduled backups: {err:#}");
+    }
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        let mut ticker = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            ticker.tick().await;
+            let due = {
+                let db = engine.db.lock().unwrap();
+                meron_core::backup_schedule::status(&db)
+                    .ok()
+                    .and_then(|s| s.next_run)
+                    .is_some_and(|at| at <= now_seconds())
+            };
+            if !due {
+                continue;
+            }
+            emit(&out, "backup.scheduled", json!({ "state": "running" })).await;
+            let result = run_scheduled_backup(&engine).await;
+            if let Err(err) = &result {
+                eprintln!("meron-core: scheduled backup failed: {err:#}");
+            }
+            let status = backup_schedule_status(&engine).unwrap_or(Value::Null);
+            emit(&out, "backup.scheduled", json!({ "state": if result.is_ok() { "done" } else { "failed" }, "status": status })).await;
+        }
+    });
+}
+
 fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()> {
     stop_chat(id);
     let account = meron_core::chat::account(&engine.db.lock().unwrap(), id)?;
