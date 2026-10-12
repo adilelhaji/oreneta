@@ -20,6 +20,7 @@ import { NotesView } from './components/notes/NotesView'
 import { AttachmentsView } from './components/attachments/AttachmentsView'
 import { TaskDialog } from './components/tasks/TaskDialog'
 import { QuickActionDialog } from './components/quick/QuickActionDialog'
+import { AwaitingDialog } from './components/awaiting/AwaitingDialog'
 import { MessagePane } from './components/chat/MessagePane'
 import { AboutDialog } from './components/dialog/AboutDialog'
 import { ChangelogDialog } from './components/dialog/ChangelogDialog'
@@ -167,6 +168,7 @@ export default function App() {
         {/* Keyed by the task, so moving from one to another starts from that one's fields. */}
         {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
         <QuickActionDialog />
+        <AwaitingDialog />
         {sweepTarget && (
           <SweepDialog
             accountId={sweepTarget.accountId}

@@ -406,6 +406,10 @@ Estado de la iteración 12 (2026-10-12, por delegación):
   cerrar; dos envíos simultáneos no se dan por enviados; se avisa de que
   hace falta la app y de los envíos tardíos; los pospuestos movidos siguen a
   la vista (ADR-0024, [registro](design/send-lifecycle.md)).
+- **#45:** esperar respuesta a lo enviado, con la respuesta reconocida por
+  `In-Reply-To`, conversación y remitente (nunca por el asunto), dudas que
+  decide la persona y un recordatorio que solo avisa dentro de la app
+  (ADR-0025, [registro](design/awaiting-replies.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

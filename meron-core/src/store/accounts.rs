@@ -812,6 +812,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     // Inbox categories (ADR-0023): the reader's corrections for this account.
     ("category_threads", "account"),
     ("category_senders", "account"),
+    // Waiting for a reply (ADR-0025).
+    ("awaiting_replies", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

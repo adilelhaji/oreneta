@@ -7,6 +7,7 @@
 
 pub mod archive;
 pub mod assistant;
+pub mod awaiting;
 pub mod backend;
 pub mod backup;
 pub mod calendar;

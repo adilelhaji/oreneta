@@ -380,6 +380,17 @@ export function useAppEffects() {
     // A message written earlier that has now gone. Dropped from the waiting
     // list here rather than on the next read, so the reader is not shown a
     // message still waiting to be sent that has already been sent.
+    // A reply waited for has not come by the time asked (#45): a notice
+    // here, nothing sent to anyone.
+    const offAwaitingDue = eventsOn('mail.awaitingDue', (detail: { item?: { subject?: string } }) => {
+      showToast(
+        t('awaiting.due', {
+          subject: detail?.item?.subject || '',
+          defaultValue: 'Still no reply: {subject}',
+        }),
+      )
+    })
+
     const offScheduledSent = eventsOn(
       'mail.scheduledSent',
       (detail: { id?: string; subject?: string; late?: boolean }) => {
@@ -472,6 +483,7 @@ export function useAppEffects() {
       if (typeof offCalendarError === 'function') offCalendarError()
       if (typeof offUnsnoozed === 'function') offUnsnoozed()
       if (typeof offScheduledSent === 'function') offScheduledSent()
+      if (typeof offAwaitingDue === 'function') offAwaitingDue()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

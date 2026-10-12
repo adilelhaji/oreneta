@@ -1248,6 +1248,16 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
                 .await;
             }
 
+            // A reply waited for that has not come by the time asked: a
+            // notice here, never a message to anyone (#45).
+            let due = {
+                let db = engine.db.lock().unwrap();
+                meron_core::awaiting::due_reminders(&db, now).unwrap_or_default()
+            };
+            for item in due {
+                emit(&out, "mail.awaitingDue", json!({ "item": item })).await;
+            }
+
             // And the other half of the same promise: messages written to go
             // later. The row is only dropped once the message has actually
             // gone, so a crash between sending and forgetting costs a repeat
@@ -2946,6 +2956,45 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::set_sender_priority(&db, &account, &addr, choice)?;
             let judged = store::rejudge_priority(&db, &account, false)?;
             Ok(json!({ "ok": true, "judged": judged }))
+        }
+
+        // Waiting for a reply (#45, ADR-0025). Answers are read from the mail
+        // each time; nothing is ever sent on the person's behalf.
+        "awaiting.add" => {
+            let thread_id = req_str(p, "thread_id")?;
+            let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id).context("invalid thread_id")?;
+            let remind_at = p.get("remind_at").and_then(Value::as_i64);
+            let db = engine.db.lock().unwrap();
+            let item = meron_core::awaiting::add(&db, &parsed.account, &parsed.thread_key, remind_at, now_seconds())?;
+            Ok(json!({ "item": item }))
+        }
+        "awaiting.list" => {
+            let account = req_str(p, "account").ok().filter(|a| !a.is_empty());
+            let settled = p.get("include_settled").and_then(Value::as_bool).unwrap_or(false);
+            let db = engine.db.lock().unwrap();
+            Ok(json!({ "items": meron_core::awaiting::list(&db, account.as_deref(), settled, now_seconds())? }))
+        }
+        "awaiting.setState" => {
+            let db = engine.db.lock().unwrap();
+            meron_core::awaiting::set_state(&db, &req_str(p, "account")?, &req_str(p, "message_id")?, &req_str(p, "state")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "awaiting.ruleOn" => {
+            let is_answer = p.get("is_answer").and_then(Value::as_bool).context("missing param: is_answer")?;
+            let db = engine.db.lock().unwrap();
+            meron_core::awaiting::rule_on(
+                &db,
+                &req_str(p, "account")?,
+                &req_str(p, "message_id")?,
+                &req_str(p, "candidate")?,
+                is_answer,
+            )?;
+            Ok(json!({ "ok": true }))
+        }
+        "awaiting.remove" => {
+            let db = engine.db.lock().unwrap();
+            meron_core::awaiting::remove(&db, &req_str(p, "account")?, &req_str(p, "message_id")?)?;
+            Ok(json!({ "ok": true }))
         }
 
         // Inbox categories (#91, ADR-0023): the reader's tabs, where each

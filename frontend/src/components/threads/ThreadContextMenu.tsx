@@ -7,6 +7,7 @@ import {
   Copy,
   FolderInput,
   ListTodo,
+  Hourglass,
   Mail,
   MailOpen,
   MessageSquare,
@@ -49,6 +50,7 @@ import { targetWithin, useDismissOnOutside } from '../menu/useDismissOnOutside'
 import { MessageContextMenu } from '../chat/MessageContextMenu'
 import { PriorityMenuSection } from './PriorityMenuSection'
 import { CategoryMenuSection } from './CategoryMenuSection'
+import { awaiting$, reminderAt, waitForReply } from '../../states/awaiting'
 
 export type ThreadMenuState =
   | {
@@ -533,6 +535,24 @@ export function ThreadContextMenu({
           }
           close()
           ui$.taskEditor.set(editorState)
+        }}
+      />
+      {/* Waiting for a reply (#45): to the last message written here. */}
+      <MenuItem
+        icon={<Hourglass size={14} className="text-secondary" strokeWidth={1.75} />}
+        label={t('awaiting.waitAction', { defaultValue: 'Wait for a reply (reminder in 3 days)' })}
+        onClick={() => {
+          const threadId = menu.threadId
+          close()
+          void waitForReply(threadId, reminderAt(3))
+        }}
+      />
+      <MenuItem
+        icon={<Hourglass size={14} className="text-secondary" strokeWidth={1.75} />}
+        label={t('awaiting.showAction', { defaultValue: 'Waiting for replies…' })}
+        onClick={() => {
+          close()
+          awaiting$.open.set(true)
         }}
       />
       <PriorityMenuSection threadId={menu.threadId} accountId={menu.accountId} folderId={menu.folderId} onAct={close} />
