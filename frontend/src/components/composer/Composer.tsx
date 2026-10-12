@@ -15,6 +15,9 @@ import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
 import { confirmAction, showToast, showUndoToast } from '../../states/ui'
 import { TranslateDraftDialog, type DraftTranslation } from './TranslateDraftDialog'
+import { AssistantRewriteDialog } from './AssistantRewriteDialog'
+import { assistantEnabled$ } from '../../states/assistant'
+import { textToHtml } from './composerHelpers'
 import { CURSOR_TOKEN, fillPlaceholders, takeCursor, type Filled } from '../../lib/placeholders'
 import type { Template } from '../../states/templates'
 import {
@@ -52,8 +55,28 @@ export function Composer({ tabId }: { tabId: string }) {
     grammar,
   } = useComposer(tabId)
   const [translating, setTranslating] = useState(false)
+  const [rewriting, setRewriting] = useState(false)
+  const assistantEnabled = useValue(assistantEnabled$)
 
   if (!draft) return null
+
+  /** A reviewed rewrite replaces the draft's text, with an undo (#52). */
+  const applyRewrite = (text: string) => {
+    setRewriting(false)
+    if (draft.rich && editor) {
+      const original = editor.getHTML()
+      editor.commands.setContent(textToHtml(text) || '<p></p>')
+      showUndoToast(t('assistant.rewrite.replaced', { defaultValue: 'Replaced with the rewrite' }), () =>
+        editor.commands.setContent(original),
+      )
+      return
+    }
+    const original = draft.text
+    update({ text })
+    showUndoToast(t('assistant.rewrite.replaced', { defaultValue: 'Replaced with the rewrite' }), () =>
+      update({ text: original }),
+    )
+  }
 
   /**
    * A reviewed translation goes in place of the draft, with an undo that
@@ -271,6 +294,16 @@ export function Composer({ tabId }: { tabId: string }) {
 
       <LocalDraftStatus tabId={tabId} />
 
+      {rewriting && (
+        <AssistantRewriteDialog
+          accountId={draft.accountId}
+          rich={draft.rich}
+          text={draft.rich ? (editor?.getText({ blockSeparator: '\n' }) ?? draft.text) : draft.text}
+          onApply={applyRewrite}
+          onClose={() => setRewriting(false)}
+        />
+      )}
+
       {translating && (
         <TranslateDraftDialog
           rich={draft.rich}
@@ -292,6 +325,7 @@ export function Composer({ tabId }: { tabId: string }) {
         onToggleRich={toggleRich}
         onUseTemplate={(template) => void useTemplate(template)}
         onTranslate={() => setTranslating(true)}
+        onRewrite={assistantEnabled ? () => setRewriting(true) : undefined}
         pgpSign={draft.pgpSign}
         pgpEncrypt={draft.pgpEncrypt}
         pgpPassphrase={pgpPassphrase}

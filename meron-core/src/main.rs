@@ -2750,20 +2750,16 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 p.get("provider").cloned().context("missing assistant provider")?,
             )?;
             let action = req_str(p, "action")?;
+            let instruction = p.get("instruction").and_then(Value::as_str).unwrap_or("").to_string();
             let context: Vec<assistant::ContextItem> = serde_json::from_value(
                 p.get("context").cloned().context("missing assistant context")?,
             )?;
-            Ok(serde_json::to_value(assistant::prepare(provider, &action, &context)?)?)
+            Ok(serde_json::to_value(assistant::prepare(provider, &action, &instruction, &context)?)?)
         }
 
         "assistant.execute" => {
             let request: assistant::ExecuteRequest = serde_json::from_value(p.clone())?;
-            let result = tokio::task::spawn_blocking(move || {
-                let agent = proxy::agent()?;
-                assistant::execute(&agent, request)
-            })
-            .await??;
-            Ok(result)
+            assistant::execute_cancellable(proxy::agent()?, request).await
         }
 
         "assistant.cancel" => assistant::cancel(&req_str(p, "execution_id")?),

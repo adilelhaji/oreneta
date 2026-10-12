@@ -1909,6 +1909,27 @@ test('a draft is translated on this computer by the shipped Bergamot, reviewed, 
   expect(errors).toEqual([])
 })
 
+test('the assistant is not offered until it is turned on', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Translate this message' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Rewrite with the assistant' })).toHaveCount(0)
+  expect(errors).toEqual([])
+
+  await page.evaluate(() => {
+    const prefs = JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')
+    sessionStorage.setItem('synthetic-prefs', JSON.stringify({ ...prefs, assistant_enabled: 'on' }))
+  })
+  await page.reload()
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  await expect(page.getByRole('button', { name: 'Rewrite with the assistant' })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+})
+
 for (const appearance of ['light', 'dark'] as const) {
   test(`fresh profile chooses cobalt ${appearance}, then preserves its choice across reload and OS changes`, async ({
     page,

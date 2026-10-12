@@ -2,7 +2,9 @@ import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 
 export type AssistantMode = 'local' | 'remote'
-export type AssistantAction = 'summary' | 'draft' | 'task_suggestion'
+export type AssistantAction = 'summary' | 'draft' | 'task_suggestion' | 'rewrite'
+/** How a draft is rewritten (#52); only for `rewrite`. */
+export type AssistantRewrite = 'proofread' | 'formal' | 'friendly' | 'shorter' | 'longer'
 
 export type AssistantSource = { account_id: string; message_id: string }
 export type AssistantTaskSuggestion = {
@@ -56,6 +58,9 @@ export type AssistantPreview = {
     total_bytes: number
     untrusted_input: boolean
   }
+  instruction: string
+  /** Exactly what is sent to the provider (#51). */
+  request_body: string
   requires_confirmation: boolean
   will_transmit: boolean
   automatic_mail_actions: boolean
@@ -69,7 +74,18 @@ const DEFAULT_PROVIDER: AssistantProviderConfig = {
 }
 
 export const assistant$ = observable<AssistantProviderConfig>({ ...DEFAULT_PROVIDER })
-export const ASSISTANT_PREF_KEYS = ['assistant_mode', 'assistant_endpoint', 'assistant_model']
+export const ASSISTANT_PREF_KEYS = ['assistant_mode', 'assistant_endpoint', 'assistant_model', 'assistant_enabled']
+
+/**
+ * Whether the assistant is offered at all (#51, ADR-0032). Off until the
+ * person turns it on; even then every request is reviewed and confirmed.
+ */
+export const assistantEnabled$ = observable(false)
+let hydratingEnabled = false
+assistantEnabled$.onChange(({ value }) => {
+  if (hydratingEnabled) return
+  void invoke('app.prefsSet', { key: 'assistant_enabled', value: value ? 'on' : 'off' }).catch(() => {})
+})
 
 let hydrating = false
 assistant$.onChange(({ changes }) => {
@@ -95,6 +111,12 @@ export function sanitizeAssistantConfig(value: unknown): AssistantProviderConfig
 }
 
 export function hydrateAssistant(prefs: Record<string, unknown>) {
+  hydratingEnabled = true
+  try {
+    assistantEnabled$.set(prefs.assistant_enabled === 'on' || prefs.assistant_enabled === true)
+  } finally {
+    hydratingEnabled = false
+  }
   hydrating = true
   try {
     const mode = prefs.assistant_mode
@@ -112,8 +134,9 @@ export async function previewAssistantAction(
   action: AssistantAction,
   context: AssistantContextItem[],
   provider: AssistantProviderConfig = assistant$.get(),
+  instruction: AssistantRewrite | '' = '',
 ) {
-  return invoke<AssistantPreview>('assistant.preview', { provider, action, context })
+  return invoke<AssistantPreview>('assistant.preview', { provider, action, context, instruction })
 }
 
 export async function executeAssistantAction(
@@ -124,10 +147,12 @@ export async function executeAssistantAction(
   executionId: string,
   authorization?: string,
   provider: AssistantProviderConfig = assistant$.get(),
+  instruction: AssistantRewrite | '' = '',
 ) {
   return invoke<{ prepared: AssistantPreview; response: string; persisted: false }>('assistant.execute', {
     provider,
     action,
+    instruction,
     context,
     confirmed,
     preview_token: previewToken,
@@ -144,7 +169,9 @@ export async function cancelAssistantExecution(executionId: string) {
 export function parseAssistantResponse(response: string): AssistantResult {
   const fallback: AssistantResult = { text: response, sources: [], tasks: [], warnings: [] }
   try {
-    const value = JSON.parse(response) as Record<string, unknown>
+    // Models often fence their JSON as a code block.
+    const fenced = response.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/)
+    const value = JSON.parse(fenced ? fenced[1] : response) as Record<string, unknown>
     if (!value || typeof value !== 'object') return fallback
     const text = typeof value.text === 'string' ? value.text : response
     const warnings: string[] = []

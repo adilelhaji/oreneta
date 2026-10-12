@@ -452,6 +452,17 @@ Estado de la iteración 13 (2026-10-12, por delegación):
 - La iteración 13 queda completa en lo automatizable; falta N5 (interoperabilidad
   con Thunderbird/Outlook en cuentas de prueba) en la verificación final.
 
+Estado de la iteración 14 (2026-10-12, por delegación):
+- **#51/#52 (estable):** el asistente está apagado por omisión, y lo que se
+  revisa es el cuerpo exacto que se envía, atado al token. Se corrigen:
+  - el formato, que no entendía ningún proveedor real;
+  - los cuerpos de error que acababan en el registro;
+  - la cancelación, que no paraba una petición en curso.
+
+  Se añade reescribir el borrador con revisión, y hay una prueba que falla
+  si sale un campo no revisado
+  (ADR-0032, [registro](design/assistant-consent.md)).
+
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.
 

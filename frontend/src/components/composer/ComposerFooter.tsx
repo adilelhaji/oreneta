@@ -1,4 +1,4 @@
-import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type, Languages } from 'lucide-react'
+import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type, Languages, Sparkles } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
 import type { Template } from '../../states/templates'
@@ -22,6 +22,7 @@ export function ComposerFooter({
   onToggleRich,
   onUseTemplate,
   onTranslate,
+  onRewrite,
   pgpSign,
   pgpEncrypt,
   pgpPassphrase,
@@ -45,6 +46,8 @@ export function ComposerFooter({
   onUseTemplate: (template: Template) => void
   /** Opens translation of the draft (#106). */
   onTranslate?: () => void
+  /** Opens the assistant's rewrite of the draft (#52), when it is turned on. */
+  onRewrite?: () => void
   pgpSign: boolean
   pgpEncrypt: boolean
   pgpPassphrase: string
@@ -81,6 +84,15 @@ export function ComposerFooter({
           />
         )}
         <TemplateMenu onPick={onUseTemplate} />
+        {onRewrite && (
+          <IconButton
+            icon={Sparkles}
+            iconSize={16}
+            label={t('assistant.rewrite.title', { defaultValue: 'Rewrite with the assistant' })}
+            radius="xl"
+            onClick={onRewrite}
+          />
+        )}
         {onTranslate && (
           <IconButton
             icon={Languages}

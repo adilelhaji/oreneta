@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
+import { assistantEnabled$ } from '../../states/assistant'
 import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
@@ -89,6 +90,8 @@ export function ConversationHeader({
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
+  // Off until turned on in Settings (#51).
+  const assistantEnabled = useValue(assistantEnabled$)
   const [senderMenu, setSenderMenu] = useState<{ x: number; y: number } | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -258,12 +261,14 @@ export function ConversationHeader({
               width more than they do. */}
           {!threadSearchOpen && (
             <>
-              <IconButton
-                icon={Sparkles}
-                label={t('assistant.open', { defaultValue: 'Review with assistant' })}
-                onClick={() => setAssistantOpen(true)}
-                className="hidden min-[1200px]:flex"
-              />
+              {assistantEnabled && (
+                <IconButton
+                  icon={Sparkles}
+                  label={t('assistant.open', { defaultValue: 'Review with assistant' })}
+                  onClick={() => setAssistantOpen(true)}
+                  className="hidden min-[1200px]:flex"
+                />
+              )}
               {/* The two that give way first when the pane is narrow. They
                   stay in the menu below, so nothing becomes unreachable —
                   only less immediate. */}
