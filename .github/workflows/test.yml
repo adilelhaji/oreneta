@@ -192,6 +192,49 @@ jobs:
             frontend/startup-report/
           if-no-files-found: error
 
+  # The production desktop binary on Linux with WebKitGTK (#115): two launches
+  # in a fresh profile must start the core and have the app in the webview
+  # call it, under the production CSP. Screenshots and logs are kept.
+  linux-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: meron-core
+      - name: Install GTK/WebKitGTK, Xvfb and screenshot tools
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev xvfb imagemagick perl
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - name: Build the app
+        run: |
+          bun scripts/i18n/catalog.ts generate
+          (cd frontend && bun run build)
+          cargo build --manifest-path meron-core/Cargo.toml
+          go build -tags "desktop,production,webkit2_41" -o build/bin/oreneta .
+      - name: Start natively twice
+        run: bash scripts/test-linux-startup.sh build/bin/oreneta native-startup-linux
+        env:
+          MERON_CORE_SERVER: ${{ github.workspace }}/meron-core/target/debug/meron-core
+      - name: Upload native Linux startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-startup-linux-${{ github.sha }}
+          path: native-startup-linux/
+          if-no-files-found: warn
+
   mobile:
     runs-on: ubuntu-latest
     steps:
