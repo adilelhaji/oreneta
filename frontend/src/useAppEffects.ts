@@ -3,6 +3,7 @@ import { useValue } from '@legendapp/state/react'
 import { boot } from './boot'
 import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
+import { onTranslationEvent } from './states/translation'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
@@ -391,6 +392,14 @@ export function useAppEffects() {
       )
     })
 
+    // Translation model downloads (#106): progress and the end of each.
+    const offTranslationProgress = eventsOn('translation.progress', (detail: { key: string }) =>
+      onTranslationEvent('translation.progress', detail),
+    )
+    const offTranslationDone = eventsOn('translation.done', (detail: { key: string }) =>
+      onTranslationEvent('translation.done', detail),
+    )
+
     const offScheduledSent = eventsOn(
       'mail.scheduledSent',
       (detail: { id?: string; subject?: string; late?: boolean }) => {
@@ -484,6 +493,8 @@ export function useAppEffects() {
       if (typeof offUnsnoozed === 'function') offUnsnoozed()
       if (typeof offScheduledSent === 'function') offScheduledSent()
       if (typeof offAwaitingDue === 'function') offAwaitingDue()
+      if (typeof offTranslationProgress === 'function') offTranslationProgress()
+      if (typeof offTranslationDone === 'function') offTranslationDone()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

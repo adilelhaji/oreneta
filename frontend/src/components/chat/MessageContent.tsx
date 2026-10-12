@@ -1,4 +1,5 @@
 import { TrackerNotice } from './TrackerNotice'
+import { TranslationNotice, useShownMessage } from './TranslationNotice'
 import { useState } from 'react'
 import { Download, Eye, Image } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
@@ -40,6 +41,8 @@ export function MessageContent({
   // Owned here rather than passed down from the bubble: the preview belongs to
   // the attachment that opened it, and nothing above needs to know about it.
   const [previewing, setPreviewing] = useState<Attachment | null>(null)
+  // A translation is shown in place of the text, never written over it.
+  const shown = useShownMessage(message)
 
   return (
     <>
@@ -122,9 +125,10 @@ export function MessageContent({
       <SpamNotice message={message} />
       {message.invitation && <InvitationCard message={message} />}
       <TrackerNotice message={message} />
+      <TranslationNotice message={message} />
 
       <MessageBubbleBody
-        message={message}
+        message={shown}
         useHtmlBody={view.useHtmlBody}
         normalizedSearchQuery={view.normalizedSearchQuery}
         activeSearchMatch={view.activeSearchMatch}

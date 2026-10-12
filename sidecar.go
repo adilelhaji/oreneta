@@ -116,6 +116,7 @@ func sidecarEnv() []string {
 	env := append(withoutOAuthEnv(os.Environ()),
 		"MERON_CORE_DB="+filepath.Join(appConfigDir(), "meron.db"),
 		"MERON_MEDIA_DIR="+mediaDir(),
+		"MERON_MODELS_DIR="+modelsDir(),
 		"MERON_PROFILE="+activeProfile(),
 	)
 	// Pass the OAuth credentials this build accepts down so the sidecar's

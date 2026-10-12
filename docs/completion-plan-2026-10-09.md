@@ -442,6 +442,15 @@ Estado de la iteración 13 (2026-10-12, por delegación):
   por omisión; sugerencias como una sola edición que conserva el formato;
   la fuente deja de pedirse a Google Fonts
   (ADR-0030, [registro](design/offline-grammar.md), [SOUP](soup.md)).
+- **#106:** traducción con Bergamot en un worker; modelos de Mozilla de un
+  registro fijo con hashes, descargados por el núcleo solo a petición y tras
+  ver tamaño y origen, comprobados y colocados de forma atómica; en el
+  lector, con el original a un clic; en el composer, revisada antes de
+  usarla (ADR-0031, [registro](design/offline-translation.md)).
+- Las pruebas e2e corren ahora con la CSP de producción; así se vio que
+  WebAssembly y sus workers estaban bloqueados.
+- La iteración 13 queda completa en lo automatizable; falta N5 (interoperabilidad
+  con Thunderbird/Outlook en cuentas de prueba) en la verificación final.
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

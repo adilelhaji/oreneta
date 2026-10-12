@@ -1,4 +1,4 @@
-import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type } from 'lucide-react'
+import { Paperclip, Image as ImageIcon, RefreshCw, Send, Type, Languages } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { sendShortcutLabel } from '../../states/settings'
 import type { Template } from '../../states/templates'
@@ -21,6 +21,7 @@ export function ComposerFooter({
   onPickInlineImages,
   onToggleRich,
   onUseTemplate,
+  onTranslate,
   pgpSign,
   pgpEncrypt,
   pgpPassphrase,
@@ -42,6 +43,8 @@ export function ComposerFooter({
   onToggleRich: () => void
   /** Puts a kept snippet in at the cursor, or opens a whole-message template. */
   onUseTemplate: (template: Template) => void
+  /** Opens translation of the draft (#106). */
+  onTranslate?: () => void
   pgpSign: boolean
   pgpEncrypt: boolean
   pgpPassphrase: string
@@ -78,6 +81,15 @@ export function ComposerFooter({
           />
         )}
         <TemplateMenu onPick={onUseTemplate} />
+        {onTranslate && (
+          <IconButton
+            icon={Languages}
+            iconSize={16}
+            label={t('translation.draftTitle', { defaultValue: 'Translate this message' })}
+            radius="xl"
+            onClick={onTranslate}
+          />
+        )}
         <ProtectionComposeControls
           sign={pgpSign}
           encrypt={pgpEncrypt}

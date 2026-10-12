@@ -137,6 +137,16 @@ jobs:
           name: coverage-frontend-${{ github.sha }}
           path: frontend/coverage/
           if-no-files-found: error
+      # The real Spanish→English model for the translation checks (#106):
+      # published by Mozilla, 22 MB, checked against the app's registry.
+      - name: Cache the translation test model
+        uses: actions/cache@v4
+        with:
+          path: frontend/.translation-models
+          key: translation-model-${{ hashFiles('meron-core/src/translation/registry.json') }}
+      - name: Fetch the translation test model
+        run: node scripts/fetch-translation-test-model.mjs
+        working-directory: frontend
       - name: Verify production React runtime resolution
         run: bun run test:bundler
         working-directory: frontend

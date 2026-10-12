@@ -84,13 +84,25 @@ func loadDotEnvLocal() {
 // path and blocks `..` traversal out of the media root.
 func mediaHandler() http.Handler {
 	fs := http.StripPrefix("/media/", http.FileServer(http.Dir(mediaDir())))
+	models := http.StripPrefix("/models/", http.FileServer(http.Dir(modelsDir())))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/media/") {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/media/"):
+			fs.ServeHTTP(w, r)
+		// Translation models, read by the in-app translator (#106). A
+		// download in progress sits in a dot folder and is never handed out.
+		case strings.HasPrefix(r.URL.Path, "/models/") && !strings.Contains(r.URL.Path, "/."):
+			models.ServeHTTP(w, r)
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		fs.ServeHTTP(w, r)
 	})
+}
+
+// modelsDir holds downloaded translation models (#106). They belong to the
+// installation, not a profile: the same files serve every profile.
+func modelsDir() string {
+	return filepath.Join(rootCacheDir(), "translation-models")
 }
 
 // mediaDir is where the mail sidecar writes attachment files and the asset

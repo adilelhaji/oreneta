@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -98,6 +101,35 @@ func TestSidecarEnvUsesProfileDirs(t *testing.T) {
 	env := sidecarEnv()
 	assertEnvContains(t, env, "MERON_CORE_DB="+filepath.Join(wantConfig, "meron.db"))
 	assertEnvContains(t, env, "MERON_MEDIA_DIR="+filepath.Join(wantCache, "attachments"))
+	// Models are the installation's, shared by profiles.
+	assertEnvContains(t, env, "MERON_MODELS_DIR="+filepath.Join(p.Cache, "oreneta-dev", "translation-models"))
+}
+
+func TestModelsAreServedButNotHalfDownloadedOnes(t *testing.T) {
+	isolateTestProfile(t)
+	t.Setenv("devserver", "127.0.0.1:34115")
+	dir := modelsDir()
+	for _, file := range []string{"esen/vocab.esen.spm", ".enfr.part/vocab.enfr.spm"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, file)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, file), []byte("vocab"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	get := func(path string) int {
+		rec := httptest.NewRecorder()
+		mediaHandler().ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec.Code
+	}
+	if code := get("/models/esen/vocab.esen.spm"); code != http.StatusOK {
+		t.Fatalf("installed model: %d", code)
+	}
+	for _, path := range []string{"/models/.enfr.part/vocab.enfr.spm", "/models/../oreneta-dev/x", "/other"} {
+		if code := get(path); code == http.StatusOK {
+			t.Fatalf("%s served", path)
+		}
+	}
 }
 
 func assertEnvContains(t *testing.T, env []string, want string) {

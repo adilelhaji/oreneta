@@ -2519,6 +2519,9 @@ async fn main() {
         }
     }
 
+    // A model download the last run did not finish leaves nothing usable.
+    meron_core::translation::clean_partial(&meron_core::translation::models_dir());
+
     spawn_reminder_watch(engine.clone(), out.clone());
     spawn_deferred_watch(engine.clone(), out.clone());
 
@@ -3077,6 +3080,43 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 &req_str(p, "message_id")?,
                 allow,
             )?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Translation models (#106, ADR-0031). Fetched only when asked, from
+        // the one source in the bundled registry, and checked before use.
+        "translation.status" => {
+            let mut status = serde_json::to_value(meron_core::translation::status(
+                &meron_core::translation::models_dir(),
+                meron_core::translation::DEFAULT_QUOTA_BYTES,
+            ))?;
+            status["downloading"] = json!(translation_downloads()
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(key, d)| (key.clone(), json!({ "done": d.done.load(std::sync::atomic::Ordering::Relaxed), "total": d.total })))
+                .collect::<serde_json::Map<_, _>>());
+            Ok(status)
+        }
+        "translation.download" => {
+            let pair = translation_pair(p)?;
+            spawn_translation_download(out.clone(), pair);
+            Ok(json!({ "started": pair.key() }))
+        }
+        "translation.cancel" => {
+            let pair = translation_pair(p)?;
+            if let Some(d) = translation_downloads().lock().unwrap().get(&pair.key()) {
+                d.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            Ok(json!({ "ok": true }))
+        }
+        "translation.remove" => {
+            let pair = translation_pair(p)?;
+            anyhow::ensure!(
+                !translation_downloads().lock().unwrap().contains_key(&pair.key()),
+                "that model is still downloading"
+            );
+            meron_core::translation::remove(&meron_core::translation::models_dir(), pair)?;
             Ok(json!({ "ok": true }))
         }
 
@@ -8527,6 +8567,77 @@ fn server_rule_plan(engine: &Arc<Engine>, account: &str, extensions: &[String]) 
 
 /// Batches with a worker sending them now, so carrying on twice cannot start
 /// a second one (#90).
+struct TranslationDownload {
+    cancel: std::sync::atomic::AtomicBool,
+    done: std::sync::atomic::AtomicU64,
+    total: u64,
+}
+
+fn translation_downloads() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<TranslationDownload>>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<TranslationDownload>>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+fn translation_pair(p: &Value) -> anyhow::Result<&'static meron_core::translation::Pair> {
+    let (from, to) = (req_str(p, "from")?, req_str(p, "to")?);
+    meron_core::translation::pair(&from, &to).with_context(|| format!("there is no model from {from} to {to}"))
+}
+
+/// One download per model at a time; progress is reported about every
+/// megabyte and the end, with what went wrong, once.
+fn spawn_translation_download(out: Writer, pair: &'static meron_core::translation::Pair) {
+    let key = pair.key();
+    let state = Arc::new(TranslationDownload {
+        cancel: std::sync::atomic::AtomicBool::new(false),
+        done: std::sync::atomic::AtomicU64::new(0),
+        total: pair.size(),
+    });
+    {
+        let mut running = translation_downloads().lock().unwrap();
+        if running.contains_key(&key) {
+            return;
+        }
+        running.insert(key.clone(), state.clone());
+    }
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(u64, u64)>();
+    let progress_out = out.clone();
+    let progress_key = key.clone();
+    tokio::spawn(async move {
+        while let Some((done, total)) = rx.recv().await {
+            emit(&progress_out, "translation.progress", json!({ "key": progress_key, "done": done, "total": total })).await;
+        }
+    });
+    tokio::spawn(async move {
+        let worker = state.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            let mut last = 0u64;
+            meron_core::translation::download(
+                &meron_core::translation::models_dir(),
+                pair,
+                &meron_core::translation::Http,
+                &worker.cancel,
+                meron_core::translation::DEFAULT_QUOTA_BYTES,
+                &mut |done, total| {
+                    worker.done.store(done, std::sync::atomic::Ordering::Relaxed);
+                    if done == 0 || done == total || done - last >= 1024 * 1024 {
+                        last = done;
+                        let _ = tx.send((done, total));
+                    }
+                },
+            )
+        })
+        .await;
+        translation_downloads().lock().unwrap().remove(&key);
+        let error = match result {
+            Ok(Ok(())) => Value::Null,
+            Ok(Err(err)) => json!({ "message": err.to_string(), "detail": err }),
+            Err(err) => json!({ "message": err.to_string(), "detail": { "code": "disk", "message": err.to_string() } }),
+        };
+        emit(&out, "translation.done", json!({ "key": key, "error": error })).await;
+    });
+}
+
 fn merge_running() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
     static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
         std::sync::OnceLock::new();

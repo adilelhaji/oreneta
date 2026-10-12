@@ -553,7 +553,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"categories.list", "categories.save", "categories.counts", "categories.reason", "categories.assign",
 		"awaiting.add", "awaiting.list", "awaiting.setState", "awaiting.ruleOn", "awaiting.remove",
 		"merge.preview", "merge.start", "merge.list", "merge.cancel", "merge.resume",
-		"rules.serverStatus", "rules.serverPush", "rules.serverRemove", "rules.runReviewed", "spam.lists", "spam.setListed":
+		"rules.serverStatus", "rules.serverPush", "rules.serverRemove", "rules.runReviewed", "spam.lists", "spam.setListed",
+		"translation.status", "translation.download", "translation.cancel", "translation.remove":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

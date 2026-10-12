@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { expect, test, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { createFixture } from '../baseline/fixtures'
@@ -25,6 +26,38 @@ type SetupOptions = {
   updatesSupported?: boolean
   syncHealth?: boolean
   manualRefresh?: boolean
+  /** Translation models the synthetic core says are installed (#106). */
+  installedModels?: string[]
+}
+
+// The registry the core ships, so the models the app is told about are real.
+const translationRegistry = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../meron-core/src/translation/registry.json', import.meta.url)), 'utf8'),
+) as Record<string, Record<string, { name: string; size: number; expectedSha256Hash: string }>>
+function translationStatus(installed: string[] = []) {
+  const pairs = Object.entries(translationRegistry).map(([key, parts]) => {
+    const files = Object.entries(parts).map(([part, f]) => ({
+      part,
+      name: f.name,
+      size: f.size,
+      sha256: f.expectedSha256Hash,
+    }))
+    return {
+      from: key.slice(0, 2),
+      to: key.slice(2),
+      files,
+      size: files.reduce((n, f) => n + f.size, 0),
+      installed: installed.includes(key),
+    }
+  })
+  return {
+    pairs,
+    languages: [...new Set(pairs.flatMap((p) => [p.from, p.to]))].sort(),
+    used: pairs.filter((p) => p.installed).reduce((n, p) => n + p.size, 0),
+    quota: 1024 ** 3,
+    source: 'https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/',
+    downloading: {},
+  }
 }
 
 // Automated accessibility audit of the production entry: onboarding, and the
@@ -929,7 +962,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
   }
   await page.addInitScript(
-    ({ accounts, folders, template, options, threads, messages }) => {
+    ({ accounts, folders, template, options, threads, messages, translation }) => {
       const calls: string[] = []
       const requests: Array<{ command: string; payload: Record<string, unknown> }> = []
       const unexpected: string[] = []
@@ -997,6 +1030,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'categories.list': { categories: [] },
         'spam.lists': { entries: [] },
         'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
+        'translation.status': translation,
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
         'localDrafts.list': { drafts: [] },
@@ -1231,6 +1265,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       messages: options.navigation ? fixture.messages : [],
       template: fixture.account,
       options,
+      translation: translationStatus(options.installedModels),
     },
   )
   return errors
@@ -1823,6 +1858,52 @@ test('grammar suggestions run on this computer and apply as one edit', async ({ 
   await issue.click()
   await page.getByRole('dialog', { name: 'Grammar suggestion' }).getByRole('button', { name: 'have' }).click()
   await expect(editor).toContainText('I have a apple')
+  expect(outside).toEqual([])
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The real Spanish→English model (scripts/fetch-translation-test-model.mjs),
+// handed to the app from where the Go bridge would serve it.
+const translationModels = fileURLToPath(new URL('../.translation-models/', import.meta.url))
+
+test('a draft is translated on this computer by the shipped Bergamot, reviewed, and added below', async ({
+  page,
+}) => {
+  test.skip(!existsSync(`${translationModels}esen`), 'no translation model fetched')
+  const errors = await prepareStartup(page, true, { navigation: true, installedModels: ['esen'] })
+  const served: string[] = []
+  await page.route('**/models/esen/*', async (route) => {
+    const name = new URL(route.request().url()).pathname.split('/').pop()!
+    served.push(name)
+    await route.fulfill({ body: readFileSync(`${translationModels}esen/${name}`), contentType: 'application/octet-stream' })
+  })
+  const outside: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname) && !['data:', 'blob:'].includes(url.protocol)) {
+      outside.push(request.url())
+    }
+  })
+  await page.goto('/')
+  await expect(page.getByRole('navigation', { name: 'Accounts and folders' })).toBeVisible()
+  await page.keyboard.press('Control+n')
+  const editor = page.locator('.tiptap[contenteditable="true"]')
+  await expect(editor).toBeVisible()
+  await editor.fill('Hola Marta, te mando el presupuesto revisado para la cocina esta tarde.')
+  await page.getByRole('button', { name: 'Translate this message' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Translate this message' })
+  await expect(dialog.getByLabel('From')).toHaveValue('es')
+  await expect(dialog.getByLabel('into')).toHaveValue('en')
+  await dialog.getByRole('button', { name: 'Translate' }).click()
+  const preview = dialog.getByRole('region', { name: 'Translation' })
+  await expect(preview).toContainText(/budget/i, { timeout: 60_000 })
+  // Nothing changed until asked.
+  await expect(editor).toHaveText('Hola Marta, te mando el presupuesto revisado para la cocina esta tarde.')
+  await dialog.getByRole('button', { name: 'Add below what I wrote' }).click()
+  await expect(editor).toContainText('Hola Marta, te mando el presupuesto')
+  await expect(editor).toContainText(/budget/i)
+  expect(served.sort()).toEqual(['lex.50.50.esen.s2t.bin', 'model.esen.intgemm.alphas.bin', 'vocab.esen.spm'])
   expect(outside).toEqual([])
   expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
   expect(errors).toEqual([])

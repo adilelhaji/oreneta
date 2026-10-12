@@ -1,4 +1,5 @@
 import { EditorContent } from '@tiptap/react'
+import { useState } from 'react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { settings$ } from '../../states/settings'
@@ -12,7 +13,8 @@ import { ComposerFooter } from './ComposerFooter'
 import { GrammarPopover, GrammarStatus } from './GrammarPopover'
 import { LocalDraftStatus } from './LocalDraftStatus'
 import { closeMessageTab } from '../../states/compose'
-import { confirmAction, showToast } from '../../states/ui'
+import { confirmAction, showToast, showUndoToast } from '../../states/ui'
+import { TranslateDraftDialog, type DraftTranslation } from './TranslateDraftDialog'
 import { CURSOR_TOKEN, fillPlaceholders, takeCursor, type Filled } from '../../lib/placeholders'
 import type { Template } from '../../states/templates'
 import {
@@ -49,8 +51,38 @@ export function Composer({ tabId }: { tabId: string }) {
     setPgpPassphrase,
     grammar,
   } = useComposer(tabId)
+  const [translating, setTranslating] = useState(false)
 
   if (!draft) return null
+
+  /**
+   * A reviewed translation goes in place of the draft, with an undo that
+   * brings back exactly what was written, or below it, keeping it (#106).
+   */
+  const applyTranslation = (translation: DraftTranslation, how: 'replace' | 'below') => {
+    setTranslating(false)
+    if (draft.rich && editor) {
+      const original = editor.getHTML()
+      if (how === 'below') {
+        editor.commands.insertContentAt(editor.state.doc.content.size, `<p></p>${translation.html ?? ''}`)
+        return
+      }
+      editor.commands.setContent(translation.html ?? '<p></p>')
+      showUndoToast(t('translation.replaced', { defaultValue: 'Replaced with the translation' }), () =>
+        editor.commands.setContent(original),
+      )
+      return
+    }
+    const original = draft.text
+    if (how === 'below') {
+      update({ text: `${original.trimEnd()}\n\n${translation.text}` })
+      return
+    }
+    update({ text: translation.text })
+    showUndoToast(t('translation.replaced', { defaultValue: 'Replaced with the translation' }), () =>
+      update({ text: original }),
+    )
+  }
 
   /**
    * Put kept text into this message.
@@ -239,6 +271,16 @@ export function Composer({ tabId }: { tabId: string }) {
 
       <LocalDraftStatus tabId={tabId} />
 
+      {translating && (
+        <TranslateDraftDialog
+          rich={draft.rich}
+          html={editor?.getHTML() ?? draft.html}
+          text={draft.rich ? (editor?.getText({ blockSeparator: '\n' }) ?? draft.text) : draft.text}
+          onApply={applyTranslation}
+          onClose={() => setTranslating(false)}
+        />
+      )}
+
       <ComposerFooter
         rich={draft.rich}
         sending={sending}
@@ -249,6 +291,7 @@ export function Composer({ tabId }: { tabId: string }) {
         onPickInlineImages={() => void pickInlineImages()}
         onToggleRich={toggleRich}
         onUseTemplate={(template) => void useTemplate(template)}
+        onTranslate={() => setTranslating(true)}
         pgpSign={draft.pgpSign}
         pgpEncrypt={draft.pgpEncrypt}
         pgpPassphrase={pgpPassphrase}

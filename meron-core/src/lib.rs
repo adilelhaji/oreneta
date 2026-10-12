@@ -30,6 +30,7 @@ pub mod oof;
 pub mod parse;
 pub mod priority;
 pub mod privacy;
+pub mod translation;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod profile_archive;
 pub mod protocol;

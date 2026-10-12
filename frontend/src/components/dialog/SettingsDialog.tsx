@@ -58,6 +58,7 @@ import { QuickActionsGroup } from '../quick/QuickActionsGroup'
 import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { SenderListsGroup } from './SenderListsGroup'
 import { TrackingProtectionGroup } from './TrackingProtectionGroup'
+import { TranslationModelsGroup } from './TranslationModelsGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
@@ -1082,6 +1083,7 @@ function GeneralSection() {
       <CategoriesGroup />
       <SenderListsGroup />
       <TrackingProtectionGroup />
+      <TranslationModelsGroup />
       <StorageGroup />
       <LogsGroup />
     </div>

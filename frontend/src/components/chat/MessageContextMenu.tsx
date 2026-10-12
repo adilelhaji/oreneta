@@ -4,6 +4,7 @@ import {
   Download,
   ExternalLink,
   Forward,
+  Languages,
   Link2,
   Mail,
   MailOpen,
@@ -15,6 +16,7 @@ import { useTranslation } from '../../lib/i18n'
 import { openMessageTab, editAsNewMessage, forwardMessage, openDraftCompose } from '../../states/compose'
 import { deleteMessage, isDraftFolder, markMessageReadState, saveMessageAsEml, starMessage } from '../../states/mail'
 import { openExternal } from '../../lib/native'
+import { startMessageTranslation } from '../../states/translation'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import type { Message } from '../../types'
@@ -167,6 +169,17 @@ export function MessageContextMenu({
                 const message = state.message
                 onClose()
                 void editAsNewMessage(message)
+              }}
+            />
+          )}
+          {!headerOnly && (
+            <MenuItem
+              icon={<Languages size={14} className="text-accent" strokeWidth={1.75} />}
+              label={t('translation.menu', { defaultValue: 'Translate…' })}
+              onClick={() => {
+                const message = state.message
+                onClose()
+                void startMessageTranslation(message)
               }}
             />
           )}

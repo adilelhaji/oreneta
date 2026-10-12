@@ -97,6 +97,31 @@ function pdfjsData() {
   }
 }
 
+// Bergamot (#106, ADR-0031) runs as a classic worker that loads its glue
+// script and WebAssembly by name from its own folder, so the three files are
+// served and shipped as they are, from the installed package: served from
+// node_modules in dev and copied into the build for production.
+function bergamotWorker() {
+  const source = path.resolve('node_modules/@browsermt/bergamot-translator/worker')
+  const files = ['translator-worker.js', 'bergamot-translator-worker.js', 'bergamot-translator-worker.wasm']
+  const type = (file) => (file.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+  return {
+    name: 'bergamot-worker',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const file = req.url?.startsWith('/bergamot/') && req.url.slice('/bergamot/'.length).split('?')[0]
+        if (!file || !files.includes(file)) return next()
+        res.setHeader('Content-Type', type(file))
+        res.end(fs.readFileSync(path.join(source, file)))
+      })
+    },
+    closeBundle() {
+      fs.mkdirSync(path.resolve('dist/bergamot'), { recursive: true })
+      for (const file of files) fs.copyFileSync(path.join(source, file), path.resolve('dist/bergamot', file))
+    },
+  }
+}
+
 // `vite preview` is what the e2e suite runs against: it answers with the exact
 // Content-Security-Policy the production build sends (read from csp_prod.go),
 // so a feature the policy would block in the app fails in a test instead of
@@ -125,5 +150,5 @@ function previewCsp() {
 export default defineConfig({
   // Linked/hoisted packages must share the renderer's React dispatcher.
   resolve: { dedupe: ['react', 'react-dom'] },
-  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData(), previewCsp()],
+  plugins: [react(), tailwindcss(), orenetaMedia(), pdfjsData(), bergamotWorker(), previewCsp()],
 })
