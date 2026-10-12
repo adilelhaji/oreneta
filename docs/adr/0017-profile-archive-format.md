@@ -1,7 +1,7 @@
 # ADR-0017: Formato de la copia completa del perfil
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-11.
 - Alcance: decisiones 1 a 5 de
   [la lista pendiente](../design/full-profile-archive-decisions.md) para

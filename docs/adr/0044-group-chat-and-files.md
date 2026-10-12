@@ -1,7 +1,7 @@
 # ADR-0044: Grupos y archivos en el chat (XMPP)
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: lo que ADR-0036 dejó pendiente de #111: grupos (MUC, XEP-0045) y
   archivos (HTTP File Upload, XEP-0363) con progreso y cancelación.

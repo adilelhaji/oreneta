@@ -1,7 +1,7 @@
 # ADR-0032: Contexto, proveedor y consentimiento del asistente
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Sin servicio nuevo de pago:
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Sin servicio nuevo de pago:
   el proveedor lo elige y configura la persona.
 - Fecha: 2026-10-12.
 - Alcance: #51 y la parte estable de #52.

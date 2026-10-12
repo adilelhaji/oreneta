@@ -1,7 +1,7 @@
 # ADR-0041: Importar desde Thunderbird
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: importación desde otros clientes (paridad con el asistente de
   importación de eM Client); amplía ADR-0014.

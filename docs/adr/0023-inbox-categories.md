@@ -1,7 +1,7 @@
 # ADR-0023: Categorías de bandeja transparentes
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Cubre la puerta de arquitectura
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Cubre la puerta de arquitectura
   de #91 (clasificador y modelo de datos nuevos).
 - Fecha: 2026-10-11.
 - Alcance: primera entrega de #91.

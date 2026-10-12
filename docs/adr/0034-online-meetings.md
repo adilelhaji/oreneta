@@ -1,7 +1,7 @@
 # ADR-0034: Reuniones en línea en el calendario
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Sin servicio nuevo de pago.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Sin servicio nuevo de pago.
 - Fecha: 2026-10-12.
 - Alcance: #109.
 

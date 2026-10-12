@@ -1,7 +1,7 @@
 # ADR-0037: Copias programadas del perfil
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: #173, sobre ADR-0010 y ADR-0017.
 

@@ -1,7 +1,7 @@
 # ADR-0030: Corrección gramatical sin conexión con Harper
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Dentro de ADR-0001; sin
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Dentro de ADR-0001; sin
   telemetría nueva.
 - Fecha: 2026-10-12.
 - Alcance: #105.

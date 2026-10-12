@@ -1,7 +1,7 @@
 # ADR-0028: Remitentes bloqueados y permitidos; ejecutar reglas tal como se previsualizaron
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: lo que faltaba de #50 tras ADR-0005.
 

@@ -1,7 +1,7 @@
 # ADR-0039: Listas de tareas en un servidor CalDAV
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: #103, paso «CalDAV VTODO primero», sobre ADR-0013, ADR-0012 y
   ADR-0018.
