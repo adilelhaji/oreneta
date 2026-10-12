@@ -172,7 +172,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BackgroundSyncCancelled, is_transient_sync_error, retry_background_sync};
-    use super::{scheduled_outcome_of, scheduled_send_precheck, sent_late, strip_send_secrets, ScheduledOutcome};
+    use super::{merge_outcome, scheduled_outcome_of, scheduled_send_precheck, sent_late, strip_send_secrets, ScheduledOutcome};
     use meron_core::store::outgoing::{AttemptKind, AttemptState, OutgoingAttempt};
 
     fn earlier(state: AttemptState, error: &str) -> OutgoingAttempt {
@@ -248,6 +248,22 @@ mod tests {
             scheduled_outcome_of(&serde_json::json!({ "ok": false, "outcome": "uncertain", "error": "reset" })),
             ScheduledOutcome::Uncertain(reason) if reason == "reset"
         ));
+    }
+
+    /// #90: a mailing's message is accepted, refused, deferred (the batch
+    /// waits) or uncertain (never sent again on its own) by its answer.
+    #[test]
+    fn a_mailing_message_settles_from_its_send_answer() {
+        use meron_core::merge::Outcome;
+        let ok = |v: serde_json::Value| merge_outcome(Ok(v));
+        assert!(matches!(ok(serde_json::json!({ "ok": true, "outcome": "archived" })), Outcome::Accepted));
+        assert!(matches!(ok(serde_json::json!({ "ok": false, "outcome": "uncertain", "error": "reset" })), Outcome::Uncertain(_)));
+        assert!(matches!(
+            ok(serde_json::json!({ "ok": false, "outcome": "already_attempted", "state": "sending" })),
+            Outcome::Uncertain(_)
+        ));
+        assert!(matches!(merge_outcome(Err(anyhow::anyhow!("451 4.7.1 try again later"))), Outcome::Deferred(_)));
+        assert!(matches!(merge_outcome(Err(anyhow::anyhow!("550 no such user"))), Outcome::Rejected(_)));
     }
 
     #[test]
@@ -2496,6 +2512,11 @@ async fn main() {
             Err(err) => eprintln!("meron-core: could not reconcile interrupted sends: {err:#}"),
         }
         let _ = outgoing::prune_settled(&db, now - OUTGOING_HISTORY_SECONDS);
+        // A mailing that was sending is paused, and its message on the way
+        // settled from its attempt (#90): carrying on is the person's call.
+        if let Err(err) = meron_core::merge::recover(&db, now) {
+            eprintln!("meron-core: could not reconcile mailings: {err:#}");
+        }
     }
 
     spawn_reminder_watch(engine.clone(), out.clone());
@@ -2956,6 +2977,62 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::set_sender_priority(&db, &account, &addr, choice)?;
             let judged = store::rejudge_priority(&db, &account, false)?;
             Ok(json!({ "ok": true, "judged": judged }))
+        }
+
+        // Personalized mass mail (#90, ADR-0026). The preview and the batch
+        // are rendered by the same function from the same inputs.
+        "merge.preview" => {
+            let me = meron_core::merge::Sender {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                email: req_str(p, "from").unwrap_or_default(),
+            };
+            let preview = meron_core::merge::preview(
+                &req_str(p, "recipients").unwrap_or_default(),
+                &req_str(p, "subject").unwrap_or_default(),
+                &req_str(p, "body").unwrap_or_default(),
+                &me,
+            );
+            Ok(serde_json::to_value(preview)?)
+        }
+        "merge.start" => {
+            let account = req_str(p, "account")?;
+            let from = req_str(p, "from")?;
+            let subject = req_str(p, "subject").unwrap_or_default();
+            let me = meron_core::merge::Sender { name: req_str(p, "me_name").unwrap_or_default(), email: from.clone() };
+            let preview = meron_core::merge::preview(
+                &req_str(p, "recipients").unwrap_or_default(),
+                &subject,
+                &req_str(p, "body").unwrap_or_default(),
+                &me,
+            );
+            let reviewed = p.get("reviewed").and_then(Value::as_u64).context("missing param: reviewed")? as usize;
+            let spacing = p.get("spacing").and_then(Value::as_i64).unwrap_or(meron_core::merge::DEFAULT_SPACING);
+            let id = uuid::Uuid::new_v4().simple().to_string();
+            meron_core::merge::create(
+                &engine.db.lock().unwrap(),
+                &id,
+                &account,
+                &from,
+                &subject,
+                &preview,
+                reviewed,
+                spacing,
+                now_seconds(),
+            )?;
+            spawn_merge(engine.clone(), out.clone(), id.clone());
+            Ok(json!({ "id": id }))
+        }
+        "merge.list" => Ok(json!({ "batches": meron_core::merge::batches(&engine.db.lock().unwrap())? })),
+        "merge.cancel" => {
+            meron_core::merge::cancel(&engine.db.lock().unwrap(), &req_str(p, "id")?, now_seconds())?;
+            Ok(json!({ "ok": true }))
+        }
+        "merge.resume" => {
+            let id = req_str(p, "id")?;
+            let retry = p.get("retry_rejected").and_then(Value::as_bool).unwrap_or(false);
+            meron_core::merge::resume(&engine.db.lock().unwrap(), &id, retry)?;
+            spawn_merge(engine.clone(), out.clone(), id);
+            Ok(json!({ "ok": true }))
         }
 
         // Waiting for a reply (#45, ADR-0025). Answers are read from the mail
@@ -8208,6 +8285,77 @@ fn scheduled_outcome_of(result: &Value) -> ScheduledOutcome {
         },
         _ => ScheduledOutcome::Sent,
     }
+}
+
+/// Batches with a worker sending them now, so carrying on twice cannot start
+/// a second one (#90).
+fn merge_running() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static RUNNING: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    RUNNING.get_or_init(Default::default)
+}
+
+/// What one send's answer means for a mailing's message.
+fn merge_outcome(result: anyhow::Result<Value>) -> meron_core::merge::Outcome {
+    use meron_core::merge::Outcome;
+    match result {
+        Ok(answer) => match scheduled_outcome_of(&answer) {
+            ScheduledOutcome::Sent => Outcome::Accepted,
+            ScheduledOutcome::Uncertain(reason) => Outcome::Uncertain(reason),
+            ScheduledOutcome::InFlight => Outcome::Uncertain("another send of this message was under way".into()),
+        },
+        Err(err) => {
+            let reason = format!("{err:#}");
+            if meron_core::merge::is_deferral(&reason) {
+                Outcome::Deferred(reason)
+            } else {
+                Outcome::Rejected(reason)
+            }
+        }
+    }
+}
+
+/// Sends a mailing's messages one at a time, spaced, for as long as it is
+/// sending. Each message settles from its own answer before the next goes.
+fn spawn_merge(engine: Arc<Engine>, out: Writer, id: String) {
+    if !merge_running().lock().unwrap().insert(id.clone()) {
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            let (next, batch) = {
+                let db = engine.db.lock().unwrap();
+                let next = meron_core::merge::claim_next(&db, &id, now_seconds());
+                (next, meron_core::merge::batch(&db, &id))
+            };
+            let (Ok(Some(item)), Ok(Some(batch))) = (next, batch) else { break };
+            let to = if item.name.trim().is_empty() {
+                item.to.clone()
+            } else {
+                format!("\"{}\" <{}>", item.name.replace('"', ""), item.to)
+            };
+            let request = json!({
+                "account": batch.account,
+                "from": batch.from,
+                "to": to,
+                "subject": item.subject,
+                "body": item.body,
+                "message_id": item.message_id,
+                "attempt_id": item.message_id,
+            });
+            let outcome = merge_outcome(perform_send(&engine, &request).await);
+            {
+                let db = engine.db.lock().unwrap();
+                if let Err(err) = meron_core::merge::settle(&db, &id, item.index, outcome, now_seconds()) {
+                    eprintln!("meron-core: recording a mailing's message: {err:#}");
+                }
+            }
+            emit(&out, "merge.changed", json!({ "id": id })).await;
+            tokio::time::sleep(std::time::Duration::from_secs(batch.spacing.max(0) as u64)).await;
+        }
+        merge_running().lock().unwrap().remove(&id);
+        emit(&out, "merge.changed", json!({ "id": id })).await;
+    });
 }
 
 /// A scheduled message sent more than five minutes after its hour went late:

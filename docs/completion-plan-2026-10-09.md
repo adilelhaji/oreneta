@@ -414,6 +414,10 @@ Estado de la iteración 12 (2026-10-12, por delegación):
   mensaje (lo que no se puede rellenar se queda y se avisa) y `{{cursor}}`;
   la sincronización de firmas con proveedores queda pendiente de evidencia
   real ([registro](design/quicktext-placeholders.md)).
+- **#90:** envíos personalizados, cada mensaje solo para su destinatario,
+  vista previa completa que es exactamente lo enviado, problemas que
+  impiden enviar, resultado por destinatario, pausa ante límites y ningún
+  reintento a ciegas (ADR-0026, [registro](design/personalized-mailings.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

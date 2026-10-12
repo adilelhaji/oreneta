@@ -814,6 +814,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("category_senders", "account"),
     // Waiting for a reply (ADR-0025).
     ("awaiting_replies", "account"),
+    // Personalized mailings (ADR-0026); their messages go just before.
+    ("merge_batches", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an
@@ -859,6 +861,11 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
             params![id],
         )?;
     }
+    // A mailing's messages have no account column of their own (ADR-0026).
+    tx.execute(
+        "DELETE FROM merge_items WHERE batch_id IN (SELECT id FROM merge_batches WHERE account = ?1)",
+        params![id],
+    )?;
     for (table, column) in REMOVED_WITH_ACCOUNT {
         tx.execute(&format!("DELETE FROM {table} WHERE {column} = ?1"), params![id])?;
     }

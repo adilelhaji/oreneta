@@ -25,6 +25,7 @@ pub mod graph;
 pub mod imap;
 pub mod log;
 pub mod mail_model;
+pub mod merge;
 pub mod oof;
 pub mod parse;
 pub mod priority;

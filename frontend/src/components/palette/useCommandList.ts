@@ -63,6 +63,8 @@ import {
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { RAIL_SHORTCUT_IDS, type ShortcutId } from '../../lib/shortcuts'
 import type { Command } from './paletteCommands'
+import { merge$ } from '../../states/merge'
+import { awaiting$ } from '../../states/awaiting'
 
 // Builds the full, ordered command list from current app state. Each entry's
 // `run` closes the palette first, then performs its action. Returns a memoized
@@ -105,6 +107,20 @@ export function useCommandList(): Command[] {
         keywords: 'write new email reply',
         shortcut: 'compose.new',
         run: run(() => openComposeTab()),
+      },
+      {
+        id: 'compose.mailing',
+        label: t('commands.compose.mailing', { defaultValue: 'Personalized mailing…' }),
+        icon: icon(Users),
+        keywords: 'mail merge mass bulk personalized newsletter',
+        run: run(() => merge$.open.set(true)),
+      },
+      {
+        id: 'mail.awaiting',
+        label: t('commands.mail.awaiting', { defaultValue: 'Waiting for replies…' }),
+        icon: icon(MailCheck),
+        keywords: 'follow up pending answer reply reminder',
+        run: run(() => awaiting$.open.set(true)),
       },
       {
         id: 'mail.sync',

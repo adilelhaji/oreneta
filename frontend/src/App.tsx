@@ -21,6 +21,7 @@ import { AttachmentsView } from './components/attachments/AttachmentsView'
 import { TaskDialog } from './components/tasks/TaskDialog'
 import { QuickActionDialog } from './components/quick/QuickActionDialog'
 import { AwaitingDialog } from './components/awaiting/AwaitingDialog'
+import { MergeDialog } from './components/merge/MergeDialog'
 import { MessagePane } from './components/chat/MessagePane'
 import { AboutDialog } from './components/dialog/AboutDialog'
 import { ChangelogDialog } from './components/dialog/ChangelogDialog'
@@ -169,6 +170,7 @@ export default function App() {
         {taskEditor && <TaskDialog key={`${taskEditor.threadId}:${taskEditor.id}`} />}
         <QuickActionDialog />
         <AwaitingDialog />
+        <MergeDialog />
         {sweepTarget && (
           <SweepDialog
             accountId={sweepTarget.accountId}
