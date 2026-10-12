@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { DragEvent } from 'react'
-import { Mail, MoreHorizontal, EyeOff, CalendarDays, BookUser, ListTodo, StickyNote, Paperclip } from 'lucide-react'
+import { Mail, MoreHorizontal, EyeOff, CalendarDays, BookUser, ListTodo, StickyNote, Paperclip, MessagesSquare } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
@@ -30,6 +30,7 @@ export function SideNav() {
   const peopleOpen = useValue(ui$.peopleOpen)
   const tasksOpen = useValue(ui$.tasksOpen)
   const notesOpen = useValue(ui$.notesOpen)
+  const messagingOpen = useValue(ui$.messagingOpen)
   const attachmentsOpen = useValue(ui$.attachmentsOpen)
   const hiddenSideNavAccounts = useValue(settings$.hiddenSideNavAccounts)
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
@@ -136,6 +137,7 @@ export function SideNav() {
     ui$.tasksOpen.set(false)
     ui$.notesOpen.set(false)
     ui$.attachmentsOpen.set(false)
+    ui$.messagingOpen.set(false)
     openMailAccount(id, folderId)
   }
 
@@ -199,6 +201,7 @@ export function SideNav() {
                 ui$.tasksOpen.set(false)
                 ui$.notesOpen.set(false)
                 ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.calendarOpen.set(!calendarOpen)
               }}
               title={t('calendar.title', { defaultValue: 'Calendar' })}
@@ -228,6 +231,7 @@ export function SideNav() {
                 ui$.tasksOpen.set(false)
                 ui$.notesOpen.set(false)
                 ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.peopleOpen.set(!peopleOpen)
               }}
               title={t('people.title')}
@@ -258,6 +262,7 @@ export function SideNav() {
                 ui$.peopleOpen.set(false)
                 ui$.notesOpen.set(false)
                 ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.tasksOpen.set(!tasksOpen)
               }}
               title={t('tasks.title')}
@@ -286,11 +291,41 @@ export function SideNav() {
                 ui$.peopleOpen.set(false)
                 ui$.tasksOpen.set(false)
                 ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.notesOpen.set(!notesOpen)
               }}
               title={t('notes.title', { defaultValue: 'Notes' })}
             >
               <StickyNote size={20} strokeWidth={1.75} />
+            </button>
+          </div>
+        )}
+
+        {/* Chat over XMPP (#111, ADR-0036). */}
+        {hasAccounts && (
+          <div className="relative w-full flex justify-center group">
+            <div
+              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+                messagingOpen ? 'h-7' : 'h-0 group-hover:h-3'
+              }`}
+            />
+            <button
+              className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
+                messagingOpen
+                  ? 'bg-accent text-on-accent '
+                  : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
+              }`}
+              onClick={() => {
+                ui$.calendarOpen.set(false)
+                ui$.peopleOpen.set(false)
+                ui$.tasksOpen.set(false)
+                ui$.notesOpen.set(false)
+                ui$.attachmentsOpen.set(false)
+                ui$.messagingOpen.set(!messagingOpen)
+              }}
+              title={t('messaging.title', { defaultValue: 'Chat' })}
+            >
+              <MessagesSquare size={20} strokeWidth={1.75} />
             </button>
           </div>
         )}
@@ -314,6 +349,7 @@ export function SideNav() {
                 ui$.peopleOpen.set(false)
                 ui$.tasksOpen.set(false)
                 ui$.notesOpen.set(false)
+                ui$.messagingOpen.set(false)
                 ui$.attachmentsOpen.set(!attachmentsOpen)
               }}
               title={t('attachmentsView.title', { defaultValue: 'Attachments' })}
@@ -346,6 +382,7 @@ export function SideNav() {
                       ui$.tasksOpen.set(false)
                       ui$.notesOpen.set(false)
                       ui$.attachmentsOpen.set(false)
+                      ui$.messagingOpen.set(false)
                       selectKanbanBoard(board.id)
                     }}
                     onContextMenu={(e) => {

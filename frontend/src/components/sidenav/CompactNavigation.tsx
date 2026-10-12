@@ -21,6 +21,7 @@ export function CompactNavigation() {
           ui$.tasksOpen.set(false)
           ui$.notesOpen.set(false)
           ui$.attachmentsOpen.set(false)
+          ui$.messagingOpen.set(false)
         }}
       />
       <IconButton

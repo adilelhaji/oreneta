@@ -2519,6 +2519,16 @@ async fn main() {
         }
     }
 
+    // Chat accounts connect at startup (#111).
+    let chat_ids: Vec<String> = meron_core::chat::accounts(&engine.db.lock().unwrap())
+        .map(|accounts| accounts.into_iter().map(|a| a.id).collect())
+        .unwrap_or_default();
+    for id in chat_ids {
+        if let Err(err) = start_chat(&engine, out.clone(), &id) {
+            eprintln!("meron-core: chat account {id}: {err:#}");
+        }
+    }
+
     // A model download the last run did not finish leaves nothing usable.
     meron_core::translation::clean_partial(&meron_core::translation::models_dir());
 
@@ -3076,6 +3086,75 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 &req_str(p, "message_id")?,
                 allow,
             )?;
+            Ok(json!({ "ok": true }))
+        }
+
+        // Chat over XMPP (#111, ADR-0036). Messages are sent only when the
+        // person sends them; one whose fate is unknown is never resent alone.
+        "chat.accounts" => Ok(serde_json::to_value(meron_core::chat::accounts(&engine.db.lock().unwrap())?)?),
+        "chat.status" => Ok(json!(chat_status().lock().unwrap().clone())),
+        "chat.save" => {
+            let account: meron_core::chat::ChatAccount =
+                serde_json::from_value(p.get("account").cloned().context("missing account")?)?;
+            meron_core::chat::save_account(&engine.db.lock().unwrap(), &account, now_seconds())?;
+            if let Some(password) = p.get("password").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                secrets::store(
+                    &meron_core::chat::secret_key(&account.id),
+                    &secrets::Secrets { password: password.to_string(), ..Default::default() },
+                )?;
+            }
+            start_chat(&engine, out.clone(), &account.id)?;
+            Ok(json!({ "ok": true }))
+        }
+        "chat.remove" => {
+            let id = req_str(p, "id")?;
+            stop_chat(&id);
+            meron_core::chat::remove_account(&engine.db.lock().unwrap(), &id)?;
+            let _ = secrets::delete(&meron_core::chat::secret_key(&id));
+            chat_status().lock().unwrap().remove(&id);
+            Ok(json!({ "ok": true }))
+        }
+        "chat.conversations" => Ok(serde_json::to_value(meron_core::chat::conversations(
+            &engine.db.lock().unwrap(),
+            &req_str(p, "account")?,
+        )?)?),
+        "chat.history" => Ok(serde_json::to_value(meron_core::chat::history(
+            &engine.db.lock().unwrap(),
+            &req_str(p, "account")?,
+            &req_str(p, "conversation")?,
+            p.get("limit").and_then(Value::as_i64).unwrap_or(200),
+        )?)?),
+        "chat.markRead" => {
+            meron_core::chat::mark_read(
+                &engine.db.lock().unwrap(),
+                &req_str(p, "account")?,
+                &req_str(p, "conversation")?,
+                now_seconds(),
+            )?;
+            Ok(json!({ "ok": true }))
+        }
+        "chat.send" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?.trim().to_lowercase();
+            let body = req_str(p, "body")?;
+            let me = meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            meron_core::chat::queue(&engine.db.lock().unwrap(), &account, &conversation, &id, &me.jid, &body, now_seconds())?;
+            chat_dispatch(&engine, &account, &conversation, &id, &body);
+            Ok(json!({ "id": id }))
+        }
+        "chat.retry" => {
+            // Only by the person's choice, with the same id, so a copy that did
+            // arrive is recognised as the same message.
+            let account = req_str(p, "account")?;
+            let id = req_str(p, "id")?;
+            let message = meron_core::chat::outgoing(&engine.db.lock().unwrap(), &account, &id)?;
+            anyhow::ensure!(
+                matches!(message.state.as_str(), "uncertain" | "failed"),
+                "only a message whose sending failed or is uncertain can be sent again"
+            );
+            meron_core::chat::set_state(&engine.db.lock().unwrap(), &account, &id, "sending")?;
+            chat_dispatch(&engine, &account, &message.conversation, &id, &message.body);
             Ok(json!({ "ok": true }))
         }
 
@@ -8739,6 +8818,68 @@ fn spawn_cloud_upload(
         };
         emit(&out, "cloud.uploaded", detail).await;
     });
+}
+
+fn chat_sessions() -> &'static std::sync::Mutex<std::collections::HashMap<String, tokio::sync::mpsc::UnboundedSender<meron_core::chat::xmpp::Command>>> {
+    static SESSIONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, tokio::sync::mpsc::UnboundedSender<meron_core::chat::xmpp::Command>>>> =
+        std::sync::OnceLock::new();
+    SESSIONS.get_or_init(Default::default)
+}
+
+/// Each chat account's last known connection state, for the app to show.
+fn chat_status() -> &'static std::sync::Mutex<std::collections::HashMap<String, Value>> {
+    static STATUS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Value>>> =
+        std::sync::OnceLock::new();
+    STATUS.get_or_init(Default::default)
+}
+
+fn stop_chat(id: &str) {
+    if let Some(tx) = chat_sessions().lock().unwrap().remove(id) {
+        let _ = tx.send(meron_core::chat::xmpp::Command::Stop);
+    }
+}
+
+/// (Re)starts an account's chat connection.
+fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()> {
+    stop_chat(id);
+    let account = meron_core::chat::account(&engine.db.lock().unwrap(), id)?;
+    let password = secrets::load(&meron_core::chat::secret_key(id))?.password;
+    anyhow::ensure!(!password.is_empty(), "this chat account has no password saved");
+    let connector = meron_core::chat::xmpp::connector(&account, false)?;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    chat_sessions().lock().unwrap().insert(id.to_string(), tx);
+    // Events leave the session through a channel to the async writer.
+    let (etx, mut erx) = tokio::sync::mpsc::unbounded_channel::<(String, Value)>();
+    tokio::spawn(async move {
+        while let Some((name, detail)) = erx.recv().await {
+            if name == "chat.status" {
+                if let Some(account) = detail["account"].as_str() {
+                    chat_status().lock().unwrap().insert(account.to_string(), detail.clone());
+                }
+            }
+            emit(&out, &name, detail).await;
+        }
+    });
+    let emit_fn: meron_core::chat::xmpp::Emit = Arc::new(move |name: &str, detail: Value| {
+        let _ = etx.send((name.to_string(), detail));
+    });
+    tokio::spawn(meron_core::chat::xmpp::run(account, password, engine.db.clone(), connector, rx, emit_fn));
+    Ok(())
+}
+
+/// Hands a message to its account's connection; with none, it failed.
+fn chat_dispatch(engine: &Arc<Engine>, account: &str, conversation: &str, id: &str, body: &str) {
+    let sent = chat_sessions().lock().unwrap().get(account).is_some_and(|tx| {
+        tx.send(meron_core::chat::xmpp::Command::Send {
+            conversation: conversation.to_string(),
+            id: id.to_string(),
+            body: body.to_string(),
+        })
+        .is_ok()
+    });
+    if !sent {
+        let _ = meron_core::chat::set_state(&engine.db.lock().unwrap(), account, id, "failed");
+    }
 }
 
 struct TranslationDownload {

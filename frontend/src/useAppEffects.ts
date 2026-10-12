@@ -5,6 +5,7 @@ import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
+import { onChatEvent } from './states/messaging'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
@@ -401,6 +402,12 @@ export function useAppEffects() {
       onTranslationEvent('translation.done', detail),
     )
 
+    // Chat (#111): a conversation changed, or a connection did.
+    const offChatChanged = eventsOn('chat.changed', (detail: { account?: string; conversation?: string }) =>
+      onChatEvent('chat.changed', detail),
+    )
+    const offChatStatus = eventsOn('chat.status', (detail: { account?: string }) => onChatEvent('chat.status', detail))
+
     // Cloud uploads (#108): progress and the end of each.
     const offCloudProgress = eventsOn('cloud.progress', (detail: { upload_id: string }) =>
       onCloudEvent('cloud.progress', detail),
@@ -506,6 +513,8 @@ export function useAppEffects() {
       if (typeof offTranslationDone === 'function') offTranslationDone()
       if (typeof offCloudProgress === 'function') offCloudProgress()
       if (typeof offCloudUploaded === 'function') offCloudUploaded()
+      if (typeof offChatChanged === 'function') offChatChanged()
+      if (typeof offChatStatus === 'function') offChatStatus()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

@@ -558,7 +558,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"rules.serverStatus", "rules.serverPush", "rules.serverRemove", "rules.runReviewed", "spam.lists", "spam.setListed",
 		"translation.status", "translation.download", "translation.cancel", "translation.remove",
 		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
-		"cloud.share", "cloud.revoke":
+		"cloud.share", "cloud.revoke", "pop3.retention",
+		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",
+		"chat.markRead", "chat.send", "chat.retry":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

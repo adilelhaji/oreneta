@@ -480,6 +480,12 @@ Estado de la iteración 15 (2026-10-12, por delegación):
   duplicados (UIDL más hash). Se conservan en el servidor salvo que se
   elija borrar, y el borrado solo vale con `QUIT`. Probado con un servidor
   falso y con Dovecot real en CI (ADR-0035, [registro](design/pop3.md)).
+- **#110/#111:** matriz de proveedores y decisión: XMPP primero, por ser un
+  estándar abierto sin registro ni gasto. Chat directo con identidad por
+  `origin-id`, sin duplicados entre directo, carbons y archivo. Los estados
+  de envío avanzan solo hacia delante y lo incierto no se reenvía solo.
+  Probado con Prosody real en CI. Grupos, archivos y otros proveedores
+  quedan pendientes (ADR-0036, [registro](design/chat.md)).
 
 Criterio de salida C-C: todas las filas obligatorias Windows/proveedor del ledger
 `verified`; cualquier exclusión mantiene la declaración de **paridad parcial**.

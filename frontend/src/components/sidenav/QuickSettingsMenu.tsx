@@ -10,8 +10,7 @@ import {
   Plus,
   RefreshCw,
   Settings,
-  SquareChevronRight,
-} from 'lucide-react'
+  SquareChevronRight, MessagesSquare } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
@@ -88,6 +87,7 @@ export function QuickSettingsMenu({
           { key: 'tasks', label: t('tasks.title'), icon: ListTodo },
           { key: 'notes', label: t('notes.title', { defaultValue: 'Notes' }), icon: StickyNote },
           { key: 'attachments', label: t('attachmentsView.title', { defaultValue: 'Attachments' }), icon: Paperclip },
+          { key: 'messaging', label: t('messaging.title', { defaultValue: 'Chat' }), icon: MessagesSquare },
         ].map(({ key, label, icon: Icon }) => (
           <MenuItem
             key={key}
@@ -99,6 +99,7 @@ export function QuickSettingsMenu({
               ui$.tasksOpen.set(key === 'tasks')
               ui$.notesOpen.set(key === 'notes')
               ui$.attachmentsOpen.set(key === 'attachments')
+              ui$.messagingOpen.set(key === 'messaging')
               onClose()
             }}
           />

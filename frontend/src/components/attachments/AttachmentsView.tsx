@@ -64,6 +64,7 @@ export function AttachmentsView() {
 
   const openMessage = (item: ListedAttachment) => {
     ui$.attachmentsOpen.set(false)
+    ui$.messagingOpen.set(false)
     openMailAccount(item.account, item.folder, false)
     ui$.selectedThread.set(item.thread_id)
     ui$.mobilePane.set('conversation')

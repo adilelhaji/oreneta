@@ -231,6 +231,24 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     await page.getByTitle('Attachments', { exact: true }).click()
     await expect(page.getByText('report.pdf')).toBeVisible()
     await audit('attachments')
+    // Chat over XMPP (#111): a conversation with each kind of send state.
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+      replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+      replies['chat.conversations'] = [
+        { conversation: 'pau@chat.test', last_body: '¿Sigues ahí?', last_stamp: 1760000120, last_direction: 'out', unread: 1 },
+      ]
+      replies['chat.history'] = [
+        { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'Hola Ana', stamp: 1760000000, state: 'received' },
+        { account: 'c1', conversation: 'pau@chat.test', id: 's1', stanza_id: null, direction: 'out', sender: 'ana@chat.test', body: 'Hola', stamp: 1760000060, state: 'delivered' },
+        { account: 'c1', conversation: 'pau@chat.test', id: 's2', stanza_id: null, direction: 'out', sender: 'ana@chat.test', body: '¿Sigues ahí?', stamp: 1760000120, state: 'uncertain' },
+      ]
+    })
+    await page.getByTitle('Chat', { exact: true }).click()
+    await page.getByRole('button', { name: /pau@chat.test/ }).click()
+    await expect(page.getByText('May not have arrived')).toBeVisible()
+    await audit('chat')
     expect(blocking).toEqual([])
     expect(errors).toEqual([])
   })
@@ -1032,6 +1050,11 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
         'translation.status': translation,
         'cloud.list': [],
+        'chat.accounts': [],
+        'chat.status': {},
+        'chat.conversations': [],
+        'chat.history': [],
+        'chat.markRead': { ok: true },
         'cloud.providers': [
           { id: 'nextcloud', name: 'Nextcloud', usable: true },
           { id: 'owncloud', name: 'ownCloud', usable: true },
