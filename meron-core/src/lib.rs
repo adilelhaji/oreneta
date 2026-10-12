@@ -38,6 +38,7 @@ pub mod privacy;
 pub mod translation;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod profile_archive;
+pub mod profile_purge;
 pub mod protocol;
 pub mod proxy;
 pub mod rss;

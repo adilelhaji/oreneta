@@ -366,6 +366,9 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
   apagadas por omisión, comprobadas antes de contar, con retención que
   nunca borra la última buena ni archivos ajenos (ADR-0037,
   [registro](design/scheduled-backups.md)).
+- **#99 (2026-10-12, por delegación):** un perfil con datos se puede
+  borrar escribiendo su nombre, si no está abierto. Antes, su núcleo borra
+  sus entradas del llavero (ADR-0038, [registro](design/profiles.md)).
 - **#99:** perfiles aislados, cada uno en su ventana y proceso, con
   carpetas, llavero y almacenamiento del webview propios (ADR-0016,
   [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,

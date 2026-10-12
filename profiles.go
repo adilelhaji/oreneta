@@ -9,6 +9,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -249,41 +250,118 @@ func (a *App) profilesRename(payload map[string]any) (any, error) {
 	return map[string]any{"ok": true}, writeProfiles(profiles)
 }
 
-// profilesDelete removes a profile that was never opened. A profile with
-// mail in it is not deleted from here: its keychain entries can only be
-// found from inside it (ADR-0016).
+// profilesDelete removes another profile. One that holds data asks for its
+// name to be typed, must not be open anywhere, and has its keychain entries
+// removed by its own core before its folders go (ADR-0038). If that fails,
+// nothing is deleted unless the person chooses to anyway.
 func (a *App) profilesDelete(payload map[string]any) (any, error) {
 	id, _ := payload["id"].(string)
 	if id == defaultProfileID || id == activeProfile() {
 		return nil, errors.New("the open profile and the default profile cannot be deleted")
 	}
-	if profileHasData(id) {
-		return nil, errors.New("this profile holds data; open it and remove its accounts first")
-	}
-	profileMu.Lock()
-	defer profileMu.Unlock()
 	profiles, err := readProfiles()
 	if err != nil {
 		return nil, err
 	}
-	kept := profiles[:0]
-	found := false
-	for _, profile := range profiles {
-		if profile.ID == id {
-			found = true
-			continue
+	var entry *profileEntry
+	for i := range profiles {
+		if profiles[i].ID == id {
+			entry = &profiles[i]
 		}
-		kept = append(kept, profile)
 	}
-	if !found {
+	if entry == nil {
 		return nil, errors.New("that profile no longer exists")
 	}
-	if err := writeProfiles(kept); err != nil {
+	hasData := profileHasData(id)
+	if hasData {
+		typed, _ := payload["confirmName"].(string)
+		if strings.TrimSpace(typed) != entry.Name {
+			return nil, errors.New("type the profile's name to delete it with everything in it")
+		}
+	}
+	release, err := lockProfile(id)
+	if err != nil {
 		return nil, err
 	}
-	_ = os.RemoveAll(profileDir(rootConfigDir(), id))
+	released := false
+	defer func() {
+		if !released {
+			release()
+		}
+	}()
+	purged := false
+	if hasData {
+		if err := purgeProfileSecrets(id); err != nil {
+			if force, _ := payload["force"].(bool); !force {
+				return map[string]any{"ok": false, "purgeFailed": err.Error()}, nil
+			}
+			a.logf("profiles.delete %s: keychain entries left behind: %v", id, err)
+		} else {
+			purged = true
+		}
+	}
+
+	profileMu.Lock()
+	current, err := readProfiles()
+	if err == nil {
+		kept := current[:0]
+		for _, profile := range current {
+			if profile.ID != id {
+				kept = append(kept, profile)
+			}
+		}
+		err = writeProfiles(kept)
+	}
+	profileMu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	// No longer listed, so it cannot be opened again; then its folders go.
+	// The lock file is closed first: Windows does not delete an open file.
+	release()
+	released = true
+	if err := os.RemoveAll(profileDir(rootConfigDir(), id)); err != nil {
+		return nil, fmt.Errorf("the profile is no longer listed, but its folder could not be removed: %w", err)
+	}
 	_ = os.RemoveAll(profileDir(rootCacheDir(), id))
-	return map[string]any{"ok": true}, nil
+	return map[string]any{"ok": true, "secretsRemoved": purged}, nil
+}
+
+// purgeProfileSecrets runs the core once inside another profile to remove
+// every keychain entry its store names, the store key last.
+var purgeProfileSecrets = func(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, coreBinaryPath(), "--purge-profile")
+	cmd.Env = purgeEnv(os.Environ(), id)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		reason := strings.TrimSpace(stderr.String())
+		if reason == "" {
+			reason = err.Error()
+		}
+		return errors.New(reason)
+	}
+	return nil
+}
+
+// purgeEnv points the core at another profile's store and keychain names.
+func purgeEnv(environ []string, id string) []string {
+	env := make([]string, 0, len(environ)+3)
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		switch name {
+		case "MERON_CORE_DB", "MERON_MEDIA_DIR", "MERON_PROFILE":
+			continue
+		}
+		env = append(env, entry)
+	}
+	return append(env,
+		"MERON_CORE_DB="+filepath.Join(profileDir(rootConfigDir(), id), "meron.db"),
+		"MERON_MEDIA_DIR="+filepath.Join(profileDir(rootCacheDir(), id), "attachments"),
+		"MERON_PROFILE="+id,
+	)
 }
 
 // startProfile launches the app for another profile. It runs as its own

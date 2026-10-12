@@ -38,6 +38,13 @@ func main() {
 	// Before anything reads a path: the profile decides where data lives.
 	profileArg, _ := profileFromArgs(os.Args[1:], os.Getenv)
 	profile := selectProfile(profileArg)
+	// Held for as long as this process runs, so the profile is never deleted
+	// from another window while open. A second launch of the same profile is
+	// handed to the first by the single-instance lock, so failing here is
+	// fine.
+	if release, err := lockProfile(profile); err == nil {
+		heldProfileLock = release
+	}
 
 	setupNativeSpellChecking()
 

@@ -49,12 +49,24 @@ export async function renameProfile(id: string, name: string) {
   }
 }
 
-export async function deleteProfile(id: string) {
+export type ProfileDeletion = { ok: boolean; purgeFailed?: string; secretsRemoved?: boolean }
+
+/**
+ * Deletes another profile. One holding data needs its name typed; when its
+ * saved passwords could not be removed, the answer says so and nothing is
+ * deleted unless `force` is given (ADR-0038).
+ */
+export async function deleteProfile(
+  id: string,
+  options: { confirmName?: string; force?: boolean } = {},
+): Promise<ProfileDeletion | null> {
   try {
-    await invoke('profiles.delete', { id })
+    const result = await invoke<ProfileDeletion>('profiles.delete', { id, ...options })
     await loadProfiles()
+    return result ?? { ok: true }
   } catch (error) {
     showToast(message(error, t('profiles.couldNotDelete', { defaultValue: 'Could not delete the profile' })), 'error')
+    return null
   }
 }
 

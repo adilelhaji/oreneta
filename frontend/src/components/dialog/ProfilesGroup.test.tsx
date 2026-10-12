@@ -5,7 +5,7 @@ mock.module('../../boot', () => ({ boot: async () => {} }))
 
 const { ProfilesGroup } = await import('./ProfilesGroup')
 const { profiles$ } = await import('../../states/profiles')
-const { ui$ } = await import('../../states/ui')
+const { ui$, settleConfirm } = await import('../../states/ui')
 
 type Row = { id: string; name: string; created_at: number; active: boolean; has_data: boolean }
 
@@ -33,6 +33,7 @@ function fakeBridge(rows: Row[]) {
             case 'profiles.open':
               return { ok: true }
             case 'profiles.delete':
+              if (payload.id === 'broken' && !payload.force) return { ok: false, purgeFailed: 'no keychain' }
               rows.splice(
                 rows.findIndex((row) => row.id === payload.id),
                 1,
@@ -67,9 +68,10 @@ it('lists the profiles, marks this window and opens another in its own window', 
   const view = render(<ProfilesGroup />)
   await waitFor(() => expect(view.getByText('Main profile')).toBeTruthy())
   expect(view.getByText('This window')).toBeTruthy()
-  // The default profile cannot be renamed or deleted; one with data cannot be deleted from here.
+  // The default profile and this window's cannot be renamed or deleted.
   expect(view.queryByRole('button', { name: 'Rename Main profile' })).toBeNull()
-  expect(view.queryByRole('button', { name: 'Delete Work' })).toBeNull()
+  expect(view.queryByRole('button', { name: 'Delete Main profile' })).toBeNull()
+  expect(view.getByRole('button', { name: 'Delete Work' })).toBeTruthy()
   expect(view.getByRole('button', { name: 'Delete Spare' })).toBeTruthy()
 
   const openButtons = view.getAllByRole('button', { name: 'Open' })
@@ -96,4 +98,49 @@ it('creates a profile and says why a duplicate name is refused', async () => {
   await waitFor(() => expect(view.getByText('Home')).toBeTruthy())
   expect(view.queryByLabelText('New profile name')).toBeNull()
   expect(calls.filter((call) => call.command === 'profiles.create')).toHaveLength(2)
+})
+
+it('deletes a profile with data only once its name is typed exactly', async () => {
+  const calls = fakeBridge(rows())
+  const view = render(<ProfilesGroup />)
+  await waitFor(() => expect(view.getByText('Work')).toBeTruthy())
+  fireEvent.click(view.getByRole('button', { name: 'Delete Work' }))
+  expect(view.getByText(/Mail and data on servers are not touched/)).toBeTruthy()
+  const confirm = view.getByRole('button', { name: 'Delete with everything in it' }) as HTMLButtonElement
+  const typed = view.getByLabelText('Profile name to confirm')
+  for (const wrong of ['work', 'Wor', '']) {
+    fireEvent.change(typed, { target: { value: wrong } })
+    expect(confirm.disabled).toBe(true)
+  }
+  fireEvent.change(typed, { target: { value: 'Work' } })
+  fireEvent.click(confirm)
+  await waitFor(() => expect(calls.some((call) => call.command === 'profiles.delete')).toBe(true))
+  await waitFor(() => expect(view.queryByLabelText('Profile name to confirm')).toBeNull())
+  expect(view.queryByRole('button', { name: 'Delete Work' })).toBeNull()
+  expect(calls.find((call) => call.command === 'profiles.delete')!.payload).toEqual({ id: 'work', confirmName: 'Work' })
+})
+
+it('asks again when its saved passwords could not be removed, and deletes nothing if declined', async () => {
+  const list = [...rows(), { id: 'broken', name: 'Broken', created_at: 3, active: false, has_data: true }]
+  const calls = fakeBridge(list)
+  const view = render(<ProfilesGroup />)
+  await waitFor(() => expect(view.getByText('Broken')).toBeTruthy())
+  fireEvent.click(view.getByRole('button', { name: 'Delete Broken' }))
+  fireEvent.change(view.getByLabelText('Profile name to confirm'), { target: { value: 'Broken' } })
+  fireEvent.click(view.getByRole('button', { name: 'Delete with everything in it' }))
+  await waitFor(() => expect(ui$.confirm.get()?.message).toContain('no keychain'))
+  settleConfirm(false)
+  await waitFor(() => expect(ui$.confirm.get()).toBeNull())
+  expect(view.getByText('Broken')).toBeTruthy()
+  expect(calls.filter((call) => call.command === 'profiles.delete')).toHaveLength(1)
+
+  fireEvent.click(view.getByRole('button', { name: 'Delete with everything in it' }))
+  await waitFor(() => expect(ui$.confirm.get()).not.toBeNull())
+  settleConfirm(true)
+  await waitFor(() => expect(view.queryByText('Broken')).toBeNull())
+  expect(calls.filter((call) => call.command === 'profiles.delete').at(-1)!.payload).toEqual({
+    id: 'broken',
+    confirmName: 'Broken',
+    force: true,
+  })
 })

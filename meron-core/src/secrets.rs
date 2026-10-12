@@ -571,6 +571,20 @@ fn is_hex_key(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+/// Whether secrets are kept in memory only (`MERON_KEYRING=off`).
+pub fn keyring_off() -> bool {
+    keyring_disabled()
+}
+
+/// Removes this profile's store key: the last step of deleting a profile,
+/// after which its store cannot be read again.
+pub fn delete_db_key() -> Result<()> {
+    if keyring_disabled() {
+        return Ok(());
+    }
+    backend_delete(&scoped(DB_KEY_ACCOUNT))
+}
+
 /// Remove an account's secrets from the keychain. A missing entry is not an error.
 pub fn delete(account: &str) -> Result<()> {
     if keyring_disabled() {

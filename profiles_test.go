@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -111,37 +113,158 @@ func TestProfilesAreCreatedRenamedAndKeptApart(t *testing.T) {
 	}
 }
 
-func TestOnlyAnUnusedProfileIsDeleted(t *testing.T) {
+// stubPurge replaces the core's keychain purge for a test.
+func stubPurge(t *testing.T, fail error) *[]string {
+	t.Helper()
+	called := []string{}
+	previous := purgeProfileSecrets
+	purgeProfileSecrets = func(id string) error {
+		called = append(called, id)
+		return fail
+	}
+	t.Cleanup(func() { purgeProfileSecrets = previous })
+	return &called
+}
+
+func usedProfile(t *testing.T, app *App, name string) string {
+	t.Helper()
+	created, err := app.profilesCreate(map[string]any{"name": name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := created.(map[string]any)["id"].(string)
+	dir := profileDir(rootConfigDir(), id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "meron.db"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func listed(id string) bool {
+	profiles, _ := readProfiles()
+	for _, profile := range profiles {
+		if profile.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAnUnusedProfileIsDeletedWithoutTypingItsName(t *testing.T) {
 	isolatedHome(t)
 	app := &App{}
+	purges := stubPurge(t, nil)
 	created, _ := app.profilesCreate(map[string]any{"name": "Spare"})
 	id := created.(map[string]any)["id"].(string)
-	used, _ := app.profilesCreate(map[string]any{"name": "Used"})
-	usedID := used.(map[string]any)["id"].(string)
-	if err := os.MkdirAll(profileDir(rootConfigDir(), usedID), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(profileDir(rootConfigDir(), usedID), "meron.db"), []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	other := usedProfile(t, app, "Used")
 
 	if _, err := app.profilesDelete(map[string]any{"id": defaultProfileID}); err == nil {
 		t.Fatal("the default profile stays")
 	}
-	if _, err := app.profilesDelete(map[string]any{"id": usedID}); err == nil {
-		t.Fatal("a profile with a store is not deleted from outside")
-	}
 	if _, err := app.profilesDelete(map[string]any{"id": id}); err != nil {
 		t.Fatal(err)
 	}
-	profiles, _ := readProfiles()
-	for _, profile := range profiles {
-		if profile.ID == id {
-			t.Fatal("still listed")
+	if listed(id) || len(*purges) != 0 {
+		t.Fatalf("listed=%v purges=%v", listed(id), *purges)
+	}
+	if _, err := os.Stat(filepath.Join(profileDir(rootConfigDir(), other), "meron.db")); err != nil {
+		t.Fatal("another profile's data is untouched")
+	}
+}
+
+func TestAProfileWithDataIsDeletedOnlyByNameAfterItsSecretsGo(t *testing.T) {
+	isolatedHome(t)
+	app := &App{}
+	purges := stubPurge(t, nil)
+	id := usedProfile(t, app, "Work")
+	cache := profileDir(rootCacheDir(), id)
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, typed := range []string{"", "work", "Wor"} {
+		if _, err := app.profilesDelete(map[string]any{"id": id, "confirmName": typed}); err == nil {
+			t.Fatalf("deleted with %q typed", typed)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(profileDir(rootConfigDir(), usedID), "meron.db")); err != nil {
-		t.Fatal("another profile's data is untouched")
+	if !listed(id) || len(*purges) != 0 {
+		t.Fatal("nothing happens without the name")
+	}
+	res, err := app.profilesDelete(map[string]any{"id": id, "confirmName": "Work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.(map[string]any)["secretsRemoved"] != true || len(*purges) != 1 || (*purges)[0] != id {
+		t.Fatalf("res=%v purges=%v", res, *purges)
+	}
+	if listed(id) || fileExists(profileDir(rootConfigDir(), id)) || fileExists(cache) {
+		t.Fatal("the profile and its folders are gone")
+	}
+	if !fileExists(filepath.Join(rootConfigDir(), "profiles.json")) {
+		t.Fatal("the profile list stays")
+	}
+}
+
+func TestAnOpenProfileIsNotDeleted(t *testing.T) {
+	isolatedHome(t)
+	app := &App{}
+	purges := stubPurge(t, nil)
+	id := usedProfile(t, app, "Open")
+	// Its own process holds its lock.
+	release, err := lockProfile(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	_, err = app.profilesDelete(map[string]any{"id": id, "confirmName": "Open"})
+	if !errors.Is(err, errProfileInUse) {
+		t.Fatalf("got %v", err)
+	}
+	if !listed(id) || len(*purges) != 0 || !fileExists(filepath.Join(profileDir(rootConfigDir(), id), "meron.db")) {
+		t.Fatal("an open profile is left whole")
+	}
+}
+
+func TestAFailedPurgeDeletesNothingUnlessChosen(t *testing.T) {
+	isolatedHome(t)
+	app := &App{}
+	stubPurge(t, errors.New("the store could not be read"))
+	id := usedProfile(t, app, "Broken")
+	res, err := app.profilesDelete(map[string]any{"id": id, "confirmName": "Broken"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.(map[string]any)["purgeFailed"] != "the store could not be read" || !listed(id) {
+		t.Fatalf("res=%v", res)
+	}
+	res, err = app.profilesDelete(map[string]any{"id": id, "confirmName": "Broken", "force": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.(map[string]any)["secretsRemoved"] != false || listed(id) {
+		t.Fatalf("res=%v", res)
+	}
+}
+
+func TestThePurgeRunsInTheProfileBeingDeleted(t *testing.T) {
+	isolatedHome(t)
+	env := purgeEnv([]string{"HOME=/h", "MERON_PROFILE=default", "MERON_CORE_DB=/wrong.db", "MERON_KEYRING=off"}, "work")
+	joined := strings.Join(env, "\n")
+	for _, want := range []string{
+		"MERON_PROFILE=work",
+		"MERON_CORE_DB=" + filepath.Join(rootConfigDir(), "profiles", "work", "meron.db"),
+		"MERON_KEYRING=off",
+		"HOME=/h",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %s in %v", want, env)
+		}
+	}
+	if strings.Contains(joined, "MERON_PROFILE=default") || strings.Contains(joined, "/wrong.db") {
+		t.Fatalf("the running profile leaks into the purge: %v", env)
 	}
 }
 
@@ -221,5 +344,31 @@ func TestProfileArchiveNamesAndPassphraseGuard(t *testing.T) {
 	app := &App{}
 	if _, err := app.exportProfileArchive(map[string]any{"passphrase": "short"}); err == nil {
 		t.Fatal("a short passphrase is refused before anything else")
+	}
+}
+
+// The real core's purge mode: it runs inside the named profile and refuses
+// the default one. Skipped when the core is not built.
+func TestTheCorePurgesOnlyANamedProfile(t *testing.T) {
+	core, _ := filepath.Abs(filepath.Join("meron-core", "target", "debug", "meron-core"+sidecarExeSuffix))
+	if !fileExists(core) {
+		t.Skip("meron-core is not built")
+	}
+	isolatedHome(t)
+	run := func(id string) (string, error) {
+		cmd := exec.Command(core, "--purge-profile")
+		cmd.Env = append(purgeEnv(os.Environ(), id), "MERON_KEYRING=off")
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if err := os.MkdirAll(profileDir(rootConfigDir(), "work"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run("work")
+	if err != nil || !strings.Contains(out, `"purged"`) {
+		t.Fatalf("err=%v out=%s", err, out)
+	}
+	if out, err := run(defaultProfileID); err == nil {
+		t.Fatalf("the default profile was purged: %s", out)
 	}
 }

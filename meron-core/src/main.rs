@@ -2492,6 +2492,26 @@ async fn main() {
     // Tag panics consistently on stderr, which the desktop bridge copies into
     // meron.log; a panic in a worker task would otherwise be easy to miss.
     meron_core::log::install_panic_hook();
+    // Deleting another profile (ADR-0038): run once inside it, remove every
+    // keychain entry its store names, and exit. Never the default profile.
+    if std::env::args().any(|arg| arg == "--purge-profile") {
+        let profile = std::env::var("MERON_PROFILE").unwrap_or_default();
+        let result = if profile.trim().is_empty() || profile == "default" {
+            Err(anyhow::anyhow!("only another, named profile can be purged"))
+        } else {
+            store::open().and_then(|conn| meron_core::profile_purge::purge(&conn))
+        };
+        match result {
+            Ok(purged) => {
+                println!("{}", json!({ "purged": purged }));
+                std::process::exit(0);
+            }
+            Err(err) => {
+                eprintln!("meron-core: could not purge profile {profile}: {err:#}");
+                std::process::exit(1);
+            }
+        }
+    }
     let out: Writer = Arc::new(Mutex::new(tokio::io::stdout()));
     let engine = match Engine::new(Box::new(DesktopHost)) {
         Ok(engine) => Arc::new(engine),

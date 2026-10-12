@@ -226,6 +226,10 @@ fn vault_key(account: &str) -> String {
         .collect();
     format!("__oreneta_graph_v1_{hash}")
 }
+/// Removes an account's Graph record from the keychain, if it has one.
+pub fn delete_record(account: &str) -> anyhow::Result<()> {
+    crate::secrets::graph_record_delete(&vault_key(account))
+}
 impl Vault for Keychain {
     fn load(&self, account: &str) -> Result<Option<Record>> {
         crate::secrets::graph_record_load(&vault_key(account))

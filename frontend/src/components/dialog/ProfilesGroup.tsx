@@ -25,6 +25,7 @@ export function ProfilesGroup() {
   const { t } = useTranslation()
   const items = useValue(profiles$.items)
   const [adding, setAdding] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<{ id: string; name: string; typed: string } | null>(null)
 
   useEffect(() => {
     void loadProfiles()
@@ -35,7 +36,11 @@ export function ProfilesGroup() {
     if (name?.trim()) void renameProfile(id, name)
   }
 
-  const remove = async (id: string, name: string) => {
+  const remove = async (id: string, name: string, hasData: boolean) => {
+    if (hasData) {
+      setDeleting({ id, name, typed: '' })
+      return
+    }
     const confirmed = await confirmAction({
       title: t('profiles.deleteTitle', { defaultValue: 'Delete profile?' }),
       message: t('profiles.deleteText', { name, defaultValue: '{name} has never been opened and holds nothing.' }),
@@ -43,6 +48,27 @@ export function ProfilesGroup() {
       tone: 'danger',
     })
     if (confirmed) await deleteProfile(id)
+  }
+
+  // A profile with data: its name typed, then its saved passwords removed by
+  // its own core before its folders go; if that fails, asked again.
+  const removeWithData = async (id: string, typed: string) => {
+    const result = await deleteProfile(id, { confirmName: typed })
+    if (result?.purgeFailed) {
+      const anyway = await confirmAction({
+        title: t('profiles.purgeFailedTitle', { defaultValue: 'Delete it anyway?' }),
+        message: t('profiles.purgeFailedText', {
+          reason: result.purgeFailed,
+          defaultValue:
+            'Its saved passwords could not be removed from the system keychain ({reason}). Deleting it anyway leaves them there.',
+        }),
+        confirmLabel: t('profiles.deleteAnyway', { defaultValue: 'Delete anyway' }),
+        tone: 'danger',
+      })
+      if (!anyway) return
+      if (!(await deleteProfile(id, { confirmName: typed, force: true }))?.ok) return
+    } else if (!result?.ok) return
+    setDeleting(null)
   }
 
   return (
@@ -84,13 +110,13 @@ export function ProfilesGroup() {
                     <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
                   </button>
                 )}
-                {profile.id !== 'default' && !profile.active && !profile.has_data && (
+                {profile.id !== 'default' && !profile.active && (
                   <button
                     type="button"
                     className={action}
                     aria-label={t('profiles.deleteNamed', { name, defaultValue: 'Delete {name}' })}
                     title={t('buttons.delete')}
-                    onClick={() => void remove(profile.id, name)}
+                    onClick={() => void remove(profile.id, profile.name, profile.has_data)}
                   >
                     <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
                   </button>
@@ -100,6 +126,39 @@ export function ProfilesGroup() {
           )
         })}
       </ul>
+      {deleting && (
+        <form
+          className="flex flex-col gap-2 border-t border-border/40 px-3.5 py-3 text-caption"
+          aria-label={t('profiles.deleteNamed', { name: deleting.name, defaultValue: 'Delete {name}' })}
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (deleting.typed.trim() === deleting.name) void removeWithData(deleting.id, deleting.typed)
+          }}
+        >
+          <p className="text-danger">
+            {t('profiles.deleteDataText', {
+              name: deleting.name,
+              defaultValue:
+                'This removes everything {name} keeps on this computer: its accounts, the mail downloaded here, drafts, contacts, calendars, tasks, notes, settings and saved passwords. Mail and data on servers are not touched. Close its window first. Type its name to confirm.',
+            })}
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={deleting.typed}
+              aria-label={t('profiles.typeName', { defaultValue: 'Profile name to confirm' })}
+              onChange={(event) => setDeleting({ ...deleting, typed: event.target.value })}
+              className="min-w-0 flex-1 rounded-control-sm border border-border bg-app px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+            />
+            <button type="submit" className={action} disabled={deleting.typed.trim() !== deleting.name}>
+              {t('profiles.deleteEverything', { defaultValue: 'Delete with everything in it' })}
+            </button>
+            <button type="button" className={action} onClick={() => setDeleting(null)}>
+              {t('buttons.cancel')}
+            </button>
+          </div>
+        </form>
+      )}
       {adding === null ? (
         <div className="px-3.5 py-2">
           <button type="button" className={action} onClick={() => setAdding('')}>
