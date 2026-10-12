@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird-Profile",
   "thunderbird.subtitle": "In das lokale Archiv auf diesem Computer. Die Dateien von Thunderbird werden nur gelesen, nie verändert.",
   "thunderbird.summary": "{count, plural, one {# Nachricht} other {# Nachrichten}} zu importieren. {left} bereits im Archiv und {deleted} in Thunderbird gelöscht werden ausgelassen.",
-  "thunderbird.title": "Aus Thunderbird importieren"
+  "thunderbird.title": "Aus Thunderbird importieren",
+  "notes.attachFile": "Datei anhängen…",
+  "notes.fileSaved": "{name} gespeichert.",
+  "notes.files": "Angehängte Dateien",
+  "notes.removeFile": "Entfernen",
+  "notes.removeFileText": "{name} wird aus dieser Notiz entfernt. Die Datei, die Sie angehängt haben, bleibt an ihrem ursprünglichen Ort unberührt.",
+  "notes.removeFileTitle": "Datei entfernen?",
+  "notes.removeNamed": "{name} entfernen",
+  "notes.saveFile": "{name} speichern"
 }

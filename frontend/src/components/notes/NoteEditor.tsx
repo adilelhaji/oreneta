@@ -22,6 +22,7 @@ import {
 } from '../../states/notes'
 import { Button } from '../button/Button'
 import { ComposerToolbar } from '../composer/ComposerToolbar'
+import { NoteAttachments } from './NoteAttachments'
 
 const SAVE_DEBOUNCE_MS = 800
 /** One picture; the note as a whole is bounded by the core. */
@@ -337,6 +338,7 @@ export function NoteEditor({ initialId }: { initialId: string | null }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
+      {id.current && <NoteAttachments noteId={id.current} readOnly={trashed} />}
       <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2">
         <label htmlFor="note-tags" className="text-caption text-secondary">
           {t('notes.tags', { defaultValue: 'Tags' })}

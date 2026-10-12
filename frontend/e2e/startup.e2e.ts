@@ -1050,6 +1050,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'privacy.info': { title: 'EasyPrivacy', version: 'test', rules: 1000, source: 'bundled' },
         'translation.status': translation,
         'cloud.list': [],
+        'notes.attachments': { attachments: [] },
         'backupSchedule.status': {
           schedule: { enabled: false, folder: '', every_hours: 24, keep: 7, max_bytes: null },
           last_attempt: null,

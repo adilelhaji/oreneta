@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird profili",
   "thunderbird.subtitle": "Vietējā arhīvā šajā datorā. Thunderbird faili tiek tikai lasīti, nekad mainīti.",
   "thunderbird.summary": "{count, plural, zero {# ziņas} one {# ziņa} other {# ziņas}} importēšanai. Izlaistas {left} jau arhīvā esošās un {deleted} Thunderbird izdzēstās.",
-  "thunderbird.title": "Importēt no Thunderbird"
+  "thunderbird.title": "Importēt no Thunderbird",
+  "notes.attachFile": "Pievienot failu…",
+  "notes.fileSaved": "{name} saglabāts.",
+  "notes.files": "Pievienotie faili",
+  "notes.removeFile": "Noņemt",
+  "notes.removeFileText": "{name} tiek noņemts no šīs piezīmes. Fails, no kura to pievienoji, netiek mainīts.",
+  "notes.removeFileTitle": "Noņemt failu?",
+  "notes.removeNamed": "Noņemt {name}",
+  "notes.saveFile": "Saglabāt {name}"
 }

@@ -383,6 +383,10 @@ Estado de la iteración 10 (2026-10-11, decisiones por delegación):
   fiable (ADR-0041, [registro](design/thunderbird-import.md)).
 - **Interfaz en los 19 idiomas:** los textos añadidos en este plan ya están
   en todos los catálogos.
+- **#104, archivos en las notas (2026-10-12, por delegación):** se guardan
+  con la nota dentro del perfil, de modo que la copia completa los
+  incluye. Hasta 25 MB por archivo (ADR-0042,
+  [registro](design/note-attachments.md)).
 - **#99:** perfiles aislados, cada uno en su ventana y proceso, con
   carpetas, llavero y almacenamiento del webview propios (ADR-0016,
   [registro](design/profiles.md)). Pendiente: borrar un perfil con datos,

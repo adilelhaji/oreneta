@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird 配置文件",
   "thunderbird.subtitle": "导入这台电脑上的本地存档。Thunderbird 的文件只会被读取，不会被更改。",
   "thunderbird.summary": "将导入 {count, plural, other {# 封邮件}}。已在存档中的 {left} 封和在 Thunderbird 中已删除的 {deleted} 封将被跳过。",
-  "thunderbird.title": "从 Thunderbird 导入"
+  "thunderbird.title": "从 Thunderbird 导入",
+  "notes.attachFile": "添加文件…",
+  "notes.fileSaved": "已保存 {name}。",
+  "notes.files": "附件",
+  "notes.removeFile": "移除",
+  "notes.removeFileText": "{name} 将从此笔记中移除。你附加时使用的原文件不受影响。",
+  "notes.removeFileTitle": "移除文件？",
+  "notes.removeNamed": "移除 {name}",
+  "notes.saveFile": "保存 {name}"
 }

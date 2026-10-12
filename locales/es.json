@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Perfiles de Thunderbird",
   "thunderbird.subtitle": "Al archivo local de este ordenador. Los archivos de Thunderbird solo se leen, nunca se modifican.",
   "thunderbird.summary": "{count, plural, one {# mensaje} many {# mensajes} other {# mensajes}} para importar. Se omiten {left} que ya están en el archivo y {deleted} eliminados en Thunderbird.",
-  "thunderbird.title": "Importar desde Thunderbird"
+  "thunderbird.title": "Importar desde Thunderbird",
+  "notes.attachFile": "Adjuntar un archivo…",
+  "notes.fileSaved": "{name} guardado.",
+  "notes.files": "Archivos adjuntos",
+  "notes.removeFile": "Quitar",
+  "notes.removeFileText": "{name} se quita de esta nota. El archivo original desde el que lo adjuntaste no se modifica.",
+  "notes.removeFileTitle": "¿Quitar el archivo?",
+  "notes.removeNamed": "Quitar {name}",
+  "notes.saveFile": "Guardar {name}"
 }

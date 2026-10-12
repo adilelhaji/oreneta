@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbirdi profiilid",
   "thunderbird.subtitle": "Selle arvuti kohalikku arhiivi. Thunderbirdi faile ainult loetakse, neid ei muudeta kunagi.",
   "thunderbird.summary": "{count, plural, one {# kiri} other {# kirja}} importida. Välja jäetakse {left} juba arhiivis olevat ja {deleted} Thunderbirdis kustutatut.",
-  "thunderbird.title": "Impordi Thunderbirdist"
+  "thunderbird.title": "Impordi Thunderbirdist",
+  "notes.attachFile": "Lisa fail…",
+  "notes.fileSaved": "{name} on salvestatud.",
+  "notes.files": "Manustatud failid",
+  "notes.removeFile": "Eemalda",
+  "notes.removeFileText": "{name} eemaldatakse sellest märkmest. Faili, millest sa selle lisasid, ei puudutata.",
+  "notes.removeFileTitle": "Eemaldada see fail?",
+  "notes.removeNamed": "Eemalda {name}",
+  "notes.saveFile": "Salvesta {name}"
 }

@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird のプロファイル",
   "thunderbird.subtitle": "このコンピューター上のローカルアーカイブへ。Thunderbird のファイルは読み取るだけで、変更されません。",
   "thunderbird.summary": "{count, plural, other {# 件のメッセージ}}をインポートします。アーカイブに既にある {left} 件と Thunderbird で削除された {deleted} 件は除外されます。",
-  "thunderbird.title": "Thunderbird からインポート"
+  "thunderbird.title": "Thunderbird からインポート",
+  "notes.attachFile": "ファイルを添付…",
+  "notes.fileSaved": "{name} を保存しました。",
+  "notes.files": "添付ファイル",
+  "notes.removeFile": "削除",
+  "notes.removeFileText": "{name} をこのメモから削除します。添付元のファイルはそのまま残ります。",
+  "notes.removeFileTitle": "ファイルを削除しますか？",
+  "notes.removeNamed": "{name} を削除",
+  "notes.saveFile": "{name} を保存"
 }

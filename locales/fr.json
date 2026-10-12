@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Profils Thunderbird",
   "thunderbird.subtitle": "Dans l’archive locale de cet ordinateur. Les fichiers de Thunderbird sont seulement lus, jamais modifiés.",
   "thunderbird.summary": "{count, plural, one {# message} many {# messages} other {# messages}} à importer. {left} déjà dans l’archive et {deleted} supprimés dans Thunderbird sont ignorés.",
-  "thunderbird.title": "Importer depuis Thunderbird"
+  "thunderbird.title": "Importer depuis Thunderbird",
+  "notes.attachFile": "Joindre un fichier…",
+  "notes.fileSaved": "{name} enregistré.",
+  "notes.files": "Fichiers joints",
+  "notes.removeFile": "Retirer",
+  "notes.removeFileText": "{name} est retiré de cette note. Le fichier d’origine que vous avez joint n’est pas modifié.",
+  "notes.removeFileTitle": "Retirer le fichier ?",
+  "notes.removeNamed": "Retirer {name}",
+  "notes.saveFile": "Enregistrer {name}"
 }

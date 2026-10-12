@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Προφίλ Thunderbird",
   "thunderbird.subtitle": "Στο τοπικό αρχείο σε αυτόν τον υπολογιστή. Τα αρχεία του Thunderbird μόνο διαβάζονται, δεν αλλάζουν ποτέ.",
   "thunderbird.summary": "{count, plural, one {# μήνυμα} other {# μηνύματα}} προς εισαγωγή. Παραλείπονται {left} που υπάρχουν ήδη στο αρχείο και {deleted} διαγραμμένα στο Thunderbird.",
-  "thunderbird.title": "Εισαγωγή από το Thunderbird"
+  "thunderbird.title": "Εισαγωγή από το Thunderbird",
+  "notes.attachFile": "Επισύναψη αρχείου…",
+  "notes.fileSaved": "Το {name} αποθηκεύτηκε.",
+  "notes.files": "Συνημμένα αρχεία",
+  "notes.removeFile": "Αφαίρεση",
+  "notes.removeFileText": "Το {name} αφαιρείται από αυτή τη σημείωση. Το αρχείο από το οποίο το επισυνάψατε δεν επηρεάζεται.",
+  "notes.removeFileTitle": "Αφαίρεση του αρχείου;",
+  "notes.removeNamed": "Αφαίρεση {name}",
+  "notes.saveFile": "Αποθήκευση {name}"
 }

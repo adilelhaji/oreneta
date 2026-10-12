@@ -433,6 +433,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.backupPickFolder()
 	case "thunderbird.pickFolder":
 		return a.thunderbirdPickFolder()
+	case "notes.pickAttachment":
+		return a.notesPickAttachment()
+	case "notes.saveAttachmentAs":
+		return a.notesSaveAttachmentAs(payload)
 	case "people.exportVcf":
 		return a.peopleExportVcf(payload)
 	case "people.importVcf":
@@ -569,6 +573,7 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"cloud.share", "cloud.revoke", "pop3.retention",
 		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
 		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
+		"notes.attachments", "notes.attach", "notes.removeAttachment",
 		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",
 		"chat.markRead", "chat.send", "chat.retry", "context.person":
 		return a.tasksPassthrough(command, payload)

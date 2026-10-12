@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird profiles",
   "thunderbird.subtitle": "Into the local archive on this computer. Thunderbird’s files are only read, never changed.",
   "thunderbird.summary": "{count, plural, one {# message} other {# messages}} to import. {left} already in the archive and {deleted} deleted in Thunderbird are left out.",
-  "thunderbird.title": "Import from Thunderbird"
+  "thunderbird.title": "Import from Thunderbird",
+  "notes.attachFile": "Attach a file…",
+  "notes.fileSaved": "{name} saved.",
+  "notes.files": "Attached files",
+  "notes.removeFile": "Remove",
+  "notes.removeFileText": "{name} is removed from this note. The copy you attached it from is not touched.",
+  "notes.removeFileTitle": "Remove the file?",
+  "notes.removeNamed": "Remove {name}",
+  "notes.saveFile": "Save {name}"
 }

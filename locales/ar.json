@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "ملفات تعريف Thunderbird",
   "thunderbird.subtitle": "إلى الأرشيف المحلي على هذا الحاسوب. ملفات Thunderbird تُقرأ فقط ولا تُغيَّر أبدًا.",
   "thunderbird.summary": "{count, plural, zero {لا رسائل للاستيراد} one {رسالة واحدة للاستيراد} two {رسالتان للاستيراد} few {# رسائل للاستيراد} many {# رسالة للاستيراد} other {# رسالة للاستيراد}}. تُستثنى {left} موجودة مسبقًا في الأرشيف و{deleted} محذوفة في Thunderbird.",
-  "thunderbird.title": "الاستيراد من Thunderbird"
+  "thunderbird.title": "الاستيراد من Thunderbird",
+  "notes.attachFile": "إرفاق ملف…",
+  "notes.fileSaved": "تم حفظ {name}.",
+  "notes.files": "الملفات المرفقة",
+  "notes.removeFile": "إزالة",
+  "notes.removeFileText": "سيُزال {name} من هذه الملاحظة. أما النسخة التي أرفقته منها فلن تتأثر.",
+  "notes.removeFileTitle": "إزالة الملف؟",
+  "notes.removeNamed": "إزالة {name}",
+  "notes.saveFile": "حفظ {name}"
 }

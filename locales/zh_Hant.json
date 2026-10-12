@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird 設定檔",
   "thunderbird.subtitle": "匯入這台電腦上的本機封存庫。Thunderbird 的檔案只會讀取，不會變更。",
   "thunderbird.summary": "將匯入 {count, plural, other {# 封郵件}}。已在封存庫中的 {left} 封和在 Thunderbird 中已刪除的 {deleted} 封將略過。",
-  "thunderbird.title": "從 Thunderbird 匯入"
+  "thunderbird.title": "從 Thunderbird 匯入",
+  "notes.attachFile": "附加檔案…",
+  "notes.fileSaved": "已儲存 {name}。",
+  "notes.files": "附加的檔案",
+  "notes.removeFile": "移除",
+  "notes.removeFileText": "{name} 將從這則記事中移除。你附加時使用的原始檔案不受影響。",
+  "notes.removeFileTitle": "要移除檔案嗎？",
+  "notes.removeNamed": "移除 {name}",
+  "notes.saveFile": "儲存 {name}"
 }

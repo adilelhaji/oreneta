@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird-profiler",
   "thunderbird.subtitle": "Till det lokala arkivet på den här datorn. Thunderbirds filer läses bara, ändras aldrig.",
   "thunderbird.summary": "{count, plural, one {# meddelande} other {# meddelanden}} att importera. {left} som redan finns i arkivet och {deleted} som raderats i Thunderbird utelämnas.",
-  "thunderbird.title": "Importera från Thunderbird"
+  "thunderbird.title": "Importera från Thunderbird",
+  "notes.attachFile": "Bifoga en fil…",
+  "notes.fileSaved": "{name} sparades.",
+  "notes.files": "Bifogade filer",
+  "notes.removeFile": "Ta bort",
+  "notes.removeFileText": "{name} tas bort från den här anteckningen. Originalfilen som du bifogade den från påverkas inte.",
+  "notes.removeFileTitle": "Ta bort filen?",
+  "notes.removeNamed": "Ta bort {name}",
+  "notes.saveFile": "Spara {name}"
 }

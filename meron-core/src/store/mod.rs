@@ -50,6 +50,7 @@ pub mod local_people;
 pub mod task_lists;
 pub mod person_links;
 pub mod notes;
+pub mod note_attachments;
 pub mod attachment_list;
 mod settings;
 pub mod local_drafts;

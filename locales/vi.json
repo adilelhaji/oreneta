@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Hồ sơ Thunderbird",
   "thunderbird.subtitle": "Vào kho lưu trữ cục bộ trên máy tính này. Các tệp của Thunderbird chỉ được đọc, không bao giờ bị thay đổi.",
   "thunderbird.summary": "{count, plural, other {# thư}} sẽ được nhập. Bỏ qua {left} thư đã có trong kho lưu trữ và {deleted} thư đã xóa trong Thunderbird.",
-  "thunderbird.title": "Nhập từ Thunderbird"
+  "thunderbird.title": "Nhập từ Thunderbird",
+  "notes.attachFile": "Đính kèm tệp…",
+  "notes.fileSaved": "Đã lưu {name}.",
+  "notes.files": "Tệp đính kèm",
+  "notes.removeFile": "Gỡ bỏ",
+  "notes.removeFileText": "{name} sẽ được gỡ khỏi ghi chú này. Tệp gốc mà bạn đã đính kèm không bị ảnh hưởng.",
+  "notes.removeFileTitle": "Gỡ bỏ tệp này?",
+  "notes.removeNamed": "Gỡ bỏ {name}",
+  "notes.saveFile": "Lưu {name}"
 }

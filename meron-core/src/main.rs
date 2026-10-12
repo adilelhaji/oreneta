@@ -3896,6 +3896,31 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             store::notes::purge(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
             Ok(json!({ "ok": true }))
         }
+        // Files attached to notes (ADR-0042), kept in the store.
+        "notes.attachments" => {
+            Ok(json!({ "attachments": store::note_attachments::list(&engine.db.lock().unwrap(), &req_str(p, "note_id")?)? }))
+        }
+        "notes.attach" => {
+            let note = req_str(p, "note_id")?;
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let db = engine.db.clone();
+            let attached = tokio::task::spawn_blocking(move || {
+                store::note_attachments::attach(&db.lock().unwrap(), &note, &path, now_seconds())
+            })
+            .await??;
+            Ok(json!({ "attachment": attached }))
+        }
+        "notes.removeAttachment" => {
+            store::note_attachments::remove(&engine.db.lock().unwrap(), &req_str(p, "id")?)?;
+            Ok(json!({ "ok": true }))
+        }
+        "notes.saveAttachment" => {
+            let id = req_str(p, "id")?;
+            let path = std::path::PathBuf::from(req_str(p, "path")?);
+            let db = engine.db.clone();
+            let bytes = tokio::task::spawn_blocking(move || store::note_attachments::save(&db.lock().unwrap(), &id, &path)).await??;
+            Ok(json!({ "saved": true, "bytes": bytes }))
+        }
         "tasks.createList" => {
             let id = store::task_lists::create_list(&engine.db.lock().unwrap(), &req_str(p, "name")?, now_seconds())?;
             Ok(json!({ "ok": true, "id": id }))

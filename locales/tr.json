@@ -2349,5 +2349,13 @@
   "thunderbird.profiles": "Thunderbird profilleri",
   "thunderbird.subtitle": "Bu bilgisayardaki yerel arşive. Thunderbird’ün dosyaları yalnızca okunur, asla değiştirilmez.",
   "thunderbird.summary": "İçe aktarılacak {count, plural, one {# ileti} other {# ileti}}. Arşivde zaten bulunan {left} ileti ve Thunderbird’de silinmiş {deleted} ileti dışarıda bırakılır.",
-  "thunderbird.title": "Thunderbird’den içe aktar"
+  "thunderbird.title": "Thunderbird’den içe aktar",
+  "notes.attachFile": "Dosya ekle…",
+  "notes.fileSaved": "{name} kaydedildi.",
+  "notes.files": "Ekli dosyalar",
+  "notes.removeFile": "Kaldır",
+  "notes.removeFileText": "{name} bu nottan kaldırılır. Eklediğiniz özgün dosyaya dokunulmaz.",
+  "notes.removeFileTitle": "Dosya kaldırılsın mı?",
+  "notes.removeNamed": "{name} dosyasını kaldır",
+  "notes.saveFile": "{name} dosyasını kaydet"
 }
