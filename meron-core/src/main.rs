@@ -2497,6 +2497,9 @@ async fn prepare_recent_cache(
 
 async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::Result<Value> {
     let p = &req.params;
+    // A proxy setting that could not be read at start is read again before
+    // each command, so a passing failure does not hold connections (#192).
+    proxy::reload_if_unreadable(&engine.db.lock().unwrap());
     meron_core::graph::mail::guard_command(&engine.db.lock().unwrap(),&req.method,p)?;
     match req.method.as_str() {
         "ping" => Ok(ping_response()),

@@ -200,7 +200,7 @@ fn status_error(status: u16, detail: &str) -> CloudError {
 /// the person chose.
 fn agent() -> std::result::Result<ureq::Agent, CloudError> {
     let proxy = crate::proxy::global().map_err(|e| CloudError::Network {
-        detail: format!("the proxy setting cannot be used: {e:#}"),
+        detail: format!("{e:#}"),
     })?;
     agent_with(proxy.as_ref())
 }

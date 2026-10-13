@@ -535,10 +535,14 @@ fn init_mobile_core(data_dir: &str, db_key: Option<&str>) -> serde_json::Value {
     // has stateless command paths that connect without ever building an Engine
     // (background syncs, one-off sends), and `init` is the one point they all
     // pass through.
-    let _ = crate::protocol::with_mobile_db(data_dir, |conn| {
+    // A store that cannot be opened leaves the setting unknown, never "off":
+    // connections wait until a later command can read it (#192).
+    if let Err(err) = crate::protocol::with_mobile_db(data_dir, |conn| {
         crate::proxy::load_global(&conn).map_err(|err| err.to_string())?;
         Ok(json!({ "ok": true }))
-    });
+    }) {
+        crate::proxy::publish_unreadable(&err);
+    }
     // Route core logs to the platform over the event channel; the host forwards
     // `log` events to os_log / Logcat. Without this the core's logs (which use
     // `eprintln!` on desktop) are invisible on device.

@@ -26,7 +26,7 @@ use std::sync::RwLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-/// Settings-table key holding the app-wide proxy (see [`parse_global`]).
+/// Settings-table key holding the app-wide proxy (see [`strict_global`]).
 pub const SETTING_KEY: &str = "proxy";
 
 /// How to speak to the proxy server.
@@ -69,7 +69,8 @@ impl ProxyConfig {
     fn from_json(v: &Value) -> Option<Self> {
         let kind = ProxyKind::parse(v["mode"].as_str().unwrap_or(""))?;
         let host = v["host"].as_str().unwrap_or("").trim().to_string();
-        let port = v["port"].as_u64().unwrap_or(0) as u16;
+        // Out of range is not a port: 70000 must not become 4464.
+        let port = u16::try_from(v["port"].as_u64().unwrap_or(0)).unwrap_or(0);
         // A half-filled form is not a proxy. Treating it as one would silently
         // send every connection to port 0 on the empty host.
         if host.is_empty() || port == 0 {
@@ -101,7 +102,7 @@ impl ProxyConfig {
 }
 
 /// What an individual account does about proxying.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum ProxyChoice {
     /// Follow the app-wide setting. The default, and what every pre-existing
     /// account deserializes to.
@@ -120,11 +121,16 @@ pub enum ProxyChoice {
 
 impl ProxyChoice {
     pub fn from_json(v: &Value) -> Self {
-        match v["mode"].as_str().unwrap_or("global") {
-            "direct" => ProxyChoice::Direct,
-            "global" => ProxyChoice::Global,
-            // Anything else is a proxy kind; one that cannot be used is kept,
-            // and refused when the account connects.
+        // No proxy entry at all is the default: follow the app-wide setting.
+        if v.is_null() || v.as_object().is_some_and(|o| o.is_empty()) {
+            return ProxyChoice::Global;
+        }
+        match v.get("mode").and_then(Value::as_str) {
+            Some("direct") => ProxyChoice::Direct,
+            Some("global") => ProxyChoice::Global,
+            // Anything else is a proxy kind; one that cannot be used (or that
+            // cannot even be read as one) is kept, and refused when the
+            // account connects.
             _ => ProxyConfig::from_json(v)
                 .map_or_else(|| ProxyChoice::Unusable(v.clone()), ProxyChoice::Custom),
         }
@@ -155,19 +161,22 @@ impl ProxyChoice {
 /// Why a stored proxy setting cannot be used.
 fn unusable(v: &Value, whose: &str) -> anyhow::Error {
     match v.get("mode").and_then(Value::as_str) {
-        Some("http" | "socks5") => anyhow!("{whose} is incomplete (host or port missing)"),
-        Some(other) => anyhow!("{whose} has an unknown mode {other:?}"),
-        None => anyhow!("{whose} has no mode"),
+        Some("http" | "socks5") => anyhow!("{whose} is incomplete (server or port missing)"),
+        Some(other) => anyhow!("{whose} has an unknown type {other:?}"),
+        None => anyhow!("{whose} cannot be read as a proxy setting"),
     }
 }
 
-/// The app-wide proxy as published: off, a proxy, or a proxy that was chosen
-/// but cannot be used, with the reason.
+/// The app-wide proxy as published: off, a proxy, a proxy that was chosen
+/// but cannot be used, or a setting that could not be read, with the reason.
+/// The last is read again before connections (see [`reload_if_unreadable`]),
+/// so a passing failure at start does not hold connections for the session.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum GlobalProxy {
     Off,
     On(ProxyConfig),
     Unusable(String),
+    Unreadable(String),
 }
 
 static GLOBAL: RwLock<GlobalProxy> = RwLock::new(GlobalProxy::Off);
@@ -210,7 +219,29 @@ pub fn global() -> Result<Option<ProxyConfig>> {
     match &*GLOBAL.read().unwrap_or_else(|err| err.into_inner()) {
         GlobalProxy::Off => Ok(None),
         GlobalProxy::On(cfg) => Ok(Some(cfg.clone())),
-        GlobalProxy::Unusable(reason) => Err(anyhow!("{reason}")),
+        GlobalProxy::Unusable(reason) | GlobalProxy::Unreadable(reason) => Err(anyhow!("{reason}")),
+    }
+}
+
+/// Mark the app-wide proxy as unknown, because its setting could not be read
+/// (the store did not open, for one). Every connection that would use it is
+/// refused until a read succeeds.
+pub(crate) fn publish_unreadable(reason: &str) {
+    publish(GlobalProxy::Unreadable(format!(
+        "the app's proxy setting could not be read: {reason}"
+    )));
+}
+
+/// Read the setting again if the last attempt failed. Cheap otherwise: called
+/// before each command and connection, it only touches the store while the
+/// setting is unknown.
+pub fn reload_if_unreadable(conn: &rusqlite::Connection) {
+    let unreadable = matches!(
+        &*GLOBAL.read().unwrap_or_else(|err| err.into_inner()),
+        GlobalProxy::Unreadable(_)
+    );
+    if unreadable {
+        let _ = publish_from_store(conn);
     }
 }
 
@@ -236,9 +267,7 @@ fn publish_from_store(conn: &rusqlite::Connection) -> Result<()> {
         // Not knowing whether a proxy was chosen is not knowing that none
         // was: hold every connection until the setting can be read.
         Err(err) => {
-            publish(GlobalProxy::Unusable(format!(
-                "the proxy setting could not be read: {err:#}"
-            )));
+            publish_unreadable(&format!("{err:#}"));
             Err(err)
         }
     }
@@ -249,12 +278,17 @@ fn publish_from_store(conn: &rusqlite::Connection) -> Result<()> {
 /// proxy is `Some`, and a proxy mode with a missing host or port, or an unknown
 /// mode, is an error instead of a silent direct connection.
 pub fn strict_global(v: &Value) -> Result<Option<ProxyConfig>> {
-    match v.get("mode").and_then(Value::as_str).unwrap_or("off") {
-        "off" | "" => Ok(None),
-        "http" | "socks5" => ProxyConfig::from_json(v)
+    // Nothing saved is off. Anything saved that cannot be read as a setting
+    // (not an object, a mode that is not text) is not taken for "off".
+    if v.is_null() {
+        return Ok(None);
+    }
+    match v.get("mode").and_then(Value::as_str) {
+        Some("off" | "") => Ok(None),
+        Some("http" | "socks5") => ProxyConfig::from_json(v)
             .map(Some)
-            .ok_or_else(|| unusable(v, "the proxy setting")),
-        _ => Err(unusable(v, "the proxy setting")),
+            .ok_or_else(|| unusable(v, "the app's proxy")),
+        _ => Err(unusable(v, "the app's proxy")),
     }
 }
 
@@ -602,9 +636,7 @@ mod tests {
 
     #[test]
     fn custom_proxy_wins_over_global_and_direct_disables_it() {
-        let _guard = TEST_GLOBAL_LOCK
-            .write()
-            .unwrap_or_else(|err| err.into_inner());
+        let _slot = GlobalSlot::take();
         set_global(Some(socks5("global.example", 1080)));
         let custom = ProxyConfig {
             kind: ProxyKind::Http,
@@ -626,19 +658,66 @@ mod tests {
         assert_eq!(ProxyChoice::Global.resolve().unwrap(), None);
     }
 
-    #[test]
-    fn an_unusable_app_proxy_refuses_every_connection_instead_of_going_direct() {
-        let _guard = TEST_GLOBAL_LOCK
-            .write()
-            .unwrap_or_else(|err| err.into_inner());
-        for stored in [
+    /// Holds the test lock and leaves the app-wide proxy off when dropped, even
+    /// if an assertion fails, so no later test inherits a broken proxy.
+    struct GlobalSlot(#[allow(dead_code)] std::sync::RwLockWriteGuard<'static, ()>);
+
+    impl GlobalSlot {
+        fn take() -> Self {
+            GlobalSlot(TEST_GLOBAL_LOCK.write().unwrap_or_else(|err| err.into_inner()))
+        }
+    }
+
+    impl Drop for GlobalSlot {
+        fn drop(&mut self) {
+            set_global(None);
+        }
+    }
+
+    /// Stored values that are not a usable app-wide proxy. None of them may
+    /// read as "off".
+    fn unusable_settings() -> Vec<Value> {
+        vec![
             json!({ "mode": "socks5", "host": "h" }),
             json!({ "mode": "http", "port": 3128 }),
             json!({ "mode": "ftp", "host": "h", "port": 21 }),
-        ] {
+            json!({ "mode": "socks5", "host": "h", "port": 70000 }),
+            json!({ "mode": 5 }),
+            json!({ "host": "h", "port": 1080 }),
+            json!("socks5"),
+            json!(5),
+            json!([]),
+        ]
+    }
+
+    #[test]
+    fn only_nothing_saved_or_off_reads_as_no_proxy() {
+        assert_eq!(strict_global(&Value::Null).unwrap(), None);
+        assert_eq!(strict_global(&json!({ "mode": "off", "host": "h", "port": 1 })).unwrap(), None);
+        assert_eq!(strict_global(&json!({ "mode": "" })).unwrap(), None);
+        for stored in unusable_settings() {
+            let err = strict_global(&stored).unwrap_err().to_string();
+            assert!(err.starts_with("the app's proxy"), "{stored}: {err}");
+        }
+    }
+
+    #[test]
+    fn an_account_proxy_that_cannot_be_read_is_refused_too() {
+        assert_eq!(ProxyChoice::from_json(&json!({})), ProxyChoice::Global);
+        for stored in [json!({ "mode": 5 }), json!({ "mode": "" }), json!({ "mode": "off" }), json!("x")] {
+            let choice = ProxyChoice::from_json(&stored);
+            assert_eq!(choice, ProxyChoice::Unusable(stored.clone()), "{stored}");
+            assert!(choice.resolve().is_err(), "{stored}");
+        }
+    }
+
+    #[test]
+    fn an_unusable_app_proxy_refuses_every_connection_instead_of_going_direct() {
+        let _slot = GlobalSlot::take();
+        for stored in unusable_settings() {
             publish_global(&stored);
             let err = global().unwrap_err().to_string();
-            assert!(err.starts_with("the proxy setting"), "{err}");
+            assert!(err.starts_with("the app's proxy"), "{stored}: {err}");
             assert!(agent().is_err(), "no HTTP agent, direct or otherwise");
             assert!(ProxyChoice::Global.resolve().is_err(), "accounts that follow it are refused too");
             // An account's own choice is its own.
@@ -654,28 +733,78 @@ mod tests {
 
         publish_global(&json!({ "mode": "socks5", "host": "h", "port": 1080 }));
         assert_eq!(global().unwrap(), Some(socks5("h", 1080)));
-        set_global(None);
     }
 
     #[test]
-    fn a_proxy_setting_that_cannot_be_read_holds_every_connection() {
-        let _guard = TEST_GLOBAL_LOCK
-            .write()
-            .unwrap_or_else(|err| err.into_inner());
-        set_global(None);
-        // A store without the settings table: the setting cannot be read.
+    fn a_proxy_setting_that_cannot_be_read_holds_connections_until_it_can() {
+        // Prepared before taking the lock, to keep the time the slot is held
+        // short: a store without the settings table, and one with it.
+        let unreadable = rusqlite::Connection::open_in_memory().unwrap();
+        let readable = rusqlite::Connection::open_in_memory().unwrap();
+        crate::store::run_migrations(&readable).unwrap();
+
+        let _slot = GlobalSlot::take();
         // (`load_global` itself takes the lock this test holds.)
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        assert!(publish_from_store(&conn).is_err());
+        assert!(publish_from_store(&unreadable).is_err());
         let err = global().unwrap_err().to_string();
-        assert!(err.starts_with("the proxy setting could not be read"), "{err}");
+        assert!(err.starts_with("the app's proxy setting could not be read"), "{err}");
         assert!(agent().is_err());
 
-        // Once it can be read, what it says applies.
-        crate::store::run_migrations(&conn).unwrap();
-        publish_from_store(&conn).unwrap();
+        // Still unreadable: still held.
+        reload_if_unreadable(&unreadable);
+        assert!(global().is_err());
+        // Read again before a later connection, it applies.
+        reload_if_unreadable(&readable);
         assert_eq!(global().unwrap(), None);
-        set_global(None);
+
+        // A store that did not open at all is unknown too, not "off".
+        publish_unreadable("the store did not open");
+        assert!(global().unwrap_err().to_string().contains("the store did not open"));
+        reload_if_unreadable(&readable);
+        assert_eq!(global().unwrap(), None);
+
+        // An incomplete proxy is not re-read: it is what was saved.
+        publish_global(&json!({ "mode": "socks5", "host": "h" }));
+        reload_if_unreadable(&readable);
+        assert!(global().is_err());
+    }
+
+    #[tokio::test]
+    async fn an_account_with_an_unusable_proxy_opens_no_socket() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let creds = crate::imap::Creds {
+            host: "127.0.0.1".into(),
+            port: listener.local_addr().unwrap().port(),
+            user: "pau".into(),
+            password: "secret".into(),
+            tls: false,
+            starttls: false,
+            smtp_host: String::new(),
+            smtp_port: 587,
+            smtp_tls: true,
+            smtp_starttls: false,
+            auth_type: "plain".into(),
+            access_token: None,
+            refresh_token: None,
+            token_expires_at: 0,
+            oauth_client_id: String::new(),
+            oauth_client_secret: String::new(),
+            oauth_token_url: String::new(),
+            oauth_scope: String::new(),
+            proxy: ProxyChoice::from_json(&json!({ "mode": "socks5", "host": "proxy.example" })),
+            cert_pin: None,
+            smtp_cert_pin: None,
+            ews_url: String::new(),
+            delegate_account_id: String::new(),
+            target_mailbox: String::new(),
+        };
+        let err = crate::imap::connect(&creds).await.err().expect("refused");
+        assert!(format!("{err:#}").contains("this account's proxy is incomplete"), "{err:#}");
+        assert!(
+            matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+            "the mail server was never contacted"
+        );
     }
 
     /// Accept one connection, run `handler` against it, and hand back what the

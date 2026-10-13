@@ -3236,6 +3236,25 @@ fn parse_thread_id_with_request_folder_overrides_encoded_folder() {
 }
 
 #[test]
+fn mobile_autodiscover_refuses_to_look_up_through_an_unusable_proxy() {
+    let _lock = crate::proxy::TEST_GLOBAL_LOCK.write().unwrap_or_else(|err| err.into_inner());
+    crate::proxy::publish_global(&serde_json::json!({ "mode": "socks5", "host": "proxy.example" }));
+    let refused = invoke_mobile_protocol_json(
+        r#"{"id":97,"method":"account.autodiscover","params":{"email":"me@unlisted.example"}}"#,
+        None,
+    );
+    // A known provider needs no network, so it is still answered.
+    let known = invoke_mobile_protocol_json(
+        r#"{"id":98,"method":"account.autodiscover","params":{"email":"me@gmail.com"}}"#,
+        None,
+    );
+    crate::proxy::set_global(None);
+    let message = refused["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("the app's proxy is incomplete"), "{refused}");
+    assert_eq!(known["result"]["source"], "known");
+}
+
+#[test]
 fn mobile_autodiscover_returns_known_provider() {
     let gmail = invoke_mobile_protocol_json(
         r#"{"id":96,"method":"account.autodiscover","params":{"email":"me@gmail.com"}}"#,

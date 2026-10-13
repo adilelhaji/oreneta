@@ -360,6 +360,9 @@ impl Engine {
     }
 
     pub async fn ensure_valid_creds(&self, account: &str) -> anyhow::Result<imap::Creds> {
+        // Background syncs connect without a command: read again here a proxy
+        // setting that could not be read before (#192).
+        crate::proxy::reload_if_unreadable(&self.db.lock().unwrap());
         let mut accounts = self.accounts.lock().await;
         // Lazily hydrate accounts added out-of-band (the mobile host adds/edits
         // accounts through the stateless command path, not this Engine, so a
