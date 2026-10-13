@@ -81,10 +81,10 @@
     <td>oauth2.googleapis.com; login.microsoftonline.com</td>
     <td>The refresh token Oreneta was given when you signed in</td></tr>
     <tr><td><strong>Pictures in feeds</strong>, on every feed sync: the
-    pictures in new items and the feed's own icon. On by default for feeds;
-    if you turn off remote pictures for a feed account, neither is fetched.
-    Known trackers are never fetched, and the reader says which ones it
-    left out.</td>
+    pictures in the feed's items that are not saved yet, and the feed's own
+    icon. On by default for feeds; if you turn off remote pictures for a
+    feed account, neither is fetched. Known trackers are never fetched; the
+    reader says which pictures and videos it left out of an item.</td>
     <td>The sites that host the pictures and the icon, which the feed
     names</td>
     <td>Your IP address and the picture's address, even if you never open
@@ -184,8 +184,8 @@
   event text and opened in your browser; Oreneta does not contact those
   services itself. A Google Meet link is created through Google Calendar
   only when you tick it.</p>
-  <p>If you set a proxy, connections for your accounts, feeds (with their
-  pictures and icons), file links, chat files, translation downloads, the
+  <p>If you set a proxy, connections for your accounts, feeds (and the
+  pictures and icons saved from them during a sync), file links, chat files, translation downloads, the
   tracker list, the changelog and the assistant go through it, and so do
   the sign-in exchange and token refreshes with Google or Microsoft,
   finding server settings, your account picture, and the update check and
@@ -203,7 +203,8 @@
   downloaded, Oreneta keeps its address and your web view loads it from
   there each time, without the proxy.</p>
   <p>Finding server settings skips the DNS lookup while a proxy is set,
-  because DNS cannot go through it. Pictures shown in mail,
+  because DNS cannot go through it. Pictures shown in mail, pictures and
+  videos shown in a feed item that are not saved on your computer,
   correspondents' pictures, and the sign-in page that opens in your
   browser do not use the app's proxy: your web view and browser connect on
   their own.</p>

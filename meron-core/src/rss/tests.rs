@@ -975,12 +975,14 @@ fn add_fetches_parses_and_syncs_over_http() {
 
 // ---- Tracking protection and remote pictures (#191) -------------------------
 
-/// A small list for these tests: `localhost` and `tracker.example` are
-/// trackers, `127.0.0.1` is not. The tests pass it in, so they never depend on
-/// the list the process happens to hold.
+/// A small list for these tests: `tracker.example`, and the paths
+/// `/tracker.png` and `/tracker-icon.png` on any host. The trackers sit on
+/// the same local server as the ordinary pictures, so a tracker fetched by
+/// mistake shows up in the server's log. The tests pass the list in, so they
+/// never depend on the list the process happens to hold.
 fn tracker_list() -> std::sync::Arc<crate::privacy::FilterSet> {
     std::sync::Arc::new(crate::privacy::FilterSet::parse(
-        "[Adblock Plus 2.0]\n! Title: EasyPrivacy\n! Version: test\n||localhost^\n||tracker.example^\n",
+        "[Adblock Plus 2.0]\n! Title: EasyPrivacy\n! Version: test\n||tracker.example^\n/tracker.png\n/tracker-icon.png\n",
     ))
 }
 
@@ -1096,7 +1098,7 @@ fn caching_feed_pictures_never_fetches_a_tracker() {
             summary: String::new(),
             content: String::new(),
             images: vec![
-                RssMedia { url: format!("http://localhost:{port}/tracker.png"), key: None },
+                RssMedia { url: format!("http://127.0.0.1:{port}/tracker.png"), key: None },
                 RssMedia { url: format!("http://127.0.0.1:{port}/fine.png"), key: None },
             ],
             videos: Vec::new(),
@@ -1117,9 +1119,13 @@ fn caching_feed_pictures_never_fetches_a_tracker() {
 fn a_feed_icon_on_the_tracker_list_is_not_fetched() {
     use_test_media_dir();
     let (port, asked) = serve_counting(String::new());
-    let icon = format!("http://localhost:{port}/icon.png");
+    let icon = format!("http://127.0.0.1:{port}/tracker-icon.png");
     assert_eq!(cache_feed_icon("rss-trackers", "feed-icon", &icon, &tracker_list()), None);
     assert!(asked.lock().unwrap().is_empty());
+    // An ordinary icon on the same server is still fetched.
+    let fine = format!("http://127.0.0.1:{port}/icon.png");
+    assert!(cache_feed_icon("rss-trackers", "feed-icon", &fine, &tracker_list()).is_some());
+    assert_eq!(*asked.lock().unwrap(), vec!["/icon.png".to_string()]);
 }
 
 fn feed_with_picture_and_icon(port: u16) -> String {
@@ -1174,4 +1180,36 @@ fn with_remote_pictures_off_a_sync_fetches_neither_pictures_nor_the_icon() {
     let mut fetched = asked.lock().unwrap().clone();
     fetched.sort();
     assert_eq!(fetched, vec!["/icon.png".to_string(), "/pic.png".to_string()]);
+    let (icon_key, picture_key) = saved_keys(&db, &account_id);
+    assert!(!icon_key.is_empty(), "the icon is saved");
+    assert!(crate::parse::media_root().join(&icon_key).is_file());
+    let picture_key = picture_key.expect("the picture is saved");
+    assert!(crate::parse::media_root().join(&picture_key).is_file());
+
+    // Turned off again, the icon already on disk is still shown, and nothing
+    // is fetched.
+    store::set_load_remote_images(&db.lock().unwrap(), &account_id, false).unwrap();
+    sync_account(&db, &account_id).unwrap();
+    assert_eq!(saved_keys(&db, &account_id).0, icon_key);
+    assert_eq!(asked.lock().unwrap().len(), 2, "no new request: {:?}", asked.lock().unwrap());
+}
+
+/// The feed's saved icon key, and the saved key of its item's first picture.
+fn saved_keys(db: &Mutex<Connection>, account: &str) -> (String, Option<String>) {
+    let conn = db.lock().unwrap();
+    let icon: String = conn
+        .query_row(
+            "SELECT COALESCE(json_extract(json, '$.icon_key'), '') FROM subscriptions WHERE account = ?1",
+            params![account],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let picture: Option<String> = conn
+        .query_row(
+            "SELECT json_extract(json, '$.images[0].key') FROM messages WHERE account = ?1",
+            params![account],
+            |r| r.get(0),
+        )
+        .unwrap();
+    (icon, picture)
 }

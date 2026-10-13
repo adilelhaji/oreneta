@@ -372,7 +372,10 @@ fn sync_subscription(db: &Mutex<Connection>, sub: &Subscription) -> Result<u32> 
     let icon_key = if images_enabled {
         cache_feed_icon(&sub.account, &sub.id, &icon_url, &trackers)
     } else {
-        existing_icon_key(&crate::parse::media_root(), &sub.account, &sub.id, icon_url.trim())
+        let icon_url = icon_url.trim();
+        (!icon_url.is_empty() && trackers.blocking_rule(icon_url).is_none())
+            .then(|| existing_icon_key(&crate::parse::media_root(), &sub.account, &sub.id, icon_url))
+            .flatten()
     }
     .unwrap_or_default();
     let title = if sub.title.is_empty() {
