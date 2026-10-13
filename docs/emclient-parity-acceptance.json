@@ -214,8 +214,8 @@
       "issue": 114,
       "section": "General/Notifications",
       "outcome": "Sounds, badges, tray and quiet-state behavior",
-      "status": "partial",
-      "present": "Native new-mail notifications opening the thread, per-account mute, tray hide/show and optional unread account badges exist; notification sounds and a quiet/do-not-disturb state are absent",
+      "status": "implemented-unverified",
+      "present": "Native new-mail notifications opening the thread, per-account mute, tray, unread badges, optional synthesized sounds for mail and reminders, do not disturb (1 hour, until tomorrow, until off) and weekly quiet hours gating popups in the Go bridge (ADR-0049) are tested; native Windows check remains",
       "code": "notify.go",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -228,6 +228,18 @@
           {
             "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
             "result": "notify_test.go"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/lib/quietHours.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/states/notifications.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "notify_quiet_test.go"
           }
         ],
         "native": [],
@@ -389,7 +401,7 @@
       "section": "General/Folders",
       "outcome": "Folder rules, favorites, colors and account-scoped operations",
       "status": "partial",
-      "present": "Account folder navigation and a folder created here joining the tree before the next sync are tested; folder favorites, colors and drag/drop of folders are absent",
+      "present": "Folder navigation and creation, favorites from any account with ordering, named contrast-checked folder colors, and moving folders by drag or menu with one IMAP RENAME (ADR-0050) are tested, including a real maddy server; moving folders on Exchange/Graph is absent",
       "code": "frontend/src/components/sidenav/MailNavigation.tsx",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -406,6 +418,18 @@
           {
             "sha": "170ae7bdc66484542596933475c88fedb5725c6a",
             "result": "meron-core/src/store/tests.rs"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/lib/folderMoves.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/states/folderPrefs.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "meron-core/src/folder_move.rs"
           }
         ],
         "native": [],
@@ -793,7 +817,7 @@
       "section": "Calendar/General; Weather",
       "outcome": "Calendar configuration and weather availability/privacy policy",
       "status": "partial",
-      "present": "Agenda/week/month views with clock-change handling, local, Google, Exchange and CalDAV calendars (ADR-0018) and .ics import/export are tested; calendar general settings (week start, work hours) and weather are absent",
+      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; weather is absent pending an owner decision",
       "code": "meron-core/src/calendar/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -814,6 +838,14 @@
           {
             "sha": "244587aacb8661f582db51afa7f6d3282aff37c5",
             "result": "meron-core/src/calendar/import/tests.rs"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/lib/calendarWeek.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/components/calendar/WeekStart.test.tsx"
           }
         ],
         "native": [],
