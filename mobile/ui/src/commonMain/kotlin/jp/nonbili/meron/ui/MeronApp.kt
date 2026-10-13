@@ -136,6 +136,8 @@ import jp.nonbili.meron.shared.MobileMailCommandClient
 import jp.nonbili.meron.shared.MoveRssFeedParams
 import jp.nonbili.meron.shared.MoveThreadParams
 import jp.nonbili.meron.shared.OAuthAuthorizationRequest
+import jp.nonbili.meron.shared.PIM_REFRESH_TICK_MILLIS
+import jp.nonbili.meron.shared.PimRefreshParams
 import jp.nonbili.meron.shared.RemoveRssFeedParams
 import jp.nonbili.meron.shared.RssMarkReadParams
 import jp.nonbili.meron.shared.RssMarkStarredParams
@@ -181,6 +183,8 @@ import jp.nonbili.meron.shared.parseStorageUsageResponse
 import jp.nonbili.meron.shared.parseThreadListPage
 import jp.nonbili.meron.shared.parseThreadListResponse
 import jp.nonbili.meron.shared.parseThreadReadPage
+import jp.nonbili.meron.shared.pimRefreshMaySync
+import jp.nonbili.meron.shared.pimRefreshTickSyncs
 import jp.nonbili.meron.shared.recipientTail
 import jp.nonbili.meron.shared.replaceRecipientTail
 import jp.nonbili.meron.shared.toReplyMailParams
@@ -461,7 +465,17 @@ private fun MeronMobileScreenContent(
                             // The core refreshed a calendar window behind an
                             // earlier read; the agenda rereads its cache.
                             "calendar.synced" -> {
+                                clearCalendarSyncError(event.detailJson.jsonStringValue("account"))
                                 scope.launch { reloadCalendarAfterSync() }
+                            }
+
+                            // ...or could not: the agenda keeps what it had
+                            // and says so above it.
+                            "calendar.syncError" -> {
+                                noteCalendarSyncError(
+                                    event.detailJson.jsonStringValue("account"),
+                                    event.detailJson.jsonStringValue("message"),
+                                )
                             }
 
                             // The deferred sync tail (body prefetch, Sent/Drafts
@@ -530,6 +544,20 @@ private fun MeronMobileScreenContent(
                         syncFirst = true,
                     )
                 }
+            }
+        }
+        // Calendars, address books and reminders while the app is open
+        // (ADR-0045): a reminder look every minute, and a read of whatever is
+        // due every quarter hour. The network part follows the same rule as
+        // mail's own automatic checks (pimRefreshMaySync); reminders need none.
+        LaunchedEffect(coreLoaded, pollIntervalMinutes) {
+            if (!coreLoaded) return@LaunchedEffect
+            val maySync = pimRefreshMaySync(mobileHost.supportsBackgroundPush, pollIntervalMinutes)
+            var tick = 0L
+            while (true) {
+                runPimRefresh(PimRefreshParams(sync = maySync && pimRefreshTickSyncs(tick)))
+                tick += 1
+                delay(PIM_REFRESH_TICK_MILLIS)
             }
         }
         // Refresh the visible mailbox whenever the app comes back to the

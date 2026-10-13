@@ -3740,3 +3740,76 @@ pub(crate) fn seed_mobile_password(data_dir: &std::path::Path, account: &str) {
     let secrets = Secrets { password: "secret".into(), ..Default::default() };
     store::upsert_secret(&conn, account, &serde_json::to_string(&secrets).unwrap()).unwrap();
 }
+
+/// The phone's periodic refresh (`pim.refresh`) raises a reminder once, from
+/// the same shared code the desktop's minute watch uses, and leaves accounts
+/// with nothing remote alone. The book commands answer through the shared
+/// address-book code too.
+#[test]
+fn mobile_pim_refresh_raises_reminders_and_routes_book_sync() {
+    let data_dir = unique_data_dir("pim-refresh");
+    let account = "rem@example.com";
+    seed_mobile_account(&data_dir, account);
+    seed_mobile_password(&data_dir, account);
+    let dir = data_dir.to_str().unwrap();
+    let ok = |method: &str, params: Value| {
+        let answer = invoke_mobile_protocol_json(&json!({"id": 1, "method": method, "params": params}).to_string(), Some(dir));
+        assert!(answer.get("error").is_none(), "{method}: {answer}");
+        answer["result"].clone()
+    };
+    let local = ok("calendar.createLocal", json!({"account": account, "name": "Home"}))["id"].as_str().unwrap().to_owned();
+    let now = crate::store::now_unix();
+    let start = now + 600;
+    let created = ok("calendar.create", json!({"account": account, "notify": false, "event": {
+        "id": "", "calendar_id": local, "subject": "Dentist", "start": start, "end": start + 3_600,
+        "all_day": false, "is_recurring": false, "description": "", "is_cancelled": false, "free_busy": "",
+        "my_response": "", "attendees": [], "location": "Clinic", "reminder_minutes": 15,
+    }}));
+    let event = created["event"]["id"].as_str().unwrap().to_owned();
+
+    // Nothing remote to read: a plain IMAP account with a local calendar.
+    let first = ok("pim.refresh", json!({"now": now}));
+    assert_eq!(
+        first,
+        json!({
+            "reminders": [{
+                "account": account, "event": event, "subject": "Dentist", "location": "Clinic",
+                "start": start, "all_day": false, "minutes": 15,
+            }],
+            "calendars": [], "books": [],
+        }),
+    );
+    assert_eq!(
+        first["reminders"][0],
+        {
+            let conn = store::open_at(data_dir.join("meron.db")).unwrap();
+            let events = crate::calendar::events_in_window(&conn, account, (now, now + 86_400)).unwrap();
+            crate::pim::reminders::reminder_detail(account, &events[0])
+        },
+        "the desktop's calendar.reminder detail",
+    );
+    let again = ok("pim.refresh", json!({"now": now + 60, "sync": false}));
+    assert_eq!(again["reminders"], json!([]), "given once");
+
+    // `google.contacts.sync` on an account that is not Google: the shared
+    // answer, and the book remembers why.
+    let google = ok("google.contacts.sync", json!({"account": account, "name": account}));
+    assert_eq!(google["ok"], false);
+    assert!(google["error"].as_str().unwrap().contains("not a Google account"), "{google}");
+    let sources = ok("carddav.list", json!({}));
+    assert_eq!(sources["sources"][0]["id"], format!("google-{account}"));
+    assert!(sources["sources"][0]["lastError"].as_str().unwrap().contains("not a Google account"));
+    let resync = ok("carddav.sync", json!({"id": format!("google-{account}")}));
+    assert_eq!(resync["ok"], false);
+
+    // A refresh reads due books; this one failed a moment ago, so it is
+    // left alone until its interval has passed, unless forced.
+    let refreshed = ok("pim.refresh", json!({"now": now + 120}));
+    assert_eq!(refreshed["books"], json!([]));
+    let calendars_only = ok("pim.refresh", json!({"now": now + 120, "force": true, "only": "calendars"}));
+    assert_eq!(calendars_only["books"], json!([]), "a calendar-only run leaves the books");
+    let forced = ok("pim.refresh", json!({"now": now + 120, "force": true, "only": "books"}));
+    assert_eq!(forced["books"][0]["id"], format!("google-{account}"));
+    assert_eq!(forced["books"][0]["ok"], false);
+    let _ = std::fs::remove_dir_all(&data_dir);
+}

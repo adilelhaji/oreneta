@@ -83,6 +83,9 @@ object MobileCommand {
     const val PeopleList = "people.list"
     const val PeopleSave = "people.save"
     const val PeopleDelete = "people.delete"
+
+    // The periodic calendar/address-book refresh and its reminders (PimRefresh.kt).
+    const val PimRefresh = "pim.refresh"
 }
 
 data class AddRssAccountParams(

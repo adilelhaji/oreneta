@@ -20,6 +20,10 @@ internal class CalendarScreenState {
     // The core answered that it has no calendar commands at all.
     var unavailable by mutableStateOf(false)
     var error by mutableStateOf("")
+
+    // Background reads that failed, by account (pimSyncErrorsAfter): shown
+    // above the agenda without hiding what the cache still holds.
+    var syncErrors by mutableStateOf(emptyMap<String, String>())
     var calendarsOpen by mutableStateOf(false)
     var viewing by mutableStateOf<CalendarEvent?>(null)
     var viewingDetails by mutableStateOf<CalendarEventDetails?>(null)

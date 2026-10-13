@@ -8,6 +8,8 @@
 
 pub mod calendar;
 pub mod people;
+pub mod refresh;
+pub mod reminders;
 
 use std::future::Future;
 use std::pin::Pin;

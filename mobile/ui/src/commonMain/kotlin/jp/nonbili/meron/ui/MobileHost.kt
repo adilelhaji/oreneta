@@ -121,6 +121,15 @@ interface MobileHost {
      *  `messages`, so flattening to the newest one here would lose the rest. */
     fun notifyNewMail(detailJson: String)
 
+    /** Post a calendar reminder the core has handed over (and already recorded
+     *  as raised). [key] is stable per event and start, so posting the same one
+     *  again replaces it. No-op where the platform has no notifications. */
+    fun notifyCalendarReminder(
+        key: String,
+        title: String,
+        body: String,
+    ) {}
+
     /** Outlook OAuth client id baked into the build (empty when unset). */
     val outlookClientId: String
 

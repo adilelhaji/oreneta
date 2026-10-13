@@ -12,10 +12,15 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import jp.nonbili.meron.shared.CalendarReminder
+import jp.nonbili.meron.shared.MobileCommand
 import jp.nonbili.meron.shared.backgroundRefreshSummary
 import jp.nonbili.meron.shared.backgroundRefreshUsesRssProtocol
+import jp.nonbili.meron.shared.calendarReminderBody
+import jp.nonbili.meron.shared.parsePimRefreshResponse
 import jp.nonbili.meron.shared.shouldBackgroundRefreshAccount
 import org.json.JSONObject
+import java.util.Date
 import java.util.concurrent.TimeUnit
 
 private const val KEY_MANUAL_RUN = "jp.nonbili.meron.background_sync.MANUAL_RUN"
@@ -130,6 +135,10 @@ class AndroidBackgroundSyncWorker(
             }
         }
 
+        // Calendars, address books and reminders ride on the same run: Google
+        // tokens were minted above, and the core only reads what is due.
+        refreshCalendarsAndContacts(applicationContext, id = accounts.length() + 2L)
+
         logEvent(
             applicationContext,
             "background refresh done: refreshed=$refreshed skipped=$skipped failed=$failed hasTransient=$hasTransientNetworkError",
@@ -150,6 +159,52 @@ class AndroidBackgroundSyncWorker(
             Result.success()
         }
     }
+}
+
+/** `pim.refresh` (ADR-0045): the calendars and books that are due, and the
+ *  reminders that came due, posted here because a closed app has no event
+ *  listener. The core records each reminder before answering, so the
+ *  foreground tick will not post it again. */
+private fun refreshCalendarsAndContacts(
+    context: Context,
+    id: Long,
+) {
+    val response = JSONObject(MeronCoreNative.invokeJson(requestJson(id, MobileCommand.PimRefresh, JSONObject().put("sync", true))))
+    if (response.has("error")) {
+        val message = response.optJSONObject("error")?.optString("message") ?: ""
+        logEvent(context, "pim.refresh failed: ${redactMessage(message)}", warning = true)
+        return
+    }
+    val report = parsePimRefreshResponse(response.toString())
+    for (reminder in report.reminders) {
+        val (title, body) = calendarReminderText(context, reminder)
+        AndroidNotificationService.notifyCalendarReminder(context, reminder.notificationKey, title, body)
+    }
+    for (failure in report.failures) {
+        logEvent(context, "${failure.kind} refresh failed: ${redactMessage(failure.message)}", warning = true)
+    }
+    logEvent(
+        context,
+        "pim refresh done: calendars=${report.calendarsRefreshed.size} books=${report.booksRefreshed.size} " +
+            "failed=${report.failures.size} reminders=${report.reminders.size}",
+    )
+}
+
+private fun calendarReminderText(
+    base: Context,
+    reminder: CalendarReminder,
+): Pair<String, String> {
+    val context = localizedAppContext(base)
+    val title = reminder.subject.ifBlank { context.getString(R.string.calendar_no_subject) }
+    val time =
+        if (reminder.allDay) {
+            context.getString(R.string.calendar_all_day)
+        } else {
+            android.text.format.DateFormat
+                .getTimeFormat(context)
+                .format(Date(reminder.start * 1000))
+        }
+    return title to calendarReminderBody(time, reminder.location)
 }
 
 internal fun isTransientNetworkError(message: String): Boolean {

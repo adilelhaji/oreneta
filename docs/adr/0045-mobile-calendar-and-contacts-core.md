@@ -51,8 +51,48 @@
 - **Sincronización en el móvil: refresco al pedir.** `calendar.events` con
   `refresh` (y una escritura en un calendario de cuenta) lanza el refresco
   de la ventana en el runtime del `Engine`, que sigue después de responder
-  y avisa con `calendar.synced` o `calendar.syncError`. No hay
-  sincronización periódica ni recordatorios en el móvil.
+  y avisa con `calendar.synced` o `calendar.syncError`.
+- **Ampliación del 2026-10-13: refresco periódico, libretas y
+  recordatorios.** Un comando móvil más, `pim.refresh`
+  (`meron-core/src/pim/refresh.rs`), y tres que ya tenía el escritorio
+  (`google.contacts.sync`, `carddav.sync`, `carddav.list`), con su lógica
+  movida de `main.rs` a `pim::people` (`sync_source`, `google_sync`,
+  `source_sync`, `sources`); los brazos del escritorio las llaman y
+  responden igual.
+  - **Recordatorios compartidos.** `pim::reminders::take_due` decide qué
+    recordatorios han vencido (`calendar::due_reminders`) y los marca como
+    dados antes de devolverlos, con la forma del evento
+    `calendar.reminder`. El vigilante de minuto del escritorio
+    (`spawn_reminder_watch`) la llama con las cuentas que tiene abiertas y
+    emite lo que devuelve, como antes; el móvil la llama desde
+    `pim.refresh` con las cuentas guardadas. El registro de «ya dado» es el
+    mismo, así que un recordatorio se da una vez sea quien sea quien
+    pregunte.
+  - **Refresco periódico.** `pim.refresh` entrega los recordatorios y, si
+    se le deja (`sync`), lee la ventana fija de ayer a cinco semanas vista
+    de cada cuenta con calendarios remotos cuya última lectura buena tenga
+    más de 15 minutos (`pim::calendar::sync_now`, el mismo refresco que
+    `spawn_sync`, esperado), y cada libreta Google o CardDAV con más de una
+    hora; crea la libreta de cada cuenta Google. Lo vencido se lee del
+    almacén (`synced_at`, `last_sync_at`), así que el proceso de una tarea
+    de fondo decide igual que el de primer plano; un fallo no se reintenta
+    antes de su intervalo en el mismo proceso. `only` limita la lectura a
+    calendarios o libretas y `force` lee aunque no haya vencido. El
+    escritorio no tenía temporizador para esto (refresca al abrir una vista
+    o al pulsar sincronizar) y sigue sin él.
+  - **Dónde corre.** En primer plano, la interfaz lo llama cada minuto
+    (solo recordatorios, sin red) y cada 15 minutos con lectura, y publica
+    los recordatorios por `MobileHost.notifyCalendarReminder` (canal propio
+    en Android, `UNUserNotificationCenter` en iOS). En segundo plano va
+    detrás del correo en el `WorkManager` de Android y en el
+    `BGAppRefreshTask` de iOS, que publican los recordatorios de la
+    respuesta. La lectura sigue las reglas del correo: tarea de fondo solo
+    con la sincronización de fondo activada y con red; en iOS, sin red si
+    el intervalo de comprobación es «Desactivado».
+  - **Errores visibles.** `calendar.syncError` y los fallos de libretas se
+    muestran como aviso no bloqueante en Calendario y Contactos. El de
+    permiso de Google ausente tiene su propia frase, porque en el móvil
+    reconectar no lo arregla.
 
 ## Alternativas descartadas
 
@@ -85,6 +125,18 @@
   - `calendar_refresh_reports_over_the_event_channel` (`ffi.rs`): el
     refresco que lanza `calendar.events` sigue tras responder y llega como
     `calendar.synced` al canal de eventos.
+- `mobile_pim_refresh_raises_reminders_and_routes_book_sync`: por la
+  entrada móvil, `pim.refresh` da un recordatorio una vez con la forma del
+  escritorio, deja en paz una cuenta sin nada remoto, respeta `only` y
+  `force`, y `google.contacts.sync`, `carddav.sync` y `carddav.list`
+  responden con el código compartido.
+- `pim::reminders` (vencido una vez, evento movido, calendario oculto,
+  limpieza) y `pim::refresh` (ventana fija, intervalo de reintento).
+- `the_reminder_watch_uses_the_shared_reminders` (binario): el vigilante
+  del escritorio pregunta a `pim::reminders` por las cuentas abiertas, y lo
+  dado queda registrado donde mira el móvil.
+- Kotlin: `PimRefreshTest` (respuesta, parámetros, reglas de red y de tic,
+  avisos) y `PimSyncModelTest` (errores por cuenta o libreta, aviso).
 - Escritorio: las pruebas del despachador (`cargo test --bin meron-core`)
   sin cambios, incluidas las de reintento de fondo, calendario local y
   libreta local.
@@ -93,15 +145,25 @@
 
 ## Pendiente
 
-- Sincronización periódica del calendario en el móvil, y recordatorios
-  (`calendar.reminder`), que hoy solo emite el escritorio.
-- Sincronizar libretas (Google, Exchange, CardDAV) en el móvil.
-- El OAuth de Google del móvil no pide `auth/calendar` (ni
-  `contacts.readonly`): hasta ampliarlo y reconectar, el calendario de una
-  cuenta Google responde con error en el móvil.
+- El OAuth de Google del móvil no pide `auth/calendar` ni
+  `contacts.readonly`: hasta que el propietario los añada (pantalla de
+  consentimiento, cliente OAuth del navegador y `GoogleAccountManagerAuth`)
+  y se reconecte la cuenta, el calendario y la libreta de una cuenta
+  Google fallan en el móvil, con un aviso que lo dice. Esta ampliación no
+  toca los permisos.
+- Recordatorios programados por adelantado: hoy se dan al llegar su hora
+  (tic de primer plano o tarea de fondo); con la app suspendida en iOS
+  pueden llegar tarde o perderse.
+- Exchange no tiene libreta que sincronizar (tampoco en escritorio: solo la
+  búsqueda en el directorio), y el móvil no tiene buzón Exchange propio.
 - El alta de CalDAV, suscripciones y CardDAV no se atiende en el móvil
   (`calendar.createLocal` sí, para que un teléfono nuevo tenga dónde poner
   un evento); las contraseñas de CalDAV y CardDAV están en el
   llavero del escritorio.
-- La interfaz móvil no muestra `calendar.syncError`.
 - Evidencia en dispositivo (Maestro).
+
+Hecho desde la primera versión de esta ADR (ampliación del 2026-10-13):
+sincronización periódica del calendario en el móvil, recordatorios
+(`calendar.reminder`) en el móvil como notificaciones locales,
+sincronización de libretas (Google, CardDAV) en el móvil y
+`calendar.syncError` en la interfaz móvil.

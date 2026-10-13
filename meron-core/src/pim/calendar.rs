@@ -419,34 +419,68 @@ pub const CALDAV_CONFLICT: &str =
 /// not. One window is fetched at a time per account; asking again while it
 /// runs does nothing.
 pub fn spawn_sync(engine: Arc<Engine>, emit: Emit, account: String, from: i64, to: i64) {
-    if engine.is_paused(&account) {
+    let Some(key) = claim_window(&engine, &account, from, to) else {
         return;
+    };
+    tokio::spawn(async move {
+        run_claimed(&engine, &emit, &account, from, to, key).await;
+    });
+}
+
+/// How a window refresh ended, for a caller that waits for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SyncOutcome {
+    /// Not run: the account is paused, or the same window is already being
+    /// fetched.
+    Skipped,
+    Synced,
+    /// The account was paused while it waited to retry.
+    Cancelled,
+    /// What `calendar.syncError` said.
+    Failed(String),
+}
+
+/// The same refresh as [`spawn_sync`], awaited: the periodic refresh
+/// ([`super::refresh`]) needs to know how it went before it answers. The
+/// events it reports are the same.
+pub async fn sync_now(engine: &Arc<Engine>, emit: &Emit, account: &str, from: i64, to: i64) -> SyncOutcome {
+    let Some(key) = claim_window(engine, account, from, to) else {
+        return SyncOutcome::Skipped;
+    };
+    run_claimed(engine, emit, account, from, to, key).await
+}
+
+/// Marks a window as being fetched, or says it should not be: the account is
+/// paused, or somebody is already at it.
+fn claim_window(engine: &Arc<Engine>, account: &str, from: i64, to: i64) -> Option<String> {
+    if engine.is_paused(account) {
+        return None;
     }
     let key = format!("calendar:{account}:{from}:{to}");
-    if !engine.syncing.lock().unwrap().insert(key.clone()) {
-        return;
-    }
-    tokio::spawn(async move {
-        let result = retry_background_sync_after(
-            &format!("calendar sync for {account}"),
-            super::RETRY_DELAY,
-            || !engine.is_paused(&account),
-            || sync_window(&engine, &account, from, to),
-        )
-        .await;
-        engine.syncing.lock().unwrap().remove(&key);
-        match result {
-            Ok(_) => emit("calendar.synced", json!({ "account": account, "from": from, "to": to })).await,
-            Err(e) if e.is::<BackgroundSyncCancelled>() => {}
-            Err(e) => {
-                emit(
-                    "calendar.syncError",
-                    json!({ "account": account, "message": format!("calendar sync: {e:#}") }),
-                )
-                .await
-            }
+    engine.syncing.lock().unwrap().insert(key.clone()).then_some(key)
+}
+
+async fn run_claimed(engine: &Arc<Engine>, emit: &Emit, account: &str, from: i64, to: i64, key: String) -> SyncOutcome {
+    let result = retry_background_sync_after(
+        &format!("calendar sync for {account}"),
+        super::RETRY_DELAY,
+        || !engine.is_paused(account),
+        || sync_window(engine, account, from, to),
+    )
+    .await;
+    engine.syncing.lock().unwrap().remove(&key);
+    match result {
+        Ok(_) => {
+            emit("calendar.synced", json!({ "account": account, "from": from, "to": to })).await;
+            SyncOutcome::Synced
         }
-    });
+        Err(e) if e.is::<BackgroundSyncCancelled>() => SyncOutcome::Cancelled,
+        Err(e) => {
+            let message = format!("calendar sync: {e:#}");
+            emit("calendar.syncError", json!({ "account": account, "message": message })).await;
+            SyncOutcome::Failed(message)
+        }
+    }
 }
 
 /// Pulls the calendar list, then one window of occurrences per enabled

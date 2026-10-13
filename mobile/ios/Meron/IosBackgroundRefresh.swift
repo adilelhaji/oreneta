@@ -98,6 +98,21 @@ final class IosNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNoti
         }
         completionHandler()
     }
+
+    // A calendar reminder is shown even while the app is open (the
+    // foreground tick posts them); everything else keeps the default of not
+    // interrupting the screen the person is already looking at.
+    func userNotificationCenter(
+        _: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if notification.request.identifier.hasPrefix(IosNotificationService.calendarReminderPrefix) {
+            completionHandler([.banner, .list, .sound])
+        } else {
+            completionHandler([])
+        }
+    }
 }
 
 enum IosNotificationService {
@@ -121,6 +136,44 @@ enum IosNotificationService {
         let request = UNNotificationRequest(
             identifier: "meron-refresh-complete",
             content: refreshNotificationContent(body),
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// The prefix of `CalendarReminder.notificationKey` (PimRefresh.kt).
+    static let calendarReminderPrefix = "calendar-reminder:"
+
+    static func calendarReminderContent(_ reminder: [String: Any]) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        let subject = (reminder["subject"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        content.title = subject.isEmpty ? String(localized: "calendar.noSubject") : subject
+        let time: String
+        if reminder["all_day"] as? Bool == true {
+            time = String(localized: "calendar.allDay")
+        } else {
+            let start = (reminder["start"] as? NSNumber)?.doubleValue ?? 0
+            let formatter = DateFormatter()
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            time = formatter.string(from: Date(timeIntervalSince1970: start))
+        }
+        content.body = PimRefreshKt.calendarReminderBody(timeText: time, location: reminder["location"] as? String)
+        content.sound = .default
+        return content
+    }
+
+    /// Posts a reminder the core handed over (already recorded as raised).
+    /// The identifier is the shared notification key, so a reminder posted
+    /// twice replaces itself.
+    static func notifyCalendarReminder(_ reminder: [String: Any]) {
+        let account = reminder["account"] as? String ?? ""
+        let event = reminder["event"] as? String ?? ""
+        let start = (reminder["start"] as? NSNumber)?.int64Value ?? 0
+        guard !account.isEmpty, !event.isEmpty else { return }
+        let request = UNNotificationRequest(
+            identifier: "\(calendarReminderPrefix)\(account):\(event):\(start)",
+            content: calendarReminderContent(reminder),
             trigger: nil
         )
         UNUserNotificationCenter.current().add(request)
@@ -383,10 +436,33 @@ enum IosBackgroundRefresh {
             }
         }
 
+        refreshCalendarsAndContacts(id: Int64(accountRows.count + 2))
+
         IosSyncDiagnosticLog.append(
             "background refresh done: refreshed=\(refreshed) skipped=\(skipped) failed=\(failed)"
         )
         return RefreshResult(refreshed: refreshed, skipped: skipped, failed: failed)
+    }
+
+    /// `pim.refresh` (ADR-0045): the calendars and books that are due, and the
+    /// reminders that came due, posted here because a suspended app has no
+    /// event listener. The core records each before answering.
+    private static func refreshCalendarsAndContacts(id: Int64) {
+        let response = invoke(id: id, method: "pim.refresh", params: ["sync": true])
+        if let error = response["error"] as? [String: Any] {
+            let message = error["message"] as? String ?? ""
+            IosSyncDiagnosticLog.append("pim.refresh failed: " + IosSyncLogRedaction.redactMessage(message))
+            return
+        }
+        guard let result = response["result"] as? [String: Any] else { return }
+        let reminders = result["reminders"] as? [[String: Any]] ?? []
+        for reminder in reminders {
+            IosNotificationService.notifyCalendarReminder(reminder)
+        }
+        let failed = ((result["calendars"] as? [[String: Any]] ?? []) + (result["books"] as? [[String: Any]] ?? []))
+            .filter { $0["ok"] as? Bool != true }
+            .count
+        IosSyncDiagnosticLog.append("pim refresh done: reminders=\(reminders.count) failed=\(failed)")
     }
 
     private static func invoke(id: Int64, method: String, params: [String: Any]) -> [String: Any] {

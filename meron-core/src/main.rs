@@ -590,6 +590,50 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(call("notes.get", json!({"id": id})).await.unwrap()["note"].is_null());
     }
 
+    /// The desktop's reminder watch asks the shared `pim::reminders` (the
+    /// phone's `pim.refresh` asks the same): the accounts the core has open,
+    /// once each, in the `calendar.reminder` shape it always sent.
+    #[tokio::test]
+    async fn the_reminder_watch_uses_the_shared_reminders() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        // Any stored account will do; the local archive needs no server.
+        let account = meron_core::archive::ACCOUNT;
+        meron_core::archive::ensure_account(&engine.db.lock().unwrap(), now_seconds()).unwrap();
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let now = now_seconds();
+        let start = now + 600;
+        let created = call("calendar.create", json!({"account": account, "notify": false, "event": {
+            "id": "", "calendar_id": home, "subject": "Standup", "start": start, "end": start + 900,
+            "all_day": false, "location": "Room 2", "reminder_minutes": 10,
+        }}))
+        .await
+        .unwrap();
+        let event = created["event"]["id"].as_str().unwrap().to_owned();
+        assert!(due_calendar_reminders(&engine, now).await.is_empty(), "an account the core has not opened is not watched");
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+        let due = due_calendar_reminders(&engine, now).await;
+        assert_eq!(
+            due,
+            vec![json!({
+                "account": account, "event": event, "subject": "Standup", "location": "Room 2",
+                "start": start, "all_day": false, "minutes": 10,
+            })],
+        );
+        assert!(due_calendar_reminders(&engine, now + 60).await.is_empty(), "given once");
+        assert!(
+            pim::reminders::take_due(&engine, &[account.to_string()], now + 120).is_empty(),
+            "recorded where the phone's refresh looks too",
+        );
+    }
+
     #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
@@ -1472,7 +1516,7 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
 /// its window is resynced.
 fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(REMINDER_TICK);
+        let mut ticker = tokio::time::interval(pim::reminders::TICK);
         loop {
             ticker.tick().await;
             let now = std::time::SystemTime::now()
@@ -1480,40 +1524,10 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                 .map(|epoch| epoch.as_secs() as i64)
                 .unwrap_or_default();
 
-            let accounts: Vec<String> =
-                engine.accounts.lock().await.keys().cloned().collect();
-            for account in accounts {
-                if engine.is_paused(&account) || engine.is_muted(&account) {
-                    continue;
-                }
-                let due = {
-                    let db = engine.db.lock().unwrap();
-                    calendar::due_reminders(&db, &account, now).unwrap_or_default()
-                };
-                for event in due {
-                    {
-                        let db = engine.db.lock().unwrap();
-                        // Recorded before it is announced: a reminder given
-                        // twice is worse than one lost to a crash in between.
-                        if calendar::mark_reminder_fired(&db, &account, &event.id, event.start, now).is_err() {
-                            continue;
-                        }
-                    }
-                    emit(
-                        &out,
-                        "calendar.reminder",
-                        json!({
-                            "account": account,
-                            "event": event.id,
-                            "subject": event.subject,
-                            "location": event.location,
-                            "start": event.start,
-                            "all_day": event.all_day,
-                            "minutes": event.reminder_minutes,
-                        }),
-                    )
-                    .await;
-                }
+            // Shared with the phone (`pim::reminders`): which are due, and
+            // recorded as raised before they are announced.
+            for detail in due_calendar_reminders(&engine, now).await {
+                emit(&out, "calendar.reminder", detail).await;
             }
             // Task reminders (ADR-0013): local, so not tied to an account.
             let due = store::task_lists::due_reminders(&engine.db.lock().unwrap(), now).unwrap_or_default();
@@ -1523,10 +1537,16 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                 }
                 emit(&out, "tasks.reminder", json!({ "id": id, "title": title, "due_at": due_at })).await;
             }
-            let db = engine.db.lock().unwrap();
-            let _ = calendar::forget_old_reminders(&db, now);
+            pim::reminders::forget_old(&engine, now);
         }
     });
+}
+
+/// The calendar reminders due now on the accounts the core has open, each
+/// recorded as raised (`pim::reminders::take_due`).
+async fn due_calendar_reminders(engine: &Arc<Engine>, now: i64) -> Vec<Value> {
+    let accounts: Vec<String> = engine.accounts.lock().await.keys().cloned().collect();
+    pim::reminders::take_due(engine, &accounts, now)
 }
 
 /// The calendars of an account that hold an invitation's event: CalDAV ones
@@ -2159,92 +2179,10 @@ async fn idle_once(
     }
 }
 
-/// Read one CardDAV source into the address book, and record how it went.
-///
-/// Off the async runtime, because the DAV client is blocking HTTP. The
-/// outcome is written to the source either way: a sync that failed leaves its
-/// reason where the settings screen can show it, and a sync that succeeded
-/// clears whatever the last one said.
+/// Read one book into the address book and record how it went
+/// (`pim::people::sync_source`, shared with the phone).
 async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<()> {
-    let source = store::contact_source(&engine.db.lock().unwrap(), id)?
-        .with_context(|| format!("no such contact source: {id}"))?;
-
-    let fetched = match source.kind.as_str() {
-        "carddav" => {
-            let password = meron_core::secrets::load(id)
-                .map(|secrets| secrets.password)
-                .unwrap_or_default();
-            let transport = meron_core::carddav::http::UreqTransport {
-                username: source.username.clone(),
-                password,
-            };
-            let url = source.url.clone();
-            tokio::task::spawn_blocking(move || {
-                let cards = meron_core::carddav::client::fetch_cards(&transport, &url)?;
-                // Asked each sync: a share can be made read-only at any time.
-                let writable = meron_core::carddav::client::book_writable(&transport, &url).unwrap_or(None);
-                let rows = cards
-                    .into_iter()
-                    .map(|card| store::SyncedRow {
-                        person: card.person,
-                        photo_key: String::new(),
-                        href: card.href,
-                        version: card.etag,
-                    })
-                    .collect::<Vec<_>>();
-                anyhow::Ok((rows, Some(writable)))
-            })
-            .await?
-        }
-        // The mail account's own token, refreshed if it had expired. The one
-        // new thing asked of it is the contacts scope; a token from before
-        // that existed is refused by Google and the refusal names the fix.
-        "google" => match engine.ensure_valid_creds(&source.account).await {
-            Ok(creds) if creds.auth_type == "gmail_oauth" => {
-                let token = creds.access_token.clone().unwrap_or_default();
-                if token.is_empty() {
-                    Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
-                } else {
-                    tokio::task::spawn_blocking(move || {
-                        meron_core::contacts::google::fetch_connections(&token).map(|people| {
-                            let rows = people
-                                .into_iter()
-                                .map(|person| store::SyncedRow { person, ..Default::default() })
-                                .collect::<Vec<_>>();
-                            (rows, None)
-                        })
-                    })
-                    .await?
-                }
-            }
-            Ok(_) => Err(anyhow::anyhow!("not a Google account: {}", source.account)),
-            Err(error) => Err(error),
-        },
-        other => Err(anyhow::anyhow!("unknown contact source kind: {other}")),
-    };
-
-    let now = chrono::Utc::now().timestamp();
-    let db = engine.db.lock().unwrap();
-    match fetched {
-        Ok((rows, writable)) => {
-            let origin = store::BookOrigin {
-                source: source.kind.clone(),
-                account: source.account.clone(),
-                book: source.id.clone(),
-            };
-            // Photos are not cached yet; the key stays empty until they are.
-            store::replace_book_rows(&db, &origin, &rows, now)?;
-            if let Some(writable) = writable {
-                store::set_contact_source_writable(&db, id, writable)?;
-            }
-            store::mark_contact_source_synced(&db, id, "", "", now)?;
-            Ok(())
-        }
-        Err(error) => {
-            store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
-            Err(error)
-        }
-    }
+    pim::people::sync_source(engine, id).await
 }
 
 #[tokio::main]
@@ -3956,43 +3894,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // A Google account's contacts, read with the token the account already
         // holds. One source per account, so asking twice re-reads rather than
         // doubling everybody.
-        "google.contacts.sync" => {
-            let account = req_str(p, "account")?;
-            let id = format!("google-{account}");
-            let existing = store::contact_source(&engine.db.lock().unwrap(), &id)?;
-            if existing.is_none() {
-                store::upsert_contact_source(
-                    &engine.db.lock().unwrap(),
-                    &store::ContactSource {
-                        writable: None,
-                        id: id.clone(),
-                        kind: "google".into(),
-                        account: account.clone(),
-                        url: String::new(),
-                        username: String::new(),
-                        name: req_str(p, "name").unwrap_or_default(),
-                        enabled: true,
-                        ctag: String::new(),
-                        last_sync_at: 0,
-                        last_error: String::new(),
-                    },
-                    chrono::Utc::now().timestamp(),
-                )?;
-            }
-            let outcome = sync_contact_source(engine, &id).await;
-            Ok(json!({ "id": id, "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
-        }
+        "google.contacts.sync" => pim::people::google_sync(engine, p).await,
 
-        "carddav.sync" => {
-            let id = req_str(p, "id")?;
-            let outcome = sync_contact_source(engine, &id).await;
-            Ok(json!({ "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
-        }
+        "carddav.sync" => pim::people::source_sync(engine, p).await,
 
-        "carddav.list" => {
-            let sources = store::contact_sources(&engine.db.lock().unwrap())?;
-            Ok(json!({ "sources": sources }))
-        }
+        "carddav.list" => pim::people::sources(engine),
 
         // Removing a source takes its people with it: they were a copy of
         // somebody else's book, and a copy with no origin can never be

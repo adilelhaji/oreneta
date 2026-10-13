@@ -150,6 +150,17 @@ internal fun CalendarScreen(
                         onDismiss = { ui.error = "" },
                     )
                 }
+                // Background reads that failed: said, without hiding what
+                // the phone still has.
+                pimSyncBanner(ui.syncErrors, CALENDAR_SCOPE_MISSING_KEY, CALENDAR_SYNC_FAILED_KEY)?.let { (key, args) ->
+                    StatusBanner(
+                        message = tr(key, args),
+                        isError = false,
+                        actionLabel = null,
+                        onAction = null,
+                        onDismiss = { ui.syncErrors = emptyMap() },
+                    )
+                }
                 val window = ui.window
                 if (window != null) {
                     WindowBar(window, offsetAt, actions.onMoveWindow)

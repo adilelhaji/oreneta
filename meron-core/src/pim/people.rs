@@ -274,3 +274,148 @@ fn local_write_json(write: store::local_people::Write) -> Value {
         }),
     }
 }
+
+/// The id a Google account's contacts are kept under: one book per account,
+/// so reading them again replaces rather than doubles everybody.
+pub fn google_source_id(account: &str) -> String {
+    format!("google-{account}")
+}
+
+/// Makes sure a Google account has its book, without reading it. `name` is
+/// only used for a book made now.
+pub fn ensure_google_source(engine: &Arc<Engine>, account: &str, name: &str) -> Result<String> {
+    let id = google_source_id(account);
+    let existing = store::contact_source(&engine.db.lock().unwrap(), &id)?;
+    if existing.is_none() {
+        store::upsert_contact_source(
+            &engine.db.lock().unwrap(),
+            &store::ContactSource {
+                writable: None,
+                id: id.clone(),
+                kind: "google".into(),
+                account: account.to_string(),
+                url: String::new(),
+                username: String::new(),
+                name: name.to_string(),
+                enabled: true,
+                ctag: String::new(),
+                last_sync_at: 0,
+                last_error: String::new(),
+            },
+            chrono::Utc::now().timestamp(),
+        )?;
+    }
+    Ok(id)
+}
+
+/// `google.contacts.sync`: a Google account's contacts, read with the token
+/// the account already holds.
+pub async fn google_sync(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
+    let account = req_str(p, "account")?;
+    let id = ensure_google_source(engine, &account, &req_str(p, "name").unwrap_or_default())?;
+    let outcome = sync_source(engine, &id).await;
+    Ok(json!({ "id": id, "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+}
+
+/// `carddav.sync`: one book read again, whatever kind it is.
+pub async fn source_sync(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
+    let id = req_str(p, "id")?;
+    let outcome = sync_source(engine, &id).await;
+    Ok(json!({ "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
+}
+
+/// `carddav.list`: the books brought in, with when each was last read and
+/// what went wrong the last time, if anything.
+pub fn sources(engine: &Arc<Engine>) -> Result<Value> {
+    let sources = store::contact_sources(&engine.db.lock().unwrap())?;
+    Ok(json!({ "sources": sources }))
+}
+
+/// Read one book (CardDAV or Google) into the address book, and record how
+/// it went.
+///
+/// Off the async runtime, because the DAV client is blocking HTTP. The
+/// outcome is written to the source either way: a sync that failed leaves its
+/// reason where the settings screen can show it, and a sync that succeeded
+/// clears whatever the last one said.
+pub async fn sync_source(engine: &Arc<Engine>, id: &str) -> Result<()> {
+    let source = store::contact_source(&engine.db.lock().unwrap(), id)?
+        .with_context(|| format!("no such contact source: {id}"))?;
+
+    let fetched = match source.kind.as_str() {
+        "carddav" => {
+            let password = crate::secrets::load(id)
+                .map(|secrets| secrets.password)
+                .unwrap_or_default();
+            let transport = crate::carddav::http::UreqTransport {
+                username: source.username.clone(),
+                password,
+            };
+            let url = source.url.clone();
+            tokio::task::spawn_blocking(move || {
+                let cards = crate::carddav::client::fetch_cards(&transport, &url)?;
+                // Asked each sync: a share can be made read-only at any time.
+                let writable = crate::carddav::client::book_writable(&transport, &url).unwrap_or(None);
+                let rows = cards
+                    .into_iter()
+                    .map(|card| store::SyncedRow {
+                        person: card.person,
+                        photo_key: String::new(),
+                        href: card.href,
+                        version: card.etag,
+                    })
+                    .collect::<Vec<_>>();
+                anyhow::Ok((rows, Some(writable)))
+            })
+            .await?
+        }
+        // The mail account's own token, refreshed if it had expired. The one
+        // new thing asked of it is the contacts scope; a token from before
+        // that existed is refused by Google and the refusal names the fix.
+        "google" => match engine.ensure_valid_creds(&source.account).await {
+            Ok(creds) if creds.auth_type == "gmail_oauth" => {
+                let token = creds.access_token.clone().unwrap_or_default();
+                if token.is_empty() {
+                    Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
+                } else {
+                    tokio::task::spawn_blocking(move || {
+                        crate::contacts::google::fetch_connections(&token).map(|people| {
+                            let rows = people
+                                .into_iter()
+                                .map(|person| store::SyncedRow { person, ..Default::default() })
+                                .collect::<Vec<_>>();
+                            (rows, None)
+                        })
+                    })
+                    .await?
+                }
+            }
+            Ok(_) => Err(anyhow::anyhow!("not a Google account: {}", source.account)),
+            Err(error) => Err(error),
+        },
+        other => Err(anyhow::anyhow!("unknown contact source kind: {other}")),
+    };
+
+    let now = chrono::Utc::now().timestamp();
+    let db = engine.db.lock().unwrap();
+    match fetched {
+        Ok((rows, writable)) => {
+            let origin = store::BookOrigin {
+                source: source.kind.clone(),
+                account: source.account.clone(),
+                book: source.id.clone(),
+            };
+            // Photos are not cached yet; the key stays empty until they are.
+            store::replace_book_rows(&db, &origin, &rows, now)?;
+            if let Some(writable) = writable {
+                store::set_contact_source_writable(&db, id, writable)?;
+            }
+            store::mark_contact_source_synced(&db, id, "", "", now)?;
+            Ok(())
+        }
+        Err(error) => {
+            store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
+            Err(error)
+        }
+    }
+}

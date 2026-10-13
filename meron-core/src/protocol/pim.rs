@@ -15,6 +15,10 @@ pub(crate) const MOBILE_PIM_METHODS: &[&str] = &[
     "people.list",
     "people.save",
     "people.delete",
+    "pim.refresh",
+    "google.contacts.sync",
+    "carddav.sync",
+    "carddav.list",
 ];
 
 /// Runs one of [`MOBILE_PIM_METHODS`] against the Engine for `data_dir`. A
@@ -42,6 +46,10 @@ pub(crate) fn run_mobile_pim_command(data_dir: &str, req: &Request) -> Result<Va
             "people.list" => crate::pim::people::list(&engine, p),
             "people.save" => crate::pim::people::save(&engine, p).await,
             "people.delete" => crate::pim::people::delete(&engine, p).await,
+            "pim.refresh" => Ok(mobile_pim_refresh(&engine, &emit, p).await),
+            "google.contacts.sync" => crate::pim::people::google_sync(&engine, p).await,
+            "carddav.sync" => crate::pim::people::source_sync(&engine, p).await,
+            "carddav.list" => crate::pim::people::sources(&engine),
             method => anyhow::bail!("unknown method: {method}"),
         }
     })
@@ -53,4 +61,24 @@ fn mobile_pim_emit() -> crate::pim::Emit {
         let _ = crate::ffi::emit_event(name, detail);
         Box::pin(async {})
     })
+}
+
+/// `pim.refresh`: the phone's periodic calendar and address-book refresh, and
+/// the reminders due now (`crate::pim::refresh`). The foreground calls it on a
+/// minute tick and the background refresh after mail; both post the
+/// `reminders` it answers as local notifications. `sync: false` only looks
+/// for reminders, for when the person has turned automatic checking off;
+/// `only: "books"` / `"calendars"` reads one of the two; `force` reads
+/// even what is not yet due.
+async fn mobile_pim_refresh(engine: &Arc<crate::engine::Engine>, emit: &crate::pim::Emit, p: &Value) -> Value {
+    let accounts = crate::store::load_accounts(&engine.db.lock().unwrap()).unwrap_or_default();
+    let now = p.get("now").and_then(Value::as_i64).unwrap_or_else(crate::store::now_unix);
+    let only = p.get("only").and_then(Value::as_str).unwrap_or_default();
+    let options = crate::pim::refresh::Options {
+        sync: p.get("sync").and_then(Value::as_bool).unwrap_or(true),
+        force: p.get("force").and_then(Value::as_bool).unwrap_or(false),
+        calendars: only != "books",
+        books: only != "calendars",
+    };
+    crate::pim::refresh::run(engine, emit, &accounts, now, options).await
 }

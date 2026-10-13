@@ -63,7 +63,8 @@ internal fun ContactsRouteContent(
                 ContactsActions(
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                     onQueryChange = ::changeContactsQuery,
-                    onRefresh = { loadPeople() },
+                    // Reads the books now too, so a refresh is a real one.
+                    onRefresh = { scope.launch { refreshAddressBooks() } },
                     onNewContact = ::startNewContact,
                     onEditContact = ::startEditingContact,
                     onSaveContact = { saveContact() },

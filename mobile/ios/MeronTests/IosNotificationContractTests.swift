@@ -11,6 +11,21 @@ final class IosNotificationContractTests: XCTestCase {
         XCTAssertNotNil(content.sound)
     }
 
+    func testCalendarReminderContentNamesTheEventAndWhere() {
+        let content = IosNotificationService.calendarReminderContent([
+            "account": "acct",
+            "event": "local:1",
+            "subject": "Dentist",
+            "location": "Clinic",
+            "start": NSNumber(value: 1_800_000_000),
+            "all_day": true,
+        ])
+
+        XCTAssertEqual(content.title, "Dentist")
+        XCTAssertEqual(content.body, "All day · Clinic")
+        XCTAssertNotNil(content.sound)
+    }
+
     func testNewMailNotificationCarriesOpenThreadPayload() throws {
         let content = IosNotificationService.notifyNewMailContentForTesting(
             accountName: "Work",

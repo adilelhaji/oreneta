@@ -17,6 +17,9 @@ internal class ContactsScreenState {
     // The core answered that it has no people commands at all.
     var unavailable by mutableStateOf(false)
     var error by mutableStateOf("")
+
+    // Address books that could not be read, by book (pimSyncErrorsAfter).
+    var syncErrors by mutableStateOf(emptyMap<String, String>())
     var selected by mutableStateOf<PersonSummary?>(null)
     var editing by mutableStateOf<ContactEditing?>(null)
     var saving by mutableStateOf(false)

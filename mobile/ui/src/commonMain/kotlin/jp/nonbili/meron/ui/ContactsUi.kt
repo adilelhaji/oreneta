@@ -116,6 +116,17 @@ internal fun ContactsScreen(
                         onDismiss = { ui.error = "" },
                     )
                 }
+                // Background reads that failed: said, without hiding what
+                // the phone still has.
+                pimSyncBanner(ui.syncErrors, CONTACTS_SCOPE_MISSING_KEY, CONTACTS_SYNC_FAILED_KEY)?.let { (key, args) ->
+                    StatusBanner(
+                        message = tr(key, args),
+                        isError = false,
+                        actionLabel = null,
+                        onAction = null,
+                        onDismiss = { ui.syncErrors = emptyMap() },
+                    )
+                }
                 OutlinedTextField(
                     value = ui.query,
                     onValueChange = actions.onQueryChange,
