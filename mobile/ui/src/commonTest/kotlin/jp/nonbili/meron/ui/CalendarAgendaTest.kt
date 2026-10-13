@@ -70,6 +70,35 @@ class CalendarAgendaTest {
     }
 
     @Test
+    fun theWindowOpensOnTheDesktopsFirstDayOfTheWeek() {
+        // 2026-10-12 is a Monday; 2026-10-14 10:00 Madrid is a Wednesday.
+        assertEquals(1, isoWeekday(oct12))
+        assertEquals(4, isoWeekday(0))
+        assertEquals(7, isoWeekday(oct12 - 1))
+        val wednesday = (oct12 + 2) * SECONDS_PER_DAY - 7_200 + 10 * 3_600
+        assertEquals(oct12 + 2, agendaWindowFrom(wednesday, madrid).startDay)
+        assertEquals(oct12, agendaWindowFrom(wednesday, madrid, firstDayOfWeek = 1).startDay)
+        assertEquals(oct12 - 1, agendaWindowFrom(wednesday, madrid, firstDayOfWeek = 7).startDay)
+        assertEquals(oct12 - 2, agendaWindowFrom(wednesday, madrid, firstDayOfWeek = 6).startDay)
+        // On the first day itself the window opens on today; pages stay whole weeks.
+        val sunday = (oct12 - 1) * SECONDS_PER_DAY + 12 * 3_600
+        assertEquals(oct12 - 1, agendaWindowFrom(sunday, madrid, firstDayOfWeek = 7).startDay)
+        assertEquals(oct12 + 13, agendaWindowFrom(sunday, madrid, firstDayOfWeek = 7).next().startDay)
+    }
+
+    @Test
+    fun theWeekStartSettingIsReadAsTheDesktopWritesIt() {
+        assertEquals("calendar_week_start", CALENDAR_WEEK_START_SETTING_KEY)
+        assertEquals(1, calendarWeekStartFromSetting("monday"))
+        assertEquals(7, calendarWeekStartFromSetting("sunday"))
+        assertEquals(6, calendarWeekStartFromSetting("saturday"))
+        // The regional default needs week data common code does not have.
+        assertNull(calendarWeekStartFromSetting("locale"))
+        assertNull(calendarWeekStartFromSetting(null))
+        assertNull(calendarWeekStartFromSetting(1L))
+    }
+
+    @Test
     fun agendaGroupsByLocalDaySpanningDaysAndPuttingAllDayFirst() {
         val day = oct12 * SECONDS_PER_DAY
         val events =

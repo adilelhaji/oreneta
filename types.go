@@ -194,6 +194,14 @@ type FolderDeleteRequest struct {
 	FolderID  string `json:"folder_id"`
 }
 
+// FolderMoveRequest moves FolderID under ParentID; an empty ParentID means
+// the top level (ADR-0050).
+type FolderMoveRequest struct {
+	AccountID string `json:"account_id"`
+	FolderID  string `json:"folder_id"`
+	ParentID  string `json:"parent_id"`
+}
+
 type ThreadListRequest struct {
 	AccountID string `json:"account_id"`
 	FolderID  string `json:"folder_id"`

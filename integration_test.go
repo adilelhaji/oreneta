@@ -254,6 +254,74 @@ func TestIntegrationMailFlow(t *testing.T) {
 		}
 	})
 
+	// ADR-0050: moving a folder under another one is one IMAP RENAME on a real
+	// server, its subfolders and cached mail follow it, and special-use folders
+	// and moves into the folder's own subtree are refused before IMAP is asked.
+	t.Run("folder move renames the subtree on the server", func(t *testing.T) {
+		result := callMap(t, sidecar, "folders.list", map[string]any{"account": "alice"})
+		delimiter := folderDelimiter(result, "INBOX")
+		if delimiter == "" {
+			t.Fatal("maddy reported no hierarchy delimiter for INBOX")
+		}
+		parent := "ITestMoveParent"
+		source := "ITestMoveMe"
+		child := source + delimiter + "Child"
+		for _, name := range []string{parent, source, child} {
+			callMap(t, sidecar, "folders.create", map[string]any{"account": "alice", "name": name})
+		}
+		moveSubject := fmt.Sprintf("Folder move %d", time.Now().UnixNano())
+		imapAppend(t, server.imapPort, "alice@maddy.test", testPassword, source, rawMessage([]string{
+			"From: Bob <bob@maddy.test>",
+			"To: alice@maddy.test",
+			"Subject: " + moveSubject,
+			fmt.Sprintf("Message-ID: <move-%d@maddy.test>", time.Now().UnixNano()),
+			"Date: " + time.Now().UTC().Format(time.RFC1123Z),
+		}, "Moves with its folder."))
+		pollFolder(t, sidecar, "alice", source, func(message map[string]any) bool { return str(message, "subject") == moveSubject })
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			result = callMap(t, sidecar, "folders.list", map[string]any{"account": "alice"})
+			if foldersContain(result, child) && folderDelimiter(result, source) == delimiter {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("folders to move never synced with delimiter %q: %v", delimiter, result)
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		if _, err := sidecar.Call("folders.move", map[string]any{"account": "alice", "folder": "INBOX", "parent": parent}); err == nil {
+			t.Fatal("folders.move accepted INBOX, want refusal")
+		}
+		if _, err := sidecar.Call("folders.move", map[string]any{"account": "alice", "folder": source, "parent": child}); err == nil {
+			t.Fatal("folders.move accepted a move into the folder's own subtree, want refusal")
+		}
+
+		moved := parent + delimiter + source
+		movedChild := moved + delimiter + "Child"
+		result = callMap(t, sidecar, "folders.move", map[string]any{"account": "alice", "folder": source, "parent": parent})
+		if result["folder"] != moved {
+			t.Fatalf("folders.move folder = %#v, want %q", result["folder"], moved)
+		}
+		renames, _ := result["renames"].([]any)
+		if len(renames) != 2 {
+			t.Fatalf("renames = %#v, want the folder and its child", renames)
+		}
+		if !foldersContain(result, moved) || !foldersContain(result, movedChild) || foldersContain(result, source) || foldersContain(result, child) {
+			t.Fatalf("folders.move did not reconcile the cached folder list: %v", result)
+		}
+
+		// The server agrees: the old names are gone, the new ones are there.
+		client := dialIMAP(t, server.imapPort, "alice@maddy.test", testPassword)
+		listing := strings.Join(client.do(`LIST "" "*"`), "\n")
+		client.close()
+		if !strings.Contains(listing, movedChild) || strings.Contains(listing, `"`+source+`"`) {
+			t.Fatalf("server LIST after move:\n%s", listing)
+		}
+		// The cached message is under the new path, and a sync there finds it.
+		pollFolder(t, sidecar, "alice", moved, func(message map[string]any) bool { return str(message, "subject") == moveSubject })
+	})
+
 	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 	subject := "Oreneta integration " + nonce
 	// Bare id (no angle brackets) — the app convention: the frontend mints bare

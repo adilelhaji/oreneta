@@ -456,6 +456,19 @@ pub async fn create_folder(session: &mut Session, name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Rename a mailbox, which moves it (and, per RFC 3501 6.3.5, every inferior
+/// hierarchical name) under a new parent. The caller must first run
+/// [`prepare_folder_delete`] on the same session, so a pooled connection is
+/// not sitting in the mailbox being renamed. Never retried: a lost reply
+/// leaves the outcome unknown, and the next folder sync shows the truth.
+pub async fn rename_folder(session: &mut Session, from: &str, to: &str) -> Result<()> {
+    session
+        .rename(from, to)
+        .await
+        .with_context(|| format!("RENAME {from} {to}"))?;
+    Ok(())
+}
+
 /// A multi-folder delete that failed after removing part of its target list.
 /// Callers must reconcile `removed` before surfacing the failure.
 #[derive(Debug)]
@@ -2271,6 +2284,73 @@ mod tests {
             ),
             Err(err) => err,
         }
+    }
+
+    /// Records every command line a client sends, answering OK to all of them
+    /// except a RENAME whose source is `refuse`, which gets NO.
+    async fn serve_recording(
+        listener: tokio::net::TcpListener,
+        seen: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        refuse: &'static str,
+    ) {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let Ok((sock, _)) = listener.accept().await else {
+            return;
+        };
+        let (reader, mut writer) = sock.into_split();
+        if writer.write_all(b"* OK IMAP4rev1 ready\r\n").await.is_err() {
+            return;
+        }
+        let mut lines = tokio::io::BufReader::new(reader).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let mut parts = line.splitn(2, ' ');
+            let tag = parts.next().unwrap_or_default().to_string();
+            let rest = parts.next().unwrap_or_default().to_string();
+            seen.lock().unwrap().push(rest.clone());
+            let cmd = rest.split(' ').next().unwrap_or_default().to_uppercase();
+            let reply = match cmd.as_str() {
+                "EXAMINE" => format!("* 0 EXISTS\r\n* OK [UIDVALIDITY 1] ok\r\n{tag} OK [READ-ONLY] EXAMINE completed\r\n"),
+                "RENAME" if rest.contains(&format!("\"{refuse}\"")) => format!("{tag} NO [ALREADYEXISTS] Mailbox exists\r\n"),
+                _ => format!("{tag} OK {cmd} completed\r\n"),
+            };
+            if writer.write_all(reply.as_bytes()).await.is_err() {
+                return;
+            }
+        }
+    }
+
+    async fn recording_session(refuse: &'static str) -> (super::Session, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        tokio::spawn(serve_recording(listener, seen.clone(), refuse));
+        let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let mut client = async_imap::Client::new(super::Stream::Plain(tcp));
+        client.read_response().await.unwrap().unwrap();
+        let session = client.login("u", "p").await.map_err(|(e, _)| e).unwrap();
+        (session, seen)
+    }
+
+    /// A folder move is one RENAME to the new hierarchical name, after the
+    /// session has stepped out of any selected mailbox (ADR-0050).
+    #[tokio::test]
+    async fn folder_move_sends_one_rename_after_leaving_the_mailbox() {
+        let (mut session, seen) = recording_session("never").await;
+        super::prepare_folder_delete(&mut session).await.unwrap();
+        super::rename_folder(&mut session, "Work", "Projects/Work").await.unwrap();
+        let seen = seen.lock().unwrap().clone();
+        let tail: Vec<&String> = seen.iter().skip_while(|line| !line.starts_with("EXAMINE")).collect();
+        assert_eq!(tail.len(), 2, "{seen:?}");
+        assert_eq!(tail[0], "EXAMINE \"INBOX\"");
+        assert_eq!(tail[1], "RENAME \"Work\" \"Projects/Work\"");
+    }
+
+    #[tokio::test]
+    async fn a_refused_rename_is_an_error_naming_both_folders() {
+        let (mut session, _seen) = recording_session("Work").await;
+        let err = super::rename_folder(&mut session, "Work", "Projects/Work").await.unwrap_err();
+        let text = format!("{err:#}");
+        assert!(text.contains("RENAME Work Projects/Work"), "{text}");
     }
 
     /// The marker `is_unparseable_response` looks for is a string emitted by our

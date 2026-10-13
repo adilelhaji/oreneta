@@ -205,6 +205,46 @@ func TestFolderDeleteReshapesFoldersAndRefusesBadTargets(t *testing.T) {
 	}
 }
 
+func TestFolderMovePassesRenamesAndRefusesBadTargets(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"ok":      true,
+		"folder":  "Projects/Work",
+		"renames": []any{map[string]any{"from": "Work", "to": "Projects/Work"}},
+		"folders": []any{map[string]any{"name": "INBOX", "delimiter": "/"}, map[string]any{"name": "Projects/Work", "delimiter": "/"}},
+	}})
+	out, err := app.folderMove(map[string]any{"account_id": "acc", "folder_id": "Work", "parent_id": "Projects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCall(t, writer.calls[0], "folders.move", map[string]any{"account": "acc", "folder": "Work", "parent": "Projects"})
+	result, _ := out.(map[string]any)
+	if result["folder"] != "Projects/Work" {
+		t.Fatalf("folder = %#v", result["folder"])
+	}
+	if renames, _ := result["renames"].([]any); len(renames) != 1 {
+		t.Fatalf("renames = %#v, want the sidecar's list", result["renames"])
+	}
+	folders, _ := result["folders"].([]Folder)
+	if len(folders) != 2 || folders[1].ID != "Projects/Work" || folders[0].Role != "inbox" {
+		t.Fatalf("folders = %#v, want reshaped rows", result["folders"])
+	}
+
+	app, writer = newMailHandlerTestApp(t)
+	for _, payload := range []map[string]any{
+		{"account_id": "acc"},
+		{"account_id": "unified", "folder_id": "Work"},
+		{"account_id": "rss-feeds", "folder_id": "Work"},
+		{"folder_id": "Work"},
+	} {
+		if _, err := app.folderMove(payload); err == nil {
+			t.Fatalf("folderMove(%v) succeeded, want an error", payload)
+		}
+	}
+	if len(writer.calls) != 0 {
+		t.Fatalf("sidecar calls = %d, want the bad payloads refused locally", len(writer.calls))
+	}
+}
+
 func TestMailMovePassesBranchKeyThrough(t *testing.T) {
 	threadID := formatImapThreadID("acc", "INBOX", "k1#Todo")
 	app, writer := newMailHandlerTestApp(t,

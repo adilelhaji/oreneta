@@ -4,6 +4,16 @@ import { accounts$ } from './accounts'
 import type { Account } from '../types'
 import { showToast } from './ui'
 import { t } from '../lib/i18n'
+import { settings$ } from './settings'
+import {
+  effectiveWorkDays,
+  localeWeekInfo,
+  resolveFirstDay,
+  systemLocale,
+  weekStartOf,
+  type LocaleWeekInfo,
+  type Weekday,
+} from '../lib/calendarWeek'
 import {
   buildNotice,
   cancellationNotSent,
@@ -172,12 +182,30 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
-/// Monday-based, following the European convention of every locale this app
-/// ships real translations for.
-export function startOfWeek(date: Date): Date {
-  const midnight = startOfDay(date)
-  const weekday = (midnight.getDay() + 6) % 7
-  return new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - weekday)
+let cachedWeek: { locale: string; info: LocaleWeekInfo } | null = null
+
+/// The system locale's week (ADR-0051): its first day, weekend and the minimum
+/// days of week 1. The system's, not the interface language's, because only it
+/// carries a region — an English interface in Madrid still has Monday weeks.
+export function localeWeek(): LocaleWeekInfo {
+  const locale = systemLocale()
+  if (cachedWeek?.locale !== locale) cachedWeek = { locale, info: localeWeekInfo(locale) }
+  return cachedWeek.info
+}
+
+/// The day the week opens on: the person's choice, else the locale's.
+export function firstDayOfWeek(choice = settings$.calendarWeekStart.peek()): Weekday {
+  return resolveFirstDay(choice, localeWeek())
+}
+
+/// The working days, ISO-numbered: the chosen ones, else all but the weekend.
+export function workDays(prefs = settings$.calendar.peek()): Weekday[] {
+  return effectiveWorkDays(prefs, localeWeek())
+}
+
+/// Local midnight of the first day of the week, on the configured first day.
+export function startOfWeek(date: Date, firstDay: Weekday = firstDayOfWeek()): Date {
+  return weekStartOf(startOfDay(date), firstDay)
 }
 
 /// The [from, to) window a view needs, in epoch seconds. Boundaries are
@@ -485,6 +513,8 @@ export function newEvent(startAt?: number): EventDraft | null {
   // at save time with a worse message.
   if (!target) return null
   const start = startAt ?? Math.ceil(Date.now() / 1000 / 3600) * 3600
+  // Calendar → General: how long a new event lasts and whether it reminds.
+  const { defaultDuration, defaultReminder } = settings$.calendar.peek()
   const draft: EventDraft = {
     id: '',
     calendar_id: target.id,
@@ -492,7 +522,8 @@ export function newEvent(startAt?: number): EventDraft | null {
     subject: '',
     location: '',
     start,
-    end: start + 3600,
+    end: start + defaultDuration * 60,
+    ...(defaultReminder === null ? {} : { reminder_minutes: defaultReminder }),
     all_day: false,
     is_recurring: false,
     is_cancelled: false,

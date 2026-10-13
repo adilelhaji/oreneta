@@ -917,6 +917,47 @@ test('a read receipt request is asked about in a bar that blocks nothing, and se
   expect(errors).toEqual([])
 })
 
+// SET-01 / ADR-0049: General → Notifications. Do not disturb is turned on from
+// the More menu, the side navigation says so, and one click there resumes.
+test('do not disturb shows an indicator in the side navigation and Resume clears it', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.getByRole('table')).toBeVisible()
+  const quietPushes = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .filter((r: { command: string }) => r.command === 'notify.setQuiet')
+        .map((r: { payload: unknown }) => r.payload),
+    )
+  // Not quiet at start, and the bridge was told so.
+  await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: false, quiet: false })
+  const indicator = page.getByRole('status', { name: 'Do not disturb is on until you turn it off' })
+  await expect(indicator).toHaveCount(0)
+
+  // The side navigation's own More button (the narrow-window header has one too).
+  await page.locator('aside').getByTitle('More', { exact: true }).first().click()
+  await page.getByRole('button', { name: 'Do not disturb until turned off', exact: true }).click()
+  await expect(indicator).toBeVisible()
+  await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: true, quiet: true })
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests
+            .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'notification_prefs')
+            .at(-1)?.payload.value.pause,
+      ),
+    )
+    .toEqual({ until: null })
+
+  await indicator.getByRole('button', { name: 'Resume notifications', exact: true }).click()
+  await expect(indicator).toHaveCount(0)
+  await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: false, quiet: false })
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('shared dialog focus returns to opener and busy Escape does not close parent', async ({ page }) => {
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
@@ -1238,6 +1279,8 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           { id: 'owncloud', name: 'ownCloud', usable: true },
           { id: 'dropbox', name: 'Dropbox', usable: false },
         ],
+        // Folder moves (ADR-0050): nothing moves unless a test says how.
+        'mail.folderMove': { ok: true, renames: [], folders },
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
         // Read receipts (ADR-0048): the core asks, and the person answers.
@@ -1252,6 +1295,8 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'localDrafts.save': { applied: true, revision: 1, deleted: false },
         'localDrafts.delete': { applied: true, revision: 2, deleted: true },
         'tray.setUnread': { ok: true },
+        // Do not disturb and quiet hours reach the bridge as intervals (ADR-0049).
+        'notify.setQuiet': { ok: true },
         'update.status': {
           state: 'idle',
           supported: !!options.updatesSupported,
@@ -2283,5 +2328,155 @@ test('a saved theme changes to cobalt only after an explicit picker action', asy
       ),
     )
     .toBe('oreneta-light')
+  expect(errors).toEqual([])
+})
+
+// SET-18 / ADR-0051: Calendar → General. Under a British locale the week opens
+// on Monday; choosing Sunday in Settings persists one flat row and redraws the
+// week view from Sunday, with the weekend still shaded as days off.
+test.describe('calendar week start', () => {
+  test.use({ locale: 'en-GB' })
+  test('changing the first day to Sunday reorders the week view and keeps its shading', async ({ page }) => {
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.addInitScript(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['calendar.events'] = { events: [] }
+      replies['calendar.list'] = {
+        calendars: [{ id: 'local-test', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+      }
+    })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    const week = page.getByRole('button', { name: 'Week', exact: true })
+    await week.click()
+    await expect(week).toHaveAttribute('aria-pressed', 'true')
+
+    const headingDays = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('[data-day-heading]')).map((el) =>
+          new Date(Number(el.dataset.dayHeading)).getDay(),
+        ),
+      )
+    const workdays = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('[data-day-column]')).map((el) => el.dataset.workday),
+      )
+    const firstHeading = page.locator('[data-day-heading]').first()
+
+    // The locale's week: Monday first, Saturday and Sunday off.
+    await expect.poll(headingDays).toEqual([1, 2, 3, 4, 5, 6, 0])
+    await expect(firstHeading).toContainText('Mon')
+    expect(await workdays()).toEqual(['true', 'true', 'true', 'true', 'true', 'false', 'false'])
+    const bands = page.locator('[data-day-column]').first().locator('[data-off-hours]')
+    await expect(bands).toHaveCount(2)
+    await expect(bands.first()).toHaveAttribute('data-off-hours', '0-9')
+
+    await page.keyboard.press('Control+,')
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const group = settings.locator('[data-settings-section="calendarGeneral"]')
+    await expect(group).toContainText('First day of the week')
+    await expect(group.getByRole('combobox', { name: 'First day of the week' })).toHaveValue('locale')
+    await expect(group.getByRole('combobox', { name: 'First day of the week' }).locator('option').first()).toHaveText(
+      'Regional default (Monday)',
+    )
+    await group.getByRole('combobox', { name: 'First day of the week' }).selectOption('sunday')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests
+              .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'calendar_week_start')
+              .at(-1)?.payload.value,
+        ),
+      )
+      .toBe('sunday')
+    await page.keyboard.press('Escape')
+    await expect(settings).toHaveCount(0)
+
+    await expect.poll(headingDays).toEqual([0, 1, 2, 3, 4, 5, 6])
+    await expect(firstHeading).toContainText('Sun')
+    // Shading follows the days, not the columns: Sunday and Saturday stay off.
+    expect(await workdays()).toEqual(['false', 'true', 'true', 'true', 'true', 'true', 'false'])
+    await expect(page.locator('[data-day-column]').first().locator('[data-off-hours]')).toHaveAttribute('data-off-hours', '0-24')
+
+    // The work-week toggle hides the days off.
+    await page.getByRole('button', { name: 'Work week', exact: true }).click()
+    await expect.poll(headingDays).toEqual([1, 2, 3, 4, 5])
+    expect(await page.evaluate(() => (window as any).startupProbe.calls.some((c: string) => c.startsWith('calendar.') && !['calendar.list', 'calendar.events'].includes(c)))).toBe(false)
+    expect(errors).toEqual([])
+  })
+})
+
+// Folder favorites, colors and moves (ADR-0050, SET-07): a folder made a
+// favorite and colored from its menu, then moved with the keyboard path, all
+// under the production CSP; the favorite and its color survive a reload.
+test('folder favorites, colors and a keyboard move', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    const extra = [
+      { id: 'Clients', account_id: 'synthetic-account', name: 'Clients', role: 'folder', delimiter: '/', unread: 1 },
+      { id: 'Team', account_id: 'synthetic-account', name: 'Team', role: 'folder', delimiter: '/', unread: 0 },
+    ]
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      const result = await invoke(command, payload)
+      if (command === 'mail.folderList' && payload.account_id === 'synthetic-account') {
+        return { folders: [...result.folders, ...extra] }
+      }
+      if (command === 'mail.folderMove') {
+        const base = (window as any).startupProbe.replies['mail.folderList'].folders
+        return {
+          ok: true,
+          folder: 'Clients/Team',
+          renames: [{ from: 'Team', to: 'Clients/Team' }],
+          folders: [...base, extra[0], { ...extra[1], id: 'Clients/Team', name: 'Clients/Team' }],
+        }
+      }
+      return result
+    }
+  })
+  await page.goto('/')
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const tree = nav.locator('ul.mail-folder-tree').last()
+  await tree.getByRole('button', { name: 'Clients 1', exact: true }).click({ button: 'right' })
+  await page.getByRole('button', { name: 'Add to favorites' }).click()
+  const favorites = nav.getByRole('region', { name: 'Favorites' })
+  await expect(favorites.getByRole('button', { name: 'Clients 1', exact: true })).toBeVisible()
+
+  await tree.getByRole('button', { name: 'Clients 1', exact: true }).click({ button: 'right' })
+  await page.getByRole('button', { name: 'Teal', exact: true }).click()
+  const colored = nav.getByRole('button', { name: 'Clients Color: Teal 1', exact: true })
+  await expect(colored).toHaveCount(2)
+  // The palette's CSS applies under the production CSP: the light-theme teal.
+  expect(await colored.first().locator('.mail-folder-dot').evaluate((dot) => getComputedStyle(dot).backgroundColor)).toBe(
+    'rgb(0, 121, 107)',
+  )
+
+  // Keyboard path: Shift+F10 on the folder, "Move folder to…", the picker, confirm.
+  await tree.getByRole('button', { name: 'Team', exact: true }).focus()
+  await page.keyboard.press('Shift+F10')
+  await expect(page.getByRole('button', { name: 'Add to favorites' })).toBeFocused()
+  await page.getByRole('button', { name: 'Move folder to…' }).click()
+  const picker = page.getByRole('dialog', { name: 'Move Team to…' })
+  await picker.getByRole('radio', { name: 'Clients' }).check()
+  await picker.getByRole('button', { name: 'Move here' }).click()
+  const confirm = page.getByRole('alertdialog')
+  await expect(confirm).toContainText('“Team” into “Clients”')
+  await confirm.getByRole('button', { name: 'Move folder' }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).startupProbe.requests.find((r: any) => r.command === 'mail.folderMove')?.payload),
+    )
+    .toEqual({ account_id: 'synthetic-account', folder_id: 'Team', parent_id: 'Clients' })
+  await expect(tree.getByRole('button', { name: 'Collapse Clients' })).toBeVisible()
+  await expect(tree.locator('.mail-folder-children').getByRole('button', { name: 'Team', exact: true })).toBeVisible()
+
+  await page.reload()
+  await expect(
+    nav.getByRole('region', { name: 'Favorites' }).getByRole('button', { name: 'Clients Color: Teal 1', exact: true }),
+  ).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
   expect(errors).toEqual([])
 })

@@ -17,12 +17,15 @@ import {
   type Frequency,
   type Participant,
   type Recurrence,
+  firstDayOfWeek,
 } from '../../states/calendar'
 import { accounts$ } from '../../states/accounts'
 import { mailsNotices, noticeRecipients, noticeSender, organizerFor } from '../../states/organizerNotices'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
+import { settings$ } from '../../states/settings'
+import { weekdayOrder } from '../../lib/calendarWeek'
 
 /// Creates or edits one event.
 ///
@@ -394,7 +397,7 @@ const inputClass =
 /// The usual ladder of reminder times, in minutes before the start.
 const REMINDER_CHOICES = [0, 5, 10, 15, 30, 60, 120, 24 * 60, 2 * 24 * 60, 7 * 24 * 60]
 
-function reminderLabel(minutes: number, t: ReturnType<typeof useTranslation>['t']): string {
+export function reminderLabel(minutes: number, t: ReturnType<typeof useTranslation>['t']): string {
   if (minutes === 0) return t('calendar.reminderAtStart', { defaultValue: 'At the start' })
   if (minutes % (7 * 24 * 60) === 0)
     return t('calendar.reminderWeeks', {
@@ -528,6 +531,9 @@ function RepeatFields({
   onChange: (rule: Recurrence | null) => void
 }) {
   const { t } = useTranslation()
+  // Listed from the week's first day (Calendar → General); the numbering stays
+  // 0 = Monday, which is what the rule carries.
+  const weekStart = useValue(settings$.calendarWeekStart)
   const startWeekday = (new Date(start * 1000).getDay() + 6) % 7
   const days = rule?.weekdays?.length ? rule.weekdays : [startWeekday]
 
@@ -568,19 +574,23 @@ function RepeatFields({
         <>
           {rule.freq === 'weekly' && (
             <div className="flex gap-1">
-              {WEEKDAY_INITIALS.map((initial, day) => (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() => toggleDay(day)}
-                  aria-pressed={days.includes(day)}
-                  className={`h-7 w-7 rounded-full text-2xs font-semibold transition-colors cursor-pointer ${
-                    days.includes(day) ? 'bg-accent text-on-accent' : 'bg-raised text-secondary hover:text-primary'
-                  }`}
-                >
-                  {initial}
-                </button>
-              ))}
+              {weekdayOrder(firstDayOfWeek(weekStart)).map((iso) => {
+                const day = iso - 1
+                const initial = WEEKDAY_INITIALS[day]
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    aria-pressed={days.includes(day)}
+                    className={`h-7 w-7 rounded-full text-2xs font-semibold transition-colors cursor-pointer ${
+                      days.includes(day) ? 'bg-accent text-on-accent' : 'bg-raised text-secondary hover:text-primary'
+                    }`}
+                  >
+                    {initial}
+                  </button>
+                )
+              })}
             </div>
           )}
 

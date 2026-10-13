@@ -88,8 +88,9 @@ describe('settings and palette discovery', () => {
     const entries = settingsDestinations([feed], t)
     expect(entries.some((item) => item.accountId === 'feed' && item.section === 'accountSignature')).toBe(false)
     expect(entries.some((item) => item.accountId === 'feed' && item.section === 'account')).toBe(true)
-    // Seven general sections plus Replies and forwards (ADR-0047).
-    expect(entries.filter((item) => !item.accountId)).toHaveLength(8)
+    // Seven general sections plus Replies and forwards (ADR-0047),
+    // Notifications (ADR-0049) and Calendar.
+    expect(entries.filter((item) => !item.accountId)).toHaveLength(10)
     expect(settingsDestinations([feed], t, false).some((item) => item.section === 'updates')).toBe(false)
   })
   it('can compose from another sendable account while viewing Graph, but rejects a stale capability', () => {

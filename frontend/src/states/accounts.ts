@@ -5,6 +5,7 @@ import { boot } from '../boot'
 import type { Account, AccountProxy, AccountSignature, Alias, ChatWallpaper } from '../types'
 import { confirmAction, ui$, showToast } from './ui'
 import { forgetAccountInGroups, inUnifiedScope } from './accountGroups'
+import { forgetAccountFolderPrefs } from './folderPrefs'
 
 // Accounts state — maps 1:1 to the `accounts` DB table. The list is loaded by
 // boot()/account flows; the mutations here update it optimistically and persist
@@ -208,6 +209,7 @@ export async function deleteAccount(accountId: string) {
   try {
     const result = await invoke<{ kept?: KeptAfterRemoval }>('account.remove', { id: accountId })
     forgetAccountInGroups(accountId)
+    forgetAccountFolderPrefs(accountId)
     showToast(keptAfterRemovalNotice(result?.kept) ?? t('accounts.toast.accountRemoved'))
     await boot()
   } catch (error) {

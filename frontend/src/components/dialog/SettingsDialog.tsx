@@ -60,6 +60,8 @@ import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { SenderListsGroup } from './SenderListsGroup'
 import { TrackingProtectionGroup } from './TrackingProtectionGroup'
 import { ReceiptsGroup } from './ReceiptsGroup'
+import { CalendarGeneralGroup } from './CalendarGeneralGroup'
+import { NotificationsGroup } from './NotificationsGroup'
 import { ReaderFoldingRows } from './ReaderFoldingRows'
 import { TranslationModelsGroup } from './TranslationModelsGroup'
 import { CloudStorageGroup } from './CloudStorageGroup'
@@ -965,6 +967,8 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
+      <NotificationsGroup />
+
       <LabelsSettingsSection />
 
       <RulesSettingsSection />
@@ -1099,6 +1103,7 @@ function GeneralSection() {
       <SenderListsGroup />
       <TrackingProtectionGroup />
       <ReceiptsGroup />
+      <CalendarGeneralGroup />
       <TranslationModelsGroup />
       <CloudStorageGroup />
       <StorageGroup />

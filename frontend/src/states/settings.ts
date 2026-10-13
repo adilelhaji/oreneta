@@ -34,6 +34,14 @@ import {
 } from '../lib/shortcuts'
 import type { Account, ChatWallpaper } from '../types'
 import { DEFAULT_REPLY_FORWARD_PREFS, sanitizeReplyForwardPrefs, type ReplyForwardPrefs } from '../lib/replyForward'
+import {
+  DEFAULT_CALENDAR_PREFS,
+  WEEK_START_CHOICES,
+  sanitizeCalendarPrefs,
+  type CalendarPrefs,
+  type WeekStartChoice,
+} from '../lib/calendarWeek'
+import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
 
 // Persisted user settings. This module maps 1:1 to the `settings` DB table: each
@@ -268,6 +276,15 @@ export type Settings = {
   requestReadReceipt: boolean
   /** Whether a new message asks for a delivery receipt unless changed there. */
   requestDeliveryReceipt: boolean
+  /**
+   * Calendar → General (ADR-0051): the week's first day. A flat row of its own,
+   * not part of `calendar`, so the mobile app can read it as a plain string.
+   */
+  calendarWeekStart: WeekStartChoice
+  /** Calendar → General (ADR-0051): week numbers, work hours, new-event defaults. */
+  calendar: CalendarPrefs
+  /** Sounds, do not disturb and quiet hours (ADR-0049). One row. */
+  notifications: NotificationPrefs
 }
 
 /**
@@ -376,6 +393,10 @@ const DB_KEY = {
   readReceiptPolicy: 'read_receipt_policy',
   requestReadReceipt: 'request_read_receipt',
   requestDeliveryReceipt: 'request_delivery_receipt',
+  // Read by the mobile agenda too (calendarWeekStartFromSetting).
+  calendarWeekStart: 'calendar_week_start',
+  calendar: 'calendar_general',
+  notifications: 'notification_prefs',
 } satisfies Record<keyof Settings, string>
 
 /** Keys to request from `app.prefsGet` on boot. */
@@ -575,6 +596,9 @@ export const settings$ = observable<Settings>({
   readReceiptPolicy: 'ask',
   requestReadReceipt: false,
   requestDeliveryReceipt: false,
+  calendarWeekStart: 'locale',
+  calendar: DEFAULT_CALENDAR_PREFS,
+  notifications: structuredClone(DEFAULT_NOTIFICATION_PREFS),
 })
 
 // lib/shortcuts resolves chords from a local mirror, so keep it in step with the
@@ -967,6 +991,15 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     if (typeof prefs[DB_KEY.requestDeliveryReceipt] === 'boolean') {
       settings$.requestDeliveryReceipt.set(prefs[DB_KEY.requestDeliveryReceipt] as boolean)
     }
+    const notifications = sanitizeNotificationPrefs(prefs[DB_KEY.notifications])
+    if (notifications) settings$.notifications.set(notifications)
+
+    const weekStart = prefs[DB_KEY.calendarWeekStart]
+    if (WEEK_START_CHOICES.includes(weekStart as WeekStartChoice)) {
+      settings$.calendarWeekStart.set(weekStart as WeekStartChoice)
+    }
+    const calendarPrefs = sanitizeCalendarPrefs(prefs[DB_KEY.calendar])
+    if (calendarPrefs) settings$.calendar.set(calendarPrefs)
 
     const hiddenSideNavAccounts = sanitizeStringArray(prefs[DB_KEY.hiddenSideNavAccounts])
     if (hiddenSideNavAccounts) settings$.hiddenSideNavAccounts.set(hiddenSideNavAccounts)

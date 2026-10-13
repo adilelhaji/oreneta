@@ -148,6 +148,48 @@ func (a *App) folderDelete(payload map[string]any) (any, error) {
 	return out, nil
 }
 
+// folderMove nests a folder under another folder of the same account, or
+// back at the top level with an empty parent (ADR-0050). The core plans the
+// new names, refuses special-use folders and moves into the folder's own
+// subtree, renames on the server and reconciles its cache; this reshapes the
+// folder rows and passes on every rename so the frontend can carry its
+// favorites, colors and open views across.
+func (a *App) folderMove(payload map[string]any) (any, error) {
+	var req FolderMoveRequest
+	_ = decode(payload, &req)
+	if req.AccountID == "" {
+		return nil, errors.New("account_id is required")
+	}
+	if strings.TrimSpace(req.FolderID) == "" {
+		return nil, errors.New("folder_id is required")
+	}
+	if isRSSAccountID(req.AccountID) {
+		return nil, errors.New("RSS accounts do not support folders")
+	}
+	if req.AccountID == "unified" {
+		return nil, errors.New("Pick a single account to move a folder")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	res, err := a.sidecar.Call("folders.move", map[string]any{"account": req.AccountID, "folder": req.FolderID, "parent": req.ParentID})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"ok": true}
+	if m, isMap := res.(map[string]any); isMap {
+		for _, key := range []string{"ok", "folder", "renames"} {
+			if value, found := m[key]; found {
+				out[key] = value
+			}
+		}
+		if shaped, isShaped := foldersJSON(req.AccountID, res).(map[string]any); isShaped {
+			out["folders"] = shaped["folders"]
+		}
+	}
+	return out, nil
+}
+
 func (a *App) threadList(payload map[string]any) (any, error) {
 	var req ThreadListRequest
 	_ = decode(payload, &req)

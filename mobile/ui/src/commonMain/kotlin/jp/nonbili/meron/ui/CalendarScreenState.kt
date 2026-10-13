@@ -15,6 +15,10 @@ internal class CalendarScreenState {
     var calendars by mutableStateOf(emptyList<CalendarSummary>())
     var events by mutableStateOf(emptyList<CalendarEvent>())
     var window by mutableStateOf<AgendaWindow?>(null)
+
+    // The week's first day from the desktop setting (ISO weekday), or null to
+    // open the agenda on today (CALENDAR_WEEK_START_SETTING_KEY).
+    var firstDayOfWeek: Int? = null
     var loading by mutableStateOf(false)
 
     // The core answered that it has no calendar commands at all.

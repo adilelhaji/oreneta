@@ -1,5 +1,6 @@
 package jp.nonbili.meron.ui
 
+import jp.nonbili.meron.shared.AppPrefsGetParams
 import jp.nonbili.meron.shared.CalendarCreateLocalParams
 import jp.nonbili.meron.shared.CalendarCreateParams
 import jp.nonbili.meron.shared.CalendarDeleteParams
@@ -11,12 +12,15 @@ import jp.nonbili.meron.shared.CalendarSetEnabledParams
 import jp.nonbili.meron.shared.CalendarSummary
 import jp.nonbili.meron.shared.CalendarUpdateParams
 import jp.nonbili.meron.shared.MobileCalendarCommandClient
+import jp.nonbili.meron.shared.MobileMailCommandClient
 import jp.nonbili.meron.shared.accountSummaryIsRss
 import jp.nonbili.meron.shared.isUnknownCoreMethod
 import jp.nonbili.meron.shared.ownAddressList
+import jp.nonbili.meron.shared.parseAppPrefsResponse
 import jp.nonbili.meron.shared.parseCalendarEventDetailsResponse
 import jp.nonbili.meron.shared.parseCalendarEventsResponse
 import jp.nonbili.meron.shared.parseCalendarListResponse
+import jp.nonbili.meron.shared.requireCoreOk
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -34,6 +38,38 @@ internal fun MeronMobileState.openCalendarScreen() {
     previousTopScreen = Screen.Calendar
     screen = Screen.Calendar
     loadCalendarScreen(refresh = true)
+    refreshCalendarWeekStart()
+}
+
+private fun MeronMobileState.todayWindow(): AgendaWindow = agendaWindowFrom(currentTimeMillis() / 1000, ::localUtcOffsetSeconds, firstDayOfWeek = calendarUi.firstDayOfWeek)
+
+/**
+ * Reads the week's first day the desktop keeps (ADR-0051). When it changed and
+ * the agenda is still on the window holding today, that window is re-anchored
+ * on the new first day; one the reader paged to is left where it is. A failed
+ * read keeps what was known.
+ */
+private fun MeronMobileState.refreshCalendarWeekStart() {
+    if (!coreLoaded) return
+    scope.launch {
+        val response =
+            runCatching {
+                withContext(ioDispatcher) {
+                    requireCoreOk(
+                        MobileMailCommandClient(core).getPrefs(AppPrefsGetParams(listOf(CALENDAR_WEEK_START_SETTING_KEY))),
+                    )
+                }
+            }.getOrNull() ?: return@launch
+        val firstDay = calendarWeekStartFromSetting(parseAppPrefsResponse(response)[CALENDAR_WEEK_START_SETTING_KEY])
+        val ui = calendarUi
+        if (firstDay == ui.firstDayOfWeek) return@launch
+        val onToday = ui.window == null || ui.window == todayWindow()
+        ui.firstDayOfWeek = firstDay
+        if (onToday && screen == Screen.Calendar) {
+            ui.window = todayWindow()
+            loadCalendarScreen(refresh = false)
+        }
+    }
 }
 
 /** Reads the calendars and the agenda window, opening on today the first time. */
@@ -43,7 +79,7 @@ internal fun MeronMobileState.loadCalendarScreen(refresh: Boolean) {
         ui.error = coreUnavailableMessage
         return
     }
-    val window = ui.window ?: agendaWindowFrom(currentTimeMillis() / 1000, ::localUtcOffsetSeconds).also { ui.window = it }
+    val window = ui.window ?: todayWindow().also { ui.window = it }
     val generation = ++ui.loadGeneration
     val accountIds = calendarAccountIds()
     val (from, to) = window.bounds(::localUtcOffsetSeconds)
@@ -86,7 +122,7 @@ internal fun MeronMobileState.moveCalendarWindow(forward: Boolean) {
 }
 
 internal fun MeronMobileState.showCalendarToday() {
-    calendarUi.window = agendaWindowFrom(currentTimeMillis() / 1000, ::localUtcOffsetSeconds)
+    calendarUi.window = todayWindow()
     loadCalendarScreen(refresh = true)
 }
 

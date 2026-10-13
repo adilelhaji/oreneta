@@ -188,6 +188,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.traySetUnread(payload)
 	case "i18n.setNativeLabels":
 		return a.setNativeLabels(payload)
+	case "notify.setQuiet":
+		return a.setNotifyQuiet(payload)
 	case "changelog.fetch":
 		return a.changelogFetch()
 	case "update.status":
@@ -483,6 +485,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.emptyFolder(payload)
 	case "mail.folderDelete":
 		return a.folderDelete(payload)
+	// Folder moves (ADR-0050): the core checks, renames and reconciles.
+	case "mail.folderMove":
+		return a.folderMove(payload)
 	case "mail.move":
 		return a.mailMove(payload)
 	case "mail.copy":

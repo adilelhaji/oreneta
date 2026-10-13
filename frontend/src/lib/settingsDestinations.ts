@@ -7,6 +7,8 @@ export type SettingsSection =
   | 'reading'
   | 'signature'
   | 'repliesForwards'
+  | 'calendarGeneral'
+  | 'notifications'
   | 'privacy'
   | 'updates'
   | 'backup'
@@ -51,6 +53,26 @@ export function settingsDestinations(
       label: t('settings.sections.repliesForwards', { defaultValue: 'Replies and forwards' }),
       keywords: `reply replies forward forwarding quote quoting header re fwd attachment eml ${t(
         'settingsSearch.aliases.repliesForwards',
+        { defaultValue: '' },
+      )}`,
+    },
+    {
+      id: 'settings.section.notifications',
+      section: 'notifications' as const,
+      accountId: '',
+      label: t('settings.sections.notifications', { defaultValue: 'Notifications' }),
+      keywords: `notifications notification sound sounds volume chime do not disturb dnd quiet hours pause mute reminder ${t(
+        'settingsSearch.aliases.notifications',
+        { defaultValue: '' },
+      )}`,
+    },
+    {
+      id: 'settings.section.calendarGeneral',
+      section: 'calendarGeneral' as const,
+      accountId: '',
+      label: t('settings.sections.calendarGeneral', { defaultValue: 'Calendar' }),
+      keywords: `calendar week start first day sunday monday saturday week numbers work hours working days work week duration reminder ${t(
+        'settingsSearch.aliases.calendarGeneral',
         { defaultValue: '' },
       )}`,
     },

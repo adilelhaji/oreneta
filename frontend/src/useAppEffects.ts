@@ -33,6 +33,7 @@ import { loadLabels } from './states/labels'
 import { loadCategories } from './states/categories'
 import { forgetScheduledSend, markScheduledSendFailed, refreshScheduledSends } from './states/scheduledSends'
 import { refreshOutgoingAttempts } from './states/outgoingAttempts'
+import { mayShowMailToast, startNotifications } from './states/notifications'
 import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
 
 const DEFAULT_RSS_SYNC_INTERVAL_MINUTES = 60
@@ -91,6 +92,7 @@ export function useAppEffects() {
       trayHide: t('tray.hideToTray'),
       trayHideTooltip: t('tray.hideOrenetaTooltip'),
       trayQuit: t('tray.quitOreneta'),
+      trayDoNotDisturb: t('tray.doNotDisturb', { defaultValue: 'Do not disturb' }),
       newMessage: t('notify.newMessage'),
       newMessageCount: translationTemplate('notify.newMessageCount'),
       noSubject: t('notify.noSubject'),
@@ -100,6 +102,9 @@ export function useAppEffects() {
     // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
     applyDocumentLanguage(targetLanguage)
   }, [language])
+
+  // Notification sounds, do not disturb and quiet hours (ADR-0049).
+  useEffect(() => startNotifications(), [])
 
   useEffect(() => {
     void boot().catch((error) => {
@@ -369,7 +374,8 @@ export function useAppEffects() {
       if (detail?.account && selectedAccount !== 'unified' && detail.account !== selectedAccount) return
       const folder = detail?.folder ?? 'inbox'
       const count = detail?.count ?? 1
-      showToast(`New mail in ${folder} (+${count})`)
+      // Do not disturb (ADR-0049) quiets this popup too; the list still refreshes.
+      if (mayShowMailToast()) showToast(`New mail in ${folder} (+${count})`)
       if (selectedAccount) void refreshCurrentMailbox().catch(console.error)
     })
 

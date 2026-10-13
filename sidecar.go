@@ -466,7 +466,7 @@ func sidecarCallTimeout(method string) time.Duration {
 	// from disk for as long as the data takes, so only a stuck call ends here.
 	case "messages.exportMbox", "archive.import", "calendar.importIcs", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage", "backupSchedule.runNow", "thunderbird.preview", "thunderbird.import", "notes.attach", "notes.saveAttachment", "chat.download":
 		return 2 * time.Hour
-	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete":
+	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete", "folders.move":
 		return 30 * time.Second
 	// A calendar window can span months and lists every enabled calendar, so
 	// it gets the same budget as a folder sync rather than the default.

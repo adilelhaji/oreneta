@@ -858,6 +858,7 @@ pub fn guard_command(conn: &Connection, method: &str, p: &Value) -> anyhow::Resu
             | "messages.emptyFolder"
             | "folders.create"
             | "folders.delete"
+            | "folders.move"
             | "mail.scheduleSend"
             | "oof.set"
             | "labels.link"

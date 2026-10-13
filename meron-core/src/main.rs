@@ -833,7 +833,7 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(dispatch(&engine,&request("graph.activationBegin",json!({"attempt":"unknown"})),&writer).await.is_err());
         let account="graph@example.test";
         engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[account]).unwrap();
-        for method in ["send","save_draft","discard_draft","messages.markRead","messages.markStarred","messages.delete","messages.move","messages.copy","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+        for method in ["send","save_draft","discard_draft","messages.markRead","messages.markStarred","messages.delete","messages.move","messages.copy","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","folders.move","mail.scheduleSend"] {
             let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
             assert!(error.to_string().contains("read-only"),"{method}: {error}");
         }
@@ -841,6 +841,34 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
+    }
+    /// ADR-0050: `folders.move` end to end on the local archive, which is its
+    /// own server, and refused on Exchange, which does not manage folders here.
+    #[tokio::test]
+    async fn folders_move_nests_a_local_folder_and_reports_every_rename() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        meron_core::archive::ensure_account(&engine.db.lock().unwrap(),0).unwrap();
+        let account=meron_core::archive::ACCOUNT;
+        for name in ["Years","2025","2025/Q1"] {
+            dispatch(&engine,&request("folders.create",json!({"account":account,"name":name})),&writer).await.unwrap();
+        }
+        let moved=dispatch(&engine,&request("folders.move",json!({"account":account,"folder":"2025","parent":"Years"})),&writer).await.unwrap();
+        assert_eq!(moved["folder"],"Years/2025");
+        assert_eq!(moved["renames"],json!([{"from":"2025","to":"Years/2025"},{"from":"2025/Q1","to":"Years/2025/Q1"}]));
+        let names:Vec<&str>=moved["folders"].as_array().unwrap().iter().filter_map(|f|f["name"].as_str()).collect();
+        assert!(names.contains(&"Years/2025/Q1") && !names.contains(&"2025"),"{names:?}");
+        let into_itself=dispatch(&engine,&request("folders.move",json!({"account":account,"folder":"Years","parent":"Years/2025"})),&writer).await.unwrap_err();
+        assert!(into_itself.to_string().contains("into itself"),"{into_itself}");
+        let trash=dispatch(&engine,&request("folders.move",json!({"account":account,"folder":meron_core::archive::TRASH,"parent":"Years"})),&writer).await.unwrap_err();
+        assert!(trash.to_string().contains("special folder"),"{trash}");
+
+        let ews="ews@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','exchange',?1,'EWS','{\"auth_type\":\"password\",\"ews_url\":\"https://ews.example.test/EWS/Exchange.asmx\"}',0,0)",[ews]).unwrap();
+        let refused=dispatch(&engine,&request("folders.move",json!({"account":ews,"folder":"Work","parent":"Projects"})),&writer).await;
+        assert!(refused.is_err());
     }
     #[tokio::test]
     async fn graph_writes_pass_the_guard_only_where_granted_and_supported() {
@@ -862,7 +890,7 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
         assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
         // Still unsupported, granted or not.
-        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","folders.move","mail.scheduleSend"] {
             let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
             assert!(error.to_string().contains("read-only"),"{method}: {error}");
         }
@@ -6372,6 +6400,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "folders": serde_json::to_value(folders)?,
                 "warning": warning,
             }))
+        }
+
+        // Move a folder under another one of the same account (ADR-0050).
+        "folders.move" => {
+            if is_rss(engine, &req_str(p, "account")?)? {
+                return Err(anyhow::anyhow!("RSS accounts do not support folders"));
+            }
+            meron_core::folder_move::move_folder(engine, p).await
         }
 
         "messages.unifiedRecent" => {

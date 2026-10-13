@@ -25,6 +25,7 @@ import { mail$, inboxUnread } from '../../states/mail'
 import { settings$, setUnifiedInboxSideNavVisible } from '../../states/settings'
 import { ui$ } from '../../states/ui'
 import { QuickSettingsMenu } from './QuickSettingsMenu'
+import { QuietIndicator } from './QuietIndicator'
 import { SortableBoard, SortableAccount } from './SortableRailItems'
 import { UnreadCountBadge } from './UnreadCountBadge'
 import { RailContextMenu, RailMenuItem } from './RailContextMenu'
@@ -450,6 +451,7 @@ export function SideNav() {
 
       {/* Utilities */}
       <div className="flex flex-col gap-3 items-center">
+        <QuietIndicator />
         <button
           className={`flex h-10 w-10 items-center justify-center rounded-control transition-all duration-120 cursor-pointer ${
             moreMenu ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white'

@@ -162,3 +162,34 @@ fn an_exported_mbox_reads_back_to_the_same_messages() {
     // A message without a final newline gains one; nothing else changes.
     assert_eq!(back[2], b"Subject: three\n\nno trailing newline\n".to_vec());
 }
+
+/// The local archive is its own server, so a folder move (ADR-0050) renames
+/// its raw messages along with the cached rows, and the moved mail still opens.
+#[test]
+fn a_folder_moves_into_another_with_its_mail() {
+    let db = conn();
+    {
+        let conn = db.lock().unwrap();
+        import(&conn, DEFAULT_FOLDER, vec![mail("a@x", "Budget", "")], &media()).unwrap();
+    }
+    let mut session = LocalSession::new(db.clone(), ACCOUNT);
+    let uid = *session.list_all_uids(DEFAULT_FOLDER).unwrap().iter().next().unwrap();
+    session.create_folder("2025").unwrap();
+    session.create_folder("Years").unwrap();
+    session.move_to_folder(DEFAULT_FOLDER, "2025", &[uid]).unwrap();
+    let moved = *session.list_all_uids("2025").unwrap().iter().next().unwrap();
+
+    let plan = {
+        let conn = db.lock().unwrap();
+        crate::folder_move::plan_folder_move(&conn, ACCOUNT, "2025", Some("Years"), Some("/")).unwrap()
+    };
+    session.rename_folders(&plan.renames).unwrap();
+    crate::folder_move::reconcile_folder_move(&db.lock().unwrap(), ACCOUNT, &plan, Some("Years")).unwrap();
+
+    assert!(session.list_all_uids("2025").unwrap().is_empty());
+    assert_eq!(session.list_all_uids("Years/2025").unwrap().into_iter().collect::<Vec<_>>(), vec![moved]);
+    let media_ctx = parse::MediaCtx { root: media(), account: ACCOUNT.into(), folder: "Years/2025".into(), uid: moved };
+    assert_eq!(session.read_message("Years/2025", moved, &media_ctx).unwrap().subject, "Budget");
+    let folders = session.list_folders().unwrap();
+    assert!(folders.iter().any(|f| f.name == "Years/2025" && f.delimiter.as_deref() == Some("/")));
+}

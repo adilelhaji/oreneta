@@ -7,6 +7,7 @@ import { accounts$ } from './states/accounts'
 import { openMailtoCompose } from './states/compose'
 import { ASSISTANT_PREF_KEYS, hydrateAssistant } from './states/assistant'
 import { ACCOUNT_GROUP_KEYS, hydrateAccountGroups } from './states/accountGroups'
+import { FOLDER_PREF_KEYS, hydrateFolderPrefs } from './states/folderPrefs'
 
 // App bootstrap: load the system check, accounts, and persisted settings in
 // parallel, seed the initial selection, and drain any mailto: links the OS
@@ -22,6 +23,7 @@ export async function boot() {
         ...KANBAN_SESSION_KEYS,
         ...ASSISTANT_PREF_KEYS,
         ...ACCOUNT_GROUP_KEYS,
+        ...FOLDER_PREF_KEYS,
       ],
     }).catch(() => ({ prefs: {} })),
   ])
@@ -29,6 +31,7 @@ export async function boot() {
   hydrateSettings(prefs)
   hydrateAssistant(prefs)
   hydrateAccountGroups(prefs)
+  hydrateFolderPrefs(prefs)
   ui$.system.set(systemResult)
   accounts$.set(accountResult.accounts)
   restoreUiSession(prefs, accountResult.accounts)

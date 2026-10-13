@@ -9,11 +9,16 @@ import {
   newEvent,
   setCalendarView,
   startOfDay,
+  firstDayOfWeek,
+  localeWeek,
   startOfWeek,
+  workDays,
   type CalendarEvent,
 } from '../../states/calendar'
+import { settings$ } from '../../states/settings'
 import { formatTime } from './AgendaView'
 import { hoursIntoDay, instantAtHour } from '../../lib/calendarGrid'
+import { isoWeekday, offHourBands, scrollHour, weekNumber, weekNumberRule } from '../../lib/calendarWeek'
 
 /// Pixels per hour. Tall enough that a half-hour meeting still fits a line of
 /// text, short enough that a working day fits a laptop screen.
@@ -24,7 +29,9 @@ const HOUR_PX = 52
 /// Events sit at their hour and share the column width when they overlap.
 /// The strip above the grid holds all-day events, which have no hour to sit
 /// at. Clicking an empty slot starts an event there; the first render scrolls
-/// to the working morning rather than to midnight.
+/// to the start of the work day rather than to midnight. Hours and days outside
+/// work (Calendar → General, ADR-0051) are shaded, and the week can be cut down
+/// to its working days.
 export function WeekView({
   days,
   onEventMenu,
@@ -36,21 +43,28 @@ export function WeekView({
   const anchorMs = useValue(calendar$.anchor)
   const events = useValue(calendar$.events)
   const calendars = useValue(calendar$.calendars)
+  const weekStart = useValue(settings$.calendarWeekStart)
+  const prefs = useValue(settings$.calendar)
   const scroller = useRef<HTMLDivElement | null>(null)
 
-  const first = days === 7 ? startOfWeek(new Date(anchorMs)) : startOfDay(new Date(anchorMs))
-  const columns = useMemo(
-    () =>
-      Array.from({ length: days }, (_, i) => {
-        return new Date(first.getFullYear(), first.getMonth(), first.getDate() + i)
-      }),
-    [first.getTime(), days],
-  )
+  const firstDay = firstDayOfWeek(weekStart)
+  const working = workDays(prefs)
+  const first = days === 7 ? startOfWeek(new Date(anchorMs), firstDay) : startOfDay(new Date(anchorMs))
+  const workWeekOnly = days === 7 && prefs.workWeekOnly
+  const columns = useMemo(() => {
+    const all = Array.from({ length: days }, (_, i) => {
+      return new Date(first.getFullYear(), first.getMonth(), first.getDate() + i)
+    })
+    // A week with no working day at all is shown whole rather than empty.
+    const kept = workWeekOnly ? all.filter((date) => working.includes(isoWeekday(date))) : all
+    return kept.length > 0 ? kept : all
+  }, [first.getTime(), days, workWeekOnly, working.join()])
   const todayMs = startOfDay(new Date()).getTime()
+  const week = prefs.showWeekNumbers ? weekNumber(first, weekNumberRule(firstDay, localeWeek())).week : null
 
   useEffect(() => {
-    scroller.current?.scrollTo({ top: 7.5 * HOUR_PX })
-  }, [days, anchorMs])
+    scroller.current?.scrollTo({ top: scrollHour(prefs) * HOUR_PX })
+  }, [days, anchorMs, prefs.workStart])
 
   const colorOf = (event: CalendarEvent) => eventColor(event, calendars)
 
@@ -90,12 +104,24 @@ export function WeekView({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Day headings, and the all-day strip beneath them. */}
       <div className="shrink-0 border-b border-border pr-3">
-        <div className="grid" style={{ gridTemplateColumns: `3.5rem repeat(${days}, 1fr)` }}>
-          <div />
+        <div className="grid" style={{ gridTemplateColumns: `3.5rem repeat(${columns.length}, 1fr)` }}>
+          {week === null ? (
+            <div />
+          ) : (
+            <div
+              data-week-number={week}
+              title={t('calendar.weekNumberTitle', { defaultValue: 'Week {week}', week })}
+              className="self-center pr-2 text-right text-2xs font-semibold tabular-nums text-secondary"
+            >
+              {t('calendar.weekNumberShort', { defaultValue: 'W{week}', week })}
+            </div>
+          )}
           {columns.map((date) => (
             <button
               key={date.getTime()}
               type="button"
+              data-day-heading={date.getTime()}
+              data-workday={working.includes(isoWeekday(date))}
               onClick={() => {
                 calendar$.anchor.set(date.getTime())
                 setCalendarView('day')
@@ -141,7 +167,7 @@ export function WeekView({
 
       {/* The hour grid. */}
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid" style={{ gridTemplateColumns: `3.5rem repeat(${days}, 1fr)` }}>
+        <div className="grid" style={{ gridTemplateColumns: `3.5rem repeat(${columns.length}, 1fr)` }}>
           <div className="relative" style={{ height: 24 * HOUR_PX }}>
             {hours.map((hour) => (
               <span
@@ -156,6 +182,8 @@ export function WeekView({
           {byColumn.map(({ date, lanes }) => (
             <div
               key={date.getTime()}
+              data-day-column={date.getTime()}
+              data-workday={working.includes(isoWeekday(date))}
               className="relative border-l border-border/60"
               style={{ height: 24 * HOUR_PX }}
               onDoubleClick={(mouse) => {
@@ -164,6 +192,15 @@ export function WeekView({
                 newEvent(instantAtHour(date, hour))
               }}
             >
+              {offHourBands(date, prefs, working).map(([from, to]) => (
+                <div
+                  key={from}
+                  aria-hidden
+                  data-off-hours={`${from}-${to}`}
+                  className="pointer-events-none absolute inset-x-0 bg-raised/70"
+                  style={{ top: from * HOUR_PX, height: (to - from) * HOUR_PX }}
+                />
+              ))}
               {hours.map((hour) => (
                 <div
                   key={hour}

@@ -18,6 +18,7 @@ var (
 
 type nativeLabels struct {
 	trayShow, trayHide, trayHideTooltip, trayQuit         string
+	trayDoNotDisturb                                      string
 	newMessage, newMessageCount, noSubject, unknownSender string
 }
 
@@ -26,9 +27,10 @@ var (
 	currentLabels  = nativeLabels{
 		trayShow: "Show Oreneta", trayHide: "Hide to Tray",
 		trayHideTooltip: "Hide Oreneta to the system tray", trayQuit: "Quit Oreneta",
-		newMessage:      "New message",
-		newMessageCount: "{count, plural, one {1 new message} other {{count} new messages}}",
-		noSubject:       "(no subject)", unknownSender: "unknown sender",
+		trayDoNotDisturb: "Do not disturb",
+		newMessage:       "New message",
+		newMessageCount:  "{count, plural, one {1 new message} other {{count} new messages}}",
+		noSubject:        "(no subject)", unknownSender: "unknown sender",
 	}
 )
 
@@ -49,6 +51,7 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	set(&currentLabels.trayHide, "trayHide")
 	set(&currentLabels.trayHideTooltip, "trayHideTooltip")
 	set(&currentLabels.trayQuit, "trayQuit")
+	set(&currentLabels.trayDoNotDisturb, "trayDoNotDisturb")
 	set(&currentLabels.newMessage, "newMessage")
 	set(&currentLabels.newMessageCount, "newMessageCount")
 	set(&currentLabels.noSubject, "noSubject")
@@ -70,6 +73,10 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	if trayQuitItem != nil {
 		trayQuitItem.SetTitle(labels.trayQuit)
 		trayQuitItem.SetTooltip(labels.trayQuit)
+	}
+	if trayDndItem != nil {
+		trayDndItem.SetTitle(labels.trayDoNotDisturb)
+		trayDndItem.SetTooltip(labels.trayDoNotDisturb)
 	}
 	return map[string]any{"ok": true}, nil
 }
@@ -107,6 +114,10 @@ func formatNativePlural(template string, count int) string {
 	}
 	return strings.ReplaceAll(selected, "{count}", fmt.Sprint(count))
 }
+
+// dispatchNotification hands a notification to the platform, off the caller's
+// goroutine. A variable so tests can see what would have been raised.
+var dispatchNotification = func(a *App, n notification) { go a.deliverNotification(n) }
 
 // notification is the platform-agnostic payload a delivered OS notification
 // carries. account/threadID are stashed so that clicking the notification can
@@ -244,6 +255,13 @@ func (a *App) notifyNewMail(detail any) {
 		if muted, _ := m["muted"].(bool); muted {
 			return
 		}
+	}
+	// Do not disturb and quiet hours (ADR-0049): the unread badge still
+	// updates (the frontend got the event), only the popup is held back.
+	if notificationsSuppressed(quietMail) {
+		return
+	}
+	if m, ok := detail.(map[string]any); ok {
 		if c, ok := m["count"].(float64); ok && c > 0 {
 			count = int(c)
 		}
@@ -297,7 +315,7 @@ func (a *App) notifyNewMail(detail any) {
 
 	// Off the sidecar read loop: the platform notify call can block briefly and
 	// must not stall event processing.
-	go a.deliverNotification(n)
+	dispatchNotification(a, n)
 }
 
 // notifyReminder raises the OS notification for a calendar reminder the core
@@ -305,7 +323,7 @@ func (a *App) notifyNewMail(detail any) {
 // of what has already been raised — so this only has to say it well.
 func (a *App) notifyReminder(detail any) {
 	m, ok := detail.(map[string]any)
-	if !ok {
+	if !ok || notificationsSuppressed(quietReminder) {
 		return
 	}
 	subject, _ := m["subject"].(string)
@@ -331,7 +349,7 @@ func (a *App) notifyReminder(detail any) {
 		body += location
 	}
 
-	go a.deliverNotification(notification{
+	dispatchNotification(a, notification{
 		title:   subject,
 		body:    body,
 		account: account,
@@ -342,7 +360,7 @@ func (a *App) notifyReminder(detail any) {
 // (ADR-0013): the task's title, and its due date when it has one.
 func (a *App) notifyTaskReminder(detail any) {
 	m, ok := detail.(map[string]any)
-	if !ok {
+	if !ok || notificationsSuppressed(quietReminder) {
 		return
 	}
 	title, _ := m["title"].(string)
@@ -353,7 +371,7 @@ func (a *App) notifyTaskReminder(detail any) {
 	if due, ok := m["due_at"].(float64); ok && due > 0 {
 		body = time.Unix(int64(due), 0).Format("2006-01-02")
 	}
-	go a.deliverNotification(notification{title: title, body: body})
+	dispatchNotification(a, notification{title: title, body: body})
 }
 
 func notificationThreadID(account, folder, threadKey string) string {

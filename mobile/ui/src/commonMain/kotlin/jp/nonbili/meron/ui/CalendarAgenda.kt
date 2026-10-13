@@ -101,11 +101,44 @@ internal data class AgendaWindow(
     fun previous(): AgendaWindow = copy(startDay = startDay - days)
 }
 
+/**
+ * The agenda window that holds now. With a first day of the week (ISO, 1 =
+ * Monday … 7 = Sunday) it opens on the start of this week, so its pages are
+ * whole weeks as on the desktop; without one it opens on today.
+ */
 internal fun agendaWindowFrom(
     nowSeconds: Long,
     offsetAt: UtcOffsetAt,
     days: Int = AGENDA_WINDOW_DAYS,
-): AgendaWindow = AgendaWindow(localEpochDay(nowSeconds, offsetAt), days)
+    firstDayOfWeek: Int? = null,
+): AgendaWindow {
+    val today = localEpochDay(nowSeconds, offsetAt)
+    val back = if (firstDayOfWeek == null) 0 else (isoWeekday(today) - firstDayOfWeek).mod(7)
+    return AgendaWindow(today - back, days)
+}
+
+/** ISO weekday of an epoch day, 1 = Monday … 7 = Sunday. 1970-01-01 was a Thursday. */
+internal fun isoWeekday(epochDay: Long): Int = (epochDay + 3).mod(7L).toInt() + 1
+
+/**
+ * Core `settings` row holding the week's first day, written by the desktop's
+ * Calendar → General (ADR-0051). Shared with the desktop, not namespaced under
+ * `mobile.`, like [APP_SIGNATURE_SETTING_KEY].
+ */
+internal const val CALENDAR_WEEK_START_SETTING_KEY = "calendar_week_start"
+
+/**
+ * The first day an explicit choice names, as an ISO weekday. The desktop's
+ * "locale" default (and anything unknown) is null: the agenda then keeps
+ * opening on today, since common code has no regional week data.
+ */
+internal fun calendarWeekStartFromSetting(value: Any?): Int? =
+    when (value) {
+        "monday" -> 1
+        "saturday" -> 6
+        "sunday" -> 7
+        else -> null
+    }
 
 /**
  * The days an event covers, first and last inclusive: its dates for an
