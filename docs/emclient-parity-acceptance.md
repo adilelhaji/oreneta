@@ -13,7 +13,7 @@ any native/provider ledger row to verified.
 
 ## Status summary (2026-10-12)
 
-48 rows: 1 verified, 21 implemented-unverified, 26 partial, 0 absent, 0 unassessed, 0 blocked.
+48 rows: 1 verified, 22 implemented-unverified, 25 partial, 0 absent, 0 unassessed, 0 blocked.
 The only verified row (SET-16A) needs neither native nor provider evidence.
 No native Windows (N4) or real-provider (N5) evidence exists yet; it is
 scheduled once on the final version, so every row that requires it stays at
@@ -41,7 +41,7 @@ GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
 | SET-10 | #88 | Mail/Templates and Signatures; QuickText | implemented-unverified | yes | - |
 | SET-11 | #107 | Mail/Privacy; Receipts | partial | yes | - |
 | SET-12 | #50 | Mail/Blacklist and whitelist | implemented-unverified | yes | - |
-| SET-13 | #112 | Mail/Automatic archiving | partial | yes | - |
+| SET-13 | #112 | Mail/Automatic archiving | implemented-unverified | yes | - |
 | SET-14 | #106 | Mail/Translation | implemented-unverified | yes | - |
 | SET-15 | #45 | Mail/Watch for Reply | implemented-unverified | yes | - |
 | SET-16A | #51 | Mail/Artificial Intelligence | verified | - | - |

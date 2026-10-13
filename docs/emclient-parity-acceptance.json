@@ -622,8 +622,8 @@
       "issue": 112,
       "section": "Mail/Automatic archiving",
       "outcome": "Local archive policy, data files and import/export fidelity",
-      "status": "partial",
-      "present": "Local mail archive with EML/MBOX import (ADR-0014), mboxrd export, Thunderbird import without deleted mail (ADR-0041) and an Outlook PST guide via readpst (guide-only by owner decision) are tested; an automatic age-based archiving policy is absent",
+      "status": "implemented-unverified",
+      "present": "Local archive with EML/MBOX import, mboxrd export, Thunderbird import and a PST guide (guide-only by owner decision); automatic age-based archiving per account to the server Archive or the local archive, only after a confirmed preview, copy-verify-delete and resumable (ADR-0054), tested including a real maddy server; native and provider checks remain",
       "code": "meron-core/src/archive.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -648,6 +648,14 @@
           {
             "sha": "d6f3a28eba23cbe20de60c3e348e0bdae985fd1b",
             "result": "meron-core/src/archive/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "meron-core/src/auto_archive/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/components/dialog/AutoArchiveGroup.test.tsx"
           }
         ],
         "native": [],
@@ -858,7 +866,7 @@
       "section": "Contacts/General",
       "outcome": "Names, fields, groups, duplicates and provenance in contact preferences",
       "status": "partial",
-      "present": "Local address book and CardDAV editing that never overwrite remote changes or drop fields (ADR-0012), vCard import/export and reviewed duplicate links are tested; contact name/display preferences and contact groups are absent",
+      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange contact groups absent",
       "code": "meron-core/src/store/local_people.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -879,6 +887,18 @@
           {
             "sha": "1fda7123b2dd307a194a4e52d89d1a075d94c7f6",
             "result": "meron-core/src/store/person_links/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "meron-core/src/contacts/groups_tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/components/people/Groups.test.tsx"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/lib/contactNames.test.ts"
           }
         ],
         "native": [],
@@ -953,7 +973,7 @@
       "section": "Tasks/General",
       "outcome": "Task lists, reminders, recurrence and provider capability differences",
       "status": "partial",
-      "present": "Local task lists with standalone tasks, reminders and priorities (ADR-0013), CalDAV task lists sent with their ETag, conflicts never overwritten (ADR-0039), and recurring tasks (daily/weekly/monthly by day or nth weekday/yearly, interval, count or end date; completing an occurrence keeps a completed record and moves the task, its reminder and the VTODO DUE/DTSTART/RRULE to the next one; ADR-0053) are tested; Google Tasks, Graph To Do and EWS tasks, and regenerating a task from its completion date, are absent",
+      "present": "Local and CalDAV task lists (ADR-0013, ADR-0039); recurring tasks with daily/weekly/monthly (day or nth weekday)/yearly rules, completion moving the task and reminder to the next occurrence, CalDAV masters advanced with unknown properties kept (ADR-0053), tested including Radicale; Google Tasks, Graph To Do and EWS tasks absent",
       "code": "meron-core/src/task_sync/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -974,6 +994,18 @@
           {
             "sha": "6cb462cd53db4ec0944d458baf159e7250136059",
             "result": "integration_caldav_tasks_test.go"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "meron-core/src/calendar/recurrence/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/components/tasks/RecurringTasks.test.tsx"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "integration_caldav_recurring_tasks_test.go"
           }
         ],
         "native": [],
