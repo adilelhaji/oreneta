@@ -972,3 +972,206 @@ fn add_fetches_parses_and_syncs_over_http() {
         "unchanged feed yields no new items on re-sync"
     );
 }
+
+// ---- Tracking protection and remote pictures (#191) -------------------------
+
+/// A small list for these tests: `localhost` and `tracker.example` are
+/// trackers, `127.0.0.1` is not. The tests pass it in, so they never depend on
+/// the list the process happens to hold.
+fn tracker_list() -> std::sync::Arc<crate::privacy::FilterSet> {
+    std::sync::Arc::new(crate::privacy::FilterSet::parse(
+        "[Adblock Plus 2.0]\n! Title: EasyPrivacy\n! Version: test\n||localhost^\n||tracker.example^\n",
+    ))
+}
+
+const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+
+/// Serve `feed` at `/feed.xml` and a PNG at any other path, recording every
+/// path asked for, so a test can say exactly what was fetched.
+fn serve_counting(feed: String) -> (u16, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = asked.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut buf = [0u8; 4096];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..n]);
+            let path = request.split_whitespace().nth(1).unwrap_or("").to_string();
+            log.lock().unwrap().push(path.clone());
+            let (kind, body): (&str, Vec<u8>) = if path == "/feed.xml" {
+                ("application/rss+xml", feed.clone().into_bytes())
+            } else {
+                ("image/png", PNG.to_vec())
+            };
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&body);
+        }
+    });
+    (port, asked)
+}
+
+fn use_test_media_dir() {
+    // The same directory `add_fetches_parses_and_syncs_over_http` uses, so the
+    // tests agree on it whichever runs first.
+    let media = std::env::temp_dir().join(format!("meron-rss-test-{}", std::process::id()));
+    unsafe { std::env::set_var("MERON_MEDIA_DIR", &media) };
+}
+
+#[test]
+fn a_feed_item_leaves_out_trackers_and_says_once_what_was_blocked() {
+    let extra = json!({
+        "summary": "Caption",
+        "link": "https://example.com/post",
+        "images": [
+            { "url": "https://tracker.example/open.gif" },
+            { "url": "https://cdn.example.com/p/1.jpg" },
+        ],
+        "videos": [
+            { "url": "https://tracker.example/beacon.mp4" },
+            { "url": "https://cdn.example.com/v/1.mp4" },
+        ],
+    })
+    .to_string();
+    let html = r#"<p>Hi</p><img src="https://tracker.example/open.gif"><img src="https://cdn.example.com/p/1.jpg">"#;
+
+    let item = item_message(
+        "rss-acct", "feed-1", "Feed", "item-1", "Post", true, false, &extra, Some(html), true,
+        &tracker_list(),
+    );
+
+    let urls: Vec<&str> = item["attachments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["url"].as_str().unwrap())
+        .collect();
+    assert_eq!(urls, vec!["https://cdn.example.com/p/1.jpg", "https://cdn.example.com/v/1.mp4"]);
+
+    let blocked: Vec<&str> = item["trackers_blocked"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| b["url"].as_str().unwrap())
+        .collect();
+    assert_eq!(blocked, vec!["https://tracker.example/open.gif", "https://tracker.example/beacon.mp4"]);
+    assert_eq!(item["trackers_blocked"][0]["rule"], "||tracker.example^");
+    assert_eq!(item["trackers_protected"], true);
+    assert!(item.get("message_id").is_none(), "no Message-ID, so no per-item exception is offered");
+
+    let body_html = item["body_html"].as_str().unwrap();
+    assert!(!body_html.contains("tracker.example"), "{body_html}");
+    assert!(body_html.contains("https://cdn.example.com/p/1.jpg"));
+}
+
+#[test]
+fn a_feed_item_without_trackers_reports_none() {
+    let extra = json!({ "images": [{ "url": "https://cdn.example.com/p/1.jpg" }] }).to_string();
+    let item = item_message(
+        "rss-acct", "feed-1", "Feed", "item-1", "Post", true, false, &extra, None, true, &tracker_list(),
+    );
+    assert_eq!(item["attachments"].as_array().unwrap().len(), 1);
+    assert_eq!(item["trackers_blocked"], json!([]));
+}
+
+#[test]
+fn caching_feed_pictures_never_fetches_a_tracker() {
+    use_test_media_dir();
+    let (port, asked) = serve_counting(String::new());
+    let mut items = vec![ParsedItem {
+        item_key: format!("item-{port}"),
+        title: "Post".to_string(),
+        unread: true,
+        content_html: None,
+        extra: RssItemExtra {
+            author: String::new(),
+            link: String::new(),
+            summary: String::new(),
+            content: String::new(),
+            images: vec![
+                RssMedia { url: format!("http://localhost:{port}/tracker.png"), key: None },
+                RssMedia { url: format!("http://127.0.0.1:{port}/fine.png"), key: None },
+            ],
+            videos: Vec::new(),
+            published_at: 0,
+            updated_at: 0,
+            fetched_at: 0,
+        },
+    }];
+
+    cache_feed_images("rss-trackers", "feed-1", &mut items, &tracker_list());
+
+    assert_eq!(*asked.lock().unwrap(), vec!["/fine.png".to_string()]);
+    assert!(items[0].extra.images[0].key.is_none(), "the tracker is not cached");
+    assert!(items[0].extra.images[1].key.is_some(), "the ordinary picture is");
+}
+
+#[test]
+fn a_feed_icon_on_the_tracker_list_is_not_fetched() {
+    use_test_media_dir();
+    let (port, asked) = serve_counting(String::new());
+    let icon = format!("http://localhost:{port}/icon.png");
+    assert_eq!(cache_feed_icon("rss-trackers", "feed-icon", &icon, &tracker_list()), None);
+    assert!(asked.lock().unwrap().is_empty());
+}
+
+fn feed_with_picture_and_icon(port: u16) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Pictures</title>
+    <link>https://example.com</link>
+    <image>
+      <url>http://127.0.0.1:{port}/icon.png</url>
+      <title>Pictures</title>
+      <link>https://example.com</link>
+    </image>
+    <item>
+      <title>With a picture</title>
+      <link>https://example.com/1</link>
+      <guid>pic-1</guid>
+      <description><![CDATA[<p>Look</p><img src="http://127.0.0.1:{port}/pic.png">]]></description>
+    </item>
+  </channel>
+</rss>"#
+    )
+}
+
+#[test]
+fn with_remote_pictures_off_a_sync_fetches_neither_pictures_nor_the_icon() {
+    use_test_media_dir();
+    let (port, asked) = serve_counting(String::new());
+    // Pictures and the icon come from one server, the feed from another, so
+    // the first one's log holds only picture and icon requests.
+    let (feed_port, _) = serve_counting(feed_with_picture_and_icon(port));
+    let conn = Connection::open_in_memory().unwrap();
+    crate::store::run_migrations(&conn).unwrap();
+    let db = Mutex::new(conn);
+    let account = add(&db, &format!("http://127.0.0.1:{feed_port}/feed.xml"), "Pictures").unwrap();
+    let account_id = account["id"].as_str().unwrap().to_string();
+
+    store::set_load_remote_images(&db.lock().unwrap(), &account_id, false).unwrap();
+    sync_account(&db, &account_id).unwrap();
+    let last_error: String = db
+        .lock()
+        .unwrap()
+        .query_row("SELECT last_error FROM subscriptions WHERE account = ?1", params![account_id], |r| r.get(0))
+        .unwrap();
+    assert_eq!(last_error, "", "the sync itself ran");
+    assert!(asked.lock().unwrap().is_empty(), "nothing remote was fetched: {:?}", asked.lock().unwrap());
+
+    // With pictures on, the same sync caches the picture and the icon, as before.
+    store::set_load_remote_images(&db.lock().unwrap(), &account_id, true).unwrap();
+    sync_account(&db, &account_id).unwrap();
+    let mut fetched = asked.lock().unwrap().clone();
+    fetched.sort();
+    assert_eq!(fetched, vec!["/icon.png".to_string(), "/pic.png".to_string()]);
+}

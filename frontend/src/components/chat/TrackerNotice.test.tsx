@@ -48,6 +48,19 @@ it('says how many trackers were kept from loading, and by which rule', () => {
   expect(view.getByText('us5.list-manage.com — EasyPrivacy rule ||list-manage.com/track/')).toBeTruthy()
 })
 
+it('says what a feed item was kept from loading, with no way to let it, as it has no Message-ID (#191)', () => {
+  const feedItem = message({
+    id: 'rss-acct#rss#feed-1#item-1',
+    thread_id: 'rss-acct#rss#feed-1',
+    account_id: 'rss-acct',
+    message_id: undefined,
+    trackers_blocked: [{ url: 'https://tracker.example/open.gif', rule: '||tracker.example^' }],
+  })
+  const view = render(<TrackerNotice message={feedItem} />)
+  expect(view.getByText('1 tracker blocked')).toBeTruthy()
+  expect(view.queryByRole('button', { name: 'Load them for this message' })).toBeNull()
+})
+
 it('lets one message load its trackers only after asking, and can undo it', async () => {
   const view = render(<TrackerNotice message={message()} />)
   await act(async () => {

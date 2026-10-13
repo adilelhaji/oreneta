@@ -351,9 +351,12 @@ fn sync_subscription(db: &Mutex<Connection>, sub: &Subscription) -> Result<u32> 
         .ok_or_else(|| anyhow!("feed returned no content"))?;
     let mut items = parse_items(&feed, now);
     // Download inline images (off the DB lock) for image-enabled accounts so they
-    // render from disk and never re-fetch from the origin on each open.
-    if db_load_remote_images(db, &sub.account) {
-        cache_feed_images(&sub.account, &sub.id, &mut items);
+    // render from disk and never re-fetch from the origin on each open. Known
+    // trackers are never fetched (#191).
+    let images_enabled = db_load_remote_images(db, &sub.account);
+    let trackers = crate::privacy::current();
+    if images_enabled {
+        cache_feed_images(&sub.account, &sub.id, &mut items, &trackers);
     }
     let feed_title = text_content(&feed.title);
     let site_url = feed
@@ -363,9 +366,15 @@ fn sync_subscription(db: &Mutex<Connection>, sub: &Subscription) -> Result<u32> 
         .unwrap_or_default();
     let icon_url = feed_icon_url(&feed);
     // Cache the feed's own icon to disk (off the DB lock) so the avatar renders
-    // from /media with no remote fetch. Unconditional: it's first-party branding,
-    // not the third-party content the remote-images gate is meant to hold back.
-    let icon_key = cache_feed_icon(&sub.account, &sub.id, &icon_url).unwrap_or_default();
+    // from /media with no remote fetch. The icon is remote too, so it follows
+    // the account's remote-pictures setting like the items' pictures (#191);
+    // with pictures off, an icon already on disk is still shown.
+    let icon_key = if images_enabled {
+        cache_feed_icon(&sub.account, &sub.id, &icon_url, &trackers)
+    } else {
+        existing_icon_key(&crate::parse::media_root(), &sub.account, &sub.id, icon_url.trim())
+    }
+    .unwrap_or_default();
     let title = if sub.title.is_empty() {
         feed_title.trim().to_string()
     } else {
@@ -532,6 +541,7 @@ pub fn read_thread_page(
         .unwrap_or_default();
 
     let load_remote_images = store::load_remote_images(conn, &account).unwrap_or(false);
+    let trackers = crate::privacy::current();
 
     // Newest-first when paginating so the cursor walks backwards in time;
     // unpaginated callers still want oldest-first to preserve old behavior.
@@ -636,6 +646,7 @@ pub fn read_thread_page(
             &json,
             body_html.as_deref(),
             load_remote_images,
+            &trackers,
         ));
     }
     Ok((out, next_cursor))
@@ -669,6 +680,7 @@ pub fn starred_items(conn: &Connection, limit: i64) -> Result<Vec<Value>> {
     })?;
 
     let mut remote_images: std::collections::HashMap<String, bool> = Default::default();
+    let trackers = crate::privacy::current();
     let mut out = Vec::new();
     for row in rows {
         let (account, sub_id, sub_title, item_key, subject, seen, json) = row?;
@@ -689,6 +701,7 @@ pub fn starred_items(conn: &Connection, limit: i64) -> Result<Vec<Value>> {
             &json,
             body_html.as_deref(),
             load_remote_images,
+            &trackers,
         ));
     }
     Ok(out)
@@ -861,8 +874,21 @@ fn item_message(
     extra_json: &str,
     body_html: Option<&str>,
     load_remote_images: bool,
+    trackers: &std::sync::Arc<crate::privacy::FilterSet>,
 ) -> Value {
     let json: Value = serde_json::from_str(extra_json).unwrap_or_else(|_| json!({}));
+    // What tracking protection kept this item from fetching (#191): pictures
+    // and videos whose address is on the list are left out, and the HTML is
+    // rewritten as mail's is. A feed item has no Message-ID, so, unlike mail,
+    // it cannot be let load its trackers.
+    let mut blocked: Vec<crate::privacy::Blocked> = Vec::new();
+    let mut not_a_tracker = |url: &str| match trackers.blocking_rule(url) {
+        Some(rule) => {
+            blocked.push(crate::privacy::Blocked { url: url.to_string(), rule: rule.to_string() });
+            false
+        }
+        None => true,
+    };
     let summary = json["summary"].as_str().unwrap_or_default();
     let content = json["content"].as_str().unwrap_or_default();
     let link = json["link"].as_str().unwrap_or_default();
@@ -875,7 +901,7 @@ fn item_message(
             let root = crate::parse::media_root();
             arr.iter()
                 .filter_map(|img| {
-                    let url = img["url"].as_str()?;
+                    let url = img["url"].as_str().filter(|url| not_a_tracker(url))?;
                     // Trust the cached key only if it's a real image still on disk;
                     // otherwise fall back to the remote URL. Keys persisted before
                     // image validation can point at poison (".plain" error bodies
@@ -896,7 +922,7 @@ fn item_message(
     // the `video/*` mime to render a player instead of an image.
     if let Some(arr) = json["videos"].as_array() {
         for vid in arr {
-            let Some(url) = vid["url"].as_str() else {
+            let Some(url) = vid["url"].as_str().filter(|url| not_a_tracker(url)) else {
                 continue;
             };
             attachments.push(json!({
@@ -937,10 +963,17 @@ fn item_message(
         fetched
     };
     // Iframe-ready original HTML for the reader's HTML mode (remote images gated on
-    // the account setting, like mail). Omitted when the feed gave no HTML.
-    let body_html = body_html
-        .filter(|html| !html.trim().is_empty())
-        .map(|html| crate::parse::prepare_html(html, load_remote_images));
+    // the account setting, trackers blocked, like mail). Omitted when the feed gave
+    // no HTML.
+    let body_html = body_html.filter(|html| !html.trim().is_empty()).map(|html| {
+        let (html, found) =
+            crate::parse::prepare_html_against(html, load_remote_images, Some(trackers.clone()));
+        blocked.extend(found);
+        html
+    });
+    // The same address can be both a picture and in the HTML: say it once.
+    let mut seen = std::collections::HashSet::new();
+    blocked.retain(|entry| seen.insert(entry.url.clone()));
 
     let thread_id = format_thread_id(account, sub_id);
     json!({
@@ -959,6 +992,8 @@ fn item_message(
         "starred": starred,
         "has_attachments": !attachments.is_empty(),
         "attachments": attachments,
+        "trackers_blocked": blocked,
+        "trackers_protected": true,
     })
 }
 
@@ -1467,10 +1502,19 @@ const FEED_MEDIA_CAP_BYTES: u64 = 1024 * 1024 * 1024;
 /// `key`. Best-effort: a failed fetch leaves `key = None` (the UI falls back to
 /// the remote URL for image-enabled accounts). Skips images already on disk so
 /// repeat syncs don't re-download. Network only — never holds the DB lock.
-fn cache_feed_images(account: &str, sub_id: &str, items: &mut [ParsedItem]) {
+fn cache_feed_images(
+    account: &str,
+    sub_id: &str,
+    items: &mut [ParsedItem],
+    trackers: &crate::privacy::FilterSet,
+) {
     let root = crate::parse::media_root();
     for item in items.iter_mut() {
         for (index, img) in item.extra.images.iter_mut().enumerate() {
+            // A known tracker is never fetched; the reader drops it too (#191).
+            if trackers.blocking_rule(&img.url).is_some() {
+                continue;
+            }
             if let Some(key) = existing_image_key(&root, account, sub_id, &item.item_key, index) {
                 img.key = Some(key);
                 continue;
@@ -1508,9 +1552,14 @@ fn cache_feed_images(account: &str, sub_id: &str, items: &mut [ParsedItem]) {
 /// media key. Best-effort and idempotent: an already-cached icon (same URL) is
 /// reused without re-fetching, and any failure (empty/bad URL, non-image bytes)
 /// yields `None` so the caller leaves the key empty. Network only — no DB lock.
-fn cache_feed_icon(account: &str, sub_id: &str, icon_url: &str) -> Option<String> {
+fn cache_feed_icon(
+    account: &str,
+    sub_id: &str,
+    icon_url: &str,
+    trackers: &crate::privacy::FilterSet,
+) -> Option<String> {
     let icon_url = icon_url.trim();
-    if icon_url.is_empty() {
+    if icon_url.is_empty() || trackers.blocking_rule(icon_url).is_some() {
         return None;
     }
     let root = crate::parse::media_root();
