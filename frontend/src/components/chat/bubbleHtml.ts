@@ -1,5 +1,14 @@
 import { BUBBLE_CODE_BASE_PX, BUBBLE_HTML_BASE_PX, type MessageFrameFont } from '../../lib/fonts'
 import { stripTrackingPixels } from './readerHtml'
+import { applyHtmlFolds, DEFAULT_FOLD_LABELS, type FoldLabels, type FoldOptions } from './quoteFolding'
+
+/** Reader-side transforms (ADR-0046): what to fold, and the toggle labels. */
+export interface BubbleReaderOptions {
+  fold?: FoldOptions
+  labels?: FoldLabels
+  /** Marks the document as fitted to the frame width (BubbleHtmlFrame scales it). */
+  fitWidth?: boolean
+}
 
 const DEFAULT_MESSAGE_FRAME_FONT: MessageFrameFont = {
   family: null,
@@ -15,7 +24,11 @@ const DEFAULT_MESSAGE_FRAME_FONT: MessageFrameFont = {
 // CSS vars or root font size, so the family is baked into the stylesheet and the
 // text size arrives as a body `zoom` — a baked font-size would only move the
 // bodies that don't set their own, which most HTML mail does (see lib/fonts).
-export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT_MESSAGE_FRAME_FONT) {
+export function prepareBubbleHtml(
+  html: string,
+  font: MessageFrameFont = DEFAULT_MESSAGE_FRAME_FONT,
+  reader: BubbleReaderOptions = {},
+) {
   try {
     const parser = new DOMParser()
     // Tracking pixels go, as in the reader tab (#35).
@@ -210,6 +223,11 @@ export function prepareBubbleHtml(html: string, font: MessageFrameFont = DEFAULT
     // rules the later one wins. Inline declarations outrank every stylesheet
     // rule of the same importance, so they win wherever the reset sits — and
     // unlike an appended `<style>` they leave `:last-child` and friends alone.
+    // Quoted history and signatures behind <details> toggles: native, so they
+    // open without any script in the frame.
+    if (reader.fold) applyHtmlFolds(doc, reader.fold, reader.labels ?? DEFAULT_FOLD_LABELS)
+    if (reader.fitWidth) doc.documentElement.setAttribute('data-oreneta-fit', '')
+
     for (const el of [doc.documentElement, doc.body]) {
       el.style.setProperty('height', 'auto', 'important')
       el.style.setProperty('min-height', '0', 'important')

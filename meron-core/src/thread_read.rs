@@ -497,6 +497,9 @@ pub fn thread_message_json(
         // it applied to this message at all.
         "trackers_blocked": cached.map(|message| message.trackers_blocked.clone()).unwrap_or_default(),
         "trackers_protected": cached.is_some_and(|message| message.trackers_protected),
+        // A read receipt request (ADR-0048): only that there is one; what to
+        // do about it is asked separately (`receipts.status`).
+        "receipt_requested": cached.is_some_and(|message| message.receipt.is_some()),
     })
 }
 
@@ -531,6 +534,24 @@ mod tests {
         assert_eq!(value["folder_id"], "INBOX");
         assert_eq!(value["unread"], true);
         assert_eq!(value["subject"], "Hi");
+    }
+
+    /// Only that a read receipt is requested reaches the reader (ADR-0048),
+    /// and a cached message without a request says no.
+    #[test]
+    fn a_read_receipt_request_is_flagged() {
+        let asking = crate::parse::Message {
+            receipt: Some(crate::receipts::ReceiptRequest {
+                notify_to: vec!["ana@x.com".into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let value = thread_message_json("acc", "tid", "INBOX", &header(12, false), Some(&asking), &HashSet::new());
+        assert_eq!(value["receipt_requested"], true);
+        let plain = crate::parse::Message::default();
+        let value = thread_message_json("acc", "tid", "INBOX", &header(13, false), Some(&plain), &HashSet::new());
+        assert_eq!(value["receipt_requested"], false);
     }
 
     #[test]

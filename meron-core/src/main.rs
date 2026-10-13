@@ -2830,6 +2830,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             meron_core::privacy::reset(&meron_core::privacy::filters_dir()?)?;
             Ok(serde_json::to_value(meron_core::privacy::info())?)
         }
+        // Read receipts (ADR-0048). Status may send one, but only under the
+        // person's own "always" and only where that is safe; answer is the
+        // person's click in the reader bar.
+        "receipts.status" | "receipts.answer" => {
+            let parsed = meron_core::protocol::mail::parse_thread_id(&req_str(p, "id")?)
+                .context("invalid message id")?;
+            let uid = parsed.uid.context("not a single message")?;
+            let account = parsed.account;
+            let folder = canon_folder(&req_str(p, "folder").unwrap_or(parsed.folder));
+            let status = if req.method == "receipts.status" {
+                meron_core::receipts::status(engine, &account, &folder, uid, now_seconds()).await?
+            } else {
+                let send = p.get("send").and_then(Value::as_bool).context("missing bool param: send")?;
+                meron_core::receipts::answer(engine, &account, &folder, uid, send, now_seconds()).await?
+            };
+            Ok(serde_json::to_value(status)?)
+        }
         "privacy.allowMessage" => {
             let allow = p.get("allow").and_then(Value::as_bool).unwrap_or(true);
             meron_core::privacy::set_exception(
@@ -9165,7 +9182,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             )?;
         }
         match perform_send_transaction(engine, p, &account, &to).await {
-            Ok(SendTransaction { raw, archived_by_server }) => {
+            Ok(SendTransaction { raw, archived_by_server, delivery_receipt }) => {
                 {
                     let db = engine.db.lock().unwrap();
                     outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
@@ -9197,7 +9214,12 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                         "accepted"
                     }
                 };
-                Ok(json!({ "ok": true, "outcome": outcome, "attempt_id": attempt_id }))
+                Ok(json!({
+                    "ok": true,
+                    "outcome": outcome,
+                    "attempt_id": attempt_id,
+                    "delivery_receipt": delivery_receipt.as_str(),
+                }))
             }
             Err(err) if smtp::is_uncertain(&err) => {
                 let reason = format!("{err:#}");
@@ -9216,6 +9238,8 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
 struct SendTransaction {
     raw: Vec<u8>,
     archived_by_server: bool,
+    /// What became of a delivery receipt request (ADR-0048).
+    delivery_receipt: smtp::DeliveryReceipt,
 }
 
 /// Builds, protects and transmits one message. Everything up to the server's
@@ -9242,6 +9266,11 @@ async fn perform_send_transaction(
         let message_id = req_str(p, "message_id").unwrap_or_default();
         let attachments = opt_attachments(p)?;
         let requested_from = req_str(p, "from").unwrap_or_default();
+        // Receipts the sender asked for (ADR-0048).
+        let receipts = smtp::Receipts {
+            read: p.get("read_receipt").and_then(Value::as_bool).unwrap_or(false),
+            delivery: p.get("delivery_receipt").and_then(Value::as_bool).unwrap_or(false),
+        };
 
         // Sign and/or encrypt, when the sender asked for it — with whichever
         // protocol can actually do the whole job. Assembled here, before
@@ -9390,6 +9419,7 @@ async fn perform_send_transaction(
                 &reply_to,
                 &message_id,
                 protection.as_ref(),
+                receipts.read,
             )?;
             engine
                 .with_write_session(&account, |session| {
@@ -9401,12 +9431,16 @@ async fn perform_send_transaction(
             // The server files its own copy, so the caller's Sent step only
             // refreshes the local view — the upload is suppressed for
             // Exchange in `should_append_sent_copy`.
-            return Ok(SendTransaction { raw, archived_by_server: true });
+            // A delivery receipt is not asked of Exchange or Graph: the MIME
+            // they submit has no envelope to carry it (ADR-0048).
+            let delivery_receipt =
+                if receipts.delivery { smtp::DeliveryReceipt::Unsupported } else { smtp::DeliveryReceipt::NotAsked };
+            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt });
         }
         // What the sender asked for, with the keys it needs: built before
         // either branch, and applied by both, so no path sends in the clear
         // what was meant to be protected.
-        let raw = smtp::send(
+        let sent = smtp::send_with_receipts(
             &creds,
             &from_addr,
             &sender_name,
@@ -9422,9 +9456,10 @@ async fn perform_send_transaction(
             &reply_to,
             &message_id,
             protection.as_ref(),
+            receipts,
         )
         .await?;
-        Ok(SendTransaction { raw, archived_by_server: false })
+        Ok(SendTransaction { raw: sent.raw, archived_by_server: false, delivery_receipt: sent.delivery_receipt })
 }
 
 /// An Exchange submission that failed without a verdict.

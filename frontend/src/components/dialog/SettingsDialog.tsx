@@ -59,6 +59,8 @@ import { QuickActionsGroup } from '../quick/QuickActionsGroup'
 import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { SenderListsGroup } from './SenderListsGroup'
 import { TrackingProtectionGroup } from './TrackingProtectionGroup'
+import { ReceiptsGroup } from './ReceiptsGroup'
+import { ReaderFoldingRows } from './ReaderFoldingRows'
 import { TranslationModelsGroup } from './TranslationModelsGroup'
 import { CloudStorageGroup } from './CloudStorageGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
@@ -106,6 +108,7 @@ import { SmimeSettingsSection } from './SmimeSettingsSection'
 import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
+import { RepliesForwardsGroup } from './RepliesForwardsGroup'
 import { OofSettingsCard } from './OofSettingsCard'
 import { SharedMailboxesCard } from './SharedMailboxesCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
@@ -918,6 +921,7 @@ function GeneralSection() {
           checked={simplifyMessages}
           onChange={() => settings$.simplifyMessages.set(!simplifyMessages)}
         />
+        <ReaderFoldingRows />
         <SegmentedRow
           icon={<Eye size={16} strokeWidth={1.75} />}
           title={t('settings.reading.markRead')}
@@ -1060,6 +1064,8 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
+      <RepliesForwardsGroup />
+
       <div data-settings-section="signature" tabIndex={-1} aria-label={t('settings.sections.signature')}>
         <SignatureSettingsSection />
       </div>
@@ -1092,6 +1098,7 @@ function GeneralSection() {
       <CategoriesGroup />
       <SenderListsGroup />
       <TrackingProtectionGroup />
+      <ReceiptsGroup />
       <TranslationModelsGroup />
       <CloudStorageGroup />
       <StorageGroup />

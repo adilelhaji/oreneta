@@ -282,6 +282,50 @@ func TestIntegrationMailFlow(t *testing.T) {
 		}
 	})
 
+	// Receipts against a real server (ADR-0048). maddy 0.8 does not
+	// advertise DSN, so the delivery receipt is reported as unsupported while
+	// the message still goes; the read receipt request travels in the
+	// message, is put to bob (policy "ask"), and only his answer sends the
+	// report, which reaches alice through bob's own submission server.
+	t.Run("read and delivery receipts", func(t *testing.T) {
+		receiptSubject := "Oreneta integration receipt " + nonce
+		sent := callMap(t, sidecar, "send", map[string]any{
+			"account":          "alice",
+			"to":               "bob@maddy.test",
+			"subject":          receiptSubject,
+			"body":             "tell me when you read this",
+			"message_id":       fmt.Sprintf("itest-receipt-%s@maddy.test", nonce),
+			"read_receipt":     true,
+			"delivery_receipt": true,
+		})
+		if got := str(sent, "delivery_receipt"); got != "unsupported" {
+			t.Errorf("delivery_receipt = %q, want unsupported (maddy 0.8 offers no DSN)", got)
+		}
+		message := pollInbox(t, sidecar, "bob", func(m map[string]any) bool {
+			return str(m, "subject") == receiptSubject
+		})
+		id := fmt.Sprintf("bob#INBOX#%d", num(message, "uid"))
+		status := callMap(t, sidecar, "receipts.status", map[string]any{"id": id, "folder": "INBOX"})
+		if str(status, "state") != "ask" {
+			t.Fatalf("receipts.status = %v, want state ask", status)
+		}
+		assertNoMessageInFolder(t, sidecar, "alice", "INBOX", func(m map[string]any) bool {
+			return str(m, "subject") == "Read: "+receiptSubject
+		})
+		answered := callMap(t, sidecar, "receipts.answer", map[string]any{"id": id, "folder": "INBOX", "send": true})
+		if str(answered, "state") != "sent" {
+			t.Fatalf("receipts.answer = %v, want state sent", answered)
+		}
+		pollInbox(t, sidecar, "alice", func(m map[string]any) bool {
+			return str(m, "subject") == "Read: "+receiptSubject
+		})
+		// Answered once: asking again neither asks nor sends again.
+		again := callMap(t, sidecar, "receipts.status", map[string]any{"id": id, "folder": "INBOX"})
+		if str(again, "state") != "sent" {
+			t.Errorf("receipts.status after answer = %v, want state sent", again)
+		}
+	})
+
 	t.Run("threading", func(t *testing.T) {
 		// A reply (References/In-Reply-To pointing at the first message) must
 		// land in the same thread as the original in bob's mailbox.

@@ -491,6 +491,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.saveAttachment(payload)
 	case "mail.saveEml":
 		return a.saveMessageEml(payload)
+	case "mail.rawMessage":
+		return a.rawMessageForForward(payload)
 	case "backup.profileExport":
 		return a.exportProfileArchive(payload)
 	case "backup.profileInspect":
@@ -579,6 +581,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"translation.status", "translation.download", "translation.cancel", "translation.remove",
 		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
 		"cloud.share", "cloud.revoke", "pop3.retention",
+		// Read receipts (ADR-0048): where a request stands, and the person's
+		// answer to it. A receipt goes only on their click or their "always".
+		"receipts.status", "receipts.answer",
 		// Proposing another time and the organizer's side of it, and the
 		// local schedule check behind both (ADR-0043).
 		"invite.counter", "invite.counterStatus", "invite.declineCounter", "calendar.conflicts",

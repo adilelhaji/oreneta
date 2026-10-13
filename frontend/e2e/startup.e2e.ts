@@ -23,6 +23,10 @@ type SetupOptions = {
   hideAccounts?: boolean
   preferences?: Record<string, unknown>
   readerStress?: boolean
+  /** A Gmail-style reply with quoted history and a fixed 1200px table (ADR-0046). */
+  readerQuote?: boolean
+  /** The first message asks for a read receipt (ADR-0048). */
+  readReceipt?: boolean
   updatesSupported?: boolean
   syncHealth?: boolean
   manualRefresh?: boolean
@@ -812,6 +816,107 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   }
 }
 
+// S01-07 / ADR-0046: quoted history folds behind a toggle that works with no
+// script in the frame (production CSP), and a fixed-width message can be fitted
+// to the reading pane from its menu.
+test('reader folds quoted text and fits a fixed-width message to the pane', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, readerQuote: true })
+  await page.goto('/')
+  await page
+    .getByRole('table')
+    .getByRole('button', { name: /Pilot checklist/ })
+    .click()
+
+  const frame = page.frameLocator('iframe[title="Message HTML"]').first()
+  await expect(frame.getByText('Fold check reply')).toBeVisible()
+  const quoted = frame.getByText('Quoted synthetic history')
+  await expect(quoted).toBeHidden()
+  await frame.getByText('Show quoted text').click()
+  await expect(quoted).toBeVisible()
+  await frame.getByText('Hide quoted text').click()
+  await expect(quoted).toBeHidden()
+
+  // The plain-text reply folds its ">" quote the same way.
+  const plainQuote = page.getByText(/Please review the plain quoted line/)
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.')).toBeVisible()
+  await expect(plainQuote).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show quoted text', exact: true }).click()
+  await expect(plainQuote).toBeVisible()
+
+  // Off by default: the 1200px table keeps its size and scrolls on its own.
+  const table = frame.locator('table')
+  await expect(table).toHaveAttribute('width', '1200')
+  await expect(frame.locator('.oreneta-table-scroll')).toHaveCount(1)
+
+  await page
+    .getByRole('group', { name: /More message actions — Morgan Rivera/ })
+    .first()
+    .getByRole('button', { name: 'More message actions', exact: true })
+    .click()
+  await page.getByText('Fit to window', { exact: true }).click()
+
+  await expect(frame.locator('html[data-oreneta-fit]')).toHaveCount(1)
+  await expect
+    .poll(() =>
+      table.evaluate((el) => {
+        const doc = el.ownerDocument
+        return el.getBoundingClientRect().right <= doc.documentElement.clientWidth + 1
+      }),
+    )
+    .toBe(true)
+  expect(await frame.locator('.oreneta-table-scroll').count()).toBe(0)
+  const fitted = await table.evaluate((el) => {
+    const doc = el.ownerDocument
+    return {
+      zoom: Number(getComputedStyle(doc.body).zoom),
+      noSideScroll: doc.documentElement.scrollWidth <= doc.documentElement.clientWidth,
+      width: el.getAttribute('width'),
+    }
+  })
+  expect(fitted.zoom).toBeLessThan(1)
+  expect(fitted.zoom).toBeGreaterThan(0.3)
+  expect(fitted.noSideScroll).toBe(true)
+  expect(fitted.width).toBe('1200')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  // The fold survives the reload the fit causes.
+  await expect(quoted).toBeHidden()
+  expect(errors).toEqual([])
+})
+
+test('a read receipt request is asked about in a bar that blocks nothing, and sent only on the click', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, readReceipt: true })
+  await page.goto('/')
+  await page
+    .getByRole('table')
+    .getByRole('button', { name: /Pilot checklist/ })
+    .click()
+
+  const bar = page.getByRole('group', { name: 'Read receipt requested' })
+  await expect(bar).toBeVisible()
+  await expect(bar).toContainText('The sender asked to be told when you read this.')
+  const receiptCalls = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests.filter((r: { command: string }) => r.command.startsWith('receipts.')),
+    )
+  // Opening the message only asked the core where the request stands.
+  expect((await receiptCalls()).every((r: { command: string }) => r.command === 'receipts.status')).toBe(true)
+  // The message itself is not held back behind the question.
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.')).toBeVisible()
+
+  await bar.getByRole('button', { name: 'Send receipt' }).click()
+  await expect(page.getByText('A read receipt was sent.')).toBeVisible()
+  await expect(bar).toHaveCount(0)
+  const answers = (await receiptCalls()).filter((r: { command: string }) => r.command === 'receipts.answer')
+  expect(answers).toHaveLength(1)
+  expect(answers[0].payload).toMatchObject({ id: 'message-1', folder: 'INBOX', send: true })
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('shared dialog focus returns to opener and busy Escape does not close parent', async ({ page }) => {
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
@@ -1025,6 +1130,16 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
     fixture.messages[0].body_html =
       '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
   }
+  if (options.readReceipt) fixture.messages[0].receipt_requested = true
+  if (options.readerQuote) {
+    fixture.account.conversation_html = true
+    fixture.messages[0].body_html =
+      '<div dir="ltr"><p>Fold check reply</p><table width="1200" style="width:1200px"><tr><td style="min-width:1200px;background:#eef">Fixed synthetic table</td></tr></table></div>' +
+      '<div class="gmail_quote gmail_quote_container"><div dir="ltr" class="gmail_attr">On Mon, Oct 12, 2026 at 10:02 AM Alex &lt;alex@example.test&gt; wrote:<br></div>' +
+      '<blockquote class="gmail_quote" style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex"><div>Quoted synthetic history</div></blockquote></div>'
+    fixture.messages[1].body =
+      'Thanks Morgan. I will review the checklist today.\n\nOn Mon, Oct 12, 2026, Morgan Rivera wrote:\n> Hello Alex,\n> Please review the plain quoted line.'
+  }
   await page.addInitScript(
     ({ accounts, folders, template, options, threads, messages, translation }) => {
       const calls: string[] = []
@@ -1125,6 +1240,13 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         ],
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
+        // Read receipts (ADR-0048): the core asks, and the person answers.
+        ...(options.readReceipt
+          ? {
+              'receipts.status': { state: 'ask', to: ['morgan@example.test'], automatic: false },
+              'receipts.answer': { state: 'sent', to: ['morgan@example.test'], automatic: false },
+            }
+          : {}),
         'localDrafts.list': { drafts: [] },
         'localDrafts.get': { draft: null },
         'localDrafts.save': { applied: true, revision: 1, deleted: false },
@@ -1588,6 +1710,48 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     expect(errors).toEqual([])
   })
 }
+
+// SET-09 / ADR-0047: Mail → Replies and forwards. The preference is changed in
+// Settings, persisted as one row, and shapes the reply the full editor opens.
+test('reply preferences change where the quote goes and how its header reads', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await page.keyboard.press('Control+,')
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  const group = settings.locator('[data-settings-section="repliesForwards"]')
+  await expect(group).toContainText('Replies and forwards')
+  await group.getByRole('button', { name: 'Below the quote', exact: true }).click()
+  await group.getByRole('button', { name: 'Full header', exact: true }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests
+            .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'reply_forward')
+            .at(-1)?.payload.value,
+      ),
+    )
+    .toMatchObject({ replyPosition: 'below', headerStyle: 'outlook', includeOriginal: true, forwardMode: 'inline' })
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+
+  const table = page.getByRole('table')
+  await table.getByRole('button', { name: /Pilot checklist/ }).click()
+  await page.getByPlaceholder('Write a message...').fill('Sounds good')
+  await page.getByTitle('Open full editor', { exact: true }).click()
+  const body = page.getByPlaceholder('Write your message...')
+  await expect(body).toBeVisible()
+  const text = await body.inputValue()
+  // The newest message of the thread is the one answered (pickReplyTarget).
+  expect(text).toMatch(/^-----\nFrom: .+ <[^>]+@example\.test>\nSent: .+2026.+\nTo: .+\nSubject: Pilot checklist[^\n]*\n> /)
+  expect(text).toContain('\n> Thanks Morgan. I will review the checklist today.\n')
+  // Below the quote: the user's own words come after the original.
+  expect(text.endsWith('\n\nSounds good')).toBe(true)
+  await expect(page.getByPlaceholder('Subject', { exact: true })).toHaveValue('Re: Pilot checklist — synthetic conversation')
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
 
 test('legacy cards/chat stay selected until explicit layout controls change them and persist across reload', async ({
   page,

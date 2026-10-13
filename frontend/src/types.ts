@@ -231,6 +231,9 @@ export type Message = {
   trackers_blocked?: { url: string; rule: string }[]
   /** Whether it applied: false when this message was let load trackers. */
   trackers_protected?: boolean
+  /** Whether the message asks to be told it was read (ADR-0048). What to
+   * do about it is asked of the core separately (`receipts.status`). */
+  receipt_requested?: boolean
   /**
    * Whether this is worth interrupting for, as the core judged it.
    *
@@ -307,6 +310,11 @@ export type ComposeDraft = {
   pgpSign: boolean
   /** Encrypt to every recipient's OpenPGP key before sending. */
   pgpEncrypt: boolean
+  /** Ask the recipient for a read receipt (ADR-0048). Absent on drafts
+   * restored from before this existed, which reads as not asked. */
+  readReceipt?: boolean
+  /** Ask the server for a delivery receipt, when it offers one. */
+  deliveryReceipt?: boolean
 }
 
 /** An open reader tab for a single message (alongside the default conversation view).

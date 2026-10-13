@@ -11,6 +11,8 @@ import {
   splitFencedCodeBlocks,
 } from './messageHelpers'
 import { BubbleHtmlFrame } from './BubbleHtmlFrame'
+import { PlainFoldedText } from './ReaderFolds'
+import { useFitWidth } from '../../states/readerFit'
 
 // The message body: the sandboxed HTML view, or the plain/markdown renderer with
 // inline bold/italic/code, fenced code blocks (with copy buttons) and links,
@@ -33,6 +35,7 @@ export function MessageBubbleBody({
   onLinkHover?: (url: string | null) => void
 }) {
   const { t } = useTranslation()
+  const fitWidth = useFitWidth(message.id)
   const boxStyle = fullHeight ? undefined : { maxHeight: MESSAGE_BODY_MAX_HEIGHT }
   const boxClass = fullHeight ? 'relative' : 'relative overflow-y-auto'
   if (useHtmlBody) {
@@ -43,16 +46,13 @@ export function MessageBubbleBody({
           searchQuery={normalizedSearchQuery}
           activeSearchMatch={activeSearchMatch}
           onLinkHover={onLinkHover}
+          fitWidth={fitWidth}
         />
       </div>
     )
   }
 
   const bodyText = normalizeBodyText(message.body)
-  const hasCodeFence = bodyText.split('\n').some((line) => line.trimStart().startsWith('```'))
-  const blocks = hasCodeFence
-    ? splitFencedCodeBlocks(bodyText)
-    : [{ type: 'inline' as const, parts: parseInlineMessageContent(bodyText) }]
 
   function renderHighlightedPlainText(content: string, keyPrefix: string) {
     if (!normalizedSearchQuery) return content
@@ -104,60 +104,74 @@ export function MessageBubbleBody({
     })
   }
 
+  // One run of body text: fenced code blocks with copy buttons, links and
+  // inline emphasis. The quote and signature folds draw their text with it too.
+  function renderBody(content: string, keyPrefix: string) {
+    const hasCodeFence = content.split('\n').some((line) => line.trimStart().startsWith('```'))
+    const blocks = hasCodeFence
+      ? splitFencedCodeBlocks(content)
+      : [{ type: 'inline' as const, parts: parseInlineMessageContent(content) }]
+    return (
+      <>
+        {blocks.map((block, blockIndex) => {
+          if (block.type === 'code') {
+            return (
+              <div key={`${keyPrefix}-code-${blockIndex}`} className="group relative my-2 max-w-full">
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(block.content).catch(() => undefined)}
+                  className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-chats/90 text-secondary opacity-0 shadow-sm transition-opacity hover:text-primary group-hover:opacity-100"
+                  title={t('chat.copyCode')}
+                >
+                  <Copy size={14} strokeWidth={1.75} />
+                </button>
+                <pre className="m-0 max-w-full overflow-x-auto rounded-control-sm border border-border/60 bg-black/5 px-3 py-2.5 pr-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
+                  <code className="block min-w-max whitespace-pre">{block.content}</code>
+                </pre>
+              </div>
+            )
+          }
+
+          return (
+            <span key={`${keyPrefix}-inline-${blockIndex}`}>
+              {block.parts.map((part, index) => {
+                if (part.type === 'link') {
+                  return (
+                    <a
+                      key={index}
+                      href={part.content}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        openExternal(part.content)
+                      }}
+                      onMouseEnter={() => onLinkHover?.(part.content)}
+                      onMouseLeave={() => onLinkHover?.(null)}
+                      onFocus={() => onLinkHover?.(part.content)}
+                      onBlur={() => onLinkHover?.(null)}
+                      title={part.content}
+                      className="text-accent hover:underline break-all font-semibold cursor-pointer"
+                    >
+                      {part.label
+                        ? renderText(part.label, `${keyPrefix}-link-${blockIndex}-${index}`)
+                        : getShortenedLinkText(part.content)}
+                    </a>
+                  )
+                }
+                return renderText(part.content, `${keyPrefix}-text-${blockIndex}-${index}`)
+              })}
+            </span>
+          )
+        })}
+      </>
+    )
+  }
+
   return (
     <div
       className={`${boxClass} -mr-3.5 pr-3.5 font-message text-[calc(0.9375rem*var(--me-message-scale))] leading-relaxed break-words whitespace-pre-wrap select-text font-normal tracking-[0.01em]`}
       style={boxStyle}
     >
-      {blocks.map((block, blockIndex) => {
-        if (block.type === 'code') {
-          return (
-            <div key={`code-${blockIndex}`} className="group relative my-2 max-w-full">
-              <button
-                type="button"
-                onClick={() => navigator.clipboard?.writeText(block.content).catch(() => undefined)}
-                className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-chats/90 text-secondary opacity-0 shadow-sm transition-opacity hover:text-primary group-hover:opacity-100"
-                title={t('chat.copyCode')}
-              >
-                <Copy size={14} strokeWidth={1.75} />
-              </button>
-              <pre className="m-0 max-w-full overflow-x-auto rounded-control-sm border border-border/60 bg-black/5 px-3 py-2.5 pr-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
-                <code className="block min-w-max whitespace-pre">{block.content}</code>
-              </pre>
-            </div>
-          )
-        }
-
-        return (
-          <span key={`inline-${blockIndex}`}>
-            {block.parts.map((part, index) => {
-              if (part.type === 'link') {
-                return (
-                  <a
-                    key={index}
-                    href={part.content}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      openExternal(part.content)
-                    }}
-                    onMouseEnter={() => onLinkHover?.(part.content)}
-                    onMouseLeave={() => onLinkHover?.(null)}
-                    onFocus={() => onLinkHover?.(part.content)}
-                    onBlur={() => onLinkHover?.(null)}
-                    title={part.content}
-                    className="text-accent hover:underline break-all font-semibold cursor-pointer"
-                  >
-                    {part.label
-                      ? renderText(part.label, `link-${blockIndex}-${index}`)
-                      : getShortenedLinkText(part.content)}
-                  </a>
-                )
-              }
-              return renderText(part.content, `text-${blockIndex}-${index}`)
-            })}
-          </span>
-        )
-      })}
+      <PlainFoldedText text={bodyText} render={renderBody} searchQuery={normalizedSearchQuery} />
     </div>
   )
 }

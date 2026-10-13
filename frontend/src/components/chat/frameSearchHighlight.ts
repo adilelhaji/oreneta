@@ -25,6 +25,8 @@ function collectTextNodes(doc: Document): Text[] {
     acceptNode(node) {
       const parent = node.parentElement
       if (!parent || SKIP_TAGS.has(parent.tagName)) return NodeFilter.FILTER_REJECT
+      // The quote-fold toggle's own label is ours, not the message's (ADR-0046).
+      if (parent.closest('summary.oreneta-fold-toggle')) return NodeFilter.FILTER_REJECT
       return node.nodeValue ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
     },
   })

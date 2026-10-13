@@ -43,6 +43,7 @@ pub mod translation;
 pub mod profile_archive;
 pub mod profile_purge;
 pub mod protocol;
+pub mod receipts;
 pub mod proxy;
 pub mod rss;
 pub mod rules;

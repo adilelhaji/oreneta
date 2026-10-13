@@ -562,6 +562,9 @@ func sendParams(req SendMailRequest) map[string]any {
 		"sign":        req.Sign,
 		"encrypt":     req.Encrypt,
 		"passphrase":  req.Passphrase,
+		// Receipts the sender asked for (ADR-0048).
+		"read_receipt":     req.ReadReceipt,
+		"delivery_receipt": req.DeliveryReceipt,
 	}
 }
 
@@ -848,6 +851,53 @@ func (a *App) saveMessageEml(payload map[string]any) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"saved": true, "path": dest}, nil
+}
+
+// maxForwardedMessageBytes bounds an original attached to a forward. Larger
+// messages would not get past most providers' size limits once base64-encoded
+// for the composer anyway, and the bytes travel through the webview's IPC.
+const maxForwardedMessageBytes = 50 << 20
+
+// rawMessageForForward returns one message's original RFC822 bytes, base64, so
+// the composer can attach it to a forward as message/rfc822 (ADR-0047). The
+// sidecar's bounded JSON protocol cannot carry the bytes, so it writes them to
+// a private temporary file through the same messages.saveRaw path as "Save as
+// .eml"; the file is read back and removed before this returns.
+func (a *App) rawMessageForForward(payload map[string]any) (any, error) {
+	params, err := messageEmlSource(payload)
+	if err != nil {
+		return nil, err
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	dir, err := os.MkdirTemp("", "oreneta-forward-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "message.eml")
+	params["path"] = path
+	if _, err := a.sidecar.Call("messages.saveRaw", params); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxForwardedMessageBytes {
+		return nil, fmt.Errorf("message is too large to forward as an attachment (%d bytes)", info.Size())
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	subject, _ := payload["subject"].(string)
+	return map[string]any{
+		"data":     base64.StdEncoding.EncodeToString(raw),
+		"size":     len(raw),
+		"filename": emlFilename(subject),
+	}, nil
 }
 
 // mboxFilename is the save dialog's default name for a folder export.

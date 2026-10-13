@@ -44,6 +44,9 @@ export type SendResult = {
   outcome?: string
   attempt_id?: string
   error?: string
+  /** What became of a delivery receipt request (ADR-0048): "requested",
+   * "unsupported" (the server does not offer it) or "none". */
+  delivery_receipt?: string
 } | null
 
 export const outgoing$ = observable({

@@ -6,6 +6,7 @@ export type SettingsSection =
   | 'typography'
   | 'reading'
   | 'signature'
+  | 'repliesForwards'
   | 'privacy'
   | 'updates'
   | 'backup'
@@ -43,6 +44,16 @@ export function settingsDestinations(
       label: t(key),
       keywords: `${english} ${t(`settingsSearch.aliases.${section}`)}`,
     })),
+    {
+      id: 'settings.section.repliesForwards',
+      section: 'repliesForwards' as const,
+      accountId: '',
+      label: t('settings.sections.repliesForwards', { defaultValue: 'Replies and forwards' }),
+      keywords: `reply replies forward forwarding quote quoting header re fwd attachment eml ${t(
+        'settingsSearch.aliases.repliesForwards',
+        { defaultValue: '' },
+      )}`,
+    },
     ...accounts.flatMap((account): SettingsDestination[] => {
       const name = account.display_name || account.email
       const item = {

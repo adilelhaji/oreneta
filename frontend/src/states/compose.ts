@@ -41,6 +41,14 @@ import {
   type SignatureTracking,
 } from '../lib/signature'
 import { settings$ } from './settings'
+import {
+  buildReplyQuote,
+  forwardSubject,
+  joinReplyBody,
+  quoteIsRich,
+  replySubject,
+  type ReplyPosition,
+} from '../lib/replyForward'
 import { formatFullTimestamp } from '../components/chat/messageHelpers'
 import { closeComposeSession, forgetComposeSession, pruneComposeSessions } from './composeSessions'
 import { offerCertificateTrust } from './certificateTrust'
@@ -96,9 +104,7 @@ function formatMessageFrom(message: Message): string {
 }
 
 function forwardedSubject(subject: string): string {
-  const trimmed = subject.trim()
-  if (!trimmed) return 'Fwd: (no subject)'
-  return /^fwd?:/i.test(trimmed) ? trimmed : `Fwd: ${trimmed}`
+  return forwardSubject(subject, settings$.replyForward.peek().collapsePrefixes)
 }
 
 function forwardedPlainBody(message: Message): string {
@@ -466,7 +472,7 @@ async function performQuickReplyDraftSave() {
   const { to, cc } = buildReplyRecipients(target, ownAddrs)
   const { in_reply_to, references } = buildReplyThreading(target)
   const fromEmail = resolveQuickReplyFrom(target, activeAcc)
-  const subject = activeT.subject.startsWith('Re:') ? activeT.subject : `Re: ${activeT.subject}`
+  const subject = replySubject(activeT.subject, settings$.replyForward.peek().collapsePrefixes)
   const draftId = compose$.quickReplyDraftId.peek() || newDraftMessageId()
   compose$.quickReplyDraftId.set(draftId)
 
@@ -878,6 +884,12 @@ type ComposeSeed = Partial<ComposeDraft> & {
   /** Where the signature lands; 'aboveQuote' for a seeded quote (forwards). */
   signaturePlacement?: SignaturePlacement
   /**
+   * The quoted original of a reply, joined to the body after the signature is
+   * placed so the signature stays with the user's own text (ADR-0047). Only the
+   * form matching `rich` is read.
+   */
+  quote?: { html: string; text: string; position: ReplyPosition }
+  /**
    * Skip the signature. Set when the body is an existing message being re-opened
    * (a saved draft, "Edit as New Message") — it already carries whatever
    * signature it was written with, and a second copy is not wanted.
@@ -911,7 +923,8 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
   // forward that later moves to an account with one still puts it above the
   // quote rather than after it.
   const tracking: SignatureTracking = signature ? { ...signature, placement } : undefined
-  const body = signature ? bodyWithSignature(seeded, signature, placement) : seeded
+  const signed = signature ? bodyWithSignature(seeded, signature, placement) : seeded
+  const body = seed?.quote ? joinReplyBody(signed, seed.quote, seed.quote.position) : signed
 
   const draft: ComposeDraft = {
     accountId,
@@ -936,6 +949,9 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
     attachments: seed?.attachments ?? [],
     pgpSign: false,
     pgpEncrypt: false,
+    // Receipts start from the person's defaults (ADR-0048).
+    readReceipt: settings$.requestReadReceipt.peek(),
+    deliveryReceipt: settings$.requestDeliveryReceipt.peek(),
   }
   const id = `compose-${Date.now()}-${composeSeq++}`
   compose$.tabs.push({
@@ -961,7 +977,8 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
 export function openReplyInFullEditor() {
   const t = getActiveThread()
   if (!t) return
-  const subject = t.subject.startsWith('Re:') ? t.subject : `Re: ${t.subject}`
+  const prefs = settings$.replyForward.peek()
+  const subject = replySubject(t.subject, prefs.collapsePrefixes)
   const target = pickReplyTarget(t)
   const accounts = accounts$.get()
   const ownAddrs = ownAddressSet(accounts)
@@ -987,6 +1004,7 @@ export function openReplyInFullEditor() {
     showCcBcc: !!cc.trim(),
     subject,
     text: carried.text,
+    ...replyQuoteSeed(target, carried.text, replyAcc),
     noSignature: !carried.found && !!compose$.quickReplySignature.peek()?.text,
     attachments: compose$.composerAttachments.get(),
     inReplyTo: in_reply_to,
@@ -1002,6 +1020,40 @@ export function openReplyInFullEditor() {
   // The thread stays open behind the new tab, so the box the user comes back to
   // is a fresh quick reply — signature and all.
   seedQuickReplySignature()
+}
+
+/**
+ * How a reply opened in the full editor carries the original (ADR-0047): rich or
+ * plain, and the quote with its header, placed above or below the user's part.
+ * Empty when the preference leaves the original out, so the reply is seeded
+ * exactly as before. A reply with nothing typed yet that answers above the
+ * quote is seeded like a forward — quote in the body, signature above it — so
+ * the signature is tracked as the one above the quote and a later change of
+ * account swaps it in place rather than appending a second below the quote.
+ */
+export function replyQuoteSeed(
+  target: Message,
+  carriedText: string,
+  account: Account | undefined,
+): Pick<ComposeSeed, 'rich' | 'html' | 'text' | 'quote' | 'signaturePlacement'> {
+  const prefs = settings$.replyForward.peek()
+  if (!prefs.includeOriginal) return {}
+  // An HTML original is answered in HTML. Otherwise a reply with nothing typed
+  // yet follows the account's format, as a new message does, while text carried
+  // over from the quick reply keeps the plain form it was written in.
+  const rich = quoteIsRich(target, prefs, !carriedText.trim() && (account?.conversation_html ?? true))
+  const quote = buildReplyQuote(target, prefs, rich)
+  if (!carriedText.trim() && prefs.replyPosition === 'above') {
+    return rich
+      ? { rich, html: `<p></p>${quote.html}`, text: '', signaturePlacement: 'aboveQuote' }
+      : { rich, html: '', text: `\n\n${quote.text}`, signaturePlacement: 'aboveQuote' }
+  }
+  return {
+    rich,
+    html: rich ? textToHtml(carriedText) : '',
+    text: rich ? '' : carriedText,
+    quote: { ...quote, position: prefs.replyPosition },
+  }
 }
 
 export function openMailtoCompose(raw: string) {
@@ -1204,11 +1256,20 @@ export async function openDraftConversationOrCompose(thread: Message) {
 }
 
 // Open a clean compose draft for forwarding a message. Recipients and threading
-// headers are intentionally blank; the original content is quoted in the body
-// and non-inline attachments are copied back into the composer.
+// headers are intentionally blank. Inline (the default) quotes the original in
+// the body and, unless the preference says otherwise, copies its non-inline
+// attachments into the composer; "as attachment" leaves the body to the user and
+// attaches the original's raw RFC 822 bytes as message/rfc822 (ADR-0047).
 export async function forwardMessage(message: Message) {
   if (accounts$.get().filter(isSendableAccount).length === 0) {
     showToast(t('compose.toast.addMailAccountBeforeComposing'))
+    return
+  }
+  const prefs = settings$.replyForward.peek()
+  // A message only this app has seen (an optimistic send not yet back from the
+  // server) has no original bytes to attach: it is forwarded inline instead.
+  if (prefs.forwardMode === 'attachment' && message.id && !isLocalSendId(message.id)) {
+    await forwardMessageAsAttachment(message)
     return
   }
   const rich = !!message.body_html
@@ -1226,7 +1287,7 @@ export async function forwardMessage(message: Message) {
     title: forwardedSubject(message.subject),
     signaturePlacement: 'aboveQuote',
   })
-  if (!id) return
+  if (!id || !prefs.forwardAttachments) return
 
   const valid = await readComposerAttachments(message.attachments ?? [], html)
   if (valid.length === 0) return
@@ -1234,6 +1295,54 @@ export async function forwardMessage(message: Message) {
   const tab = compose$.tabs.get().find((t) => t.id === id)
   if (!tab?.compose) return
   updateComposeDraft(id, { attachments: [...tab.compose.attachments, ...valid] })
+}
+
+/** What `mail.rawMessage` hands back: the original bytes, base64, and a file name. */
+type RawMessage = { data: string; size: number; filename: string }
+
+/** The composer attachment that carries a forwarded original. */
+export function forwardedMessageAttachment(raw: RawMessage, subject: string): ComposerAttachment {
+  const base = (raw.filename || subject || 'message').trim()
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    filename: /\.eml$/i.test(base) ? base : `${base}.eml`,
+    mime: 'message/rfc822',
+    size: raw.size,
+    data: raw.data,
+  }
+}
+
+async function forwardMessageAsAttachment(message: Message) {
+  const subject = forwardedSubject(message.subject)
+  const id = openComposeTab({
+    accountId: message.account_id || undefined,
+    subject,
+    title: subject,
+  })
+  if (!id) return
+  try {
+    const raw = await invoke<RawMessage>('mail.rawMessage', {
+      thread_id: message.thread_id,
+      message_ids: [message.id],
+      folder: message.folder_id,
+      subject: message.subject,
+    })
+    if (!raw?.data) throw new Error('empty message')
+    const tab = compose$.tabs.get().find((t) => t.id === id)
+    if (!tab?.compose) return
+    updateComposeDraft(id, {
+      attachments: [...tab.compose.attachments, forwardedMessageAttachment(raw, message.subject)],
+    })
+  } catch {
+    // The draft stays open: the user can still write, attach the message by
+    // other means, or close it. Nothing is sent without the original silently.
+    showToast(
+      t('compose.forward.attachFailed', {
+        defaultValue: "Couldn't attach the original message. Check the connection and try again.",
+      }),
+      'error',
+    )
+  }
 }
 
 async function readComposerAttachments(attachments: Attachment[], inlineHtml: string): Promise<ComposerAttachment[]> {
@@ -1369,6 +1478,11 @@ export type ComposedMessage = {
    * would be a worse answer than refusing to schedule it.
    */
   protection?: { sign: boolean; encrypt: boolean; passphrase?: string }
+  /**
+   * Receipts asked for (ADR-0048): a read receipt is a request in the
+   * message; a delivery receipt is asked of the server, when it offers it.
+   */
+  receipts?: { read: boolean; delivery: boolean }
 }
 
 /**
@@ -1387,7 +1501,7 @@ export class UncertainSendError extends Error {
   }
 }
 
-export async function sendComposed(args: ComposedMessage) {
+export async function sendComposed(args: ComposedMessage): Promise<SendResult> {
   const res = await invoke<SendResult>('mail.send', composedPayload(args))
   if (isUnsettledOutcome(res)) {
     // The attempt is in the core's list for the reader to settle; the
@@ -1396,6 +1510,7 @@ export async function sendComposed(args: ComposedMessage) {
     throw new UncertainSendError(unsettledOutcomeMessage(res), res?.attempt_id ?? '')
   }
   if (res && res.ok === false) throw new Error(res.error || t('compose.toast.sendFailed'))
+  return res
 }
 
 /// The bridge payload for a composed message.
@@ -1433,6 +1548,8 @@ export function composedPayload(args: ComposedMessage) {
           passphrase: args.protection.passphrase,
         }
       : {}),
+    ...(args.receipts?.read ? { read_receipt: true } : {}),
+    ...(args.receipts?.delivery ? { delivery_receipt: true } : {}),
   }
 }
 
@@ -1757,7 +1874,7 @@ export async function sendReply() {
   const prepared = prepareConversationAttachments(attachments)
   const sendAttachments = prepared.attachments
   const html = prepared.hasInlineImages ? conversationHtmlBody(text, sendAttachments) : ''
-  const subject = activeT.subject.startsWith('Re:') ? activeT.subject : `Re: ${activeT.subject}`
+  const subject = replySubject(activeT.subject, settings$.replyForward.peek().collapsePrefixes)
 
   // Render the sent bubble optimistically — before the SMTP round-trip resolves —
   // so sending feels instant. The status starts as "sending" and flips to "sent"

@@ -248,6 +248,11 @@ type SendMailRequest struct {
 	// Passphrase unlocks the sender's own key for this one message. Not
 	// stored anywhere on this side, and not written to a draft.
 	Passphrase string `json:"passphrase,omitempty"`
+	// ReadReceipt asks the recipient for a read receipt (RFC 8098) and
+	// DeliveryReceipt asks the server for delivery notices (RFC 3461), when
+	// it offers them (ADR-0048).
+	ReadReceipt     bool `json:"read_receipt,omitempty"`
+	DeliveryReceipt bool `json:"delivery_receipt,omitempty"`
 }
 
 type ExchangedProfile struct {

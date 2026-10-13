@@ -490,6 +490,10 @@ func sidecarCallTimeout(method string) time.Duration {
 	// from there too.
 	case "invite.counterStatus", "invite.declineCounter", "invite.notify":
 		return 30 * time.Second
+	// Where a read receipt request stands may read the message, and sending
+	// the receipt goes through the account's server (ADR-0048).
+	case "receipts.status", "receipts.answer":
+		return 60 * time.Second
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second
 	case "folders.list", "folders.create", "folders.archive", "messages.recent", "messages.sync", "rss.markRead", "rss.markAllRead", "watch.start", "watch.stop", "discard_draft", "account.addRss", "feed.add", "rss.importOpml":

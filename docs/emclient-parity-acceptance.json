@@ -439,7 +439,7 @@
       "section": "Mail/Replies and Forwards",
       "outcome": "Reply identity, quote/header formatting and recipient handling",
       "status": "partial",
-      "present": "Reply/reply-all keep \"Last, First\" recipients whole, drop the reader's own address and reply from the alias the message reached (#39); quote and reply-header formatting preferences are absent",
+      "present": "Reply/reply-all keep \"Last, First\" recipients whole, drop the reader's own address and reply from the alias the message reached (#39); Replies and forwards preferences (ADR-0047): include original, reply above/below the quote, HTML or \"> \" quoting, short or Outlook-style header, collapsed Re:/Fwd: prefixes, forward inline or as message/rfc822 attachment, keep forwarded attachments; native/provider evidence pending",
       "code": "frontend/src/states/compose.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",

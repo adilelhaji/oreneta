@@ -5456,6 +5456,9 @@ pub fn get_cached_message(
         // encrypted is re-parsed on read, so it corrects itself.
         protection: extra["protection"].as_str().unwrap_or_default().to_string(),
         invitation: extra.get("invitation").cloned().and_then(|value| serde_json::from_value(value).ok()),
+        // A read receipt request (ADR-0048). Cached before this existed reads
+        // as none: nothing is ever sent on a guess.
+        receipt: extra.get("receipt").cloned().and_then(|value| serde_json::from_value(value).ok()),
         trackers_blocked: Vec::new(),
         trackers_protected: false,
     }))
@@ -5482,6 +5485,7 @@ pub fn save_cached_message(
         "body_is_rendered": message.body_is_rendered,
         "protection": message.protection,
         "invitation": message.invitation,
+        "receipt": message.receipt,
         "attachments": attachments_json,
     })
     .to_string();

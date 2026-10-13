@@ -6,6 +6,11 @@ import { LinkHoverPreview } from './LinkHoverPreview'
 import { htmlReferencesMedia, isImage, mediaSrc } from './messageHelpers'
 import { applyReaderFont, applyReaderLayout, stripTrackingPixels } from './readerHtml'
 import { useMessageFrameFont } from './useMessageFrameFont'
+import { useValue } from '@legendapp/state/react'
+import { settings$ } from '../../states/settings'
+import { applyHtmlFolds } from './quoteFolding'
+import { PlainFoldedText, useFoldLabels, useFoldOptions } from './ReaderFolds'
+import { createWidthFitter, type WidthFitter } from './fitWidth'
 
 const readerScrollPositions = new Map<string, number>()
 
@@ -34,6 +39,10 @@ export function HtmlMessageView({ scrollKey, title, html, text, attachments, vie
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const textRef = useRef<HTMLDivElement | null>(null)
   const messageFont = useMessageFrameFont()
+  const foldOptions = useFoldOptions()
+  const foldLabels = useFoldLabels()
+  const fitWidth = useValue(settings$.readerFitWidth)
+  const fitterRef = useRef<WidthFitter | null>(null)
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([])
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null)
@@ -92,7 +101,21 @@ export function HtmlMessageView({ scrollKey, title, html, text, attachments, vie
     return saveScrollPosition
   }, [saveScrollPosition])
 
-  const sanitizedHtml = useMemo(() => (html ? stripTrackingPixels(html) : html), [html])
+  // Tracking pixels out, quoted history folded (ADR-0046), and the document
+  // marked when it is to be fitted, so changing that reloads it.
+  const sanitizedHtml = useMemo(() => {
+    if (!html) return html
+    const stripped = stripTrackingPixels(html)
+    if (!foldOptions.quotes && !foldOptions.signatures && !fitWidth) return stripped
+    try {
+      const doc = new DOMParser().parseFromString(stripped, 'text/html')
+      applyHtmlFolds(doc, foldOptions, foldLabels)
+      if (fitWidth) doc.documentElement.setAttribute('data-oreneta-fit', '')
+      return doc.documentElement.outerHTML
+    } catch {
+      return stripped
+    }
+  }, [html, foldOptions, foldLabels, fitWidth])
 
   useEffect(() => {
     setHoveredLink(null)
@@ -135,8 +158,23 @@ export function HtmlMessageView({ scrollKey, title, html, text, attachments, vie
     (doc: Document) => {
       applyReaderLayout(doc, messageFont)
       requestAnimationFrame(restoreScrollPosition)
+      if (!fitWidth || !doc.documentElement.hasAttribute('data-oreneta-fit')) return
+      const fitter = createWidthFitter(doc, messageFont.zoom)
+      fitterRef.current = fitter
+      const update = () => fitter.update()
+      update()
+      const observer = new ResizeObserver(update)
+      observer.observe(doc.documentElement)
+      if (doc.body) observer.observe(doc.body)
+      const images = Array.from(doc.querySelectorAll('img'))
+      images.forEach((img) => img.addEventListener('load', update))
+      return () => {
+        observer.disconnect()
+        images.forEach((img) => img.removeEventListener('load', update))
+        if (fitterRef.current === fitter) fitterRef.current = null
+      }
     },
-    [messageFont, restoreScrollPosition],
+    [fitWidth, messageFont, restoreScrollPosition],
   )
 
   // The frame only re-runs `onReady` when its document is replaced, so repaint
@@ -144,6 +182,9 @@ export function HtmlMessageView({ scrollKey, title, html, text, attachments, vie
   useEffect(() => {
     const doc = iframeRef.current?.contentDocument
     if (doc?.body) applyReaderFont(doc, messageFont)
+    // The fit compounds with the text size, so it starts over from the new one.
+    fitterRef.current?.reset(messageFont.zoom)
+    fitterRef.current?.update()
   }, [messageFont, html, viewMode])
 
   useLayoutEffect(() => {
@@ -160,7 +201,13 @@ export function HtmlMessageView({ scrollKey, title, html, text, attachments, vie
             <AttachmentImageGrid images={attachmentImages} onOpen={openAttachmentImage} />
           )}
           <div className="whitespace-pre-wrap break-words font-message text-[calc(0.9375rem*var(--me-message-scale))] leading-relaxed text-primary select-text tracking-[0.01em]">
-            {text || (attachmentImages.length > 0 ? '' : '(no content)')}
+            {text ? (
+              <PlainFoldedText text={text} render={(content) => content} />
+            ) : attachmentImages.length > 0 ? (
+              ''
+            ) : (
+              '(no content)'
+            )}
           </div>
         </div>
         {galleryIndex !== null && galleryItems[galleryIndex] && (
