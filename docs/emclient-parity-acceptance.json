@@ -177,8 +177,8 @@
       "issue": 35,
       "section": "Mail/Read",
       "outcome": "Wide HTML remains contained and message actions disclose their scope",
-      "status": "partial",
-      "present": "Fixed-width HTML contained, message text size 80-400%, scoped per-message actions (#156) and print scope that keeps reader privacy and states omissions (#35) are tested; quote/signature folding and fit-to-width are absent",
+      "status": "implemented-unverified",
+      "present": "Fixed-width HTML contained, message text size 80-400%, scoped per-message actions (#156), print scope that keeps reader privacy (#35), quoted history and signatures folded behind toggles that run no script, and wide messages fitted to the pane per message or by default (ADR-0046) are tested; native Windows check remains",
       "code": "frontend/src/lib/print.ts",
       "acceptance": "Long subject, wide table, blocked images, quote folding, zoom, print scope; no shell overflow",
       "platform": "Windows desktop",
@@ -195,6 +195,14 @@
           {
             "sha": "92b13356c59d27f308d14d39ecaa8e8710d4fdc1",
             "result": "frontend/src/lib/print.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/chat/quoteFolding.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/chat/ReaderFolds.test.tsx"
           }
         ],
         "native": [],
@@ -438,8 +446,8 @@
       "issue": 39,
       "section": "Mail/Replies and Forwards",
       "outcome": "Reply identity, quote/header formatting and recipient handling",
-      "status": "partial",
-      "present": "Reply/reply-all keep \"Last, First\" recipients whole, drop the reader's own address and reply from the alias the message reached (#39); Replies and forwards preferences (ADR-0047): include original, reply above/below the quote, HTML or \"> \" quoting, short or Outlook-style header, collapsed Re:/Fwd: prefixes, forward inline or as message/rfc822 attachment, keep forwarded attachments; native/provider evidence pending",
+      "status": "implemented-unverified",
+      "present": "Reply/reply-all keep \"Last, First\" recipients whole, drop the reader's own address and reply from the alias the message reached (#39); reply position, HTML or plain-text quoting, short or Outlook-style header, collapsed Re:/Fwd: and forwarding inline or as the original .eml are preferences (ADR-0047) and tested; native Windows and provider checks remain",
       "code": "frontend/src/states/compose.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -452,6 +460,18 @@
           {
             "sha": "840fb3d1c7138e8eceeb968d8930b032bfac7a96",
             "result": "frontend/src/states/replyRecipients.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/lib/replyForward.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/states/replyForwardCompose.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/dialog/RepliesForwardsGroup.test.tsx"
           }
         ],
         "native": [],
@@ -501,7 +521,7 @@
       "section": "Mail/Privacy; Receipts",
       "outcome": "Tracking protection, remote content and explicit receipt policy",
       "status": "partial",
-      "present": "Remote content blocking and EasyPrivacy tracking protection in the reader (ADR-0029) are tested; read/delivery receipt policy is absent",
+      "present": "Remote content blocking and EasyPrivacy tracking protection (ADR-0029); read receipts requested and answered by an ask/always/never policy that never answers list mail, mismatched return paths or Junk automatically, and delivery receipts over SMTP DSN when offered (ADR-0048), tested including a real maddy server; delivery receipts on Exchange/Graph and interpreting incoming reports are absent",
       "code": "meron-core/src/privacy",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -518,6 +538,18 @@
           {
             "sha": "08a8ae5b2b7d78de2715f049c4439c6b8fa27cf7",
             "result": "frontend/src/components/chat/TrackerNotice.test.tsx"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "meron-core/src/receipts/tests.rs"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/chat/ReceiptNotice.test.tsx"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/composer/ReceiptComposeControls.test.tsx"
           }
         ],
         "native": [],
