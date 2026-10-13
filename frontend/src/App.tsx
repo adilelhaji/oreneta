@@ -141,11 +141,11 @@ export default function App() {
           </ErrorBoundary>
         ) : showKanbanMessagePane ? (
           <div
-            className="relative flex shrink-0 overflow-hidden border-l border-border bg-chat max-[600px]:w-full"
+            className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
             style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
           >
             <div
-              className="absolute left-0 top-0 z-20 h-full w-2 -translate-x-1 cursor-col-resize"
+              className="absolute start-0 top-0 z-20 h-full w-2 -translate-x-1 rtl:translate-x-1 cursor-col-resize"
               onPointerDown={(event) => startKanbanResize(event, mainRef.current)}
               title={t('layout.resizeConversation')}
             >

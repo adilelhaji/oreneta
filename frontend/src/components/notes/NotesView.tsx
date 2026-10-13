@@ -73,7 +73,7 @@ export function NotesView() {
         <section
           aria-label={t('notes.listLabel', { defaultValue: 'Notes' })}
           className={clsx(
-            'flex min-h-0 w-full flex-col border-r border-border min-[900px]:w-80 min-[900px]:shrink-0',
+            'flex min-h-0 w-full flex-col border-e border-border min-[900px]:w-80 min-[900px]:shrink-0',
             opened && 'max-[899px]:hidden',
           )}
         >
@@ -134,7 +134,7 @@ export function NotesView() {
                       aria-current={selected === note.id ? 'true' : undefined}
                       onClick={() => open(note.id)}
                       className={clsx(
-                        'flex w-full flex-col gap-0.5 rounded-control px-3 py-2 text-left transition-colors cursor-pointer',
+                        'flex w-full flex-col gap-0.5 rounded-control px-3 py-2 text-start transition-colors cursor-pointer',
                         selected === note.id ? 'bg-accent/10 dark:bg-accent/15' : 'hover:bg-hover',
                       )}
                     >
@@ -179,7 +179,7 @@ export function NotesView() {
               <button
                 type="button"
                 onClick={() => notes$.selected.set(null)}
-                className="border-b border-border px-4 py-2 text-left text-caption text-secondary hover:bg-hover min-[900px]:hidden cursor-pointer"
+                className="border-b border-border px-4 py-2 text-start text-caption text-secondary hover:bg-hover min-[900px]:hidden cursor-pointer"
               >
                 ← {t('notes.backToList', { defaultValue: 'All notes' })}
               </button>

@@ -11,6 +11,7 @@ import { UNIFIED_ACCOUNT, unifiedFolderLabel, unifiedFolders } from '../../lib/u
 import { FloatingContextMenu } from './FloatingContextMenu'
 import { menuItemBase, menuItemClass } from './menuStyles'
 import { buildFolderTree, type TreeNode } from '../../lib/folderTree'
+import { startEdgeX } from '../../lib/direction'
 
 const FILTER_THRESHOLD = 8
 
@@ -39,7 +40,7 @@ function FolderNodeRow({
 
   return (
     <div>
-      <div className="flex items-center" style={{ paddingLeft: depth * 14 }}>
+      <div className="flex items-center" style={{ paddingInlineStart: depth * 14 }}>
         <button
           type="button"
           className={clsx(
@@ -161,7 +162,7 @@ export function FolderSwitcher({
       return
     }
     const rect = event.currentTarget.getBoundingClientRect()
-    setMenu({ x: rect.left, y: rect.bottom })
+    setMenu({ x: startEdgeX(rect), y: rect.bottom })
   }
 
   const needle = query.trim().toLowerCase()
@@ -240,7 +241,7 @@ export function FolderSwitcher({
                     className={clsx(menuItemClass, 'w-full')}
                   >
                     <Bookmark size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-                    <span className="min-w-0 flex-1 truncate text-left">{search.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-start">{search.name}</span>
                   </button>
                 ))}
                 <div className="my-1 border-t border-border" />

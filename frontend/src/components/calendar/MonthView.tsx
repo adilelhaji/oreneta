@@ -17,6 +17,7 @@ import {
 import { settings$ } from '../../states/settings'
 import { weekNumber, weekNumberRule } from '../../lib/calendarWeek'
 import { formatTime } from './AgendaView'
+import { formattingLocale } from '../../lib/i18n'
 
 /// How many events a month cell names before folding the rest into a count.
 const CELL_EVENTS = 3
@@ -88,7 +89,7 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
     () =>
       Array.from({ length: 7 }, (_, i) => {
         const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i)
-        return date.toLocaleDateString(i18n.language.replace('_', '-'), { weekday: 'short' })
+        return date.toLocaleDateString(formattingLocale(), { weekday: 'short' })
       }),
     [gridStart.getTime(), i18n.language],
   )
@@ -112,7 +113,7 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
             key={`week-${row}`}
             data-week-number={week}
             title={t('calendar.weekNumberTitle', { defaultValue: 'Week {week}', week })}
-            className="border-b border-r border-border/60 pt-1.5 text-center text-2xs font-semibold tabular-nums text-secondary/80"
+            className="border-b border-e border-border/60 pt-1.5 text-center text-2xs font-semibold tabular-nums text-secondary/80"
             style={{ gridColumn: 1, gridRow: row + 1 }}
           >
             {week}
@@ -133,7 +134,7 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
                 const at = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, prefs.workStart)
                 newEvent(Math.floor(at.getTime() / 1000))
               }}
-              className={`flex min-h-0 flex-col gap-0.5 overflow-hidden border-b border-r border-border/60 p-1 ${
+              className={`flex min-h-0 flex-col gap-0.5 overflow-hidden border-b border-e border-border/60 p-1 ${
                 inMonth ? '' : 'bg-raised/40'
               }`}
             >
@@ -159,7 +160,7 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
                     mouse.preventDefault()
                     onEventMenu(mouse.clientX, mouse.clientY, event)
                   }}
-                  className={`flex min-w-0 items-center gap-1 rounded px-1 py-px text-left text-2xs leading-4 text-primary transition-colors hover:bg-hover cursor-pointer ${
+                  className={`flex min-w-0 items-center gap-1 rounded px-1 py-px text-start text-2xs leading-4 text-primary transition-colors hover:bg-hover cursor-pointer ${
                     event.is_cancelled ? 'line-through opacity-55' : ''
                   }`}
                 >

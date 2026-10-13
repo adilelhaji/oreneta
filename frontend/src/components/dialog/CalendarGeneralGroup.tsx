@@ -15,13 +15,14 @@ import { settings$ } from '../../states/settings'
 import { SelectInput } from '../field/Field'
 import { reminderLabel } from '../calendar/EventEditor'
 import { SettingRow, SettingsGroup, ToggleRow } from './AccountSettingsRows'
+import { formattingLocale } from '../../lib/i18n'
 
 /// Half-hour steps for the work day's start and end.
 const TIME_STEPS = Array.from({ length: 49 }, (_, i) => i * 30)
 
 /// A weekday's name in the interface language. 2024-01-01 was a Monday.
 function weekdayName(day: Weekday, width: 'long' | 'short'): string {
-  return new Date(2024, 0, day).toLocaleDateString(i18n.language.replace('_', '-'), { weekday: width })
+  return new Date(2024, 0, day).toLocaleDateString(formattingLocale(), { weekday: width })
 }
 
 /**
@@ -37,7 +38,7 @@ export function CalendarGeneralGroup() {
   const set = (partial: Partial<CalendarPrefs>) => settings$.calendar.set({ ...prefs, ...partial })
   const icon = { size: 16, strokeWidth: 1.75 }
   const working = workDays(prefs)
-  const selectClass = 'w-44 rounded-control py-1.5 pl-3 font-semibold'
+  const selectClass = 'w-44 rounded-control py-1.5 ps-3 font-semibold'
 
   const select = (
     label: string,

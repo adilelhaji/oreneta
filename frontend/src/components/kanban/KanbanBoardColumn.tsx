@@ -325,7 +325,7 @@ function KanbanColumnContent({
             />
             {isPaused && (
               <span
-                className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-chats"
+                className="absolute -bottom-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/60 text-white/80 ring-2 ring-chats"
                 title={t('settings.account.paused', { defaultValue: 'Paused' })}
               >
                 <Pause size={7} className="fill-current" strokeWidth={1.75} />

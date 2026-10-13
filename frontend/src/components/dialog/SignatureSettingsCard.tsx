@@ -56,6 +56,8 @@ function SignatureEditor({
     editorProps: {
       attributes: {
         class: 'tiptap-body focus:outline-none min-h-[110px] px-3.5 py-2.5 text-ui leading-relaxed',
+        // The text keeps its own direction, whatever the interface's (ADR-0055).
+        dir: 'auto',
         spellcheck: String(spellCheck),
       },
     },

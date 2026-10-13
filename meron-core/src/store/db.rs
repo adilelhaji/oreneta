@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 62;
+pub const SCHEMA_VERSION: i64 = 64;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -789,6 +789,22 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 62 {
         // Automatic archiving by age (ADR-0054).
         tx.execute_batch(crate::auto_archive::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 62)?;
+    }
+    if version < 63 {
+        // The wall clock of a floating event, so its reminder follows the
+        // reader to another zone (ADR-0057). Checked first, like the others.
+        let has = tx
+            .prepare("SELECT 1 FROM pragma_table_info('calendar_events') WHERE name = 'floating_local'")?
+            .exists([])?;
+        if !has {
+            tx.execute_batch("ALTER TABLE calendar_events ADD COLUMN floating_local INTEGER;")?;
+        }
+        tx.pragma_update(None, "user_version", 63)?;
+    }
+    if version < 64 {
+        // Chat presence, mentions and notifications (ADR-0056).
+        crate::chat::migrate_presence(&tx)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

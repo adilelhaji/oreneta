@@ -154,7 +154,7 @@ export function RulesSettingsSection() {
                 <button
                   type="button"
                   onClick={() => setEditing(rule)}
-                  className="min-w-0 flex-1 text-left cursor-pointer"
+                  className="min-w-0 flex-1 text-start cursor-pointer"
                 >
                   <span className="block truncate text-ui font-semibold">{rule.name}</span>
                   <span className="block truncate text-caption text-secondary">{ruleSummary(rule, t)}</span>

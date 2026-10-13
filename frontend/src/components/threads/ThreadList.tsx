@@ -74,6 +74,7 @@ import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
 import { accountGroups$ } from '../../states/accountGroups'
+import { endAlignedX } from '../../lib/direction'
 
 type ThreadListProps = {
   width?: number
@@ -345,7 +346,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       data-thread-list
       // The remembered width is a preference, not a claim on the window: on a
       // narrow one the list gives way (down to 280px) before the reader does.
-      className={`relative flex w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:w-[var(--thread-list-width)] min-[769px]:min-w-[280px] min-[769px]:shrink ${
+      className={`relative flex w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:w-[var(--thread-list-width)] min-[769px]:min-w-[280px] min-[769px]:shrink ${
         mobilePane === 'threads' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
       onKeyDownCapture={(event) => {
@@ -355,7 +356,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
     >
       {onResizeStart && (
         <div
-          className="absolute right-0 top-0 z-20 hidden h-full w-2 translate-x-1 cursor-col-resize min-[769px]:block"
+          className="absolute end-0 top-0 z-20 hidden h-full w-2 translate-x-1 rtl:-translate-x-1 cursor-col-resize min-[769px]:block"
           onPointerDown={onResizeStart}
           title={t('layout.resizeThreadList')}
         >
@@ -367,7 +368,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       ) : (
         // Less padding on the right than the left: the trailing icon buttons carry
         // their own, so px-4 on both sides left the row lopsided.
-        <div className="flex h-16 shrink-0 flex-row items-center gap-3 pl-4 pr-2 border-b border-border bg-white dark:bg-[#0f172a]/40">
+        <div className="flex h-16 shrink-0 flex-row items-center gap-3 ps-4 pe-2 border-b border-border bg-white dark:bg-[#0f172a]/40">
           <div className="flex items-center gap-2 w-full">
             {/* Current folder, doubling as a picker: switching here retargets the
               list the same way it retargets a kanban column. Capped so a deep
@@ -377,13 +378,13 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 accountId={selectedAccount}
                 folderId={selectedFolder}
                 label={folderLabel({ accountId: selectedAccount, folderId: selectedFolder }, folders, accounts, t)}
-                labelClassName="-ml-2 max-w-[40%] shrink-0 text-xs font-bold"
+                labelClassName="-ms-2 max-w-[40%] shrink-0 text-xs font-bold"
                 onSelect={(nextFolderId) => ui$.selectedFolder.set(nextFolderId)}
               />
             )}
             <div className="relative min-w-0 flex-1">
               <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary"
+                className="absolute start-2.5 top-1/2 -translate-y-1/2 text-secondary"
                 size={16}
                 strokeWidth={1.75}
               />
@@ -404,9 +405,9 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                 // whether this search can do more than words.
                 title={isRSSAccount ? undefined : t('search.operatorsHint')}
                 className={clsx(
-                  'w-full rounded-control bg-hover py-2 pl-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
+                  'w-full rounded-control bg-hover py-2 ps-8 text-ui text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:bg-chats border border-transparent focus:border-transparent transition-all duration-120',
                   // The right padding only has to clear the clear button while there is one.
-                  query ? 'pr-8' : 'pr-3',
+                  query ? 'pe-8' : 'pe-3',
                 )}
               />
               {query && (
@@ -414,7 +415,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   type="button"
                   aria-label={t('common.clearSearch')}
                   onClick={() => ui$.query.set('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
+                  className="absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary cursor-pointer"
                 >
                   <X size={16} strokeWidth={1.75} />
                 </button>
@@ -524,7 +525,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
                   className="min-[769px]:hidden"
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect()
-                    setQuickMenu({ x: rect.right - 208, y: rect.bottom })
+                    setQuickMenu({ x: endAlignedX(rect, 208), y: rect.bottom })
                   }}
                 />
               </>

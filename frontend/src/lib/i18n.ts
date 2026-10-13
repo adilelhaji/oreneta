@@ -69,6 +69,22 @@ export const resolveI18nLanguageFromWebLocale = (localeStr?: string): SupportedI
   return isSupportedLanguage(lang) ? (lang as SupportedI18nLanguage) : undefined
 }
 
+/**
+ * Locale for dates, times and numbers (ADR-0055). When the system locale is a
+ * variant of the interface language (en-GB for "en", ar-EG for "ar") it is used
+ * as is, so the user's regional conventions, digits included, survive;
+ * otherwise the interface language decides, so an Arabic interface on an
+ * English system formats in Arabic rather than mixing the two. Intl's own
+ * defaults apply: plain "ar" writes Latin digits, ar-EG or ar-SA Arabic-Indic.
+ */
+export function formattingLocale(
+  language: SupportedI18nLanguage = currentLanguage,
+  systemLocale: string | undefined = typeof navigator === 'undefined' ? undefined : navigator.language,
+): string {
+  if (systemLocale && resolveI18nLanguageFromWebLocale(systemLocale) === language) return systemLocale
+  return localeForIntl(language)
+}
+
 export const normalizeI18nLanguage = (value?: string | null): SupportedI18nLanguage | null =>
   value == null ? null : isSupportedLanguage(value) ? value : null
 

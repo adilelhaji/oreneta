@@ -220,7 +220,7 @@ function ArchiveDetails({ summary }: { summary: ArchiveSummary }) {
         <p className="font-semibold text-secondary">
           {t('profileArchive.leftOut', { defaultValue: 'Not in the archive' })}
         </p>
-        <ul className="mt-1 list-disc pl-5 text-secondary">
+        <ul className="mt-1 list-disc ps-5 text-secondary">
           {summary.excluded.map((item) => (
             <li key={item.what}>
               <span className="text-primary">{item.what}</span>: {item.why}

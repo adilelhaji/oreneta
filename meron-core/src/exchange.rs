@@ -1998,6 +1998,7 @@ fn to_event(item: &Message, calendar_id: &str) -> anyhow::Result<Event> {
         meeting: None,
         add_meeting: None,
         meeting_status: None,
+        floating: None,
         free_busy: item
             .legacy_free_busy_status
             .map(free_busy_name)

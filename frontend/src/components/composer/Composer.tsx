@@ -296,6 +296,7 @@ export function Composer({ tabId }: { tabId: string }) {
         ) : (
           <textarea
             ref={textRef}
+            dir="auto"
             autoFocus={focusBody}
             value={draft.text}
             onChange={(e) => update({ text: e.target.value })}

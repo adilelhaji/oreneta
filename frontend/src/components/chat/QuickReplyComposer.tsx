@@ -51,6 +51,7 @@ export function QuickReplyComposer() {
 
           <textarea
             ref={textareaRef}
+            dir="auto"
             value={composer}
             onChange={(event) => compose$.composer.set(event.target.value)}
             placeholder={t('composer.placeholders.quickMessage')}
@@ -80,7 +81,7 @@ export function QuickReplyComposer() {
             {sendingReply ? (
               <Loader2 size={14} className="animate-spin" strokeWidth={1.75} />
             ) : (
-              <Send size={14} className="relative left-[0.5px]" strokeWidth={1.75} />
+              <Send size={14} className="relative start-[0.5px]" strokeWidth={1.75} />
             )}
           </button>
         </div>

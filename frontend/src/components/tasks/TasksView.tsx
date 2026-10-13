@@ -223,7 +223,7 @@ export function TasksView() {
               )}
             >
               {entry.label}
-              {entry.open > 0 && <span className="ml-1 tabular-nums">{entry.open}</span>}
+              {entry.open > 0 && <span className="ms-1 tabular-nums">{entry.open}</span>}
             </button>
           ))}
         </div>
@@ -262,7 +262,7 @@ export function TasksView() {
           + {t('tasks.addCalDavList', { defaultValue: 'CalDAV task list…' })}
         </button>
         {current && current.id !== MAIL_LIST && (
-          <span className="ml-auto flex gap-1">
+          <span className="ms-auto flex gap-1">
             <button
               type="button"
               onClick={() => void renameList()}
@@ -330,7 +330,7 @@ export function TasksView() {
                   <button
                     type="button"
                     onClick={() => open(task)}
-                    className="min-w-0 flex-1 basis-40 rounded-control-sm text-left cursor-pointer"
+                    className="min-w-0 flex-1 basis-40 rounded-control-sm text-start cursor-pointer"
                   >
                     <span
                       className={clsx(
@@ -342,7 +342,7 @@ export function TasksView() {
                         <Flag
                           size={12}
                           strokeWidth={2}
-                          className="mr-1 inline text-danger"
+                          className="me-1 inline text-danger"
                           aria-label={t('tasks.priorityHigh', { defaultValue: 'High' })}
                         />
                       )}

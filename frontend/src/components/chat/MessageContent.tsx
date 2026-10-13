@@ -155,7 +155,7 @@ export function MessageContent({
                   ? t('attachments.preview', { filename: file.filename })
                   : t('chat.saveFile', { filename: file.filename })
             }
-            className={`group mt-2.5 flex w-full items-center gap-2 rounded-control bg-black/[0.03] dark:bg-white/[0.03] p-2 text-xs font-semibold border border-border/20 text-left ${
+            className={`group mt-2.5 flex w-full items-center gap-2 rounded-control bg-black/[0.03] dark:bg-white/[0.03] p-2 text-xs font-semibold border border-border/20 text-start ${
               downloadable ? 'hover:bg-black/[0.06] dark:hover:bg-white/[0.06] cursor-pointer' : 'cursor-default'
             }`}
           >
@@ -164,12 +164,12 @@ export function MessageContent({
               {file.unavailable === 'tooLarge' ? t('attachments.unavailable.tooLarge') : file.filename}
             </span>
             {file.unavailable === 'link' ? (
-              <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">
+              <span className="text-2xs text-secondary ms-auto shrink-0 font-normal">
                 {t('attachments.unavailable.link')}
               </span>
             ) : (
               !file.unavailable && (
-                <span className="text-2xs text-secondary ml-auto shrink-0 font-normal">
+                <span className="text-2xs text-secondary ms-auto shrink-0 font-normal">
                   {formatFileSize(file.size)}
                 </span>
               )

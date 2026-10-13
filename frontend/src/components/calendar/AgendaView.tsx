@@ -3,6 +3,7 @@ import { useValue } from '@legendapp/state/react'
 import { MapPin, Repeat } from 'lucide-react'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { calendar$, eventColor, openEvent, groupByDay, type CalendarEvent } from '../../states/calendar'
+import { formattingLocale } from '../../lib/i18n'
 
 /// A list of what is coming, grouped by day.
 ///
@@ -103,7 +104,7 @@ function EventRow({
         <p className={`truncate text-ui font-medium text-primary ${event.is_cancelled ? 'line-through' : ''}`}>
           {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
           {continues && (
-            <span className="ml-1.5 font-normal text-secondary">
+            <span className="ms-1.5 font-normal text-secondary">
               {t('calendar.continues', { defaultValue: '· continues' })}
             </span>
           )}
@@ -139,7 +140,7 @@ function sameDay(event: CalendarEvent): boolean {
 
 /// The day an event ends on, short enough for the agenda's time column.
 function formatEndDay(event: CalendarEvent): string {
-  return `→ ${new Date(event.end * 1000).toLocaleDateString(i18n.language.replace('_', '-'), {
+  return `→ ${new Date(event.end * 1000).toLocaleDateString(formattingLocale(), {
     day: 'numeric',
     month: 'short',
   })}`
@@ -152,7 +153,7 @@ function spanInDays(event: CalendarEvent): number {
 }
 
 export function formatTime(epochSeconds: number): string {
-  return new Date(epochSeconds * 1000).toLocaleTimeString(i18n.language.replace('_', '-'), {
+  return new Date(epochSeconds * 1000).toLocaleTimeString(formattingLocale(), {
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -164,7 +165,7 @@ function formatDayHeading(day: number, t: ReturnType<typeof useTranslation>['t']
   const today = new Date()
   const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
   const dayDiff = Math.round((day - midnight(today)) / (24 * 3600 * 1000))
-  const formatted = date.toLocaleDateString(i18n.language.replace('_', '-'), {
+  const formatted = date.toLocaleDateString(formattingLocale(), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',

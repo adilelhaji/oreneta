@@ -5,6 +5,7 @@ import { useTranslation } from '../../lib/i18n'
 import { compose$, quickReplyFromState, saveQuickReplyDraft } from '../../states/compose'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
+import { startEdgeX } from '../../lib/direction'
 
 // Menu geometry, used to open the picker *upward* — the quick reply sits at the
 // bottom of the window, so a downward menu would cover the composer it belongs
@@ -32,7 +33,7 @@ export function QuickReplyFrom() {
       <button
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect()
-          setMenu({ x: rect.left, y: rect.top - menuHeight - MENU_GAP_PX })
+          setMenu({ x: startEdgeX(rect), y: rect.top - menuHeight - MENU_GAP_PX })
         }}
         title={t('composer.actions.chooseSendAddress')}
         className="flex max-w-full items-center gap-1 self-start rounded-control-sm px-1.5 py-0.5 text-caption text-secondary hover:bg-active hover:text-primary transition-colors cursor-pointer"

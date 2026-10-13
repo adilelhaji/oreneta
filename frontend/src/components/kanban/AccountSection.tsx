@@ -84,7 +84,7 @@ export function AccountSection({
       <div className="flex items-center gap-1 rounded-control-sm px-2 pb-1 pt-2 hover:bg-hover">
         <button
           type="button"
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-left text-2xs font-bold tracking-wide text-secondary hover:text-primary"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-start text-2xs font-bold tracking-wide text-secondary hover:text-primary"
           onClick={() => setExpanded((open) => !open)}
           title={expanded ? t('accounts.actions.collapseAccount') : t('accounts.actions.expandAccount')}
         >

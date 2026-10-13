@@ -165,6 +165,8 @@ export function useComposer(tabId: string) {
     editorProps: {
       attributes: {
         class: 'tiptap-body focus:outline-none min-h-[240px] text-sm leading-relaxed',
+        // The text keeps its own direction, whatever the interface's (ADR-0055).
+        dir: 'auto',
         spellcheck: String(spellCheck),
       },
       handlePaste: (_view, event) => {

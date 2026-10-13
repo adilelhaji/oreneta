@@ -15,8 +15,8 @@ export function AppToast() {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-6 left-1/2 -translate-x-1/2 animate-slide-up flex w-max max-w-[calc(100%-2rem)] items-center gap-2 rounded-control border border-border bg-chats py-2 pl-4 text-xs font-semibold text-primary shadow-overlay z-50 ${
-        toastUndo ? 'pr-2' : 'pr-4'
+      className={`fixed bottom-6 left-1/2 -translate-x-1/2 animate-slide-up flex w-max max-w-[calc(100%-2rem)] items-center gap-2 rounded-control border border-border bg-chats py-2 ps-4 text-xs font-semibold text-primary shadow-overlay z-50 ${
+        toastUndo ? 'pe-2' : 'pe-4'
       }`}
     >
       {toastTone === 'error' ? (
@@ -30,7 +30,7 @@ export function AppToast() {
       {toastUndo && (
         <button
           onClick={runToastUndo}
-          className="ml-1 shrink-0 rounded-control-sm bg-hover px-2.5 py-1 font-bold text-primary hover:bg-active transition-colors cursor-pointer"
+          className="ms-1 shrink-0 rounded-control-sm bg-hover px-2.5 py-1 font-bold text-primary hover:bg-active transition-colors cursor-pointer"
         >
           Undo
         </button>

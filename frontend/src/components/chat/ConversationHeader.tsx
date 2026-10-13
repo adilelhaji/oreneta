@@ -145,7 +145,7 @@ export function ConversationHeader({
 
         {inKanban && (
           <button
-            className="-mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-hover text-secondary cursor-pointer max-[600px]:hidden"
+            className="-me-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-hover text-secondary cursor-pointer max-[600px]:hidden"
             onClick={closeKanbanPane}
             title={t('chat.closeConversationEsc')}
           >
@@ -183,7 +183,7 @@ export function ConversationHeader({
               type="button"
               onClick={openSenderMenu}
               onContextMenu={openSenderMenu}
-              className="mt-0.5 block max-w-full truncate rounded-sm text-left text-xs font-medium text-secondary outline-none transition-colors cursor-context-menu hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="mt-0.5 block max-w-full truncate rounded-sm text-start text-xs font-medium text-secondary outline-none transition-colors cursor-context-menu hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
               title={`${activeThread.from_name} (${activeThread.from_addr})`}
               aria-label={t('chat.copyFullAddress')}
             >
@@ -329,7 +329,7 @@ export function ConversationHeader({
               onClick={() => setActionsMenuOpen((open) => !open)}
             />
             {actionsMenuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay">
+              <div className="absolute end-0 top-full z-50 mt-2 w-52 rounded-control border border-border bg-chats p-1 shadow-overlay">
                 <button
                   onClick={() => {
                     setQuickConversationMode('html')

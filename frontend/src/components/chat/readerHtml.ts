@@ -1,4 +1,5 @@
 import { type MessageFrameFont } from '../../lib/fonts'
+import { applyContentDirection } from '../../lib/direction'
 
 const READER_STYLE_ID = 'oreneta-reader-style'
 const READER_FONT_STYLE_ID = 'oreneta-reader-font'
@@ -248,6 +249,7 @@ export function applyReaderFont(doc: Document, font: MessageFrameFont) {
 // treatment.
 export function applyReaderLayout(doc: Document, font: MessageFrameFont = DEFAULT_READER_FONT) {
   applyReaderFont(doc, font)
+  applyContentDirection(doc)
 
   if (!doc.getElementById(READER_STYLE_ID)) {
     const style = doc.createElement('style')

@@ -133,7 +133,7 @@ export function CommandPalette() {
                   onClick={() => {
                     if (!command.disabled) command.run()
                   }}
-                  className={`flex w-full items-center gap-3 rounded-control-sm px-3 py-2 text-left text-ui transition-colors cursor-pointer ${
+                  className={`flex w-full items-center gap-3 rounded-control-sm px-3 py-2 text-start text-ui transition-colors cursor-pointer ${
                     selected ? 'bg-accent/10 text-primary' : 'text-primary hover:bg-hover'
                   }`}
                 >

@@ -50,7 +50,7 @@ export function LabelPicker({ threadId, applied }: { threadId: string; applied: 
         onClick={() => setOpen((was) => !was)}
       />
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 min-w-[14rem] rounded-control border border-border bg-chats p-1 shadow-overlay">
+        <div className="absolute end-0 top-full z-50 mt-2 min-w-[14rem] rounded-control border border-border bg-chats p-1 shadow-overlay">
           {labels.length === 0 ? (
             <p className="px-3 py-2 text-xs text-secondary">{t('labels.noneYet')}</p>
           ) : (
@@ -69,7 +69,7 @@ export function LabelPicker({ threadId, applied }: { threadId: string; applied: 
                     style={{ backgroundColor: label.colour }}
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                   />
-                  <span className="min-w-0 flex-1 truncate text-left">{label.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-start">{label.name}</span>
                   {on && <Check size={14} className="shrink-0 text-accent" strokeWidth={1.75} />}
                 </button>
               )
@@ -85,7 +85,7 @@ export function LabelPicker({ threadId, applied }: { threadId: string; applied: 
             className={menuItemClass}
           >
             <Tag size={14} className="text-secondary" strokeWidth={1.75} />
-            <span className="min-w-0 flex-1 truncate text-left">{t('labels.manage')}</span>
+            <span className="min-w-0 flex-1 truncate text-start">{t('labels.manage')}</span>
           </button>
         </div>
       )}

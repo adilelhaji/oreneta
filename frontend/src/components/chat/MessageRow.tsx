@@ -26,6 +26,7 @@ import { MessageActions } from './MessageActions'
 import { settings$ } from '../../states/settings'
 import { readingMeasure } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
+import { besideEndX } from '../../lib/direction'
 
 const COLLAPSED_PREVIEW_CHARS = 200
 
@@ -80,7 +81,7 @@ export function MessageRow({
   const openActionsMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
-    onOpenContextMenu({ x: rect.right, y: rect.bottom + 4, message, hideOpenInNewTab: true })
+    onOpenContextMenu({ x: besideEndX(rect, 0), y: rect.bottom + 4, message, hideOpenInNewTab: true })
   }
   const openMessageOrDraftTab = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -155,15 +156,16 @@ export function MessageRow({
         // Held to the same measure as an expanded message, so a collapsed row
         // does not sit wider than the one it opens into.
         style={{ maxWidth: readingMeasure(readingWidth) ?? undefined }}
-        className="group/message-row mx-auto flex w-full cursor-pointer items-center gap-2.5 rounded-control border border-border/40 bg-chats px-3 py-2.5 text-left transition-colors hover:bg-hover"
+        className="group/message-row mx-auto flex w-full cursor-pointer items-center gap-2.5 rounded-control border border-border/40 bg-chats px-3 py-2.5 text-start transition-colors hover:bg-hover"
       >
         <Avatar name={view.avatarName} email={view.avatarEmail} src={view.avatarSrc} size={26} className="shrink-0" />
         <span
           className={`shrink-0 max-w-[30%] truncate text-ui text-primary ${message.unread ? 'font-bold' : 'font-semibold'}`}
+          dir="auto"
         >
           {outgoing && recipientSummary ? t('chat.toRecipients', { recipients: recipientSummary }) : senderName}
         </span>
-        <span className="min-w-0 flex-1 truncate text-ui text-secondary/80">{collapsedPreview(message)}</span>
+        <span className="min-w-0 flex-1 truncate text-ui text-secondary/80" dir="auto">{collapsedPreview(message)}</span>
         <div className="flex shrink-0 items-center gap-1.5 text-caption text-secondary/80">
           {draftBadge}
           {message.has_attachments && <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />}
@@ -195,9 +197,9 @@ export function MessageRow({
             aria-expanded={true}
             onClick={onToggleExpanded}
             title={t('chat.collapseMessage')}
-            className="flex w-full min-w-0 flex-col items-start text-left cursor-pointer"
+            className="flex w-full min-w-0 flex-col items-start text-start cursor-pointer"
           >
-            <span className="max-w-full wrap-anywhere text-sm font-semibold text-primary">{senderName}</span>
+            <span className="max-w-full wrap-anywhere text-sm font-semibold text-primary" dir="auto">{senderName}</span>
             <span className="max-w-full wrap-anywhere text-caption text-secondary">{message.from_addr}</span>
           </button>
           {/* The details toggle trails the recipients, the way the chat bubble
@@ -239,7 +241,7 @@ export function MessageRow({
         {metaOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
-            <div className="absolute left-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-control-sm border border-border bg-chats p-3 text-secondary shadow-overlay select-text">
+            <div className="absolute start-0 top-full z-50 mt-1 max-h-[260px] w-[460px] max-w-[calc(100vw-48px)] space-y-2 overflow-y-auto rounded-control-sm border border-border bg-chats p-3 text-secondary shadow-overlay select-text">
               <AddressRow label={t('composer.fields.from')} rawList={fromRaw} />
               {toRaw && <AddressRow label={t('composer.fields.to')} rawList={toRaw} />}
               {ccRaw && <AddressRow label={t('composer.fields.cc')} rawList={ccRaw} />}

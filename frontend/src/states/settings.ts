@@ -44,6 +44,7 @@ import {
 import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
+import { languageDirection } from '../lib/direction'
 
 // Persisted user settings. This module maps 1:1 to the `settings` DB table: each
 // field is one row, keyed by `DB_KEY`. Persistence is centralized here (a single
@@ -538,7 +539,8 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
   const root = document.documentElement
   // Our codes use "_" (zh_Hant, pt_BR); the lang attribute wants BCP-47 "-".
   root.lang = lang.replace('_', '-')
-  root.dir = lang === 'ar' ? 'rtl' : 'ltr'
+  // Arabic (and any RTL language added later) mirrors the layout (ADR-0055).
+  root.dir = languageDirection(lang)
   try {
     localStorage.setItem(profileKey(LANG_CACHE_KEY), lang)
   } catch {

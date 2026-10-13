@@ -178,7 +178,7 @@ function ColumnEditor({ accountId, folderId, onClose }: MailboxScope & { onClose
                     {t('mailboxColumns.auto')}
                   </label>
                 )}
-                <div className="ml-auto flex shrink-0 items-center gap-2">
+                <div className="ms-auto flex shrink-0 items-center gap-2">
                   <IconButton
                     icon={ArrowUp}
                     label={`${t('mailboxColumns.moveUp')}: ${label(column.id)}`}

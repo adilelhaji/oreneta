@@ -184,7 +184,7 @@ export function PeopleView() {
     <div className="flex min-h-0 min-w-0 flex-1 bg-app">
       <section
         className={clsx(
-          'min-w-0 w-full shrink-0 flex-col border-r border-border bg-chats min-[769px]:flex min-[769px]:w-72',
+          'min-w-0 w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:flex min-[769px]:w-72',
           selected ? 'hidden' : 'flex',
         )}
       >
@@ -353,7 +353,7 @@ export function PeopleView() {
                         }
                       }}
                       className={clsx(
-                        'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-left transition-colors cursor-pointer',
+                        'flex w-full items-center gap-3 border-b border-border/50 px-3 py-2 text-start transition-colors cursor-pointer',
                         active ? 'bg-accent/20 dark:bg-accent/30' : 'hover:bg-hover',
                       )}
                     >
@@ -439,7 +439,7 @@ export function PeopleView() {
                         type="button"
                         aria-current={copy.id === selected.id}
                         onClick={() => people$.selectedId.set(copy.id)}
-                        className="min-w-0 flex-1 text-left text-ui text-primary cursor-pointer"
+                        className="min-w-0 flex-1 text-start text-ui text-primary cursor-pointer"
                       >
                         {names.format(copy)}{' '}
                         <span className="text-caption text-secondary">
@@ -533,7 +533,7 @@ function PersonCard({
             {memberOf.map((group) => (
               <span
                 key={group.id}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-chats py-0.5 pl-2.5 pr-1 text-caption text-primary"
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-chats py-0.5 ps-2.5 pe-1 text-caption text-primary"
               >
                 <span className="wrap-anywhere">{group.name}</span>
                 {group.editable && (

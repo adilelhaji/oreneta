@@ -9,9 +9,15 @@
 //! Group chats (XEP-0045) and files (XEP-0363) ride the same session
 //! (ADR-0044): rooms are joined again on each new connection, and a file's
 //! upload is asked for, put over HTTPS and then sent as a link.
+//!
+//! Presence, mentions, notifications and private messages in rooms follow
+//! ADR-0056: the person's status is broadcast (so only subscribed contacts
+//! get it), contacts' and occupants' statuses are kept for the session, and
+//! a message new to the person may ask the bridge for a system notification.
 
 use super::files::{self, FileError};
-use super::{ChatAccount, ChatMessage, Invitation, KIND_CHAT, KIND_GROUP};
+use super::presence::{self, Arrival, ContactPresence};
+use super::{ChatAccount, ChatMessage, Invitation, KIND_CHAT, KIND_GROUP, KIND_PRIVATE, mentions};
 use anyhow::{Context, Result};
 use futures::stream::FuturesUnordered;
 use futures::{SinkExt, StreamExt};
@@ -181,6 +187,7 @@ pub fn interpret(message: &Message, own: &BareJid, archive_id: Option<String>, s
         file_name: link.as_deref().map(files::file_name_of),
         file_url: link,
         file_size: None,
+        mention: false,
     })
 }
 
@@ -225,6 +232,54 @@ pub fn interpret_group(
         file_name: link.as_deref().map(files::file_name_of),
         file_url: link,
         file_size: None,
+        mention: false,
+    })
+}
+
+/// A private message with someone in a room (XEP-0045 §7.5): a chat
+/// message to or from `room/nick`. It is its own conversation, tied to the
+/// room; who speaks is a nickname. Our own (a copy from another device, or
+/// from our archive) is addressed to the occupant.
+pub fn interpret_private(
+    message: &Message,
+    own: &BareJid,
+    room: &BareJid,
+    nick: &str,
+    archive_id: Option<String>,
+    stamp: i64,
+    account: &str,
+) -> Option<ChatMessage> {
+    if !matches!(message.type_, MessageType::Chat | MessageType::Normal) {
+        return None;
+    }
+    let from = message.from.as_ref();
+    let outgoing = from.is_none_or(|f| f.to_bare() == *own);
+    let other = if outgoing { message.to.as_ref()? } else { from? };
+    if other.to_bare() != *room {
+        return None;
+    }
+    let occupant = other.resource()?.as_str().to_string();
+    let link = files::link_of(message);
+    let body = body_of(message, &link)?;
+    let (origin, archived, when) = ids(message, own, archive_id, stamp);
+    let id = origin
+        .or_else(|| message.id.as_ref().map(|i| i.0.clone()))
+        .or_else(|| archived.clone())?;
+    Some(ChatMessage {
+        account: account.into(),
+        conversation: format!("{room}/{occupant}"),
+        id,
+        stanza_id: archived,
+        direction: if outgoing { "out" } else { "in" }.into(),
+        sender: if outgoing { nick.to_string() } else { occupant },
+        body,
+        stamp: when,
+        state: if outgoing { "accepted" } else { "received" }.into(),
+        kind: KIND_PRIVATE.into(),
+        file_name: link.as_deref().map(files::file_name_of),
+        file_url: link,
+        file_size: None,
+        mention: false,
     })
 }
 
@@ -294,6 +349,31 @@ pub fn outgoing_message(to: &BareJid, id: &str, body: &str, group: bool, file: O
 /// A chat message to one person.
 pub fn outgoing(to: &BareJid, id: &str, body: &str) -> Message {
     outgoing_message(to, id, body, false, None)
+}
+
+/// A private message to someone in a room, addressed to their place in it
+/// (`room/nick`) and marked as coming through the room (XEP-0045 §7.5), so
+/// it is not mistaken for a direct one. The room relays it, and may keep it.
+pub fn outgoing_private(room: &BareJid, nick: &str, id: &str, body: &str, file: Option<&str>) -> Result<Message> {
+    let to = room.with_resource_str(nick).context("this nickname cannot be written to")?;
+    let mut message = Message::new(Some(Jid::from(to)));
+    message.type_ = MessageType::Chat;
+    message.id = Some(tokio_xmpp::parsers::message::Id(id.into()));
+    message.bodies.insert(tokio_xmpp::parsers::message::Lang::default(), body.into());
+    message.payloads.push(OriginId { id: id.into() }.into());
+    message.payloads.push(Element::builder("x", tokio_xmpp::parsers::ns::MUC_USER).build());
+    Ok(match file {
+        Some(url) => files::with_link(message, url),
+        None => message,
+    })
+}
+
+/// A message to a room with XEP-0372 references for the nicknames the
+/// person picked from the suggestions (ADR-0056).
+pub fn outgoing_group(room: &BareJid, id: &str, body: &str, file: Option<&str>, mentioned: &[String]) -> Message {
+    let mut message = outgoing_message(room, id, body, true, file);
+    message.payloads.extend(mentions::references(room, body, mentioned));
+    message
 }
 
 /// Joining a room (or joining it again): with its password if it has one,
@@ -372,7 +452,15 @@ pub struct Upload {
 }
 
 pub enum Command {
-    Send { conversation: String, id: String, body: String, group: bool, file: Option<String> },
+    /// `mentions`: nicknames picked from the suggestions, for references.
+    Send { conversation: String, id: String, body: String, group: bool, file: Option<String>, mentions: Vec<String> },
+    /// The person's status changed (read again from the store), or, with
+    /// `idle`, since when they have been idle (`Some(None)`: active again).
+    Presence { idle: Option<Option<i64>> },
+    /// Ask to see someone's status (which offers ours to them).
+    Subscribe { jid: String },
+    /// Answer someone's request to see the person's status.
+    AnswerSubscription { jid: String, allow: bool },
     Join { room: String, nick: String, password: Option<String> },
     Leave { room: String, nick: String },
     Upload(Upload),
@@ -400,7 +488,8 @@ impl Default for Options {
 
 /// What an answer to one of our questions (iq) is about.
 enum Asked {
-    Mam(Option<String>),
+    /// The room (none: the account's own archive) and the query's id.
+    Mam(Option<String>, &'static str),
     Items,
     Info(Jid),
     Slot(String),
@@ -479,7 +568,7 @@ pub async fn run(
                         let _ = client.send_iq(None, tokio_xmpp::IqRequest::Set(carbons::Enable.into())).await;
                         let after = super::last_archive_id(&db.lock().unwrap(), &account.id).ok().flatten();
                         let token = client.send_iq(None, tokio_xmpp::IqRequest::Set(archive_query(after).into())).await;
-                        ask(&pending, Asked::Mam(None), token);
+                        ask(&pending, Asked::Mam(None, CATCH_UP), token);
                         // A resumed stream is still in its rooms; a new one joins them again.
                         if !resumed {
                             let rooms = super::rooms(&db.lock().unwrap(), &account.id).unwrap_or_default();
@@ -530,7 +619,7 @@ pub async fn run(
                                 let after = super::last_room_archive_id(&db.lock().unwrap(), &account.id, &room).ok().flatten();
                                 if after.is_some() {
                                     let token = client.send_iq(Some(Jid::from(from.clone())), tokio_xmpp::IqRequest::Set(archive_query(after).into())).await;
-                                    ask(&pending, Asked::Mam(Some(room.clone())), token);
+                                    ask(&pending, Asked::Mam(Some(room.clone()), CATCH_UP), token);
                                 }
                             }
                             Some(RoomPresence::Out) => room_state(&room, "out", Value::Null),
@@ -545,15 +634,15 @@ pub async fn run(
             }
             Some((what, answer)) = pending.next(), if !pending.is_empty() => {
                 match what {
-                    Asked::Mam(room) => {
+                    Asked::Mam(room, query) => {
                         // Page after page until the archive says it is done.
                         if let Ok(tokio_xmpp::IqResponse::Result(Some(element))) = answer {
                             if let Ok(fin) = mam::Fin::try_from(element) {
                                 if !fin.complete {
                                     if let Some(last) = fin.set.last {
                                         let to = room.as_deref().and_then(|r| Jid::from_str(r).ok());
-                                        let token = client.send_iq(to, tokio_xmpp::IqRequest::Set(archive_query(Some(last)).into())).await;
-                                        ask(&pending, Asked::Mam(room), token);
+                                        let token = client.send_iq(to, tokio_xmpp::IqRequest::Set(archive_query_as(Some(last), query).into())).await;
+                                        ask(&pending, Asked::Mam(room, query), token);
                                     }
                                 }
                             }
@@ -796,11 +885,22 @@ fn spawn_put(
     });
 }
 
+/// The id of archive queries made to catch up after connecting: what they
+/// bring is history, never a notification.
+pub const CATCH_UP: &str = "oreneta";
+/// The id of the queries made while appearing offline, when messages are
+/// not delivered live: what they bring is new to the person.
+pub const POLL: &str = "oreneta-poll";
+
 /// The archive query: everything after the last id known here, or the most
 /// recent page when nothing is known yet.
 pub fn archive_query(after: Option<String>) -> mam::Query {
+    archive_query_as(after, CATCH_UP)
+}
+
+pub fn archive_query_as(after: Option<String>, query: &str) -> mam::Query {
     mam::Query {
-        queryid: Some(mam::QueryId("oreneta".into())),
+        queryid: Some(mam::QueryId(query.into())),
         node: None,
         form: None,
         set: Some(SetQuery { max: Some(100), after, before: None, index: None }),
@@ -808,30 +908,50 @@ pub fn archive_query(after: Option<String>) -> mam::Query {
     }
 }
 
-/// Records one incoming message stanza; returns a delivery receipt to send,
-/// when the sender asked for one.
-fn handle_message(
+/// What one incoming message stanza led to: a delivery receipt to send,
+/// when the sender asked for one, and a message to notify about.
+#[derive(Default)]
+pub struct Handled {
+    pub receipt: Option<Message>,
+    pub notify: Option<ChatMessage>,
+}
+
+/// Whether a message carries a delay stamp: history a room replays on
+/// joining, or what the server kept while we were away.
+fn delayed(message: &Message) -> bool {
+    message.payloads.iter().any(|p| Delay::try_from(p.clone()).is_ok())
+}
+
+/// Records one incoming message stanza. `own_show` is the person's status
+/// now: busy keeps notifications back.
+pub fn handle_message(
     db: &Arc<Mutex<Connection>>,
     account: &str,
     own: &BareJid,
     message: &Message,
+    own_show: &str,
     changed: &dyn Fn(&str),
     invited: &dyn Fn(&Invitation, Option<String>),
-) -> Option<Message> {
+) -> Handled {
+    let mut handled = Handled::default();
     let now = crate::store::now_unix();
     let conn = db.lock().unwrap();
-    let joined = |jid: &BareJid| super::room(&conn, account, &jid.to_string()).ok().flatten();
+    let nick_in = |jid: &BareJid| super::room_nick(&conn, account, &jid.to_string()).ok().flatten();
     let from = message.from.as_ref().map(|j| j.to_bare());
 
     // A message that bounced: one of ours did not get there.
     if message.type_ == MessageType::Error {
-        if let (Some(id), Some(from)) = (&message.id, &from) {
-            if super::is_ours(&conn, account, &from.to_string(), &id.0).unwrap_or(false) {
-                let _ = super::set_state(&conn, account, &id.0, "failed");
-                changed(&from.to_string());
+        if let (Some(id), Some(from_full)) = (&message.id, &message.from) {
+            // A private one bounces from `room/nick`; a direct or room one from the bare address.
+            for conversation in [from_full.to_string(), from_full.to_bare().to_string()] {
+                if super::is_ours(&conn, account, &conversation, &id.0).unwrap_or(false) {
+                    let _ = super::set_state(&conn, account, &id.0, "failed");
+                    changed(&conversation);
+                    break;
+                }
             }
         }
-        return None;
+        return handled;
     }
 
     // An invitation is kept for the person to answer, nothing more.
@@ -839,26 +959,30 @@ fn handle_message(
         if super::save_invitation(&conn, &invitation).unwrap_or(false) {
             invited(&invitation, password);
         }
-        return None;
+        return handled;
     }
 
-    let mut wrapped: Option<(Message, Option<String>, i64)> = None;
+    let mut wrapped: Option<(Message, Option<String>, i64, Arrival)> = None;
     for payload in &message.payloads {
         // From an archive: the account's, or a room's (then from the room).
         if let Ok(result) = mam::Result_::try_from(payload.clone()) {
-            let archive_ok = from.as_ref().is_none_or(|f| f == own || joined(f).is_some());
+            let archive_ok = from.as_ref().is_none_or(|f| f == own || nick_in(f).is_some());
             if archive_ok {
                 let stamp = result.forwarded.delay.as_ref().map(|d| d.stamp.0.timestamp()).unwrap_or(now);
-                wrapped = Some((result.forwarded.message.clone(), Some(result.id.clone()), stamp));
+                let arrival = match result.queryid.as_ref() {
+                    Some(q) if q.0 == POLL && from.as_ref().is_none_or(|f| f == own) => Arrival::Poll,
+                    _ => Arrival::Backfill,
+                };
+                wrapped = Some((result.forwarded.message.clone(), Some(result.id.clone()), stamp, arrival));
             }
         }
         // A copy from another of the person's devices; only our server sends those.
         if from.as_ref().is_none_or(|f| f == own) {
             if let Ok(carbon) = carbons::Received::try_from(payload.clone()) {
-                wrapped = Some((carbon.forwarded.message.clone(), None, now));
+                wrapped = Some((carbon.forwarded.message.clone(), None, now, Arrival::Carbon));
             }
             if let Ok(carbon) = carbons::Sent::try_from(payload.clone()) {
-                wrapped = Some((carbon.forwarded.message.clone(), None, now));
+                wrapped = Some((carbon.forwarded.message.clone(), None, now, Arrival::Carbon));
             }
         }
         // Someone's client says our message arrived.
@@ -870,40 +994,87 @@ fn handle_message(
         }
     }
     let live = wrapped.is_none();
-    let (inner, archive_id, stamp) = wrapped.unwrap_or((message.clone(), None, now));
+    let (inner, archive_id, stamp, arrival) = wrapped.unwrap_or_else(|| {
+        let arrival = if delayed(message) { Arrival::Backfill } else { Arrival::Live };
+        (message.clone(), None, now, arrival)
+    });
+    let notify = |recorded: &ChatMessage| {
+        let mode = presence::notify_mode(&conn, account, &recorded.conversation, &recorded.kind).unwrap_or_default();
+        presence::should_notify(recorded, arrival, &mode, own_show).then(|| recorded.clone())
+    };
 
     // A room's message, live or from its history or archive.
     if inner.type_ == MessageType::Groupchat {
-        let room_jid = inner.from.as_ref().map(|j| j.to_bare())?;
-        let room = joined(&room_jid)?;
-        let mut recorded = interpret_group(&inner, &room_jid, &room.nick, archive_id, stamp, account)?;
+        let Some(room_jid) = inner.from.as_ref().map(|j| j.to_bare()) else { return handled };
+        let Some(nick) = nick_in(&room_jid) else { return handled };
+        let Some(mut recorded) = interpret_group(&inner, &room_jid, &nick, archive_id, stamp, account) else { return handled };
         // Ours, reflected by the room, even if our nickname changed since.
         if recorded.direction == "in" && super::is_ours(&conn, account, &recorded.conversation, &recorded.id).unwrap_or(false) {
             recorded.direction = "out".into();
             recorded.state = "accepted".into();
         }
+        if recorded.direction == "in" {
+            recorded.mention = mentions::is_mention(&inner, &recorded.body, own, &room_jid, &nick);
+        }
         if super::record(&conn, &recorded).unwrap_or(false) {
             changed(&recorded.conversation);
+            handled.notify = notify(&recorded);
         }
-        return None;
+        return handled;
     }
 
-    let recorded = interpret(&inner, own, archive_id, stamp, account)?;
-    // Private messages through a room are not taken in yet.
-    if BareJid::from_str(&recorded.conversation).ok().is_some_and(|c| joined(&c).is_some()) {
-        return None;
+    // A private message through a room: to or from `room/nick`.
+    let counterpart = if inner.from.as_ref().is_none_or(|f| f.to_bare() == *own) { inner.to.as_ref() } else { inner.from.as_ref() };
+    if let Some(counterpart) = counterpart {
+        let room_jid = counterpart.to_bare();
+        if let Some(nick) = nick_in(&room_jid) {
+            // The room itself writing to us directly is not a conversation here.
+            if counterpart.resource().is_none() {
+                return handled;
+            }
+            let Some(recorded) = interpret_private(&inner, own, &room_jid, &nick, archive_id, stamp, account) else { return handled };
+            if super::record(&conn, &recorded).unwrap_or(false) {
+                changed(&recorded.conversation);
+                handled.notify = notify(&recorded);
+            }
+            return handled;
+        }
     }
+
+    let Some(recorded) = interpret(&inner, own, archive_id, stamp, account) else { return handled };
     if super::record(&conn, &recorded).unwrap_or(false) {
         changed(&recorded.conversation);
+        handled.notify = notify(&recorded);
     }
     // A receipt only for a live message to us that asks for one.
     let asked = inner.payloads.iter().any(|p| receipts::Request::try_from(p.clone()).is_ok());
     if live && asked && recorded.direction == "in" {
         let mut receipt = Message::new(inner.from.clone());
         receipt.payloads.push(receipts::Received { id: recorded.id.clone() }.into());
-        return Some(receipt);
+        handled.receipt = Some(receipt);
     }
-    None
+    handled
+}
+
+/// The event that asks the bridge for a system notification: who, where,
+/// and the text (or the file's name), cut short.
+pub fn notification(message: &ChatMessage) -> Value {
+    let text = message.file_name.clone().unwrap_or_else(|| message.body.clone());
+    let text: String = text.chars().take(280).collect();
+    let room = match message.kind.as_str() {
+        KIND_GROUP => Some(message.conversation.clone()),
+        KIND_PRIVATE => super::split_private(&message.conversation).map(|(room, _)| room.to_string()),
+        _ => None,
+    };
+    json!({
+        "account": message.account,
+        "conversation": message.conversation,
+        "kind": message.kind,
+        "room": room,
+        "sender": message.sender,
+        "body": text,
+        "mention": message.mention,
+    })
 }
 
 /// The connection settings for an account.

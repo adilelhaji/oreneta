@@ -262,7 +262,7 @@ export function MergeDialog() {
                     <li key={b.id}>
                       <button
                         type="button"
-                        className="text-left text-accent underline"
+                        className="text-start text-accent underline"
                         onClick={() => setWatching(b.id)}
                       >
                         {b.subject} —{' '}

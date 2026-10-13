@@ -77,14 +77,14 @@ export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(funct
           'w-full min-w-0 appearance-none border border-border text-primary transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 focus:border-accent',
           INPUT_SIZES[fieldSize],
           INPUT_SURFACES[surface],
-          'pr-8',
+          'pe-8',
           className,
         )}
         {...rest}
       >
         {children}
       </select>
-      <div className="pointer-events-none absolute right-2.5 flex items-center text-secondary">
+      <div className="pointer-events-none absolute end-2.5 flex items-center text-secondary">
         <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
       </div>
     </div>
@@ -105,7 +105,7 @@ export function Field({
 }: FieldProps) {
   return (
     <label className="flex flex-col gap-1.5 w-full">
-      <span className={`pl-0.5 ${labelClassName ?? 'text-caption font-semibold text-secondary'}`}>{label}</span>
+      <span className={`ps-0.5 ${labelClassName ?? 'text-caption font-semibold text-secondary'}`}>{label}</span>
       <input
         type={type}
         value={value}

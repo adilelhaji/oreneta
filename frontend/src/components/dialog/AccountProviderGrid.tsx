@@ -31,7 +31,7 @@ export function AccountProviderGrid({
               role="tab"
               aria-selected={active}
               onClick={() => setMode(p.mode)}
-              className={`group flex min-w-0 items-center justify-center gap-2 rounded-control px-3 py-2.5 text-center transition-all cursor-pointer max-[640px]:justify-start max-[640px]:text-left ${
+              className={`group flex min-w-0 items-center justify-center gap-2 rounded-control px-3 py-2.5 text-center transition-all cursor-pointer max-[640px]:justify-start max-[640px]:text-start ${
                 active
                   ? 'bg-chats text-primary shadow-sm ring-1 ring-border/80'
                   : 'text-secondary hover:bg-chats/60 hover:text-primary'
@@ -55,7 +55,7 @@ export function AccountProviderGrid({
             key={p.id}
             type="button"
             onClick={() => setMode(p.mode)}
-            className={`group relative flex items-center text-left transition-all cursor-pointer gap-2.5 rounded-panel p-2.5 border ${
+            className={`group relative flex items-center text-start transition-all cursor-pointer gap-2.5 rounded-panel p-2.5 border ${
               active
                 ? 'border-accent bg-accent/5 shadow-sm ring-1 ring-accent/30'
                 : 'border-border/60 hover:border-border hover:bg-hover'
@@ -73,7 +73,7 @@ export function AccountProviderGrid({
             {/* A radio-style dot — this is a single-choice picker, so the mark
                 means "selected", not "done" (a check would imply completion). */}
             <span
-              className={`absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full border transition-colors ${
+              className={`absolute end-2 top-2 flex h-4 w-4 items-center justify-center rounded-full border transition-colors ${
                 active ? 'border-accent' : 'border-border/70'
               }`}
             >

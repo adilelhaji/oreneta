@@ -214,7 +214,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
               </Labelled>
               {found !== null && (
                 <fieldset className="flex flex-col gap-1.5">
-                  <legend className="mb-1 pl-0.5 text-caption font-semibold text-secondary">
+                  <legend className="mb-1 ps-0.5 text-caption font-semibold text-secondary">
                     {t('calendar.foundCalendars', { defaultValue: 'Calendars on this server' })}
                   </legend>
                   {found.map((calendar) => (
@@ -331,7 +331,7 @@ function KindTab({
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex w-full flex-col gap-1.5">
-      <span className="pl-0.5 text-caption font-semibold text-secondary">{label}</span>
+      <span className="ps-0.5 text-caption font-semibold text-secondary">{label}</span>
       {children}
     </label>
   )

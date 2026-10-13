@@ -156,7 +156,7 @@ function dateOnly(date: Date): Date {
 export function formatMessageTime(epochSeconds: number): string {
   if (!epochSeconds) return ''
   const date = new Date(epochSeconds * 1000)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleTimeString(formattingLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 export function formatDateDivider(epochSeconds: number): string {
@@ -168,13 +168,13 @@ export function formatDateDivider(epochSeconds: number): string {
   if (date.getTime() === today.getTime()) return 'Today'
   if (date.getTime() === yesterday.getTime()) return 'Yesterday'
 
-  return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(formattingLocale(), { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 export function formatFullTimestamp(epochSeconds: number): string {
   if (!epochSeconds) return ''
   const date = new Date(epochSeconds * 1000)
-  return date.toLocaleString([], {
+  return date.toLocaleString(formattingLocale(), {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
@@ -194,7 +194,7 @@ export function formatMessageStamp(epochSeconds: number, _showDate: boolean): st
     date.getFullYear() === now.getFullYear()
       ? { month: 'short', day: 'numeric' }
       : { month: 'short', day: 'numeric', year: 'numeric' }
-  return date.toLocaleDateString([], options)
+  return date.toLocaleDateString(formattingLocale(), options)
 }
 
 export function normalizeUrl(urlStr: string): string {

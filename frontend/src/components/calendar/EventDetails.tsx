@@ -21,6 +21,7 @@ import {
 import { ScopeAsk } from './ScopeAsk'
 import { isAnswerableInvitation } from '../../lib/calendarInvitation'
 import { accounts$ } from '../../states/accounts'
+import { formattingLocale } from '../../lib/i18n'
 
 /// An event at full size, to read rather than to edit.
 ///
@@ -269,7 +270,7 @@ export function EventDetails() {
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
           {readOnly ? (
-            <p className="mr-auto text-caption text-secondary">
+            <p className="me-auto text-caption text-secondary">
               {t('calendar.readOnlyEvent', {
                 defaultValue: 'This calendar is read-only — it belongs to whoever publishes it.',
               })}
@@ -278,7 +279,7 @@ export function EventDetails() {
             <button
               type="button"
               onClick={() => (event.is_recurring && event.series_id ? setAsking(true) : void deleteEvent(event))}
-              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
+              className="me-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
             >
               <Trash2 size={14} strokeWidth={1.75} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
@@ -321,14 +322,14 @@ function formatRange(event: CalendarEvent): string {
   const start = new Date(event.start * 1000)
   const end = new Date(event.end * 1000)
   const day = (date: Date) =>
-    date.toLocaleDateString(i18n.language.replace('_', '-'), {
+    date.toLocaleDateString(formattingLocale(), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     })
   const time = (date: Date) =>
-    date.toLocaleTimeString(i18n.language.replace('_', '-'), { hour: '2-digit', minute: '2-digit' })
+    date.toLocaleTimeString(formattingLocale(), { hour: '2-digit', minute: '2-digit' })
 
   if (event.all_day) {
     // Dates, read as dates. The stored instants are midnight UTC because a
@@ -348,13 +349,13 @@ function formatRange(event: CalendarEvent): string {
 /// One occurrence's date, short enough to sit on a line with other facts.
 function formatOccurrence(event: CalendarEvent): string {
   const date = new Date(event.start * 1000)
-  const day = date.toLocaleDateString(i18n.language.replace('_', '-'), {
+  const day = date.toLocaleDateString(formattingLocale(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   })
   if (event.all_day) return day
-  return `${day}, ${date.toLocaleTimeString(i18n.language.replace('_', '-'), { hour: '2-digit', minute: '2-digit' })}`
+  return `${day}, ${date.toLocaleTimeString(formattingLocale(), { hour: '2-digit', minute: '2-digit' })}`
 }
 
 /// How far off it is, in the coarsest unit that still says something: days

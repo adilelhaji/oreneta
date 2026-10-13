@@ -40,7 +40,7 @@ export function MessageBubbleBody({
   const boxClass = fullHeight ? 'relative' : 'relative overflow-y-auto'
   if (useHtmlBody) {
     return (
-      <div className={`${boxClass} -mr-3.5 pr-3.5`} style={boxStyle}>
+      <div className={`${boxClass} -me-3.5 pe-3.5`} style={boxStyle}>
         <BubbleHtmlFrame
           html={message.body_html!}
           searchQuery={normalizedSearchQuery}
@@ -120,12 +120,12 @@ export function MessageBubbleBody({
                 <button
                   type="button"
                   onClick={() => navigator.clipboard?.writeText(block.content).catch(() => undefined)}
-                  className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-chats/90 text-secondary opacity-0 shadow-sm transition-opacity hover:text-primary group-hover:opacity-100"
+                  className="absolute end-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-border/70 bg-chats/90 text-secondary opacity-0 shadow-sm transition-opacity hover:text-primary group-hover:opacity-100"
                   title={t('chat.copyCode')}
                 >
                   <Copy size={14} strokeWidth={1.75} />
                 </button>
-                <pre className="m-0 max-w-full overflow-x-auto rounded-control-sm border border-border/60 bg-black/5 px-3 py-2.5 pr-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
+                <pre className="m-0 max-w-full overflow-x-auto rounded-control-sm border border-border/60 bg-black/5 px-3 py-2.5 pe-11 pb-2 font-mono text-[calc(0.8125rem*var(--me-message-scale))] leading-relaxed text-primary shadow-inner dark:bg-white/10">
                   <code className="block min-w-max whitespace-pre">{block.content}</code>
                 </pre>
               </div>
@@ -168,7 +168,8 @@ export function MessageBubbleBody({
 
   return (
     <div
-      className={`${boxClass} -mr-3.5 pr-3.5 font-message text-[calc(0.9375rem*var(--me-message-scale))] leading-relaxed break-words whitespace-pre-wrap select-text font-normal tracking-[0.01em]`}
+      dir="auto"
+      className={`${boxClass} -me-3.5 pe-3.5 font-message text-[calc(0.9375rem*var(--me-message-scale))] leading-relaxed break-words whitespace-pre-wrap select-text font-normal tracking-[0.01em]`}
       style={boxStyle}
     >
       <PlainFoldedText text={bodyText} render={renderBody} searchQuery={normalizedSearchQuery} />

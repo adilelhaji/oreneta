@@ -441,7 +441,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                 onClick={openDraft}
                 className="rounded-control bg-accent px-2.5 py-1.5 text-xs font-semibold text-on-accent"
               >
-                <FileText size={14} className="mr-1 inline" strokeWidth={1.75} />
+                <FileText size={14} className="me-1 inline" strokeWidth={1.75} />
                 {t('assistant.openDraft', { defaultValue: 'Open editable draft' })}
               </button>
             )}

@@ -41,6 +41,7 @@ import { MenuItem } from '../menu/MenuItem'
 import { settings$ } from '../../states/settings'
 import { startQuickAction } from '../../states/quickActions'
 import { bulkLabelSelected, labelCoverage, labels$ } from '../../states/labels'
+import { endAlignedX, flyoutX } from '../../lib/direction'
 
 export function BulkActionBar({
   items,
@@ -132,7 +133,7 @@ export function BulkActionBar({
     const gap = 4
     const flyoutWidth = 190
     const rect = anchor.getBoundingClientRect()
-    const x = rect.right + gap + flyoutWidth > window.innerWidth ? rect.left - flyoutWidth - gap : rect.right + gap
+    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
     const y = rect.top
 
     setMoveFlyoutPosition((current) => {
@@ -153,7 +154,7 @@ export function BulkActionBar({
     const gap = 4
     const flyoutWidth = 230
     const rect = anchor.getBoundingClientRect()
-    const x = rect.right + gap + flyoutWidth > window.innerWidth ? rect.left - flyoutWidth - gap : rect.right + gap
+    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
     const y = rect.top
 
     setCopyFlyoutPosition((current) => {
@@ -214,7 +215,7 @@ export function BulkActionBar({
           className="hover:bg-accent/10"
           onClick={(event) => {
             const rect = event.currentTarget.getBoundingClientRect()
-            setMenu({ x: rect.right - 190, y: rect.bottom + 4 })
+            setMenu({ x: endAlignedX(rect, 190), y: rect.bottom + 4 })
           }}
         />
       </div>

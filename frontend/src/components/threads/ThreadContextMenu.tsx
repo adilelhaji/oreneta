@@ -51,6 +51,7 @@ import { MessageContextMenu } from '../chat/MessageContextMenu'
 import { PriorityMenuSection } from './PriorityMenuSection'
 import { CategoryMenuSection } from './CategoryMenuSection'
 import { awaiting$, reminderAt, waitForReply } from '../../states/awaiting'
+import { flyoutX } from '../../lib/direction'
 
 export type ThreadMenuState =
   | {
@@ -258,7 +259,7 @@ export function ThreadContextMenu({
     const gap = 4
     const flyoutWidth = 190
     const rect = anchor.getBoundingClientRect()
-    const x = rect.right + gap + flyoutWidth > window.innerWidth ? rect.left - flyoutWidth - gap : rect.right + gap
+    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
     const y = rect.top
 
     setMoveFlyoutPosition((current) => {
@@ -279,7 +280,7 @@ export function ThreadContextMenu({
     const gap = 4
     const flyoutWidth = 230
     const rect = anchor.getBoundingClientRect()
-    const x = rect.right + gap + flyoutWidth > window.innerWidth ? rect.left - flyoutWidth - gap : rect.right + gap
+    const x = flyoutX(rect, flyoutWidth, gap, window.innerWidth)
     const y = rect.top
 
     setCopyFlyoutPosition((current) => {

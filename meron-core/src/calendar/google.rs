@@ -1085,6 +1085,7 @@ fn to_event(source: GoogleEvent, calendar_id: &str) -> Option<Event> {
         meeting,
         add_meeting: None,
         meeting_status: None,
+        floating: None,
         id: source.id,
         calendar_id: calendar_id.to_string(),
         change_key: source.etag,
@@ -1253,6 +1254,7 @@ mod tests {
             meeting: None,
             add_meeting: None,
             meeting_status: None,
+            floating: None,
         }
     }
 

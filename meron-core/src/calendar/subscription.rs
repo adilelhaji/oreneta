@@ -295,6 +295,7 @@ fn event_from(
         meeting: None,
         add_meeting: None,
         meeting_status: None,
+        floating: (!all_day).then(|| floating_wall_clock(source, start)).flatten(),
         // Only what the file says: a transparent event leaves the time free
         // (RFC 5545 §3.8.2.7), which is what keeps it out of the conflicts a
         // proposed time is checked against (ADR-0043). Anything else is left
@@ -317,6 +318,22 @@ fn is_cancelled(source: &icalendar::Event) -> bool {
         .properties()
         .get("STATUS")
         .is_some_and(|status| status.value().eq_ignore_ascii_case("CANCELLED"))
+}
+
+/// The wall clock a floating start names (ADR-0057), as seconds since
+/// 1970-01-01T00:00 of that clock; `None` for a start with a zone or in UTC.
+///
+/// Read back from the instant it was resolved to, so an occurrence of a
+/// floating series carries its own date and the series' time of day.
+fn floating_wall_clock(source: &icalendar::Event, start: i64) -> Option<i64> {
+    use chrono::TimeZone as _;
+    use icalendar::{CalendarDateTime, DatePerhapsTime};
+    match source.get_start()? {
+        DatePerhapsTime::DateTime(CalendarDateTime::Floating(_)) => Some(
+            chrono::Local.timestamp_opt(start, 0).earliest()?.naive_local().and_utc().timestamp(),
+        ),
+        _ => None,
+    }
 }
 
 fn is_all_day(source: &icalendar::Event) -> bool {
@@ -774,6 +791,31 @@ SUMMARY:Floating\r\nEND:VEVENT\r\n",
         let event = events.iter().find(|e| e.subject == "Floating").unwrap();
         assert_eq!(event.start, expected);
         assert_eq!(event.end - event.start, 90 * 60, "it used to come out zero-length");
+        // The wall clock itself is kept beside the instant (ADR-0057), the
+        // same whatever zone this machine is in: what a reminder follows.
+        assert_eq!(event.floating, Some(at("2026-10-12T09:00:00Z")));
+    }
+
+    #[test]
+    fn only_a_floating_time_keeps_a_wall_clock() {
+        let body = calendar(
+            "BEGIN:VEVENT\r\nUID:u@x\r\nDTSTART:20261012T090000Z\r\nSUMMARY:Utc\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:z@x\r\nDTSTART;TZID=Europe/Madrid:20261012T090000\r\nSUMMARY:Zoned\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:d@x\r\nDTSTART;VALUE=DATE:20261012\r\nSUMMARY:Day\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:w@x\r\nDTSTART:20261005T183000\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\nSUMMARY:Weekly\r\nEND:VEVENT\r\n",
+        );
+        let (events, _) =
+            parse_window(&body, "cal", at("2026-10-01T00:00:00Z"), at("2026-10-30T00:00:00Z")).unwrap();
+        for name in ["Utc", "Zoned", "Day"] {
+            assert!(events.iter().filter(|e| e.subject == name).all(|e| e.floating.is_none()), "{name}");
+        }
+        let mut weekly: Vec<_> = events.iter().filter(|e| e.subject == "Weekly").filter_map(|e| e.floating).collect();
+        weekly.sort();
+        assert_eq!(
+            weekly,
+            vec![at("2026-10-05T18:30:00Z"), at("2026-10-12T18:30:00Z"), at("2026-10-19T18:30:00Z")],
+            "each occurrence of a floating series keeps its date and the series' time of day",
+        );
     }
 
     #[test]

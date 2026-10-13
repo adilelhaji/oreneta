@@ -27,7 +27,7 @@ export function ReaderTabView({ tab }: { tab: MessageTab }) {
     <>
       <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-header px-4 z-10 select-none">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-bold text-primary leading-tight" title={tab.subject}>
+          <h2 className="truncate text-sm font-bold text-primary leading-tight" dir="auto" title={tab.subject}>
             {tab.subject}
           </h2>
           {tab.date && (

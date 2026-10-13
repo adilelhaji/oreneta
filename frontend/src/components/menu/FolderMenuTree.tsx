@@ -33,7 +33,7 @@ function FolderMenuRow({
         // Structural segments and the folder the thread already lives in stay
         // visible so the hierarchy reads correctly, but can't be picked.
         className={clsx(menuItemBase, pickable ? 'text-primary hover:bg-hover' : 'cursor-default text-secondary')}
-        style={{ paddingLeft: depth * 14 + 8 }}
+        style={{ paddingInlineStart: depth * 14 + 8 }}
         onClick={() => folder && onPick(folder)}
       >
         <Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />

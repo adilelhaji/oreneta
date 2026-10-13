@@ -61,7 +61,7 @@ export function PersonHistory({
 
   const day = (seconds: number) => new Date(seconds * 1000).toLocaleDateString()
   const section = 'px-4 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-secondary'
-  const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-left text-caption hover:bg-hover cursor-pointer'
+  const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-start text-caption hover:bg-hover cursor-pointer'
   const partial = context.coverage.downloaded < context.coverage.messages
 
   return (

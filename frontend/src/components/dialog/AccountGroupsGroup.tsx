@@ -81,7 +81,7 @@ export function AccountGroupsGroup() {
               <li key={group.id} className="flex min-h-11 items-center justify-between gap-3 px-3.5 py-2">
                 <span className="min-w-0 truncate text-xs text-primary">
                   {group.name}
-                  <span className="ml-2 text-2xs text-secondary">
+                  <span className="ms-2 text-2xs text-secondary">
                     {members.length
                       ? members.map((a) => a.display_name || a.email).join(', ')
                       : t('accountGroups.empty', { defaultValue: 'No accounts' })}

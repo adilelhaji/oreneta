@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Copy, Download, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { inlineArrowStep, isDocumentRtl } from '../../lib/direction'
 import { copyAttachmentImage, downloadAttachment } from '../../states/mail'
 import { MenuItem } from '../menu/MenuItem'
 import { VideoAttachment } from './VideoAttachment'
@@ -86,8 +87,10 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowLeft') goPrev()
-      else if (event.key === 'ArrowRight') goNext()
+      // Previous/next follow reading order: in RTL the right arrow goes back (ADR-0055).
+      const step = inlineArrowStep(event.key)
+      if (step < 0) goPrev()
+      else if (step > 0) goNext()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -206,7 +209,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
               event.stopPropagation()
               goPrev()
             }}
-            className="absolute left-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 hover:bg-black/70 cursor-pointer transition-colors"
+            className="absolute start-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 hover:bg-black/70 cursor-pointer transition-colors"
             title={t('chat.previousImage')}
           >
             <ChevronLeft size={26} strokeWidth={1.75} />
@@ -265,7 +268,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
               event.stopPropagation()
               goNext()
             }}
-            className="absolute right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 hover:bg-black/70 cursor-pointer transition-colors"
+            className="absolute end-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white/90 hover:bg-black/70 cursor-pointer transition-colors"
             title={t('chat.nextImage')}
           >
             <ChevronRight size={26} strokeWidth={1.75} />
@@ -289,7 +292,8 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
           />
           <div
             className="fixed z-[61] min-w-[160px] rounded-control border border-border bg-header p-1 shadow-overlay"
-            style={{ top: menu.y, left: menu.x }}
+            // Opens from the pointer towards the end edge (leftwards in RTL).
+            style={isDocumentRtl() ? { top: menu.y, right: window.innerWidth - menu.x } : { top: menu.y, left: menu.x }}
             onClick={(event) => event.stopPropagation()}
           >
             <MenuItem

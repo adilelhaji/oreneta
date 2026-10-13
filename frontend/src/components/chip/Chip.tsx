@@ -81,7 +81,7 @@ export function Chip({
           type="button"
           onClick={onClick}
           aria-pressed={selected}
-          className={clsx('flex h-full min-w-0 flex-1 items-center rounded-full text-left cursor-pointer', padding)}
+          className={clsx('flex h-full min-w-0 flex-1 items-center rounded-full text-start cursor-pointer', padding)}
         >
           <span className="min-w-0 truncate">{children}</span>
         </button>
@@ -99,7 +99,7 @@ export function Chip({
           }}
           className={clsx(
             'flex shrink-0 items-center justify-center rounded-full opacity-70 transition-opacity hover:opacity-100 cursor-pointer',
-            onClick ? 'h-full w-6' : '-mr-0.5 h-3.5 w-3.5',
+            onClick ? 'h-full w-6' : '-me-0.5 h-3.5 w-3.5',
           )}
         >
           <X size={14} strokeWidth={1.75} aria-hidden="true" />

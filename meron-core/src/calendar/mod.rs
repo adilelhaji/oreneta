@@ -184,6 +184,13 @@ pub struct Event {
     /// set up by the server, or could not be made.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meeting_status: Option<String>,
+    /// For a floating time (an iCalendar `DTSTART` with no zone, ADR-0057):
+    /// the wall clock it names, as seconds since 1970-01-01T00:00 of that
+    /// clock. `start` is that wall clock read in this machine's zone when the
+    /// event was last read; this is what lets a reminder follow the reader to
+    /// another zone before the next sync. Kept in the store only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floating: Option<i64>,
 }
 
 /// How often an event repeats, as asked for when creating one.
@@ -519,9 +526,9 @@ fn insert_event(conn: &Connection, account: &str, calendar_id: &str, event: &Eve
            account, calendar_id, event_id, change_key, subject, location,
            start_utc, end_utc, all_day, is_recurring, is_cancelled,
            free_busy, my_response, organizer, attendees, series_id,
-           description, reminder_minutes, meeting)
+           description, reminder_minutes, meeting, floating_local)
          VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                ?17, ?18, ?19)",
+                ?17, ?18, ?19, ?20)",
         params![
             account,
             calendar_id,
@@ -546,6 +553,7 @@ fn insert_event(conn: &Connection, account: &str, calendar_id: &str, event: &Eve
             event.description,
             event.reminder_minutes,
             event.meeting.as_ref().map(serde_json::to_string).transpose()?,
+            event.floating,
         ],
     )?;
     Ok(())
@@ -620,6 +628,7 @@ pub(crate) fn event_row_at(row: &rusqlite::Row, base: usize) -> rusqlite::Result
             .and_then(|json| serde_json::from_str(&json).ok()),
         add_meeting: None,
         meeting_status: None,
+        floating: None,
     })
 }
 
@@ -790,6 +799,69 @@ pub fn mark_reminder_fired(
         "INSERT OR REPLACE INTO calendar_reminders_fired(account, event_id, fired_at)
          VALUES(?1, ?2, ?3)",
         params![account, format!("{event_id}@{start}"), now],
+    )?;
+    Ok(())
+}
+
+/// Every event of an account that might have a reminder to give around
+/// `[from, to]`, with the floating wall clock of those that have one.
+///
+/// Deliberately wider than "due": when a reminder rings depends on the zone
+/// the reader is in now for an all-day or floating event (ADR-0057), which
+/// the store cannot know, so `pim::reminders` decides from these. Two days
+/// either side cover any zone's distance from UTC.
+pub fn reminder_candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Vec<Event>> {
+    const SLACK: i64 = 2 * 86_400;
+    let mut stmt = conn.prepare(
+        "SELECT e.calendar_id, e.event_id, e.subject, e.start_utc, e.end_utc,
+                e.all_day, e.location, e.reminder_minutes, e.floating_local
+         FROM calendar_events e
+         JOIN calendars c
+           ON c.account = e.account AND c.provider_id = e.calendar_id
+         WHERE e.account = ?1 AND c.enabled = 1
+           AND e.reminder_minutes IS NOT NULL
+           AND e.is_cancelled = 0
+           AND MAX(e.end_utc, e.start_utc) >= ?2
+           AND e.start_utc - (e.reminder_minutes * 60) <= ?3
+         ORDER BY e.start_utc, e.event_id",
+    )?;
+    let events = stmt
+        .query_map(params![account, from - SLACK, to + SLACK], |row| {
+            Ok(Event {
+                calendar_id: row.get(0)?,
+                id: row.get(1)?,
+                subject: row.get(2)?,
+                start: row.get(3)?,
+                end: row.get(4)?,
+                all_day: row.get::<_, i64>(5)? != 0,
+                location: row.get(6)?,
+                reminder_minutes: row.get(7)?,
+                floating: row.get(8)?,
+                ..Default::default()
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(events)
+}
+
+/// Whether any of `keys` was recorded as a reminder already given.
+pub fn reminder_given(conn: &Connection, account: &str, keys: &[String]) -> Result<bool> {
+    let mut stmt =
+        conn.prepare_cached("SELECT 1 FROM calendar_reminders_fired WHERE account = ?1 AND event_id = ?2")?;
+    for key in keys {
+        if stmt.exists(params![account, key])? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Records a reminder as given under `key` (see `pim::reminders::keys`).
+pub fn mark_reminder_given(conn: &Connection, account: &str, key: &str, now: i64) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO calendar_reminders_fired(account, event_id, fired_at)
+         VALUES(?1, ?2, ?3)",
+        params![account, key, now],
     )?;
     Ok(())
 }

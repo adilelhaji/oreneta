@@ -1,5 +1,6 @@
 import { BUBBLE_CODE_BASE_PX, BUBBLE_HTML_BASE_PX, type MessageFrameFont } from '../../lib/fonts'
 import { stripTrackingPixels } from './readerHtml'
+import { applyContentDirection } from '../../lib/direction'
 import { applyHtmlFolds, DEFAULT_FOLD_LABELS, type FoldLabels, type FoldOptions } from './quoteFolding'
 
 /** Reader-side transforms (ADR-0046): what to fold, and the toggle labels. */
@@ -33,6 +34,8 @@ export function prepareBubbleHtml(
     const parser = new DOMParser()
     // Tracking pixels go, as in the reader tab (#35).
     const doc = parser.parseFromString(stripTrackingPixels(html), 'text/html')
+    // The message keeps its own direction, whatever the interface's (ADR-0055).
+    applyContentDirection(doc)
 
     // The iframe runs with `allow-scripts` (so our link-click handler fires),
     // so we must block the email's own JS here. `default-src 'none'` denies

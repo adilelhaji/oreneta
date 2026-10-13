@@ -33,6 +33,7 @@ import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 import { settings$ } from '../../states/settings'
 import { isoWeekday } from '../../lib/calendarWeek'
+import { formattingLocale } from '../../lib/i18n'
 
 /// The calendar surface: one header — period, navigation, view switcher — over
 /// whichever view is chosen. The editor and the context menu live here so
@@ -73,7 +74,7 @@ export function CalendarView() {
         <h1 className="min-w-0 wrap-anywhere text-heading-sm font-bold text-primary">{periodLabel(view, anchor, t)}</h1>
         {loading && <RefreshCw size={14} className="shrink-0 animate-spin text-secondary" strokeWidth={1.75} />}
 
-        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
+        <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {view !== 'agenda' && (
             <div className="flex items-center gap-0.5">
               <NavButton label={t('calendar.previousPeriod')} onClick={() => navigateCalendar(-1)}>
@@ -191,7 +192,7 @@ function NavButton({ label, onClick, children }: { label: string; onClick: () =>
 function periodLabel(view: CalendarViewMode, anchorMs: number, t: ReturnType<typeof useTranslation>['t']): string {
   const anchor = new Date(anchorMs)
   if (view === 'month') {
-    const label = anchor.toLocaleDateString(i18n.language.replace('_', '-'), { month: 'long', year: 'numeric' })
+    const label = anchor.toLocaleDateString(formattingLocale(), { month: 'long', year: 'numeric' })
     return label.charAt(0).toUpperCase() + label.slice(1)
   }
   if (view === 'week') {
@@ -209,11 +210,11 @@ function periodLabel(view: CalendarViewMode, anchorMs: number, t: ReturnType<typ
     const firstShown = shown[0]
     const lastShown = shown[shown.length - 1]
     const sameMonth = firstShown.getMonth() === lastShown.getMonth()
-    const from = firstShown.toLocaleDateString(i18n.language.replace('_', '-'), {
+    const from = firstShown.toLocaleDateString(formattingLocale(), {
       day: 'numeric',
       month: sameMonth ? undefined : 'short',
     })
-    const to = lastShown.toLocaleDateString(i18n.language.replace('_', '-'), {
+    const to = lastShown.toLocaleDateString(formattingLocale(), {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -221,7 +222,7 @@ function periodLabel(view: CalendarViewMode, anchorMs: number, t: ReturnType<typ
     return `${from} – ${to}`
   }
   if (view === 'day') {
-    const label = anchor.toLocaleDateString(i18n.language.replace('_', '-'), {
+    const label = anchor.toLocaleDateString(formattingLocale(), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',

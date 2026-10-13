@@ -18,6 +18,7 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { menuLeft } from '../../lib/direction'
 import { syncMail } from '../../states/mail'
 import { openCommandPalette, ui$ } from '../../states/ui'
 import { formatShortcut, isMac, type ShortcutId } from '../../lib/shortcuts'
@@ -79,7 +80,8 @@ export function QuickSettingsMenu({
         style={{
           width: menuWidth,
           maxHeight: Math.max(0, viewportHeight - edge - 8),
-          left: Math.max(8, Math.min(anchor.x / zoom, viewportWidth - menuWidth - 8)),
+          // Opens from the anchor towards the end edge: rightwards in LTR, leftwards in RTL.
+          left: menuLeft(anchor.x / zoom, menuWidth, viewportWidth, 8),
           ...(anchor.placement === 'up' ? { bottom: edge } : { top: edge }),
         }}
         onContextMenu={(e) => {

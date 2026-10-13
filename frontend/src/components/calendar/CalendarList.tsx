@@ -39,7 +39,7 @@ export function CalendarList() {
   return (
     <aside
       aria-label={t('calendar.title')}
-      className="flex max-h-40 w-full shrink-0 flex-col gap-3 overflow-y-auto border-b border-border bg-raised px-3 py-3 min-[769px]:max-h-none min-[769px]:w-48 min-[769px]:border-b-0 min-[769px]:border-r"
+      className="flex max-h-40 w-full shrink-0 flex-col gap-3 overflow-y-auto border-b border-border bg-raised px-3 py-3 min-[769px]:max-h-none min-[769px]:w-48 min-[769px]:border-b-0 min-[769px]:border-e"
     >
       {groups.map(({ account, calendars }) => (
         <div key={account.id}>
@@ -72,7 +72,7 @@ export function CalendarList() {
                       type="button"
                       onClick={() => setPicking(open ? null : key(calendar))}
                       title={t('calendar.color', { defaultValue: 'Colour' })}
-                      className={`min-w-0 flex-1 truncate text-left text-xs transition-colors cursor-pointer ${
+                      className={`min-w-0 flex-1 truncate text-start text-xs transition-colors cursor-pointer ${
                         calendar.enabled ? 'text-primary' : 'text-secondary'
                       }`}
                     >
@@ -84,7 +84,7 @@ export function CalendarList() {
                   {open && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setPicking(null)} />
-                      <div className="absolute left-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-overlay">
+                      <div className="absolute start-6 top-8 z-50 flex gap-1.5 rounded-control border border-border bg-app p-2 shadow-overlay">
                         {CALENDAR_COLORS.map((swatch) => (
                           <button
                             key={swatch}

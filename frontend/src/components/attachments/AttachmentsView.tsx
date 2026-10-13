@@ -242,7 +242,7 @@ export function AttachmentsView() {
                     </button>
                   </span>
                   {!item.key && (
-                    <p className="w-full pl-8 text-2xs text-secondary">
+                    <p className="w-full ps-8 text-2xs text-secondary">
                       {item.unavailable === 'link'
                         ? t('attachmentsView.isLink', {
                             defaultValue: 'A link to a file kept elsewhere; open the message to follow it.',
