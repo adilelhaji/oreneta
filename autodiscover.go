@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -90,7 +91,9 @@ type clientConfig struct {
 // autodiscover resolves the email's domain into IMAP/SMTP settings. It tries,
 // in order: provider-hosted Mozilla autoconfig, the Thunderbird ISPDB, DNS SRV
 // records (RFC 6186), and finally common-prefix guessing. The first method that
-// yields a usable config wins.
+// yields a usable config wins. The HTTP lookups go through the app's proxy; with
+// a proxy set, the DNS SRV step is skipped (it cannot be proxied). The frontend
+// only calls this when the person presses "Find settings".
 func (a *App) autodiscover(payload map[string]any) (any, error) {
 	var req struct {
 		Email string `json:"email"`
@@ -104,15 +107,35 @@ func (a *App) autodiscover(payload map[string]any) (any, error) {
 		return nil, errors.New("invalid email")
 	}
 	domain := strings.ToLower(email[at+1:])
+	if strings.ContainsAny(domain, "/?#@:\\ \t\r\n") {
+		return nil, errors.New("invalid email")
+	}
+
+	// Every lookup below goes through the app's proxy. If a proxy is set but
+	// unusable, stop here rather than contact anything directly.
+	route, err := a.proxyRoute("")
+	if err != nil {
+		return nil, err
+	}
+	transport, err := proxyTransport(route)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{Transport: transport, Timeout: 6 * time.Second}
 
 	var cfg *DiscoveredConfig
-	if c := a.discoverAutoconfig(email, domain); c != nil {
+	if c := a.discoverAutoconfig(client, email, domain); c != nil {
 		cfg = c
 		a.logf("autodiscover: %s via %s (imap=%s:%d smtp=%s:%d)", domain, cfg.Source, cfg.IMAPHost, cfg.IMAPPort, cfg.SMTPHost, cfg.SMTPPort)
+	} else if route != nil {
+		// DNS SRV lookups cannot travel through an HTTP or SOCKS proxy, and
+		// asking the local resolver would reveal the domain outside it.
+		a.logf("autodiscover: %s skipping DNS SRV lookup because a proxy is set", domain)
 	} else if c := a.discoverSRV(email, domain); c != nil {
 		cfg = c
 		a.logf("autodiscover: %s via srv (imap=%s:%d smtp=%s:%d)", domain, cfg.IMAPHost, cfg.IMAPPort, cfg.SMTPHost, cfg.SMTPPort)
-	} else {
+	}
+	if cfg == nil {
 		cfg = &DiscoveredConfig{
 			IMAPHost: "imap." + domain,
 			IMAPPort: 993,
@@ -130,17 +153,9 @@ func (a *App) autodiscover(payload map[string]any) (any, error) {
 // discoverAutoconfig fetches and parses a Mozilla autoconfig document. It probes
 // the provider-hosted URLs first (which can return account-specific settings)
 // and then the central Thunderbird database.
-func (a *App) discoverAutoconfig(email, domain string) *DiscoveredConfig {
-	urls := []struct {
-		url    string
-		source string
-	}{
-		{fmt.Sprintf("https://autoconfig.%s/mail/config-v1.1.xml?emailaddress=%s", domain, email), "autoconfig"},
-		{fmt.Sprintf("https://%s/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=%s", domain, email), "autoconfig"},
-		{fmt.Sprintf("https://autoconfig.thunderbird.net/v1.1/%s", domain), "thunderbird"},
-	}
-	for _, u := range urls {
-		cfg := fetchAutoconfig(u.url, email)
+func (a *App) discoverAutoconfig(client *http.Client, email, domain string) *DiscoveredConfig {
+	for _, u := range autoconfigURLs(email, domain) {
+		cfg := fetchAutoconfig(client, u.url, email)
 		if cfg != nil {
 			cfg.Source = u.source
 			return cfg
@@ -149,8 +164,24 @@ func (a *App) discoverAutoconfig(email, domain string) *DiscoveredConfig {
 	return nil
 }
 
-func fetchAutoconfig(rawURL, email string) *DiscoveredConfig {
-	client := &http.Client{Timeout: 6 * time.Second}
+type autoconfigURL struct {
+	url    string
+	source string
+}
+
+// autoconfigURLs lists the documents to try, in order. The address goes in a
+// query parameter, so it is escaped: a "+" or "&" in the local part must not
+// change the request.
+func autoconfigURLs(email, domain string) []autoconfigURL {
+	q := url.QueryEscape(email)
+	return []autoconfigURL{
+		{fmt.Sprintf("https://autoconfig.%s/mail/config-v1.1.xml?emailaddress=%s", domain, q), "autoconfig"},
+		{fmt.Sprintf("https://%s/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=%s", domain, q), "autoconfig"},
+		{fmt.Sprintf("https://autoconfig.thunderbird.net/v1.1/%s", url.PathEscape(domain)), "thunderbird"},
+	}
+}
+
+func fetchAutoconfig(client *http.Client, rawURL, email string) *DiscoveredConfig {
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil

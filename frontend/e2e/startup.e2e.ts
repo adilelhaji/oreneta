@@ -1756,6 +1756,10 @@ test('manual discovery, rejected credentials and retry use the existing account 
   await page.goto('/')
   await page.getByRole('textbox', { name: 'Email Address', exact: true }).fill('new@example.test')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  // Nothing is looked up until the person asks.
+  await expect(page.getByRole('button', { name: 'Find settings online', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.calls)).not.toContain('account.autodiscover')
+  await page.getByRole('button', { name: 'Find settings online', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('Server settings found')
   await page.getByLabel('Password', { exact: true }).fill('synthetic-password')
   await page.getByRole('button', { name: 'Save Account', exact: true }).click()
@@ -1781,6 +1785,7 @@ for (const discovery of ['guess', 'failure'] as const) {
     await page.goto('/')
     await page.getByRole('textbox', { name: 'Email Address', exact: true }).fill('person@example.test')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await page.getByRole('button', { name: 'Find settings online', exact: true }).click()
     await expect(page.getByRole('status')).toContainText(
       discovery === 'guess' ? 'No published settings' : 'Could not look up',
     )

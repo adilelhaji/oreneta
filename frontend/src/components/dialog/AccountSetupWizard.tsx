@@ -48,8 +48,8 @@ export function AccountSetupWizard({
     ctl.startNewAccount(mode, email.trim())
     setManual(useManual)
     setStep('connect')
-    // Discovery is explicit and sends only the address, never the password.
-    if (mode === 'custom' && accountSetupAddress(email)) void ctl.runDiscovery(email.trim())
+    // No lookup here: server settings are looked up online only when the
+    // person presses "Find settings" on the next step (AccountDialogCustom).
   }
 
   function next() {
@@ -120,7 +120,10 @@ export function AccountSetupWizard({
               className="w-full rounded-control border border-border bg-raised px-4 py-3 text-title text-primary outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
             <p id={`${emailId}-hint`} className="text-caption leading-relaxed text-secondary">
-              {t('accounts.wizard.discoveryPrivacy')}
+              {t('accounts.wizard.discoveryOnRequest', {
+                defaultValue:
+                  'Nothing is looked up online yet. For other mail servers, the next step offers to find the settings for you, or you can enter them yourself.',
+              })}
             </p>
             {invalid && (
               <p id={`${emailId}-error`} role="alert" className="text-caption text-primary">

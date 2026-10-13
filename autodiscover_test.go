@@ -119,7 +119,7 @@ func TestFetchAutoconfigParsesUsableXML(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := fetchAutoconfig(server.URL, "person@example.com")
+	cfg := fetchAutoconfig(http.DefaultClient, server.URL, "person@example.com")
 	if cfg == nil {
 		t.Fatal("fetchAutoconfig returned nil")
 	}
@@ -157,7 +157,7 @@ func TestFetchAutoconfigRejectsUnusableResponses(t *testing.T) {
 			}))
 			defer server.Close()
 
-			if cfg := fetchAutoconfig(server.URL, "person@example.com"); cfg != nil {
+			if cfg := fetchAutoconfig(http.DefaultClient, server.URL, "person@example.com"); cfg != nil {
 				t.Fatalf("fetchAutoconfig returned %#v, want nil", cfg)
 			}
 		})

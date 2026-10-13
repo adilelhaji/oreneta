@@ -80,11 +80,13 @@
     login.microsoftonline.com</td>
     <td>The sign-in exchange, in your browser; afterwards, token
     refreshes</td></tr>
-    <tr><td><strong>Finding your server settings</strong>, when you type an
-    address while adding an account by hand</td>
+    <tr><td><strong>Finding your server settings</strong>, when you press
+    Find settings while adding an account by hand. Typing an address looks
+    nothing up, and you can always enter the servers yourself.</td>
     <td>Your mail domain (autoconfig.&lt;domain&gt; and
     &lt;domain&gt;/.well-known/autoconfig), Mozilla's provider database
-    (autoconfig.thunderbird.net) and your DNS resolver</td>
+    (autoconfig.thunderbird.net) and, without a proxy, your DNS
+    resolver</td>
     <td>Your full address to your own domain; only the domain to Mozilla
     and DNS</td></tr>
     <tr><td><strong>Your account picture</strong></td>
@@ -138,9 +140,15 @@
   services itself. A Google Meet link is created through Google Calendar
   only when you tick it.</p>
   <p>If you set a proxy, connections for your accounts, feeds, file links
-  and translation downloads go through it. Signing in, finding server
-  settings, the update check and download, and pictures shown in messages
-  do not use it yet.</p>
+  and translation downloads go through it, and so do the sign-in exchange
+  with Google or Microsoft, finding server settings, your account picture,
+  and the update check and download. An account with its own proxy uses
+  that one for its picture. If the proxy is set but cannot be used, these
+  connections fail instead of going around it. Finding server settings
+  skips the DNS lookup while a proxy is set, because DNS cannot go through
+  it. Pictures shown in messages, correspondents' pictures, and the
+  sign-in page that opens in your browser do not use the app's proxy:
+  your web view and browser connect on their own.</p>
   <p>Your operating system's web view (for example Microsoft Edge WebView2
   on Windows) may make connections of its own, under its vendor's
   policy.</p>

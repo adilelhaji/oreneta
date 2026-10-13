@@ -2560,6 +2560,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true }))
         }
 
+        // The proxy one outbound HTTP request from the Go bridge must use
+        // (autodiscovery, OAuth sign-in, avatars, update check and download).
+        // Errors when a proxy is set but unusable, so the caller never falls
+        // back to a direct connection.
+        "proxy.route" => {
+            let account = p.get("account").and_then(Value::as_str).filter(|s| !s.is_empty());
+            proxy::route_json(&engine.db.lock().unwrap(), account)
+        }
+
         "assistant.preview" => {
             let provider: assistant::ProviderConfig = serde_json::from_value(
                 p.get("provider").cloned().context("missing assistant provider")?,

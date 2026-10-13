@@ -46,6 +46,10 @@ type App struct {
 
 	coreErrorMu sync.Mutex
 	coreError   string
+
+	// proxyLookup replaces the core's "proxy.route" answer (see netproxy.go).
+	// Only tests set it; nil asks the core.
+	proxyLookup func(account string) (*proxySetting, error)
 }
 
 // setCoreError remembers the last fatal condition the core reported, so the

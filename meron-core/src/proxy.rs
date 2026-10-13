@@ -180,6 +180,44 @@ pub fn load_global(conn: &rusqlite::Connection) -> Result<()> {
     Ok(())
 }
 
+/// The app-wide proxy read strictly, for callers outside the core (the Go
+/// bridge) that must fail closed: "off" or no setting is `None`, a usable
+/// proxy is `Some`, and a proxy mode with a missing host or port, or an unknown
+/// mode, is an error instead of a silent direct connection.
+pub fn strict_global(v: &Value) -> Result<Option<ProxyConfig>> {
+    match v.get("mode").and_then(Value::as_str).unwrap_or("off") {
+        "off" | "" => Ok(None),
+        "http" | "socks5" => ProxyConfig::from_json(v)
+            .map(Some)
+            .ok_or_else(|| anyhow!("the proxy setting is incomplete (host or port missing)")),
+        other => Err(anyhow!("unknown proxy mode {other:?}")),
+    }
+}
+
+/// The proxy one outbound HTTP request should use, as JSON for the Go bridge:
+/// `{"proxy": null}` for a direct connection, otherwise
+/// `{"proxy": {"mode","host","port","username","password"}}`. With an account
+/// it follows that account's choice (inherit, direct or its own; an unknown
+/// account inherits); without one
+/// it is the app-wide setting, read from the store so it never lags a save.
+pub fn route_json(conn: &rusqlite::Connection, account: Option<&str>) -> Result<Value> {
+    let global = || -> Result<Option<ProxyConfig>> {
+        let stored = crate::store::settings_get(conn, &[SETTING_KEY.to_string()])?;
+        strict_global(&stored[SETTING_KEY])
+    };
+    let route = match account {
+        None => global()?,
+        // An account that is not stored yet (its avatar is fetched while it
+        // is being added) gets the default choice: the app-wide proxy.
+        Some(id) => match crate::store::load_account(conn, id)?.map(|c| c.proxy) {
+            None | Some(ProxyChoice::Global) => global()?,
+            Some(ProxyChoice::Direct) => None,
+            Some(ProxyChoice::Custom(cfg)) => Some(cfg),
+        },
+    };
+    Ok(json!({ "proxy": route.map(|cfg| cfg.to_json()) }))
+}
+
 /// Open a TCP connection to `host:port` *through* `proxy`.
 ///
 /// The socket to the proxy itself is made with the ordinary connect path, so it
@@ -746,5 +784,21 @@ mod tests {
             ..ipv6
         };
         assert!(agent_for(Some(&invalid)).is_err());
+    }
+
+    #[test]
+    fn strict_global_fails_closed_on_an_unusable_setting() {
+        assert_eq!(strict_global(&Value::Null).unwrap(), None);
+        assert_eq!(
+            strict_global(&json!({ "mode": "off", "host": "h", "port": 1 })).unwrap(),
+            None
+        );
+        assert_eq!(
+            strict_global(&json!({ "mode": "socks5", "host": "h", "port": 1080 })).unwrap(),
+            Some(socks5("h", 1080))
+        );
+        assert!(strict_global(&json!({ "mode": "http", "host": "h" })).is_err());
+        assert!(strict_global(&json!({ "mode": "socks5", "port": 1080 })).is_err());
+        assert!(strict_global(&json!({ "mode": "ftp", "host": "h", "port": 1 })).is_err());
     }
 }

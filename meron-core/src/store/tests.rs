@@ -5745,3 +5745,34 @@ fn senders_can_be_blocked_or_allowed_by_address_or_domain() {
     set_sender_listed(&conn, "acct", "shop.example", None).unwrap();
     assert_eq!(sender_listed(&conn, "acct", "promo@shop.example"), None);
 }
+
+/// What the Go bridge asks before its own HTTP requests: the app-wide proxy,
+/// an account's own choice, and an error (never "direct") for a proxy that is
+/// switched on but incomplete.
+#[test]
+fn proxy_route_follows_the_account_and_fails_closed() {
+    use serde_json::json;
+    let conn = test_conn();
+    let none = crate::proxy::route_json(&conn, None).unwrap();
+    assert_eq!(none, json!({ "proxy": null }));
+
+    let global = json!({ "mode": "socks5", "host": "g.example", "port": 1080, "username": "", "password": "" });
+    setting_set(&conn, crate::proxy::SETTING_KEY, &global).unwrap();
+    assert_eq!(crate::proxy::route_json(&conn, None).unwrap()["proxy"], global);
+    // Not stored yet: inherits the app-wide proxy.
+    assert_eq!(crate::proxy::route_json(&conn, Some("new")).unwrap()["proxy"], global);
+
+    proxy_test_account(&conn, "direct", crate::proxy::ProxyChoice::Direct);
+    assert_eq!(crate::proxy::route_json(&conn, Some("direct")).unwrap()["proxy"], json!(null));
+    proxy_test_account(&conn, "inherit", crate::proxy::ProxyChoice::Global);
+    assert_eq!(crate::proxy::route_json(&conn, Some("inherit")).unwrap()["proxy"], global);
+    let own = json!({ "mode": "http", "host": "a.example", "port": 3128, "username": "u", "password": "p" });
+    proxy_test_account(&conn, "own", crate::proxy::ProxyChoice::from_json(&own));
+    assert_eq!(crate::proxy::route_json(&conn, Some("own")).unwrap()["proxy"], own);
+
+    setting_set(&conn, crate::proxy::SETTING_KEY, &json!({ "mode": "http", "host": "", "port": 0 })).unwrap();
+    assert!(crate::proxy::route_json(&conn, None).is_err());
+    assert!(crate::proxy::route_json(&conn, Some("inherit")).is_err());
+    // An account that does not use the app-wide proxy is unaffected.
+    assert_eq!(crate::proxy::route_json(&conn, Some("own")).unwrap()["proxy"], own);
+}
