@@ -1,12 +1,16 @@
 package jp.nonbili.meron.ui
 
+import jp.nonbili.meron.shared.AppPrefsGetParams
+import jp.nonbili.meron.shared.MobileMailCommandClient
 import jp.nonbili.meron.shared.MobilePeopleCommandClient
 import jp.nonbili.meron.shared.PeopleListParams
 import jp.nonbili.meron.shared.PersonSummary
 import jp.nonbili.meron.shared.PersonWriteResult
 import jp.nonbili.meron.shared.isUnknownCoreMethod
+import jp.nonbili.meron.shared.parseAppPrefsResponse
 import jp.nonbili.meron.shared.parsePeopleListResponse
 import jp.nonbili.meron.shared.parsePersonWriteResponse
+import jp.nonbili.meron.shared.requireCoreOk
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -21,7 +25,32 @@ private fun MeronMobileState.peopleClient() = MobilePeopleCommandClient(core)
 internal fun MeronMobileState.openContactsScreen() {
     previousTopScreen = Screen.Contacts
     screen = Screen.Contacts
+    refreshContactNamePrefs()
     loadPeople()
+}
+
+/**
+ * Reads the desktop's name order and sort (ADR-0052). Asked on each opening,
+ * since the desktop can change them at any time; a failed read keeps what was
+ * known.
+ */
+private fun MeronMobileState.refreshContactNamePrefs() {
+    if (!coreLoaded) return
+    scope.launch {
+        val response =
+            runCatching {
+                withContext(ioDispatcher) {
+                    requireCoreOk(
+                        MobileMailCommandClient(core).getPrefs(
+                            AppPrefsGetParams(listOf(CONTACT_NAME_DISPLAY_SETTING_KEY, CONTACT_NAME_SORT_SETTING_KEY)),
+                        ),
+                    )
+                }
+            }.getOrNull() ?: return@launch
+        val prefs = parseAppPrefsResponse(response)
+        contactsUi.nameDisplay = contactNameDisplayFromSetting(prefs[CONTACT_NAME_DISPLAY_SETTING_KEY])
+        contactsUi.nameSort = contactNameSortFromSetting(prefs[CONTACT_NAME_SORT_SETTING_KEY])
+    }
 }
 
 /** Reads the book, or the part matching [query]. */

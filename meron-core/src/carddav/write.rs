@@ -100,3 +100,103 @@ fn finish(
 fn current_of(card: &str, etag: &str) -> Option<(Person, String)> {
     people_from_vcards(card.as_bytes()).into_iter().next().map(|person| (person, etag.to_string()))
 }
+
+// ---- Groups (ADR-0052) ------------------------------------------------------
+
+use crate::contacts::groups::{group_from_properties, new_group_card, patch_group_card, GroupCard, GroupStyle};
+
+/// What became of a write to a group card.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GroupOutcome {
+    /// Written: the card's URL, its new version and the group as now stored.
+    Saved { href: String, version: String, group: GroupCard },
+    Deleted,
+    /// Changed or deleted on the server since it was read: nothing was
+    /// written. The server's copy and its version, if it is still there.
+    Conflict { current: Option<(GroupCard, String)> },
+}
+
+fn group_of(card: &str) -> Option<GroupCard> {
+    crate::contacts::vcard::split_cards(card.as_bytes()).iter().find_map(|properties| group_from_properties(properties))
+}
+
+fn current_group(card: &str, etag: &str) -> Option<(GroupCard, String)> {
+    group_of(card).map(|group| (group, etag.to_string()))
+}
+
+/// Renames the group card at `href` and adds and removes members, from the
+/// version `read_at`. The edit starts from the server's copy, so members and
+/// fields this app does not know are kept.
+#[allow(clippy::too_many_arguments)]
+pub fn save_group_existing(
+    transport: &dyn Transport,
+    book_url: &str,
+    href: &str,
+    read_at: &str,
+    name: &str,
+    add: &[String],
+    remove: &[String],
+    now: i64,
+) -> Result<GroupOutcome> {
+    let Some((card, etag)) = get_card(transport, book_url, href)? else {
+        return Ok(GroupOutcome::Conflict { current: None });
+    };
+    if etag.is_empty() || etag != read_at {
+        return Ok(GroupOutcome::Conflict { current: current_group(&card, &etag) });
+    }
+    let patched = patch_group_card(&card, name, add, remove, now)?;
+    match put_card(transport, book_url, href, &patched, Some(&etag))? {
+        Written::Conflict => {
+            let current = get_card(transport, book_url, href)?.and_then(|(card, etag)| current_group(&card, &etag));
+            Ok(GroupOutcome::Conflict { current })
+        }
+        Written::Saved { etag } => finish_group(transport, book_url, href, etag, &patched),
+    }
+}
+
+/// Adds a new group card to the book, written in `style`.
+pub fn save_group_new(
+    transport: &dyn Transport,
+    book_url: &str,
+    name: &str,
+    members: &[String],
+    style: GroupStyle,
+) -> Result<GroupOutcome> {
+    let uid = uuid::Uuid::new_v4().to_string();
+    let base = if book_url.ends_with('/') { book_url.to_string() } else { format!("{book_url}/") };
+    let href = format!("{base}{uid}.vcf");
+    let card = new_group_card(name, &uid, members, style);
+    match put_card(transport, book_url, &href, &card, None)? {
+        Written::Conflict => anyhow::bail!("the server already has a card at that address; nothing was saved"),
+        Written::Saved { etag } => finish_group(transport, book_url, &href, etag, &card),
+    }
+}
+
+/// Deletes the group card at `href` if it is still at `read_at`. Its members'
+/// cards are not touched.
+pub fn delete_group(transport: &dyn Transport, book_url: &str, href: &str, read_at: &str) -> Result<GroupOutcome> {
+    match delete_card(transport, book_url, href, read_at)? {
+        Written::Saved { .. } => Ok(GroupOutcome::Deleted),
+        Written::Conflict => {
+            let current = get_card(transport, book_url, href)?.and_then(|(card, etag)| current_group(&card, &etag));
+            Ok(GroupOutcome::Conflict { current })
+        }
+    }
+}
+
+fn finish_group(
+    transport: &dyn Transport,
+    book_url: &str,
+    href: &str,
+    etag: Option<String>,
+    written: &str,
+) -> Result<GroupOutcome> {
+    let (card, version) = match etag {
+        Some(etag) if !etag.is_empty() => (written.to_string(), etag),
+        _ => get_card(transport, book_url, href)?.unwrap_or_else(|| (written.to_string(), String::new())),
+    };
+    let group = group_of(&card)
+        .or_else(|| group_of(written))
+        .ok_or_else(|| anyhow::anyhow!("the server did not keep the card as a group"))?;
+    Ok(GroupOutcome::Saved { href: href.to_string(), version, group })
+}

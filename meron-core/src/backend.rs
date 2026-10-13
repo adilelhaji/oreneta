@@ -154,6 +154,15 @@ impl Session {
         }
     }
 
+    /// Messages sent before `before`, when the server can be asked (IMAP).
+    /// `None` means it cannot, and the caller works from the synced copy.
+    pub async fn search_sent_before(&mut self, folder: &str, before: i64) -> Result<Option<Vec<u32>>> {
+        match self {
+            Session::Imap(session) => imap::search_sent_before(session, folder, before).await.map(Some),
+            _ => Ok(None),
+        }
+    }
+
     pub async fn list_all_uids(&mut self, folder: &str) -> Result<HashSet<u32>> {
         match self {
             Session::Local(session) => session.list_all_uids(folder),

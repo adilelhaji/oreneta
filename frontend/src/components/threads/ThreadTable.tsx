@@ -7,6 +7,7 @@ import { formatThreadDate } from '../../lib/date'
 import { settings$, type ListSort, type SortKey } from '../../states/settings'
 import { mail$ } from '../../states/mail'
 import { ui$ } from '../../states/ui'
+import { useSenderName } from '../../states/contactNames'
 import type { Account, Message } from '../../types'
 import { LabelChips } from './LabelChips'
 import { resolveMailboxColumns } from '../../lib/mailboxViews'
@@ -207,7 +208,7 @@ export function ThreadTable({
                     className={clsx('max-w-0 truncate px-2 py-1.5')}
                   >
                     <span className={clsx('truncate', thread.unread ? 'font-bold text-primary' : 'text-primary/85')}>
-                      {thread.from_name || thread.from_addr}
+                      <SenderName thread={thread} />
                     </span>
                     {showAccount && account && !columns.some((item) => item.key === 'account') && (
                       <span className="ml-1 text-2xs text-secondary">{account.display_name || account.email}</span>
@@ -294,4 +295,10 @@ export function ThreadTable({
       </tbody>
     </table>
   )
+}
+
+/** The sender cell's text: the header's name, else the address book's (ADR-0052), else the address. */
+function SenderName({ thread }: { thread: { from_name: string; from_addr: string; feed_url?: string } }) {
+  const name = useSenderName(thread.from_name, thread.from_addr, !thread.feed_url)
+  return <>{name || thread.from_addr}</>
 }

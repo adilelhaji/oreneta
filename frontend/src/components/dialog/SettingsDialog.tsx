@@ -52,7 +52,7 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
-import { startMailImport } from '../../states/archive'
+import { ARCHIVE_ACCOUNT, startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
 import { AccountGroupsGroup } from './AccountGroupsGroup'
 import { QuickActionsGroup } from '../quick/QuickActionsGroup'
@@ -61,6 +61,7 @@ import { SenderListsGroup } from './SenderListsGroup'
 import { TrackingProtectionGroup } from './TrackingProtectionGroup'
 import { ReceiptsGroup } from './ReceiptsGroup'
 import { CalendarGeneralGroup } from './CalendarGeneralGroup'
+import { ContactsGeneralGroup } from './ContactsGeneralGroup'
 import { NotificationsGroup } from './NotificationsGroup'
 import { ReaderFoldingRows } from './ReaderFoldingRows'
 import { TranslationModelsGroup } from './TranslationModelsGroup'
@@ -68,6 +69,7 @@ import { CloudStorageGroup } from './CloudStorageGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
 import { BackupScheduleGroup } from './BackupScheduleGroup'
+import { AutoArchiveGroup } from './AutoArchiveGroup'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
 import { MailImportDialog } from './MailImportDialog'
 import { ThunderbirdImportDialog } from './ThunderbirdImportDialog'
@@ -973,6 +975,7 @@ function GeneralSection() {
 
       <RulesSettingsSection />
       <TemplatesSettingsSection />
+      <ContactsGeneralGroup />
       <ContactSourcesSettingsSection />
       <PgpSettingsSection />
       <SmimeSettingsSection />
@@ -1740,6 +1743,10 @@ function AccountPanel({ account }: { account: Account }) {
       </SettingsGroup>
       <AccountTogglesSection account={account} isRSS={isRSS} />
       {account.auth_type === 'pop3' && <Pop3RetentionGroup accountId={account.id} />}
+      {/* Automatic archiving by age (ADR-0054): accounts whose mail is on a server. */}
+      {!isRSS && account.auth_type !== 'pop3' && account.auth_type !== 'local_archive' && account.id !== ARCHIVE_ACCOUNT && (
+        <AutoArchiveGroup key={account.id} accountId={account.id} />
+      )}
       {!isRSS && <AccountCalendarsGroup account={account} />}
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}

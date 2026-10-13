@@ -6,6 +6,7 @@
 //! one source of truth.
 
 pub mod archive;
+pub mod auto_archive;
 pub mod assistant;
 pub mod awaiting;
 pub mod backend;

@@ -165,3 +165,12 @@ fn a_quoted_printable_name_from_an_old_exporter_is_read() {
     let person = one(card);
     assert_eq!(person.name, "André Prat");
 }
+
+#[test]
+fn the_structured_name_gives_the_given_and_family_names() {
+    let person = one("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Garc\\;ía;José;Luis;;\r\nFN:José García\r\nEND:VCARD\r\n");
+    assert_eq!(person.given, "José");
+    assert_eq!(person.family, "Garc;ía");
+    let none = one("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Only Fn\r\nEND:VCARD\r\n");
+    assert!(none.given.is_empty() && none.family.is_empty());
+}

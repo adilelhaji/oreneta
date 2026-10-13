@@ -449,6 +449,12 @@ func sidecarCallTimeout(method string) time.Duration {
 	// A full-folder STORE + EXPUNGE on a large Trash can take a while.
 	case "messages.emptyFolder":
 		return 60 * time.Second
+	// Automatic archiving (ADR-0054): a preview searches every chosen folder
+	// and reads the old messages' headers; a run copies or moves each one.
+	case "autoArchive.preview":
+		return 10 * time.Minute
+	case "autoArchive.runNow":
+		return 2 * time.Hour
 	// Rules run on a previewed folder, one server action per step (#50).
 	case "rules.runReviewed":
 		return 10 * time.Minute
@@ -494,6 +500,10 @@ func sidecarCallTimeout(method string) time.Duration {
 	// the receipt goes through the account's server (ADR-0048).
 	case "receipts.status", "receipts.answer":
 		return 60 * time.Second
+	// A group written to a CardDAV book reads the card and writes it back
+	// (ADR-0052), each request bounded by the core.
+	case "people.groupSave", "people.groupDelete":
+		return 30 * time.Second
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second
 	case "folders.list", "folders.create", "folders.archive", "messages.recent", "messages.sync", "rss.markRead", "rss.markAllRead", "watch.start", "watch.stop", "discard_draft", "account.addRss", "feed.add", "rss.importOpml":

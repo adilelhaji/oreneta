@@ -7,6 +7,7 @@ import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
 import { onChatEvent } from './states/messaging'
 import { onBackupScheduled } from './states/backupSchedule'
+import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
@@ -428,6 +429,12 @@ export function useAppEffects() {
       },
     )
 
+    // Automatic archiving (ADR-0054): a scheduled run ended; trouble is
+    // said even with Settings closed.
+    const offAutoArchiveRan = eventsOn('autoArchive.ran', (detail: Parameters<typeof onAutoArchiveRan>[0]) => {
+      void onAutoArchiveRan(detail)
+    })
+
     // Chat (#111): a conversation changed, or a connection did.
     const offChatChanged = eventsOn('chat.changed', (detail: { account?: string; conversation?: string }) =>
       onChatEvent('chat.changed', detail),
@@ -548,6 +555,7 @@ export function useAppEffects() {
       if (typeof offChatStatus === 'function') offChatStatus()
       for (const off of offChatOthers) if (typeof off === 'function') off()
       if (typeof offBackupScheduled === 'function') offBackupScheduled()
+      if (typeof offAutoArchiveRan === 'function') offAutoArchiveRan()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

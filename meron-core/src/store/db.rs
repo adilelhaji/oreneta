@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 59;
+pub const SCHEMA_VERSION: i64 = 62;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -774,6 +774,21 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 59 {
         // How each read receipt request was answered (ADR-0048).
         tx.execute_batch(crate::receipts::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 59)?;
+    }
+    if version < 60 {
+        // Contact groups, and a person's given and family names (ADR-0052).
+        super::contact_groups::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 60)?;
+    }
+    if version < 61 {
+        // Repeating tasks (ADR-0053).
+        crate::task_sync::migrate_recurrence(&tx)?;
+        tx.pragma_update(None, "user_version", 61)?;
+    }
+    if version < 62 {
+        // Automatic archiving by age (ADR-0054).
+        tx.execute_batch(crate::auto_archive::SCHEMA)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

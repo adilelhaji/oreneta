@@ -953,7 +953,7 @@
       "section": "Tasks/General",
       "outcome": "Task lists, reminders, recurrence and provider capability differences",
       "status": "partial",
-      "present": "Local task lists with standalone tasks, reminders and priorities (ADR-0013) and CalDAV task lists sent with their ETag, conflicts never overwritten (ADR-0039) are tested; editing recurrence and Google Tasks, Graph To Do and EWS tasks are absent",
+      "present": "Local task lists with standalone tasks, reminders and priorities (ADR-0013), CalDAV task lists sent with their ETag, conflicts never overwritten (ADR-0039), and recurring tasks (daily/weekly/monthly by day or nth weekday/yearly, interval, count or end date; completing an occurrence keeps a completed record and moves the task, its reminder and the VTODO DUE/DTSTART/RRULE to the next one; ADR-0053) are tested; Google Tasks, Graph To Do and EWS tasks, and regenerating a task from its completion date, are absent",
       "code": "meron-core/src/task_sync/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",

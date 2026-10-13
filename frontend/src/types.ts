@@ -122,6 +122,9 @@ export type Contact = {
   organisation?: string
   /** True when this came from the organisation's directory, asked just now. */
   directory?: boolean
+  /** Given and family names, when a book keeps them apart (ADR-0052). */
+  given?: string
+  family?: string
 }
 
 /** Somebody in an address book. */
@@ -133,6 +136,9 @@ export type Person = {
   account: string
   book: string
   name: string
+  /** Given and family names, when the book keeps them apart (ADR-0052). */
+  given?: string
+  family?: string
   organisation: string
   note: string
   /** Media key of their picture, served at `/media/<key>`; empty when none. */
@@ -382,4 +388,18 @@ export type Invitation = {
   /** STATUS:CANCELLED on the event itself. */
   cancelled?: boolean
   ics: string
+}
+
+/** A contact group (ADR-0052): a local one, a CardDAV group card, or a Google label. */
+export type ContactGroup = {
+  id: string
+  source: string
+  account: string
+  book: string
+  name: string
+  version: string
+  /** Whether it can be changed from here: local and writable CardDAV books. */
+  editable: boolean
+  /** Its members still in the address book, with their first address. */
+  members: { id: string; name: string; given?: string; family?: string; addr: string }[]
 }

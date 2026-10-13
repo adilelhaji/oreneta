@@ -141,6 +141,13 @@ export type Recurrence = {
   until?: number | null
   /// Or a fixed number of occurrences.
   count?: number | null
+  /// A monthly or yearly rule on the nth weekday (1–4, or -1 for the last)
+  /// instead of a day of the month; the weekday is the first of `weekdays`
+  /// (ADR-0053). Tasks only, for now.
+  month_week?: number | null
+  /// A monthly or yearly rule's day of the month, when it is not the start's
+  /// own (a task moved from the 31st to a shorter month's last day).
+  month_day?: number | null
 }
 
 /// The event being edited, or null when the editor is closed. A new event has

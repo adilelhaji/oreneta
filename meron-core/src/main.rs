@@ -180,6 +180,59 @@ mod tests {
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
     #[tokio::test]
+    async fn automatic_archiving_is_off_until_its_preview_is_confirmed() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        {
+            let db = engine.db.lock().unwrap();
+            db.execute(
+                "INSERT INTO accounts(id, email, display_name, config) VALUES('ana', 'ana@x.cat', 'Ana',
+                   '{\"auth_type\":\"password\",\"host\":\"imap.x.cat\",\"tls\":true}')",
+                [],
+            )
+            .unwrap();
+            let folder = |name: &str, role: Option<&str>| meron_core::imap::Folder {
+                name: name.into(),
+                display_name: name.into(),
+                special_use: role.map(str::to_string),
+                ..Default::default()
+            };
+            store::upsert_folders(&db, "ana", &[folder("INBOX", None), folder("Drafts", Some("drafts")), folder("Archive", Some("archive"))])
+                .unwrap();
+        }
+        let status = call("autoArchive.status", json!({"account": "ana"})).await.unwrap();
+        assert_eq!(status["policy"]["enabled"], false);
+        assert_eq!(status["policy"]["folders"][0]["name"], "INBOX");
+        assert_eq!(status["confirmed"], false);
+        assert_eq!(status["next_run"], Value::Null);
+        assert_eq!(status["local_supported"], true);
+        assert_eq!(status["folders"][1]["refused"], "drafts");
+
+        let mut policy = status["policy"].clone();
+        policy["enabled"] = json!(true);
+        let refused = call("autoArchive.save", json!({"account": "ana", "policy": policy})).await.unwrap_err();
+        assert!(refused.to_string().contains("confirm"), "{refused}");
+        let mut drafts = policy.clone();
+        drafts["enabled"] = json!(false);
+        drafts["folders"] = json!([{ "name": "Drafts" }]);
+        assert!(call("autoArchive.save", json!({"account": "ana", "policy": drafts})).await.is_err());
+        let ran = call("autoArchive.runNow", json!({"account": "ana"})).await.unwrap_err();
+        assert!(ran.to_string().contains("confirm"), "{ran}");
+
+        let print = meron_core::auto_archive::fingerprint("ana", &serde_json::from_value(policy.clone()).unwrap());
+        let saved = call("autoArchive.save", json!({"account": "ana", "policy": policy, "confirm": print})).await.unwrap();
+        assert_eq!((saved["policy"]["enabled"].clone(), saved["confirmed"].clone()), (json!(true), json!(true)));
+        assert_eq!(saved["next_run"], 0);
+        assert!(call("autoArchive.status", json!({"account": "nobody"})).await.is_err());
+    }
+
+    #[tokio::test]
     async fn an_mbox_is_imported_into_the_local_archive_and_read_with_the_ordinary_mail_commands() {
         use super::*;
         let dir = std::env::temp_dir().join(format!("oreneta-archive-dispatch-{}", std::process::id()));
@@ -670,6 +723,56 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert_eq!(gone["ok"], true);
         let listed = call("people.list", json!({"query": ""})).await.unwrap();
         assert!(listed["people"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn local_contact_groups_and_name_parts_go_through_the_commands() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &request(method, params), &writer).await }
+        };
+        let ann = call(
+            "people.save",
+            json!({"person": {"name": "Ann Lee", "given": "Ann", "family": "Lee", "emails": [{"addr": "ann@example.com"}]}}),
+        )
+        .await
+        .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        // An editor that sends no name parts keeps the stored ones.
+        call("people.save", json!({"id": ann, "version": "1", "person": {"name": "Ann Lee", "note": "x", "emails": [{"addr": "ann@example.com"}]}}))
+            .await
+            .unwrap();
+        let listed = call("people.list", json!({"query": ""})).await.unwrap();
+        assert_eq!(listed["people"][0]["family"], "Lee");
+        let names = call("people.names", json!({"addrs": ["ANN@example.com", "x@example.com"]})).await.unwrap();
+        assert_eq!(names["names"]["ann@example.com"]["given"], "Ann");
+        assert!(names["names"].get("x@example.com").is_none());
+
+        let group = call("people.groupSave", json!({"name": "Climbing", "members": [ann]})).await.unwrap();
+        let id = group["id"].as_str().unwrap().to_owned();
+        let listed = call("people.groups", json!({})).await.unwrap();
+        assert_eq!(listed["groups"][0]["name"], "Climbing");
+        assert_eq!(listed["groups"][0]["editable"], true);
+        assert_eq!(listed["groups"][0]["members"][0]["addr"], "ann@example.com");
+        let renamed = call("people.groupSave", json!({"id": id, "version": "1", "name": "Climbing club", "members": []}))
+            .await
+            .unwrap();
+        assert_eq!(renamed["version"], "2");
+        let stale = call("people.groupSave", json!({"id": id, "version": "1", "name": "Other", "members": []}))
+            .await
+            .unwrap();
+        assert_eq!(stale["conflict"], true);
+        assert_eq!(stale["current"]["name"], "Climbing club");
+        assert!(call("people.groupSave", json!({"name": " "})).await.is_err());
+        call("people.groupDelete", json!({"id": id, "version": "2"})).await.unwrap();
+        assert!(call("people.groups", json!({})).await.unwrap()["groups"].as_array().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -2305,6 +2408,7 @@ async fn main() {
     spawn_reminder_watch(engine.clone(), out.clone());
     spawn_deferred_watch(engine.clone(), out.clone());
     spawn_backup_schedule(engine.clone(), out.clone());
+    spawn_auto_archive(engine.clone(), out.clone());
 
     emit(&out, "ready", ready_event()).await;
 
@@ -3133,6 +3237,39 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             run_scheduled_backup(engine).await?;
             backup_schedule_status(engine)
         }
+        // Automatic archiving by age (#112, ADR-0054): off by default, and
+        // turned on only with the preview of what it moves confirmed.
+        "autoArchive.status" => auto_archive_status(engine, &req_str(p, "account")?),
+        "autoArchive.preview" => {
+            let account = req_str(p, "account")?;
+            let policy: meron_core::auto_archive::Policy =
+                serde_json::from_value(p.get("policy").cloned().context("missing policy")?)?;
+            let (kind, folders, label) = auto_archive_context(engine, &account)?;
+            meron_core::auto_archive::validate(&policy, kind, &folders)?;
+            let mut steps = meron_core::auto_archive::EngineSteps {
+                engine: engine.clone(),
+                account: account.clone(),
+                media_root: parse::media_root(),
+            };
+            let cutoffs = meron_core::auto_archive::cutoffs(&policy, &chrono::Local::now());
+            let plan =
+                meron_core::auto_archive::plan(&mut steps, &engine.db, &account, &label, &policy, &cutoffs).await?;
+            Ok(serde_json::to_value(plan)?)
+        }
+        "autoArchive.save" => {
+            let account = req_str(p, "account")?;
+            let policy: meron_core::auto_archive::Policy =
+                serde_json::from_value(p.get("policy").cloned().context("missing policy")?)?;
+            let confirm = p.get("confirm").and_then(Value::as_str);
+            let (kind, folders, _) = auto_archive_context(engine, &account)?;
+            meron_core::auto_archive::save(&engine.db.lock().unwrap(), &account, &policy, confirm, kind, &folders)?;
+            auto_archive_status(engine, &account)
+        }
+        "autoArchive.runNow" => {
+            let account = req_str(p, "account")?;
+            let (log, archive_created) = run_auto_archive(engine, out, &account, "manual").await?;
+            Ok(json!({ "run": log, "archive_created": archive_created, "status": auto_archive_status(engine, &account)? }))
+        }
         "cloud.providers" => Ok(json!(meron_core::cloud::PROVIDERS
             .iter()
             .map(|(id, name, usable)| json!({ "id": id, "name": name, "usable": usable }))
@@ -3486,6 +3623,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "pending": task.pending,
                         "conflict": task.conflict,
                         "recurring": task.recurring,
+                        "recurrence": store::task_lists::recurrence_of(&task.rrule),
                     }))
                     .collect::<Vec<_>>(),
             }))
@@ -3528,7 +3666,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 Some((task, revision, linked)) => json!({
                     "due_at": task.due_at, "note": task.note, "list_id": task.list_id, "title": task.title,
                     "reminder_at": task.reminder_at, "priority": task.priority, "revision": revision,
-                    "linked": linked,
+                    "linked": linked, "recurrence": task.recurrence,
                 }),
                 None => Value::Null,
             })
@@ -3843,18 +3981,21 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     "current": current.map(|task| json!({
                         "list_id": task.list_id, "title": task.title, "note": task.note,
                         "due_at": task.due_at, "reminder_at": task.reminder_at, "priority": task.priority,
-                        "revision": revision,
+                        "recurrence": task.recurrence, "revision": revision,
                     })),
                 }),
             })
         }
 
+        // A repeating task completes one occurrence and moves on to the
+        // next; `stop` ends the repetition instead (ADR-0053).
         "tasks.setCompleted" => {
             let id = req_i64(p, "id")?;
             let completed = req_bool(p, "completed")?;
+            let stop = p.get("stop_repeating").and_then(Value::as_bool).unwrap_or(false);
             let db = engine.db.lock().unwrap();
-            store::set_task_completed(&db, id, completed, now_seconds())?;
-            Ok(json!({ "ok": true }))
+            let done = store::task_lists::set_completed(&db, id, completed, stop, now_seconds())?;
+            Ok(json!({ "ok": true, "next_due": done.next_due }))
         }
 
         // "Never mind, this was not one" — removes the task outright.
@@ -4502,6 +4643,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         }
 
         "people.delete" => pim::people::delete(engine, p).await,
+
+        // Contact groups (ADR-0052): the local book's, CardDAV group cards
+        // and Google labels; writes go to the local book and CardDAV books.
+        "people.groups" => pim::people::groups(engine),
+        "people.groupSave" => pim::people::group_save(engine, p).await,
+        "people.groupDelete" => pim::people::group_delete(engine, p).await,
+        // The book's names for senders a message gave no name (ADR-0052).
+        "people.names" => pim::people::names(engine, p),
 
         // Text the writer keeps because they write it often: a snippet
         // dropped in at the cursor, or a whole message with its own subject.
@@ -8831,6 +8980,103 @@ fn spawn_backup_schedule(engine: Arc<Engine>, out: Writer) {
             }
             let status = backup_schedule_status(&engine).unwrap_or(Value::Null);
             emit(&out, "backup.scheduled", json!({ "state": if result.is_ok() { "done" } else { "failed" }, "status": status })).await;
+        }
+    });
+}
+
+/// What automatic archiving needs to know about an account: its kind, its
+/// folders as last listed, and the name its mail is filed under locally.
+fn auto_archive_context(
+    engine: &Arc<Engine>,
+    account: &str,
+) -> anyhow::Result<(meron_core::auto_archive::AccountKind, Vec<meron_core::imap::Folder>, String)> {
+    let db = engine.db.lock().unwrap();
+    let creds = store::load_account(&db, account)?.context("no such account")?;
+    Ok((
+        meron_core::auto_archive::AccountKind::of(&creds),
+        store::get_folders(&db, account)?,
+        meron_core::auto_archive::account_label(&db, account)?,
+    ))
+}
+
+fn auto_archive_status(engine: &Arc<Engine>, account: &str) -> anyhow::Result<Value> {
+    let (kind, folders, _) = auto_archive_context(engine, account)?;
+    Ok(serde_json::to_value(meron_core::auto_archive::status(&engine.db.lock().unwrap(), account, kind, &folders)?)?)
+}
+
+/// One archiving run for an account (ADR-0054), then the lists it touched
+/// are refreshed. Says whether the local archive was created by it.
+async fn run_auto_archive(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    trigger: &str,
+) -> anyhow::Result<(meron_core::auto_archive::RunLog, bool)> {
+    let (_, _, label) = auto_archive_context(engine, account)?;
+    let had_archive = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?.is_some();
+    let mut steps = meron_core::auto_archive::EngineSteps {
+        engine: engine.clone(),
+        account: account.to_string(),
+        media_root: parse::media_root(),
+    };
+    let log = meron_core::auto_archive::run(
+        &mut steps,
+        &engine.db,
+        account,
+        &label,
+        trigger,
+        |policy| meron_core::auto_archive::cutoffs(policy, &chrono::Local::now()),
+        now_seconds(),
+        now_seconds,
+    )
+    .await?;
+    let created = !had_archive && {
+        let creds = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?;
+        match creds {
+            Some(creds) => {
+                engine.accounts.lock().await.insert(meron_core::archive::ACCOUNT.to_string(), creds);
+                true
+            }
+            None => false,
+        }
+    };
+    if log.moved + log.kept > 0 {
+        emit(out, "mail.synced", json!({ "account": account, "folders": true })).await;
+        if log.destination == Some(meron_core::auto_archive::Destination::Local) {
+            emit(out, "mail.synced", json!({ "account": meron_core::archive::ACCOUNT, "folders": true })).await;
+        }
+    }
+    Ok((log, created))
+}
+
+/// Checks every few minutes whether an account's archiving is due (#112),
+/// as scheduled backups do; the first check waits a little.
+fn spawn_auto_archive(engine: Arc<Engine>, out: Writer) {
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(150)).await;
+        let mut ticker = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            ticker.tick().await;
+            let due = meron_core::auto_archive::due(&engine.db.lock().unwrap(), now_seconds()).unwrap_or_default();
+            for account in due {
+                if engine.is_paused(&account) {
+                    continue;
+                }
+                let result = run_auto_archive(&engine, &out, &account, "scheduled").await;
+                let (run, created, error) = match result {
+                    Ok((run, created)) => (serde_json::to_value(&run).unwrap_or(Value::Null), created, None),
+                    Err(err) => (Value::Null, false, Some(format!("{err:#}"))),
+                };
+                if let Some(error) = &error {
+                    eprintln!("meron-core: automatic archiving for {account} did not run: {error}");
+                }
+                emit(
+                    &out,
+                    "autoArchive.ran",
+                    json!({ "account": account, "run": run, "archive_created": created, "error": error }),
+                )
+                .await;
+            }
         }
     });
 }

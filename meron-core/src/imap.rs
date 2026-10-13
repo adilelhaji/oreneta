@@ -1696,6 +1696,26 @@ pub async fn search_prefetch_uids(
     Ok(uids)
 }
 
+/// Messages whose `Date:` falls before `before` (epoch seconds), as the server
+/// sees it: `SENTBEFORE` compares calendar days and ignores time and zone, so
+/// the day asked is two after `before`'s and the caller narrows the answer by
+/// each message's exact date (automatic archiving, ADR-0054).
+pub async fn search_sent_before(session: &mut Session, folder: &str, before: i64) -> Result<Vec<u32>> {
+    session.select(folder).await.context("SELECT")?;
+    let (y, m, d) = civil_from_days(before.div_euclid(86_400) + 2);
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let day = format!("{:02}-{}-{:04}", d, MONTHS[(m - 1) as usize], y);
+    let set: HashSet<u32> = session
+        .uid_search(format!("SENTBEFORE {day}"))
+        .await
+        .context("UID SEARCH SENTBEFORE")?;
+    let mut uids: Vec<u32> = set.into_iter().collect();
+    uids.sort_unstable();
+    Ok(uids)
+}
+
 /// Format the IMAP `dd-Mon-yyyy` date for `days` days before now (UTC), for use
 /// in `SEARCH SINCE` (which compares by internal date, ignoring time of day).
 fn imap_date_days_ago(days: u32) -> String {

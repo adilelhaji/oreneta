@@ -6,6 +6,7 @@ import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { showToast } from './ui'
 import { t } from '../lib/i18n'
+import type { Recurrence } from './calendar'
 
 export type Task = {
   id: number
@@ -36,8 +37,11 @@ export type Task = {
   /** Why it waits for a choice: 'changed' (here and on the server) or
    * 'deleted' (on the server); empty when it does not. */
   conflict?: string
-  /** It repeats; such a task is not edited here yet. */
+  /** It repeats in a way not edited here (ADR-0039, ADR-0053): extra dates,
+   * changed occurrences, or a rule beyond the editor's. */
   recurring?: boolean
+  /** How it repeats, when the editor can change it (ADR-0053). */
+  recurrence?: Recurrence | null
 }
 
 export type TaskList = {
@@ -67,6 +71,8 @@ export type TaskFields = {
   due_at: number | null
   reminder_at: number | null
   priority: number
+  /** How it repeats (ADR-0053); null or absent when it does not. */
+  recurrence?: Recurrence | null
 }
 
 /** The list every task made from a conversation goes to; it cannot be deleted. */
@@ -225,10 +231,32 @@ export async function saveTask(threadId: string, fields: { dueAt: number | null;
   }
 }
 
-export async function setTaskCompleted(id: number, completed: boolean) {
+/** Whether a task repeats in a way this app completes one occurrence at a time. */
+export function repeats(task: Pick<Task, 'recurrence' | 'completed_at'>): boolean {
+  return !!task.recurrence && !task.completed_at
+}
+
+/**
+ * Completes a task or reopens it. A repeating task completes the occurrence
+ * due and moves on to the next one, keeping a completed copy as the record;
+ * `stopRepeating` ends the repetition and completes it instead (ADR-0053).
+ */
+export async function setTaskCompleted(id: number, completed: boolean, options: { stopRepeating?: boolean } = {}) {
   try {
-    await invoke('tasks.setCompleted', { id, completed })
+    const res = await invoke<{ next_due?: number | null }>('tasks.setCompleted', {
+      id,
+      completed,
+      ...(options.stopRepeating ? { stop_repeating: true } : {}),
+    })
     await loadTasks()
+    if (completed && res?.next_due) {
+      showToast(
+        t('tasks.nextOccurrence', {
+          date: new Date(res.next_due * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+          defaultValue: 'Done. Next due {date}.',
+        }),
+      )
+    }
   } catch (error) {
     showToast(error instanceof Error ? error.message : t('tasks.saveFailed'), 'error')
   }

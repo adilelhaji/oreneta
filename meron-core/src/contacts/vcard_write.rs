@@ -17,7 +17,7 @@ pub fn new_card(person: &Person, uid: &str) -> String {
         "VERSION:3.0".to_string(),
         format!("UID:{}", escape(uid)),
         format!("FN:{}", escape(&person.name)),
-        name_line(&person.name),
+        n_line(person),
     ];
     if !person.organisation.is_empty() {
         lines.push(format!("ORG:{}", escape(&person.organisation)));
@@ -51,6 +51,7 @@ pub fn patch_card(raw: &str, person: &Person, now: i64) -> anyhow::Result<String
     };
     let before = person_from_properties(&card);
     let name_changed = before.name != person.name;
+    let parts_changed = before.given != person.given || before.family != person.family;
     let org_changed = before.organisation != person.organisation;
     let note_changed = before.note != person.note;
     let keep_emails: Vec<String> = person.emails.iter().map(|e| e.addr.trim().to_lowercase()).collect();
@@ -61,6 +62,7 @@ pub fn patch_card(raw: &str, person: &Person, now: i64) -> anyhow::Result<String
     let mut seen_emails: Vec<String> = Vec::new();
     let mut seen_phones: Vec<String> = Vec::new();
     let mut had = (false, false, false); // FN, ORG, NOTE
+    let mut had_n = false;
     let mut depth = 0usize;
     let mut done = false;
 
@@ -83,6 +85,9 @@ pub fn patch_card(raw: &str, person: &Person, now: i64) -> anyhow::Result<String
                 // What is new goes in just before the card closes.
                 if !had.0 {
                     out.push(format!("FN:{}", escape(&person.name)));
+                }
+                if !had_n && (!person.given.is_empty() || !person.family.is_empty()) {
+                    out.push(n_line(person));
                 }
                 if !had.1 && !person.organisation.is_empty() {
                     out.push(format!("ORG:{}", escape(&person.organisation)));
@@ -124,7 +129,19 @@ pub fn patch_card(raw: &str, person: &Person, now: i64) -> anyhow::Result<String
                 had.0 = true;
                 out.push(if name_changed { format!("FN:{}", escape(&person.name)) } else { line });
             }
-            "N" => out.push(if name_changed { name_line(&person.name) } else { line }),
+            "N" if had_n => out.push(line),
+            "N" => {
+                had_n = true;
+                out.push(if parts_changed {
+                    patched_n(&property.raw, person)
+                } else if name_changed {
+                    // A new whole name with the same parts: the old parts no
+                    // longer describe it, and splitting it would be a guess.
+                    name_line(&person.name)
+                } else {
+                    line
+                })
+            }
             "ORG" => {
                 if had.1 {
                     continue;
@@ -183,6 +200,26 @@ pub fn patch_card(raw: &str, person: &Person, now: i64) -> anyhow::Result<String
     Ok(join(&out))
 }
 
+/// `N` for a person: family and given names when they are known apart,
+/// otherwise the whole name as the given name.
+fn n_line(person: &Person) -> String {
+    if person.given.is_empty() && person.family.is_empty() {
+        return name_line(&person.name);
+    }
+    format!("N:{};{};;;", escape(&person.family), escape(&person.given))
+}
+
+/// An existing `N` with its family and given names replaced, keeping the
+/// middle names, prefixes and suffixes this app does not edit.
+fn patched_n(raw: &str, person: &Person) -> String {
+    if person.given.is_empty() && person.family.is_empty() {
+        return name_line(&person.name);
+    }
+    let parts = super::person::structured_parts(raw);
+    let rest: Vec<String> = (2..5).map(|index| parts.get(index).cloned().unwrap_or_default()).collect();
+    format!("N:{};{};{}", escape(&person.family), escape(&person.given), rest.join(";"))
+}
+
 /// `N` from a single name: the whole of it as the given name. Splitting it
 /// into family and given names would be a guess, and a wrong one for most of
 /// the world's naming conventions.
@@ -205,7 +242,7 @@ fn digits(number: &str) -> String {
     number.chars().filter(|c| c.is_ascii_digit() || *c == '+').collect()
 }
 
-fn rev(now: i64) -> String {
+pub(crate) fn rev(now: i64) -> String {
     chrono::DateTime::from_timestamp(now, 0)
         .unwrap_or_default()
         .format("%Y%m%dT%H%M%SZ")
@@ -229,7 +266,7 @@ pub fn escape(value: &str) -> String {
 }
 
 /// Logical lines, continuations joined.
-fn unfold(raw: &str) -> Vec<String> {
+pub(crate) fn unfold(raw: &str) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     for line in raw.split('\n') {
         let line = line.strip_suffix('\r').unwrap_or(line);
@@ -243,7 +280,7 @@ fn unfold(raw: &str) -> Vec<String> {
 }
 
 /// Lines folded at 75 octets, never inside a character, ended with CRLF.
-fn join(lines: &[String]) -> String {
+pub(crate) fn join(lines: &[String]) -> String {
     let mut out = String::new();
     for line in lines {
         let mut width = 0;

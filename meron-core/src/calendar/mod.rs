@@ -16,6 +16,7 @@ pub mod import;
 pub mod itip;
 pub mod meeting;
 pub mod overlap;
+pub mod recurrence;
 pub mod route;
 pub mod subscription;
 
@@ -208,6 +209,16 @@ pub struct Recurrence {
     /// picked from a calendar.
     #[serde(default)]
     pub count: Option<u16>,
+    /// A monthly or yearly rule on the nth weekday of the month instead of a
+    /// day of the month: 1–4, or -1 for the last. The weekday is the first of
+    /// `weekdays`, or the day the series starts on (ADR-0053).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub month_week: Option<i8>,
+    /// A monthly or yearly rule's day of the month, when it is not the day
+    /// the series starts on: a task due on the 31st that was moved to the
+    /// 30th of a shorter month keeps coming back on the 31st (ADR-0053).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub month_day: Option<u8>,
 }
 
 fn one() -> u16 {

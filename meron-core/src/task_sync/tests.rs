@@ -468,7 +468,12 @@ fn moving_between_a_server_list_and_another_and_editing_a_repeating_task_are_ref
     assert_eq!(state_of(&conn, local), "", "a local list's task is never pending");
     drop(conn);
 
-    server.touch(PLAN, "STATUS:NEEDS-ACTION", "STATUS:NEEDS-ACTION\r\nRRULE:FREQ=WEEKLY");
+    // A repetition beyond the editor's (the last weekday of the month).
+    server.touch(
+        PLAN,
+        "STATUS:NEEDS-ACTION",
+        "STATUS:NEEDS-ACTION\r\nDUE;VALUE=DATE:20261030\r\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
+    );
     sync(&db, &server, &list, 130).unwrap();
     let plan = task_id(&db, "Plan the week");
     let conn = db.lock().unwrap();
@@ -493,4 +498,150 @@ fn a_reminder_already_past_on_import_does_not_ring() {
     let list = bind(&db, WORK);
     sync(&db, &server, &list, 1_800_000_000).unwrap();
     assert!(task_lists::due_reminders(&db.lock().unwrap(), 1_800_000_001).unwrap().is_empty());
+}
+
+const WEEKLY: &str = "https://dav.example/ana/work/weekly.ics";
+
+/// A weekly task from another client, due on Tuesday 13 October 2026, with
+/// a reminder the evening before, set relative to it.
+fn weekly_task() -> String {
+    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Phone//EN\r\nBEGIN:VTODO\r\nUID:weekly@phone\r\nDTSTAMP:20260101T000000Z\r\n\
+SUMMARY:Water the plants\r\nX-PHONE-COLOR:green\r\nDTSTART;VALUE=DATE:20261013\r\nDUE;VALUE=DATE:20261013\r\n\
+RRULE:FREQ=WEEKLY;COUNT=3\r\nSTATUS:NEEDS-ACTION\r\n\
+BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Water\r\nTRIGGER;RELATED=END:-PT6H\r\nEND:VALARM\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
+        .to_string()
+}
+
+fn local_midnight(y: i32, m: u32, d: u32) -> i64 {
+    use chrono::TimeZone as _;
+    chrono::Local
+        .from_local_datetime(&chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(0, 0, 0).unwrap())
+        .earliest()
+        .unwrap()
+        .timestamp()
+}
+
+#[test]
+fn completing_an_occurrence_moves_the_series_on_the_server_and_keeps_a_record() {
+    let server = Server::default();
+    server.seed(WEEKLY, &weekly_task());
+    let db = store();
+    let list = bind(&db, WORK);
+    sync(&db, &server, &list, 10).unwrap();
+    let id = task_id(&db, "Water the plants");
+    {
+        let conn = db.lock().unwrap();
+        let card = crate::store::list_tasks(&conn, false).unwrap().into_iter().find(|t| t.id == id).unwrap();
+        assert!(!card.recurring, "a weekly rule is one this client changes");
+        assert_eq!(card.rrule, "FREQ=WEEKLY;BYDAY=TU;COUNT=3");
+        let done = task_lists::set_completed(&conn, id, true, false, 20).unwrap();
+        assert_eq!(done.next_due, Some(local_midnight(2026, 10, 20)));
+    }
+    let report = sync(&db, &server, &list, 30).unwrap();
+    assert_eq!(report.pushed, 2, "the series and the record of the occurrence");
+
+    let series = server.body(WEEKLY);
+    for expected in [
+        "DUE;VALUE=DATE:20261020",
+        "DTSTART;VALUE=DATE:20261020",
+        "RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=2",
+        "STATUS:NEEDS-ACTION",
+        "X-PHONE-COLOR:green",
+        "TRIGGER;RELATED=END:-PT6H",
+        "UID:weekly@phone",
+    ] {
+        assert!(series.contains(expected), "lost {expected}:\n{series}");
+    }
+    assert!(!series.contains("COMPLETED:"), "the series is not done:\n{series}");
+    let record = server
+        .objects
+        .borrow()
+        .iter()
+        .find(|(href, _)| href.as_str() != WEEKLY)
+        .map(|(_, (ics, _))| ics.clone())
+        .expect("the record is on the server");
+    assert!(record.contains("STATUS:COMPLETED") && record.contains("DUE;VALUE=DATE:20261013"), "{record}");
+    assert!(!record.contains("RRULE") && record.contains("SUMMARY:Water the plants"), "{record}");
+
+    // The reminder moved with it: 18:00 the evening before the new due date.
+    let reminder: Option<i64> = db
+        .lock()
+        .unwrap()
+        .query_row("SELECT reminder_at FROM tasks WHERE id = ?1", params![id], |row| row.get(0))
+        .unwrap();
+    assert_eq!(reminder, Some(local_midnight(2026, 10, 20) - 6 * 3600));
+
+    // A sync later reads both back unchanged: no conflict, no copy.
+    let again = sync(&db, &server, &list, 40).unwrap();
+    assert_eq!((again.pulled, again.conflicts), (0, 0));
+    assert_eq!(titles(&db, &list), vec!["Water the plants", "Water the plants"]);
+
+    // Two more: the count runs out at the third, which completes the task.
+    let conn = db.lock().unwrap();
+    assert!(task_lists::set_completed(&conn, id, true, false, 50).unwrap().next_due.is_some());
+    assert_eq!(task_lists::set_completed(&conn, id, true, false, 60).unwrap().next_due, None);
+    let open = crate::store::list_tasks(&conn, false).unwrap();
+    assert!(open.iter().all(|t| t.list_id != list), "every occurrence done");
+    drop(conn);
+    sync(&db, &server, &list, 70).unwrap();
+    assert!(server.body(WEEKLY).contains("STATUS:COMPLETED"));
+    assert_eq!(server.objects.borrow().len(), 3, "the series and two records");
+}
+
+#[test]
+fn stopping_a_repetition_removes_the_rule_on_the_server_and_completes_the_task() {
+    let server = Server::default();
+    server.seed(WEEKLY, &weekly_task());
+    let db = store();
+    let list = bind(&db, WORK);
+    sync(&db, &server, &list, 10).unwrap();
+    let id = task_id(&db, "Water the plants");
+    task_lists::set_completed(&db.lock().unwrap(), id, true, true, 20).unwrap();
+    sync(&db, &server, &list, 30).unwrap();
+    let body = server.body(WEEKLY);
+    assert!(!body.contains("RRULE") && body.contains("STATUS:COMPLETED"), "{body}");
+    assert!(body.contains("DUE;VALUE=DATE:20261013"), "it stays due when it was: {body}");
+    assert_eq!(server.objects.borrow().len(), 1, "no record of an occurrence");
+}
+
+#[test]
+fn a_repeating_task_made_here_is_sent_with_its_rule_and_start() {
+    let db = store();
+    let server = Server::default();
+    let list = bind(&db, WORK);
+    let rule = crate::calendar::Recurrence {
+        freq: crate::calendar::Frequency::Monthly,
+        interval: 1,
+        month_week: Some(-1),
+        weekdays: vec![4],
+        ..Default::default()
+    };
+    let fields = TaskFields {
+        list_id: list.clone(),
+        title: "Pay the rent".into(),
+        priority: 1,
+        due_at: Some(local_midnight(2026, 10, 30)),
+        recurrence: Some(rule),
+        ..Default::default()
+    };
+    task_lists::create(&db.lock().unwrap(), &fields, 5).unwrap();
+    sync(&db, &server, &list, 10).unwrap();
+    let (_, (ics, _)) = server.objects.borrow().iter().next().map(|(k, v)| (k.clone(), v.clone())).unwrap();
+    assert!(ics.contains("RRULE:FREQ=MONTHLY;BYDAY=-1FR"), "{ics}");
+    assert!(ics.contains("DTSTART;VALUE=DATE:20261030") && ics.contains("DUE;VALUE=DATE:20261030"), "{ics}");
+}
+
+#[test]
+fn tasks_read_before_repetition_was_editable_are_read_again_by_the_migration() {
+    let conn = crate::store::open_in_memory_for_test().unwrap();
+    conn.execute(
+        "INSERT INTO tasks(account, thread_key, folder, created_at, list_id, title, remote_ics, recurring)
+         VALUES('', '', '', 1, 'mail', 'Old', ?1, 1)",
+        params![weekly_task()],
+    )
+    .unwrap();
+    migrate_recurrence(&conn).unwrap();
+    let (recurring, rrule): (bool, String) =
+        conn.query_row("SELECT recurring, rrule FROM tasks WHERE title = 'Old'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+    assert_eq!((recurring, rrule.as_str()), (false, "FREQ=WEEKLY;BYDAY=TU;COUNT=3"));
 }

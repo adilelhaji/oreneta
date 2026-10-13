@@ -2,6 +2,7 @@
 
 pub mod exchange;
 pub mod google;
+pub mod groups;
 pub mod person;
 pub mod vcard;
 pub mod vcard_import;
@@ -11,6 +12,8 @@ pub mod vcard_write;
 mod exchange_tests;
 #[cfg(test)]
 mod google_tests;
+#[cfg(test)]
+mod groups_tests;
 #[cfg(test)]
 mod person_tests;
 #[cfg(test)]

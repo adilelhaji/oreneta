@@ -11,7 +11,7 @@ class PeopleCommandsTest {
     // What main.rs writes for `people.list`, inside the platform envelope.
     private val peopleJson =
         """{"id":1,"result":{"people":[""" +
-            """{"id":"local-1","source":"local","account":"","book":"local","name":"Ann Lee","organisation":"Acme","note":"Met at \"the\" fair",""" +
+            """{"id":"local-1","source":"local","account":"","book":"local","name":"Ann Lee","given":"Ann","family":"Lee","organisation":"Acme","note":"Met at \"the\" fair",""" +
             """"photo":"","emails":[{"addr":"ann@example.com","label":"work"},{"addr":"","label":"home"}],"phones":[{"number":"+34 600 000 000","label":"mobile"}],""" +
             """"version":"3","link":null,"editable":true},""" +
             """{"id":"g-7","source":"google","account":"me@gmail.com","book":"google:me@gmail.com","name":"Bo","organisation":"","note":"",""" +
@@ -33,6 +33,8 @@ class PeopleCommandsTest {
         assertEquals("3", ann.version)
         assertTrue(ann.editable)
         assertNull(ann.link)
+        assertEquals("Ann", ann.given)
+        assertEquals("Lee", ann.family)
 
         val bo = people[1]
         assertEquals("google", bo.source)
@@ -40,6 +42,7 @@ class PeopleCommandsTest {
         assertEquals("people/g-7.jpg", bo.photo)
         assertFalse(bo.editable)
         assertEquals("link-1", bo.link)
+        assertEquals("", bo.family, "a book that keeps no parts has none")
     }
 
     // people.go forwards `people.list` with query and limit, and the writes

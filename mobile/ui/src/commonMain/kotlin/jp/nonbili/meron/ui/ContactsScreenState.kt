@@ -24,5 +24,9 @@ internal class ContactsScreenState {
     var editing by mutableStateOf<ContactEditing?>(null)
     var saving by mutableStateOf(false)
     var confirmingDelete by mutableStateOf<PersonSummary?>(null)
+
+    // The desktop's Contacts → General choices (ADR-0052), read on opening.
+    var nameDisplay by mutableStateOf(ContactNameDisplay.AsWritten)
+    var nameSort by mutableStateOf(ContactNameSort.Name)
     var searchJob: Job? = null
 }

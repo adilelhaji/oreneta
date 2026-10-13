@@ -160,6 +160,19 @@ export function PersonEditor() {
           <span className={labelClass}>{t('people.name', { defaultValue: 'Name' })}</span>
           <TextInput value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus />
         </label>
+        {/* The parts, kept apart so lists can order names as the reader
+            chose (ADR-0052). Optional: a name with no parts is shown as
+            written, never split by guessing. */}
+        <div className="grid gap-3 min-[480px]:grid-cols-2">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClass}>{t('people.givenName', { defaultValue: 'First name' })}</span>
+            <TextInput value={draft.given} onChange={(e) => set({ given: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClass}>{t('people.familyName', { defaultValue: 'Last name' })}</span>
+            <TextInput value={draft.family} onChange={(e) => set({ family: e.target.value })} />
+          </label>
+        </div>
         <label className="flex flex-col gap-1.5">
           <span className={labelClass}>{t('people.organisationField', { defaultValue: 'Organisation' })}</span>
           <TextInput value={draft.organisation} onChange={(e) => set({ organisation: e.target.value })} />

@@ -12,6 +12,8 @@
 use anyhow::{bail, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 
+use crate::calendar::{recurrence, Recurrence};
+
 /// The list every mail-linked task lives in. It cannot be deleted.
 pub const MAIL_LIST: &str = "mail";
 
@@ -143,6 +145,9 @@ pub struct TaskFields {
     pub reminder_at: Option<i64>,
     /// 0 low, 1 normal, 2 high.
     pub priority: i64,
+    /// How it repeats (ADR-0053), in the calendar's own terms; `None` when
+    /// it does not.
+    pub recurrence: Option<Recurrence>,
 }
 
 impl TaskFields {
@@ -153,8 +158,38 @@ impl TaskFields {
         if !(0..=2).contains(&self.priority) {
             bail!("unknown priority");
         }
+        if self.recurrence.is_some() {
+            if linked {
+                bail!("a task tied to a conversation does not repeat");
+            }
+            if self.due_at.is_none() {
+                bail!("a repeating task needs a due date to repeat from");
+            }
+        }
         Ok(())
     }
+
+    /// The rule as stored: an RRULE value spelled out from the due date.
+    fn rrule(&self) -> String {
+        match (&self.recurrence, self.due_at.and_then(due_day)) {
+            (Some(rule), Some((day, all_day))) => recurrence::format(&recurrence::anchored(rule, day), day, all_day),
+            _ => String::new(),
+        }
+    }
+}
+
+/// A due instant as the date it falls on here, and whether it is a date
+/// rather than a time (midnight here).
+fn due_day(instant: i64) -> Option<(chrono::NaiveDate, bool)> {
+    use chrono::{TimeZone as _, Timelike as _};
+    let local = chrono::Local.timestamp_opt(instant, 0).earliest()?;
+    Some((local.date_naive(), local.num_seconds_from_midnight() == 0))
+}
+
+/// A stored rule in the calendar's terms. One that cannot be read is no
+/// rule: it was written here, so that would be a bug, not a server's whim.
+pub fn recurrence_of(rrule: &str) -> Option<Recurrence> {
+    (!rrule.is_empty()).then(|| recurrence::parse(rrule).ok()).flatten()
 }
 
 fn list_exists(conn: &Connection, id: &str) -> Result<bool> {
@@ -187,7 +222,7 @@ fn sync_state(conn: &Connection, id: i64) -> Result<Option<(String, bool, bool)>
 /// that repeats, in a list kept on a server.
 pub fn check_editable(conn: &Connection, id: i64) -> Result<()> {
     if let Some((_, true, true)) = sync_state(conn, id)? {
-        bail!("this task repeats; change it in the app that made it, Oreneta does not edit repeating tasks yet");
+        bail!("this task repeats in a way Oreneta does not change; change it in the app that made it");
     }
     Ok(())
 }
@@ -215,9 +250,18 @@ pub fn create(conn: &Connection, fields: &TaskFields, now: i64) -> Result<i64> {
         bail!("that list no longer exists");
     }
     conn.execute(
-        "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at, list_id, title, priority, reminder_at)
-         VALUES('', '', '', ?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![fields.note.trim(), fields.due_at, now, list, fields.title.trim(), fields.priority, fields.reminder_at],
+        "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at, list_id, title, priority, reminder_at, rrule)
+         VALUES('', '', '', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            fields.note.trim(),
+            fields.due_at,
+            now,
+            list,
+            fields.title.trim(),
+            fields.priority,
+            fields.reminder_at,
+            fields.rrule()
+        ],
     )?;
     let id = conn.last_insert_rowid();
     touched(conn, id)?;
@@ -237,7 +281,7 @@ pub enum Edit {
 pub fn get(conn: &Connection, id: i64) -> Result<Option<(TaskFields, i64, bool)>> {
     Ok(conn
         .query_row(
-            "SELECT list_id, title, note, due_at, reminder_at, priority, revision, thread_key <> ''
+            "SELECT list_id, title, note, due_at, reminder_at, priority, revision, thread_key <> '', rrule
                FROM tasks WHERE id = ?1 AND pending <> 'delete'",
             params![id],
             |row| {
@@ -249,6 +293,7 @@ pub fn get(conn: &Connection, id: i64) -> Result<Option<(TaskFields, i64, bool)>
                         due_at: row.get(3)?,
                         reminder_at: row.get(4)?,
                         priority: row.get(5)?,
+                        recurrence: recurrence_of(&row.get::<_, String>(8)?),
                     },
                     row.get(6)?,
                     row.get(7)?,
@@ -279,17 +324,131 @@ pub fn update(conn: &Connection, id: i64, read_at: i64, fields: &TaskFields) -> 
         bail!(MOVE_REFUSED);
     }
     check_editable(&tx, id)?;
+    // A new due date is a new anchor: a monthly rule kept on the 31st after
+    // a short month comes back to the day now chosen.
+    let mut fields = fields.clone();
+    if fields.due_at != current.due_at {
+        if let Some(rule) = fields.recurrence.as_mut() {
+            rule.month_day = None;
+        }
+    }
     tx.execute(
         "UPDATE tasks SET list_id = ?2, title = ?3, note = ?4, due_at = ?5, priority = ?6,
                 reminder_at = ?7,
                 reminded_at = CASE WHEN reminder_at IS ?7 THEN reminded_at ELSE NULL END,
+                rrule = ?8,
                 revision = revision + 1
           WHERE id = ?1",
-        params![id, list, fields.title.trim(), fields.note.trim(), fields.due_at, fields.priority, fields.reminder_at],
+        params![
+            id,
+            list,
+            fields.title.trim(),
+            fields.note.trim(),
+            fields.due_at,
+            fields.priority,
+            fields.reminder_at,
+            fields.rrule()
+        ],
     )?;
     touched(&tx, id)?;
     tx.commit()?;
     Ok(Edit::Saved { revision: revision + 1 })
+}
+
+/// What completing a task did (ADR-0053).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Completed {
+    /// The task's next due date, when it repeats and the series goes on: it
+    /// stays open, due then. `None` when the task is now done.
+    pub next_due: Option<i64>,
+    /// The completed copy kept as the record of the occurrence done.
+    pub record: Option<i64>,
+}
+
+/// Completes one occurrence of a repeating task (ADR-0053).
+///
+/// The occurrence is kept as a completed copy of the task — no rule, due
+/// when the occurrence was — and the task itself moves on to the next
+/// occurrence, its reminder the same time ahead of it. In a list kept on a
+/// server both go there: the copy as a new task, the task as its DUE,
+/// DTSTART and RRULE (a count is what is left). When the series is over,
+/// the task is simply completed. `None` for a task that does not repeat:
+/// the caller completes it as any other.
+pub fn complete_occurrence(conn: &Connection, id: i64, now: i64) -> Result<Option<Completed>> {
+    let row: Option<(String, Option<i64>, Option<i64>, Option<i64>)> = conn
+        .query_row(
+            "SELECT rrule, due_at, reminder_at, completed_at FROM tasks
+              WHERE id = ?1 AND pending <> 'delete' AND thread_key = ''",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .optional()?;
+    let Some((rrule, Some(due), reminder, None)) = row else { return Ok(None) };
+    let Some(rule) = recurrence_of(&rrule) else { return Ok(None) };
+    check_editable(conn, id)?;
+    let tx = conn.unchecked_transaction()?;
+    let Some(next) = recurrence::next_local(&rule, due) else {
+        // The last occurrence: the series is done, and so is the task.
+        tx.execute("UPDATE tasks SET completed_at = ?2, revision = revision + 1 WHERE id = ?1", params![id, now])?;
+        touched(&tx, id)?;
+        tx.commit()?;
+        return Ok(Some(Completed { next_due: None, record: None }));
+    };
+    tx.execute(
+        "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at, list_id, title, priority,
+                           reminder_at, reminded_at, completed_at)
+         SELECT '', '', '', note, due_at, ?2, list_id, title, priority, reminder_at, COALESCE(reminded_at, ?2), ?2
+           FROM tasks WHERE id = ?1",
+        params![id, now],
+    )?;
+    let record = tx.last_insert_rowid();
+    touched(&tx, record)?;
+    let (day, all_day) = due_day(next).unwrap_or_default();
+    let rule = recurrence::advanced(&rule);
+    let rrule = recurrence::format(&recurrence::anchored(&rule, day), day, all_day);
+    tx.execute(
+        "UPDATE tasks SET due_at = ?2, reminder_at = ?3, reminded_at = NULL, rrule = ?4, revision = revision + 1
+          WHERE id = ?1",
+        params![id, next, reminder.map(|at| at + (next - due)), rrule],
+    )?;
+    touched(&tx, id)?;
+    tx.commit()?;
+    Ok(Some(Completed { next_due: Some(next), record: Some(record) }))
+}
+
+/// Ends a task's repetition and completes it: "stop repeating" (ADR-0053).
+/// The occurrences already done keep their records; the task becomes an
+/// ordinary completed task, which reopened does not repeat.
+pub fn stop_repeating(conn: &Connection, id: i64, now: i64) -> Result<()> {
+    check_editable(conn, id)?;
+    let changed = conn.execute(
+        "UPDATE tasks SET rrule = '', completed_at = COALESCE(completed_at, ?2), revision = revision + 1
+          WHERE id = ?1 AND pending <> 'delete'",
+        params![id, now],
+    )?;
+    if changed == 0 {
+        bail!("this task no longer exists");
+    }
+    touched(conn, id)?;
+    Ok(())
+}
+
+/// Completes a task, or reopens it (`tasks.setCompleted`). A repeating task
+/// completes its present occurrence and moves on, unless `stop` asks to end
+/// its repetition and complete it for good (ADR-0053).
+pub fn set_completed(conn: &Connection, id: i64, completed: bool, stop: bool, now: i64) -> Result<Completed> {
+    let done = Completed { next_due: None, record: None };
+    if completed && stop {
+        stop_repeating(conn, id, now)?;
+        return Ok(done);
+    }
+    if completed {
+        if let Some(outcome) = complete_occurrence(conn, id, now)? {
+            return Ok(outcome);
+        }
+    }
+    crate::store::set_task_completed(conn, id, completed, now)?;
+    Ok(done)
 }
 
 /// Open tasks whose reminder time has come and which have not rung yet.

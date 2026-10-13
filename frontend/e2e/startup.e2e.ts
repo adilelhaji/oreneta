@@ -178,15 +178,24 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
             completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
             list_id: 'list:home', title: 'Fix the tap', priority: 2, reminder_at: null, revision: 1,
           },
+          {
+            id: 3, thread_id: '', account_id: '', folder_id: '', note: '', due_at: 1760000000,
+            completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+            list_id: 'list:home', title: 'Water the plants', priority: 1, reminder_at: null, revision: 1,
+            recurrence: { freq: 'weekly', interval: 1, weekdays: [1] },
+          },
         ],
       }
       replies['tasks.get'] = {
         title: 'Fix the tap', note: 'Washer is in the drawer', due_at: null, list_id: 'list:home',
         priority: 2, reminder_at: null, revision: 1, linked: false,
+        recurrence: { freq: 'monthly', interval: 1, weekdays: [], month_week: null },
       }
     })
     await page.getByTitle('Tasks', { exact: true }).click()
     await expect(page.getByText('Fix the tap')).toBeVisible()
+    // A repeating task says how it repeats, and completing it asks (ADR-0053).
+    await expect(page.getByText('Every week')).toBeVisible()
     await audit('tasks')
     await page.getByText('Fix the tap').click()
     await expect(page.getByRole('dialog')).toBeVisible()
@@ -194,6 +203,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       body: await page.screenshot({ path: info.outputPath('task-editor.png'), animations: 'disabled' }),
       contentType: 'image/png',
     })
+    await expect(page.getByLabel('Repeats')).toHaveValue('monthly')
     await audit('task-editor')
     await page.keyboard.press('Escape')
     // Notes: the list with a tagged, pinned note and that note open (ADR-0015).
@@ -1212,6 +1222,9 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         },
         'people.list': { people: [] },
         'people.duplicates': { groups: [] },
+        // Contact groups and the book's names for nameless senders (ADR-0052).
+        'people.groups': { groups: [] },
+        'people.names': { names: {} },
         'calendar.list': { calendars: [] },
         'storage.usage': { cacheBytes: 0, dbBytes: 0 },
         'oof.get': { kind: 'imap', settings: { enabled: false, startAt: 0, endAt: 0, subject: '', body: '' } },
@@ -1265,6 +1278,30 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           backups: [],
           password_saved: false,
           running: false,
+        },
+        // Automatic archiving (ADR-0054): off, as a fresh account has it.
+        'autoArchive.status': {
+          policy: {
+            enabled: false,
+            older_than: { value: 6, unit: 'months' },
+            folders: [{ name: 'INBOX', older_than: null }],
+            destination: 'server',
+            keep_server_copy: false,
+            include_starred: false,
+            include_unread: false,
+          },
+          confirmed: false,
+          last_attempt: null,
+          last_success: null,
+          last_error: null,
+          next_run: null,
+          running: false,
+          local_supported: true,
+          folders: [
+            { name: 'INBOX', display_name: 'INBOX', refused: null },
+            { name: 'Drafts', display_name: 'Drafts', refused: 'drafts' },
+          ],
+          runs: [],
         },
         'chat.accounts': [],
         'chat.status': {},
@@ -2114,6 +2151,57 @@ test('editing an existing account preserves its identity and stored password', a
   expect(errors).toEqual([])
 })
 
+// ADR-0054: nothing is archived automatically until the preview of what
+// would move has been shown and confirmed; the confirmation carries the
+// preview's fingerprint to the core.
+test('automatic archiving turns on only after its preview is confirmed', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { existingEmail: 'alex@intranet' })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    const status = structuredClone(replies['autoArchive.status'])
+    replies['autoArchive.preview'] = {
+      account: 'x',
+      destination: 'server',
+      target: 'Archive',
+      total: 12,
+      fingerprint: 'e2e-print',
+      folders: [{ folder: 'INBOX', cutoff: 1_760_000_000, target: 'Archive', count: 12, oldest: 1, newest: 2 }],
+    }
+    replies['autoArchive.save'] = {
+      ...status,
+      policy: { ...status.policy, enabled: true },
+      confirmed: true,
+      next_run: 0,
+    }
+  })
+  await page.keyboard.press('Control+,')
+  await page
+    .getByRole('navigation')
+    .filter({ has: page.getByRole('button', { name: 'General', exact: true }) })
+    .getByRole('button', { name: /Alex · Demo/ })
+    .click()
+  const group = page.locator('[data-settings-section="autoArchive"]')
+  await expect(group.getByRole('checkbox', { name: 'Drafts' })).toBeDisabled()
+  await group.getByRole('checkbox', { name: 'Archive old messages automatically' }).check()
+  await expect(group.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
+  await expect(group.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled()
+  await group.getByRole('button', { name: 'Preview…', exact: true }).click()
+  await expect(group.getByRole('region', { name: 'What will be archived' })).toContainText('12 messages would be archived now.')
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('autoArchive.save'))).toBe(false)
+  await group.getByRole('button', { name: 'Confirm and turn on', exact: true }).click()
+  await expect(group.getByRole('button', { name: 'Run now', exact: true })).toBeEnabled()
+  const saves = await page.evaluate(() =>
+    (window as any).startupProbe.requests.filter((r: { command: string }) => r.command === 'autoArchive.save'),
+  )
+  expect(saves).toHaveLength(1)
+  expect(saves[0].payload).toMatchObject({ confirm: 'e2e-print', policy: { enabled: true, folders: [{ name: 'INBOX' }] } })
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('autoArchive.runNow'))).toBe(false)
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('production shell navigates settings, people, tasks and composer without hook errors', async ({ page }) => {
   const errors = await prepareStartup(page, true)
   await page.goto('/')
@@ -2477,6 +2565,75 @@ test('folder favorites, colors and a keyboard move', async ({ page }) => {
   await expect(
     nav.getByRole('region', { name: 'Favorites' }).getByRole('button', { name: 'Clients Color: Teal 1', exact: true }),
   ).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// SET-19 (ADR-0052): the reader's name order in the address book, a group as a
+// filter and as a list to change, and a group expanded in the composer — all
+// under the production CSP.
+test('contact names and groups in the address book and the composer', async ({ page }) => {
+  await page.addInitScript(() => {
+    const prefs = JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')
+    sessionStorage.setItem(
+      'synthetic-prefs',
+      JSON.stringify({ ...prefs, contact_name_display: 'last_comma_first', contact_name_sort: 'last' }),
+    )
+  })
+  const errors = await prepareStartup(page, true)
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    const person = (id: string, given: string, family: string, addr: string) => ({
+      id, source: 'local', account: '', book: 'local', name: `${given} ${family}`, given, family,
+      organisation: '', note: '', photo: '', emails: [{ addr, label: '' }], phones: [], version: '1', editable: true,
+    })
+    replies['people.list'] = {
+      people: [
+        person('local::local:c', 'Charles', 'Babbage', 'charles@example.test'),
+        person('local::local:a', 'Ada', 'Lovelace', 'ada@example.test'),
+        person('local::local:z', 'Zed', 'Abbot', 'zed@example.test'),
+      ],
+    }
+    replies['people.groups'] = {
+      groups: [
+        {
+          id: 'group:local::local:g', source: 'local', account: '', book: 'local', name: 'Engines', version: '3',
+          editable: true,
+          members: [
+            { id: 'local::local:a', name: 'Ada Lovelace', given: 'Ada', family: 'Lovelace', addr: 'ada@example.test' },
+            { id: 'local::local:c', name: 'Charles Babbage', given: 'Charles', family: 'Babbage', addr: 'charles@example.test' },
+          ],
+        },
+      ],
+    }
+    replies['people.groupSave'] = { ok: true, id: 'group:local::local:g', version: '4' }
+  })
+  await page.getByTitle('People', { exact: true }).click()
+  const list = page.getByRole('listbox', { name: 'People' })
+  await expect(list.getByRole('option')).toHaveText([/Abbot, Zed/, /Babbage, Charles/, /Lovelace, Ada/])
+  await page.getByLabel('Show group').selectOption({ label: 'Engines (2)' })
+  await expect(list.getByRole('option')).toHaveCount(2)
+  await list.getByRole('option', { name: /Lovelace, Ada/ }).click()
+  await expect(page.getByRole('heading', { name: 'Lovelace, Ada' })).toBeVisible()
+  await page.getByRole('button', { name: 'Remove from Engines' }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).startupProbe.requests.find((r: any) => r.command === 'people.groupSave')?.payload),
+    )
+    .toEqual({ id: 'group:local::local:g', version: '3', name: 'Engines', members: ['local::local:c'] })
+
+  // Back to the mail, then a new message.
+  await page.getByTitle('People', { exact: true }).click()
+  await page.keyboard.press('Control+n')
+  await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+  const to = page.getByPlaceholder('recipient@example.com')
+  await to.fill('engi')
+  await expect(page.getByText('group, 2 people')).toBeVisible()
+  await to.press('Enter')
+  await expect(page.getByText('Lovelace, Ada', { exact: true })).toBeVisible()
+  await expect(page.getByText('Babbage, Charles', { exact: true })).toBeVisible()
   expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
   expect(errors).toEqual([])
 })

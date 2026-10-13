@@ -993,7 +993,7 @@ fn parse_rrule(line: &str) -> Option<super::Recurrence> {
         interval: interval.max(1),
         weekdays,
         until,
-        count,
+        count, month_week: None, month_day: None,
     })
 }
 
@@ -1427,7 +1427,7 @@ mod tests {
             interval: 1,
             weekdays: vec![1],
             until: None,
-            count: None,
+            count: None, month_week: None, month_day: None,
         });
         update_event("token", &occurrence, false, false).unwrap();
         let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].body).unwrap();
@@ -1511,6 +1511,7 @@ mod tests {
                     .timestamp()
             }),
             count: None,
+            ..Default::default()
         };
         let line = rrule(&fortnightly, start, false).expect("rrule");
         assert!(line.starts_with("RRULE:FREQ=WEEKLY"), "{line}");
@@ -1527,7 +1528,7 @@ mod tests {
             interval: 1,
             weekdays: vec![],
             until: None,
-            count: Some(10),
+            count: Some(10), month_week: None, month_day: None,
         };
         let line = rrule(&ten_days, start, false).expect("rrule");
         assert_eq!(line, "RRULE:FREQ=DAILY;COUNT=10");
@@ -1538,7 +1539,7 @@ mod tests {
             interval: 1,
             weekdays: vec![],
             until: None,
-            count: None,
+            count: None, month_week: None, month_day: None,
         };
         assert_eq!(rrule(&weekly, start, false).expect("rrule"), "RRULE:FREQ=WEEKLY;BYDAY=TH");
     }
@@ -1556,7 +1557,7 @@ mod tests {
                 .unwrap()
                 .timestamp()
         };
-        let weekly = |until| Recurrence { freq: Frequency::Weekly, interval: 1, weekdays: vec![], until, count: None };
+        let weekly = |until| Recurrence { freq: Frequency::Weekly, interval: 1, weekdays: vec![], until, count: None, ..Default::default() };
         // Tuesday 13 October 2026 at 00:30 on this machine's clock: east of
         // UTC that is still Monday in UTC, and was saved as every Monday.
         let line = rrule(&weekly(None), local(2026, 10, 13, 0, 30), false).unwrap();

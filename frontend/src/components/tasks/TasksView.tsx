@@ -27,6 +27,7 @@ import {
   loadTaskLists,
   loadTasks,
   renameTaskList,
+  repeats,
   resolveTaskConflict,
   setTaskCompleted,
   syncTaskLists,
@@ -42,6 +43,7 @@ import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { CalDavTaskListDialog } from './CalDavTaskListDialog'
+import { describeRecurrence } from '../calendar/RepeatFields'
 
 const DUE_TONE: Record<ReturnType<typeof dueStatus>, string> = {
   overdue: 'text-danger ',
@@ -88,6 +90,9 @@ export function TasksView() {
   const search = useValue(tasks$.search)
   const [newList, setNewList] = useState<string | null>(null)
   const [addingCalDav, setAddingCalDav] = useState(false)
+  // A repeating task whose check box was pressed: completing it asks whether
+  // this occurrence is done or the repetition is over (ADR-0053).
+  const [choosing, setChoosing] = useState<number | null>(null)
   const syncing = useValue(tasks$.syncing)
   const listsById = new Map(lists.map((list) => [list.id, list]))
 
@@ -307,9 +312,11 @@ export function TasksView() {
                     type="button"
                     title={done ? t('tasks.markNotDone') : t('tasks.markDone')}
                     aria-label={done ? t('tasks.markNotDone') : t('tasks.markDone')}
+                    aria-expanded={repeats(task) ? choosing === task.id : undefined}
                     onClick={(event) => {
                       event.stopPropagation()
-                      void setTaskCompleted(task.id, !done)
+                      if (repeats(task)) setChoosing(choosing === task.id ? null : task.id)
+                      else void setTaskCompleted(task.id, !done)
                     }}
                     className={clsx(
                       'flex h-8 w-8 shrink-0 items-center justify-center rounded-control border transition-colors cursor-pointer',
@@ -348,6 +355,13 @@ export function TasksView() {
                     </span>
                     <span className="flex flex-wrap items-center gap-3">
                       {!done && task.due_at && <DueChip dueAt={task.due_at} />}
+                      {task.recurrence && !done && (
+                        <span className="flex items-center gap-1 text-2xs text-secondary">
+                          <Repeat size={12} strokeWidth={1.75} aria-hidden="true" />
+                          <span className="sr-only">{t('tasks.repeats', { defaultValue: 'Repeats' })}: </span>
+                          {describeRecurrence(task.recurrence, t)}
+                        </span>
+                      )}
                       {task.recurring && (
                         <span className="flex items-center gap-1 text-2xs text-secondary">
                           <Repeat size={12} strokeWidth={1.75} aria-hidden="true" />
@@ -391,6 +405,15 @@ export function TasksView() {
                   >
                     <Trash2 size={14} strokeWidth={1.75} />
                   </button>
+                  {choosing === task.id && repeats(task) && (
+                    <CompleteChoice
+                      onChoose={(stopRepeating) => {
+                        setChoosing(null)
+                        void setTaskCompleted(task.id, true, { stopRepeating })
+                      }}
+                      onCancel={() => setChoosing(null)}
+                    />
+                  )}
                   {task.conflict && <ConflictBar task={task} />}
                 </li>
               )
@@ -398,6 +421,34 @@ export function TasksView() {
           </ul>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Completing a repeating task: this occurrence, or the whole series. */
+function CompleteChoice({ onChoose, onCancel }: { onChoose: (stopRepeating: boolean) => void; onCancel: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div
+      role="group"
+      aria-label={t('tasks.completeRepeating', { defaultValue: 'Complete a repeating task' })}
+      className="flex basis-full flex-wrap items-center gap-2 rounded-control bg-raised px-2.5 py-1.5 text-caption text-primary"
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <Repeat size={14} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />
+        {t('tasks.completeRepeatingText', {
+          defaultValue: 'This task repeats. Complete only this occurrence, or stop repeating and complete it for good.',
+        })}
+      </span>
+      <Button variant="primary" size="sm" onClick={() => onChoose(false)}>
+        {t('tasks.completeOccurrence', { defaultValue: 'Complete this occurrence' })}
+      </Button>
+      <Button variant="secondary" size="sm" onClick={() => onChoose(true)}>
+        {t('tasks.stopRepeating', { defaultValue: 'Stop repeating' })}
+      </Button>
+      <Button variant="ghost" size="sm" onClick={onCancel}>
+        {t('buttons.cancel')}
+      </Button>
     </div>
   )
 }

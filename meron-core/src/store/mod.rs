@@ -49,6 +49,7 @@ mod accounts;
 pub mod local_people;
 pub mod task_lists;
 pub mod person_links;
+pub mod contact_groups;
 pub mod notes;
 pub mod note_attachments;
 pub mod attachment_list;
@@ -1189,6 +1190,13 @@ pub struct Contact {
     /// Where they work, when a book said so.
     #[serde(default)]
     pub organisation: String,
+    /// Given and family names, when a book keeps them apart, so the
+    /// interface can order them as the reader chose (ADR-0052). Empty for an
+    /// address seen in mail: a header's name is shown as it was written.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub given: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub family: String,
 }
 
 /// Address-book matches for recipient autocomplete.
@@ -1200,7 +1208,7 @@ pub fn suggest_from_book(conn: &Connection, query: &str, limit: u32) -> Result<V
     let needle = query.trim().to_lowercase();
     let like = format!("%{}%", escape_like(needle.clone()));
     let mut stmt = conn.prepare(
-        "SELECT p.name, e.addr, p.organisation
+        "SELECT p.name, e.addr, p.organisation, p.given, p.family
            FROM person_emails e JOIN people p ON p.id = e.person_id
           WHERE ?1 = ''
              OR lower(p.name) LIKE ?2 ESCAPE '\\'
@@ -1215,6 +1223,8 @@ pub fn suggest_from_book(conn: &Connection, query: &str, limit: u32) -> Result<V
             addr: row.get(1)?,
             known: true,
             organisation: row.get(2)?,
+            given: row.get(3)?,
+            family: row.get(4)?,
         })
     })?;
     Ok(rows.flatten().collect())
@@ -1338,6 +1348,8 @@ pub fn suggest_contacts(
             addr: tally.addr,
             known: false,
             organisation: String::new(),
+            given: String::new(),
+            family: String::new(),
         });
     }
     merged.truncate(limit as usize);
@@ -2446,6 +2458,8 @@ pub struct TaskCard {
     pub pending: String,
     pub conflict: String,
     pub recurring: bool,
+    /// ADR-0053: how it repeats, as an RRULE value; empty when it does not.
+    pub rrule: String,
 }
 
 /// Creates a task on this conversation, or edits the one already open on it.
@@ -2488,6 +2502,10 @@ pub fn save_task(
 /// honest answer here, not a case to paper over.
 pub fn set_task_completed(conn: &Connection, id: i64, completed: bool, now: i64) -> Result<()> {
     task_lists::check_editable(conn, id)?;
+    // A repeating task completes one occurrence and moves on (ADR-0053).
+    if completed && task_lists::complete_occurrence(conn, id, now)?.is_some() {
+        return Ok(());
+    }
     let completed_at: Option<i64> = completed.then_some(now);
     let changed = match conn.execute(
         "UPDATE tasks SET completed_at = ?2 WHERE id = ?1 AND pending <> 'delete'",
@@ -2573,7 +2591,7 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
                 t.completed_at, t.created_at,
                 COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_addr, ''),
                 m.id IS NOT NULL, t.list_id, t.title, t.priority, t.reminder_at, t.revision,
-                t.pending, t.conflict, t.recurring
+                t.pending, t.conflict, t.recurring, t.rrule
            FROM (SELECT task.*, COALESCE(
                    (SELECT m2.id FROM messages m2
                      WHERE m2.account = task.account AND m2.folder = task.folder
@@ -2610,6 +2628,7 @@ pub fn list_tasks(conn: &Connection, include_completed: bool) -> Result<Vec<Task
             pending: row.get(17)?,
             conflict: row.get(18)?,
             recurring: row.get(19)?,
+            rrule: row.get(20)?,
         })
     })?;
     // A row that cannot be read is an error to report, not a task to drop
@@ -2801,8 +2820,8 @@ pub fn replace_book_rows(conn: &Connection, origin: &BookOrigin, people: &[Synce
     {
         let mut person_stmt = tx.prepare(
             "INSERT OR REPLACE INTO people
-               (id, source, account, book, uid, name, organisation, note, photo, updated, href, version)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+               (id, source, account, book, uid, name, organisation, note, photo, updated, href, version, given, family)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         )?;
         let mut email_stmt = tx.prepare(
             "INSERT OR REPLACE INTO person_emails(person_id, addr, label, position)
@@ -2837,6 +2856,8 @@ pub fn replace_book_rows(conn: &Connection, origin: &BookOrigin, people: &[Synce
                 now,
                 row.href,
                 row.version,
+                person.given,
+                person.family,
             ])?;
             for (position, email) in person.emails.iter().enumerate() {
                 email_stmt.execute(params![id, email.addr, email.label, position as i64])?;
@@ -2864,7 +2885,7 @@ pub struct SyncedPerson {
 pub fn synced_person(conn: &Connection, id: &str) -> Result<Option<SyncedPerson>> {
     let row = conn
         .query_row(
-            "SELECT source, account, book, uid, name, organisation, note, href, version
+            "SELECT source, account, book, uid, name, organisation, note, href, version, given, family
                FROM people WHERE id = ?1",
             params![id],
             |row| {
@@ -2873,6 +2894,8 @@ pub fn synced_person(conn: &Connection, id: &str) -> Result<Option<SyncedPerson>
                     person: crate::contacts::person::Person {
                         uid: row.get(3)?,
                         name: row.get(4)?,
+                        given: row.get(9)?,
+                        family: row.get(10)?,
                         organisation: row.get(5)?,
                         note: row.get(6)?,
                         ..Default::default()
@@ -2903,8 +2926,8 @@ pub fn put_synced_person(conn: &Connection, origin: &BookOrigin, row: &SyncedRow
     tx.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
     tx.execute(
         "INSERT OR REPLACE INTO people
-           (id, source, account, book, uid, name, organisation, note, photo, updated, href, version)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+           (id, source, account, book, uid, name, organisation, note, photo, updated, href, version, given, family)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             id,
             origin.source,
@@ -2917,7 +2940,9 @@ pub fn put_synced_person(conn: &Connection, origin: &BookOrigin, row: &SyncedRow
             photo,
             now,
             row.href,
-            row.version
+            row.version,
+            row.person.given,
+            row.person.family
         ],
     )?;
     for (position, email) in row.person.emails.iter().enumerate() {
@@ -2941,6 +2966,7 @@ pub fn forget_person(conn: &Connection, id: &str) -> Result<()> {
     person_links::unlink(conn, id)?;
     conn.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
     conn.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
+    conn.execute("DELETE FROM contact_group_members WHERE person_id = ?1", params![id])?;
     conn.execute("DELETE FROM people WHERE id = ?1", params![id])?;
     Ok(())
 }
@@ -3025,7 +3051,7 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
     let needle = query.trim().to_lowercase();
     let like = format!("%{}%", escape_like(needle.clone()));
     let mut stmt = conn.prepare(
-        "SELECT id, source, account, book, uid, name, organisation, note, photo, version
+        "SELECT id, source, account, book, uid, name, organisation, note, photo, version, given, family
            FROM people
           WHERE ?1 = ''
              OR lower(name) LIKE ?2 ESCAPE '\\'
@@ -3045,6 +3071,8 @@ pub fn find_people(conn: &Connection, query: &str, limit: u32) -> Result<Vec<Sto
             person: crate::contacts::person::Person {
                 uid: row.get(4)?,
                 name: row.get(5)?,
+                given: row.get(10)?,
+                family: row.get(11)?,
                 organisation: row.get(6)?,
                 note: row.get(7)?,
                 emails: Vec::new(),
@@ -3167,6 +3195,7 @@ pub fn delete_contact_source(conn: &Connection, id: &str) -> Result<()> {
         book: source.id.clone(),
     };
     replace_book(conn, &origin, &[], 0)?;
+    contact_groups::forget_book(conn, &origin)?;
     conn.execute("DELETE FROM contact_sources WHERE id = ?1", params![id])?;
     Ok(())
 }

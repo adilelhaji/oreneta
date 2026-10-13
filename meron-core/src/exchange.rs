@@ -1872,7 +1872,7 @@ fn from_ews_recurrence(rule: &::ews::Recurrence) -> Option<crate::calendar::Recu
         interval: interval.max(1),
         weekdays,
         until,
-        count,
+        count, month_week: None, month_day: None,
     })
 }
 
@@ -2784,7 +2784,7 @@ mod tests {
                 interval: 2,
                 weekdays: vec![1, 3],
                 until: Some(start + 60 * 24 * 3600),
-                count: None,
+                count: None, month_week: None, month_day: None,
                 }),
             ..Default::default()
         };

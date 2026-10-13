@@ -62,6 +62,33 @@ pub(crate) fn migrate(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Repeating tasks (ADR-0053): the rule each task follows, as an RRULE
+/// value. Tasks read from a server before this were all marked as not
+/// editable here; each is read again from the copy kept, so the ones whose
+/// rule the editor writes become editable without waiting for a change on
+/// the server.
+pub(crate) fn migrate_recurrence(conn: &Connection) -> Result<()> {
+    let has = conn.prepare("SELECT 1 FROM pragma_table_info('tasks') WHERE name = 'rrule'")?.exists([])?;
+    if !has {
+        conn.execute_batch("ALTER TABLE tasks ADD COLUMN rrule TEXT NOT NULL DEFAULT ''")?;
+    }
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, remote_ics FROM tasks WHERE recurring = 1 AND remote_ics <> ''")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    for (id, ics) in rows {
+        // A copy that cannot be read stays as it was: read-only.
+        if let Ok(todo) = vtodo::parse(&ics) {
+            conn.execute(
+                "UPDATE tasks SET recurring = ?2, rrule = ?3 WHERE id = ?1",
+                params![id, todo.recurring, todo.fields.rrule],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// The collections a server offers. Every calendar collection is listed:
 /// which ones accept tasks is not asked of the server here, and one that
 /// does not is reported by the first sync.
@@ -175,7 +202,7 @@ struct Pending {
 fn queue(conn: &Connection, list_id: &str) -> Result<Vec<Pending>> {
     let mut stmt = conn.prepare(
         "SELECT id, title, note, due_at, priority, completed_at, reminder_at, remote_href, remote_etag, remote_ics,
-                pending, recurring, sync_seq
+                pending, recurring, sync_seq, rrule
            FROM tasks WHERE list_id = ?1 AND pending <> '' ORDER BY id",
     )?;
     let rows = stmt.query_map(params![list_id], |row| {
@@ -188,6 +215,7 @@ fn queue(conn: &Connection, list_id: &str) -> Result<Vec<Pending>> {
                 priority: row.get(4)?,
                 completed_at: row.get(5)?,
                 reminder_at: row.get(6)?,
+                rrule: row.get(13)?,
             },
             href: row.get(7)?,
             etag: row.get(8)?,
@@ -288,10 +316,23 @@ fn take_server_copy(conn: &Connection, id: i64, object: &Object, todo: &vtodo::T
         "UPDATE tasks SET title = ?2, note = ?3, due_at = ?4, priority = ?5, completed_at = ?6,
                 reminded_at = CASE WHEN reminder_at IS ?7 THEN reminded_at
                                    WHEN ?7 IS NOT NULL AND ?7 <= ?11 THEN ?11 ELSE NULL END,
-                reminder_at = ?7, remote_etag = ?8, remote_ics = ?9, recurring = ?10,
+                reminder_at = ?7, remote_etag = ?8, remote_ics = ?9, recurring = ?10, rrule = ?12,
                 pending = '', conflict = '', revision = revision + 1
           WHERE id = ?1",
-        params![id, f.title, f.note, f.due_at, f.priority, f.completed_at, f.reminder_at, object.etag, object.ics, todo.recurring, now],
+        params![
+            id,
+            f.title,
+            f.note,
+            f.due_at,
+            f.priority,
+            f.completed_at,
+            f.reminder_at,
+            object.etag,
+            object.ics,
+            todo.recurring,
+            now,
+            f.rrule
+        ],
     )?;
     Ok(())
 }
@@ -301,8 +342,8 @@ fn insert_server_copy(conn: &Connection, list_id: &str, object: &Object, todo: &
     let reminded = f.reminder_at.filter(|at| *at <= now).map(|_| now);
     conn.execute(
         "INSERT INTO tasks(account, thread_key, folder, note, due_at, created_at, list_id, title, priority,
-                           reminder_at, reminded_at, completed_at, remote_href, remote_etag, remote_ics, recurring)
-         VALUES('', '', '', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                           reminder_at, reminded_at, completed_at, remote_href, remote_etag, remote_ics, recurring, rrule)
+         VALUES('', '', '', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             f.note,
             f.due_at,
@@ -316,7 +357,8 @@ fn insert_server_copy(conn: &Connection, list_id: &str, object: &Object, todo: &
             object.href,
             object.etag,
             object.ics,
-            todo.recurring
+            todo.recurring,
+            f.rrule
         ],
     )?;
     Ok(())

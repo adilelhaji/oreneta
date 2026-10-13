@@ -36,6 +36,9 @@ data class PersonSummary(
     val editable: Boolean = false,
     /** The reader's link to the same person in other books, if any. */
     val link: String? = null,
+    /** Given and family names, when the book keeps them apart (ADR-0052). */
+    val given: String = "",
+    val family: String = "",
 )
 
 /** The fields an edit sends, as the core's `PersonInput` reads them. */
@@ -158,6 +161,8 @@ private fun parsePerson(json: String): PersonSummary? {
         version = entries.string("version").orEmpty(),
         editable = entries.bool("editable") ?: false,
         link = entries.string("link")?.takeIf { it.isNotBlank() },
+        given = entries.string("given").orEmpty(),
+        family = entries.string("family").orEmpty(),
     )
 }
 

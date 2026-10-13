@@ -8,11 +8,14 @@ import {
   Mail,
   Pencil,
   Phone,
+  Plus,
   Search,
   SquarePen,
   Trash2,
   Upload,
   UserPlus,
+  Users,
+  X,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -27,13 +30,19 @@ import {
   loadPeople,
   people$,
   collapseLinked,
+  deleteGroup,
+  groupRecipients,
+  groupsFor,
   loadDuplicates,
+  loadGroups,
+  setMembership,
   sourceLabel,
   startVcfImport,
   unlinkPerson,
 } from '../../states/people'
 import { confirmAction, showToast, ui$ } from '../../states/ui'
-import type { Person } from '../../types'
+import { useContactNames } from '../../states/contactNames'
+import type { ContactGroup, Person } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { EmptyState } from '../empty-state/EmptyState'
 import { LoadingState } from '../empty-state/StateViews'
@@ -43,6 +52,7 @@ import { Button } from '../button/Button'
 import { PersonEditor } from './PersonEditor'
 import { VcfImportDialog } from './VcfImportDialog'
 import { DuplicatesDialog } from './DuplicatesDialog'
+import { GroupDialog } from './GroupDialog'
 
 /**
  * The address book, as a place rather than as a dropdown.
@@ -61,8 +71,14 @@ import { DuplicatesDialog } from './DuplicatesDialog'
 export function PeopleView() {
   const { t } = useTranslation()
   const everyone = useValue(people$.people)
-  // People linked as one show once (ADR-0012).
-  const people = collapseLinked(everyone)
+  const groups = useValue(people$.groups)
+  const groupFilter = useValue(people$.groupFilter)
+  const names = useContactNames()
+  const shownGroup = groups.find((group) => group.id === groupFilter) ?? null
+  // People linked as one show once (ADR-0012), in the reader's name order,
+  // and only the chosen group's when one is chosen (ADR-0052).
+  const memberIds = shownGroup ? new Set(shownGroup.members.map((member) => member.id)) : null
+  const people = names.sorted(collapseLinked(everyone).filter((person) => !memberIds || memberIds.has(person.id)))
   const duplicates = useValue(people$.duplicates)
   const loaded = useValue(people$.loaded)
   const loading = useValue(people$.loading)
@@ -78,6 +94,7 @@ export function PeopleView() {
   }, [loaded])
   useEffect(() => {
     void loadDuplicates()
+    void loadGroups()
   }, [])
 
   // Searching re-asks the core rather than filtering what is loaded: the list
@@ -106,16 +123,53 @@ export function PeopleView() {
     openComposeTab({ accountId: from.id, to: person.name ? `${person.name} <${addr}>` : addr })
   }
 
+  // Everyone in the shown group who has an address, from whichever account
+  // can send.
+  const writeToGroup = (group: ContactGroup) => {
+    const from = accounts.find(isSendableAccount)
+    const recipients = groupRecipients(group)
+    if (!from || recipients.length === 0) return
+    ui$.peopleOpen.set(false)
+    openComposeTab({
+      accountId: from.id,
+      to: recipients
+        .map((member) => (member.name ? `"${member.name.replace(/"/g, '')}" <${member.addr}>` : member.addr))
+        .join(', '),
+    })
+  }
+
+  const removeGroup = async (group: ContactGroup) => {
+    const confirmed = await confirmAction({
+      title: t('people.deleteGroupTitle', { defaultValue: 'Delete group?' }),
+      message:
+        group.source === 'carddav'
+          ? t('people.deleteGroupTextServer', {
+              name: group.name,
+              defaultValue: 'The group {name} will be deleted from the address book on its server. The people in it stay.',
+            })
+          : t('people.deleteGroupText', {
+              name: group.name,
+              defaultValue: 'The group {name} will be deleted. The people in it stay.',
+            }),
+      confirmLabel: t('buttons.delete'),
+      tone: 'danger',
+    })
+    if (confirmed) await deleteGroup(group)
+  }
+
   const removePerson = async (person: Person) => {
     const confirmed = await confirmAction({
       title: t('people.deleteTitle', { defaultValue: 'Delete contact?' }),
-      message: t('people.deleteText', {
-        name: person.name || person.emails[0]?.addr || '',
-        defaultValue:
-          person.source === 'carddav'
-            ? '{name} will be deleted from the address book on its server, for every app that reads it.'
-            : '{name} will be deleted from the address book on this computer.',
-      }),
+      message:
+        person.source === 'carddav'
+          ? t('people.deleteTextServer', {
+              name: person.name || person.emails[0]?.addr || '',
+              defaultValue: '{name} will be deleted from the address book on its server, for every app that reads it.',
+            })
+          : t('people.deleteText', {
+              name: person.name || person.emails[0]?.addr || '',
+              defaultValue: '{name} will be deleted from the address book on this computer.',
+            }),
       confirmLabel: t('buttons.delete'),
       tone: 'danger',
     })
@@ -173,6 +227,75 @@ export function PeopleView() {
               className="min-w-0 flex-1 bg-transparent text-ui text-primary placeholder-secondary outline-none"
             />
           </div>
+          <div className="flex min-w-0 items-center gap-1">
+            <Users size={14} className="shrink-0 text-secondary" strokeWidth={1.75} aria-hidden="true" />
+            {groups.length > 0 ? (
+              <select
+                value={shownGroup ? shownGroup.id : ''}
+                onChange={(event) => people$.groupFilter.set(event.target.value)}
+                aria-label={t('people.groupFilter', { defaultValue: 'Show group' })}
+                className="min-w-0 flex-1 rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+              >
+                <option value="">{t('people.allContacts', { defaultValue: 'All contacts' })}</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {t('people.groupOption', {
+                      name: group.name,
+                      count: group.members.length,
+                      defaultValue: '{name} ({count})',
+                    })}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-caption text-secondary">
+                {t('people.groupsNone', { defaultValue: 'No groups yet' })}
+              </span>
+            )}
+            <IconButton
+              icon={Plus}
+              iconSize={14}
+              size="sm"
+              label={t('people.newGroup', { defaultValue: 'New group' })}
+              onClick={() => people$.groupEditing.set({ name: '', book: '', members: [] })}
+            />
+            {shownGroup && (
+              <IconButton
+                icon={Mail}
+                iconSize={14}
+                size="sm"
+                label={t('people.writeToGroup', { name: shownGroup.name, defaultValue: 'Write to everyone in {name}' })}
+                disabled={groupRecipients(shownGroup).length === 0}
+                onClick={() => writeToGroup(shownGroup)}
+              />
+            )}
+            {shownGroup?.editable && (
+              <>
+                <IconButton
+                  icon={Pencil}
+                  iconSize={14}
+                  size="sm"
+                  label={t('people.renameGroup', { defaultValue: 'Rename group' })}
+                  onClick={() =>
+                    people$.groupEditing.set({
+                      id: shownGroup.id,
+                      version: shownGroup.version,
+                      name: shownGroup.name,
+                      book: shownGroup.book,
+                      members: shownGroup.members.map((member) => member.id),
+                    })
+                  }
+                />
+                <IconButton
+                  icon={Trash2}
+                  iconSize={14}
+                  size="sm"
+                  label={t('people.deleteGroup', { defaultValue: 'Delete group' })}
+                  onClick={() => void removeGroup(shownGroup)}
+                />
+              </>
+            )}
+          </div>
           {duplicates.length > 0 && (
             <button
               type="button"
@@ -191,8 +314,22 @@ export function PeopleView() {
             <LoadingState title={t('people.loading')} />
           ) : people.length === 0 ? (
             <EmptyState
-              title={query ? t('people.noMatch') : t('people.emptyTitle')}
-              text={query ? t('people.tryAnother') : t('people.emptyText')}
+              title={
+                query
+                  ? t('people.noMatch')
+                  : shownGroup
+                    ? t('people.groupEmpty', { defaultValue: 'Nobody in this group' })
+                    : t('people.emptyTitle')
+              }
+              text={
+                query
+                  ? t('people.tryAnother')
+                  : shownGroup
+                    ? t('people.groupEmptyText', {
+                        defaultValue: 'Open a contact and add them to the group from their card.',
+                      })
+                    : t('people.emptyText')
+              }
             />
           ) : (
             <ul role="listbox" aria-label={t('people.title')}>
@@ -227,7 +364,9 @@ export function PeopleView() {
                         size={34}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-ui font-semibold text-primary">{person.name}</span>
+                        <span className="block truncate text-ui font-semibold text-primary">
+                          {names.format(person)}
+                        </span>
                         {/* On the selected row's tinted background the secondary
                             colour falls just under 4.5:1, so it uses the primary. */}
                         <span
@@ -248,7 +387,7 @@ export function PeopleView() {
       <section
         ref={detailRef}
         tabIndex={-1}
-        aria-label={selected?.name}
+        aria-label={selected ? names.format(selected) : undefined}
         className={clsx(
           'min-h-0 min-w-0 flex-1 flex-col overflow-y-auto min-[769px]:flex',
           selected ? 'flex' : 'hidden',
@@ -271,6 +410,8 @@ export function PeopleView() {
             </div>
             <PersonCard
               person={selected}
+              displayName={names.format(selected)}
+              groups={groups}
               onWrite={(addr) => writeTo(selected, addr)}
               onCopy={copy}
               onEdit={() =>
@@ -300,7 +441,7 @@ export function PeopleView() {
                         onClick={() => people$.selectedId.set(copy.id)}
                         className="min-w-0 flex-1 text-left text-ui text-primary cursor-pointer"
                       >
-                        {copy.name}{' '}
+                        {names.format(copy)}{' '}
                         <span className="text-caption text-secondary">
                           · {t(`people.source.${sourceLabel(copy.source)}`)}
                         </span>
@@ -323,18 +464,23 @@ export function PeopleView() {
       <PersonEditor />
       <VcfImportDialog />
       <DuplicatesDialog />
+      <GroupDialog />
     </div>
   )
 }
 
 function PersonCard({
   person,
+  displayName,
+  groups,
   onWrite,
   onCopy,
   onEdit,
   onDelete,
 }: {
   person: Person
+  displayName: string
+  groups: ContactGroup[]
   onWrite: (addr: string) => void
   onCopy: (text: string) => void
   onEdit: () => void
@@ -342,6 +488,8 @@ function PersonCard({
 }) {
   const { t } = useTranslation()
   const source = sourceLabel(person.source)
+  const memberOf = groups.filter((group) => group.members.some((member) => member.id === person.id))
+  const joinable = groupsFor(person, groups).filter((group) => !memberOf.includes(group))
 
   return (
     <div className="mx-auto w-full max-w-2xl p-4 min-[769px]:p-6">
@@ -353,7 +501,7 @@ function PersonCard({
           size={72}
         />
         <div className="min-w-0 flex-1 basis-40">
-          <h2 className="wrap-anywhere text-heading font-bold text-primary">{person.name}</h2>
+          <h2 className="wrap-anywhere text-heading font-bold text-primary">{displayName}</h2>
           {person.organisation && (
             <p className="mt-1 flex items-start gap-1.5 wrap-anywhere text-ui text-secondary">
               <Building2 size={14} strokeWidth={1.75} /> {person.organisation}
@@ -375,6 +523,51 @@ function PersonCard({
           </div>
         )}
       </header>
+
+      {(memberOf.length > 0 || joinable.length > 0) && (
+        <section className="mt-6" aria-label={t('people.groups', { defaultValue: 'Groups' })}>
+          <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">
+            {t('people.groups', { defaultValue: 'Groups' })}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {memberOf.map((group) => (
+              <span
+                key={group.id}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-chats py-0.5 pl-2.5 pr-1 text-caption text-primary"
+              >
+                <span className="wrap-anywhere">{group.name}</span>
+                {group.editable && (
+                  <IconButton
+                    icon={X}
+                    iconSize={12}
+                    size="sm"
+                    label={t('people.leaveGroup', { name: group.name, defaultValue: 'Remove from {name}' })}
+                    onClick={() => void setMembership(group, person.id, false)}
+                  />
+                )}
+              </span>
+            ))}
+            {joinable.length > 0 && (
+              <select
+                value=""
+                aria-label={t('people.addToGroup', { defaultValue: 'Add to group' })}
+                onChange={(event) => {
+                  const group = joinable.find((candidate) => candidate.id === event.target.value)
+                  if (group) void setMembership(group, person.id, true)
+                }}
+                className="rounded-control-sm border border-border bg-chats px-2 py-1 text-caption text-primary outline-none focus:border-accent"
+              >
+                <option value="">{t('people.addToGroup', { defaultValue: 'Add to group' })}</option>
+                {joinable.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </section>
+      )}
 
       {person.emails.length > 0 && (
         <section className="mt-8">

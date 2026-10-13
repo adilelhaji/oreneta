@@ -41,6 +41,7 @@ import {
   type CalendarPrefs,
   type WeekStartChoice,
 } from '../lib/calendarWeek'
+import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
 
@@ -285,6 +286,13 @@ export type Settings = {
   calendar: CalendarPrefs
   /** Sounds, do not disturb and quiet hours (ADR-0049). One row. */
   notifications: NotificationPrefs
+  /**
+   * Contacts → General (ADR-0052): how names with known parts are written,
+   * and which part lists are ordered by. Flat strings, so the mobile app can
+   * read them too.
+   */
+  contactNameDisplay: NameDisplay
+  contactNameSort: NameSort
 }
 
 /**
@@ -397,6 +405,9 @@ const DB_KEY = {
   calendarWeekStart: 'calendar_week_start',
   calendar: 'calendar_general',
   notifications: 'notification_prefs',
+  // Read by the mobile contacts list too (ContactsModel).
+  contactNameDisplay: 'contact_name_display',
+  contactNameSort: 'contact_name_sort',
 } satisfies Record<keyof Settings, string>
 
 /** Keys to request from `app.prefsGet` on boot. */
@@ -599,6 +610,8 @@ export const settings$ = observable<Settings>({
   calendarWeekStart: 'locale',
   calendar: DEFAULT_CALENDAR_PREFS,
   notifications: structuredClone(DEFAULT_NOTIFICATION_PREFS),
+  contactNameDisplay: 'auto',
+  contactNameSort: 'auto',
 })
 
 // lib/shortcuts resolves chords from a local mirror, so keep it in step with the
@@ -1000,6 +1013,11 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     }
     const calendarPrefs = sanitizeCalendarPrefs(prefs[DB_KEY.calendar])
     if (calendarPrefs) settings$.calendar.set(calendarPrefs)
+
+    const nameDisplay = sanitizeNameDisplay(prefs[DB_KEY.contactNameDisplay])
+    if (nameDisplay) settings$.contactNameDisplay.set(nameDisplay)
+    const nameSort = sanitizeNameSort(prefs[DB_KEY.contactNameSort])
+    if (nameSort) settings$.contactNameSort.set(nameSort)
 
     const hiddenSideNavAccounts = sanitizeStringArray(prefs[DB_KEY.hiddenSideNavAccounts])
     if (hiddenSideNavAccounts) settings$.hiddenSideNavAccounts.set(hiddenSideNavAccounts)

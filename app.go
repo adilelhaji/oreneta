@@ -431,6 +431,11 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.peopleList(payload)
 	case "people.save", "people.delete", "people.duplicates", "people.link", "people.unlink", "people.dismissDuplicate":
 		return a.peopleWrite(command, payload)
+	// Contact groups and the book's names for senders (ADR-0052).
+	case "people.groupSave", "people.groupDelete":
+		return a.peopleWrite(command, payload)
+	case "people.groups", "people.names":
+		return a.peopleRead(command, payload)
 	case "archive.import":
 		return a.archiveImport(payload)
 	case "cloud.pickFile":
@@ -596,6 +601,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		// the people on it, after confirming who (2026-10-12).
 		"invite.notify",
 		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
+		// Automatic archiving by age (ADR-0054): the core previews, keeps the
+		// confirmed policy and runs it.
+		"autoArchive.status", "autoArchive.preview", "autoArchive.save", "autoArchive.runNow",
 		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
 		"notes.attachments", "notes.attach", "notes.removeAttachment",
 		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",

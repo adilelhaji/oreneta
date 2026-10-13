@@ -103,3 +103,34 @@ fn an_import_preview_counts_what_cannot_be_kept_and_refuses_what_is_not_vcard() 
     assert!(already_there(&found.people[0], &existing));
     assert!(!already_there(&Person { name: "Ana".into(), ..Default::default() }, &existing));
 }
+
+#[test]
+fn given_and_family_names_are_read_and_written_as_n() {
+    let read = people_from_vcards(APPLE.as_bytes()).remove(0);
+    assert_eq!((read.given.as_str(), read.family.as_str()), ("Ana", "Prat"));
+    let person = Person { name: "Wang Fang".into(), given: "Fang".into(), family: "Wang".into(), ..Default::default() };
+    let card = new_card(&person, "u-1");
+    assert!(card.contains("N:Wang;Fang;;;\r\n"), "{card}");
+    let back = people_from_vcards(card.as_bytes()).remove(0);
+    assert_eq!((back.given.as_str(), back.family.as_str(), back.name.as_str()), ("Fang", "Wang", "Wang Fang"));
+}
+
+#[test]
+fn changing_the_family_name_keeps_the_rest_of_n() {
+    let card = APPLE.replace("N:Prat;Ana;;;", "N:Prat;Ana;Maria;Dr.;PhD");
+    let mut person = people_from_vcards(card.as_bytes()).remove(0);
+    person.family = "Prat i Soler".into();
+    let patched = patch_card(&card, &person, 0).unwrap();
+    assert!(patched.contains("N:Prat i Soler;Ana;Maria;Dr.;PhD\r\n"), "{patched}");
+    assert!(patched.contains("FN:Ana Prat\r\n"), "the whole name was not changed");
+}
+
+#[test]
+fn a_card_without_n_gets_one_when_its_parts_are_given() {
+    let card = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:x\r\nFN:Kim Min-jun\r\nEND:VCARD\r\n";
+    let mut person = people_from_vcards(card.as_bytes()).remove(0);
+    person.given = "Min-jun".into();
+    person.family = "Kim".into();
+    let patched = patch_card(card, &person, 0).unwrap();
+    assert!(patched.contains("N:Kim;Min-jun;;;\r\n"), "{patched}");
+}

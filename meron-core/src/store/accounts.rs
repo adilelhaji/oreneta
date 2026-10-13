@@ -805,6 +805,12 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("oof_replied", "account"),
     ("contact_sources", "account"),
     ("people", "account"),
+    // Contact groups (ADR-0052); their members go just before.
+    ("contact_groups", "account"),
+    // Automatic archiving's policy, run log and progress (ADR-0054).
+    ("auto_archive_policies", "account"),
+    ("auto_archive_runs", "account"),
+    ("auto_archive_items", "account"),
     // The local archive's original messages (ADR-0014).
     ("archive_messages", "account"),
     ("caldav_objects", "account"),
@@ -863,6 +869,12 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
         .collect();
     tx.execute(
         "DELETE FROM person_links WHERE person_id IN (SELECT id FROM people WHERE account = ?1)",
+        params![id],
+    )?;
+    // A group's members have no account column of their own (ADR-0052).
+    tx.execute(
+        "DELETE FROM contact_group_members WHERE group_id IN (SELECT id FROM contact_groups WHERE account = ?1)
+            OR person_id IN (SELECT id FROM people WHERE account = ?1)",
         params![id],
     )?;
     // A person's addresses and numbers have no account column of their own.

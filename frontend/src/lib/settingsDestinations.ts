@@ -8,12 +8,14 @@ export type SettingsSection =
   | 'signature'
   | 'repliesForwards'
   | 'calendarGeneral'
+  | 'contactsGeneral'
   | 'notifications'
   | 'privacy'
   | 'updates'
   | 'backup'
   | 'account'
   | 'accountSignature'
+  | 'autoArchive'
 export type SettingsDestination = {
   id: string
   section: SettingsSection
@@ -76,6 +78,16 @@ export function settingsDestinations(
         { defaultValue: '' },
       )}`,
     },
+    {
+      id: 'settings.section.contactsGeneral',
+      section: 'contactsGeneral' as const,
+      accountId: '',
+      label: t('settings.sections.contactsGeneral', { defaultValue: 'Contacts' }),
+      keywords: `contacts contact people names name order display first last surname family given sort sorting ${t(
+        'settingsSearch.aliases.contactsGeneral',
+        { defaultValue: '' },
+      )}`,
+    },
     ...accounts.flatMap((account): SettingsDestination[] => {
       const name = account.display_name || account.email
       const item = {
@@ -96,6 +108,24 @@ export function settingsDestinations(
               label: t('settingsSearch.accountSignature', { name }),
               keywords: `${account.email} ${t('settingsSearch.aliases.signature')} signature account`,
             },
+            // Automatic archiving by age (ADR-0054), where the account has a server.
+            ...(account.auth_type === 'pop3' || account.auth_type === 'local_archive' || account.id === 'local-archive'
+              ? []
+              : [
+                  {
+                    id: `settings.autoArchive.${account.id}`,
+                    section: 'autoArchive' as const,
+                    accountId: account.id,
+                    label: t('settingsSearch.autoArchive', {
+                      name,
+                      defaultValue: 'Automatic archiving: {name}',
+                    }),
+                    keywords: `${account.email} archive archiving automatic auto old age older days months cleanup ${t(
+                      'settingsSearch.aliases.autoArchive',
+                      { defaultValue: '' },
+                    )}`,
+                  },
+                ]),
           ]
     }),
   ]

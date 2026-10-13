@@ -142,7 +142,7 @@ internal fun ContactsScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 )
-                val people = remember(ui.people) { collapseLinked(ui.people) }
+                val people = remember(ui.people, ui.nameSort) { sortedForList(collapseLinked(ui.people), ui.nameSort) }
                 when {
                     !ui.loaded && ui.loading -> {
                         LoadingState(tr("people.loading"))
@@ -159,7 +159,7 @@ internal fun ContactsScreen(
                     else -> {
                         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                             items(people, key = { it.id }) { person ->
-                                PersonRow(person, onClick = { ui.selected = person })
+                                PersonRow(person, ui.nameDisplay, onClick = { ui.selected = person })
                             }
                         }
                     }
@@ -171,6 +171,7 @@ internal fun ContactsScreen(
     ui.selected?.let { person ->
         PersonCardDialog(
             person = person,
+            display = ui.nameDisplay,
             onDismiss = { ui.selected = null },
             onEdit = { actions.onEditContact(person) },
             onDelete = { ui.confirmingDelete = person },
@@ -197,7 +198,7 @@ internal fun ContactsScreen(
         AlertDialog(
             onDismissRequest = { ui.confirmingDelete = null },
             title = { Text(tr("people.deleteTitle")) },
-            text = { Text(person.displayLabel()) },
+            text = { Text(person.displayLabel(ui.nameDisplay)) },
             confirmButton = {
                 TextButton(onClick = { actions.onDeleteContact(person) }) {
                     Text(tr("buttons.delete"), color = MaterialTheme.colorScheme.error)
@@ -211,9 +212,10 @@ internal fun ContactsScreen(
 @Composable
 private fun PersonRow(
     person: PersonSummary,
+    display: ContactNameDisplay,
     onClick: () -> Unit,
 ) {
-    val label = person.displayLabel()
+    val label = person.displayLabel(display)
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -246,6 +248,7 @@ private fun PersonRow(
 @Composable
 private fun PersonCardDialog(
     person: PersonSummary,
+    display: ContactNameDisplay,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -255,7 +258,7 @@ private fun PersonCardDialog(
     val editable = person.editableOnMobile()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(person.displayLabel()) },
+        title = { Text(person.displayLabel(display)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (person.organisation.isNotBlank()) Text(person.organisation, style = MaterialTheme.typography.bodyMedium)

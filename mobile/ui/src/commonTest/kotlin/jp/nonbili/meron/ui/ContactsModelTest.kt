@@ -89,4 +89,35 @@ class ContactsModelTest {
         assertTrue(deleted.isNew)
         assertEquals("Mine", deleted.draft.name)
     }
+
+    @Test
+    fun namesFollowTheDesktopsOrderOnlyWhenTheBookKeepsTheirParts() {
+        assertEquals("contact_name_display", CONTACT_NAME_DISPLAY_SETTING_KEY)
+        assertEquals("contact_name_sort", CONTACT_NAME_SORT_SETTING_KEY)
+        assertEquals(ContactNameDisplay.LastCommaFirst, contactNameDisplayFromSetting("last_comma_first"))
+        assertEquals(ContactNameDisplay.AsWritten, contactNameDisplayFromSetting("auto"))
+        assertEquals(ContactNameDisplay.AsWritten, contactNameDisplayFromSetting(null))
+        assertEquals(ContactNameSort.Last, contactNameSortFromSetting("last"))
+        assertEquals(ContactNameSort.Name, contactNameSortFromSetting(3L))
+
+        val ada = person("a", name = "Ada Lovelace").copy(given = "Ada", family = "Lovelace")
+        assertEquals("Ada Lovelace", ada.displayLabel())
+        assertEquals("Lovelace, Ada", ada.displayLabel(ContactNameDisplay.LastCommaFirst))
+        assertEquals("Lovelace Ada", ada.displayLabel(ContactNameDisplay.LastFirst))
+        val wang = person("w", name = "王芳").copy(given = "芳", family = "王")
+        assertEquals("王芳", wang.displayLabel(ContactNameDisplay.LastFirst))
+        // A whole name is never split by guessing.
+        assertEquals("María José García López", person("m", name = "María José García López").displayLabel(ContactNameDisplay.LastCommaFirst))
+    }
+
+    @Test
+    fun theListIsOrderedByTheChosenPart() {
+        val zoe = person("z", name = "Zoe Adams").copy(given = "Zoe", family = "Adams")
+        val bob = person("b", name = "Bob Young").copy(given = "Bob", family = "Young")
+        val mallory = person("m", name = "Mallory")
+        val people = listOf(zoe, bob, mallory)
+        assertEquals(listOf("z", "b", "m"), sortedForList(people, ContactNameSort.Name).map { it.id }, "the core's order")
+        assertEquals(listOf("b", "m", "z"), sortedForList(people, ContactNameSort.First).map { it.id })
+        assertEquals(listOf("z", "m", "b"), sortedForList(people, ContactNameSort.Last).map { it.id })
+    }
 }
