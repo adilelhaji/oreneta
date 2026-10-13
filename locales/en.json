@@ -2445,5 +2445,9 @@
   "calendar.noticeSent": "The people on it were sent the new details",
   "calendar.notifyFrom": "Sent by mail from {address}",
   "invite.acceptNoticeAsks": "The editor opens with the proposed time. When you save, it asks whether to send the new time to the people invited. Declining sends a message to the person who proposed it.",
-  "zoom.size": "Size {size}%"
+  "zoom.size": "Size {size}%",
+  "accounts.discovery.findSettings": "Find settings online",
+  "accounts.wizard.discoveryOnRequest": "Nothing is looked up online yet. For other mail servers, the next step offers to find the settings for you, or you can enter them yourself.",
+  "accounts.discovery.findSettingsHint": "Looks up the server settings by sending your address to {domain} and the domain to Mozilla’s provider database. Your password is not sent. You can also enter the servers yourself under Advanced server settings.",
+  "accounts.discovery.yourMailDomain": "your mail domain"
 }
