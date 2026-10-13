@@ -1,7 +1,7 @@
 # ADR-0027: Reglas en el servidor
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Cubre la puerta de #94
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Cubre la puerta de #94
   (adaptadores y permisos nuevos por proveedor).
 - Fecha: 2026-10-12.
 - Alcance: primera entrega de #94.

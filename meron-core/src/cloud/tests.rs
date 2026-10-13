@@ -227,3 +227,22 @@ fn what_the_server_requires_is_asked_before_any_link_exists() {
     assert!(share(&account(&url), "p", "f", &LinkRequest::default(), &none).is_err());
     assert!(seen.lock().unwrap().is_empty(), "nothing was created");
 }
+
+#[test]
+fn an_unusable_proxy_is_an_error_and_never_a_direct_connection() {
+    // A configured proxy that cannot be turned into an agent used to fall back
+    // silently to a direct connection; it must fail closed instead.
+    let invalid = crate::proxy::ProxyConfig {
+        kind: crate::proxy::ProxyKind::Http,
+        host: "bad\nhost".into(),
+        port: 8080,
+        username: String::new(),
+        password: String::new(),
+    };
+    match agent_with(Some(&invalid)) {
+        Err(CloudError::Network { detail }) => assert!(detail.contains("proxy"), "{detail}"),
+        other => panic!("expected a proxy error, got {:?}", other.map(|_| "an agent")),
+    }
+    // No proxy configured is still a plain direct agent.
+    assert!(agent_with(None).is_ok());
+}

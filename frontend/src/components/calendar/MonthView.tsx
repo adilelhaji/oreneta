@@ -9,9 +9,13 @@ import {
   newEvent,
   setCalendarView,
   startOfDay,
+  firstDayOfWeek,
+  localeWeek,
   startOfWeek,
   type CalendarEvent,
 } from '../../states/calendar'
+import { settings$ } from '../../states/settings'
+import { weekNumber, weekNumberRule } from '../../lib/calendarWeek'
 import { formatTime } from './AgendaView'
 
 /// How many events a month cell names before folding the rest into a count.
@@ -28,9 +32,20 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
   const anchorMs = useValue(calendar$.anchor)
   const events = useValue(calendar$.events)
   const calendars = useValue(calendar$.calendars)
+  const weekStart = useValue(settings$.calendarWeekStart)
+  const prefs = useValue(settings$.calendar)
 
   const anchor = new Date(anchorMs)
-  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1))
+  // The week's first day is a setting (Calendar → General, ADR-0051).
+  const firstDay = firstDayOfWeek(weekStart)
+  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1), firstDay)
+  const weekNumbers = prefs.showWeekNumbers
+    ? Array.from({ length: 6 }, (_, row) => {
+        const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + row * 7)
+        return weekNumber(date, weekNumberRule(firstDay, localeWeek())).week
+      })
+    : null
+  const columns = weekNumbers ? '2rem repeat(7, minmax(0, 1fr))' : 'repeat(7, minmax(0, 1fr))'
   const todayMs = startOfDay(new Date()).getTime()
 
   const days = useMemo(
@@ -80,7 +95,8 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid shrink-0 grid-cols-7 border-b border-border">
+      <div className="grid shrink-0 border-b border-border" style={{ gridTemplateColumns: columns }}>
+        {weekNumbers && <div />}
         {weekdays.map((name) => (
           <div
             key={name}
@@ -90,8 +106,19 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
           </div>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6">
-        {days.map((date) => {
+      <div className="grid min-h-0 flex-1 grid-rows-6" style={{ gridTemplateColumns: columns }}>
+        {weekNumbers?.map((week, row) => (
+          <div
+            key={`week-${row}`}
+            data-week-number={week}
+            title={t('calendar.weekNumberTitle', { defaultValue: 'Week {week}', week })}
+            className="border-b border-r border-border/60 pt-1.5 text-center text-2xs font-semibold tabular-nums text-secondary/80"
+            style={{ gridColumn: 1, gridRow: row + 1 }}
+          >
+            {week}
+          </div>
+        ))}
+        {days.map((date, index) => {
           const key = date.getTime()
           const inMonth = date.getMonth() === anchor.getMonth()
           const isToday = key === todayMs
@@ -100,8 +127,10 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
           return (
             <div
               key={key}
+              style={weekNumbers ? { gridColumn: (index % 7) + 2, gridRow: Math.floor(index / 7) + 1 } : undefined}
               onDoubleClick={() => {
-                const at = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9)
+                // At the start of the work day (Calendar → General).
+                const at = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, prefs.workStart)
                 newEvent(Math.floor(at.getTime() / 1000))
               }}
               className={`flex min-h-0 flex-col gap-0.5 overflow-hidden border-b border-r border-border/60 p-1 ${

@@ -1,7 +1,7 @@
 # ADR-0024: Ciclo de vida del envío (inmediato, retenido, programado) y pospuestos
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Cubre la puerta de #89 sobre el
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Cubre la puerta de #89 sobre el
   contrato duradero.
 - Fecha: 2026-10-12.
 - Alcance: #89.

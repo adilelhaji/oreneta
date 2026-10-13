@@ -8,6 +8,7 @@ import {
   Link2,
   Mail,
   MailOpen,
+  Shrink,
   SquarePen,
   Star,
   Trash2,
@@ -21,6 +22,7 @@ import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import type { Message } from '../../types'
 import { useMessageChangesBlocked, useReadOnlyMail, useSendBlocked } from '../../lib/useReadOnlyMail'
+import { toggleFitWidth, useFitWidth } from '../../states/readerFit'
 
 export type MessageContextMenuState = {
   x: number
@@ -55,6 +57,7 @@ export function MessageContextMenu({
   // Forwarding and editing as new are sending (#143).
   const sendingBlocked = useSendBlocked(state.message.account_id)
   const isDraft = isDraftFolder(state.message.folder_id, state.message.account_id)
+  const fitWidth = useFitWidth(state.message.id)
   return (
     <FloatingContextMenu
       x={state.x}
@@ -180,6 +183,22 @@ export function MessageContextMenu({
                 const message = state.message
                 onClose()
                 void startMessageTranslation(message)
+              }}
+            />
+          )}
+          {/* Fixed-width HTML only; a plain-text body always wraps (ADR-0046). */}
+          {!headerOnly && !!state.message.body_html && (
+            <MenuItem
+              icon={<Shrink size={14} className="text-accent" strokeWidth={1.75} />}
+              label={
+                fitWidth
+                  ? t('reader.fit.original', { defaultValue: 'Show at original size' })
+                  : t('reader.fit.fit', { defaultValue: 'Fit to window' })
+              }
+              onClick={() => {
+                const message = state.message
+                onClose()
+                toggleFitWidth(message.id)
               }}
             />
           )}

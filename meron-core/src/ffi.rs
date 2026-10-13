@@ -1013,6 +1013,42 @@ mod tests {
         assert_eq!(value["detail"]["protocol"], PROTOCOL_VERSION);
     }
 
+    /// ADR-0045: `calendar.events` answers from the cache at once and the
+    /// refresh it starts keeps running on the Engine's runtime, reporting
+    /// `calendar.synced` over the event channel as the desktop does on stdout.
+    #[test]
+    fn calendar_refresh_reports_over_the_event_channel() {
+        let _guard = EVENT_CALLBACK_TEST_LOCK.lock().unwrap();
+        let data_dir = crate::protocol::tests::unique_data_dir("pim-refresh");
+        let account = "refresh@example.com";
+        crate::protocol::tests::seed_mobile_account(&data_dir, account);
+        crate::protocol::tests::seed_mobile_password(&data_dir, account);
+        CAPTURED_EVENTS.lock().unwrap().clear();
+        meron_core_register_event_callback(Some(capture_event), ptr::null_mut());
+        let request = json!({"id": 1, "method": "calendar.events", "params": {
+            "account": account, "from": 1_000, "to": 2_000, "refresh": true,
+        }});
+        let answer = invoke_mobile_protocol_json(&request.to_string(), data_dir.to_str());
+        assert_eq!(answer["result"], json!({"events": []}), "{answer}");
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let synced = loop {
+            let found = CAPTURED_EVENTS
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|raw| serde_json::from_str::<Value>(raw).ok())
+                .find(|event| event["event"] == "calendar.synced" || event["event"] == "calendar.syncError");
+            if let Some(found) = found {
+                break found;
+            }
+            assert!(std::time::Instant::now() < deadline, "no calendar.synced event");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        meron_core_register_event_callback(None, ptr::null_mut());
+        assert_eq!(synced, json!({"event": "calendar.synced", "detail": {"account": account, "from": 1_000, "to": 2_000}}));
+    }
+
     #[test]
     fn ffi_ready_event_reports_false_without_callback() {
         let _guard = EVENT_CALLBACK_TEST_LOCK.lock().unwrap();

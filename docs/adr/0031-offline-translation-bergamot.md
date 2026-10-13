@@ -1,7 +1,7 @@
 # ADR-0031: Traducción sin conexión con Bergamot
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Dentro de ADR-0001; sin
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Dentro de ADR-0001; sin
   telemetría nueva ni servicio nuevo de pago.
 - Fecha: 2026-10-12.
 - Alcance: #106.
@@ -18,6 +18,15 @@
 - **Modelos:**
   - los de Mozilla (MPL-2.0), publicados para Bergamot 0.3.3 en
     `storage.googleapis.com/bergamot-models-sandbox`;
+  - la aplicación no los pide a ese bucket, que Mozilla llama «sandbox» y
+    puede retirar: los pide a una copia sin cambios en el release
+    `translation-models-0.3.3` de este repositorio (revisión del
+    propietario, 2026-10-12). La copia la hace a mano el workflow
+    *Publish translation models* con `scripts/translation-models/mirror.py`,
+    que comprueba cada archivo contra el registro antes de subirlo. Un
+    release solo tiene una lista plana, y algunos nombres se repiten entre
+    pares, así que cada archivo se publica como `<par>-<nombre>`. El release
+    nunca se marca como el último, para que el actualizador no lo vea;
   - el registro con el nombre, el tamaño y el SHA-256 de cada archivo va
     con la aplicación (`meron-core/src/translation/registry.json`): no se
     descarga ninguna lista, y no se puede pedir nada que no esté en ella;
@@ -62,6 +71,9 @@
   termina el worker y la traducción a medias.
 
 ## Alternativas
+
+- Descargar del bucket de Mozilla (la decisión inicial): sin nada que
+  mantener, pero depende de un bucket de pruebas que puede desaparecer.
 
 - Servicios en línea (DeepL, Google): el texto sale del equipo.
 - Modelos más nuevos de Mozilla (`moz-fx-translations-data`): más idiomas,

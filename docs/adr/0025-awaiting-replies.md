@@ -1,7 +1,7 @@
 # ADR-0025: Esperando respuesta
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan. Cubre la puerta de #45
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12. Cubre la puerta de #45
   (estados, evidencia de identidad, política de recordatorio y
   persistencia).
 - Fecha: 2026-10-12.

@@ -51,7 +51,9 @@ func (a *App) tasksSave(payload map[string]any) (any, error) {
 	return a.sidecar.Call("tasks.save", params)
 }
 
-// tasksSetCompleted marks a task done, or takes that back.
+// tasksSetCompleted marks a task done, or takes that back. A repeating task
+// completes one occurrence; stop_repeating ends the series instead
+// (ADR-0053). The core decides which.
 func (a *App) tasksSetCompleted(payload map[string]any) (any, error) {
 	id, ok := payload["id"].(float64)
 	if !ok {
@@ -64,7 +66,11 @@ func (a *App) tasksSetCompleted(payload map[string]any) (any, error) {
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}
-	return a.sidecar.Call("tasks.setCompleted", map[string]any{"id": int64(id), "completed": completed})
+	params := map[string]any{"id": int64(id), "completed": completed}
+	if stop, ok := payload["stop_repeating"].(bool); ok && stop {
+		params["stop_repeating"] = true
+	}
+	return a.sidecar.Call("tasks.setCompleted", params)
 }
 
 // tasksDelete removes a task outright.

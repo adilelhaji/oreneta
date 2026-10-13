@@ -14,6 +14,9 @@ var (
 	trayShowItem *systray.MenuItem
 	trayHideItem *systray.MenuItem
 	trayQuitItem *systray.MenuItem
+	// Do not disturb (ADR-0049): checked while notifications are quiet.
+	trayDndItem    *systray.MenuItem
+	trayDndChecked bool
 )
 
 func (a *App) startTrayPhysical() {
@@ -63,13 +66,33 @@ func (a *App) trayReady() {
 	show := systray.AddMenuItem(labels.trayShow, labels.trayShow)
 	hide := systray.AddMenuItem(labels.trayHide, labels.trayHideTooltip)
 	systray.AddSeparator()
+	dnd := systray.AddMenuItemCheckbox(labels.trayDoNotDisturb, labels.trayDoNotDisturb, trayDndChecked)
+	systray.AddSeparator()
 	quit := systray.AddMenuItem(labels.trayQuit, labels.trayQuit)
-	trayShowItem, trayHideItem, trayQuitItem = show, hide, quit
+	trayShowItem, trayHideItem, trayQuitItem, trayDndItem = show, hide, quit, dnd
 	trayMenuMu.Unlock()
+
+	go a.handleTrayClicks(dnd.ClickedCh, a.toggleDoNotDisturbFromTray)
 
 	go a.handleTrayClicks(show.ClickedCh, a.showMainWindow)
 	go a.handleTrayClicks(hide.ClickedCh, a.hideMainWindow)
 	go a.handleTrayClicks(quit.ClickedCh, a.quitFromTray)
+}
+
+// setTrayDoNotDisturbChecked mirrors the frontend's quiet state onto the tray
+// item. Remembered when the tray is not up yet, so it starts out right.
+func setTrayDoNotDisturbChecked(checked bool) {
+	trayMenuMu.Lock()
+	defer trayMenuMu.Unlock()
+	trayDndChecked = checked
+	if trayDndItem == nil {
+		return
+	}
+	if checked {
+		trayDndItem.Check()
+	} else {
+		trayDndItem.Uncheck()
+	}
 }
 
 func (a *App) handleTrayClicks(clicked <-chan struct{}, fn func()) {

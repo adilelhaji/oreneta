@@ -449,6 +449,12 @@ func sidecarCallTimeout(method string) time.Duration {
 	// A full-folder STORE + EXPUNGE on a large Trash can take a while.
 	case "messages.emptyFolder":
 		return 60 * time.Second
+	// Automatic archiving (ADR-0054): a preview searches every chosen folder
+	// and reads the old messages' headers; a run copies or moves each one.
+	case "autoArchive.preview":
+		return 10 * time.Minute
+	case "autoArchive.runNow":
+		return 2 * time.Hour
 	// Rules run on a previewed folder, one server action per step (#50).
 	case "rules.runReviewed":
 		return 10 * time.Minute
@@ -466,7 +472,7 @@ func sidecarCallTimeout(method string) time.Duration {
 	// from disk for as long as the data takes, so only a stuck call ends here.
 	case "messages.exportMbox", "archive.import", "calendar.importIcs", "profileArchive.export", "profileArchive.inspect", "profileArchive.stage", "backupSchedule.runNow", "thunderbird.preview", "thunderbird.import", "notes.attach", "notes.saveAttachment", "chat.download":
 		return 2 * time.Hour
-	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete":
+	case "messages.read", "messages.thread", "messages.markRead", "messages.markAllRead", "send", "save_draft", "folders.delete", "folders.move":
 		return 30 * time.Second
 	// A calendar window can span months and lists every enabled calendar, so
 	// it gets the same budget as a folder sync rather than the default.
@@ -486,8 +492,17 @@ func sidecarCallTimeout(method string) time.Duration {
 		"calendar.createLocal", "calendar.subscribe":
 		return 30 * time.Second
 	// Where a proposal stands may read the event's version from its CalDAV
-	// server (ADR-0043).
-	case "invite.counterStatus", "invite.declineCounter":
+	// server (ADR-0043); a notice to the people on a meeting reads the event
+	// from there too.
+	case "invite.counterStatus", "invite.declineCounter", "invite.notify":
+		return 30 * time.Second
+	// Where a read receipt request stands may read the message, and sending
+	// the receipt goes through the account's server (ADR-0048).
+	case "receipts.status", "receipts.answer":
+		return 60 * time.Second
+	// A group written to a CardDAV book reads the card and writes it back
+	// (ADR-0052), each request bounded by the core.
+	case "people.groupSave", "people.groupDelete":
 		return 30 * time.Second
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second

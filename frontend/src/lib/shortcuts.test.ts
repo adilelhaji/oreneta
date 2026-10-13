@@ -59,6 +59,36 @@ describe('matchShortcut', () => {
   })
 })
 
+describe('keyboard zoom (#181)', () => {
+  afterEach(() => setShortcutOverrides({}))
+
+  it('takes the browser keys, with plus however the layout types it', () => {
+    expect(matchShortcut(keydown('=', modKey))).toBe('view.zoomIn')
+    expect(matchShortcut(keydown('+', { ...modKey, shiftKey: true }))).toBe('view.zoomIn')
+    expect(matchShortcut(keydown('+', modKey))).toBe('view.zoomIn')
+    expect(matchShortcut(keydown('-', modKey))).toBe('view.zoomOut')
+    expect(matchShortcut(keydown('0', modKey))).toBe('view.zoomReset')
+    // Never without the command key, so typing them is untouched.
+    expect(matchShortcut(keydown('+'))).toBeNull()
+    expect(matchShortcut(keydown('-'))).toBeNull()
+    expect(matchShortcut(keydown('+', { ...modKey, altKey: true }))).toBeNull()
+  })
+
+  it('a rebound zoom-in replaces the plus key too, and a forwarded chord matches the same', () => {
+    expect(shortcutForChord({ mod: true, shift: true, key: '+' })).toBe('view.zoomIn')
+    setShortcutOverrides({ 'view.zoomIn': { mod: true, alt: true, key: 'i' } })
+    expect(matchShortcut(keydown('+', modKey))).toBeNull()
+    expect(matchShortcut(keydown('=', modKey))).toBeNull()
+    expect(matchShortcut(keydown('i', { ...modKey, altKey: true }))).toBe('view.zoomIn')
+  })
+
+  it('collides with no other default binding', () => {
+    for (const id of ['view.zoomIn', 'view.zoomOut', 'view.zoomReset'] as ShortcutId[]) {
+      expect(shortcutConflict(id, DEFAULT_SHORTCUTS[id])).toBeNull()
+    }
+  })
+})
+
 describe('isBareShortcut', () => {
   it('is true for single-key and shift-only chords, false for mod chords', () => {
     expect(isBareShortcut('thread.next')).toBe(true)

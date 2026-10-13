@@ -6,6 +6,9 @@ import { prepareBubbleHtml } from './bubbleHtml'
 import { applyFrameHighlights, clearFrameHighlights } from './frameSearchHighlight'
 import { frameMetrics, measureFrameHeight } from './frameHeight'
 import { useMessageFrameFont } from './useMessageFrameFont'
+import { createWidthFitter } from './fitWidth'
+import { revealFoldsAround } from './quoteFolding'
+import { useFoldLabels, useFoldOptions } from './ReaderFolds'
 
 const DEFAULT_FRAME_HEIGHT = 120
 const HEIGHT_CHANGE_EPSILON = 1
@@ -28,8 +31,11 @@ export function BubbleHtmlFrame({
   searchQuery = '',
   activeSearchMatch = false,
   onLinkHover,
+  fitWidth = false,
 }: {
   html: string
+  /** Scale fixed-width content down to the frame (ADR-0046). */
+  fitWidth?: boolean
   /** In-thread search query; matches are marked inside the frame document. */
   searchQuery?: string
   activeSearchMatch?: boolean
@@ -38,12 +44,21 @@ export function BubbleHtmlFrame({
   const { t } = useTranslation()
   const messageFont = useMessageFrameFont()
   // Re-preparing the document is what re-renders the frame with new typography.
-  const prepareHtml = useCallback((raw: string) => prepareBubbleHtml(raw, messageFont), [messageFont])
+  const foldOptions = useFoldOptions()
+  const foldLabels = useFoldLabels()
+  const prepareHtml = useCallback(
+    // `fitWidth` marks the document, so turning it on or off reloads the frame
+    // and measures the message from its natural size again.
+    (raw: string) => prepareBubbleHtml(raw, messageFont, { fold: foldOptions, labels: foldLabels, fitWidth }),
+    [messageFont, foldOptions, foldLabels, fitWidth],
+  )
   // Typography is part of the key: the same HTML measures to a different height
-  // once the message font or text size changes.
+  // once the message font or text size changes — or once quotes fold or the
+  // content is fitted to the width.
   const cacheKey = useMemo(
-    () => `${messageFont.family ?? ''}:${messageFont.zoom}:${messageFont.simplify ? 's' : 'o'}:${cacheKeyForHtml(html)}`,
-    [html, messageFont],
+    () =>
+      `${messageFont.family ?? ''}:${messageFont.zoom}:${messageFont.simplify ? 's' : 'o'}:${foldOptions.quotes ? 'q' : ''}${foldOptions.signatures ? 'g' : ''}:${fitWidth ? 'f' : ''}:${cacheKeyForHtml(html)}`,
+    [html, messageFont, foldOptions, fitWidth],
   )
   const cachedHeight = measuredHeights.get(cacheKey)
   const [height, setHeight] = useState(() => cachedHeight ?? DEFAULT_FRAME_HEIGHT)
@@ -143,7 +158,11 @@ export function BubbleHtmlFrame({
         })
       }
 
+      // Fit before the scroller fallback, so a fitted table never needs one.
+      const fitter = fitWidth ? createWidthFitter(doc, messageFont.zoom) : null
+
       const measure = () => {
+        fitter?.update()
         wrapOverflowingTables()
         const measurement = measureFrameHeight(frameMetrics(doc), overflowExtent)
         overflowExtent = measurement.overflowExtent
@@ -223,6 +242,10 @@ export function BubbleHtmlFrame({
       const frameWindow = doc.defaultView
       frameWindow?.addEventListener('load', scheduleMeasure)
       frameWindow?.addEventListener('resize', scheduleMeasure)
+      // A fold opening or closing changes the height; the ResizeObserver sees
+      // that too, but `toggle` is immediate.
+      doc.addEventListener('toggle', scheduleMeasure, true)
+      cleanupFns.push(() => doc.removeEventListener('toggle', scheduleMeasure, true))
       cleanupFns.push(() => {
         frameWindow?.removeEventListener('load', scheduleMeasure)
         frameWindow?.removeEventListener('resize', scheduleMeasure)
@@ -242,7 +265,7 @@ export function BubbleHtmlFrame({
         cleanupFns.forEach((cleanup) => cleanup())
       }
     },
-    [cacheKey],
+    [cacheKey, fitWidth, messageFont.zoom],
   )
 
   // Mark search hits in the live document. Re-runs when the query, the active
@@ -251,6 +274,8 @@ export function BubbleHtmlFrame({
   useEffect(() => {
     if (!frameDoc) return
     applyFrameHighlights(frameDoc, searchQuery, activeSearchMatch)
+    // A hit inside folded quoted text opens its fold, so no match is hidden.
+    for (const mark of frameDoc.querySelectorAll('mark.oreneta-search-hit')) revealFoldsAround(mark)
     return () => {
       // The document is gone once the frame reloads; ignore that case.
       if (frameDoc.defaultView) clearFrameHighlights(frameDoc)

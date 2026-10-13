@@ -422,7 +422,13 @@ func (a *App) downloadAndSaveAvatar(accountID, avatarURL string) string {
 		return avatarURL
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// Through this account's proxy (or the app-wide one). If the proxy is
+	// set but unusable, keep the remote URL rather than fetch it directly.
+	client, err := a.httpClient(accountID, 10*time.Second)
+	if err != nil {
+		a.logf("download avatar skipped: %v", err)
+		return avatarURL
+	}
 	resp, err := client.Get(avatarURL)
 	if err != nil {
 		a.logf("download avatar failed: %v", err)

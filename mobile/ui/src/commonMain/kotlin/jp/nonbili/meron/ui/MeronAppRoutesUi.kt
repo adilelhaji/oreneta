@@ -170,6 +170,14 @@ internal fun KanbanRouteContent(
                         connectGoogleDeviceAccount()
                         scope.launch { drawerState.close() }
                     },
+                    onSelectCalendar = {
+                        openCalendarScreen()
+                        scope.launch { drawerState.close() }
+                    },
+                    onSelectContacts = {
+                        openContactsScreen()
+                        scope.launch { drawerState.close() }
+                    },
                 )
             },
         ) {
@@ -555,6 +563,14 @@ internal fun MailRouteContent(
                     googleReauthAccountId = googleReauthAccountId,
                     onReconnectGoogle = {
                         connectGoogleDeviceAccount()
+                        scope.launch { drawerState.close() }
+                    },
+                    onSelectCalendar = {
+                        openCalendarScreen()
+                        scope.launch { drawerState.close() }
+                    },
+                    onSelectContacts = {
+                        openContactsScreen()
                         scope.launch { drawerState.close() }
                     },
                 )

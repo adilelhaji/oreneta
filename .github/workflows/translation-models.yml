@@ -1,0 +1,36 @@
+name: Publish translation models
+
+# Copies Mozilla's translation models, unchanged, into this repository's own
+# release so the app does not depend on Mozilla's "sandbox" bucket
+# (ADR-0031). Run by hand; every file is checked against the registry the
+# app ships with before anything is uploaded. The release is never marked
+# latest, so the desktop updater (releases/latest) never sees it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    env:
+      TAG: translation-models-0.3.3
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/translation-models/test_mirror.py
+      - run: python3 scripts/translation-models/mirror.py models
+      - name: Create or complete the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Translation models (Bergamot 0.3.3)" \
+              --notes "Mozilla's production translation models (MPL-2.0), copied unchanged from bergamot-models-sandbox/0.3.3 for the app's offline translation (ADR-0031). Each file's size and SHA-256 are in meron-core/src/translation/registry.json; the app refuses any file that differs."
+          fi
+          gh release upload "$TAG" models/* --clobber

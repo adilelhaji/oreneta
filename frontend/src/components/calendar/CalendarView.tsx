@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, TriangleAlert } from 'lucide-react'
+import {
+  BriefcaseBusiness,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react'
 import i18n, { useTranslation } from '../../lib/i18n'
 import {
   calendar$,
@@ -10,6 +18,7 @@ import {
   newEvent,
   setCalendarView,
   startOfWeek,
+  workDays,
   type CalendarEvent,
   type CalendarViewMode,
   retrySync,
@@ -22,6 +31,8 @@ import { EventDetails } from './EventDetails'
 import { CalendarList } from './CalendarList'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
+import { settings$ } from '../../states/settings'
+import { isoWeekday } from '../../lib/calendarWeek'
 
 /// The calendar surface: one header — period, navigation, view switcher — over
 /// whichever view is chosen. The editor and the context menu live here so
@@ -32,6 +43,9 @@ export function CalendarView() {
   const anchor = useValue(calendar$.anchor)
   const loading = useValue(calendar$.loading)
   const syncError = useValue(calendar$.syncError)
+  // Read so the header follows a change of the week's first day or work week.
+  useValue(settings$.calendarWeekStart)
+  const calendarPrefs = useValue(settings$.calendar)
   const [menu, setMenu] = useState<EventContextMenuState | null>(null)
 
   useEffect(() => {
@@ -76,6 +90,23 @@ export function CalendarView() {
                 <ChevronRight size={14} strokeWidth={1.75} />
               </NavButton>
             </div>
+          )}
+
+          {view === 'week' && (
+            <button
+              type="button"
+              aria-pressed={calendarPrefs.workWeekOnly}
+              onClick={() => settings$.calendar.set({ ...calendarPrefs, workWeekOnly: !calendarPrefs.workWeekOnly })}
+              title={t('calendar.workWeekHint', { defaultValue: 'Show only the working days of the week' })}
+              className={`inline-flex min-h-8 items-center gap-1.5 rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
+                calendarPrefs.workWeekOnly
+                  ? 'bg-accent/10 text-accent ring-1 ring-accent/30'
+                  : 'text-secondary hover:bg-hover hover:text-primary'
+              }`}
+            >
+              <BriefcaseBusiness size={14} strokeWidth={1.75} />
+              {t('calendar.workWeek', { defaultValue: 'Work week' })}
+            </button>
           )}
 
           <div className="flex max-w-full flex-wrap items-center gap-0.5 rounded-control border border-border bg-raised p-0.5">
@@ -164,14 +195,25 @@ function periodLabel(view: CalendarViewMode, anchorMs: number, t: ReturnType<typ
     return label.charAt(0).toUpperCase() + label.slice(1)
   }
   if (view === 'week') {
-    const monday = startOfWeek(anchor)
-    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
-    const sameMonth = monday.getMonth() === sunday.getMonth()
-    const from = monday.toLocaleDateString(i18n.language.replace('_', '-'), {
+    const weekFirst = startOfWeek(anchor)
+    let shown = Array.from(
+      { length: 7 },
+      (_, i) => new Date(weekFirst.getFullYear(), weekFirst.getMonth(), weekFirst.getDate() + i),
+    )
+    if (settings$.calendar.peek().workWeekOnly) {
+      const working = workDays()
+      const kept = shown.filter((date) => working.includes(isoWeekday(date)))
+      if (kept.length > 0) shown = kept
+    }
+    // The first and last day on screen, whichever weekdays those are.
+    const firstShown = shown[0]
+    const lastShown = shown[shown.length - 1]
+    const sameMonth = firstShown.getMonth() === lastShown.getMonth()
+    const from = firstShown.toLocaleDateString(i18n.language.replace('_', '-'), {
       day: 'numeric',
       month: sameMonth ? undefined : 'short',
     })
-    const to = sunday.toLocaleDateString(i18n.language.replace('_', '-'), {
+    const to = lastShown.toLocaleDateString(i18n.language.replace('_', '-'), {
       day: 'numeric',
       month: 'short',
       year: 'numeric',

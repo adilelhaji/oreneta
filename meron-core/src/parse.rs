@@ -128,6 +128,10 @@ pub struct Message {
     /// calendar unless the person asks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invitation: Option<crate::calendar::itip::Invitation>,
+    /// A read receipt request the message carries (RFC 8098, ADR-0048).
+    /// Described only: nothing is sent unless the person says so.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<crate::receipts::ReceiptRequest>,
     /// What tracking protection kept this message from fetching (#107), set
     /// when it is prepared for reading, never stored.
     #[serde(default, skip)]
@@ -275,6 +279,7 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
             other => other.as_str().to_string(),
         },
         invitation,
+        receipt: crate::receipts::request_of(&mail),
         trackers_blocked: Vec::new(),
         trackers_protected: false,
     }

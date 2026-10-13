@@ -26,6 +26,9 @@ use tokio::sync::Mutex;
 // copies) so the desktop Engine and the mobile FFI operate on identical types.
 use meron_core::engine::*;
 use meron_core::engine::{Engine, EngineHost};
+use meron_core::pim;
+use meron_core::pim::calendar::{caldav_target, caldav_write, local_calendar_write, CALDAV_CONFLICT};
+use meron_core::pim::people::carddav_create;
 use meron_core::protocol::{Request, ping_response, ready_event};
 use meron_core::store::outgoing;
 use meron_core::sweep_review;
@@ -43,130 +46,15 @@ const BACKGROUND_SYNC_RETRY_DELAY: Duration = if cfg!(test) {
     Duration::from_secs(2)
 };
 
-fn is_transient_io_error(error: &std::io::Error) -> bool {
-    matches!(
-        error.kind(),
-        std::io::ErrorKind::ConnectionRefused
-            | std::io::ErrorKind::ConnectionReset
-            | std::io::ErrorKind::HostUnreachable
-            | std::io::ErrorKind::NetworkUnreachable
-            | std::io::ErrorKind::ConnectionAborted
-            | std::io::ErrorKind::NotConnected
-            | std::io::ErrorKind::BrokenPipe
-            | std::io::ErrorKind::TimedOut
-            | std::io::ErrorKind::UnexpectedEof
-    )
-}
-
-fn is_transient_sync_error(error: &anyhow::Error) -> bool {
-    if error.downcast_ref::<meron_core::graph::Error>().is_some() { return false; }
-    for cause in error.chain() {
-        if let Some(io_error) = cause.downcast_ref::<std::io::Error>()
-            && is_transient_io_error(io_error)
-        {
-            return true;
-        }
-        if let Some(imap_error) = cause.downcast_ref::<async_imap::error::Error>() {
-            match imap_error {
-                async_imap::error::Error::ConnectionLost => return true,
-                async_imap::error::Error::Io(io_error) if is_transient_io_error(io_error) => {
-                    return true;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    // Tokio timeouts and SOCKS reply codes are repository-generated anyhow
-    // messages rather than typed sources. Keep this fallback narrow; protocol,
-    // authentication, and certificate errors must not retry.
-    let message = format!("{error:#}").to_ascii_lowercase();
-    [
-        "tcp connect",
-        "dial tcp",
-        "dns lookup",
-        "timed out",
-        "timeout",
-        "network is unreachable",
-        "network unreachable",
-        "host unreachable",
-        "connection refused",
-        "connection reset",
-        "connection abort",
-        "connection closed",
-        "connection lost",
-        "broken pipe",
-        "failed to lookup address",
-        "no address associated with hostname",
-        "server closed before greeting",
-        "unexpected eof",
-        "bytes remaining in stream",
-    ]
-    .iter()
-    .any(|needle| message.contains(needle))
-}
-
-#[derive(Debug)]
-struct BackgroundSyncCancelled;
-
-impl std::fmt::Display for BackgroundSyncCancelled {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("background sync cancelled")
-    }
-}
-
-impl std::error::Error for BackgroundSyncCancelled {}
-
-/// Retry a background read once when it fails for a recognizable transport
-/// reason. Both attempts share the configured per-folder ceiling so a stuck
-/// sync does not hold its dedup key indefinitely.
-async fn retry_background_sync<T, C, F, Fut>(
-    label: &str,
-    mut can_attempt: C,
-    mut operation: F,
-) -> anyhow::Result<T>
+/// The shared retry ([`retry_background_sync_after`]) with this process's
+/// delay, which tests shorten to nothing.
+async fn retry_background_sync<T, C, F, Fut>(label: &str, can_attempt: C, operation: F) -> anyhow::Result<T>
 where
     C: FnMut() -> bool,
     F: FnMut() -> Fut,
     Fut: Future<Output = anyhow::Result<T>>,
 {
-    if !can_attempt() {
-        return Err(anyhow::Error::new(BackgroundSyncCancelled));
-    }
-    let sync_timeout = background_sync_timeout();
-    let deadline = tokio::time::Instant::now() + sync_timeout;
-    let first = tokio::time::timeout_at(deadline, operation()).await;
-    let first_error = match first {
-        Ok(Ok(value)) => return Ok(value),
-        Ok(Err(error)) if is_transient_sync_error(&error) => error,
-        Ok(Err(error)) => return Err(error),
-        Err(_) => anyhow::bail!("timed out after {}s", sync_timeout.as_secs()),
-    };
-
-    eprintln!("meron-core: {label} failed, retrying: {first_error:#}");
-    if tokio::time::timeout_at(deadline, tokio::time::sleep(BACKGROUND_SYNC_RETRY_DELAY))
-        .await
-        .is_err()
-    {
-        return Err(first_error.context(format!(
-            "retry budget exhausted after {}s",
-            sync_timeout.as_secs()
-        )));
-    }
-    if !can_attempt() {
-        return Err(anyhow::Error::new(BackgroundSyncCancelled));
-    }
-
-    match tokio::time::timeout_at(deadline, operation()).await {
-        Ok(Ok(value)) => Ok(value),
-        Ok(Err(retry_error)) => Err(anyhow::anyhow!(
-            "retry failed: {retry_error:#}; first attempt: {first_error:#}"
-        )),
-        Err(_) => Err(first_error.context(format!(
-            "retry timed out within the {}s sync budget",
-            sync_timeout.as_secs()
-        ))),
-    }
+    retry_background_sync_after(label, BACKGROUND_SYNC_RETRY_DELAY, can_attempt, operation).await
 }
 
 #[cfg(test)]
@@ -291,6 +179,59 @@ mod tests {
         fn apply_secret(&self, _: &rusqlite::Connection, _: &str, _: &mut meron_core::imap::Creds) {}
         fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &meron_core::secrets::Secrets) -> anyhow::Result<()> { Ok(()) }
     }
+    #[tokio::test]
+    async fn automatic_archiving_is_off_until_its_preview_is_confirmed() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        {
+            let db = engine.db.lock().unwrap();
+            db.execute(
+                "INSERT INTO accounts(id, email, display_name, config) VALUES('ana', 'ana@x.cat', 'Ana',
+                   '{\"auth_type\":\"password\",\"host\":\"imap.x.cat\",\"tls\":true}')",
+                [],
+            )
+            .unwrap();
+            let folder = |name: &str, role: Option<&str>| meron_core::imap::Folder {
+                name: name.into(),
+                display_name: name.into(),
+                special_use: role.map(str::to_string),
+                ..Default::default()
+            };
+            store::upsert_folders(&db, "ana", &[folder("INBOX", None), folder("Drafts", Some("drafts")), folder("Archive", Some("archive"))])
+                .unwrap();
+        }
+        let status = call("autoArchive.status", json!({"account": "ana"})).await.unwrap();
+        assert_eq!(status["policy"]["enabled"], false);
+        assert_eq!(status["policy"]["folders"][0]["name"], "INBOX");
+        assert_eq!(status["confirmed"], false);
+        assert_eq!(status["next_run"], Value::Null);
+        assert_eq!(status["local_supported"], true);
+        assert_eq!(status["folders"][1]["refused"], "drafts");
+
+        let mut policy = status["policy"].clone();
+        policy["enabled"] = json!(true);
+        let refused = call("autoArchive.save", json!({"account": "ana", "policy": policy})).await.unwrap_err();
+        assert!(refused.to_string().contains("confirm"), "{refused}");
+        let mut drafts = policy.clone();
+        drafts["enabled"] = json!(false);
+        drafts["folders"] = json!([{ "name": "Drafts" }]);
+        assert!(call("autoArchive.save", json!({"account": "ana", "policy": drafts})).await.is_err());
+        let ran = call("autoArchive.runNow", json!({"account": "ana"})).await.unwrap_err();
+        assert!(ran.to_string().contains("confirm"), "{ran}");
+
+        let print = meron_core::auto_archive::fingerprint("ana", &serde_json::from_value(policy.clone()).unwrap());
+        let saved = call("autoArchive.save", json!({"account": "ana", "policy": policy, "confirm": print})).await.unwrap();
+        assert_eq!((saved["policy"]["enabled"].clone(), saved["confirmed"].clone()), (json!(true), json!(true)));
+        assert_eq!(saved["next_run"], 0);
+        assert!(call("autoArchive.status", json!({"account": "nobody"})).await.is_err());
+    }
+
     #[tokio::test]
     async fn an_mbox_is_imported_into_the_local_archive_and_read_with_the_ordinary_mail_commands() {
         use super::*;
@@ -702,6 +643,50 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(call("notes.get", json!({"id": id})).await.unwrap()["note"].is_null());
     }
 
+    /// The desktop's reminder watch asks the shared `pim::reminders` (the
+    /// phone's `pim.refresh` asks the same): the accounts the core has open,
+    /// once each, in the `calendar.reminder` shape it always sent.
+    #[tokio::test]
+    async fn the_reminder_watch_uses_the_shared_reminders() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        // Any stored account will do; the local archive needs no server.
+        let account = meron_core::archive::ACCOUNT;
+        meron_core::archive::ensure_account(&engine.db.lock().unwrap(), now_seconds()).unwrap();
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let now = now_seconds();
+        let start = now + 600;
+        let created = call("calendar.create", json!({"account": account, "notify": false, "event": {
+            "id": "", "calendar_id": home, "subject": "Standup", "start": start, "end": start + 900,
+            "all_day": false, "location": "Room 2", "reminder_minutes": 10,
+        }}))
+        .await
+        .unwrap();
+        let event = created["event"]["id"].as_str().unwrap().to_owned();
+        assert!(due_calendar_reminders(&engine, now).await.is_empty(), "an account the core has not opened is not watched");
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+        let due = due_calendar_reminders(&engine, now).await;
+        assert_eq!(
+            due,
+            vec![json!({
+                "account": account, "event": event, "subject": "Standup", "location": "Room 2",
+                "start": start, "all_day": false, "minutes": 10,
+            })],
+        );
+        assert!(due_calendar_reminders(&engine, now + 60).await.is_empty(), "given once");
+        assert!(
+            pim::reminders::take_due(&engine, &[account.to_string()], now + 120).is_empty(),
+            "recorded where the phone's refresh looks too",
+        );
+    }
+
     #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
@@ -738,6 +723,56 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert_eq!(gone["ok"], true);
         let listed = call("people.list", json!({"query": ""})).await.unwrap();
         assert!(listed["people"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn local_contact_groups_and_name_parts_go_through_the_commands() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = |method: &str, params: Value| Request { id: 1, method: method.into(), params };
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &request(method, params), &writer).await }
+        };
+        let ann = call(
+            "people.save",
+            json!({"person": {"name": "Ann Lee", "given": "Ann", "family": "Lee", "emails": [{"addr": "ann@example.com"}]}}),
+        )
+        .await
+        .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        // An editor that sends no name parts keeps the stored ones.
+        call("people.save", json!({"id": ann, "version": "1", "person": {"name": "Ann Lee", "note": "x", "emails": [{"addr": "ann@example.com"}]}}))
+            .await
+            .unwrap();
+        let listed = call("people.list", json!({"query": ""})).await.unwrap();
+        assert_eq!(listed["people"][0]["family"], "Lee");
+        let names = call("people.names", json!({"addrs": ["ANN@example.com", "x@example.com"]})).await.unwrap();
+        assert_eq!(names["names"]["ann@example.com"]["given"], "Ann");
+        assert!(names["names"].get("x@example.com").is_none());
+
+        let group = call("people.groupSave", json!({"name": "Climbing", "members": [ann]})).await.unwrap();
+        let id = group["id"].as_str().unwrap().to_owned();
+        let listed = call("people.groups", json!({})).await.unwrap();
+        assert_eq!(listed["groups"][0]["name"], "Climbing");
+        assert_eq!(listed["groups"][0]["editable"], true);
+        assert_eq!(listed["groups"][0]["members"][0]["addr"], "ann@example.com");
+        let renamed = call("people.groupSave", json!({"id": id, "version": "1", "name": "Climbing club", "members": []}))
+            .await
+            .unwrap();
+        assert_eq!(renamed["version"], "2");
+        let stale = call("people.groupSave", json!({"id": id, "version": "1", "name": "Other", "members": []}))
+            .await
+            .unwrap();
+        assert_eq!(stale["conflict"], true);
+        assert_eq!(stale["current"]["name"], "Climbing club");
+        assert!(call("people.groupSave", json!({"name": " "})).await.is_err());
+        call("people.groupDelete", json!({"id": id, "version": "2"})).await.unwrap();
+        assert!(call("people.groups", json!({})).await.unwrap()["groups"].as_array().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -788,6 +823,88 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(refused.is_err_and(|e| e.to_string().contains("Holidays is a subscribed calendar")));
     }
     #[tokio::test]
+    async fn the_organizer_of_a_local_event_builds_an_invitation_and_a_cancellation() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let call = |method: &'static str, params: Value| {
+            let engine = engine.clone();
+            let writer = writer.clone();
+            async move { dispatch(&engine, &Request { id: 1, method: method.into(), params }, &writer).await }
+        };
+        let account = "ana@example.com";
+        let home = call("calendar.createLocal", json!({"account": account, "name": "Home"})).await.unwrap()["id"].as_str().unwrap().to_owned();
+        let event = |id: &str, subject: &str, change_key: Option<&str>| json!({
+            "id": id, "calendar_id": home, "subject": subject, "start": 1_894_269_600i64, "end": 1_894_273_200i64,
+            "all_day": false, "is_recurring": false, "is_cancelled": false, "free_busy": "", "my_response": "",
+            "description": "", "change_key": change_key,
+            "organizer": {"name": "Ana", "addr": "ana@example.com", "response": ""},
+            "attendees": [
+                {"name": "Bo", "addr": "bo@example.com", "response": ""},
+                {"name": "Cy", "addr": "cy@example.com", "response": "accept"},
+            ],
+        });
+        let notify = |id: String, method: &'static str, me: &'static str, people: Value| {
+            let home = home.clone();
+            async move {
+                call("invite.notify", json!({
+                    "account": account, "calendar": home, "event": id, "scope": "occurrence", "method": method,
+                    "me_name": "Ana", "me_addr": me, "people": people,
+                }))
+                .await
+            }
+        };
+        let both = json!(["bo@example.com", "CY@example.com"]);
+
+        let id = call("calendar.create", json!({"account": account, "event": event("", "Planning", None)})).await.unwrap()["event"]["id"]
+            .as_str().unwrap().to_owned();
+        let first = notify(id.clone(), "request", "Ana@Example.com", both.clone()).await.unwrap();
+        assert_eq!(first["notice"]["to"], json!(["bo@example.com", "cy@example.com"]), "everyone on it but the organizer");
+        assert_eq!(first["notice"]["subject"], "Invitation: Planning");
+        assert_eq!(first["notice"]["method"], "REQUEST");
+        let ics = first["notice"]["ics"].as_str().unwrap();
+        assert!(ics.contains("METHOD:REQUEST\r\n") && ics.contains(&format!("UID:{id}\r\n")) && ics.contains("SEQUENCE:0\r\n"), "{ics}");
+        assert!(ics.contains("ORGANIZER;CN=Ana:mailto:ana@example.com"));
+
+        // Each save is a newer version, counted from what is stored even when
+        // the editor still holds an older one.
+        call("calendar.update", json!({"account": account, "event": event(&id, "Planning (moved)", Some("0"))})).await.unwrap();
+        call("calendar.update", json!({"account": account, "event": event(&id, "Planning (moved again)", Some("0"))})).await.unwrap();
+        let updated = notify(id.clone(), "request", "ana@example.com", both.clone()).await.unwrap();
+        assert_eq!(updated["notice"]["sequence"], 2);
+        assert_eq!(updated["notice"]["subject"], "Updated invitation: Planning (moved again)");
+        let read = calendar::itip::parse(updated["notice"]["ics"].as_str().unwrap()).unwrap();
+        assert_eq!((read.uid.as_str(), read.sequence), (id.as_str(), 2));
+        // What an answer to it comes back with finds the event again.
+        let organized = calendar::itip::organized_event(&engine.db.lock().unwrap(), account, account, &read.uid, None).unwrap();
+        assert_eq!(organized.map(|e| e.id), Some(id.clone()));
+
+        // Nobody is mailed who was not named in the question.
+        let unseen = notify(id.clone(), "request", "ana@example.com", json!(["bo@example.com"])).await.unwrap_err();
+        assert!(unseen.to_string().contains("cy@example.com, who was not shown"), "{unseen}");
+        // Only the organizer tells.
+        let other = notify(id.clone(), "request", "bo@example.com", both.clone()).await.unwrap_err();
+        assert!(other.to_string().contains("ana@example.com organizes this meeting"), "{other}");
+
+        // The cancellation is built before the event goes, one version on.
+        let cancel = notify(id.clone(), "cancel", "ana@example.com", both.clone()).await.unwrap();
+        assert_eq!(cancel["notice"]["subject"], "Cancelled: Planning (moved again)");
+        let ics = cancel["notice"]["ics"].as_str().unwrap();
+        assert!(ics.contains("METHOD:CANCEL\r\n") && ics.contains("SEQUENCE:3\r\n") && ics.contains("STATUS:CANCELLED\r\n"), "{ics}");
+        call("calendar.delete", json!({"account": account, "event": id, "calendar": home})).await.unwrap();
+        assert!(notify(id.clone(), "cancel", "ana@example.com", both.clone()).await.unwrap_err().to_string().contains("no longer"));
+
+        // A calendar that tells people itself is not one this builds for.
+        let refused = call("invite.notify", json!({
+            "account": account, "calendar": "primary", "event": "x", "method": "request", "me_addr": "ana@example.com",
+        })).await.unwrap_err();
+        assert!(refused.to_string().contains("own server tells"), "{refused}");
+        assert!(call("invite.notify", json!({
+            "account": account, "calendar": home, "event": "x", "method": "reply", "me_addr": "ana@example.com",
+        })).await.is_err(), "only an update or a cancellation");
+    }
+
+    #[tokio::test]
     async fn local_draft_rpc_is_local_and_preserves_conflicts() {
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
@@ -819,7 +936,7 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert!(dispatch(&engine,&request("graph.activationBegin",json!({"attempt":"unknown"})),&writer).await.is_err());
         let account="graph@example.test";
         engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','outlook',?1,'Graph','{\"auth_type\":\"graph_oauth\"}',0,0)",[account]).unwrap();
-        for method in ["send","save_draft","discard_draft","messages.markRead","messages.markStarred","messages.delete","messages.move","messages.copy","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+        for method in ["send","save_draft","discard_draft","messages.markRead","messages.markStarred","messages.delete","messages.move","messages.copy","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","folders.move","mail.scheduleSend"] {
             let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
             assert!(error.to_string().contains("read-only"),"{method}: {error}");
         }
@@ -827,6 +944,34 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         let list=dispatch(&engine,&request("account.list",json!({})),&writer).await.unwrap();
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
+    }
+    /// ADR-0050: `folders.move` end to end on the local archive, which is its
+    /// own server, and refused on Exchange, which does not manage folders here.
+    #[tokio::test]
+    async fn folders_move_nests_a_local_folder_and_reports_every_rename() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        meron_core::archive::ensure_account(&engine.db.lock().unwrap(),0).unwrap();
+        let account=meron_core::archive::ACCOUNT;
+        for name in ["Years","2025","2025/Q1"] {
+            dispatch(&engine,&request("folders.create",json!({"account":account,"name":name})),&writer).await.unwrap();
+        }
+        let moved=dispatch(&engine,&request("folders.move",json!({"account":account,"folder":"2025","parent":"Years"})),&writer).await.unwrap();
+        assert_eq!(moved["folder"],"Years/2025");
+        assert_eq!(moved["renames"],json!([{"from":"2025","to":"Years/2025"},{"from":"2025/Q1","to":"Years/2025/Q1"}]));
+        let names:Vec<&str>=moved["folders"].as_array().unwrap().iter().filter_map(|f|f["name"].as_str()).collect();
+        assert!(names.contains(&"Years/2025/Q1") && !names.contains(&"2025"),"{names:?}");
+        let into_itself=dispatch(&engine,&request("folders.move",json!({"account":account,"folder":"Years","parent":"Years/2025"})),&writer).await.unwrap_err();
+        assert!(into_itself.to_string().contains("into itself"),"{into_itself}");
+        let trash=dispatch(&engine,&request("folders.move",json!({"account":account,"folder":meron_core::archive::TRASH,"parent":"Years"})),&writer).await.unwrap_err();
+        assert!(trash.to_string().contains("special folder"),"{trash}");
+
+        let ews="ews@example.test";
+        engine.db.lock().unwrap().execute("INSERT INTO accounts(id,engine,provider,email,display_name,config,created_at,updated_at) VALUES(?1,'mail','exchange',?1,'EWS','{\"auth_type\":\"password\",\"ews_url\":\"https://ews.example.test/EWS/Exchange.asmx\"}',0,0)",[ews]).unwrap();
+        let refused=dispatch(&engine,&request("folders.move",json!({"account":ews,"folder":"Work","parent":"Projects"})),&writer).await;
+        assert!(refused.is_err());
     }
     #[tokio::test]
     async fn graph_writes_pass_the_guard_only_where_granted_and_supported() {
@@ -848,7 +993,7 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
         assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
         // Still unsupported, granted or not.
-        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","folders.move","mail.scheduleSend"] {
             let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
             assert!(error.to_string().contains("read-only"),"{method}: {error}");
         }
@@ -1502,7 +1647,7 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
 /// its window is resynced.
 fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(REMINDER_TICK);
+        let mut ticker = tokio::time::interval(pim::reminders::TICK);
         loop {
             ticker.tick().await;
             let now = std::time::SystemTime::now()
@@ -1510,40 +1655,10 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                 .map(|epoch| epoch.as_secs() as i64)
                 .unwrap_or_default();
 
-            let accounts: Vec<String> =
-                engine.accounts.lock().await.keys().cloned().collect();
-            for account in accounts {
-                if engine.is_paused(&account) || engine.is_muted(&account) {
-                    continue;
-                }
-                let due = {
-                    let db = engine.db.lock().unwrap();
-                    calendar::due_reminders(&db, &account, now).unwrap_or_default()
-                };
-                for event in due {
-                    {
-                        let db = engine.db.lock().unwrap();
-                        // Recorded before it is announced: a reminder given
-                        // twice is worse than one lost to a crash in between.
-                        if calendar::mark_reminder_fired(&db, &account, &event.id, event.start, now).is_err() {
-                            continue;
-                        }
-                    }
-                    emit(
-                        &out,
-                        "calendar.reminder",
-                        json!({
-                            "account": account,
-                            "event": event.id,
-                            "subject": event.subject,
-                            "location": event.location,
-                            "start": event.start,
-                            "all_day": event.all_day,
-                            "minutes": event.reminder_minutes,
-                        }),
-                    )
-                    .await;
-                }
+            // Shared with the phone (`pim::reminders`): which are due, and
+            // recorded as raised before they are announced.
+            for detail in due_calendar_reminders(&engine, now).await {
+                emit(&out, "calendar.reminder", detail).await;
             }
             // Task reminders (ADR-0013): local, so not tied to an account.
             let due = store::task_lists::due_reminders(&engine.db.lock().unwrap(), now).unwrap_or_default();
@@ -1553,73 +1668,17 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
                 }
                 emit(&out, "tasks.reminder", json!({ "id": id, "title": title, "due_at": due_at })).await;
             }
-            let db = engine.db.lock().unwrap();
-            let _ = calendar::forget_old_reminders(&db, now);
+            pim::reminders::forget_old(&engine, now);
         }
     });
 }
 
-/// The local calendar a write is addressed to, or None when it belongs to the
-/// account's server. A subscribed calendar is refused: it belongs to whoever
-/// publishes it. Local calendars used to be offered in the editor and then
-/// sent to the account's server, which has never heard of them, so saving an
-/// event there always failed.
-fn local_calendar_write(
-    engine: &Engine,
-    account: &str,
-    calendar_id: &str,
-) -> anyhow::Result<Option<calendar::Calendar>> {
-    let found = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?;
-    match found {
-        Some(calendar) if calendar.kind == calendar::CalendarKind::Local => Ok(Some(calendar)),
-        Some(calendar) if calendar.kind == calendar::CalendarKind::Subscribed => {
-            anyhow::bail!("{} is a subscribed calendar and cannot be changed here", calendar.name)
-        }
-        _ => Ok(None),
-    }
+/// The calendar reminders due now on the accounts the core has open, each
+/// recorded as raised (`pim::reminders::take_due`).
+async fn due_calendar_reminders(engine: &Arc<Engine>, now: i64) -> Vec<Value> {
+    let accounts: Vec<String> = engine.accounts.lock().await.keys().cloned().collect();
+    pim::reminders::take_due(engine, &accounts, now)
 }
-
-/// A CalDAV calendar of an account, and a transport signed in to it.
-fn caldav_target(
-    engine: &Engine,
-    account: &str,
-    calendar_id: &str,
-) -> anyhow::Result<(calendar::Calendar, meron_core::carddav::http::UreqTransport)> {
-    let (found, sign_in) = {
-        let db = engine.db.lock().unwrap();
-        (
-            calendar::calendar_of(&db, account, calendar_id)?,
-            calendar::caldav::sign_in(&db, account, calendar_id)?,
-        )
-    };
-    let (Some(found), Some((_, username))) = (found, sign_in) else {
-        anyhow::bail!("that calendar is no longer here");
-    };
-    let password = meron_core::secrets::load(&calendar::caldav::secret_key(account, calendar_id))?.password;
-    Ok((found, meron_core::carddav::http::UreqTransport { username, password }))
-}
-
-/// The CalDAV calendar an edit is for, when it is one, refusing a read-only
-/// one before anything is sent.
-fn caldav_write(
-    engine: &Engine,
-    account: &str,
-    calendar_id: &str,
-) -> anyhow::Result<Option<(calendar::Calendar, meron_core::carddav::http::UreqTransport)>> {
-    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, calendar_id)?
-        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
-    if !is_caldav {
-        return Ok(None);
-    }
-    let (found, transport) = caldav_target(engine, account, calendar_id)?;
-    if found.read_only {
-        anyhow::bail!("{} is read-only on its server", found.name);
-    }
-    Ok(Some((found, transport)))
-}
-
-const CALDAV_CONFLICT: &str =
-    "this event was changed or removed on the server since it was opened; nothing was saved, and the calendar is being refreshed";
 
 /// The calendars of an account that hold an invitation's event: CalDAV ones
 /// by where the UID lives, local ones by the ids imported events take.
@@ -1676,11 +1735,15 @@ async fn counter_standing(
         return Ok(CounterStanding { event: None, sequence: None, outdated: false });
     };
     // Occurrences keep no SEQUENCE. A CalDAV calendar has the object on its
-    // server, which is read; a local calendar has no version to compare, and
-    // a server that cannot be reached leaves it unknown rather than guessed.
+    // server, which is read; a local event made here keeps it in its change
+    // key; a server that cannot be reached leaves it unknown rather than
+    // guessed.
     let mut sequence = None;
-    let is_caldav = calendar::calendar_of(&engine.db.lock().unwrap(), account, &event.calendar_id)?
-        .is_some_and(|found| found.kind == calendar::CalendarKind::CalDav);
+    let kind = calendar::calendar_of(&engine.db.lock().unwrap(), account, &event.calendar_id)?.map(|found| found.kind);
+    if kind == Some(calendar::CalendarKind::Local) && !event.id.starts_with("local:import:") && event.change_key.is_some() {
+        sequence = Some(calendar::local_sequence(&event));
+    }
+    let is_caldav = kind == Some(calendar::CalendarKind::CalDav);
     if is_caldav {
         if let Ok((target, transport)) = caldav_target(engine, account, &event.calendar_id) {
             let located = calendar::caldav::locate(&engine.db.lock().unwrap(), account, &target.id, &proposal.uid)?;
@@ -1822,171 +1885,6 @@ async fn remove_invitation(
     Ok(holding.len())
 }
 
-/// The source a CardDAV contact belongs to, and a transport signed in to it.
-fn carddav_target(
-    engine: &Engine,
-    book: &str,
-) -> anyhow::Result<(store::ContactSource, meron_core::carddav::http::UreqTransport)> {
-    let source = {
-        let db = engine.db.lock().unwrap();
-        if store::contact_sources_writable(&db)?.get(book).copied().flatten() == Some(false) {
-            anyhow::bail!("the server says this address book is read-only for this account");
-        }
-        store::contact_source(&db, book)?.context("that address book is no longer set up")?
-    };
-    let password = meron_core::secrets::load(&source.id).map(|secrets| secrets.password).unwrap_or_default();
-    let transport = meron_core::carddav::http::UreqTransport { username: source.username.clone(), password };
-    Ok((source, transport))
-}
-
-/// Edits a CardDAV contact from the version it was read at (ADR-0012).
-async fn carddav_save(
-    engine: &Arc<Engine>,
-    stored: Option<&store::SyncedPerson>,
-    read_at: &str,
-    person: meron_core::contacts::person::Person,
-) -> anyhow::Result<Value> {
-    let stored = stored.context("no such contact")?.clone();
-    if stored.href.is_empty() {
-        anyhow::bail!("this contact's place on the server is not known yet; sync the address book and try again");
-    }
-    let (source, transport) = carddav_target(engine, &stored.origin.book)?;
-    let read_at = read_at.to_string();
-    let now = now_seconds();
-    let (book_url, href, uid) = (source.url.clone(), stored.href.clone(), stored.person.uid.clone());
-    let outcome = tokio::task::spawn_blocking(move || {
-        meron_core::carddav::write::save_existing(&transport, &book_url, &href, &read_at, &uid, &person, now)
-    })
-    .await??;
-    record_carddav_outcome(engine, &stored.origin, outcome, Some(&stored.origin.person_id(&stored.person.uid)))
-}
-
-async fn carddav_create(
-    engine: &Arc<Engine>,
-    source: &store::ContactSource,
-    person: meron_core::contacts::person::Person,
-) -> anyhow::Result<Value> {
-    let (source, transport) = carddav_target(engine, &source.id)?;
-    let book_url = source.url.clone();
-    let outcome =
-        tokio::task::spawn_blocking(move || meron_core::carddav::write::save_new(&transport, &book_url, &person)).await??;
-    let origin = store::BookOrigin { source: source.kind.clone(), account: source.account.clone(), book: source.id.clone() };
-    record_carddav_outcome(engine, &origin, outcome, None)
-}
-
-async fn carddav_delete(
-    engine: &Arc<Engine>,
-    id: &str,
-    stored: &store::SyncedPerson,
-    read_at: &str,
-) -> anyhow::Result<Value> {
-    if stored.href.is_empty() {
-        anyhow::bail!("this contact's place on the server is not known yet; sync the address book and try again");
-    }
-    let (source, transport) = carddav_target(engine, &stored.origin.book)?;
-    let (book_url, href, read_at) = (source.url.clone(), stored.href.clone(), read_at.to_string());
-    let outcome = tokio::task::spawn_blocking(move || {
-        meron_core::carddav::write::delete_existing(&transport, &book_url, &href, &read_at)
-    })
-    .await??;
-    record_carddav_outcome(engine, &stored.origin, outcome, Some(id))
-}
-
-/// Brings the local copy in line with what the server now holds, and answers
-/// the editor in the same shape as the local book does.
-fn record_carddav_outcome(
-    engine: &Engine,
-    origin: &store::BookOrigin,
-    outcome: meron_core::carddav::write::Outcome,
-    id: Option<&str>,
-) -> anyhow::Result<Value> {
-    use meron_core::carddav::write::Outcome;
-    let db = engine.db.lock().unwrap();
-    match outcome {
-        Outcome::Saved { href, version, person } => {
-            let id = store::put_synced_person(
-                &db,
-                origin,
-                &store::SyncedRow { person, photo_key: String::new(), href, version: version.clone() },
-                now_seconds(),
-            )?;
-            Ok(json!({ "ok": true, "id": id, "version": version }))
-        }
-        Outcome::Deleted => {
-            if let Some(id) = id {
-                store::forget_person(&db, id)?;
-            }
-            Ok(json!({ "ok": true }))
-        }
-        Outcome::Conflict { current } => Ok(json!({
-            "ok": false,
-            "conflict": true,
-            "current": current.map(|(person, version)| json!({
-                "id": id.unwrap_or_default(),
-                "name": person.name,
-                "organisation": person.organisation,
-                "note": person.note,
-                "emails": person.emails,
-                "phones": person.phones,
-                "version": version,
-            })),
-        })),
-    }
-}
-
-/// A person as the editor sends it: any field may be left out.
-#[derive(serde::Deserialize, Default)]
-#[serde(default)]
-struct PersonInput {
-    name: String,
-    organisation: String,
-    note: String,
-    emails: Vec<LabelledInput>,
-    phones: Vec<LabelledInput>,
-}
-
-#[derive(serde::Deserialize, Default)]
-#[serde(default)]
-struct LabelledInput {
-    #[serde(alias = "number")]
-    addr: String,
-    label: String,
-}
-
-impl PersonInput {
-    fn into_person(self) -> meron_core::contacts::person::Person {
-        use meron_core::contacts::person::{EmailAddress, Person, PhoneNumber};
-        Person {
-            name: self.name,
-            organisation: self.organisation,
-            note: self.note,
-            emails: self.emails.into_iter().map(|e| EmailAddress { addr: e.addr, label: e.label }).collect(),
-            phones: self.phones.into_iter().map(|p| PhoneNumber { number: p.addr, label: p.label }).collect(),
-            ..Default::default()
-        }
-    }
-}
-
-/// The bridge's answer to a write to the local address book.
-fn local_write_json(write: store::local_people::Write) -> Value {
-    match write {
-        store::local_people::Write::Saved { id, version } => json!({ "ok": true, "id": id, "version": version }),
-        store::local_people::Write::Conflict { current } => json!({
-            "ok": false,
-            "conflict": true,
-            "current": current.map(|stored| json!({
-                "id": stored.id,
-                "name": stored.person.name,
-                "organisation": stored.person.organisation,
-                "note": stored.person.note,
-                "emails": stored.person.emails,
-                "phones": stored.person.phones,
-                "version": stored.version,
-            })),
-        }),
-    }
-}
-
 /// The transport a bound task list signs in with: its user name, and the
 /// password kept in the keychain for it (ADR-0039).
 fn task_transport(
@@ -2018,55 +1916,6 @@ async fn sync_task_list(engine: &Arc<Engine>, binding: meron_core::task_sync::Bi
     }
 }
 
-fn spawn_calendar_sync(
-    engine: Arc<Engine>,
-    out: Writer,
-    account: String,
-    from: i64,
-    to: i64,
-) {
-    if engine.is_paused(&account) {
-        return;
-    }
-    let key = format!("calendar:{account}:{from}:{to}");
-    if !engine.syncing.lock().unwrap().insert(key.clone()) {
-        return;
-    }
-    tokio::spawn(async move {
-        let result = retry_background_sync(
-            &format!("calendar sync for {account}"),
-            || !engine.is_paused(&account),
-            || sync_calendar_window(&engine, &account, from, to),
-        )
-        .await;
-        engine.syncing.lock().unwrap().remove(&key);
-        match result {
-            Ok(_) => {
-                emit(
-                    &out,
-                    "calendar.synced",
-                    json!({ "account": account, "from": from, "to": to }),
-                )
-                .await
-            }
-            Err(e) if e.is::<BackgroundSyncCancelled>() => {}
-            Err(e) => {
-                emit(
-                    &out,
-                    "calendar.syncError",
-                    json!({ "account": account, "message": format!("calendar sync: {e:#}") }),
-                )
-                .await
-            }
-        }
-    });
-}
-
-/// Pulls the calendar list, then one window of occurrences per enabled
-/// calendar.
-///
-/// A calendar the user hid is not fetched at all: the point of hiding one is
-/// not to pay for it.
 /// Now, as epoch seconds. A clock that cannot be read is treated as the epoch,
 /// which shows as "never synced" rather than as a plausible wrong time.
 /// Sweeps previewed and not yet confirmed. Process-wide: a review is a thing
@@ -2081,136 +1930,6 @@ fn now_seconds() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|epoch| epoch.as_secs() as i64)
         .unwrap_or_default()
-}
-
-async fn sync_calendar_window(
-    engine: &Arc<Engine>,
-    account: &str,
-    from: i64,
-    to: i64,
-) -> anyhow::Result<()> {
-    let calendars = calendar::route::list_calendars(engine, account).await?;
-    {
-        let db = engine.db.lock().unwrap();
-        // Only the account's own calendars are refreshed from the server;
-        // local and subscribed ones are not its to report, and upserting the
-        // server's answer over them would drop them.
-        calendar::replace_account_calendars(&db, account, &calendars)?;
-    }
-    let wanted: Vec<calendar::Calendar> = {
-        let db = engine.db.lock().unwrap();
-        calendar::get_calendars(&db, account)?
-            .into_iter()
-            .filter(|calendar| calendar.enabled)
-            .collect()
-    };
-
-    for calendar in wanted {
-        match calendar.kind {
-            // Nothing to fetch: its events only ever came from here.
-            calendar::CalendarKind::Local => continue,
-            calendar::CalendarKind::Subscribed => {
-                let Some(url) = calendar.url.clone() else {
-                    continue;
-                };
-                let id = calendar.id.clone();
-                // One subscription that cannot be fetched or read is that
-                // calendar's problem: it keeps the events it last had, and the
-                // calendars after it are still refreshed. Returning the error
-                // here stopped the whole account's sync at the first one.
-                let fetched = match tokio::task::spawn_blocking(move || {
-                    calendar::subscription::fetch(&url)
-                })
-                .await
-                {
-                    Ok(Ok(body)) => calendar::subscription::parse_window(&body, &id, from, to),
-                    Ok(Err(err)) => Err(err),
-                    Err(err) => Err(err.into()),
-                };
-                let (events, skipped) = match fetched {
-                    Ok(parsed) => parsed,
-                    Err(err) => {
-                        meron_core::mlog!(
-                            meron_core::log::Level::Warn,
-                            "calendar",
-                            "{id}: subscription not refreshed: {err:#}"
-                        );
-                        continue;
-                    }
-                };
-                if skipped > 0 {
-                    meron_core::mlog!(
-                        meron_core::log::Level::Warn,
-                        "calendar",
-                        "{id}: {skipped} entr(ies) in the published file could not be read"
-                    );
-                }
-                let db = engine.db.lock().unwrap();
-                calendar::replace_window(&db, account, &id, (from, to), &events)?;
-                calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
-            }
-            // A CalDAV calendar that cannot be read keeps its last window,
-            // like a subscription, and the others are still refreshed.
-            calendar::CalendarKind::CalDav => {
-                let id = calendar.id.clone();
-                let (_, transport) = match caldav_target(engine, account, &id) {
-                    Ok(found) => found,
-                    Err(err) => {
-                        meron_core::mlog!(meron_core::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
-                        continue;
-                    }
-                };
-                let url = id.clone();
-                let fetched = tokio::task::spawn_blocking(move || {
-                    calendar::caldav::fetch_window(&transport, &url, from, to)
-                })
-                .await;
-                let objects = match fetched {
-                    Ok(Ok(objects)) => objects,
-                    Ok(Err(err)) => {
-                        meron_core::mlog!(meron_core::log::Level::Warn, "calendar", "{id}: not refreshed: {err:#}");
-                        continue;
-                    }
-                    Err(err) => return Err(err.into()),
-                };
-                let (events, located, skipped) = calendar::caldav::events_from(&objects, &id, from, to);
-                if skipped > 0 {
-                    meron_core::mlog!(
-                        meron_core::log::Level::Warn,
-                        "calendar",
-                        "{id}: {skipped} event(s) on the server could not be read"
-                    );
-                }
-                let db = engine.db.lock().unwrap();
-                calendar::replace_window(&db, account, &id, (from, to), &events)?;
-                calendar::caldav::remember(&db, account, &id, &located)?;
-                calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
-            }
-            calendar::CalendarKind::Account => {
-                let id = calendar.id.clone();
-                let events =
-                    calendar::route::events_in_window(engine, account, &id, from, to).await?;
-                // An occurrence with no series identifier cannot be edited as
-                // a series, and nothing on screen would explain why. Said once
-                // per sync rather than per event.
-                let unidentified = events
-                    .iter()
-                    .filter(|event| event.is_recurring && event.series_id.is_none())
-                    .count();
-                if unidentified > 0 {
-                    meron_core::mlog!(
-                        meron_core::log::Level::Warn,
-                        "calendar",
-                        "{id}: {unidentified} recurring occurrence(s) arrived without a series id"
-                    );
-                }
-                let db = engine.db.lock().unwrap();
-                calendar::replace_window(&db, account, &id, (from, to), &events)?;
-                calendar::mark_calendar_synced(&db, account, &id, now_seconds())?;
-            }
-        }
-    }
-    Ok(())
 }
 
 fn spawn_folder_sync(engine: Arc<Engine>, out: Writer, account: String) {
@@ -2591,92 +2310,10 @@ async fn idle_once(
     }
 }
 
-/// Read one CardDAV source into the address book, and record how it went.
-///
-/// Off the async runtime, because the DAV client is blocking HTTP. The
-/// outcome is written to the source either way: a sync that failed leaves its
-/// reason where the settings screen can show it, and a sync that succeeded
-/// clears whatever the last one said.
+/// Read one book into the address book and record how it went
+/// (`pim::people::sync_source`, shared with the phone).
 async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<()> {
-    let source = store::contact_source(&engine.db.lock().unwrap(), id)?
-        .with_context(|| format!("no such contact source: {id}"))?;
-
-    let fetched = match source.kind.as_str() {
-        "carddav" => {
-            let password = meron_core::secrets::load(id)
-                .map(|secrets| secrets.password)
-                .unwrap_or_default();
-            let transport = meron_core::carddav::http::UreqTransport {
-                username: source.username.clone(),
-                password,
-            };
-            let url = source.url.clone();
-            tokio::task::spawn_blocking(move || {
-                let cards = meron_core::carddav::client::fetch_cards(&transport, &url)?;
-                // Asked each sync: a share can be made read-only at any time.
-                let writable = meron_core::carddav::client::book_writable(&transport, &url).unwrap_or(None);
-                let rows = cards
-                    .into_iter()
-                    .map(|card| store::SyncedRow {
-                        person: card.person,
-                        photo_key: String::new(),
-                        href: card.href,
-                        version: card.etag,
-                    })
-                    .collect::<Vec<_>>();
-                anyhow::Ok((rows, Some(writable)))
-            })
-            .await?
-        }
-        // The mail account's own token, refreshed if it had expired. The one
-        // new thing asked of it is the contacts scope; a token from before
-        // that existed is refused by Google and the refusal names the fix.
-        "google" => match engine.ensure_valid_creds(&source.account).await {
-            Ok(creds) if creds.auth_type == "gmail_oauth" => {
-                let token = creds.access_token.clone().unwrap_or_default();
-                if token.is_empty() {
-                    Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
-                } else {
-                    tokio::task::spawn_blocking(move || {
-                        meron_core::contacts::google::fetch_connections(&token).map(|people| {
-                            let rows = people
-                                .into_iter()
-                                .map(|person| store::SyncedRow { person, ..Default::default() })
-                                .collect::<Vec<_>>();
-                            (rows, None)
-                        })
-                    })
-                    .await?
-                }
-            }
-            Ok(_) => Err(anyhow::anyhow!("not a Google account: {}", source.account)),
-            Err(error) => Err(error),
-        },
-        other => Err(anyhow::anyhow!("unknown contact source kind: {other}")),
-    };
-
-    let now = chrono::Utc::now().timestamp();
-    let db = engine.db.lock().unwrap();
-    match fetched {
-        Ok((rows, writable)) => {
-            let origin = store::BookOrigin {
-                source: source.kind.clone(),
-                account: source.account.clone(),
-                book: source.id.clone(),
-            };
-            // Photos are not cached yet; the key stays empty until they are.
-            store::replace_book_rows(&db, &origin, &rows, now)?;
-            if let Some(writable) = writable {
-                store::set_contact_source_writable(&db, id, writable)?;
-            }
-            store::mark_contact_source_synced(&db, id, "", "", now)?;
-            Ok(())
-        }
-        Err(error) => {
-            store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
-            Err(error)
-        }
-    }
+    pim::people::sync_source(engine, id).await
 }
 
 #[tokio::main]
@@ -2771,6 +2408,7 @@ async fn main() {
     spawn_reminder_watch(engine.clone(), out.clone());
     spawn_deferred_watch(engine.clone(), out.clone());
     spawn_backup_schedule(engine.clone(), out.clone());
+    spawn_auto_archive(engine.clone(), out.clone());
 
     emit(&out, "ready", ready_event()).await;
 
@@ -2990,6 +2628,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 proxy::set_global(proxy::parse_global(&value));
             }
             Ok(json!({ "ok": true }))
+        }
+
+        // The proxy one outbound HTTP request from the Go bridge must use
+        // (autodiscovery, OAuth sign-in, avatars, update check and download).
+        // Errors when a proxy is set but unusable, so the caller never falls
+        // back to a direct connection.
+        "proxy.route" => {
+            let account = p.get("account").and_then(Value::as_str).filter(|s| !s.is_empty());
+            proxy::route_json(&engine.db.lock().unwrap(), account)
         }
 
         "assistant.preview" => {
@@ -3315,6 +2962,23 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             meron_core::privacy::reset(&meron_core::privacy::filters_dir()?)?;
             Ok(serde_json::to_value(meron_core::privacy::info())?)
         }
+        // Read receipts (ADR-0048). Status may send one, but only under the
+        // person's own "always" and only where that is safe; answer is the
+        // person's click in the reader bar.
+        "receipts.status" | "receipts.answer" => {
+            let parsed = meron_core::protocol::mail::parse_thread_id(&req_str(p, "id")?)
+                .context("invalid message id")?;
+            let uid = parsed.uid.context("not a single message")?;
+            let account = parsed.account;
+            let folder = canon_folder(&req_str(p, "folder").unwrap_or(parsed.folder));
+            let status = if req.method == "receipts.status" {
+                meron_core::receipts::status(engine, &account, &folder, uid, now_seconds()).await?
+            } else {
+                let send = p.get("send").and_then(Value::as_bool).context("missing bool param: send")?;
+                meron_core::receipts::answer(engine, &account, &folder, uid, send, now_seconds()).await?
+            };
+            Ok(serde_json::to_value(status)?)
+        }
         "privacy.allowMessage" => {
             let allow = p.get("allow").and_then(Value::as_bool).unwrap_or(true);
             meron_core::privacy::set_exception(
@@ -3572,6 +3236,39 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "backupSchedule.runNow" => {
             run_scheduled_backup(engine).await?;
             backup_schedule_status(engine)
+        }
+        // Automatic archiving by age (#112, ADR-0054): off by default, and
+        // turned on only with the preview of what it moves confirmed.
+        "autoArchive.status" => auto_archive_status(engine, &req_str(p, "account")?),
+        "autoArchive.preview" => {
+            let account = req_str(p, "account")?;
+            let policy: meron_core::auto_archive::Policy =
+                serde_json::from_value(p.get("policy").cloned().context("missing policy")?)?;
+            let (kind, folders, label) = auto_archive_context(engine, &account)?;
+            meron_core::auto_archive::validate(&policy, kind, &folders)?;
+            let mut steps = meron_core::auto_archive::EngineSteps {
+                engine: engine.clone(),
+                account: account.clone(),
+                media_root: parse::media_root(),
+            };
+            let cutoffs = meron_core::auto_archive::cutoffs(&policy, &chrono::Local::now());
+            let plan =
+                meron_core::auto_archive::plan(&mut steps, &engine.db, &account, &label, &policy, &cutoffs).await?;
+            Ok(serde_json::to_value(plan)?)
+        }
+        "autoArchive.save" => {
+            let account = req_str(p, "account")?;
+            let policy: meron_core::auto_archive::Policy =
+                serde_json::from_value(p.get("policy").cloned().context("missing policy")?)?;
+            let confirm = p.get("confirm").and_then(Value::as_str);
+            let (kind, folders, _) = auto_archive_context(engine, &account)?;
+            meron_core::auto_archive::save(&engine.db.lock().unwrap(), &account, &policy, confirm, kind, &folders)?;
+            auto_archive_status(engine, &account)
+        }
+        "autoArchive.runNow" => {
+            let account = req_str(p, "account")?;
+            let (log, archive_created) = run_auto_archive(engine, out, &account, "manual").await?;
+            Ok(json!({ "run": log, "archive_created": archive_created, "status": auto_archive_status(engine, &account)? }))
         }
         "cloud.providers" => Ok(json!(meron_core::cloud::PROVIDERS
             .iter()
@@ -3926,6 +3623,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         "pending": task.pending,
                         "conflict": task.conflict,
                         "recurring": task.recurring,
+                        "recurrence": store::task_lists::recurrence_of(&task.rrule),
                     }))
                     .collect::<Vec<_>>(),
             }))
@@ -3968,7 +3666,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 Some((task, revision, linked)) => json!({
                     "due_at": task.due_at, "note": task.note, "list_id": task.list_id, "title": task.title,
                     "reminder_at": task.reminder_at, "priority": task.priority, "revision": revision,
-                    "linked": linked,
+                    "linked": linked, "recurrence": task.recurrence,
                 }),
                 None => Value::Null,
             })
@@ -4283,18 +3981,21 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     "current": current.map(|task| json!({
                         "list_id": task.list_id, "title": task.title, "note": task.note,
                         "due_at": task.due_at, "reminder_at": task.reminder_at, "priority": task.priority,
-                        "revision": revision,
+                        "recurrence": task.recurrence, "revision": revision,
                     })),
                 }),
             })
         }
 
+        // A repeating task completes one occurrence and moves on to the
+        // next; `stop` ends the repetition instead (ADR-0053).
         "tasks.setCompleted" => {
             let id = req_i64(p, "id")?;
             let completed = req_bool(p, "completed")?;
+            let stop = p.get("stop_repeating").and_then(Value::as_bool).unwrap_or(false);
             let db = engine.db.lock().unwrap();
-            store::set_task_completed(&db, id, completed, now_seconds())?;
-            Ok(json!({ "ok": true }))
+            let done = store::task_lists::set_completed(&db, id, completed, stop, now_seconds())?;
+            Ok(json!({ "ok": true, "next_due": done.next_due }))
         }
 
         // "Never mind, this was not one" — removes the task outright.
@@ -4379,43 +4080,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // A Google account's contacts, read with the token the account already
         // holds. One source per account, so asking twice re-reads rather than
         // doubling everybody.
-        "google.contacts.sync" => {
-            let account = req_str(p, "account")?;
-            let id = format!("google-{account}");
-            let existing = store::contact_source(&engine.db.lock().unwrap(), &id)?;
-            if existing.is_none() {
-                store::upsert_contact_source(
-                    &engine.db.lock().unwrap(),
-                    &store::ContactSource {
-                        writable: None,
-                        id: id.clone(),
-                        kind: "google".into(),
-                        account: account.clone(),
-                        url: String::new(),
-                        username: String::new(),
-                        name: req_str(p, "name").unwrap_or_default(),
-                        enabled: true,
-                        ctag: String::new(),
-                        last_sync_at: 0,
-                        last_error: String::new(),
-                    },
-                    chrono::Utc::now().timestamp(),
-                )?;
-            }
-            let outcome = sync_contact_source(engine, &id).await;
-            Ok(json!({ "id": id, "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
-        }
+        "google.contacts.sync" => pim::people::google_sync(engine, p).await,
 
-        "carddav.sync" => {
-            let id = req_str(p, "id")?;
-            let outcome = sync_contact_source(engine, &id).await;
-            Ok(json!({ "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
-        }
+        "carddav.sync" => pim::people::source_sync(engine, p).await,
 
-        "carddav.list" => {
-            let sources = store::contact_sources(&engine.db.lock().unwrap())?;
-            Ok(json!({ "sources": sources }))
-        }
+        "carddav.list" => pim::people::sources(engine),
 
         // Removing a source takes its people with it: they were a copy of
         // somebody else's book, and a copy with no origin can never be
@@ -4848,85 +4517,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         // People, from whichever books have been brought in. An empty query
         // is the whole book, which is what the Personas view opens on.
-        "people.list" => {
-            let query = req_str(p, "query").unwrap_or_default();
-            let limit = req_u32(p, "limit").unwrap_or(500);
-            let (found, writable, links) = {
-                let db = engine.db.lock().unwrap();
-                (
-                    store::find_people(&db, &query, limit)?,
-                    store::contact_sources_writable(&db)?,
-                    store::person_links::links(&db)?,
-                )
-            };
-            Ok(json!({
-                "people": found
-                    .iter()
-                    .map(|stored| json!({
-                        "id": stored.id,
-                        "source": stored.origin.source,
-                        "account": stored.origin.account,
-                        "book": stored.origin.book,
-                        "name": stored.person.name,
-                        "organisation": stored.person.organisation,
-                        "note": stored.person.note,
-                        "photo": stored.photo_key,
-                        "emails": stored.person.emails,
-                        "phones": stored.person.phones,
-                        "version": stored.version,
-                        // Linked by the reader with the same person elsewhere.
-                        "link": links.get(&stored.id),
-                        // The local book, and CardDAV books the server has not
-                        // said are read-only (ADR-0012). Google and Exchange
-                        // stay read-only here.
-                        "editable": stored.origin.source == "local"
-                            || (stored.origin.source == "carddav"
-                                && writable.get(&stored.origin.book).copied().flatten() != Some(false)),
-                    }))
-                    .collect::<Vec<_>>()
-            }))
-        }
+        "people.list" => pim::people::list(engine, p),
 
         // Creates a person in the local book, or edits one from the version
         // it was read at. A different version saves nothing and answers with
         // the copy that is there now, for the reader to choose (ADR-0012).
-        "people.save" => {
-            let id = p.get("id").and_then(Value::as_str).filter(|id| !id.is_empty());
-            let version = p.get("version").and_then(Value::as_str);
-            if id.is_some() && version.is_none() {
-                anyhow::bail!("an edit must say which version it was made from");
-            }
-            let input: PersonInput =
-                serde_json::from_value(p.get("person").cloned().context("missing param: person")?)
-                    .context("person")?;
-            let person = input.into_person();
-            let stored = match id {
-                Some(id) => store::synced_person(&engine.db.lock().unwrap(), id)?,
-                None => None,
-            };
-            let book = p.get("book").and_then(Value::as_str).filter(|book| !book.is_empty() && *book != "local");
-            match (&stored, book) {
-                (Some(stored), _) if stored.origin.source == "carddav" => {
-                    carddav_save(&engine, Some(stored), version.unwrap_or_default(), person).await
-                }
-                (Some(stored), _) if stored.origin.source != "local" => {
-                    anyhow::bail!("this address book is read-only here")
-                }
-                (None, Some(book)) if id.is_none() => {
-                    let source = store::contact_source(&engine.db.lock().unwrap(), book)?
-                        .context("that address book is no longer set up")?;
-                    if source.kind != "carddav" {
-                        anyhow::bail!("this address book is read-only here");
-                    }
-                    carddav_create(&engine, &source, person).await
-                }
-                _ => {
-                    let write =
-                        store::local_people::save(&engine.db.lock().unwrap(), id, version, &person, now_seconds())?;
-                    Ok(local_write_json(write))
-                }
-            }
-        }
+        "people.save" => pim::people::save(engine, p).await,
 
         // People who share an address and may be one person: suggestions,
         // never acted on alone (ADR-0012).
@@ -5046,19 +4642,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }))
         }
 
-        "people.delete" => {
-            let id = req_str(p, "id")?;
-            let version = req_str(p, "version")?;
-            let stored = store::synced_person(&engine.db.lock().unwrap(), &id)?;
-            match stored {
-                Some(stored) if stored.origin.source == "carddav" => carddav_delete(&engine, &id, &stored, &version).await,
-                Some(stored) if stored.origin.source != "local" => anyhow::bail!("this address book is read-only here"),
-                _ => {
-                    let write = store::local_people::delete(&engine.db.lock().unwrap(), &id, &version)?;
-                    Ok(local_write_json(write))
-                }
-            }
-        }
+        "people.delete" => pim::people::delete(engine, p).await,
+
+        // Contact groups (ADR-0052): the local book's, CardDAV group cards
+        // and Google labels; writes go to the local book and CardDAV books.
+        "people.groups" => pim::people::groups(engine),
+        "people.groupSave" => pim::people::group_save(engine, p).await,
+        "people.groupDelete" => pim::people::group_delete(engine, p).await,
+        // The book's names for senders a message gave no name (ADR-0052).
+        "people.names" => pim::people::names(engine, p),
 
         // Text the writer keeps because they write it often: a snippet
         // dropped in at the cursor, or a whole message with its own subject.
@@ -6205,43 +5797,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // avoid a sync→event→reload loop.
         // RSS accounts return final Folder JSON (one synthetic Inbox); mail
         // returns raw rows the bridge formats. Routed by the account's engine.
-        "calendar.list" => {
-            let account = req_str(p, "account")?;
-            let calendars = calendar::get_calendars(&engine.db.lock().unwrap(), &account)?;
-            Ok(json!({ "calendars": serde_json::to_value(calendars)? }))
-        }
+        "calendar.list" => pim::calendar::list(engine, p),
 
-        "calendar.setEnabled" => {
-            let account = req_str(p, "account")?;
-            let id = req_str(p, "calendar")?;
-            let enabled = p
-                .get("enabled")
-                .and_then(Value::as_bool)
-                .context("missing bool param: enabled")?;
-            calendar::set_calendar_enabled(&engine.db.lock().unwrap(), &account, &id, enabled)?;
-            Ok(json!({ "ok": true }))
-        }
+        "calendar.setEnabled" => pim::calendar::set_enabled(engine, p),
 
         // Answers from the cache and refreshes behind the request, the same
         // contract `folders.list` and `messages.recent` give: a view renders
         // at once and settles when the server answers.
-        "calendar.events" => {
-            let account = req_str(p, "account")?;
-            let from = req_i64(p, "from")?;
-            let to = req_i64(p, "to")?;
-            if to <= from {
-                anyhow::bail!("calendar window ends before it starts");
-            }
-            let events = calendar::events_in_window(
-                &engine.db.lock().unwrap(),
-                &account,
-                (from, to),
-            )?;
-            if p.get("refresh").and_then(Value::as_bool).unwrap_or(true) {
-                spawn_calendar_sync(engine.clone(), out.clone(), account, from, to);
-            }
-            Ok(json!({ "events": serde_json::to_value(events)? }))
-        }
+        "calendar.events" => pim::calendar::events(engine, &emitter(out), p),
 
         // Writes go straight to the server and then refresh the window they
         // land in, so the agenda shows what the server actually stored rather
@@ -6250,26 +5813,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // which is exactly what the user asked for when they chose "on this
         // computer" — and what the interface must say, since nothing else has
         // a copy of it.
-        "calendar.createLocal" => {
-            let account = req_str(p, "account")?;
-            let name = req_str(p, "name")?;
-            if name.trim().is_empty() {
-                anyhow::bail!("a calendar needs a name");
-            }
-            let id = format!("local:{}", uuid::Uuid::new_v4());
-            calendar::upsert_calendars(
-                &engine.db.lock().unwrap(),
-                &account,
-                &[calendar::Calendar {
-                    id: id.clone(),
-                    name,
-                    kind: calendar::CalendarKind::Local,
-                    enabled: true,
-                    ..Default::default()
-                }],
-            )?;
-            Ok(json!({ "id": id }))
-        }
+        "calendar.createLocal" => pim::calendar::create_local(engine, p),
 
         // Subscribing fetches once before storing, so a wrong URL is reported
         // now rather than as a calendar that silently never fills.
@@ -6502,6 +6046,75 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "to": proposer.addr,
                 "subject": format!("Proposed time declined: {}", proposal.summary),
                 "ics": refusal,
+            }}))
+        }
+        // The organizer of a meeting in a local or CalDAV calendar telling
+        // the people on it, after the person confirmed who (2026-10-12).
+        // Like answers, the core builds what is to be sent and the frontend
+        // sends it as an ordinary message. Built from the event as stored:
+        // after a save, its new version; before a delete, the one going.
+        // Google and Exchange tell people themselves and are refused here.
+        "invite.notify" => {
+            let account = req_str(p, "account")?;
+            let calendar_id = req_str(p, "calendar")?;
+            let event_id = req_str(p, "event")?;
+            let notice = calendar::itip::Notice::parse(&req_str(p, "method")?).context("unknown method")?;
+            let me = calendar::Participant {
+                name: req_str(p, "me_name").unwrap_or_default(),
+                addr: req_str(p, "me_addr")?.trim().to_ascii_lowercase(),
+                response: String::new(),
+            };
+            let whole_series = p.get("scope").and_then(Value::as_str).is_some_and(|scope| scope == "series");
+            let now = now_seconds();
+            let built = if local_calendar_write(&engine, &account, &calendar_id)?.is_some() {
+                let event = calendar::event_of(&engine.db.lock().unwrap(), &account, &calendar_id, &event_id)?
+                    .context("this event is no longer in the calendar")?;
+                let object = calendar::itip::local_object(&event, calendar::local_sequence(&event), now);
+                let (_, occurrence) = calendar::itip::local_uid(&event);
+                calendar::itip::organizer_notice(&object, notice, occurrence, &me, now)?
+            } else if let Some((target, transport)) = caldav_write(&engine, &account, &calendar_id)? {
+                let uid = calendar::caldav::uid_of(&event_id);
+                let located = calendar::caldav::locate(&engine.db.lock().unwrap(), &account, &target.id, &uid)?
+                    .context("this event's place on the server is not known yet; refresh the calendar and try again")?;
+                let url = target.id.clone();
+                let object = tokio::task::spawn_blocking(move || calendar::caldav::get_object(&transport, &url, &located.href))
+                    .await??
+                    .context("this event is no longer on the server")?
+                    .0;
+                let occurrence = if whole_series {
+                    None
+                } else {
+                    calendar::ics::occurrence_of(&event_id).map(|(_, at)| at)
+                };
+                calendar::itip::organizer_notice(&object, notice, occurrence, &me, now)?
+            } else {
+                anyhow::bail!("this calendar's own server tells the people on its events; nothing is sent from here");
+            };
+            // Only the people the person was shown: anyone else on the stored
+            // event (a copy changed elsewhere since it was opened) would be
+            // mailed without having been named, so nothing is built.
+            if let Some(shown) = p.get("people").and_then(Value::as_array) {
+                let shown: Vec<String> =
+                    shown.iter().filter_map(Value::as_str).map(|addr| addr.trim().to_ascii_lowercase()).collect();
+                let unseen: Vec<&str> = built.to.iter().filter(|addr| !shown.contains(addr)).map(String::as_str).collect();
+                if !unseen.is_empty() {
+                    anyhow::bail!(
+                        "the event also names {}, who was not shown; nothing was sent. Refresh the calendar and try again",
+                        unseen.join(", ")
+                    );
+                }
+            }
+            let subject = match (notice, built.sequence) {
+                (calendar::itip::Notice::Cancel, _) => format!("Cancelled: {}", built.summary),
+                (calendar::itip::Notice::Request, 0) => format!("Invitation: {}", built.summary),
+                (calendar::itip::Notice::Request, _) => format!("Updated invitation: {}", built.summary),
+            };
+            Ok(json!({ "notice": {
+                "method": built.method,
+                "to": built.to,
+                "subject": subject,
+                "sequence": built.sequence,
+                "ics": built.ics,
             }}))
         }
         // Which of the person's own events a time overlaps (ADR-0043): read
@@ -6738,24 +6351,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // What a cached occurrence cannot carry: who is on the event and its
         // notes. Exchange's window query returns neither, so they are fetched
         // when a reader opens one.
-        "calendar.eventDetails" => {
-            let account = req_str(p, "account")?;
-            let calendar_id = p.get("calendar").and_then(Value::as_str).unwrap_or_default();
-            let event_id = req_str(p, "event")?;
-            let change_key = p.get("change_key").and_then(Value::as_str).filter(|k| !k.is_empty());
-            let (attendees, description) = calendar::route::event_details(
-                &engine,
-                &account,
-                calendar_id,
-                &event_id,
-                change_key,
-            )
-            .await?;
-            Ok(json!({
-                "attendees": serde_json::to_value(attendees)?,
-                "description": description,
-            }))
-        }
+        "calendar.eventDetails" => pim::calendar::event_details(engine, p).await,
 
         // The rule behind a series, asked for when a reader opens a repeating
         // event: the store keeps occurrences, never rules.
@@ -6840,235 +6436,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true }))
         }
 
-        "calendar.create" => {
-            let account = req_str(p, "account")?;
-            let event: calendar::Event = serde_json::from_value(
-                p.get("event").cloned().context("missing param: event")?,
-            )
-            .context("event")?;
-            // Local and CalDAV calendars have nobody to make a meeting with
-            // (#109); Exchange is refused where it is routed.
-            if event.add_meeting.as_deref().is_some_and(|m| m != "none")
-                && (local_calendar_write(&engine, &account, &event.calendar_id)?.is_some()
-                    || caldav_write(&engine, &account, &event.calendar_id)?.is_some())
-            {
-                anyhow::bail!("online meetings can be added here only to Google calendars");
-            }
-            if event.end < event.start {
-                anyhow::bail!("an event cannot end before it starts");
-            }
-            if let Some(local) = local_calendar_write(&engine, &account, &event.calendar_id)? {
-                // A local calendar keeps single events: there is no server to
-                // expand a rule, and storing one unexpanded would show it once.
-                if event.recurrence.is_some() {
-                    anyhow::bail!(
-                        "a local calendar keeps single events; a repeating event needs an account calendar"
-                    );
-                }
-                let created = calendar::Event {
-                    id: format!("local:{}", uuid::Uuid::new_v4()),
-                    calendar_id: local.id,
-                    change_key: None,
-                    is_recurring: false,
-                    series_id: None,
-                    ..event
-                };
-                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &created)?;
-                return Ok(json!({ "event": serde_json::to_value(created)? }));
-            }
-            if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
-                let wanted = event.clone();
-                let url = target.id.clone();
-                let (uid, change) = tokio::task::spawn_blocking(move || {
-                    calendar::caldav::create(&transport, &url, &wanted, now_seconds())
-                })
-                .await??;
-                let calendar::caldav::Change::Saved { href, etag } = change else {
-                    anyhow::bail!("the server already holds an event at that address; nothing was saved");
-                };
-                calendar::caldav::remember(
-                    &engine.db.lock().unwrap(),
-                    &account,
-                    &target.id,
-                    &[calendar::caldav::Located { uid: uid.clone(), href, etag: etag.unwrap_or_default() }],
-                )?;
-                spawn_calendar_sync(engine.clone(), out.clone(), account, event.start, event.end.max(event.start + 1));
-                let created = calendar::Event { id: format!("{uid}@{}", event.start), ..event };
-                return Ok(json!({ "event": serde_json::to_value(created)? }));
-            }
-            // Telling the people on an event is never assumed: the caller says
-            // so only after the reader has confirmed it.
-            let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
-            let created = calendar::route::create_event(&engine, &account, &event, notify).await?;
-            spawn_calendar_sync(
-                engine.clone(),
-                out.clone(),
-                account,
-                created.start,
-                created.end.max(created.start + 1),
-            );
-            Ok(json!({ "event": serde_json::to_value(created)? }))
-        }
+        "calendar.create" => pim::calendar::create(engine, &emitter(out), p).await,
 
-        "calendar.update" => {
-            let account = req_str(p, "account")?;
-            let event: calendar::Event = serde_json::from_value(
-                p.get("event").cloned().context("missing param: event")?,
-            )
-            .context("event")?;
-            // Local and CalDAV calendars have nobody to make a meeting with
-            // (#109); Exchange is refused where it is routed.
-            if event.add_meeting.as_deref().is_some_and(|m| m != "none")
-                && (local_calendar_write(&engine, &account, &event.calendar_id)?.is_some()
-                    || caldav_write(&engine, &account, &event.calendar_id)?.is_some())
-            {
-                anyhow::bail!("online meetings can be added here only to Google calendars");
-            }
-            if event.end < event.start {
-                anyhow::bail!("an event cannot end before it starts");
-            }
-            // Which of the two questions an edit answers: this day, or every
-            // day the series falls on. Absent means this one, which is what a
-            // caller that has never heard of series should get.
-            let whole_series = p
-                .get("scope")
-                .and_then(Value::as_str)
-                .is_some_and(|scope| scope == "series");
-            if local_calendar_write(&engine, &account, &event.calendar_id)?.is_some() {
-                if event.recurrence.is_some() {
-                    anyhow::bail!(
-                        "a local calendar keeps single events; a repeating event needs an account calendar"
-                    );
-                }
-                calendar::put_local_event(&engine.db.lock().unwrap(), &account, &event)?;
-                return Ok(json!({ "ok": true }));
-            }
-            if let Some((target, transport)) = caldav_write(&engine, &account, &event.calendar_id)? {
-                let uid = calendar::caldav::uid_of(&event.id);
-                let located = calendar::caldav::locate(&engine.db.lock().unwrap(), &account, &target.id, &uid)?
-                    .context("this event's place on the server is not known yet; refresh the calendar and try again")?;
-                let seen = event.change_key.clone().unwrap_or_default();
-                let wanted = event.clone();
-                let url = target.id.clone();
-                let change = tokio::task::spawn_blocking(move || {
-                    calendar::caldav::update(&transport, &url, &located.href, &seen, &wanted, whole_series, now_seconds())
-                })
-                .await??;
-                spawn_calendar_sync(engine.clone(), out.clone(), account.clone(), event.start, event.end.max(event.start + 1));
-                match change {
-                    calendar::caldav::Change::Saved { href, etag } => {
-                        calendar::caldav::remember(
-                            &engine.db.lock().unwrap(),
-                            &account,
-                            &target.id,
-                            &[calendar::caldav::Located { uid, href, etag: etag.unwrap_or_default() }],
-                        )?;
-                        return Ok(json!({ "ok": true }));
-                    }
-                    calendar::caldav::Change::Conflict => anyhow::bail!(CALDAV_CONFLICT),
-                }
-            }
-            let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(false);
-            let version =
-                calendar::route::update_event(&engine, &account, &event, whole_series, notify)
-                    .await?;
-            if let (Some(version), false) = (version, whole_series) {
-                calendar::set_event_change_key(&engine.db.lock().unwrap(), &account, &event.id, &version)?;
-            }
-            spawn_calendar_sync(
-                engine.clone(),
-                out.clone(),
-                account,
-                event.start,
-                event.end.max(event.start + 1),
-            );
-            Ok(json!({ "ok": true }))
-        }
+        "calendar.update" => pim::calendar::update(engine, &emitter(out), p).await,
 
-        "calendar.delete" => {
-            let account = req_str(p, "account")?;
-            let id = req_str(p, "event")?;
-            let change_key = p.get("change_key").and_then(Value::as_str);
-            // Exchange addresses an event by its own id alone; Google needs
-            // the calendar holding it, so it is taken from the cached row the
-            // agenda is showing.
-            let calendar_id = p
-                .get("calendar")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .unwrap_or_default();
-            let whole_series = p
-                .get("scope")
-                .and_then(Value::as_str)
-                .is_some_and(|scope| scope == "series");
-            let series_id = p.get("series").and_then(Value::as_str);
-            if local_calendar_write(&engine, &account, &calendar_id)?.is_some() {
-                calendar::forget_event(&engine.db.lock().unwrap(), &account, &id)?;
-                return Ok(json!({ "ok": true }));
-            }
-            if let Some((target, transport)) = caldav_write(&engine, &account, &calendar_id)? {
-                let uid = calendar::caldav::uid_of(&id);
-                let (located, all_day) = {
-                    let db = engine.db.lock().unwrap();
-                    let located = calendar::caldav::locate(&db, &account, &target.id, &uid)?;
-                    let all_day: bool = db
-                        .query_row(
-                            "SELECT all_day FROM calendar_events WHERE account = ?1 AND calendar_id = ?2 AND event_id = ?3",
-                            rusqlite::params![account, target.id, id],
-                            |row| row.get::<_, i64>(0),
-                        )
-                        .map(|v| v != 0)
-                        .unwrap_or(false);
-                    (located, all_day)
-                };
-                let located = located.context("this event's place on the server is not known yet; refresh the calendar and try again")?;
-                let seen = change_key.map(str::to_string).unwrap_or_else(|| located.etag.clone());
-                let occurrence_only = !whole_series && series_id.is_some();
-                let (url, href, event_id) = (target.id.clone(), located.href.clone(), id.clone());
-                let change = tokio::task::spawn_blocking(move || {
-                    calendar::caldav::delete(&transport, &url, &href, &seen, &event_id, all_day, occurrence_only)
-                })
-                .await??;
-                if change == calendar::caldav::Change::Conflict {
-                    let now = now_seconds();
-                    spawn_calendar_sync(engine.clone(), out.clone(), account, now - 86_400 * 31, now + 86_400 * 366);
-                    anyhow::bail!(CALDAV_CONFLICT);
-                }
-                let db = engine.db.lock().unwrap();
-                if occurrence_only {
-                    calendar::forget_event(&db, &account, &id)?;
-                } else {
-                    calendar::forget_series(&db, &account, &uid)?;
-                    calendar::forget_event(&db, &account, &id)?;
-                    calendar::caldav::forget(&db, &account, &target.id, &uid)?;
-                }
-                return Ok(json!({ "ok": true }));
-            }
-            calendar::route::delete_event(
-                &engine,
-                &account,
-                &calendar_id,
-                &id,
-                change_key,
-                series_id,
-                whole_series,
-                p.get("notify").and_then(Value::as_bool).unwrap_or(false),
-            )
-            .await?;
-            // Drop the cached rows now: the agenda should not keep showing what
-            // the server has already accepted the deletion of. A series takes
-            // all of its occurrences with it.
-            {
-                let db = engine.db.lock().unwrap();
-                match (whole_series, series_id) {
-                    (true, Some(series)) => {
-                        calendar::forget_series(&db, &account, series)?;
-                    }
-                    _ => calendar::forget_event(&db, &account, &id)?,
-                }
-            }
-            Ok(json!({ "ok": true }))
-        }
+        "calendar.delete" => pim::calendar::delete(engine, &emitter(out), p).await,
 
         "folders.list" => {
             let account = req_str(p, "account")?;
@@ -7177,6 +6549,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "folders": serde_json::to_value(folders)?,
                 "warning": warning,
             }))
+        }
+
+        // Move a folder under another one of the same account (ADR-0050).
+        "folders.move" => {
+            if is_rss(engine, &req_str(p, "account")?)? {
+                return Err(anyhow::anyhow!("RSS accounts do not support folders"));
+            }
+            meron_core::folder_move::move_folder(engine, p).await
         }
 
         "messages.unifiedRecent" => {
@@ -9604,6 +8984,103 @@ fn spawn_backup_schedule(engine: Arc<Engine>, out: Writer) {
     });
 }
 
+/// What automatic archiving needs to know about an account: its kind, its
+/// folders as last listed, and the name its mail is filed under locally.
+fn auto_archive_context(
+    engine: &Arc<Engine>,
+    account: &str,
+) -> anyhow::Result<(meron_core::auto_archive::AccountKind, Vec<meron_core::imap::Folder>, String)> {
+    let db = engine.db.lock().unwrap();
+    let creds = store::load_account(&db, account)?.context("no such account")?;
+    Ok((
+        meron_core::auto_archive::AccountKind::of(&creds),
+        store::get_folders(&db, account)?,
+        meron_core::auto_archive::account_label(&db, account)?,
+    ))
+}
+
+fn auto_archive_status(engine: &Arc<Engine>, account: &str) -> anyhow::Result<Value> {
+    let (kind, folders, _) = auto_archive_context(engine, account)?;
+    Ok(serde_json::to_value(meron_core::auto_archive::status(&engine.db.lock().unwrap(), account, kind, &folders)?)?)
+}
+
+/// One archiving run for an account (ADR-0054), then the lists it touched
+/// are refreshed. Says whether the local archive was created by it.
+async fn run_auto_archive(
+    engine: &Arc<Engine>,
+    out: &Writer,
+    account: &str,
+    trigger: &str,
+) -> anyhow::Result<(meron_core::auto_archive::RunLog, bool)> {
+    let (_, _, label) = auto_archive_context(engine, account)?;
+    let had_archive = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?.is_some();
+    let mut steps = meron_core::auto_archive::EngineSteps {
+        engine: engine.clone(),
+        account: account.to_string(),
+        media_root: parse::media_root(),
+    };
+    let log = meron_core::auto_archive::run(
+        &mut steps,
+        &engine.db,
+        account,
+        &label,
+        trigger,
+        |policy| meron_core::auto_archive::cutoffs(policy, &chrono::Local::now()),
+        now_seconds(),
+        now_seconds,
+    )
+    .await?;
+    let created = !had_archive && {
+        let creds = store::load_account(&engine.db.lock().unwrap(), meron_core::archive::ACCOUNT)?;
+        match creds {
+            Some(creds) => {
+                engine.accounts.lock().await.insert(meron_core::archive::ACCOUNT.to_string(), creds);
+                true
+            }
+            None => false,
+        }
+    };
+    if log.moved + log.kept > 0 {
+        emit(out, "mail.synced", json!({ "account": account, "folders": true })).await;
+        if log.destination == Some(meron_core::auto_archive::Destination::Local) {
+            emit(out, "mail.synced", json!({ "account": meron_core::archive::ACCOUNT, "folders": true })).await;
+        }
+    }
+    Ok((log, created))
+}
+
+/// Checks every few minutes whether an account's archiving is due (#112),
+/// as scheduled backups do; the first check waits a little.
+fn spawn_auto_archive(engine: Arc<Engine>, out: Writer) {
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(150)).await;
+        let mut ticker = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            ticker.tick().await;
+            let due = meron_core::auto_archive::due(&engine.db.lock().unwrap(), now_seconds()).unwrap_or_default();
+            for account in due {
+                if engine.is_paused(&account) {
+                    continue;
+                }
+                let result = run_auto_archive(&engine, &out, &account, "scheduled").await;
+                let (run, created, error) = match result {
+                    Ok((run, created)) => (serde_json::to_value(&run).unwrap_or(Value::Null), created, None),
+                    Err(err) => (Value::Null, false, Some(format!("{err:#}"))),
+                };
+                if let Some(error) = &error {
+                    eprintln!("meron-core: automatic archiving for {account} did not run: {error}");
+                }
+                emit(
+                    &out,
+                    "autoArchive.ran",
+                    json!({ "account": account, "run": run, "archive_created": created, "error": error }),
+                )
+                .await;
+            }
+        }
+    });
+}
+
 fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()> {
     stop_chat(id);
     let account = meron_core::chat::account(&engine.db.lock().unwrap(), id)?;
@@ -9987,7 +9464,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             )?;
         }
         match perform_send_transaction(engine, p, &account, &to).await {
-            Ok(SendTransaction { raw, archived_by_server }) => {
+            Ok(SendTransaction { raw, archived_by_server, delivery_receipt }) => {
                 {
                     let db = engine.db.lock().unwrap();
                     outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
@@ -10019,7 +9496,12 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                         "accepted"
                     }
                 };
-                Ok(json!({ "ok": true, "outcome": outcome, "attempt_id": attempt_id }))
+                Ok(json!({
+                    "ok": true,
+                    "outcome": outcome,
+                    "attempt_id": attempt_id,
+                    "delivery_receipt": delivery_receipt.as_str(),
+                }))
             }
             Err(err) if smtp::is_uncertain(&err) => {
                 let reason = format!("{err:#}");
@@ -10038,6 +9520,8 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
 struct SendTransaction {
     raw: Vec<u8>,
     archived_by_server: bool,
+    /// What became of a delivery receipt request (ADR-0048).
+    delivery_receipt: smtp::DeliveryReceipt,
 }
 
 /// Builds, protects and transmits one message. Everything up to the server's
@@ -10064,6 +9548,11 @@ async fn perform_send_transaction(
         let message_id = req_str(p, "message_id").unwrap_or_default();
         let attachments = opt_attachments(p)?;
         let requested_from = req_str(p, "from").unwrap_or_default();
+        // Receipts the sender asked for (ADR-0048).
+        let receipts = smtp::Receipts {
+            read: p.get("read_receipt").and_then(Value::as_bool).unwrap_or(false),
+            delivery: p.get("delivery_receipt").and_then(Value::as_bool).unwrap_or(false),
+        };
 
         // Sign and/or encrypt, when the sender asked for it — with whichever
         // protocol can actually do the whole job. Assembled here, before
@@ -10212,6 +9701,7 @@ async fn perform_send_transaction(
                 &reply_to,
                 &message_id,
                 protection.as_ref(),
+                receipts.read,
             )?;
             engine
                 .with_write_session(&account, |session| {
@@ -10223,12 +9713,16 @@ async fn perform_send_transaction(
             // The server files its own copy, so the caller's Sent step only
             // refreshes the local view — the upload is suppressed for
             // Exchange in `should_append_sent_copy`.
-            return Ok(SendTransaction { raw, archived_by_server: true });
+            // A delivery receipt is not asked of Exchange or Graph: the MIME
+            // they submit has no envelope to carry it (ADR-0048).
+            let delivery_receipt =
+                if receipts.delivery { smtp::DeliveryReceipt::Unsupported } else { smtp::DeliveryReceipt::NotAsked };
+            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt });
         }
         // What the sender asked for, with the keys it needs: built before
         // either branch, and applied by both, so no path sends in the clear
         // what was meant to be protected.
-        let raw = smtp::send(
+        let sent = smtp::send_with_receipts(
             &creds,
             &from_addr,
             &sender_name,
@@ -10244,9 +9738,10 @@ async fn perform_send_transaction(
             &reply_to,
             &message_id,
             protection.as_ref(),
+            receipts,
         )
         .await?;
-        Ok(SendTransaction { raw, archived_by_server: false })
+        Ok(SendTransaction { raw: sent.raw, archived_by_server: false, delivery_receipt: sent.delivery_receipt })
 }
 
 /// An Exchange submission that failed without a verdict.
@@ -10392,6 +9887,22 @@ async fn write_line(out: &Writer, value: Value) {
 
 async fn emit(out: &Writer, name: &str, detail: Value) {
     write_line(out, json!({ "event": name, "detail": detail })).await;
+}
+
+/// The shared commands' event channel (`pim::Emit`), written to stdout like
+/// every other event.
+fn emitter(out: &Writer) -> pim::Emit {
+    let out = out.clone();
+    Arc::new(move |name, detail| {
+        let out = out.clone();
+        Box::pin(async move { emit(&out, name, detail).await })
+    })
+}
+
+/// Refreshes a calendar window in the background (`pim::calendar::spawn_sync`),
+/// reporting on stdout.
+fn spawn_calendar_sync(engine: Arc<Engine>, out: Writer, account: String, from: i64, to: i64) {
+    pim::calendar::spawn_sync(engine, emitter(&out), account, from, to);
 }
 
 async fn respond(out: &Writer, id: u64, result: Value) {

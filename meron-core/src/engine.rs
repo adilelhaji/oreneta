@@ -1315,6 +1315,133 @@ pub fn background_sync_timeout() -> Duration {
     })
 }
 
+pub fn is_transient_io_error(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::ConnectionRefused
+            | std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::HostUnreachable
+            | std::io::ErrorKind::NetworkUnreachable
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::NotConnected
+            | std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::TimedOut
+            | std::io::ErrorKind::UnexpectedEof
+    )
+}
+
+pub fn is_transient_sync_error(error: &anyhow::Error) -> bool {
+    if error.downcast_ref::<crate::graph::Error>().is_some() { return false; }
+    for cause in error.chain() {
+        if let Some(io_error) = cause.downcast_ref::<std::io::Error>()
+            && is_transient_io_error(io_error)
+        {
+            return true;
+        }
+        if let Some(imap_error) = cause.downcast_ref::<async_imap::error::Error>() {
+            match imap_error {
+                async_imap::error::Error::ConnectionLost => return true,
+                async_imap::error::Error::Io(io_error) if is_transient_io_error(io_error) => {
+                    return true;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Tokio timeouts and SOCKS reply codes are repository-generated anyhow
+    // messages rather than typed sources. Keep this fallback narrow; protocol,
+    // authentication, and certificate errors must not retry.
+    let message = format!("{error:#}").to_ascii_lowercase();
+    [
+        "tcp connect",
+        "dial tcp",
+        "dns lookup",
+        "timed out",
+        "timeout",
+        "network is unreachable",
+        "network unreachable",
+        "host unreachable",
+        "connection refused",
+        "connection reset",
+        "connection abort",
+        "connection closed",
+        "connection lost",
+        "broken pipe",
+        "failed to lookup address",
+        "no address associated with hostname",
+        "server closed before greeting",
+        "unexpected eof",
+        "bytes remaining in stream",
+    ]
+    .iter()
+    .any(|needle| message.contains(needle))
+}
+
+#[derive(Debug)]
+pub struct BackgroundSyncCancelled;
+
+impl std::fmt::Display for BackgroundSyncCancelled {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("background sync cancelled")
+    }
+}
+
+impl std::error::Error for BackgroundSyncCancelled {}
+
+/// Retry a background read once when it fails for a recognizable transport
+/// reason, `delay` after the first try. Both attempts share the configured
+/// per-folder ceiling so a stuck sync does not hold its dedup key indefinitely.
+pub async fn retry_background_sync_after<T, C, F, Fut>(
+    label: &str,
+    delay: Duration,
+    mut can_attempt: C,
+    mut operation: F,
+) -> anyhow::Result<T>
+where
+    C: FnMut() -> bool,
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    if !can_attempt() {
+        return Err(anyhow::Error::new(BackgroundSyncCancelled));
+    }
+    let sync_timeout = background_sync_timeout();
+    let deadline = tokio::time::Instant::now() + sync_timeout;
+    let first = tokio::time::timeout_at(deadline, operation()).await;
+    let first_error = match first {
+        Ok(Ok(value)) => return Ok(value),
+        Ok(Err(error)) if is_transient_sync_error(&error) => error,
+        Ok(Err(error)) => return Err(error),
+        Err(_) => anyhow::bail!("timed out after {}s", sync_timeout.as_secs()),
+    };
+
+    eprintln!("meron-core: {label} failed, retrying: {first_error:#}");
+    if tokio::time::timeout_at(deadline, tokio::time::sleep(delay))
+        .await
+        .is_err()
+    {
+        return Err(first_error.context(format!(
+            "retry budget exhausted after {}s",
+            sync_timeout.as_secs()
+        )));
+    }
+    if !can_attempt() {
+        return Err(anyhow::Error::new(BackgroundSyncCancelled));
+    }
+
+    match tokio::time::timeout_at(deadline, operation()).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(retry_error)) => Err(anyhow::anyhow!(
+            "retry failed: {retry_error:#}; first attempt: {first_error:#}"
+        )),
+        Err(_) => Err(first_error.context(format!(
+            "retry timed out within the {}s sync budget",
+            sync_timeout.as_secs()
+        ))),
+    }
+}
+
 /// The companion mailboxes (Sent, then Drafts) to piggyback onto a sync of
 /// another folder, each paired with its role label for the caller's logs.
 /// Callers resolve the names via `cached_sent_folder`/`cached_drafts_folder`,

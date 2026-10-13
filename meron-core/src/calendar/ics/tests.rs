@@ -89,7 +89,7 @@ fn editing_keeps_every_line_this_client_does_not_own() {
     let mut first = occurrences(FOREIGN)[0].clone();
     first.subject = "Review, now longer".into();
     first.reminder_minutes = Some(5);
-    let patched = patch_event(FOREIGN, &first, true, NOW).unwrap();
+    let patched = patch_event(FOREIGN, &first, true, &[], NOW).unwrap();
     for kept in ["ORGANIZER;CN=Ana:mailto:ana@x.cat", "ATTENDEE;PARTSTAT=ACCEPTED:mailto:bo@x.cat", "X-OTHER-CLIENT:keep me", "RRULE:FREQ=WEEKLY;COUNT=5", "UID:abc@other"] {
         assert!(patched.contains(kept), "{kept} lost:\n{patched}");
     }
@@ -108,7 +108,7 @@ fn moving_a_whole_series_from_one_occurrence_keeps_its_first_date() {
     let mut third = all[2].clone();
     third.start += 3600;
     third.end += 3600;
-    let patched = patch_event(FOREIGN, &third, true, NOW).unwrap();
+    let patched = patch_event(FOREIGN, &third, true, &[], NOW).unwrap();
     assert!(patched.contains("DTSTART;TZID=Europe/Madrid:20260302T110000"), "{patched}");
     let after = occurrences(&patched);
     assert_eq!(after.len(), 5);
@@ -124,7 +124,7 @@ fn one_occurrence_is_changed_or_removed_on_its_own() {
     second.subject = "Review (moved)".into();
     second.start += 7200;
     second.end += 7200;
-    let with_override = put_override(FOREIGN, &second, NOW).unwrap();
+    let with_override = put_override(FOREIGN, &second, &[], NOW).unwrap();
     let after = occurrences(&with_override);
     assert_eq!(after.len(), 5);
     assert_eq!(after[1].subject, "Review (moved)");
@@ -134,7 +134,7 @@ fn one_occurrence_is_changed_or_removed_on_its_own() {
 
     // Changing it again replaces the exception rather than adding a second.
     second.subject = "Review (moved again)".into();
-    let twice = put_override(&with_override, &second, NOW).unwrap();
+    let twice = put_override(&with_override, &second, &[], NOW).unwrap();
     assert_eq!(twice.matches("RECURRENCE-ID").count(), 1);
 
     let removed = exclude_occurrence(&twice, &all[1].id, false).unwrap();
@@ -182,4 +182,71 @@ DTEND;TZID=Etc/UTC:20260316T081500Z\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\nSUMMARY:S\r\
     let (events, skipped) = parse_window(stored, "cal", at("2026-03-01T00:00:00Z"), at("2026-04-01T00:00:00Z")).unwrap();
     assert_eq!((events.len(), skipped), (3, 0));
     assert!(events.iter().any(|e| e.start == at("2026-03-16T08:00:00Z")));
+}
+
+fn person(name: &str, addr: &str) -> Participant {
+    Participant { name: name.into(), addr: addr.into(), response: String::new() }
+}
+
+#[test]
+fn a_new_event_names_its_organizer_and_guests() {
+    let mut e = event("Planning", "2026-03-10T09:00:00Z", "2026-03-10T10:00:00Z");
+    e.organizer = Some(person("Ana", "ana@x.cat"));
+    e.attendees = vec![person("Bo", "Bo@X.cat"), person("", "no address")];
+    let ics = new_object(&e, "uid-p", NOW);
+    let lines = unfold(&ics);
+    assert!(lines.contains(&"ORGANIZER;CN=Ana:mailto:ana@x.cat".to_string()));
+    assert!(lines.contains(&"ATTENDEE;CN=Bo;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:bo@x.cat".to_string()));
+    assert_eq!(lines.iter().filter(|l| l.starts_with("ATTENDEE")).count(), 1, "someone with no address cannot be invited");
+    let (events, _) = parse_window(&ics, "cal", at("2026-03-01T00:00:00Z"), at("2026-04-01T00:00:00Z")).unwrap();
+    assert_eq!(events[0].attendees.iter().map(|p| p.addr.as_str()).collect::<Vec<_>>(), vec!["bo@x.cat"]);
+    assert_eq!(events[0].organizer.as_ref().unwrap().addr, "ana@x.cat");
+
+    // Alone, there is nobody to organize.
+    let mut alone = e.clone();
+    alone.attendees.clear();
+    assert!(!new_object(&alone, "uid-q", NOW).contains("ORGANIZER"));
+}
+
+#[test]
+fn an_edit_adds_guests_and_removes_only_those_the_editor_took_out() {
+    let mut first = occurrences(FOREIGN)[0].clone();
+    assert_eq!(first.attendees.iter().map(|p| p.addr.as_str()).collect::<Vec<_>>(), vec!["bo@x.cat"], "read from the object");
+    assert_eq!(first.attendees[0].response, "accept");
+    first.attendees.push(person("Cy", "cy@x.cat"));
+    let patched = patch_event(FOREIGN, &first, true, &[], NOW).unwrap();
+    assert!(patched.contains("ATTENDEE;PARTSTAT=ACCEPTED:mailto:bo@x.cat"), "an answer the server kept stays as it was");
+    assert!(unfold(&patched).contains(&"ATTENDEE;CN=Cy;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:cy@x.cat".to_string()));
+    assert_eq!(patched.matches("ORGANIZER").count(), 1);
+
+    // A copy that never showed the guests (read before they were kept) does
+    // not drop them; one the editor removed goes.
+    let mut blind = occurrences(FOREIGN)[0].clone();
+    blind.attendees.clear();
+    assert!(patch_event(FOREIGN, &blind, true, &[], NOW).unwrap().contains("mailto:bo@x.cat"));
+    let removed = patch_event(FOREIGN, &blind, true, &["BO@x.cat".to_string()], NOW).unwrap();
+    assert!(!removed.contains("mailto:bo@x.cat"));
+
+    // An object with no organizer gets the one the editor set, with its guests.
+    let bare = FOREIGN.replace("ORGANIZER;CN=Ana:mailto:ana@x.cat\r\n", "");
+    let mut mine = occurrences(&bare)[0].clone();
+    mine.organizer = Some(person("Ana", "ana@x.cat"));
+    let owned = patch_event(&bare, &mine, true, &[], NOW).unwrap();
+    assert!(unfold(&owned).contains(&"ORGANIZER;CN=Ana:mailto:ana@x.cat".to_string()), "{owned}");
+}
+
+#[test]
+fn each_change_to_one_occurrence_is_a_newer_version_of_it() {
+    let all = occurrences(FOREIGN);
+    let mut second = all[1].clone();
+    second.subject = "Review (moved)".into();
+    second.attendees.push(person("", "cy@x.cat"));
+    let once = put_override(FOREIGN, &second, &[], NOW).unwrap();
+    let sequences = |ics: &str| unfold(ics).into_iter().filter(|l| l.starts_with("SEQUENCE:")).collect::<Vec<_>>();
+    assert_eq!(sequences(&once), vec!["SEQUENCE:3", "SEQUENCE:4"], "past the series' own");
+    let names_cy = |ics: &str| unfold(ics).iter().filter(|l| l.ends_with("mailto:cy@x.cat")).count();
+    assert_eq!(names_cy(&once), 1, "a guest added to one occurrence is on it");
+    let twice = put_override(&once, &second, &[], NOW).unwrap();
+    assert_eq!(sequences(&twice), vec!["SEQUENCE:3", "SEQUENCE:5"]);
+    assert_eq!(names_cy(&twice), 1);
 }

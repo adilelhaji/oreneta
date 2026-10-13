@@ -866,7 +866,9 @@ describe('quick reply draft sharing', () => {
     }
     await expect(sendComposed(composed)).rejects.toThrow('550 no such user')
     ;(window as any).go.main.App.Invoke = async () => ({ ok: true, outcome: 'archived' })
-    await expect(sendComposed(composed)).resolves.toBeUndefined()
+    // The answer is handed back, so the composer can say what became of a
+    // delivery receipt request (ADR-0048).
+    await expect(sendComposed(composed)).resolves.toEqual({ ok: true, outcome: 'archived' })
   })
 
   it('undoing a held send keeps one draft, not two', async () => {
@@ -1729,7 +1731,8 @@ describe('signature in the quick reply', () => {
     openReplyInFullEditor()
 
     const draft = compose$.tabs.get()[0].compose
-    expect(draft?.text).toBe('t2\n\nfrom u2')
+    // The quoted original follows the signature (ADR-0047).
+    expect(draft?.text).toStartWith('t2\n\nfrom u2\n\n')
     expect(draft?.signature).toEqual({ html: '<p>from u2</p>', text: 'from u2', placement: 'belowText' })
     // And the box behind the new tab is a fresh quick reply, not an empty one.
     expect(compose$.composer.get()).toBe('\n\nfrom u2')
@@ -1743,7 +1746,7 @@ describe('signature in the quick reply', () => {
     openReplyInFullEditor()
 
     const draft = compose$.tabs.get()[0].compose
-    expect(draft?.text).toBe('t2\n\nfrom u2, but edited')
+    expect(draft?.text).toStartWith('t2\n\nfrom u2, but edited\n\n')
     expect(draft?.signature).toBeUndefined()
   })
 

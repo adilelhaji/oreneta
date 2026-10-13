@@ -254,6 +254,74 @@ func TestIntegrationMailFlow(t *testing.T) {
 		}
 	})
 
+	// ADR-0050: moving a folder under another one is one IMAP RENAME on a real
+	// server, its subfolders and cached mail follow it, and special-use folders
+	// and moves into the folder's own subtree are refused before IMAP is asked.
+	t.Run("folder move renames the subtree on the server", func(t *testing.T) {
+		result := callMap(t, sidecar, "folders.list", map[string]any{"account": "alice"})
+		delimiter := folderDelimiter(result, "INBOX")
+		if delimiter == "" {
+			t.Fatal("maddy reported no hierarchy delimiter for INBOX")
+		}
+		parent := "ITestMoveParent"
+		source := "ITestMoveMe"
+		child := source + delimiter + "Child"
+		for _, name := range []string{parent, source, child} {
+			callMap(t, sidecar, "folders.create", map[string]any{"account": "alice", "name": name})
+		}
+		moveSubject := fmt.Sprintf("Folder move %d", time.Now().UnixNano())
+		imapAppend(t, server.imapPort, "alice@maddy.test", testPassword, source, rawMessage([]string{
+			"From: Bob <bob@maddy.test>",
+			"To: alice@maddy.test",
+			"Subject: " + moveSubject,
+			fmt.Sprintf("Message-ID: <move-%d@maddy.test>", time.Now().UnixNano()),
+			"Date: " + time.Now().UTC().Format(time.RFC1123Z),
+		}, "Moves with its folder."))
+		pollFolder(t, sidecar, "alice", source, func(message map[string]any) bool { return str(message, "subject") == moveSubject })
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			result = callMap(t, sidecar, "folders.list", map[string]any{"account": "alice"})
+			if foldersContain(result, child) && folderDelimiter(result, source) == delimiter {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("folders to move never synced with delimiter %q: %v", delimiter, result)
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		if _, err := sidecar.Call("folders.move", map[string]any{"account": "alice", "folder": "INBOX", "parent": parent}); err == nil {
+			t.Fatal("folders.move accepted INBOX, want refusal")
+		}
+		if _, err := sidecar.Call("folders.move", map[string]any{"account": "alice", "folder": source, "parent": child}); err == nil {
+			t.Fatal("folders.move accepted a move into the folder's own subtree, want refusal")
+		}
+
+		moved := parent + delimiter + source
+		movedChild := moved + delimiter + "Child"
+		result = callMap(t, sidecar, "folders.move", map[string]any{"account": "alice", "folder": source, "parent": parent})
+		if result["folder"] != moved {
+			t.Fatalf("folders.move folder = %#v, want %q", result["folder"], moved)
+		}
+		renames, _ := result["renames"].([]any)
+		if len(renames) != 2 {
+			t.Fatalf("renames = %#v, want the folder and its child", renames)
+		}
+		if !foldersContain(result, moved) || !foldersContain(result, movedChild) || foldersContain(result, source) || foldersContain(result, child) {
+			t.Fatalf("folders.move did not reconcile the cached folder list: %v", result)
+		}
+
+		// The server agrees: the old names are gone, the new ones are there.
+		client := dialIMAP(t, server.imapPort, "alice@maddy.test", testPassword)
+		listing := strings.Join(client.do(`LIST "" "*"`), "\n")
+		client.close()
+		if !strings.Contains(listing, movedChild) || strings.Contains(listing, `"`+source+`"`) {
+			t.Fatalf("server LIST after move:\n%s", listing)
+		}
+		// The cached message is under the new path, and a sync there finds it.
+		pollFolder(t, sidecar, "alice", moved, func(message map[string]any) bool { return str(message, "subject") == moveSubject })
+	})
+
 	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
 	subject := "Oreneta integration " + nonce
 	// Bare id (no angle brackets) — the app convention: the frontend mints bare
@@ -279,6 +347,50 @@ func TestIntegrationMailFlow(t *testing.T) {
 		}
 		if str(message, "thread_key") == "" {
 			t.Error("delivered message has empty thread_key")
+		}
+	})
+
+	// Receipts against a real server (ADR-0048). maddy 0.8 does not
+	// advertise DSN, so the delivery receipt is reported as unsupported while
+	// the message still goes; the read receipt request travels in the
+	// message, is put to bob (policy "ask"), and only his answer sends the
+	// report, which reaches alice through bob's own submission server.
+	t.Run("read and delivery receipts", func(t *testing.T) {
+		receiptSubject := "Oreneta integration receipt " + nonce
+		sent := callMap(t, sidecar, "send", map[string]any{
+			"account":          "alice",
+			"to":               "bob@maddy.test",
+			"subject":          receiptSubject,
+			"body":             "tell me when you read this",
+			"message_id":       fmt.Sprintf("itest-receipt-%s@maddy.test", nonce),
+			"read_receipt":     true,
+			"delivery_receipt": true,
+		})
+		if got := str(sent, "delivery_receipt"); got != "unsupported" {
+			t.Errorf("delivery_receipt = %q, want unsupported (maddy 0.8 offers no DSN)", got)
+		}
+		message := pollInbox(t, sidecar, "bob", func(m map[string]any) bool {
+			return str(m, "subject") == receiptSubject
+		})
+		id := fmt.Sprintf("bob#INBOX#%d", num(message, "uid"))
+		status := callMap(t, sidecar, "receipts.status", map[string]any{"id": id, "folder": "INBOX"})
+		if str(status, "state") != "ask" {
+			t.Fatalf("receipts.status = %v, want state ask", status)
+		}
+		assertNoMessageInFolder(t, sidecar, "alice", "INBOX", func(m map[string]any) bool {
+			return str(m, "subject") == "Read: "+receiptSubject
+		})
+		answered := callMap(t, sidecar, "receipts.answer", map[string]any{"id": id, "folder": "INBOX", "send": true})
+		if str(answered, "state") != "sent" {
+			t.Fatalf("receipts.answer = %v, want state sent", answered)
+		}
+		pollInbox(t, sidecar, "alice", func(m map[string]any) bool {
+			return str(m, "subject") == "Read: "+receiptSubject
+		})
+		// Answered once: asking again neither asks nor sends again.
+		again := callMap(t, sidecar, "receipts.status", map[string]any{"id": id, "folder": "INBOX"})
+		if str(again, "state") != "sent" {
+			t.Errorf("receipts.status after answer = %v, want state sent", again)
 		}
 	})
 
@@ -813,6 +925,133 @@ func TestIntegrationMailFlow(t *testing.T) {
 		pollFolder(t, sidecar, "bob", sweepFolder, func(m map[string]any) bool {
 			return num(m, "uid") == late
 		})
+	})
+
+	// ADR-0054: automatic archiving by age takes only old, read, unflagged
+	// mail, copies it to the local archive and checks it before removing it
+	// from the server, does nothing more when run again, and moves to the
+	// server's Archive folder when that is the destination.
+	t.Run("automatic archiving moves only old read mail and only once", func(t *testing.T) {
+		folder := "AutoArchive" + nonce[:6]
+		callMap(t, sidecar, "folders.create", map[string]any{"account": "bob", "name": folder})
+		deadline := time.Now().Add(30 * time.Second)
+		for !foldersContain(callMap(t, sidecar, "folders.list", map[string]any{"account": "bob"}), folder) {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s never appeared in the folder list", folder)
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		user := "bob@maddy.test"
+		add := func(label, date string, seen, starred bool) string {
+			subject := fmt.Sprintf("Oreneta auto archive %s %s", nonce, label)
+			imapAppend(t, server.imapPort, user, testPassword, folder, rawMessage([]string{
+				"From: Alice <alice@maddy.test>",
+				"To: bob@maddy.test",
+				"Subject: " + subject,
+				"Date: " + date,
+				fmt.Sprintf("Message-ID: <itest-autoarchive-%s-%s@maddy.test>", nonce, label),
+			}, "Archived by age: "+label))
+			uids := imapSearchSubject(t, server.imapPort, user, testPassword, folder, subject)
+			if len(uids) != 1 {
+				t.Fatalf("fixture %s: %v", label, uids)
+			}
+			imapSetFlags(t, server.imapPort, user, testPassword, folder, uids[0], seen, starred)
+			return subject
+		}
+		old := "Mon, 6 Jan 2020 09:00:00 +0000"
+		recent := time.Now().UTC().Format("Mon, 2 Jan 2006 15:04:05 -0700")
+		archived := add("old-read", old, true, false)
+		flagged := add("old-flagged", old, true, true)
+		unread := add("old-unread", old, false, false)
+		fresh := add("recent", recent, true, false)
+		stays := []string{flagged, unread, fresh}
+
+		policy := map[string]any{
+			"enabled":     true,
+			"older_than":  map[string]any{"value": 30, "unit": "days"},
+			"folders":     []any{map[string]any{"name": folder}},
+			"destination": "local",
+		}
+		if _, err := sidecar.Call("autoArchive.save", map[string]any{"account": "bob", "policy": policy}); err == nil ||
+			!strings.Contains(err.Error(), "confirm") {
+			t.Fatalf("turning archiving on without its preview should be refused: %v", err)
+		}
+		preview := callMap(t, sidecar, "autoArchive.preview", map[string]any{"account": "bob", "policy": policy})
+		if total := num(preview, "total"); total != 1 {
+			t.Fatalf("preview total = %d, want only the old read message: %v", total, preview)
+		}
+		for _, subject := range append([]string{archived}, stays...) {
+			if len(imapSearchSubject(t, server.imapPort, user, testPassword, folder, subject)) != 1 {
+				t.Fatalf("the preview moved %q", subject)
+			}
+		}
+		status := callMap(t, sidecar, "autoArchive.save", map[string]any{
+			"account": "bob", "policy": policy, "confirm": str(preview, "fingerprint"),
+		})
+		if status["confirmed"] != true {
+			t.Fatalf("the confirmed policy was not kept: %v", status)
+		}
+
+		result := callMap(t, sidecar, "autoArchive.runNow", map[string]any{"account": "bob"})
+		run, _ := result["run"].(map[string]any)
+		if num(run, "moved") != 1 || num(run, "failed") != 0 {
+			t.Fatalf("run = %v, want one archived and none failed", run)
+		}
+		if len(imapSearchSubject(t, server.imapPort, user, testPassword, folder, archived)) != 0 {
+			t.Fatal("the archived message is still on the server")
+		}
+		for _, subject := range stays {
+			if len(imapSearchSubject(t, server.imapPort, user, testPassword, folder, subject)) != 1 {
+				t.Fatalf("%q should have stayed on the server", subject)
+			}
+		}
+		local := callMap(t, sidecar, "messages.recent", map[string]any{
+			"account": "local-archive", "folder": "Archived/bob@maddy.test/" + folder, "limit": 50,
+		})
+		if countSubject(local, archived) != 1 {
+			t.Fatalf("the local archive should hold one copy of %q: %v", archived, local)
+		}
+
+		again := callMap(t, sidecar, "autoArchive.runNow", map[string]any{"account": "bob"})
+		if rerun, _ := again["run"].(map[string]any); num(rerun, "moved") != 0 || num(rerun, "failed") != 0 {
+			t.Fatalf("a second run should find nothing to do: %v", rerun)
+		}
+		local = callMap(t, sidecar, "messages.recent", map[string]any{
+			"account": "local-archive", "folder": "Archived/bob@maddy.test/" + folder, "limit": 50,
+		})
+		if countSubject(local, archived) != 1 {
+			t.Fatalf("a second run copied again: %v", local)
+		}
+		statusAfter := callMap(t, sidecar, "autoArchive.status", map[string]any{"account": "bob"})
+		if runs, _ := statusAfter["runs"].([]any); len(runs) != 2 {
+			t.Fatalf("both runs should be in the log: %v", statusAfter["runs"])
+		}
+
+		// To the server's Archive folder: a changed policy is previewed and
+		// confirmed again, then moved there on the server.
+		policy["destination"] = "server"
+		if _, err := sidecar.Call("autoArchive.save", map[string]any{"account": "bob", "policy": policy}); err == nil {
+			t.Fatal("a changed destination must be confirmed again")
+		}
+		toServer := add("old-read-server", old, true, false)
+		preview = callMap(t, sidecar, "autoArchive.preview", map[string]any{"account": "bob", "policy": policy})
+		if num(preview, "total") != 1 || str(preview, "target") == "" {
+			t.Fatalf("server preview = %v", preview)
+		}
+		callMap(t, sidecar, "autoArchive.save", map[string]any{"account": "bob", "policy": policy, "confirm": str(preview, "fingerprint")})
+		result = callMap(t, sidecar, "autoArchive.runNow", map[string]any{"account": "bob"})
+		if run, _ := result["run"].(map[string]any); num(run, "moved") != 1 {
+			t.Fatalf("server run = %v", run)
+		}
+		if len(imapSearchSubject(t, server.imapPort, user, testPassword, folder, toServer)) != 0 {
+			t.Fatal("the message is still in the source folder")
+		}
+		if len(imapSearchSubject(t, server.imapPort, user, testPassword, str(preview, "target"), toServer)) != 1 {
+			t.Fatalf("the message did not reach %s", str(preview, "target"))
+		}
+		// Off again, so nothing in the rest of the suite is archived.
+		policy["enabled"] = false
+		callMap(t, sidecar, "autoArchive.save", map[string]any{"account": "bob", "policy": policy})
 	})
 
 	t.Run("empty trash", func(t *testing.T) {

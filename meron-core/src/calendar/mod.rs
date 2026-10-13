@@ -16,6 +16,7 @@ pub mod import;
 pub mod itip;
 pub mod meeting;
 pub mod overlap;
+pub mod recurrence;
 pub mod route;
 pub mod subscription;
 
@@ -208,6 +209,16 @@ pub struct Recurrence {
     /// picked from a calendar.
     #[serde(default)]
     pub count: Option<u16>,
+    /// A monthly or yearly rule on the nth weekday of the month instead of a
+    /// day of the month: 1–4, or -1 for the last. The weekday is the first of
+    /// `weekdays`, or the day the series starts on (ADR-0053).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub month_week: Option<i8>,
+    /// A monthly or yearly rule's day of the month, when it is not the day
+    /// the series starts on: a task due on the 31st that was moved to the
+    /// 30th of a shorter month keeps coming back on the 31st (ADR-0053).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub month_day: Option<u8>,
 }
 
 fn one() -> u16 {
@@ -610,6 +621,30 @@ pub(crate) fn event_row_at(row: &rusqlite::Row, base: usize) -> rusqlite::Result
         add_meeting: None,
         meeting_status: None,
     })
+}
+
+/// One kept event of a calendar, by its id.
+pub fn event_of(conn: &Connection, account: &str, calendar_id: &str, event_id: &str) -> Result<Option<Event>> {
+    use rusqlite::OptionalExtension;
+    Ok(conn
+        .query_row(
+            &format!(
+                "SELECT {EVENT_COLUMNS} FROM calendar_events e
+                 WHERE e.account = ?1 AND e.calendar_id = ?2 AND e.event_id = ?3"
+            ),
+            params![account, calendar_id, event_id],
+            event_row,
+        )
+        .optional()?)
+}
+
+/// The SEQUENCE of a local event (RFC 5545 §3.8.7.4). A local calendar keeps
+/// no calendar object, so the number lives in the event's change key, the
+/// column that holds a version stamp for every other kind of calendar: each
+/// save here raises it, which is what lets a notice sent after a later save
+/// supersede an earlier one. Absent or unreadable is zero, a new event's.
+pub fn local_sequence(event: &Event) -> i64 {
+    event.change_key.as_deref().and_then(|key| key.trim().parse().ok()).unwrap_or(0)
 }
 
 /// Every kept occurrence of the event with this iCalendar UID in an

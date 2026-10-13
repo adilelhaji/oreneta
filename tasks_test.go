@@ -77,6 +77,14 @@ func TestTasksSetCompletedPassesIdAndCompletedThrough(t *testing.T) {
 	assertCall(t, writer.calls[0], "tasks.setCompleted", map[string]any{"id": float64(3), "completed": true})
 }
 
+func TestTasksSetCompletedPassesStopRepeatingThrough(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{"ok": true}})
+	if _, err := app.tasksSetCompleted(map[string]any{"id": float64(4), "completed": true, "stop_repeating": true}); err != nil {
+		t.Fatal(err)
+	}
+	assertCall(t, writer.calls[0], "tasks.setCompleted", map[string]any{"id": float64(4), "completed": true, "stop_repeating": true})
+}
+
 func TestTasksSetCompletedRejectsMissingFields(t *testing.T) {
 	app, _ := newMailHandlerTestApp(t)
 	if _, err := app.tasksSetCompleted(map[string]any{"completed": true}); err == nil {

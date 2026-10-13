@@ -353,6 +353,21 @@ impl LocalSession {
         Ok(names.to_vec())
     }
 
+    /// The local store is its own server: moving a folder renames the raw
+    /// messages kept under each folder of the subtree (ADR-0050).
+    pub fn rename_folders(&self, renames: &[(String, String)]) -> Result<()> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        for (from, to) in renames {
+            tx.execute(
+                "UPDATE archive_messages SET folder = ?3 WHERE account = ?1 AND folder = ?2",
+                params![self.account, from, to],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn fetch_recent(&mut self, folder: &str, limit: u32) -> Result<imap::RecentBatch> {
         self.selected = folder.to_string();
         let messages = store::recent_headers(&self.conn(), &self.account, folder, limit as i64)?;

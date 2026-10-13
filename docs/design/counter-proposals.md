@@ -12,8 +12,9 @@
   - **Abrir en el editor** abre el evento propio con la hora propuesta.
   - **Rechazar la propuesta**, con una nota opcional, se lo dice a quien la
     hizo.
-  - Guardar en el editor cambia solo el calendario propio: en calendarios
-    locales y CalDAV no se avisa a los asistentes, y la tarjeta lo advierte.
+  - Al guardar en el editor, si el evento tiene asistentes, se pregunta si
+    avisarles, también en calendarios locales y CalDAV (véase
+    `organizer-notifications.md`); la tarjeta lo advierte.
   - Si la reunión no se organiza en un calendario guardado aquí, la tarjeta
     solo informa. Si la propuesta es de una versión anterior, aparece como
     antigua y sin botones.

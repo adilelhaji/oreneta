@@ -260,3 +260,176 @@ fn the_organizer_is_found_for_a_kept_event_and_nobody_else() {
     assert!(organized_event(&conn, "ana@example.com", "ana@example.com", "missing@example.com", None).unwrap().is_none());
     assert!(organized_event(&conn, "bo@example.com", "bo@example.com", "meet@example.com", None).unwrap().is_none(), "per account");
 }
+
+// ---- The organizer telling the people on it ----------------------------------
+
+/// A series Ana organizes on a CalDAV server, with its zone, an alarm of hers
+/// and one occurrence moved, after two saves.
+const ORGANIZED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Oreneta//Oreneta Calendar//EN\r\n\
+BEGIN:VTIMEZONE\r\nTZID:Europe/Madrid\r\nBEGIN:STANDARD\r\nDTSTART:19701025T030000\r\nTZOFFSETFROM:+0200\r\n\
+TZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n\
+BEGIN:VEVENT\r\nUID:weekly@oreneta\r\nDTSTAMP:20260101T000000Z\r\nDTSTART;TZID=Europe/Madrid:20260701T100000\r\n\
+DTEND;TZID=Europe/Madrid:20260701T110000\r\nSUMMARY:Sync\\, weekly\r\nDESCRIPTION:Agenda in the doc\r\nSEQUENCE:2\r\n\
+RRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE;TZID=Europe/Madrid:20260722T100000\r\n\
+ORGANIZER;CN=Ana:mailto:ana@example.com\r\nATTENDEE;ROLE=CHAIR;PARTSTAT=ACCEPTED;CN=Ana:mailto:ana@example.com\r\n\
+ATTENDEE;PARTSTAT=ACCEPTED;CN=Bo:mailto:bo@example.com\r\nATTENDEE;CN=\"Cy, the intern\":mailto:Cy@Example.com\r\n\
+BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT10M\r\nEND:VALARM\r\nEND:VEVENT\r\n\
+BEGIN:VEVENT\r\nUID:weekly@oreneta\r\nRECURRENCE-ID;TZID=Europe/Madrid:20260708T100000\r\nDTSTAMP:20260101T000000Z\r\n\
+DTSTART;TZID=Europe/Madrid:20260708T120000\r\nDTEND;TZID=Europe/Madrid:20260708T130000\r\nSUMMARY:Sync (moved)\r\n\
+SEQUENCE:3\r\nORGANIZER;CN=Ana:mailto:ana@example.com\r\nATTENDEE;PARTSTAT=ACCEPTED;CN=Bo:mailto:bo@example.com\r\n\
+ATTENDEE;CN=\"Cy, the intern\":mailto:Cy@Example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+fn ana() -> Participant {
+    Participant { name: "Ana".into(), addr: "ana@example.com".into(), response: String::new() }
+}
+
+const NOTICE_NOW: i64 = 1_791_799_200;
+
+/// The lines of the event components of a notice, unfolded.
+fn notice_lines(ics: &str) -> Vec<String> {
+    unfold(ics)
+}
+
+#[test]
+fn an_update_of_a_series_carries_its_rule_zone_exceptions_and_people() {
+    let notice = organizer_notice(ORGANIZED, Notice::Request, None, &ana(), NOTICE_NOW).unwrap();
+    assert_eq!(notice.method, "REQUEST");
+    assert_eq!(notice.to, vec!["bo@example.com", "cy@example.com"], "the organizer is not mailed her own invitation");
+    assert_eq!(notice.summary, "Sync, weekly");
+    assert_eq!(notice.sequence, 2, "the version the last save stored");
+    let lines = notice_lines(&notice.ics);
+    assert!(lines.contains(&"METHOD:REQUEST".to_string()));
+    assert!(lines.contains(&"TZID:Europe/Madrid".to_string()), "the zone the times are in travels with them");
+    assert!(lines.contains(&"RRULE:FREQ=WEEKLY;COUNT=4".to_string()));
+    assert!(lines.contains(&"EXDATE;TZID=Europe/Madrid:20260722T100000".to_string()));
+    assert_eq!(lines.iter().filter(|l| *l == "BEGIN:VEVENT").count(), 2, "the series and its exception");
+    assert!(lines.contains(&"RECURRENCE-ID;TZID=Europe/Madrid:20260708T100000".to_string()));
+    assert!(lines.contains(&"SEQUENCE:3".to_string()), "each component keeps its own version");
+    assert_eq!(lines.iter().filter(|l| **l == format!("DTSTAMP:{}", stamp(NOTICE_NOW))).count(), 2, "stamped when sent");
+    assert!(!notice.ics.contains("VALARM"), "the organizer's alarms are hers");
+    assert!(lines.contains(&"DESCRIPTION:Agenda in the doc".to_string()));
+    // An answer already given stays; whoever has not answered is asked to.
+    assert!(lines.contains(&"ATTENDEE;PARTSTAT=ACCEPTED;CN=Bo:mailto:bo@example.com".to_string()));
+    assert!(lines.contains(&"ATTENDEE;CN=\"Cy, the intern\";PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:Cy@Example.com".to_string()));
+    assert!(lines.contains(&"ATTENDEE;ROLE=CHAIR;PARTSTAT=ACCEPTED;CN=Ana:mailto:ana@example.com".to_string()));
+    // What goes out is a valid invitation in its own right.
+    let read = parse(&notice.ics).unwrap();
+    assert_eq!((read.method.as_str(), read.uid.as_str(), read.sequence), ("REQUEST", "weekly@oreneta", 2));
+    assert!(read.repeats);
+    assert_eq!(read.organizer.unwrap().addr, "ana@example.com");
+    assert!(notice.ics.split("\r\n").all(|line| line.len() <= 75));
+}
+
+#[test]
+fn an_update_of_one_occurrence_carries_only_it() {
+    let moved = at("2026-07-08T08:00:00Z");
+    let notice = organizer_notice(ORGANIZED, Notice::Request, Some(moved), &ana(), NOTICE_NOW).unwrap();
+    let lines = notice_lines(&notice.ics);
+    assert_eq!(lines.iter().filter(|l| *l == "BEGIN:VEVENT").count(), 1);
+    assert!(lines.contains(&"RECURRENCE-ID;TZID=Europe/Madrid:20260708T100000".to_string()));
+    assert!(lines.contains(&"DTSTART;TZID=Europe/Madrid:20260708T120000".to_string()));
+    assert!(!notice.ics.contains("RRULE"), "one occurrence does not restate the series");
+    assert_eq!(notice.sequence, 3);
+    assert_eq!(notice.summary, "Sync (moved)");
+    let read = parse(&notice.ics).unwrap();
+    assert_eq!(read.recurrence_id, Some(moved));
+
+    // An occurrence with no exception of its own goes out as the series has it.
+    let third = at("2026-07-15T08:00:00Z");
+    let plain = organizer_notice(ORGANIZED, Notice::Request, Some(third), &ana(), NOTICE_NOW).unwrap();
+    let lines = notice_lines(&plain.ics);
+    assert!(lines.contains(&"RECURRENCE-ID;TZID=Europe/Madrid:20260715T100000".to_string()), "{}", plain.ics);
+    assert!(lines.contains(&"DTSTART;TZID=Europe/Madrid:20260715T100000".to_string()));
+    assert!(lines.contains(&"DTEND;TZID=Europe/Madrid:20260715T110000".to_string()));
+    assert!(!plain.ics.contains("RRULE") && !plain.ics.contains("EXDATE"));
+    assert_eq!(plain.sequence, 2);
+}
+
+#[test]
+fn a_cancellation_supersedes_the_last_version_sent() {
+    let notice = organizer_notice(ORGANIZED, Notice::Cancel, None, &ana(), NOTICE_NOW).unwrap();
+    assert_eq!(notice.method, "CANCEL");
+    assert_eq!(notice.sequence, 3, "one past the stored version");
+    let lines = notice_lines(&notice.ics);
+    assert!(lines.contains(&"METHOD:CANCEL".to_string()));
+    assert!(lines.contains(&"STATUS:CANCELLED".to_string()));
+    assert!(lines.contains(&"SEQUENCE:3".to_string()));
+    assert_eq!(lines.iter().filter(|l| *l == "BEGIN:VEVENT").count(), 1, "cancelling the UID cancels every occurrence");
+    assert!(!lines.iter().any(|l| l.starts_with("RECURRENCE-ID")));
+    assert!(!notice.ics.contains("RRULE") && !notice.ics.contains("DESCRIPTION"));
+    assert_eq!(notice.to, vec!["bo@example.com", "cy@example.com"]);
+    let read = parse(&notice.ics).unwrap();
+    assert!(read.cancelled);
+    assert_eq!(read.sequence, 3);
+
+    // One occurrence: named by its RECURRENCE-ID, one past its own version.
+    let one = organizer_notice(ORGANIZED, Notice::Cancel, Some(at("2026-07-08T08:00:00Z")), &ana(), NOTICE_NOW).unwrap();
+    assert!(notice_lines(&one.ics).contains(&"RECURRENCE-ID;TZID=Europe/Madrid:20260708T100000".to_string()));
+    assert_eq!(one.sequence, 4);
+}
+
+#[test]
+fn only_the_organizer_tells_and_only_when_someone_is_on_it() {
+    let refused = organizer_notice(ORGANIZED, Notice::Request, None, &bo(), NOTICE_NOW).unwrap_err();
+    assert!(refused.to_string().contains("ana@example.com organizes this meeting"), "{refused}");
+
+    let alone = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:solo\r\nDTSTART:20300110T090000Z\r\n\
+SUMMARY:Focus\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    assert!(organizer_notice(alone, Notice::Request, None, &ana(), NOTICE_NOW).unwrap_err().to_string().contains("nobody to tell"));
+    let only_me = alone.replace("END:VEVENT", "ATTENDEE:mailto:ANA@example.com\r\nEND:VEVENT");
+    assert!(organizer_notice(&only_me, Notice::Request, None, &ana(), NOTICE_NOW).is_err());
+
+    // No organizer yet: the one sending becomes it.
+    let unowned = alone.replace("END:VEVENT", "ATTENDEE:mailto:bo@example.com\r\nEND:VEVENT");
+    let notice = organizer_notice(&unowned, Notice::Request, None, &ana(), NOTICE_NOW).unwrap();
+    assert!(notice_lines(&notice.ics).contains(&"ORGANIZER;CN=Ana:mailto:ana@example.com".to_string()));
+    assert!(notice_lines(&notice.ics).contains(&"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:bo@example.com".to_string()));
+
+    let nameless = Participant { addr: String::new(), ..ana() };
+    assert!(organizer_notice(&unowned, Notice::Request, None, &nameless, NOTICE_NOW).is_err());
+}
+
+#[test]
+fn a_local_event_goes_out_with_its_own_uid_sequence_and_escaped_text() {
+    use crate::calendar::Event;
+    let event = Event {
+        id: "local:3f1c".into(),
+        calendar_id: "local:home".into(),
+        subject: "Budget; draft, v2 — revisión con el equipo de finanzas y el comité de dirección".into(),
+        location: Some("Sala 2, planta 3".into()),
+        start: at("2030-01-10T09:00:00Z"),
+        end: at("2030-01-10T10:00:00Z"),
+        organizer: Some(ana()),
+        attendees: vec![bo(), Participant { name: "Cy".into(), addr: "cy@example.com".into(), response: "accept".into() }],
+        change_key: Some("5".into()),
+        ..Default::default()
+    };
+    assert_eq!(local_uid(&event), ("local:3f1c".to_string(), None));
+    let object = local_object(&event, crate::calendar::local_sequence(&event), NOTICE_NOW);
+    let notice = organizer_notice(&object, Notice::Request, None, &ana(), NOTICE_NOW).unwrap();
+    assert_eq!(notice.sequence, 5);
+    assert_eq!(notice.to, vec!["bo@example.com", "cy@example.com"]);
+    assert_eq!(notice.summary, event.subject);
+    let lines = notice_lines(&notice.ics);
+    assert!(lines.contains(&"UID:local:3f1c".to_string()));
+    assert!(lines.contains(&"LOCATION:Sala 2\\, planta 3".to_string()));
+    assert!(lines.contains(&format!("SUMMARY:{}", crate::calendar::ics::escape(&event.subject))));
+    assert!(lines.contains(&"ATTENDEE;CN=Bo;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:bo@example.com".to_string()));
+    assert!(lines.contains(&"ATTENDEE;CN=Cy;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:mailto:cy@example.com".to_string()));
+    assert!(notice.ics.contains("\r\n "), "a long line is folded");
+    assert!(notice.ics.split("\r\n").all(|line| line.len() <= 75));
+    let read = parse(&notice.ics).unwrap();
+    assert_eq!((read.uid.as_str(), read.sequence, read.start), ("local:3f1c", 5, event.start));
+
+    // An imported occurrence keeps the UID it came with and names itself.
+    let imported = Event {
+        id: format!("local:import:series@example.com@{}", event.start),
+        is_recurring: true,
+        ..event.clone()
+    };
+    assert_eq!(local_uid(&imported), ("series@example.com".to_string(), Some(event.start)));
+    let object = local_object(&imported, 0, NOTICE_NOW);
+    let cancel = organizer_notice(&object, Notice::Cancel, Some(event.start), &ana(), NOTICE_NOW).unwrap();
+    assert!(notice_lines(&cancel.ics).contains(&"RECURRENCE-ID:20300110T090000Z".to_string()), "{}", cancel.ics);
+    assert_eq!(cancel.sequence, 1);
+}

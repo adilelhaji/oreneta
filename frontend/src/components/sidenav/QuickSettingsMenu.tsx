@@ -1,4 +1,6 @@
 import {
+  Bell,
+  BellOff,
   BookUser,
   CalendarDays,
   Columns3,
@@ -20,6 +22,8 @@ import { syncMail } from '../../states/mail'
 import { openCommandPalette, ui$ } from '../../states/ui'
 import { formatShortcut, isMac, type ShortcutId } from '../../lib/shortcuts'
 import { MenuItem } from '../menu/MenuItem'
+import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
+import { useQuietState } from './QuietIndicator'
 
 /** The chord a menu row triggers, so the keystroke is learnable from the menu. */
 function Hint({ id }: { id: ShortcutId }) {
@@ -44,6 +48,7 @@ export function QuickSettingsMenu({
 }) {
   const { t } = useTranslation()
   const busy = useValue(ui$.busy)
+  const quiet = useQuietState()
   useEscapeKey(onClose)
   // Anchors are visual pixels; fixed positions use CSS pixels under root zoom.
   const rootStyle = getComputedStyle(document.documentElement)
@@ -143,6 +148,37 @@ export function QuickSettingsMenu({
           trailing={<Hint id="mail.sync" />}
           onClick={() => syncMail()}
         />
+        {/* Do not disturb (ADR-0049): the same choices as Settings and the tray. */}
+        <div className="my-1 border-t border-border" />
+        {quiet.quiet ? (
+          <MenuItem
+            icon={<Bell size={14} className="text-secondary" strokeWidth={1.75} />}
+            label={t('notifications.dnd.resume', { defaultValue: 'Resume notifications' })}
+            onClick={() => {
+              resumeNotifications()
+              onClose()
+            }}
+          />
+        ) : (
+          (
+            [
+              ['hour', t('notifications.dnd.menuHour', { defaultValue: 'Do not disturb for 1 hour' })],
+              ['tomorrow', t('notifications.dnd.menuTomorrow', { defaultValue: 'Do not disturb until tomorrow' })],
+              ['off', t('notifications.dnd.menuOff', { defaultValue: 'Do not disturb until turned off' })],
+            ] as [PauseChoice, string][]
+          ).map(([choice, label]) => (
+            <MenuItem
+              key={choice}
+              icon={<BellOff size={14} className="text-secondary" strokeWidth={1.75} />}
+              label={label}
+              onClick={() => {
+                pauseNotifications(choice)
+                onClose()
+              }}
+            />
+          ))
+        )}
+        <div className="my-1 border-t border-border" />
         <MenuItem
           icon={<Settings size={14} className="text-secondary" strokeWidth={1.75} />}
           label={t('settings.label')}

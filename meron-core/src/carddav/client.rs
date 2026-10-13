@@ -445,9 +445,50 @@ pub struct Card {
     pub etag: String,
 }
 
+/// One group card as read from a book (ADR-0052).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupEntry {
+    pub group: crate::contacts::groups::GroupCard,
+    pub href: String,
+    pub etag: String,
+}
+
+/// Everything in a book: its people, its groups, and the vCard versions its
+/// cards are written in (which decide how a new group is written).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BookContents {
+    pub cards: Vec<Card>,
+    pub groups: Vec<GroupEntry>,
+    pub versions: Vec<String>,
+}
+
+impl BookContents {
+    fn add(&mut self, data: &str, href: &str, etag: &str) {
+        for properties in crate::contacts::vcard::split_cards(data.as_bytes()) {
+            let version = crate::contacts::groups::card_version(&properties);
+            if !version.is_empty() && !self.versions.contains(&version) {
+                self.versions.push(version);
+            }
+            if let Some(group) = crate::contacts::groups::group_from_properties(&properties) {
+                self.groups.push(GroupEntry { group, href: href.to_string(), etag: etag.to_string() });
+                continue;
+            }
+            let person = crate::contacts::person::person_from_properties(&properties);
+            if person.is_useful() {
+                self.cards.push(Card { person, href: href.to_string(), etag: etag.to_string() });
+            }
+        }
+    }
+}
+
 /// The book's cards with their URLs and versions. All or nothing, like
 /// [`fetch_book`], which is this without the URLs.
 pub fn fetch_cards(transport: &dyn Transport, book_url: &str) -> Result<Vec<Card>> {
+    fetch_book_contents(transport, book_url).map(|contents| contents.cards)
+}
+
+/// The book's people and groups with their URLs and versions. All or nothing.
+pub fn fetch_book_contents(transport: &dyn Transport, book_url: &str) -> Result<BookContents> {
     let reply = transport.send(&DavRequest {
         method: "REPORT",
         url: book_url.to_string(),
@@ -463,7 +504,7 @@ pub fn fetch_cards(transport: &dyn Transport, book_url: &str) -> Result<Vec<Card
         return fetch_cards_one_at_a_time(transport, book_url);
     }
     let responses = parse_multistatus_complete(&reply.body)?;
-    let mut cards = Vec::new();
+    let mut contents = BookContents::default();
     let mut failed: Vec<String> = Vec::new();
     let mut total = 0usize;
     for response in responses.iter().filter(|response| !is_the_book(response, book_url)) {
@@ -481,17 +522,15 @@ pub fn fetch_cards(transport: &dyn Transport, book_url: &str) -> Result<Vec<Card
         };
         let href = resolve(&reply.url, &response.href)?;
         let etag = response.prop("getetag").unwrap_or_default().to_string();
-        for person in people_from_vcards(data.as_bytes()) {
-            cards.push(Card { person, href: href.clone(), etag: etag.clone() });
-        }
+        contents.add(data, &href, &etag);
     }
     if !failed.is_empty() {
         return Err(incomplete(&failed, total));
     }
-    Ok(cards)
+    Ok(contents)
 }
 
-fn fetch_cards_one_at_a_time(transport: &dyn Transport, book_url: &str) -> Result<Vec<Card>> {
+fn fetch_cards_one_at_a_time(transport: &dyn Transport, book_url: &str) -> Result<BookContents> {
     let reply = transport.send(&DavRequest {
         method: "PROPFIND",
         url: book_url.to_string(),
@@ -506,7 +545,7 @@ fn fetch_cards_one_at_a_time(transport: &dyn Transport, book_url: &str) -> Resul
         return Err(anyhow!("the server would not list the address book (HTTP {})", reply.status));
     }
     let responses = parse_multistatus_complete(&reply.body)?;
-    let mut cards = Vec::new();
+    let mut contents = BookContents::default();
     let mut failed: Vec<String> = Vec::new();
     let mut total = 0usize;
     for response in responses {
@@ -518,9 +557,7 @@ fn fetch_cards_one_at_a_time(transport: &dyn Transport, book_url: &str) -> Resul
         match get_card(transport, book_url, &url)? {
             Some((body, etag)) => {
                 let etag = if etag.is_empty() { response.prop("getetag").unwrap_or_default().to_string() } else { etag };
-                for person in people_from_vcards(body.as_bytes()) {
-                    cards.push(Card { person, href: url.clone(), etag: etag.clone() });
-                }
+                contents.add(&body, &url, &etag);
             }
             None => failed.push(format!("{} could not be read", response.href)),
         }
@@ -528,7 +565,7 @@ fn fetch_cards_one_at_a_time(transport: &dyn Transport, book_url: &str) -> Resul
     if !failed.is_empty() {
         return Err(incomplete(&failed, total));
     }
-    Ok(cards)
+    Ok(contents)
 }
 
 /// Whether this account may write to the book, as the server says in

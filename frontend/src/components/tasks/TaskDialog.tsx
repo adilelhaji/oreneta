@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ListTodo, Trash2 } from 'lucide-react'
+import { ListTodo, Repeat, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import {
@@ -20,6 +20,8 @@ import { ui$ } from '../../states/ui'
 import { Dialog } from '../dialog/Dialog'
 import { Button } from '../button/Button'
 import { TextInput } from '../field/Field'
+import { RepeatFields } from '../calendar/RepeatFields'
+import type { Recurrence } from '../../states/calendar'
 
 /** The local date, the same one `fromDateInput` turns back into local
  * midnight. The UTC date (`toISOString`) showed the day before east of UTC,
@@ -78,6 +80,9 @@ export function TaskDialog() {
   const [dueAt, setDueAt] = useState(() => toDateInput(state?.dueAt ?? null))
   const [reminderAt, setReminderAt] = useState('')
   const [priority, setPriority] = useState(1)
+  // How it repeats (ADR-0053). A task that repeats in a way this app does
+  // not change (extra dates, changed occurrences) shows that instead.
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null)
   const [note, setNote] = useState(() => state?.note ?? '')
   const [revision, setRevision] = useState<number | null>(null)
   const [linked, setLinked] = useState(!standalone)
@@ -106,6 +111,7 @@ export function TaskDialog() {
         setOriginalList(task.list_id || MAIL_LIST)
         setReminderAt(toDateTimeInput(task.reminder_at ?? null))
         setPriority(task.priority ?? 1)
+        setRecurrence(task.recurrence ?? null)
         setRevision(task.revision ?? null)
         setLinked(task.linked ?? !standalone)
         setLoadingExisting(false)
@@ -127,6 +133,31 @@ export function TaskDialog() {
 
   if (!state) return null
 
+  const lockedRepeat = editing && tasks$.items.peek().some((task) => task.id === state.id && task.recurring)
+  const canRepeat = (standalone || (editing && !linked)) && !lockedRepeat
+  const dueSeconds = fromDateInput(dueAt)
+
+  // A rule on "the second Tuesday" follows the due date to its own weekday.
+  const changeDue = (value: string) => {
+    setDueAt(value)
+    const next = fromDateInput(value)
+    if (!recurrence?.month_week || next === null) return
+    const date = new Date(next * 1000)
+    const lastWeek = date.getDate() + 7 > new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+    setRecurrence({
+      ...recurrence,
+      weekdays: [(date.getDay() + 6) % 7],
+      month_week: recurrence.month_week === -1 && lastWeek ? -1 : Math.min(Math.floor((date.getDate() - 1) / 7) + 1, 4),
+    })
+  }
+
+  // Repeating counts from the due date, so choosing a repetition on a task
+  // with none makes it due today.
+  const changeRecurrence = (rule: Recurrence | null) => {
+    if (rule && !dueAt) setDueAt(toDateInput(Math.floor(Date.now() / 1000)))
+    setRecurrence(rule)
+  }
+
   const close = () => ui$.taskEditor.set(null)
   const fields = (): TaskFields => ({
     list_id: listId,
@@ -135,6 +166,7 @@ export function TaskDialog() {
     due_at: fromDateInput(dueAt),
     reminder_at: fromDateTimeInput(reminderAt),
     priority,
+    recurrence: canRepeat ? recurrence : null,
   })
   const finish = (result: Awaited<ReturnType<typeof updateTask>>) => {
     if (result.kind === 'saved') close()
@@ -323,12 +355,28 @@ export function TaskDialog() {
             id="task-due"
             type="date"
             value={dueAt}
-            onChange={(event) => setDueAt(event.target.value)}
+            onChange={(event) => changeDue(event.target.value)}
             fieldSize="md"
             surface="app"
             disabled={locked}
           />
         </div>
+        {canRepeat && (
+          <RepeatFields
+            rule={recurrence}
+            start={dueSeconds ?? Math.floor(Date.now() / 1000)}
+            onChange={changeRecurrence}
+            monthlyByWeekday
+            inputClass={selectClass}
+            idPrefix="task-repeat"
+          />
+        )}
+        {lockedRepeat && (
+          <p className="flex items-center gap-1.5 text-caption text-secondary">
+            <Repeat size={12} strokeWidth={1.75} aria-hidden="true" />
+            {t('tasks.repeatsReadOnly', { defaultValue: 'Repeats · edit it in the app that made it' })}
+          </p>
+        )}
         {(standalone || editing) && (
           <div className="grid gap-3 min-[420px]:grid-cols-2">
             <div className="flex flex-col gap-1.5">

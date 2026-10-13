@@ -299,11 +299,15 @@ pub fn build_submission(
     reply_to: &str,
     message_id: &str,
     protect: Option<&Protection>,
+    // Whether to ask for a read receipt (ADR-0048). Exchange and Graph read
+    // the header from the MIME as they read everything else in it.
+    read_receipt: bool,
 ) -> Result<Vec<u8>> {
     let raw = build_message(
         sender_name, from, to, cc, bcc, true, subject, body, html, attachments, in_reply_to, references, reply_to,
         message_id,
     )?;
+    let raw = if read_receipt { with_read_receipt(raw, sender_name, from)? } else { raw };
     match protect {
         Some(protection) => protection.apply(&raw),
         None => Ok(raw),
@@ -326,6 +330,41 @@ fn attachment_type(mime: &str) -> ContentType<'static> {
         }
     }
     content_type
+}
+
+fn is_message_rfc822(mime: &str) -> bool {
+    mime.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("message/rfc822")
+}
+
+/// Whether bytes can travel as a 7bit MIME part: ASCII without NULs, CR only
+/// in CRLF, and no line over RFC 5322's 998 characters.
+fn is_7bit_message(bytes: &[u8]) -> bool {
+    let mut line = 0usize;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            0 | 0x80..=0xff => return false,
+            b'\r' => {
+                if bytes.get(i + 1) != Some(&b'\n') {
+                    return false;
+                }
+            }
+            b'\n' => {
+                if i == 0 || bytes[i - 1] != b'\r' {
+                    return false;
+                }
+                line = 0;
+                continue;
+            }
+            _ => {}
+        }
+        if b != b'\r' {
+            line += 1;
+            if line > 998 {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 pub fn build_message(
@@ -413,6 +452,18 @@ pub fn build_message(
             .with_context(|| format!("decode attachment {:?}", att.filename))?;
         if !att.inline_id.trim().is_empty() {
             builder = builder.inline(&att.mime, att.inline_id.trim(), bytes);
+        } else if is_message_rfc822(&att.mime) && is_7bit_message(&bytes) {
+            // A forwarded original (ADR-0047). RFC 2046 §5.2.1 allows a
+            // message/rfc822 part no encoding but 7bit, 8bit or binary, so the
+            // original goes in as it is rather than base64, which mail-builder
+            // would otherwise pick for any non-text part. An original that is
+            // not 7-bit clean falls through to base64 below: this client
+            // submits 7-bit only, and readers open either.
+            let content_type = attachment_type(&att.mime).attribute("name", att.filename.clone());
+            let part = mail_builder::mime::MimePart::new(content_type, bytes)
+                .attachment(att.filename.clone())
+                .transfer_encoding("7bit");
+            builder.attachments.get_or_insert_with(Vec::new).push(part);
         } else {
             // The filename also goes on Content-Type's own "name" attribute,
             // not just Content-Disposition's "filename" — the older
@@ -431,7 +482,95 @@ pub fn build_message(
     builder.write_to_vec().context("build MIME message")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn send(
+    creds: &Creds,
+    from_addr: &str,
+    sender_name: &str,
+    to: &str,
+    cc: &str,
+    bcc: &str,
+    subject: &str,
+    body: &str,
+    html: &str,
+    attachments: &[AttachmentInput],
+    in_reply_to: &str,
+    references: &str,
+    reply_to: &str,
+    message_id: &str,
+    protect: Option<&Protection>,
+) -> Result<Vec<u8>> {
+    send_with_receipts(
+        creds, from_addr, sender_name, to, cc, bcc, subject, body, html, attachments, in_reply_to, references,
+        reply_to, message_id, protect, Receipts::default(),
+    )
+    .await
+    .map(|sent| sent.raw)
+}
+
+/// Receipts the sender asked for on one message (ADR-0048).
+///
+/// `read` writes `Disposition-Notification-To` (RFC 8098) naming the sender;
+/// whether the recipient answers is entirely theirs. `delivery` asks the
+/// submission server for delivery status notifications (RFC 3461), and only
+/// when it says it offers them: otherwise the message goes without, and the
+/// caller is told so it can say so.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Receipts {
+    pub read: bool,
+    pub delivery: bool,
+}
+
+/// What became of a delivery receipt request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryReceipt {
+    /// Nobody asked for one.
+    NotAsked,
+    /// The server offers DSN and was asked for success and failure notices.
+    Requested,
+    /// Asked for, but the server does not offer DSN (or the protocol cannot
+    /// carry the request): the message went without one.
+    Unsupported,
+}
+
+impl DeliveryReceipt {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeliveryReceipt::NotAsked => "none",
+            DeliveryReceipt::Requested => "requested",
+            DeliveryReceipt::Unsupported => "unsupported",
+        }
+    }
+}
+
+/// A message the server accepted: the copy to file in Sent, and what became
+/// of a delivery receipt request.
+#[derive(Debug)]
+pub struct Sent {
+    pub raw: Vec<u8>,
+    pub delivery_receipt: DeliveryReceipt,
+}
+
+/// The message with `Disposition-Notification-To` naming the sender (RFC
+/// 8098 §2.1), written ahead of the rest of the header. Applied to built
+/// bytes, before any protection, so a signed message signs it too.
+pub fn with_read_receipt(raw: Vec<u8>, sender_name: &str, from: &str) -> Result<Vec<u8>> {
+    use mail_builder::headers::Header as _;
+    use mail_builder::headers::address::Address;
+    const NAME: &str = "Disposition-Notification-To: ";
+    let name = sender_name.trim();
+    let address = Address::new_address((!name.is_empty()).then(|| name.to_string()), from.trim().to_string());
+    let mut out = NAME.as_bytes().to_vec();
+    address.write_header(&mut out, NAME.len()).context("write Disposition-Notification-To")?;
+    if !out.ends_with(b"\r\n") {
+        out.extend_from_slice(b"\r\n");
+    }
+    out.extend_from_slice(&raw);
+    Ok(out)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn send_with_receipts(
     creds: &Creds,
     from_addr: &str,
     sender_name: &str,
@@ -451,7 +590,10 @@ pub async fn send(
     // OpenPGP protects is a finished MIME entity, and a half-built one is not
     // the thing a recipient will verify.
     protect: Option<&Protection>,
-) -> Result<Vec<u8>> {
+    // Receipts the sender asked for (ADR-0048): a read receipt is a header in
+    // the message, a delivery receipt is asked of the server in the envelope.
+    receipts: Receipts,
+) -> Result<Sent> {
     if creds.is_graph() { return crate::graph::mail::unsupported(); }
     if creds.is_local() { return crate::archive::unsupported("send mail"); }
     // Caller passes the chosen send-as address (primary or a verified alias),
@@ -502,6 +644,8 @@ pub async fn send(
         &message_id,
     )?;
 
+    let raw = if receipts.read { with_read_receipt(raw, sender_name, from)? } else { raw };
+
     // Protection goes on before anything touches the network. A failure here
     // stops the send: a message meant to be encrypted that went in the clear
     // is a worse outcome than one that did not go at all.
@@ -514,15 +658,15 @@ pub async fn send(
     // may carry a display name. The header form survives in `to_list`/`cc_list`
     // for the builder above; here we strip down to the address for RCPT TO.
     let recipients = envelope_recipients(&to_list, &cc_list, &bcc_list);
-    transport(creds, from, &recipients, &raw).await?;
+    let delivery_receipt = transport(creds, from, &recipients, &raw, receipts.delivery).await?;
 
     // Return the copy to file in Sent: identical to the transmitted message
     // unless there's a Bcc, in which case we rebuild with the `Bcc:` header (and
     // the same Message-ID) so the user's Sent folder records who they bcc'd.
     if bcc_list.is_empty() {
-        Ok(raw)
+        Ok(Sent { raw, delivery_receipt })
     } else {
-        build_message(
+        let kept = build_message(
             sender_name,
             from,
             to,
@@ -537,7 +681,9 @@ pub async fn send(
             references,
             reply_to,
             &message_id,
-        )
+        )?;
+        let kept = if receipts.read { with_read_receipt(kept, sender_name, from)? } else { kept };
+        Ok(Sent { raw: kept, delivery_receipt })
     }
 }
 
@@ -545,7 +691,14 @@ pub async fn send(
 /// SMTP server for exactly the recipients given — the wire mechanics shared
 /// by every outgoing message this app sends over SMTP, whether composed by
 /// the reader (`send`) or generated automatically (`send_oof_reply`).
-async fn transport(creds: &Creds, from: &str, recipients: &[String], raw: &[u8]) -> Result<()> {
+async fn transport(
+    creds: &Creds,
+    from: &str,
+    recipients: &[String],
+    raw: &[u8],
+    // Whether to ask for delivery status notifications (RFC 3461).
+    want_dsn: bool,
+) -> Result<DeliveryReceipt> {
     // Fall back to the IMAP host if SMTP settings were not provided.
     let host = if creds.smtp_host.is_empty() {
         creds.host.as_str()
@@ -609,6 +762,23 @@ async fn transport(creds: &Creds, from: &str, recipients: &[String], raw: &[u8])
         .context("smtp connect (post-STARTTLS)")?;
     }
 
+    // Whether the server offers DSN, asked before AUTH: the greeting's own
+    // EHLO answer is parsed by the library into the features it knows, and
+    // DSN is not one of them, so the question is put again here. Only when a
+    // delivery receipt is wanted; otherwise nothing changes on the wire.
+    let dsn = if want_dsn {
+        let reply = with_timeout(
+            SMTP_COMMAND_TIMEOUT,
+            "smtp ehlo",
+            transport.get_mut().ehlo(async_smtp::extension::ClientId::default()),
+        )
+        .await?
+        .context("smtp EHLO")?;
+        offers_dsn(&reply.message)
+    } else {
+        false
+    };
+
     let secret = if creds.is_oauth() {
         creds.access_token.clone().unwrap_or_default()
     } else {
@@ -669,9 +839,37 @@ async fn transport(creds: &Creds, from: &str, recipients: &[String], raw: &[u8])
         }
     }
 
-    submit(&mut transport, from, recipients, raw).await?;
+    let dsn_sent = submit(&mut transport, from, recipients, raw, dsn).await?;
     let _ = with_timeout(Duration::from_secs(10), "smtp quit", transport.quit()).await;
-    Ok(())
+    Ok(match (want_dsn, dsn_sent) {
+        (false, _) => DeliveryReceipt::NotAsked,
+        (true, true) => DeliveryReceipt::Requested,
+        (true, false) => DeliveryReceipt::Unsupported,
+    })
+}
+
+/// Whether an EHLO answer lists the DSN extension (RFC 3461 §4).
+fn offers_dsn(lines: &[String]) -> bool {
+    lines
+        .iter()
+        .any(|line| line.split_whitespace().next().is_some_and(|word| word.eq_ignore_ascii_case("DSN")))
+}
+
+/// The `MAIL FROM` parameter of a delivery receipt request (RFC 3461 §4.3):
+/// a notice carries only the headers of the message back, not all of it.
+fn dsn_mail_parameters() -> Vec<async_smtp::extension::MailParameter> {
+    vec![async_smtp::extension::MailParameter::Other { keyword: "RET".to_string(), value: Some("HDRS".to_string()) }]
+}
+
+/// The `RCPT TO` parameters of a delivery receipt request (RFC 3461 §4.1,
+/// §4.2): a notice when delivery to this recipient succeeds or fails, naming
+/// the recipient as the sender wrote it.
+fn dsn_rcpt_parameters(recipient: &str) -> Vec<async_smtp::extension::RcptParameter> {
+    use async_smtp::extension::RcptParameter;
+    vec![
+        RcptParameter::Other { keyword: "NOTIFY".to_string(), value: Some("SUCCESS,FAILURE".to_string()) },
+        RcptParameter::Other { keyword: "ORCPT".to_string(), value: Some(format!("rfc822;{recipient}")) },
+    ]
 }
 
 /// A send whose outcome the server never reported.
@@ -718,7 +916,17 @@ fn uncertain(err: anyhow::Error) -> anyhow::Error {
 ///
 /// The envelope and data phases are driven here rather than through the
 /// library's one-shot `send`, which cannot report which phase failed.
-async fn submit<S>(transport: &mut SmtpTransport<S>, from: &str, recipients: &[String], raw: &[u8]) -> Result<()>
+///
+/// Returns whether delivery status notifications were asked for: only when
+/// `dsn` says the server offers them, and only on the path that can carry
+/// envelope parameters.
+async fn submit<S>(
+    transport: &mut SmtpTransport<S>,
+    from: &str,
+    recipients: &[String],
+    raw: &[u8],
+    dsn: bool,
+) -> Result<bool>
 where
     S: tokio::io::AsyncBufRead + tokio::io::AsyncWrite + Unpin,
 {
@@ -744,7 +952,7 @@ where
         )
         .await;
         return match sent {
-            Ok(Ok(_)) => Ok(()),
+            Ok(Ok(_)) => Ok(false),
             Ok(Err(err)) if is_refusal(&err) => Err(anyhow::Error::new(err).context("smtp send")),
             Ok(Err(err)) => Err(uncertain(anyhow::Error::new(err).context("smtp send"))),
             Err(err) => Err(uncertain(err)),
@@ -752,18 +960,20 @@ where
     };
 
     let stream = transport.get_mut();
+    let mail_parameters = if dsn { dsn_mail_parameters() } else { vec![] };
     with_timeout(
         SMTP_COMMAND_TIMEOUT,
         "smtp mail from",
-        stream.command(MailCommand::new(Some(sender), vec![])),
+        stream.command(MailCommand::new(Some(sender), mail_parameters)),
     )
     .await?
     .context("smtp MAIL FROM")?;
-    for addr in envelope_addrs {
+    for (addr, plain) in envelope_addrs.into_iter().zip(recipients) {
+        let rcpt_parameters = if dsn { dsn_rcpt_parameters(plain) } else { vec![] };
         with_timeout(
             SMTP_COMMAND_TIMEOUT,
             "smtp rcpt to",
-            stream.command(RcptCommand::new(addr, vec![])),
+            stream.command(RcptCommand::new(addr, rcpt_parameters)),
         )
         .await?
         .context("smtp RCPT TO")?;
@@ -781,7 +991,7 @@ where
         Err(err) => return Err(uncertain(err)),
     }
     match with_timeout(SMTP_DATA_TIMEOUT, "smtp send", stream.read_response()).await {
-        Ok(Ok(_)) => Ok(()),
+        Ok(Ok(_)) => Ok(dsn),
         Ok(Err(err)) if is_refusal(&err) => Err(anyhow::Error::new(err).context("smtp send")),
         Ok(Err(err)) => Err(uncertain(anyhow::Error::new(err).context("smtp send"))),
         Err(err) => Err(uncertain(err)),
@@ -865,8 +1075,20 @@ pub async fn send_oof_reply(
     };
     let raw = build_oof_reply(sender_name, from, to, subject, body, in_reply_to)?;
     let recipients = vec![bare_addr(to)];
-    transport(creds, from, &recipients, &raw).await?;
+    transport(creds, from, &recipients, &raw, false).await?;
     Ok(raw)
+}
+
+/// Send a report this app generated — a read receipt (ADR-0048) — over the
+/// account's own SMTP server, to exactly the recipients given. Nothing is
+/// filed in Sent, as for an out-of-office reply.
+pub async fn send_report(creds: &Creds, from: &str, recipients: &[String], raw: &[u8]) -> Result<()> {
+    if creds.is_graph() { return crate::graph::mail::unsupported(); }
+    if creds.is_local() { return crate::archive::unsupported("send mail"); }
+    let from = if from.trim().is_empty() { creds.user.as_str() } else { from.trim() };
+    let recipients: Vec<String> = recipients.iter().map(|entry| bare_addr(entry)).collect();
+    transport(creds, from, &recipients, raw, false).await?;
+    Ok(())
 }
 
 /// Flatten to/cc/bcc header entries into the bare envelope address list,
@@ -930,7 +1152,7 @@ mod tests {
         };
         let raw = build_submission(
             "Ana", "ana@example.com", &addresses[0], "", "hidden@example.com", "Plan", "the secret body", "", &[], "",
-            "", "", "<m@example.com>", Some(&protection),
+            "", "", "<m@example.com>", Some(&protection), false,
         )
         .unwrap();
         let text = String::from_utf8_lossy(&raw);
@@ -941,7 +1163,7 @@ mod tests {
 
         let plain = build_submission(
             "Ana", "ana@example.com", "b@example.com", "", "", "Plan", "plain body", "", &[], "", "", "",
-            "<m2@example.com>", None,
+            "<m2@example.com>", None, false,
         )
         .unwrap();
         assert!(String::from_utf8_lossy(&plain).contains("plain body"));
@@ -1037,6 +1259,57 @@ mod tests {
         )
         .expect_err("must fail instead of sending without the attachment");
         assert!(err.to_string().contains("broken.bin"), "{err:#}");
+    }
+
+    #[test]
+    fn a_forwarded_original_is_attached_as_message_rfc822_without_base64() {
+        let original = "From: Ana <ana@y.com>\r\nSubject: Plan\r\n\r\nSee you.\r\n";
+        let atts = vec![super::AttachmentInput {
+            filename: "Plan.eml".into(),
+            mime: "message/rfc822".into(),
+            data: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, original),
+            inline_id: String::new(),
+        }];
+        let raw = build_message("Bo", "bo@x.com", "cy@z.com", "", "", false, "Fwd: Plan", "", "", &atts, "", "", "", "")
+            .expect("built");
+        let text = String::from_utf8_lossy(&raw).to_string();
+        assert!(text.contains("Content-Transfer-Encoding: 7bit"), "{text}");
+        assert!(text.contains(original), "{text}");
+        let parsed = mailparse::parse_mail(&raw).expect("parses");
+        let part = parsed
+            .subparts
+            .iter()
+            .find(|p| p.ctype.mimetype == "message/rfc822")
+            .unwrap_or_else(|| panic!("{text}"));
+        assert_eq!(part.get_body_raw().expect("body"), original.as_bytes());
+        assert_eq!(part.get_content_disposition().params.get("filename").map(String::as_str), Some("Plan.eml"));
+    }
+
+    #[test]
+    fn an_original_that_is_not_7bit_clean_is_still_attached() {
+        let original = "Subject: Caf\u{e9}\r\n\r\nCaf\u{e9}\r\n";
+        let atts = vec![super::AttachmentInput {
+            filename: "Cafe.eml".into(),
+            mime: "message/rfc822".into(),
+            data: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, original),
+            inline_id: String::new(),
+        }];
+        let raw = build_message("Bo", "bo@x.com", "cy@z.com", "", "", false, "Fwd", "", "", &atts, "", "", "", "")
+            .expect("built");
+        assert!(raw.is_ascii(), "the submitted message stays 7-bit");
+        let parsed = mailparse::parse_mail(&raw).expect("parses");
+        let part = parsed.subparts.iter().find(|p| p.ctype.mimetype == "message/rfc822").expect("part");
+        assert_eq!(part.get_body_raw().expect("body"), original.as_bytes());
+    }
+
+    #[test]
+    fn seven_bit_detection_rejects_bare_newlines_and_long_lines() {
+        assert!(super::is_7bit_message(b"a\r\nb\r\n"));
+        assert!(!super::is_7bit_message(b"a\nb"));
+        assert!(!super::is_7bit_message(b"a\rb"));
+        assert!(!super::is_7bit_message("\u{e9}".as_bytes()));
+        assert!(!super::is_7bit_message(&[b'x'; 999]));
+        assert!(super::is_7bit_message(&[b'x'; 998]));
     }
 
     #[test]
@@ -1318,6 +1591,7 @@ mod tests {
         refuse_recipient: bool,
         after_data: AfterData,
         transcript: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        offer_dsn: bool,
     ) {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
         let Ok((sock, _)) = listener.accept().await else {
@@ -1348,6 +1622,7 @@ mod tests {
             transcript.lock().unwrap().push(line.clone());
             let verb = line.split(' ').next().unwrap_or_default().to_uppercase();
             let reply: &[u8] = match verb.as_str() {
+                "EHLO" | "HELO" if offer_dsn => b"250-test\r\n250-DSN\r\n250 OK\r\n",
                 "EHLO" | "HELO" => b"250-test\r\n250 OK\r\n",
                 "MAIL" => b"250 2.1.0 OK\r\n",
                 "RCPT" if refuse_recipient => b"550 5.1.1 no such user\r\n",
@@ -1406,8 +1681,8 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let transcript = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        tokio::spawn(serve_submission(listener, refuse_recipient, after_data, transcript.clone()));
-        let result = super::transport(&plain_creds(port), "alice@test", &["bob@test".to_string()], raw).await;
+        tokio::spawn(serve_submission(listener, refuse_recipient, after_data, transcript.clone(), false));
+        let result = super::transport(&plain_creds(port), "alice@test", &["bob@test".to_string()], raw, false).await.map(|_| ());
         let lines = transcript.lock().unwrap().clone();
         (result, lines)
     }
@@ -1458,6 +1733,97 @@ mod tests {
         assert!(lines.contains(&"..hidden dot".to_string()), "a leading dot is doubled: {lines:?}");
         assert!(lines.contains(&"hello".to_string()));
         assert_eq!(lines.iter().filter(|line| *line == ".").count(), 1, "one terminator: {lines:?}");
+    }
+
+    /// One accepted submission asking for a delivery receipt, against a
+    /// server that does or does not offer DSN.
+    async fn submit_wanting_dsn(offer_dsn: bool) -> (super::DeliveryReceipt, Vec<String>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let transcript = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        tokio::spawn(serve_submission(listener, false, AfterData::Accept, transcript.clone(), offer_dsn));
+        let receipt = super::transport(&plain_creds(port), "alice@test", &["bob@test".to_string()], RAW, true)
+            .await
+            .expect("accepted");
+        let lines = transcript.lock().unwrap().clone();
+        (receipt, lines)
+    }
+
+    /// A server that offers DSN is asked for success and failure notices,
+    /// with only the headers returned (RFC 3461).
+    #[tokio::test]
+    async fn a_delivery_receipt_is_asked_for_in_the_envelope_when_the_server_offers_dsn() {
+        let (receipt, lines) = submit_wanting_dsn(true).await;
+        assert_eq!(receipt, super::DeliveryReceipt::Requested);
+        let mail = lines.iter().find(|line| line.starts_with("MAIL FROM")).expect("MAIL FROM");
+        assert!(mail.ends_with(" RET=HDRS"), "{mail}");
+        let rcpt = lines.iter().find(|line| line.starts_with("RCPT TO")).expect("RCPT TO");
+        assert!(rcpt.contains(" NOTIFY=SUCCESS,FAILURE"), "{rcpt}");
+        assert!(rcpt.contains(" ORCPT=rfc822;bob@test"), "{rcpt}");
+    }
+
+    /// A server that does not offer DSN gets an ordinary envelope, and the
+    /// caller is told no receipt was asked for.
+    #[tokio::test]
+    async fn without_dsn_the_message_goes_plain_and_says_so() {
+        let (receipt, lines) = submit_wanting_dsn(false).await;
+        assert_eq!(receipt, super::DeliveryReceipt::Unsupported);
+        assert!(lines.iter().all(|line| !line.contains("NOTIFY=") && !line.contains("RET=")), "{lines:?}");
+    }
+
+    /// Not asking changes nothing on the wire: no extra EHLO, no parameters.
+    #[tokio::test]
+    async fn not_asking_for_a_delivery_receipt_changes_nothing() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let transcript = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        tokio::spawn(serve_submission(listener, false, AfterData::Accept, transcript.clone(), true));
+        let receipt = super::transport(&plain_creds(port), "alice@test", &["bob@test".to_string()], RAW, false)
+            .await
+            .expect("accepted");
+        assert_eq!(receipt, super::DeliveryReceipt::NotAsked);
+        let lines = transcript.lock().unwrap().clone();
+        assert_eq!(lines.iter().filter(|line| line.starts_with("EHLO")).count(), 1, "{lines:?}");
+        assert!(lines.iter().all(|line| !line.contains("NOTIFY=")), "{lines:?}");
+    }
+
+    #[test]
+    fn dsn_is_read_from_the_ehlo_answer() {
+        assert!(super::offers_dsn(&["test".into(), "PIPELINING".into(), "DSN".into()]));
+        assert!(super::offers_dsn(&["dsn".into()]));
+        assert!(!super::offers_dsn(&["test".into(), "DSNX".into(), "8BITMIME".into()]));
+    }
+
+    /// A read receipt is the sender's own address in
+    /// `Disposition-Notification-To`, with a non-ASCII name encoded.
+    #[test]
+    fn a_requested_read_receipt_names_the_sender() {
+        let raw = super::build_message(
+            "Zoë", "zoe@example.org", "bob@example.com", "", "", false, "Hola", "body", "", &[], "", "", "", "",
+        )
+        .unwrap();
+        let raw = super::with_read_receipt(raw, "Zoë", "zoe@example.org").unwrap();
+        assert!(raw.is_ascii());
+        let parsed = mailparse::parse_mail(&raw).unwrap();
+        use mailparse::MailHeaderMap as _;
+        let value = parsed.headers.get_first_value("Disposition-Notification-To").expect("header");
+        assert!(value.contains("<zoe@example.org>") && value.contains("Zoë"), "{value}");
+        assert_eq!(parsed.headers.get_first_value("Subject").as_deref(), Some("Hola"));
+        // Exchange and Graph get it in the MIME they submit.
+        let submitted = super::build_submission(
+            "", "zoe@example.org", "bob@example.com", "", "", "Hola", "body", "", &[], "", "", "", "", None, true,
+        )
+        .unwrap();
+        let parsed = mailparse::parse_mail(&submitted).unwrap();
+        assert_eq!(
+            parsed.headers.get_first_value("Disposition-Notification-To").as_deref(),
+            Some("<zoe@example.org>")
+        );
+        let without = super::build_submission(
+            "", "zoe@example.org", "bob@example.com", "", "", "Hola", "body", "", &[], "", "", "", "", None, false,
+        )
+        .unwrap();
+        assert!(mailparse::parse_mail(&without).unwrap().headers.get_first_value("Disposition-Notification-To").is_none());
     }
 
     #[test]

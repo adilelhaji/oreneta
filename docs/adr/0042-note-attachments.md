@@ -1,7 +1,7 @@
 # ADR-0042: Archivos adjuntos en las notas
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: #104, sobre ADR-0015.
 

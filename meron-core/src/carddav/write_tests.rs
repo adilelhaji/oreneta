@@ -165,3 +165,67 @@ fn a_contact_whose_version_was_never_known_is_not_written_over() {
     let outcome = save_existing(&server, BOOK, ANA_URL, "", "ana", &ana_edited(), 0).unwrap();
     assert!(matches!(outcome, Outcome::Conflict { current: Some(_) }));
 }
+
+// ---- Groups (ADR-0052) ------------------------------------------------------
+
+use super::write::{delete_group, save_group_existing, save_group_new, GroupOutcome};
+use crate::contacts::groups::GroupStyle;
+
+const GROUP: &str = "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Family;;;;\r\nFN:Family\r\nX-ADDRESSBOOKSERVER-KIND:group\r\nUID:fam\r\nX-ADDRESSBOOKSERVER-MEMBER:urn:uuid:ana\r\nX-ADDRESSBOOKSERVER-MEMBER:urn:uuid:not-synced\r\nX-SHARED-BY:somebody\r\nEND:VCARD\r\n";
+const GROUP_URL: &str = "https://dav.example/alice/contacts/fam.vcf";
+
+#[test]
+fn a_group_edit_from_the_current_version_changes_only_its_members() {
+    let server = Server::with(GROUP_URL, GROUP);
+    let outcome =
+        save_group_existing(&server, BOOK, GROUP_URL, "\"v1\"", "Family", &["cy".into()], &["ana".into()], 0).unwrap();
+    let GroupOutcome::Saved { version, group, .. } = outcome else { panic!("{outcome:?}") };
+    assert_eq!(version, "\"v2\"");
+    assert_eq!(group.members, vec!["not-synced", "cy"]);
+    let stored = server.cards.borrow()[GROUP_URL].0.clone();
+    assert!(stored.contains("X-SHARED-BY:somebody\r\n"), "{stored}");
+    assert!(stored.contains("X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:cy\r\n"));
+    let put = server.seen.borrow().iter().find(|(m, _)| m == "PUT").cloned().unwrap();
+    assert!(put.1.contains(&("If-Match".into(), "\"v1\"".into())));
+}
+
+#[test]
+fn a_group_edit_from_an_older_version_writes_nothing() {
+    let server = Server::with(GROUP_URL, GROUP);
+    {
+        let mut cards = server.cards.borrow_mut();
+        let entry = cards.get_mut(GROUP_URL).unwrap();
+        entry.0 = entry.0.replace("FN:Family", "FN:Family (renamed on the phone)");
+        entry.1 += 1;
+    }
+    let outcome = save_group_existing(&server, BOOK, GROUP_URL, "\"v1\"", "Family", &["cy".into()], &[], 0).unwrap();
+    match outcome {
+        GroupOutcome::Conflict { current: Some((group, version)) } => {
+            assert_eq!(group.name, "Family (renamed on the phone)");
+            assert_eq!(version, "\"v2\"");
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(!server.seen.borrow().iter().any(|(m, _)| m == "PUT"), "nothing written");
+}
+
+#[test]
+fn a_new_group_is_put_where_nothing_is_in_the_books_style() {
+    let server = Server::default();
+    let outcome = save_group_new(&server, BOOK, "Climbing", &["ana".into()], GroupStyle::Vcard4).unwrap();
+    let GroupOutcome::Saved { href, version, group } = outcome else { panic!("{outcome:?}") };
+    assert!(href.starts_with(BOOK) && href.ends_with(".vcf"));
+    assert_eq!(version, "\"v1\"");
+    assert_eq!((group.name.as_str(), group.style), ("Climbing", GroupStyle::Vcard4));
+    assert!(server.cards.borrow()[&href].0.contains("KIND:group\r\n"));
+    let put = server.seen.borrow().iter().find(|(m, _)| m == "PUT").cloned().unwrap();
+    assert!(put.1.contains(&("If-None-Match".into(), "*".into())));
+}
+
+#[test]
+fn a_group_is_deleted_only_from_the_version_read() {
+    let server = Server::with(GROUP_URL, GROUP);
+    assert!(matches!(delete_group(&server, BOOK, GROUP_URL, "\"v0\"").unwrap(), GroupOutcome::Conflict { current: Some(_) }));
+    assert_eq!(delete_group(&server, BOOK, GROUP_URL, "\"v1\"").unwrap(), GroupOutcome::Deleted);
+    assert!(server.cards.borrow().is_empty());
+}

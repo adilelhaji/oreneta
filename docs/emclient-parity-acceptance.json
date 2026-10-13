@@ -115,9 +115,9 @@
       "issue": 85,
       "section": "Appearance/Layout",
       "outcome": "Reader, navigation and essential actions remain usable at pane boundaries",
-      "status": "partial",
-      "present": "#85 aligns pane visibility at 769px, reveals new composers and wraps footer actions; native 200-percent zoom remains pending",
-      "code": "frontend/baseline",
+      "status": "implemented-unverified",
+      "present": "Boundary e2e at 599/600/601, 768/769 and 1024/1025px keeps reader, back/list and composer reachable (#85); keyboard zoom to 200% via the app scale with no horizontal scroll at 1440/1024px (#181, keyboard-zoom.md); native Windows 200% check (N4) pending on the final version",
+      "code": "frontend/src/states/zoom.ts",
       "acceptance": "Positive visible-reader and back/list tests at 599/600/601, 1024/1025 and 200% zoom",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -125,7 +125,20 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "8f6755319180217df5ed47cf33ba2659099b5a0d",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
+            "result": "frontend/src/states/zoom.test.ts"
+          },
+          {
+            "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
+            "result": "frontend/e2e/startup.e2e.ts"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -135,9 +148,9 @@
       "issue": 34,
       "section": "Appearance/Lists",
       "outcome": "Unread, open, focused and multi-selected rows have distinct meaning",
-      "status": "partial",
-      "present": "Real navigation merged in #82; list/selection acceptance incomplete",
-      "code": "frontend/src/components",
+      "status": "implemented-unverified",
+      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); card-list polish and native evidence pending",
+      "code": "frontend/src/components/threads/ThreadTable.tsx",
       "acceptance": "Production-entry keyboard/pointer scenarios in both themes; reviewed selection excludes new arrivals",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -145,7 +158,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "520c12e62f26fd4e71d0749166f7a6200d9e62ab",
+            "result": "frontend/baseline/tableSelection.test.tsx"
+          },
+          {
+            "sha": "2a3227aecc4b642d00d4ca24b86802a51c6fe54a",
+            "result": "frontend/baseline/mailboxVisualHierarchy.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -155,9 +177,9 @@
       "issue": 35,
       "section": "Mail/Read",
       "outcome": "Wide HTML remains contained and message actions disclose their scope",
-      "status": "partial",
-      "present": "Existing reader needs complete content/printing validation",
-      "code": "frontend/src/components",
+      "status": "implemented-unverified",
+      "present": "Fixed-width HTML contained, message text size 80-400%, scoped per-message actions (#156), print scope that keeps reader privacy (#35), quoted history and signatures folded behind toggles that run no script, and wide messages fitted to the pane per message or by default (ADR-0046) are tested; native Windows check remains",
+      "code": "frontend/src/lib/print.ts",
       "acceptance": "Long subject, wide table, blocked images, quote folding, zoom, print scope; no shell overflow",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -165,7 +187,24 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "33f7b0f3cd8f3728782654a1dd0cf22a76016ed0",
+            "result": "frontend/baseline/readerControls.test.tsx"
+          },
+          {
+            "sha": "92b13356c59d27f308d14d39ecaa8e8710d4fdc1",
+            "result": "frontend/src/lib/print.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/chat/quoteFolding.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/chat/ReaderFolds.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -175,9 +214,9 @@
       "issue": 114,
       "section": "General/Notifications",
       "outcome": "Sounds, badges, tray and quiet-state behavior",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/states/settings.ts",
+      "status": "implemented-unverified",
+      "present": "Native new-mail notifications opening the thread, per-account mute, tray, unread badges, optional synthesized sounds for mail and reminders, do not disturb (1 hour, until tomorrow, until off) and weekly quiet hours gating popups in the Go bridge (ADR-0049) are tested; native Windows check remains",
+      "code": "notify.go",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -185,7 +224,24 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
+            "result": "notify_test.go"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/lib/quietHours.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/states/notifications.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "notify_quiet_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -195,9 +251,9 @@
       "issue": 114,
       "section": "General/Shortcuts; Swipe",
       "outcome": "Custom shortcuts and touch actions without accidental destructive gestures",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/states/settings.ts",
+      "status": "partial",
+      "present": "Keyboard shortcuts can be reassigned in the shortcuts dialog, including zoom; no touch/swipe actions exist",
+      "code": "frontend/src/lib/shortcuts.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -205,7 +261,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "11af73db33e86be3da90036aaf5dbfdc89770879",
+            "result": "frontend/src/lib/shortcuts.test.ts"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -215,9 +276,9 @@
       "issue": 113,
       "section": "General/Backup; Storage",
       "outcome": "Scheduled consistent backups and explicit cache/data retention",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "partial",
+      "present": "Scheduled encrypted profile backups, off by default, verified before they count and never removing the last good one (ADR-0037), plus full-profile archive and isolated restore (ADR-0017); no explicit cache/data retention setting",
+      "code": "meron-core/src/backup_schedule/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -225,7 +286,20 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "5346186e7020285294b7bf78b3cde070124a7f1d",
+            "result": "meron-core/src/backup_schedule/tests.rs"
+          },
+          {
+            "sha": "5346186e7020285294b7bf78b3cde070124a7f1d",
+            "result": "frontend/src/components/dialog/BackupScheduleGroup.test.tsx"
+          },
+          {
+            "sha": "a58e7c29f257f0c65b280bb6525e74c65a0a94d9",
+            "result": "meron-core/src/profile_archive/tests.rs"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -235,9 +309,9 @@
       "issue": 54,
       "section": "General/Password protection",
       "outcome": "Profile protection and truthful key/secret security boundaries",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "partial",
+      "present": "Secrets live in the OS keychain; archives and backups encrypt secrets with a passphrase (ADR-0017); profile deletion removes keychain entries first (ADR-0038); no password to open a profile",
+      "code": "profiles.go",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -245,7 +319,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "a58e7c29f257f0c65b280bb6525e74c65a0a94d9",
+            "result": "meron-core/src/profile_archive/tests.rs"
+          },
+          {
+            "sha": "1a65a5b1bb99c105fc8d691213ebd30ebb2ebf28",
+            "result": "profiles_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -255,9 +338,9 @@
       "issue": 35,
       "section": "General/Print",
       "outcome": "Native message/conversation printing configuration and completeness",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "partial",
+      "present": "Message printing keeps blocked remote content blocked and states what is left out (#35); no print configuration (headers, conversation scope options) or native print evidence",
+      "code": "frontend/src/lib/print.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -265,7 +348,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "92b13356c59d27f308d14d39ecaa8e8710d4fdc1",
+            "result": "frontend/src/lib/print.test.ts"
+          },
+          {
+            "sha": "92b13356c59d27f308d14d39ecaa8e8710d4fdc1",
+            "result": "frontend/src/lib/printDocument.test.ts"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -289,6 +381,14 @@
           {
             "sha": "82f378001b4c9ced9c581304f9c704911dddf4bd",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38195085097"
+          },
+          {
+            "sha": "08da6e6aea9bf0b438d03fdd2d25b6d7a8d55352",
+            "result": "frontend/src/components/composer/grammar.test.ts"
+          },
+          {
+            "sha": "08da6e6aea9bf0b438d03fdd2d25b6d7a8d55352",
+            "result": "frontend/src/components/composer/GrammarPopover.test.tsx"
           }
         ],
         "native": [],
@@ -300,8 +400,8 @@
       "issue": 87,
       "section": "General/Folders",
       "outcome": "Folder rules, favorites, colors and account-scoped operations",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "status": "partial",
+      "present": "Folder navigation and creation, favorites from any account with ordering, named contrast-checked folder colors, and moving folders by drag or menu with one IMAP RENAME (ADR-0050) are tested, including a real maddy server; moving folders on Exchange/Graph is absent",
       "code": "frontend/src/components/sidenav/MailNavigation.tsx",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -310,7 +410,28 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "b0653a98f84b5ae2f0b9e2c11dc8872e124595c0",
+            "result": "frontend/src/components/sidenav/MailNavigation.test.tsx"
+          },
+          {
+            "sha": "170ae7bdc66484542596933475c88fedb5725c6a",
+            "result": "meron-core/src/store/tests.rs"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/lib/folderMoves.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/states/folderPrefs.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "meron-core/src/folder_move.rs"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -320,9 +441,9 @@
       "issue": 33,
       "section": "Appearance/Toolbars",
       "outcome": "Consistent customizable controls and discoverable settings",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "partial",
+      "present": "Shared controls and accessible feedback (#152) and localized searchable settings and command palette (#149) exist; toolbars are not customizable",
+      "code": "frontend/src/components/dialog/SettingsSearch.tsx",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -330,7 +451,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "0190e4969a773d72f8b843a87533d5fae4a348ee",
+            "result": "frontend/src/components/design-primitives.test.tsx"
+          },
+          {
+            "sha": "7328abd7b4123af215f4f47e2db1a6afa2f96ffa",
+            "result": "frontend/baseline/settingsDiscovery.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -340,9 +470,9 @@
       "issue": 39,
       "section": "Mail/Replies and Forwards",
       "outcome": "Reply identity, quote/header formatting and recipient handling",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "implemented-unverified",
+      "present": "Reply/reply-all keep \"Last, First\" recipients whole, drop the reader's own address and reply from the alias the message reached (#39); reply position, HTML or plain-text quoting, short or Outlook-style header, collapsed Re:/Fwd: and forwarding inline or as the original .eml are preferences (ADR-0047) and tested; native Windows and provider checks remain",
+      "code": "frontend/src/states/compose.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -350,7 +480,24 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "840fb3d1c7138e8eceeb968d8930b032bfac7a96",
+            "result": "frontend/src/states/replyRecipients.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/lib/replyForward.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/states/replyForwardCompose.test.ts"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/dialog/RepliesForwardsGroup.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -360,9 +507,9 @@
       "issue": 88,
       "section": "Mail/Templates and Signatures; QuickText",
       "outcome": "Templates, account signatures and safe placeholder expansion",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "implemented-unverified",
+      "present": "Templates with escaped plain text (#40), per-account signatures and searchable QuickText with placeholders and a cursor mark (#88) are implemented and tested; native evidence pending",
+      "code": "frontend/src/lib/placeholders.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -370,7 +517,24 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "d47017777081dfad3c621af6aba0ddf2404c2ff1",
+            "result": "frontend/src/lib/placeholders.test.ts"
+          },
+          {
+            "sha": "d47017777081dfad3c621af6aba0ddf2404c2ff1",
+            "result": "frontend/src/components/composer/TemplateMenu.test.tsx"
+          },
+          {
+            "sha": "ca35a1dab456a7b4f5d2b0f90027cc07bc91efb9",
+            "result": "frontend/src/components/composer/applyTemplate.test.ts"
+          },
+          {
+            "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
+            "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -380,9 +544,9 @@
       "issue": 107,
       "section": "Mail/Privacy; Receipts",
       "outcome": "Tracking protection, remote content and explicit receipt policy",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "partial",
+      "present": "Remote content blocking and EasyPrivacy tracking protection (ADR-0029); read receipts requested and answered by an ask/always/never policy that never answers list mail, mismatched return paths or Junk automatically, and delivery receipts over SMTP DSN when offered (ADR-0048), tested including a real maddy server; delivery receipts on Exchange/Graph and interpreting incoming reports are absent",
+      "code": "meron-core/src/privacy",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -390,7 +554,28 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "08a8ae5b2b7d78de2715f049c4439c6b8fa27cf7",
+            "result": "meron-core/src/privacy/tests.rs"
+          },
+          {
+            "sha": "08a8ae5b2b7d78de2715f049c4439c6b8fa27cf7",
+            "result": "frontend/src/components/chat/TrackerNotice.test.tsx"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "meron-core/src/receipts/tests.rs"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/chat/ReceiptNotice.test.tsx"
+          },
+          {
+            "sha": "4c85ff052b18895141de3594ee17d23699232d87",
+            "result": "frontend/src/components/composer/ReceiptComposeControls.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -400,9 +585,9 @@
       "issue": 50,
       "section": "Mail/Blacklist and whitelist",
       "outcome": "Repeat-safe correction and explainable block/allow rules",
-      "status": "partial",
-      "present": "Local explainable spam suggestions persist explicit per-message judgments, replace corrections idempotently and preserve judgments across normal moves with stable provider identity; blacklist/whitelist settings and full rule execution remain open",
-      "code": "meron-core/src/store/db.rs",
+      "status": "implemented-unverified",
+      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
+      "code": "meron-core/src/spam",
       "acceptance": "Repeated identical judgments do not inflate evidence; replacement retracts the prior sender/subject contribution; missing threads and account isolation are safe; normal MOVE transfers stable-identity judgments before source deletion; no automatic filing",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -410,7 +595,24 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "7cd2bc621da24be3fc22531aaa2fa86678ab4c27",
+            "result": "spam_test.go"
+          },
+          {
+            "sha": "54628c360106a70b9bf88cea96ff341c278c8c57",
+            "result": "meron-core/src/spam/tests.rs"
+          },
+          {
+            "sha": "54628c360106a70b9bf88cea96ff341c278c8c57",
+            "result": "meron-core/src/rules/tests.rs"
+          },
+          {
+            "sha": "54628c360106a70b9bf88cea96ff341c278c8c57",
+            "result": "frontend/src/components/dialog/SpamAndRuns.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -420,9 +622,9 @@
       "issue": 112,
       "section": "Mail/Automatic archiving",
       "outcome": "Local archive policy, data files and import/export fidelity",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "implemented-unverified",
+      "present": "Local archive with EML/MBOX import, mboxrd export, Thunderbird import and a PST guide (guide-only by owner decision); automatic age-based archiving per account to the server Archive or the local archive, only after a confirmed preview, copy-verify-delete and resumable (ADR-0054), tested including a real maddy server; native and provider checks remain",
+      "code": "meron-core/src/archive.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -430,7 +632,32 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "8913719f3131855ac381c7a8c34e95707c4021f6",
+            "result": "meron-core/src/archive/tests.rs"
+          },
+          {
+            "sha": "c2885b5c71d70c8d022ee2c91f9a45ef9265c2a4",
+            "result": "frontend/src/components/threads/ExportFolder.test.tsx"
+          },
+          {
+            "sha": "5e9f964398e3fb7ddb3eff5a64c3615f08c52583",
+            "result": "meron-core/src/thunderbird/tests.rs"
+          },
+          {
+            "sha": "d6f3a28eba23cbe20de60c3e348e0bdae985fd1b",
+            "result": "meron-core/src/archive/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "meron-core/src/auto_archive/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/components/dialog/AutoArchiveGroup.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -454,6 +681,14 @@
           {
             "sha": "e989298fb86661661bfa397a9358a3f8d9cb08da",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38196724818"
+          },
+          {
+            "sha": "e989298fb86661661bfa397a9358a3f8d9cb08da",
+            "result": "meron-core/src/translation/tests.rs"
+          },
+          {
+            "sha": "802ae208863dc28a11734c2a945f64a7d92c9df2",
+            "result": "frontend/src/components/composer/TranslateDraftDialog.test.tsx"
           }
         ],
         "native": [],
@@ -465,9 +700,9 @@
       "issue": 45,
       "section": "Mail/Watch for Reply",
       "outcome": "Reminder states and matching without subject-only inference",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "implemented-unverified",
+      "present": "Awaiting-reply items matched by what answers and who sent it, not subject alone, with one-shot reminders (ADR-0025); native evidence pending",
+      "code": "meron-core/src/awaiting/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -475,7 +710,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "dfbb566bad0a735d446c68c789f573310d4c0502",
+            "result": "meron-core/src/awaiting/tests.rs"
+          },
+          {
+            "sha": "dfbb566bad0a735d446c68c789f573310d4c0502",
+            "result": "frontend/src/components/awaiting/Awaiting.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -485,9 +729,9 @@
       "issue": 51,
       "section": "Mail/Artificial Intelligence",
       "outcome": "Explicit provider, context disclosure and privacy boundaries",
-      "status": "implemented-unverified",
-      "present": "Assistant off by default; exact request body reviewed and bound to its token; mail fenced as data; errors never logged with content (ADR-0032)",
-      "code": "docs/design/assistant-consent.md",
+      "status": "verified",
+      "present": "Assistant off by default; preview shows exactly what is sent, stale preview tokens and unconfirmed execution are rejected, context bounded and account-scoped, mail instructions stay data, provider errors omit bodies, responses not persisted (ADR-0006, ADR-0032); provider-neutral, no native/provider evidence required",
+      "code": "meron-core/src/assistant.rs",
       "acceptance": "Preview lists the exact selected messages and attachments before activation; a preview token rejects changed provider/action/context; only confirmed bounded context may be transmitted; mail instructions are untrusted and cannot authorize mail mutations; provider credentials are ephemeral and responses are not persisted",
       "platform": "Windows desktop",
       "provider": "Provider-neutral contract; no provider certified by this row",
@@ -499,6 +743,14 @@
           {
             "sha": "3eb7493c8b67e695af4f315825eb8e0c274d43d0",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38197960233"
+          },
+          {
+            "sha": "3eb7493c8b67e695af4f315825eb8e0c274d43d0",
+            "result": "meron-core/src/assistant.rs"
+          },
+          {
+            "sha": "3eb7493c8b67e695af4f315825eb8e0c274d43d0",
+            "result": "frontend/src/states/assistant.test.ts"
           }
         ],
         "native": [],
@@ -511,7 +763,7 @@
       "section": "Mail/Artificial Intelligence",
       "outcome": "Explicit-context writing transformations and reviewed suggestions",
       "status": "implemented-unverified",
-      "present": "Draft rewrite (proofread, formal, friendly, shorter, longer) after review of the exact request (ADR-0032)",
+      "present": "Reviewable source-linked results (ADR-0007) and draft rewrite (proofread, formal, friendly, shorter, longer) after review of the exact request, with real cancel (ADR-0032); native evidence pending",
       "code": "frontend/src/components/composer/AssistantRewriteDialog.tsx",
       "acceptance": "Summary results retain only explicit source links; drafts open as editable composer content without sending; tasks require confirmation and preserve the one-open-task-per-thread contract; cancellation rejects stale execution results; provider errors and malformed results are visible",
       "platform": "Windows desktop",
@@ -524,6 +776,14 @@
           {
             "sha": "3eb7493c8b67e695af4f315825eb8e0c274d43d0",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38197960233"
+          },
+          {
+            "sha": "bd2c48133ef9b948a83f9ef3c67d0c0d0e4b14a5",
+            "result": "frontend/src/components/chat/AssistantReviewDialog.test.tsx"
+          },
+          {
+            "sha": "3eb7493c8b67e695af4f315825eb8e0c274d43d0",
+            "result": "frontend/src/components/composer/AssistantRewriteDialog.test.tsx"
           }
         ],
         "native": [],
@@ -535,8 +795,8 @@
       "issue": 49,
       "section": "Signing and Encryption/Policies; Key Lookup Services",
       "outcome": "Identity-specific policies and public-key discovery without implicit trust",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
+      "status": "partial",
+      "present": "PGP and S/MIME interoperate both ways with GnuPG and OpenSSL, with certificate validity checks (#9, #12, #49); per-identity sign/encrypt policies and key lookup services (WKD, keyservers) are absent",
       "code": "meron-core/src/crypto",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -545,7 +805,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "6865caa52655ef968d098969d26d54721035f33f",
+            "result": "meron-core/src/crypto/interop_tests.rs"
+          },
+          {
+            "sha": "b5bf385a0359ad58a44f65540bd468c36c652b51",
+            "result": "meron-core/src/crypto/smime_tests.rs"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -555,9 +824,9 @@
       "issue": 100,
       "section": "Calendar/General; Weather",
       "outcome": "Calendar configuration and weather availability/privacy policy",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "partial",
+      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; weather is absent pending an owner decision",
+      "code": "meron-core/src/calendar/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -565,7 +834,28 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "a9761d93782a658badb4ffa750f062d6a32819c1",
+            "result": "frontend/src/lib/calendarGrid.test.ts"
+          },
+          {
+            "sha": "6e8032a063c8197a1a96a724e6d4712471fd003a",
+            "result": "meron-core/src/calendar/caldav/tests.rs"
+          },
+          {
+            "sha": "244587aacb8661f582db51afa7f6d3282aff37c5",
+            "result": "meron-core/src/calendar/import/tests.rs"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/lib/calendarWeek.test.ts"
+          },
+          {
+            "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
+            "result": "frontend/src/components/calendar/WeekStart.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -575,9 +865,9 @@
       "issue": 41,
       "section": "Contacts/General",
       "outcome": "Names, fields, groups, duplicates and provenance in contact preferences",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "partial",
+      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange contact groups absent",
+      "code": "meron-core/src/store/local_people.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -585,7 +875,32 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "e25a19946b777c2ac63a2b895c4f8d147940f4d5",
+            "result": "meron-core/src/store/local_people/tests.rs"
+          },
+          {
+            "sha": "38300be6486bf11d6ea2af0ff1d7415860336968",
+            "result": "meron-core/src/carddav/write_tests.rs"
+          },
+          {
+            "sha": "1fda7123b2dd307a194a4e52d89d1a075d94c7f6",
+            "result": "meron-core/src/store/person_links/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "meron-core/src/contacts/groups_tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/components/people/Groups.test.tsx"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/lib/contactNames.test.ts"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -620,8 +935,8 @@
       "issue": 54,
       "section": "Privacy/Diagnostics; Backup; Updates",
       "outcome": "Local redacted diagnostics, safe configuration recovery and staged integrity-checked updates",
-      "status": "partial",
-      "present": "ADR-0008 selects local-only diagnostics, configuration-only backups with optional encrypted secrets and staged SHA-256 verified updates; native recovery and production delivery evidence remain open",
+      "status": "implemented-unverified",
+      "present": "Redacted local diagnostics, configuration backups that keep the previous copy on failure and encrypt secrets with a passphrase, and staged updates re-verified by size/SHA-256 before an explicit install (ADR-0008) are tested; native recovery and production delivery (N4) pending",
       "code": "applog.go",
       "acceptance": "Logs and exports redact email and credential-like values; backups omit cached mail and require a passphrase for secrets; update downloads enforce size/hash checks and require explicit install; failures remain visible",
       "platform": "Windows desktop",
@@ -636,12 +951,16 @@
             "result": "applog_test.go"
           },
           {
-            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
+            "sha": "b78e1e9e489672e98ca6a32925dfdf8397e0a0e2",
             "result": "backup_test.go"
           },
           {
-            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
+            "sha": "99bc6f682394608c528ab3ef5a73b1af980011f0",
             "result": "update_test.go"
+          },
+          {
+            "sha": "99bc6f682394608c528ab3ef5a73b1af980011f0",
+            "result": "update_portable_test.go"
           }
         ],
         "native": [],
@@ -653,9 +972,9 @@
       "issue": 103,
       "section": "Tasks/General",
       "outcome": "Task lists, reminders, recurrence and provider capability differences",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "partial",
+      "present": "Local and CalDAV task lists (ADR-0013, ADR-0039); recurring tasks with daily/weekly/monthly (day or nth weekday)/yearly rules, completion moving the task and reminder to the next occurrence, CalDAV masters advanced with unknown properties kept (ADR-0053), tested including Radicale; Google Tasks, Graph To Do and EWS tasks absent",
+      "code": "meron-core/src/task_sync/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -663,7 +982,32 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "6692705602a7772bbe92dad35a1d6f3da5c7f50c",
+            "result": "meron-core/src/store/task_lists/tests.rs"
+          },
+          {
+            "sha": "6cb462cd53db4ec0944d458baf159e7250136059",
+            "result": "meron-core/src/task_sync/tests.rs"
+          },
+          {
+            "sha": "6cb462cd53db4ec0944d458baf159e7250136059",
+            "result": "integration_caldav_tasks_test.go"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "meron-core/src/calendar/recurrence/tests.rs"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "frontend/src/components/tasks/RecurringTasks.test.tsx"
+          },
+          {
+            "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
+            "result": "integration_caldav_recurring_tasks_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -674,8 +1018,8 @@
       "section": "Chat/General",
       "outcome": "Chat presence/history/file preferences and account isolation",
       "status": "partial",
-      "present": "XMPP direct chat with archive, carbons, receipts and stream management, per-account isolation (ADR-0036); groups, files, presence settings and other providers absent",
-      "code": "docs/design/chat.md",
+      "present": "XMPP direct chat with archive, carbons, receipts and stream management (ADR-0036), plus group chats (MUC) and file sharing tested against a real Prosody (ADR-0044); presence settings, mentions, system notifications, in-room private messages and other providers are absent",
+      "code": "meron-core/src/chat/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -687,6 +1031,18 @@
           {
             "sha": "0a3dd6ab255f24d61a5c1e08719a386986171779",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38205000348"
+          },
+          {
+            "sha": "02732d66614b8b1141e588911d7fe09824a86b33",
+            "result": "meron-core/src/chat/tests.rs"
+          },
+          {
+            "sha": "02732d66614b8b1141e588911d7fe09824a86b33",
+            "result": "meron-core/tests/prosody-xmpp.sh"
+          },
+          {
+            "sha": "02732d66614b8b1141e588911d7fe09824a86b33",
+            "result": "frontend/src/components/messaging/MessagingView.test.tsx"
           }
         ],
         "native": [],
@@ -712,6 +1068,10 @@
           {
             "sha": "04a90694ec30c354f77a735b56213ec7f2e9348a",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38200592556"
+          },
+          {
+            "sha": "04a90694ec30c354f77a735b56213ec7f2e9348a",
+            "result": "frontend/src/components/calendar/OnlineMeeting.test.tsx"
           }
         ],
         "native": [],
@@ -724,7 +1084,7 @@
       "section": "Widgets/General",
       "outcome": "Sidebar widgets, agenda and contextual history with reliable scope",
       "status": "partial",
-      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated; agenda widget and panel resizing absent",
+      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); a standalone agenda widget, panel resizing and remembering the last section are absent",
       "code": "docs/design/contextual-sidebar.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -737,6 +1097,10 @@
           {
             "sha": "5a776161ebcc5923c0e0ff4d7fc541cf43af07be",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38205766834"
+          },
+          {
+            "sha": "5a776161ebcc5923c0e0ff4d7fc541cf43af07be",
+            "result": "frontend/src/components/chat/PersonHistory.test.tsx"
           }
         ],
         "native": [],
@@ -748,9 +1112,9 @@
       "issue": 54,
       "section": "Advanced/Logging",
       "outcome": "Reviewable diagnostics with no secret or message-content leakage",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "implemented-unverified",
+      "present": "Local log with credential and email redaction, exportable from Settings (ADR-0008); no remote telemetry; native evidence pending",
+      "code": "applog.go",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -758,7 +1122,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "dfcbaaa5f28d693d7cb87247c582ddc590de59a7",
+            "result": "applog_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -768,9 +1137,9 @@
       "issue": 112,
       "section": "Settings/Import and Export",
       "outcome": "Settings migration, archive formats and unsupported data warnings",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "partial",
+      "present": "Configuration backup/restore, encrypted full-profile archive (ADR-0017), mail import from EML/MBOX and Thunderbird with skipped items counted (ADR-0041), and a PST guide (guide-only by owner decision) exist; accounts, settings, contacts and calendars cannot be migrated from other clients",
+      "code": "meron-core/src/thunderbird/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -778,7 +1147,20 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "5e9f964398e3fb7ddb3eff5a64c3615f08c52583",
+            "result": "meron-core/src/thunderbird/tests.rs"
+          },
+          {
+            "sha": "5e9f964398e3fb7ddb3eff5a64c3615f08c52583",
+            "result": "frontend/src/components/dialog/ThunderbirdImportDialog.test.tsx"
+          },
+          {
+            "sha": "f22ab6e8077be02576269963b852306abf2caf1f",
+            "result": "restore_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -789,7 +1171,7 @@
       "section": "Settings/QR Export",
       "outcome": "Mobile portability evaluated separately from desktop completion",
       "status": "partial",
-      "present": "Mobile inventoried separately: mail, OAuth, RSS and backup present; calendar, contacts book, tasks, notes, crypto, POP3 and chat absent; scope is an owner decision",
+      "present": "Mobile inventoried separately: mail, OAuth, RSS and backup present; calendar and contacts now run on the desktop core (ADR-0045) without periodic sync or device evidence; tasks, notes, crypto, POP3 and chat absent; scope is an owner decision",
       "code": "docs/design/mobile-inventory.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -798,7 +1180,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "775a2083b4b22129f21005addaa9734964ae5dc7",
+            "result": "meron-core/src/protocol/tests.rs"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -808,9 +1195,9 @@
       "issue": 37,
       "section": "General/Language",
       "outcome": "Full locale coverage, long labels, RTL/CJK and native input",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/states/settings.ts",
+      "status": "partial",
+      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated; no right-to-left layout and no native IME evidence",
+      "code": "scripts/i18n/catalog.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -818,7 +1205,16 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
+            "result": "scripts/i18n/catalog.test.ts"
+          },
+          {
+            "sha": "2773876f4afe8c84f9f0224f8a1ccc2213b47239",
+            "result": "frontend/baseline/settingsDiscovery.test.tsx"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -828,9 +1224,9 @@
       "issue": 29,
       "section": "Mail/Send; General/Confirmations",
       "outcome": "Durable send state, undo window and accurate destructive confirmations",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "docs/emclient-parity-plan.md",
+      "status": "implemented-unverified",
+      "present": "Every send is recorded and an uncertain one is never retried blindly (#29); durable undo window, disclosed timing and findable snoozes (ADR-0024); sweeps confirmed by their reviewed preview once (#27); native evidence pending",
+      "code": "meron-core/src/store/outgoing.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -838,7 +1234,20 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "020060cce7784a18c8ce7db5467aa992798c3f7d",
+            "result": "meron-core/src/store/outgoing/tests.rs"
+          },
+          {
+            "sha": "70e735edfe5fbf1f409020accbda4fe68808d467",
+            "result": "frontend/src/states/compose.test.ts"
+          },
+          {
+            "sha": "17d5e2268d3195a0068d4e17cba05fe8eba4c560",
+            "result": "frontend/src/states/priority.test.ts"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -848,9 +1257,9 @@
       "issue": 100,
       "section": "General/Reminders",
       "outcome": "Event reminders survive restart, suspend and timezone changes",
-      "status": "unassessed",
-      "present": "Section confirmed in stable 10.0 documentation; detailed behavior/code parity not yet audited",
-      "code": "frontend/src/components",
+      "status": "partial",
+      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a resume listener exists, but suspend and time-zone changes have no automated test and no native evidence",
+      "code": "meron-core/src/calendar/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -858,7 +1267,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "ed1b52f2dbaaf23e8f26600c3f2fcdfbdc751005",
+            "result": "meron-core/src/calendar/mod.rs"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -882,6 +1296,14 @@
           {
             "sha": "92dc54ceb163aad7cdc6075a0781cc1d09666cc9",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38202463939"
+          },
+          {
+            "sha": "92dc54ceb163aad7cdc6075a0781cc1d09666cc9",
+            "result": "meron-core/src/pop3/tests.rs"
+          },
+          {
+            "sha": "92dc54ceb163aad7cdc6075a0781cc1d09666cc9",
+            "result": "meron-core/tests/dovecot-pop3.sh"
           }
         ],
         "native": [],
@@ -907,6 +1329,14 @@
           {
             "sha": "b7276a8138f5788fb86a1cd517d908d3555b94f4",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/38199243500"
+          },
+          {
+            "sha": "b7276a8138f5788fb86a1cd517d908d3555b94f4",
+            "result": "meron-core/src/cloud/tests.rs"
+          },
+          {
+            "sha": "b7276a8138f5788fb86a1cd517d908d3555b94f4",
+            "result": "cloud_test.go"
           }
         ],
         "native": [],
@@ -928,7 +1358,12 @@
       "requiresNative": true,
       "requiresProvider": false,
       "evidence": {
-        "automated": [],
+        "automated": [
+          {
+            "sha": "c9b3f9ac1771b1309cd1175ad77bd9d81e3f1c45",
+            "result": "scripts/test-desktop-startup.sh"
+          }
+        ],
         "native": [],
         "provider": []
       }
@@ -949,6 +1384,183 @@
       "requiresProvider": false,
       "evidence": {
         "automated": [],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "CAL-01",
+      "issue": 102,
+      "section": "Calendar/Invitations",
+      "outcome": "Answer invitations, propose new times and tell attendees of changes",
+      "status": "implemented-unverified",
+      "present": "Mail invitations read and answered (ADR-0019); counterproposals, declining a proposal and free/busy overlap (ADR-0043); organizer changes and cancellations sent by mail for local and CalDAV events after an explicit ask (organizer-notifications.md); real-provider and native checks pending",
+      "code": "meron-core/src/calendar/itip.rs",
+      "acceptance": "Automated N1-N3 evidence recorded; native Windows and real-provider verification pending on the final version",
+      "platform": "Windows desktop",
+      "provider": "Google, Exchange, CalDAV and mail recipients",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": true,
+      "evidence": {
+        "automated": [
+          {
+            "sha": "3c42eaf412ec42fbb531fbb5d0545e05afd40848",
+            "result": "meron-core/src/calendar/itip/tests.rs"
+          },
+          {
+            "sha": "eba9ca2883f5c8a44f88b749e75166e4beb47286",
+            "result": "meron-core/src/calendar/overlap/tests.rs"
+          },
+          {
+            "sha": "eba9ca2883f5c8a44f88b749e75166e4beb47286",
+            "result": "frontend/src/components/chat/InvitationCard.test.tsx"
+          },
+          {
+            "sha": "bbdbf3a2added1db7f04addeabdb77e6a281ced5",
+            "result": "frontend/src/components/calendar/OrganizerNotices.test.tsx"
+          }
+        ],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "CAL-02",
+      "issue": 101,
+      "section": "Calendar/Accounts",
+      "outcome": "Calendars kept in sync without overwriting changes made elsewhere",
+      "status": "implemented-unverified",
+      "present": "CalDAV calendars read and written with ETags (ADR-0018), .ics import/export without duplicates, Google and Exchange edits that keep remote changes; tested against Radicale; real-provider and native checks pending",
+      "code": "meron-core/src/calendar/caldav.rs",
+      "acceptance": "Automated N1-N3 evidence recorded; native Windows and real-provider verification pending on the final version",
+      "platform": "Windows desktop",
+      "provider": "CalDAV, Google and Exchange calendars",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": true,
+      "evidence": {
+        "automated": [
+          {
+            "sha": "6e8032a063c8197a1a96a724e6d4712471fd003a",
+            "result": "meron-core/src/calendar/caldav/tests.rs"
+          },
+          {
+            "sha": "6e8032a063c8197a1a96a724e6d4712471fd003a",
+            "result": "integration_caldav_test.go"
+          },
+          {
+            "sha": "244587aacb8661f582db51afa7f6d3282aff37c5",
+            "result": "meron-core/src/calendar/import/tests.rs"
+          }
+        ],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "NOTE-01",
+      "issue": 104,
+      "section": "Notes/General",
+      "outcome": "Standalone notes with attachments kept safely in the profile",
+      "status": "partial",
+      "present": "Local notes with tags, search, revisions and a trash (ADR-0015) and files attached to notes kept with the note in the profile (ADR-0042) are tested; provider synchronization of notes is absent",
+      "code": "meron-core/src/store/notes.rs",
+      "acceptance": "Automated N1-N3 evidence recorded; native Windows verification pending on the final version",
+      "platform": "Windows desktop",
+      "provider": "Local only; provider sync absent",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [
+          {
+            "sha": "b8b81296c39a948236f98db6db4cb03e84b719c4",
+            "result": "meron-core/src/store/notes/tests.rs"
+          },
+          {
+            "sha": "b8b81296c39a948236f98db6db4cb03e84b719c4",
+            "result": "frontend/src/components/notes/NotesView.test.tsx"
+          },
+          {
+            "sha": "68436c268f25f0b0a20d7c47b9b7f1fdad993d5b",
+            "result": "frontend/src/components/notes/NoteAttachments.test.tsx"
+          }
+        ],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "ACC-01",
+      "issue": 99,
+      "section": "Accounts/Profiles; Account groups",
+      "outcome": "Isolated profiles and named account groups with safe switching and deletion",
+      "status": "implemented-unverified",
+      "present": "Isolated profiles each in its own window and process (ADR-0016), deleting a profile with data by name, never while open and keychain entries first (ADR-0038), and account groups as named views with the unified inbox (ADR-0040) are tested; native evidence pending",
+      "code": "profiles.go",
+      "acceptance": "Automated N1-N3 evidence recorded; native Windows verification pending on the final version",
+      "platform": "Windows desktop",
+      "provider": "Not applicable",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": false,
+      "evidence": {
+        "automated": [
+          {
+            "sha": "cd5612c3e257cea9bd4675bcf5e4b12c166e0a5c",
+            "result": "profiles_test.go"
+          },
+          {
+            "sha": "1a65a5b1bb99c105fc8d691213ebd30ebb2ebf28",
+            "result": "frontend/src/components/dialog/ProfilesGroup.test.tsx"
+          },
+          {
+            "sha": "75afd606bbdcc1ddbfd7745a7e07af2d649d4649",
+            "result": "frontend/src/states/accountGroups.test.ts"
+          },
+          {
+            "sha": "75afd606bbdcc1ddbfd7745a7e07af2d649d4649",
+            "result": "frontend/src/components/dialog/AccountGroupsGroup.test.tsx"
+          }
+        ],
+        "native": [],
+        "provider": []
+      }
+    },
+    {
+      "id": "GRAPH-01",
+      "issue": 143,
+      "section": "Accounts/Microsoft 365",
+      "outcome": "Microsoft Graph mail: read, change, attachments and send with granted permissions",
+      "status": "partial",
+      "present": "Graph read adapter with paging and delta, recoverable projection (ADR-0004, #125-#128), capability-gated message actions (#141), attachments and inline images (#142) and sending with durable uncertain-outcome recovery (#143) are tested on fixtures; Graph calendar, contacts and delegation absent; real Microsoft 365 and native checks pending",
+      "code": "meron-core/src/graph/mod.rs",
+      "acceptance": "Automated N1-N3 evidence recorded; native Windows and real-provider verification pending on the final version",
+      "platform": "Windows desktop",
+      "provider": "Microsoft 365 (Graph)",
+      "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
+      "requiresNative": true,
+      "requiresProvider": true,
+      "evidence": {
+        "automated": [
+          {
+            "sha": "9f7fff492664fe06a49af82dab4bb9d6f84b8698",
+            "result": "graph_mail_test.go"
+          },
+          {
+            "sha": "db78483897931fc45c1987712b4f3fb44fb48b96",
+            "result": "meron-core/src/graph/mail/tests.rs"
+          },
+          {
+            "sha": "508b5f962ee387b09d71162ca5de4181c7b555fc",
+            "result": "meron-core/src/graph/tests.rs"
+          },
+          {
+            "sha": "104a3a35f062567ba6fca8047dbe595bf60f927e",
+            "result": "graph_oauth_test.go"
+          }
+        ],
         "native": [],
         "provider": []
       }

@@ -1,7 +1,7 @@
 # ADR-0043: Proponer otra hora y coincidencias con la agenda propia
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-12.
 - Alcance: lo que ADR-0019 dejó pendiente de #102 (contrapropuesta y
   disponibilidad).

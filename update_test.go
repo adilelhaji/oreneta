@@ -37,7 +37,7 @@ func TestFetchUpdateManifest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manifest, err := fetchUpdateManifest(server.URL)
+	manifest, err := fetchUpdateManifest(http.DefaultClient, server.URL)
 	if err != nil {
 		t.Fatalf("fetchUpdateManifest: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestFetchUpdateManifestRejectsBadResponses(t *testing.T) {
 				_, _ = w.Write([]byte(tc.body))
 			}))
 			defer server.Close()
-			if _, err := fetchUpdateManifest(server.URL); err == nil {
+			if _, err := fetchUpdateManifest(http.DefaultClient, server.URL); err == nil {
 				t.Fatal("expected an error")
 			}
 		})
@@ -118,7 +118,7 @@ func TestDownloadToVerifiesPayload(t *testing.T) {
 	defer server.Close()
 
 	isolateTestProfile(t)
-	u := newUpdater(&App{})
+	u := newUpdater(directApp())
 
 	t.Run("good payload lands in the cache dir", func(t *testing.T) {
 		path, err := u.downloadTo(updateAsset{URL: server.URL + "/oreneta.AppImage", SHA256: digest, Size: int64(len(payload))})
@@ -220,7 +220,7 @@ func TestUpdaterCheckThenDownload(t *testing.T) {
 	isolateTestProfile(t)
 	t.Setenv("MERON_UPDATE_MANIFEST_URL", server.URL+"/latest.json")
 
-	app := &App{}
+	app := directApp()
 	// Pretend we're running from an AppImage regardless of the test host.
 	app.updateChannelOnce.Do(func() {
 		app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: filepath.Join(t.TempDir(), "Oreneta.AppImage")}
@@ -300,7 +300,7 @@ func TestUpdaterInstallRejectsAPayloadChangedAfterDownload(t *testing.T) {
 			if err := os.WriteFile(target, []byte("current version"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			app := &App{}
+			app := directApp()
 			app.updateChannelOnce.Do(func() {
 				app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: target}
 			})
@@ -356,7 +356,7 @@ func TestUpdaterCheckWhenCurrent(t *testing.T) {
 	isolateTestProfile(t)
 	t.Setenv("MERON_UPDATE_MANIFEST_URL", server.URL)
 
-	app := &App{}
+	app := directApp()
 	app.updateChannelOnce.Do(func() {
 		app.updateChannelValue = updateChannel{Kind: channelAppImage, Target: "/tmp/Oreneta.AppImage"}
 	})
@@ -383,7 +383,7 @@ func TestUpdaterCheckSkipsManagedChannel(t *testing.T) {
 	defer server.Close()
 	t.Setenv("MERON_UPDATE_MANIFEST_URL", server.URL)
 
-	app := &App{}
+	app := directApp()
 	app.updateChannelOnce.Do(func() {
 		app.updateChannelValue = updateChannel{Kind: channelSnap, Managed: true}
 	})
@@ -405,7 +405,7 @@ func TestUpdaterCheckSkipsEnvironmentDisabledUpdates(t *testing.T) {
 	t.Setenv("MERON_UPDATE_MANIFEST_URL", server.URL)
 	t.Setenv("MERON_DISABLE_SELF_UPDATE", "1")
 
-	got, err := (&App{}).ensureUpdater().check()
+	got, err := directApp().ensureUpdater().check()
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}

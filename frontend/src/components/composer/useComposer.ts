@@ -653,6 +653,7 @@ export function useComposer(tabId: string) {
         inReplyTo: current.inReplyTo,
         references: current.references,
         attachments,
+        receipts: { read: !!current.readReceipt, delivery: !!current.deliveryReceipt },
       }
       if (scheduleAt) {
         // Protection is never scheduled: see ComposedMessage.protection.
@@ -666,7 +667,7 @@ export function useComposer(tabId: string) {
       // kept after an unanswered send: pressing Send again then names the
       // same message, which is how the core knows not to deliver it twice.
       session.messageId ??= await allocateMessageIdentity(current.accountId, false)
-      await sendComposed({
+      const sent = await sendComposed({
         ...message,
         messageId: session.messageId,
         protection:
@@ -692,7 +693,13 @@ export function useComposer(tabId: string) {
         })
       }
       await discardRemoteDraft(current)
-      showToast(t('chat.messageSent'))
+      showToast(
+        sent?.delivery_receipt === 'unsupported'
+          ? t('receipts.deliveryUnsupported', {
+              defaultValue: 'Message sent. The server does not offer delivery receipts, so none was requested.',
+            })
+          : t('chat.messageSent'),
+      )
       finishClosingMessageTab(tabId)
     } catch (err) {
       // The composer stays open on failure, so autosaving resumes with it.

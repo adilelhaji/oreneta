@@ -16,6 +16,7 @@ export function MenuItem({
   disabled,
   trailing,
   className,
+  title,
 }: {
   icon?: ReactNode
   label: ReactNode
@@ -26,6 +27,8 @@ export function MenuItem({
   trailing?: ReactNode
   /** Extra classes appended to the shared item class. */
   className?: string
+  /** Tooltip, e.g. why a disabled row is disabled. */
+  title?: string
 }) {
   const base = danger ? menuItemDangerClass : menuItemClass
   return (
@@ -33,6 +36,7 @@ export function MenuItem({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={`${base}${className ? ` ${className}` : ''}`}
     >
       {icon}

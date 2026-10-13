@@ -513,6 +513,8 @@ pub fn hold_restored(conn: &Connection) -> Result<()> {
     // Its password is not in the archive, and its folder may be another
     // computer's: scheduled backups are turned on again by the person.
     conn.execute("UPDATE backup_schedule SET enabled = 0", [])?;
+    // Nor does it archive mail by age until turned on again (ADR-0054).
+    crate::auto_archive::hold_restored(conn)?;
     Ok(())
 }
 

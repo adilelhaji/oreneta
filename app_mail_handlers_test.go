@@ -1,11 +1,15 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -195,6 +199,46 @@ func TestFolderDeleteReshapesFoldersAndRefusesBadTargets(t *testing.T) {
 	}
 	if _, err := app.folderDelete(map[string]any{"account_id": "rss-feeds", "folder_id": "Work"}); err == nil {
 		t.Fatal("folderDelete on an RSS account succeeded, want an error")
+	}
+	if len(writer.calls) != 0 {
+		t.Fatalf("sidecar calls = %d, want the bad payloads refused locally", len(writer.calls))
+	}
+}
+
+func TestFolderMovePassesRenamesAndRefusesBadTargets(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"ok":      true,
+		"folder":  "Projects/Work",
+		"renames": []any{map[string]any{"from": "Work", "to": "Projects/Work"}},
+		"folders": []any{map[string]any{"name": "INBOX", "delimiter": "/"}, map[string]any{"name": "Projects/Work", "delimiter": "/"}},
+	}})
+	out, err := app.folderMove(map[string]any{"account_id": "acc", "folder_id": "Work", "parent_id": "Projects"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCall(t, writer.calls[0], "folders.move", map[string]any{"account": "acc", "folder": "Work", "parent": "Projects"})
+	result, _ := out.(map[string]any)
+	if result["folder"] != "Projects/Work" {
+		t.Fatalf("folder = %#v", result["folder"])
+	}
+	if renames, _ := result["renames"].([]any); len(renames) != 1 {
+		t.Fatalf("renames = %#v, want the sidecar's list", result["renames"])
+	}
+	folders, _ := result["folders"].([]Folder)
+	if len(folders) != 2 || folders[1].ID != "Projects/Work" || folders[0].Role != "inbox" {
+		t.Fatalf("folders = %#v, want reshaped rows", result["folders"])
+	}
+
+	app, writer = newMailHandlerTestApp(t)
+	for _, payload := range []map[string]any{
+		{"account_id": "acc"},
+		{"account_id": "unified", "folder_id": "Work"},
+		{"account_id": "rss-feeds", "folder_id": "Work"},
+		{"folder_id": "Work"},
+	} {
+		if _, err := app.folderMove(payload); err == nil {
+			t.Fatalf("folderMove(%v) succeeded, want an error", payload)
+		}
 	}
 	if len(writer.calls) != 0 {
 		t.Fatalf("sidecar calls = %d, want the bad payloads refused locally", len(writer.calls))
@@ -550,5 +594,101 @@ func TestExportFolderMboxNeedsAFolder(t *testing.T) {
 	app := &App{}
 	if _, err := app.exportFolderMbox(map[string]any{"account": "a"}); err == nil {
 		t.Fatal("expected an error without a folder")
+	}
+}
+
+// fileWritingSidecar plays the core's messages.saveRaw: it writes the given
+// bytes to the requested path before answering, as the real sidecar does.
+type fileWritingSidecar struct {
+	t       *testing.T
+	sidecar *Sidecar
+	raw     []byte
+	calls   []sidecarCallRecord
+}
+
+func (w *fileWritingSidecar) Write(data []byte) (int, error) {
+	var req struct {
+		ID     uint64         `json:"id"`
+		Method string         `json:"method"`
+		Params map[string]any `json:"params"`
+	}
+	if err := json.Unmarshal(data, &req); err != nil {
+		w.t.Fatalf("sidecar request JSON: %v", err)
+	}
+	w.calls = append(w.calls, sidecarCallRecord{Method: req.Method, Params: req.Params})
+	path, _ := req.Params["path"].(string)
+	if err := os.WriteFile(path, w.raw, 0o600); err != nil {
+		w.t.Fatalf("write raw: %v", err)
+	}
+	w.sidecar.pending[req.ID] <- sidecarResponse{Result: map[string]any{"saved": true}}
+	return len(data), nil
+}
+
+func (w *fileWritingSidecar) Close() error { return nil }
+
+func TestRawMessageForForwardReturnsTheOriginalAndCleansUp(t *testing.T) {
+	sidecar := &Sidecar{started: true, pending: map[uint64]chan sidecarResponse{}}
+	raw := []byte("From: a@example.test\r\nSubject: Q3 <plan>\r\n\r\nBody\r\n")
+	writer := &fileWritingSidecar{t: t, sidecar: sidecar, raw: raw}
+	sidecar.stdin = writer
+	app := &App{sidecar: sidecar}
+	threadID := formatImapThreadID("acc", "INBOX", "k1")
+
+	got, err := app.rawMessageForForward(map[string]any{
+		"thread_id":   threadID,
+		"message_ids": []any{threadID + "#42"},
+		"folder":      "INBOX",
+		"subject":     "Q3 <plan>",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := got.(map[string]any)
+	if result["data"] != base64.StdEncoding.EncodeToString(raw) || result["size"] != len(raw) {
+		t.Fatalf("result = %#v", result)
+	}
+	if result["filename"] != "Q3 plan.eml" {
+		t.Fatalf("filename = %q", result["filename"])
+	}
+	if len(writer.calls) != 1 || writer.calls[0].Method != "messages.saveRaw" {
+		t.Fatalf("calls = %#v", writer.calls)
+	}
+	path, _ := writer.calls[0].Params["path"].(string)
+	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Fatalf("temporary directory %s left behind (err %v)", filepath.Dir(path), err)
+	}
+}
+
+func TestRawMessageForForwardRejectsFeedItems(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t)
+	if _, err := app.rawMessageForForward(map[string]any{"thread_id": "rssacc#rss#sub1#item1"}); err == nil {
+		t.Fatal("rawMessageForForward on a feed item = nil error, want rejection")
+	}
+	if len(writer.calls) != 0 {
+		t.Fatalf("sidecar calls = %#v, want none", writer.calls)
+	}
+}
+
+// Receipts the composer asked for reach the core, and are absent when not
+// asked (ADR-0048). Scheduling goes through the same parameters.
+func TestSendParamsCarryReceiptRequests(t *testing.T) {
+	var req SendMailRequest
+	if err := decode(map[string]any{"to": "b@example.com", "read_receipt": true, "delivery_receipt": true}, &req); err != nil {
+		t.Fatal(err)
+	}
+	params := sendParams(req)
+	if params["read_receipt"] != true || params["delivery_receipt"] != true {
+		t.Fatalf("receipts lost: %#v", params)
+	}
+	var plain SendMailRequest
+	if err := decode(map[string]any{"to": "b@example.com"}, &plain); err != nil {
+		t.Fatal(err)
+	}
+	params = sendParams(plain)
+	if params["read_receipt"] != false || params["delivery_receipt"] != false {
+		t.Fatalf("receipts asked for without the sender: %#v", params)
+	}
+	if got := sidecarCallTimeout("receipts.answer"); got < 30*time.Second {
+		t.Fatalf("receipts.answer timeout %s too short to send", got)
 	}
 }

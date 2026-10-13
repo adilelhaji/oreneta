@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronRight, Eye, EyeOff, Info, RefreshCw } from 'lucide-react'
+import { useId, useState } from 'react'
+import { ChevronDown, ChevronRight, Eye, EyeOff, Info, RefreshCw, Search } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { Field } from '../field/Field'
 import { securityAfterPortEdit, type MailSecurity } from './accountSecurity'
@@ -7,8 +7,14 @@ import type { AccountDialogController } from './useAccountDialog'
 import type { DialogClasses } from './accountDialogStyles'
 import { accountSetupAddress } from './accountSetup'
 
-// The custom IMAP/SMTP section: email (with autodiscovery), sender name, password,
-// the app-password hint, and the collapsible advanced server settings.
+// The custom IMAP/SMTP section: email, an explicit "Find settings" lookup,
+// sender name, password, the app-password hint, and the collapsible advanced
+// server settings.
+//
+// Looking settings up online sends the address to the mail domain and the
+// domain to Mozilla's provider database, so it happens only when the person
+// presses the button, never on typing or leaving the field. Entering the
+// servers by hand needs no lookup at all.
 export function AccountDialogCustom({
   ctl,
   classes,
@@ -20,6 +26,7 @@ export function AccountDialogCustom({
 }) {
   const { t } = useTranslation()
   const [showPassword, setShowPassword] = useState(false)
+  const findHintId = useId()
   const {
     form,
     setForm,
@@ -42,7 +49,6 @@ export function AccountDialogCustom({
         type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
-        onBlur={() => runDiscovery(form.email)}
         inputClassName={inputClass}
         labelClassName={fieldLabelClass}
         // The address is the account's primary key in the store, so letting it
@@ -54,6 +60,29 @@ export function AccountDialogCustom({
         <p role="alert" className="text-caption text-secondary">
           {t('accounts.wizard.invalidEmail')}
         </p>
+      )}
+      {!editing && (
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={() => void runDiscovery(form.email)}
+            disabled={discovering || !accountSetupAddress(form.email)}
+            aria-describedby={findHintId}
+            className="flex items-center gap-1.5 self-start rounded-control border border-border px-3 py-1.5 text-caption font-semibold text-primary transition-colors hover:bg-hover cursor-pointer disabled:cursor-default disabled:opacity-50"
+          >
+            <Search size={14} aria-hidden="true" strokeWidth={1.75} />
+            {t('accounts.discovery.findSettings', { defaultValue: 'Find settings online' })}
+          </button>
+          <p id={findHintId} className="px-1 text-caption leading-relaxed text-secondary">
+            {t('accounts.discovery.findSettingsHint', {
+              domain:
+                findSettingsDomain(form.email) ||
+                t('accounts.discovery.yourMailDomain', { defaultValue: 'your mail domain' }),
+              defaultValue:
+                'Looks up the server settings by sending your address to {domain} and the domain to Mozilla’s provider database. Your password is not sent. You can also enter the servers yourself under Advanced server settings.',
+            })}
+          </p>
+        </div>
       )}
       {(discovering || discoverNote) && (
         <p role="status" className="flex items-center gap-1.5 px-1 text-caption font-medium text-secondary">
@@ -276,4 +305,11 @@ function SecurityField({
       </span>
     </label>
   )
+}
+
+// The mail domain named in the "Find settings" hint, so the person sees which
+// server would be asked before asking it.
+function findSettingsDomain(email: string): string {
+  const address = accountSetupAddress(email)
+  return address ? address.slice(address.lastIndexOf('@') + 1).toLowerCase() : ''
 }

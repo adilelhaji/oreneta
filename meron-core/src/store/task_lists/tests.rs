@@ -94,3 +94,115 @@ fn upgrading_keeps_every_linked_task_and_its_fields() {
     assert_eq!(tasks.len(), 1);
     assert_eq!((tasks[0].note.as_str(), tasks[0].due_at), ("keep me", Some(42)));
 }
+
+// ---- Repeating tasks (ADR-0053) ---------------------------------------------------
+
+fn local(y: i32, m: u32, d: u32, h: u32) -> i64 {
+    use chrono::TimeZone as _;
+    chrono::Local
+        .from_local_datetime(&chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, 0, 0).unwrap())
+        .earliest()
+        .unwrap()
+        .timestamp()
+}
+
+fn repeating(rule: Recurrence, due: i64) -> TaskFields {
+    TaskFields {
+        list_id: MAIL_LIST.into(),
+        title: "Water the plants".into(),
+        priority: 2,
+        note: "the ferns too".into(),
+        due_at: Some(due),
+        reminder_at: Some(due - 3600),
+        recurrence: Some(rule),
+    }
+}
+
+fn weekly() -> Recurrence {
+    Recurrence { freq: crate::calendar::Frequency::Weekly, interval: 1, ..Default::default() }
+}
+
+#[test]
+fn a_repeating_task_needs_a_due_date_and_no_conversation() {
+    let conn = conn();
+    let mut fields = repeating(weekly(), local(2026, 10, 13, 9));
+    fields.due_at = None;
+    assert!(create(&conn, &fields, 1).unwrap_err().to_string().contains("due date"));
+    let linked = crate::store::save_task(&conn, "acct", "t-1", "INBOX", None, "note", 1).unwrap();
+    let (mut current, revision, _) = get(&conn, linked).unwrap().unwrap();
+    current.due_at = Some(local(2026, 10, 13, 9));
+    current.recurrence = Some(weekly());
+    assert!(update(&conn, linked, revision, &current).is_err());
+}
+
+#[test]
+fn the_rule_is_stored_spelled_out_and_read_back() {
+    let conn = conn();
+    let id = create(&conn, &repeating(weekly(), local(2026, 10, 13, 9)), 1).unwrap();
+    let rrule: String = conn.query_row("SELECT rrule FROM tasks WHERE id = ?1", [id], |r| r.get(0)).unwrap();
+    assert_eq!(rrule, "FREQ=WEEKLY;BYDAY=TU");
+    let (fields, ..) = get(&conn, id).unwrap().unwrap();
+    assert_eq!(fields.recurrence.unwrap().weekdays, vec![1]);
+}
+
+#[test]
+fn completing_an_occurrence_keeps_a_record_and_moves_the_task_and_its_reminder_on() {
+    let conn = conn();
+    let due = local(2026, 10, 13, 9);
+    let id = create(&conn, &repeating(weekly(), due), 1).unwrap();
+    mark_reminded(&conn, id, due - 3600).unwrap();
+
+    let done = set_completed(&conn, id, true, false, due + 60).unwrap();
+    let next = local(2026, 10, 20, 9);
+    assert_eq!(done.next_due, Some(next), "same time, a week on");
+    let record = done.record.unwrap();
+
+    let all = crate::store::list_tasks(&conn, true).unwrap();
+    let task = all.iter().find(|t| t.id == id).unwrap();
+    assert_eq!((task.due_at, task.reminder_at, task.completed_at), (Some(next), Some(next - 3600), None));
+    assert_eq!(task.rrule, "FREQ=WEEKLY;BYDAY=TU", "the series goes on");
+    let copy = all.iter().find(|t| t.id == record).unwrap();
+    assert_eq!((copy.title.as_str(), copy.note.as_str(), copy.priority), ("Water the plants", "the ferns too", 2));
+    assert_eq!((copy.due_at, copy.completed_at, copy.rrule.as_str()), (Some(due), Some(due + 60), ""));
+
+    // The moved reminder rings again when its time comes; the record's never does.
+    assert!(due_reminders(&conn, next - 3600 + 1).unwrap().iter().map(|r| r.0).eq([id]));
+    // Reopening the record is reopening a plain task: the series is untouched.
+    set_completed(&conn, record, false, false, due + 120).unwrap();
+    assert_eq!(get(&conn, id).unwrap().unwrap().0.due_at, Some(next));
+}
+
+#[test]
+fn the_last_occurrence_completes_the_task_and_stop_repeating_ends_the_rule() {
+    let conn = conn();
+    let rule = Recurrence { count: Some(2), ..weekly() };
+    let id = create(&conn, &repeating(rule, local(2026, 10, 13, 9)), 1).unwrap();
+    assert!(set_completed(&conn, id, true, false, 10).unwrap().next_due.is_some());
+    let rrule: String = conn.query_row("SELECT rrule FROM tasks WHERE id = ?1", [id], |r| r.get(0)).unwrap();
+    assert_eq!(rrule, "FREQ=WEEKLY;BYDAY=TU;COUNT=1", "one left");
+    assert_eq!(set_completed(&conn, id, true, false, 20).unwrap().next_due, None);
+    assert!(crate::store::list_tasks(&conn, false).unwrap().is_empty(), "the series is done");
+
+    let other = create(&conn, &repeating(weekly(), local(2026, 10, 13, 9)), 1).unwrap();
+    set_completed(&conn, other, true, true, 30).unwrap();
+    let (fields, ..) = get(&conn, other).unwrap().unwrap();
+    assert_eq!(fields.recurrence, None);
+    assert_eq!(crate::store::list_tasks(&conn, true).unwrap().len(), 3, "no record for stopping");
+    set_completed(&conn, other, false, false, 40).unwrap();
+    assert!(set_completed(&conn, other, true, false, 50).unwrap().record.is_none(), "reopened, it no longer repeats");
+}
+
+#[test]
+fn a_task_on_the_31st_comes_back_on_the_31st_after_a_short_month() {
+    let conn = conn();
+    let monthly = Recurrence { freq: crate::calendar::Frequency::Monthly, interval: 1, ..Default::default() };
+    let id = create(&conn, &repeating(monthly, local(2027, 1, 31, 0)), 1).unwrap();
+    assert_eq!(set_completed(&conn, id, true, false, 1).unwrap().next_due, Some(local(2027, 2, 28, 0)));
+    assert_eq!(set_completed(&conn, id, true, false, 2).unwrap().next_due, Some(local(2027, 3, 31, 0)));
+
+    // A due date changed by hand is the new anchor.
+    let (mut fields, revision, _) = get(&conn, id).unwrap().unwrap();
+    fields.due_at = Some(local(2027, 4, 15, 0));
+    update(&conn, id, revision, &fields).unwrap();
+    assert_eq!(set_completed(&conn, id, true, false, 3).unwrap().next_due, Some(local(2027, 5, 15, 0)));
+}

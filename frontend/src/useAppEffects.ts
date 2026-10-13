@@ -7,6 +7,7 @@ import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
 import { onChatEvent } from './states/messaging'
 import { onBackupScheduled } from './states/backupSchedule'
+import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
 import { calendar$, loadCalendars, loadWindow } from './states/calendar'
@@ -33,6 +34,7 @@ import { loadLabels } from './states/labels'
 import { loadCategories } from './states/categories'
 import { forgetScheduledSend, markScheduledSendFailed, refreshScheduledSends } from './states/scheduledSends'
 import { refreshOutgoingAttempts } from './states/outgoingAttempts'
+import { mayShowMailToast, startNotifications } from './states/notifications'
 import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
 
 const DEFAULT_RSS_SYNC_INTERVAL_MINUTES = 60
@@ -91,6 +93,7 @@ export function useAppEffects() {
       trayHide: t('tray.hideToTray'),
       trayHideTooltip: t('tray.hideOrenetaTooltip'),
       trayQuit: t('tray.quitOreneta'),
+      trayDoNotDisturb: t('tray.doNotDisturb', { defaultValue: 'Do not disturb' }),
       newMessage: t('notify.newMessage'),
       newMessageCount: translationTemplate('notify.newMessageCount'),
       noSubject: t('notify.noSubject'),
@@ -100,6 +103,9 @@ export function useAppEffects() {
     // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
     applyDocumentLanguage(targetLanguage)
   }, [language])
+
+  // Notification sounds, do not disturb and quiet hours (ADR-0049).
+  useEffect(() => startNotifications(), [])
 
   useEffect(() => {
     void boot().catch((error) => {
@@ -369,7 +375,8 @@ export function useAppEffects() {
       if (detail?.account && selectedAccount !== 'unified' && detail.account !== selectedAccount) return
       const folder = detail?.folder ?? 'inbox'
       const count = detail?.count ?? 1
-      showToast(`New mail in ${folder} (+${count})`)
+      // Do not disturb (ADR-0049) quiets this popup too; the list still refreshes.
+      if (mayShowMailToast()) showToast(`New mail in ${folder} (+${count})`)
       if (selectedAccount) void refreshCurrentMailbox().catch(console.error)
     })
 
@@ -421,6 +428,12 @@ export function useAppEffects() {
           )
       },
     )
+
+    // Automatic archiving (ADR-0054): a scheduled run ended; trouble is
+    // said even with Settings closed.
+    const offAutoArchiveRan = eventsOn('autoArchive.ran', (detail: Parameters<typeof onAutoArchiveRan>[0]) => {
+      void onAutoArchiveRan(detail)
+    })
 
     // Chat (#111): a conversation changed, or a connection did.
     const offChatChanged = eventsOn('chat.changed', (detail: { account?: string; conversation?: string }) =>
@@ -542,6 +555,7 @@ export function useAppEffects() {
       if (typeof offChatStatus === 'function') offChatStatus()
       for (const off of offChatOthers) if (typeof off === 'function') off()
       if (typeof offBackupScheduled === 'function') offBackupScheduled()
+      if (typeof offAutoArchiveRan === 'function') offAutoArchiveRan()
       if (typeof offScheduledFailed === 'function') offScheduledFailed()
     }
   }, [selectedAccount, selectedFolder, query])

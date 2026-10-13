@@ -105,6 +105,18 @@ impl Session {
         }
     }
 
+    /// Rename `from` to `to` (ADR-0050). IMAP's RENAME carries the inferiors
+    /// with it; the local store has no server, so it is handed the whole
+    /// subtree in `renames` (the source first) and renames each row itself.
+    pub async fn rename_folder(&mut self, from: &str, to: &str, renames: &[(String, String)]) -> Result<()> {
+        match self {
+            Session::Local(session) => session.rename_folders(renames),
+            Session::Graph(_) => crate::graph::mail::unsupported(),
+            Session::Imap(session) => imap::rename_folder(session, from, to).await,
+            Session::Ews(_) => ews_unsupported("rename_folder"),
+        }
+    }
+
     pub async fn fetch_recent(&mut self, folder: &str, limit: u32) -> Result<imap::RecentBatch> {
         match self {
             Session::Local(session) => session.fetch_recent(folder, limit),
@@ -139,6 +151,15 @@ impl Session {
             Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::search_uids(session, folder, query).await,
             Session::Ews(_) => ews_unsupported("search_uids"),
+        }
+    }
+
+    /// Messages sent before `before`, when the server can be asked (IMAP).
+    /// `None` means it cannot, and the caller works from the synced copy.
+    pub async fn search_sent_before(&mut self, folder: &str, before: i64) -> Result<Option<Vec<u32>>> {
+        match self {
+            Session::Imap(session) => imap::search_sent_before(session, folder, before).await.map(Some),
+            _ => Ok(None),
         }
     }
 

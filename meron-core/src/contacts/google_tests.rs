@@ -100,3 +100,35 @@ fn any_other_refusal_says_what_google_said() {
     assert!(text.contains("429"));
     assert!(text.contains("Quota exceeded."));
 }
+
+#[test]
+fn name_parts_and_group_memberships_are_read() {
+    let page = r#"{"connections": [
+      {"resourceName": "people/c1",
+       "names": [{"displayName": "Wang Fang", "givenName": "Fang", "familyName": "Wang"}],
+       "emailAddresses": [{"value": "fang@example.com"}],
+       "memberships": [
+         {"contactGroupMembership": {"contactGroupId": "abc", "contactGroupResourceName": "contactGroups/abc"}},
+         {"contactGroupMembership": {"contactGroupResourceName": "contactGroups/myContacts"}},
+         {"domainMembership": {"inViewerDomain": true}}
+       ]},
+      {"resourceName": "people/c2", "names": [{"displayName": "Jo"}],
+       "memberships": [{"contactGroupMembership": {"contactGroupResourceName": "contactGroups/abc"}}]}
+    ]}"#;
+    let (people, memberships, next) = page_with_memberships(page).unwrap();
+    assert_eq!(next, None);
+    assert_eq!((people[0].given.as_str(), people[0].family.as_str()), ("Fang", "Wang"));
+    assert!(people[1].given.is_empty());
+    assert_eq!(memberships.len(), 3);
+
+    let groups_page = r#"{"contactGroups": [
+      {"resourceName": "contactGroups/abc", "name": "Climbing", "formattedName": "Climbing", "groupType": "USER_CONTACT_GROUP"},
+      {"resourceName": "contactGroups/myContacts", "name": "myContacts", "formattedName": "My Contacts", "groupType": "SYSTEM_CONTACT_GROUP"}
+    ], "nextPageToken": "n2"}"#;
+    let (mut groups, next) = groups_from_page(groups_page).unwrap();
+    assert_eq!(next.as_deref(), Some("n2"));
+    assert_eq!(groups.len(), 1, "Google's own groups are not the person's");
+    assign_members(&mut groups, &memberships);
+    assert_eq!(groups[0].name, "Climbing");
+    assert_eq!(groups[0].members, vec!["people/c1", "people/c2"]);
+}

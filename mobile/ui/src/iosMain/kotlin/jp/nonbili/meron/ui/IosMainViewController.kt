@@ -41,6 +41,8 @@ import platform.UserNotifications.UNAuthorizationStatusAuthorized
 import platform.UserNotifications.UNAuthorizationStatusEphemeral
 import platform.UserNotifications.UNAuthorizationStatusNotDetermined
 import platform.UserNotifications.UNAuthorizationStatusProvisional
+import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.NSObject
 
@@ -146,6 +148,24 @@ private class IosMobileHost(
     }
 
     override fun notificationsEnabled(): Boolean = notificationsGranted
+
+    // Posted now (no trigger), as IosNotificationService posts new mail. The
+    // app delegate presents these while the app is open (willPresent), which
+    // is when this path runs; the background refresh posts its own, with
+    // sound (the banner on an open app is enough here).
+    override fun notifyCalendarReminder(
+        key: String,
+        title: String,
+        body: String,
+    ) {
+        val content =
+            UNMutableNotificationContent().apply {
+                setTitle(title)
+                setBody(body)
+            }
+        val request = UNNotificationRequest.requestWithIdentifier(key, content, null)
+        UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, null)
+    }
 
     override fun requestNotificationPermission() {
         if (authorizationDetermined && !notificationsGranted) {

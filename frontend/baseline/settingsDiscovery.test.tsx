@@ -45,6 +45,14 @@ describe('settings and palette discovery', () => {
     await act(async () => {
       await i18n.changeLanguage('fr')
     })
+    const french = result.current.find((item) => item.id === 'settings.open')!
+    expect(french.label).toBe('Ouvrir les paramètres')
+    // Every locale keeps the English words after its own, so English still finds it.
+    expect(matchesCommand(french, 'open settings')).toBe(true)
+    // A language with no catalog falls back to English.
+    await act(async () => {
+      await i18n.changeLanguage('nl')
+    })
     expect(result.current.find((item) => item.id === 'settings.open')?.label).toBe('Open settings')
   })
   it('navigates to the exact account without changing mailbox selection and ignores removed accounts', () => {
@@ -80,7 +88,9 @@ describe('settings and palette discovery', () => {
     const entries = settingsDestinations([feed], t)
     expect(entries.some((item) => item.accountId === 'feed' && item.section === 'accountSignature')).toBe(false)
     expect(entries.some((item) => item.accountId === 'feed' && item.section === 'account')).toBe(true)
-    expect(entries.filter((item) => !item.accountId)).toHaveLength(7)
+    // Seven general sections plus Replies and forwards (ADR-0047),
+    // Notifications (ADR-0049), Calendar and Contacts (ADR-0052).
+    expect(entries.filter((item) => !item.accountId)).toHaveLength(11)
     expect(settingsDestinations([feed], t, false).some((item) => item.section === 'updates')).toBe(false)
   })
   it('can compose from another sendable account while viewing Graph, but rejects a stale capability', () => {

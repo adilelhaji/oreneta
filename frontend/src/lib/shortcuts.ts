@@ -38,6 +38,9 @@ export type ShortcutId =
   | 'thread.details'
   | 'thread.junk'
   | 'reply.focus'
+  | 'view.zoomIn'
+  | 'view.zoomOut'
+  | 'view.zoomReset'
   | RailShortcutId
 
 /** True for single-key shortcuts (no ⌘/Ctrl/Alt). These only fire when the user
@@ -80,6 +83,10 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutId, Chord> = {
   // ⌘/Ctrl+? — "?" already implies Shift on most layouts.
   'shortcuts.help': { mod: true, shift: true, key: '?' },
   'tab.close': { mod: true, key: 'w' },
+  // The browser's zoom keys, which the webview leaves unbound (#181).
+  'view.zoomIn': { mod: true, key: '=' },
+  'view.zoomOut': { mod: true, key: '-' },
+  'view.zoomReset': { mod: true, key: '0' },
   // Gmail-style single-key thread shortcuts (only when not typing).
   'thread.next': { key: 'j' },
   'thread.prev': { key: 'k' },
@@ -239,6 +246,9 @@ export const SHORTCUT_LABELS: Record<ShortcutId, string> = {
   'view.rail8': 'Go to side navigation item 8',
   'view.rail9': 'Go to side navigation item 9',
   'tab.close': 'Close tab',
+  'view.zoomIn': 'Make everything larger',
+  'view.zoomOut': 'Make everything smaller',
+  'view.zoomReset': 'Reset size',
   'thread.next': 'Next thread',
   'thread.prev': 'Previous thread',
   'thread.archive': 'Archive thread',
@@ -268,7 +278,7 @@ export const SHORTCUT_GROUPS: { title: string; ids: ShortcutId[] }[] = [
     title: 'Mail',
     ids: ['compose.new', 'reply.focus', 'compose.replyFull', 'mail.sync', 'search.thread', 'search.global'],
   },
-  { title: 'View', ids: ['view.toggle', 'tab.close'] },
+  { title: 'View', ids: ['view.toggle', 'tab.close', 'view.zoomIn', 'view.zoomOut', 'view.zoomReset'] },
   // Every rail slot gets a row, so all nine are visible and rebindable.
   { title: 'Side navigation', ids: [...RAIL_SHORTCUT_IDS] },
 ]
@@ -290,13 +300,23 @@ export function matchShortcut(event: KeyboardEvent): ShortcutId | null {
   })
 }
 
+/**
+ * The other keys browsers zoom with, while zoom keeps its default binding:
+ * ⌘/Ctrl with `+` (Shift+`=` on many layouts, or the keypad's plus). The
+ * keypad's minus already arrives as `-`. A rebinding replaces these too.
+ */
+export function zoomAlias(chord: Chord): ShortcutId | null {
+  if (!chord.mod || chord.alt || chord.key !== '+') return null
+  return isShortcutCustomized('view.zoomIn') ? null : 'view.zoomIn'
+}
+
 /** Same lookup for a chord reconstructed by hand — e.g. a keystroke forwarded
  * out of a message iframe, which arrives as data rather than a KeyboardEvent. */
 export function shortcutForChord(chord: Chord): ShortcutId | null {
   for (const id of SHORTCUT_IDS) {
     if (chordEquals(shortcutChord(id), chord)) return id
   }
-  return null
+  return zoomAlias(chord)
 }
 
 /** Render a shortcut as display parts, e.g. ["⌘", "K"] or ["Ctrl", "Shift", "R"]. */

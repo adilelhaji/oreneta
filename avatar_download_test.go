@@ -25,7 +25,7 @@ func TestDownloadAndSaveAvatar(t *testing.T) {
 	}))
 	defer server.Close()
 
-	app := &App{}
+	app := directApp()
 	localURL := app.downloadAndSaveAvatar("test-user@example.com", server.URL)
 
 	if !strings.HasPrefix(localURL, "/media/avatars/test-user-example-com/") {
@@ -43,7 +43,7 @@ func TestDownloadAndSaveAvatar(t *testing.T) {
 }
 
 func TestDownloadAndSaveAvatarIgnoresNonRemote(t *testing.T) {
-	app := &App{}
+	app := directApp()
 	url1 := app.downloadAndSaveAvatar("user", "/media/avatars/user/abc.png")
 	if url1 != "/media/avatars/user/abc.png" {
 		t.Errorf("expected local url to be untouched, got %q", url1)

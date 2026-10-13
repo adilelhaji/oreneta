@@ -25,7 +25,7 @@ const status = (installed: boolean) => ({
   languages: ['en', 'es', 'nb'],
   used: 0,
   quota: 1024 ** 3,
-  source: 'https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/',
+  source: 'https://github.com/adilelhaji/oreneta/releases/download/translation-models-0.3.3/',
   downloading: {},
 })
 
@@ -125,7 +125,7 @@ it('downloads a missing model only after saying its size and source, and transla
     fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
   })
   await waitFor(() => expect(ui$.confirm.get()).toBeTruthy())
-  expect(ui$.confirm.get()?.message).toContain('from storage.googleapis.com')
+  expect(ui$.confirm.get()?.message).toContain('from github.com')
   expect(ui$.confirm.get()?.message).toContain('no text is sent anywhere')
   await act(async () => settleConfirm(false))
   expect(calls.some((c) => c.command === 'translation.download')).toBe(false)

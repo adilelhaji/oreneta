@@ -35,6 +35,7 @@ import {
 } from '../../states/mail'
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { handleEditUndoKeyDown } from '../../lib/editUndo'
+import { zoom } from '../../states/zoom'
 import {
   isBareShortcut,
   isMac,
@@ -345,6 +346,14 @@ export function AppHotkeys() {
           void closeMessageTab(tab)
           break
         }
+        // Work while typing too, as a browser's do: none of these chords
+        // edits text, and the editors bind none of them.
+        case 'view.zoomIn':
+        case 'view.zoomOut':
+        case 'view.zoomReset':
+          event.preventDefault()
+          zoom(action)
+          break
         case 'shortcuts.help':
           event.preventDefault()
           ui$.shortcutsOpen.set(!ui$.shortcutsOpen.peek())

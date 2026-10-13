@@ -69,6 +69,23 @@ object MobileCommand {
     const val RssThread = "rss.thread"
     const val RssMarkRead = "rss.markRead"
     const val RssMarkStarred = "rss.markStarred"
+
+    // Calendar and people, the same commands the desktop bridge forwards
+    // (calendar.go, people.go). See CalendarCommands.kt and PeopleCommands.kt.
+    const val CalendarList = "calendar.list"
+    const val CalendarSetEnabled = "calendar.setEnabled"
+    const val CalendarCreateLocal = "calendar.createLocal"
+    const val CalendarEvents = "calendar.events"
+    const val CalendarEventDetails = "calendar.eventDetails"
+    const val CalendarCreate = "calendar.create"
+    const val CalendarUpdate = "calendar.update"
+    const val CalendarDelete = "calendar.delete"
+    const val PeopleList = "people.list"
+    const val PeopleSave = "people.save"
+    const val PeopleDelete = "people.delete"
+
+    // The periodic calendar/address-book refresh and its reminders (PimRefresh.kt).
+    const val PimRefresh = "pim.refresh"
 }
 
 data class AddRssAccountParams(
@@ -1442,9 +1459,9 @@ fun rssMarkStarredRequest(
     params: RssMarkStarredParams,
 ): CoreRequest = CoreRequest(id, MobileCommand.RssMarkStarred, params.toJson())
 
-private fun jsonObject(vararg fields: Pair<String, String?>): String =
+internal fun jsonObject(vararg fields: Pair<String, String?>): String =
     fields
         .filter { it.second != null }
         .joinToString(separator = ",", prefix = "{", postfix = "}") { (name, value) -> "${name.jsonString()}:$value" }
 
-private fun List<String>.jsonStringArray(): String = joinToString(separator = ",", prefix = "[", postfix = "]") { it.jsonString() }
+internal fun List<String>.jsonStringArray(): String = joinToString(separator = ",", prefix = "[", postfix = "]") { it.jsonString() }

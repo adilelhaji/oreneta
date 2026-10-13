@@ -45,6 +45,14 @@ pub struct Person {
     /// The book's own identifier for them, used so a re-sync updates in place.
     pub uid: String,
     pub name: String,
+    /// The given and family names, when the book keeps them apart (vCard
+    /// `N`, Google's `names`, or the editor's two fields). Empty when it does
+    /// not: the display preference then shows `name` as it is, because
+    /// splitting a whole name would be a guess (ADR-0052).
+    #[serde(default)]
+    pub given: String,
+    #[serde(default)]
+    pub family: String,
     pub organisation: String,
     pub note: String,
     pub emails: Vec<EmailAddress>,
@@ -103,7 +111,7 @@ fn label_for(property: &Property, all: &[Property]) -> String {
 /// A structured value's components, split on unescaped semicolons, each
 /// unescaped: a component containing a semicolon escapes it precisely so it is
 /// not a separator.
-fn structured_parts(value: &str) -> Vec<String> {
+pub(crate) fn structured_parts(value: &str) -> Vec<String> {
     let mut parts: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut chars = value.chars().peekable();
@@ -121,6 +129,13 @@ fn structured_parts(value: &str) -> Vec<String> {
     }
     parts.push(current);
     parts
+}
+
+/// The family and given names of a structured `N`, unescaped and trimmed.
+pub fn name_parts(value: &str) -> (String, String) {
+    let parts = structured_parts(value);
+    let field = |index: usize| parts.get(index).map(|part| unescape(part).trim().to_string()).unwrap_or_default();
+    (field(1), field(0))
 }
 
 fn name_from_structured(value: &str) -> String {
@@ -209,7 +224,10 @@ pub fn person_from_properties(properties: &[Property]) -> Person {
         match property.name.as_str() {
             "UID" => person.uid = property.value.trim().to_string(),
             "FN" if person.name.is_empty() => person.name = property.value.trim().to_string(),
-            "N" if structured_name.is_empty() => structured_name = property.raw.clone(),
+            "N" if structured_name.is_empty() => {
+                structured_name = property.raw.clone();
+                (person.given, person.family) = name_parts(&property.raw);
+            }
             "ORG" if person.organisation.is_empty() => {
                 // ORG is a hierarchy — company;department — and the first part
                 // is the answer to "who do they work for".
@@ -262,9 +280,14 @@ pub fn person_from_properties(properties: &[Property]) -> Person {
 }
 
 /// Read a stream of cards as people, keeping only those worth keeping.
+///
+/// A group card (vCard 4 `KIND:group`, or Apple's
+/// `X-ADDRESSBOOKSERVER-KIND:group`) is not a person and is left out; the
+/// groups are read by [`super::groups`].
 pub fn people_from_vcards(input: &[u8]) -> Vec<Person> {
     super::vcard::split_cards(input)
         .iter()
+        .filter(|properties| !super::groups::is_group(properties))
         .map(|properties| person_from_properties(properties))
         .filter(Person::is_useful)
         .collect()

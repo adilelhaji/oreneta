@@ -14,7 +14,7 @@ use scraper::{Html, Selector};
 use serde_json::{Value, json};
 use std::time::Duration;
 
-const RELEASES_ATOM_URL: &str = "https://github.com/nonbili/meron/releases.atom";
+const RELEASES_ATOM_URL: &str = "https://github.com/adilelhaji/oreneta/releases.atom";
 const ANDROID_TAG_PREFIX: &str = "android/";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -164,6 +164,13 @@ mod tests {
         assert!(!Variant::Desktop.matches("android/v0.1.3"));
         assert!(Variant::Android.matches("android/v0.1.3"));
         assert!(!Variant::Android.matches("v0.1.4"));
+        // The translation models' release is not an app version.
+        assert!(!Variant::Desktop.matches("translation-models-0.3.3"));
+    }
+
+    #[test]
+    fn the_changelog_is_this_project_s_own() {
+        assert_eq!(RELEASES_ATOM_URL, "https://github.com/adilelhaji/oreneta/releases.atom");
     }
 
     #[test]

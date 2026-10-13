@@ -5,8 +5,19 @@ import { formatContact, searchDirectory, suggestContacts } from '../../lib/conta
 import { useValue } from '@legendapp/state/react'
 import { accounts$ } from '../../states/accounts'
 import { commitPending, editAt, fieldParts, removeAt, setPending } from '../../lib/recipientField'
-import type { Contact } from '../../types'
+import type { Contact, ContactGroup } from '../../types'
 import { Chip } from '../chip/Chip'
+import { groupRecipients, loadGroups, people$ } from '../../states/people'
+import { useContactNames } from '../../states/contactNames'
+
+/** Groups whose name holds what was typed, with somebody to write to. */
+export function matchingGroups(groups: ContactGroup[], query: string): ContactGroup[] {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return []
+  return groups
+    .filter((group) => group.name.toLowerCase().includes(needle) && groupRecipients(group).length > 0)
+    .slice(0, 3)
+}
 
 type RecipientInputProps = {
   value: string
@@ -36,6 +47,8 @@ const inputClass = 'min-w-[8rem] flex-1 bg-transparent text-ui text-primary plac
 export function RecipientInput({ value, onChange, accountId, placeholder, autoFocus }: RecipientInputProps) {
   const { t } = useTranslation()
   const [suggestions, setSuggestions] = useState<Contact[]>([])
+  const names = useContactNames()
+  const allGroups = useValue(people$.groups)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const focusedRef = useRef(false)
@@ -48,6 +61,11 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
   // Only an Exchange account has a directory to ask; asking anything else
   // would be a round trip per keystroke for an answer known to be empty.
   const hasDirectory = !!account && (account.provider === 'exchange' || !!account.ews_url)
+
+  // A group is offered above the people, says how many it holds, and becomes
+  // its members' addresses only when chosen (ADR-0052).
+  const groupMatches = open ? matchingGroups(allGroups, pending) : []
+  const total = groupMatches.length + suggestions.length
 
   // Suggestions follow the token under the cursor, debounced, and only while
   // the field has focus — a dropdown over a field nobody is in is in the way.
@@ -62,13 +80,15 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
       const [local, remote] = await Promise.all([
         suggestContacts(accountId, query),
         hasDirectory ? searchDirectory(accountId, query) : Promise.resolve([]),
+        // The groups are read once, the first time somebody types a name.
+        query && !people$.groupsLoaded.peek() ? loadGroups() : Promise.resolve(),
       ])
       if (cancelled) return
       const taken = new Set(local.map((contact) => contact.addr.toLowerCase()))
       const results = [...local, ...remote.filter((contact) => !taken.has(contact.addr.toLowerCase()))]
       setSuggestions(results)
       setActive(0)
-      setOpen(results.length > 0)
+      setOpen(results.length > 0 || matchingGroups(people$.groups.peek(), query).length > 0)
     }, 120)
     return () => {
       cancelled = true
@@ -81,26 +101,40 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
     setSuggestions([])
   }
 
+  // A name from the address book reads the way the reader orders names; one
+  // seen only in a header is written as it came.
+  const shownName = (contact: Contact) => (contact.known ? names.format(contact) : contact.name).trim()
   const accept = (contact: Contact) => {
-    onChange(commitPending(value, formatContact(contact)))
+    onChange(commitPending(value, formatContact({ ...contact, name: shownName(contact) })))
     close()
+  }
+  const acceptGroup = (group: ContactGroup) => {
+    const entries = groupRecipients(group).map((member) =>
+      formatContact({ name: names.format(member), addr: member.addr }),
+    )
+    onChange(commitPending(value, entries.join(', ')))
+    close()
+  }
+  const acceptAt = (index: number) => {
+    if (index < groupMatches.length) acceptGroup(groupMatches[index])
+    else accept(suggestions[index - groupMatches.length])
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (open && suggestions.length > 0) {
+    if (open && total > 0) {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setActive((index) => (index + 1) % suggestions.length)
+        setActive((index) => (index + 1) % total)
         return
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setActive((index) => (index - 1 + suggestions.length) % suggestions.length)
+        setActive((index) => (index - 1 + total) % total)
         return
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault()
-        accept(suggestions[active])
+        acceptAt(Math.min(active, total - 1))
         return
       }
       if (event.key === 'Escape') {
@@ -141,7 +175,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
   }
 
   return (
-    <div className="relative flex-1">
+    <div className="relative min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-1">
         {committed.map((recipient, index) => {
           const label = recipient.name || recipient.address || recipient.raw
@@ -195,40 +229,64 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
           }}
         />
       </div>
-      {open && suggestions.length > 0 && (
+      {open && total > 0 && (
         <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-overlay">
-          {suggestions.map((contact, index) => (
+          {groupMatches.map((group, index) => (
             <li
-              key={contact.addr}
-              // mousedown, not click, so it fires before the input's blur.
+              key={`group:${group.id}`}
               onMouseDown={(event) => {
                 event.preventDefault()
-                accept(contact)
+                acceptGroup(group)
               }}
               onMouseEnter={() => setActive(index)}
               className={`cursor-pointer px-3 py-1.5 text-ui ${index === active ? 'bg-accent/10' : ''}`}
             >
-              {contact.name.trim() && contact.name.trim().toLowerCase() !== contact.addr.toLowerCase() ? (
-                <span>
-                  <span className="text-primary">{contact.name.trim()}</span>{' '}
-                  <span className="text-secondary">{`<${contact.addr}>`}</span>
-                  {/* Only for somebody the reader keeps. An address seen in a
-                      header carries no such fact, and inventing one would put
-                      a stranger's employer on screen as if it were known. */}
-                  {contact.known && contact.organisation && (
-                    <span className="text-2xs text-secondary/75"> · {contact.organisation}</span>
-                  )}
-                  {/* Said, because it is a different claim: not somebody the
-                      reader keeps, but somebody the organisation lists. */}
-                  {contact.directory && (
-                    <span className="text-2xs text-secondary/75"> · {t('composer.recipients.fromDirectory')}</span>
-                  )}
-                </span>
-              ) : (
-                <span className="text-primary">{contact.addr}</span>
-              )}
+              <span className="text-primary">{group.name}</span>{' '}
+              <span className="text-secondary">
+                ·{' '}
+                {t('composer.recipients.groupCount', {
+                  count: groupRecipients(group).length,
+                  defaultValue: 'group, {count, plural, one {# person} other {# people}}',
+                })}
+              </span>
             </li>
           ))}
+          {suggestions.map((contact, contactIndex) => {
+            const index = contactIndex + groupMatches.length
+            const name = shownName(contact)
+            return (
+              <li
+                key={contact.addr}
+                // mousedown, not click, so it fires before the input's blur.
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  accept(contact)
+                }}
+                onMouseEnter={() => setActive(index)}
+                className={`cursor-pointer px-3 py-1.5 text-ui ${index === active ? 'bg-accent/10' : ''}`}
+              >
+                {name && name.toLowerCase() !== contact.addr.toLowerCase() ? (
+                  <span>
+                    <span className="text-primary">{name}</span>{' '}
+                    <span className="text-secondary">{`<${contact.addr}>`}</span>
+                    {/* Only for somebody the reader keeps. An address seen in a
+                      header carries no such fact, and inventing one would put
+                      a stranger's employer on screen as if it were known. */}
+                    {contact.known && contact.organisation && (
+                      <span className="text-2xs text-secondary/75"> · {contact.organisation}</span>
+                    )}
+                    {/* Said, because it is a different claim: not somebody the
+                      reader keeps, but somebody the organisation lists. */}
+                    {contact.directory && (
+                      <span className="text-2xs text-secondary/75"> · {t('composer.recipients.fromDirectory')}</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-primary">{contact.addr}</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

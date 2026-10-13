@@ -6,6 +6,7 @@
 //! one source of truth.
 
 pub mod archive;
+pub mod auto_archive;
 pub mod assistant;
 pub mod awaiting;
 pub mod backend;
@@ -24,6 +25,7 @@ pub mod crypto;
 pub mod engine;
 pub mod exchange;
 pub mod ffi;
+pub mod folder_move;
 pub mod graph;
 pub mod imap;
 pub mod log;
@@ -32,6 +34,7 @@ pub mod merge;
 pub mod oof;
 pub mod parse;
 pub mod person_context;
+pub mod pim;
 pub mod pop3;
 pub mod priority;
 pub mod privacy;
@@ -42,6 +45,7 @@ pub mod translation;
 pub mod profile_archive;
 pub mod profile_purge;
 pub mod protocol;
+pub mod receipts;
 pub mod proxy;
 pub mod rss;
 pub mod rules;

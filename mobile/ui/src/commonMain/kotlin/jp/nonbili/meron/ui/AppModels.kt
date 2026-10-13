@@ -5,7 +5,7 @@ import jp.nonbili.meron.shared.AccountSummary
 import jp.nonbili.meron.shared.FolderSummary
 import jp.nonbili.meron.shared.ThreadSummary
 
-internal enum class Screen { Mail, Kanban, Thread, Compose, AddAccount, Settings }
+internal enum class Screen { Mail, Kanban, Thread, Compose, AddAccount, Settings, Calendar, Contacts }
 
 internal object AppRoutes {
     const val Mail = "mail"
@@ -14,6 +14,8 @@ internal object AppRoutes {
     const val Compose = "compose"
     const val AddAccount = "add-account"
     const val Settings = "settings"
+    const val Calendar = "calendar"
+    const val Contacts = "contacts"
 }
 
 internal fun Screen.route(): String =
@@ -24,6 +26,8 @@ internal fun Screen.route(): String =
         Screen.Compose -> AppRoutes.Compose
         Screen.AddAccount -> AppRoutes.AddAccount
         Screen.Settings -> AppRoutes.Settings
+        Screen.Calendar -> AppRoutes.Calendar
+        Screen.Contacts -> AppRoutes.Contacts
     }
 
 internal fun appRouteToScreen(route: String?): Screen? =
@@ -34,6 +38,8 @@ internal fun appRouteToScreen(route: String?): Screen? =
         AppRoutes.Compose -> Screen.Compose
         AppRoutes.AddAccount -> Screen.AddAccount
         AppRoutes.Settings -> Screen.Settings
+        AppRoutes.Calendar -> Screen.Calendar
+        AppRoutes.Contacts -> Screen.Contacts
         else -> null
     }
 

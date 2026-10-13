@@ -35,7 +35,7 @@ pub enum Write {
 pub fn get(conn: &Connection, id: &str) -> Result<Option<(StoredPerson, String)>> {
     let row = conn
         .query_row(
-            "SELECT uid, name, organisation, note, photo, version FROM people
+            "SELECT uid, name, organisation, note, photo, version, given, family FROM people
               WHERE id = ?1 AND source = 'local'",
             params![id],
             |row| {
@@ -43,6 +43,8 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<(StoredPerson, String)>
                     Person {
                         uid: row.get(0)?,
                         name: row.get(1)?,
+                        given: row.get(6)?,
+                        family: row.get(7)?,
                         organisation: row.get(2)?,
                         note: row.get(3)?,
                         emails: Vec::new(),
@@ -105,11 +107,12 @@ pub fn save(
     };
     let origin = origin();
     tx.execute(
-        "INSERT INTO people(id, source, account, book, uid, name, organisation, note, photo, updated, version)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10)
+        "INSERT INTO people(id, source, account, book, uid, name, organisation, note, photo, updated, version, given, family)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, '', ?9, ?10, ?11, ?12)
          ON CONFLICT(id) DO UPDATE SET
            name = excluded.name, organisation = excluded.organisation, note = excluded.note,
-           updated = excluded.updated, version = excluded.version",
+           updated = excluded.updated, version = excluded.version,
+           given = excluded.given, family = excluded.family",
         params![
             id,
             origin.source,
@@ -120,7 +123,9 @@ pub fn save(
             person.organisation,
             person.note,
             now,
-            version.to_string()
+            version.to_string(),
+            person.given,
+            person.family
         ],
     )?;
     tx.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
@@ -162,6 +167,7 @@ pub fn delete(conn: &Connection, id: &str, read_at: &str) -> Result<Write> {
     tx.execute("DELETE FROM person_emails WHERE person_id = ?1", params![id])?;
     tx.execute("DELETE FROM person_phones WHERE person_id = ?1", params![id])?;
     tx.execute("DELETE FROM people WHERE id = ?1", params![id])?;
+    tx.execute("DELETE FROM contact_group_members WHERE person_id = ?1", params![id])?;
     tx.commit()?;
     super::person_links::unlink(conn, id)?;
     Ok(Write::Saved {
@@ -175,6 +181,17 @@ pub fn delete(conn: &Connection, id: &str, read_at: &str) -> Result<Write> {
 fn tidy(person: &Person) -> Person {
     let mut tidy = person.clone();
     tidy.name = tidy.name.trim().to_string();
+    tidy.given = tidy.given.trim().to_string();
+    tidy.family = tidy.family.trim().to_string();
+    // A name typed only as its two parts still has a name to show.
+    if tidy.name.is_empty() {
+        tidy.name = [tidy.given.as_str(), tidy.family.as_str()]
+            .iter()
+            .filter(|part| !part.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
     tidy.organisation = tidy.organisation.trim().to_string();
     tidy.note = tidy.note.trim().to_string();
     tidy.emails.retain(|email| !email.addr.trim().is_empty());

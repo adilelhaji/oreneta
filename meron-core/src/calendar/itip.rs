@@ -415,6 +415,321 @@ pub fn sequence_of(ics: &str) -> Option<i64> {
         .or(Some(0))
 }
 
+// ---- The organizer telling the people on it (2026-10-12) --------------------
+
+/// What an organizer sends after saving or deleting a meeting kept in a
+/// local or CalDAV calendar: the new version (REQUEST, RFC 5546 §3.2.2) or
+/// its cancellation (CANCEL, §3.2.5). Google and Exchange tell the people
+/// on their own events themselves and never come here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Notice {
+    Request,
+    Cancel,
+}
+
+impl Notice {
+    pub fn parse(text: &str) -> Option<Notice> {
+        match text.to_ascii_lowercase().as_str() {
+            "request" => Some(Notice::Request),
+            "cancel" => Some(Notice::Cancel),
+            _ => None,
+        }
+    }
+
+    pub fn method(self) -> &'static str {
+        match self {
+            Notice::Request => "REQUEST",
+            Notice::Cancel => "CANCEL",
+        }
+    }
+}
+
+/// A notice ready to be mailed: who gets it, what the meeting is called,
+/// the SEQUENCE it carries and the calendar object itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OrganizerNotice {
+    pub method: String,
+    pub to: Vec<String>,
+    pub summary: String,
+    pub sequence: i64,
+    pub ics: String,
+}
+
+/// One top-level block of a calendar object: its lines, BEGIN to END.
+struct Block {
+    lines: Vec<String>,
+    /// The instant a VEVENT's RECURRENCE-ID names, when it has one.
+    recurrence_id: Option<i64>,
+}
+
+fn blocks(lines: &[String], kind: &str) -> Vec<Block> {
+    let begin = format!("BEGIN:{kind}");
+    let end = format!("END:{kind}");
+    let mut found = Vec::new();
+    let mut current: Option<Vec<String>> = None;
+    let mut depth = 0usize;
+    for line in lines {
+        let upper = line.to_ascii_uppercase();
+        match current.as_mut() {
+            None if upper == begin => {
+                current = Some(vec![line.clone()]);
+                depth = 0;
+            }
+            None => {}
+            Some(block) => {
+                block.push(line.clone());
+                if upper.starts_with("BEGIN:") {
+                    depth += 1;
+                } else if upper.starts_with("END:") && depth > 0 {
+                    depth -= 1;
+                } else if upper == end {
+                    let lines = current.take().unwrap_or_default();
+                    let recurrence_id = top_level(&lines)
+                        .find(|l| name_of(l) == "RECURRENCE-ID")
+                        .and_then(|l| super::ics::instant_of(l));
+                    found.push(Block { lines, recurrence_id });
+                }
+            }
+        }
+    }
+    found
+}
+
+/// The lines of a block that are its own properties: not its BEGIN/END and
+/// not those of a component inside it (an alarm).
+fn top_level(lines: &[String]) -> impl Iterator<Item = &String> {
+    let mut depth = 0usize;
+    let inner = if lines.len() >= 2 { &lines[1..lines.len() - 1] } else { &lines[..0] };
+    inner.iter().filter(move |line| {
+        let upper = line.to_ascii_uppercase();
+        if upper.starts_with("BEGIN:") {
+            depth += 1;
+            return false;
+        }
+        if upper.starts_with("END:") && depth > 0 {
+            depth -= 1;
+            return false;
+        }
+        depth == 0
+    })
+}
+
+fn sequence_in(lines: &[String]) -> i64 {
+    top_level(lines).find(|l| name_of(l) == "SEQUENCE").and_then(|l| value(l).trim().parse().ok()).unwrap_or(0)
+}
+
+/// One occurrence of a series that has no exception of its own, as a
+/// component: the series' properties without its rule, at that instant.
+fn occurrence_from(master: &[String], at: i64) -> Vec<String> {
+    let start = top_level(master).find(|l| name_of(l) == "DTSTART").cloned();
+    let end = top_level(master).find(|l| name_of(l) == "DTEND").cloned();
+    let all_day = start.as_deref().is_some_and(|l| {
+        let upper = l.to_ascii_uppercase();
+        (upper.contains("VALUE=DATE") && !upper.contains("VALUE=DATE-TIME")) || value(l).trim().len() == 8
+    });
+    let zone = start.as_deref().and_then(super::ics::tzid_of);
+    let length = match (start.as_deref().and_then(super::ics::instant_of), end.as_deref().and_then(super::ics::instant_of)) {
+        (Some(from), Some(to)) if to >= from => Some(to - from),
+        _ => None,
+    };
+    let mut out = vec!["BEGIN:VEVENT".to_string()];
+    out.push(super::ics::time_property("RECURRENCE-ID", at, all_day, zone.as_deref()));
+    out.push(super::ics::time_property("DTSTART", at, all_day, zone.as_deref()));
+    if let Some(length) = length {
+        out.push(super::ics::time_property("DTEND", at + length, all_day, zone.as_deref()));
+    }
+    out.extend(
+        top_level(master)
+            .filter(|l| !matches!(name_of(l).as_str(), "RRULE" | "RDATE" | "EXDATE" | "EXRULE" | "DTSTART" | "DTEND" | "RECURRENCE-ID"))
+            .cloned(),
+    );
+    out.push("END:VEVENT".into());
+    out
+}
+
+/// Adds a parameter to a property line unless it already has one by that
+/// name.
+fn with_param(line: &str, key: &str, value: &str) -> String {
+    if param(line, key).is_some() {
+        return line.to_string();
+    }
+    let at = line.find(':').unwrap_or(line.len());
+    format!("{};{key}={value}{}", &line[..at], &line[at..])
+}
+
+/// The component as it goes out: identity and version first, the organizer
+/// checked to be `me`, attendees asked to answer, alarms (which are the
+/// organizer's own) left behind. A cancellation keeps only what names the
+/// meeting and its people.
+fn outgoing(component: &[String], notice: Notice, me: &Participant, now: i64) -> Result<(Vec<String>, i64)> {
+    let own: Vec<&String> = top_level(component).collect();
+    let find = |name: &str| own.iter().find(|l| name_of(l) == name).map(|l| (*l).clone());
+    let uid = find("UID").context("the event has no UID")?;
+    let organizer = match find("ORGANIZER") {
+        Some(line) if !same_person(&super::ics::address_of(&line), &me.addr) => {
+            bail!("{} organizes this meeting; only they can tell the people on it", super::ics::address_of(&line))
+        }
+        Some(line) => line,
+        None => super::ics::organizer_line(me),
+    };
+    let stored = sequence_in(component);
+    let sequence = match notice {
+        Notice::Request => stored,
+        // A cancellation supersedes the last version sent.
+        Notice::Cancel => stored + 1,
+    };
+    let mut out = vec!["BEGIN:VEVENT".to_string(), uid];
+    if let Some(line) = find("RECURRENCE-ID") {
+        out.push(line);
+    }
+    out.push(format!("SEQUENCE:{sequence}"));
+    out.push(format!("DTSTAMP:{}", stamp(now)));
+    out.push(organizer);
+    let skipped = ["UID", "RECURRENCE-ID", "SEQUENCE", "DTSTAMP", "ORGANIZER", "METHOD"];
+    for line in own {
+        let name = name_of(line);
+        if skipped.contains(&name.as_str()) {
+            continue;
+        }
+        match notice {
+            Notice::Request => {
+                if name == "ATTENDEE" && !same_person(&super::ics::address_of(line), &me.addr) {
+                    let line = with_param(line, "PARTSTAT", "NEEDS-ACTION");
+                    let asked = param(&line, "PARTSTAT").is_some_and(|p| p.eq_ignore_ascii_case("NEEDS-ACTION"));
+                    out.push(if asked { with_param(&line, "RSVP", "TRUE") } else { line });
+                } else {
+                    out.push(line.clone());
+                }
+            }
+            Notice::Cancel => {
+                if matches!(name.as_str(), "DTSTART" | "DTEND" | "DURATION" | "SUMMARY" | "LOCATION" | "ATTENDEE") {
+                    out.push(line.clone());
+                }
+            }
+        }
+    }
+    if notice == Notice::Cancel {
+        out.retain(|l| name_of(l) != "STATUS");
+        out.push("STATUS:CANCELLED".into());
+    }
+    out.push("END:VEVENT".into());
+    Ok((out, sequence))
+}
+
+/// The notice for a meeting the person organizes, built from the calendar
+/// object stored for it (the CalDAV server's, or [`local_object`]'s).
+///
+/// `occurrence` names one occurrence of a series by the instant it was
+/// originally at; `None` is the whole event. For one occurrence the notice
+/// carries its exception (or the occurrence as the series has it) with its
+/// RECURRENCE-ID; for a whole series, the series and every exception, rule
+/// and time zones included. A REQUEST carries the SEQUENCE the last save
+/// stored; a CANCEL one more.
+///
+/// Recipients are the attendees with an address, the organizer excluded.
+/// Refused when someone else organizes it or nobody is left to tell.
+pub fn organizer_notice(
+    object: &str,
+    notice: Notice,
+    occurrence: Option<i64>,
+    me: &Participant,
+    now: i64,
+) -> Result<OrganizerNotice> {
+    if !me.addr.contains('@') {
+        bail!("no address to send this from");
+    }
+    let lines = unfold(object);
+    let zones = blocks(&lines, "VTIMEZONE");
+    let events = blocks(&lines, "VEVENT");
+    let master = events.iter().find(|b| b.recurrence_id.is_none());
+    let repeats = master.is_some_and(|m| top_level(&m.lines).any(|l| matches!(name_of(l).as_str(), "RRULE" | "RDATE")));
+    // An occurrence is only one when the event repeats (or the object holds
+    // exceptions alone); otherwise the event is the whole thing.
+    let occurrence = occurrence.filter(|_| repeats || master.is_none());
+    let chosen: Vec<Vec<String>> = match (occurrence, notice) {
+        (Some(at), _) => match events.iter().find(|b| b.recurrence_id == Some(at)) {
+            Some(exception) => vec![exception.lines.clone()],
+            None => vec![occurrence_from(&master.context("the series has no main event")?.lines, at)],
+        },
+        (None, Notice::Request) => events.iter().map(|b| b.lines.clone()).collect(),
+        // Cancelling the UID cancels every occurrence; the series stands for
+        // all of them.
+        (None, Notice::Cancel) => match master {
+            Some(master) => vec![master.lines.clone()],
+            None => events.iter().map(|b| b.lines.clone()).collect(),
+        },
+    };
+    if chosen.is_empty() {
+        bail!("the calendar object holds no event");
+    }
+    let mut out = vec![
+        "BEGIN:VCALENDAR".to_string(),
+        "VERSION:2.0".into(),
+        format!("PRODID:{}", super::ics::PRODID),
+        format!("METHOD:{}", notice.method()),
+    ];
+    for zone in &zones {
+        out.extend(zone.lines.iter().cloned());
+    }
+    let mut to: Vec<String> = Vec::new();
+    let mut summary = String::new();
+    let mut sequence = 0;
+    for (n, component) in chosen.iter().enumerate() {
+        let (lines, at) = outgoing(component, notice, me, now)?;
+        if n == 0 {
+            sequence = at;
+            summary = lines.iter().find(|l| name_of(l) == "SUMMARY").map(|l| unescape(value(l))).unwrap_or_default();
+        }
+        for line in lines.iter().filter(|l| name_of(l) == "ATTENDEE") {
+            let addr = super::ics::address_of(line);
+            if addr.contains('@') && !same_person(&addr, &me.addr) && !to.contains(&addr) {
+                to.push(addr);
+            }
+        }
+        out.extend(lines);
+    }
+    out.push("END:VCALENDAR".into());
+    if to.is_empty() {
+        bail!("this event has nobody to tell");
+    }
+    Ok(OrganizerNotice {
+        method: notice.method().into(),
+        to,
+        summary,
+        sequence,
+        ics: out.iter().map(|l| fold(l) + "\r\n").collect(),
+    })
+}
+
+/// The calendar object a local event stands for, which a local calendar
+/// does not keep: written from its row, with the UID it is known by
+/// ([`local_uid`]), the SEQUENCE kept for it, and the RECURRENCE-ID of an
+/// imported occurrence.
+pub fn local_object(event: &super::Event, sequence: i64, now: i64) -> String {
+    let (uid, occurrence) = local_uid(event);
+    let written = super::ics::new_object(&super::Event { recurrence: None, ..event.clone() }, &uid, now);
+    let mut lines = unfold(&written);
+    if let Some(i) = lines.iter().position(|l| name_of(l) == "SEQUENCE") {
+        lines[i] = format!("SEQUENCE:{sequence}");
+    }
+    if let (Some(at), Some(i)) = (occurrence, lines.iter().position(|l| name_of(l) == "UID")) {
+        lines.insert(i + 1, super::ics::time_property("RECURRENCE-ID", at, event.all_day, None));
+    }
+    lines.iter().map(|l| fold(l) + "\r\n").collect()
+}
+
+/// The UID a local event goes out with, and the occurrence it stands for
+/// when it is one of an imported series. An event made here is known by its
+/// own id (`local:…`), which is what [`super::events_with_uid`] finds when
+/// an answer or a proposal comes back; an imported one by the UID it came
+/// with.
+pub fn local_uid(event: &super::Event) -> (String, Option<i64>) {
+    match event.id.strip_prefix("local:import:").and_then(super::ics::occurrence_of) {
+        Some((uid, at)) => (uid.to_string(), event.is_recurring.then_some(at)),
+        None => (event.id.clone(), None),
+    }
+}
+
 // ---- What was answered (#102) ------------------------------------------------
 
 pub const SCHEMA: &str = "

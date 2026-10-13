@@ -148,6 +148,48 @@ func (a *App) folderDelete(payload map[string]any) (any, error) {
 	return out, nil
 }
 
+// folderMove nests a folder under another folder of the same account, or
+// back at the top level with an empty parent (ADR-0050). The core plans the
+// new names, refuses special-use folders and moves into the folder's own
+// subtree, renames on the server and reconciles its cache; this reshapes the
+// folder rows and passes on every rename so the frontend can carry its
+// favorites, colors and open views across.
+func (a *App) folderMove(payload map[string]any) (any, error) {
+	var req FolderMoveRequest
+	_ = decode(payload, &req)
+	if req.AccountID == "" {
+		return nil, errors.New("account_id is required")
+	}
+	if strings.TrimSpace(req.FolderID) == "" {
+		return nil, errors.New("folder_id is required")
+	}
+	if isRSSAccountID(req.AccountID) {
+		return nil, errors.New("RSS accounts do not support folders")
+	}
+	if req.AccountID == "unified" {
+		return nil, errors.New("Pick a single account to move a folder")
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	res, err := a.sidecar.Call("folders.move", map[string]any{"account": req.AccountID, "folder": req.FolderID, "parent": req.ParentID})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"ok": true}
+	if m, isMap := res.(map[string]any); isMap {
+		for _, key := range []string{"ok", "folder", "renames"} {
+			if value, found := m[key]; found {
+				out[key] = value
+			}
+		}
+		if shaped, isShaped := foldersJSON(req.AccountID, res).(map[string]any); isShaped {
+			out["folders"] = shaped["folders"]
+		}
+	}
+	return out, nil
+}
+
 func (a *App) threadList(payload map[string]any) (any, error) {
 	var req ThreadListRequest
 	_ = decode(payload, &req)
@@ -562,6 +604,9 @@ func sendParams(req SendMailRequest) map[string]any {
 		"sign":        req.Sign,
 		"encrypt":     req.Encrypt,
 		"passphrase":  req.Passphrase,
+		// Receipts the sender asked for (ADR-0048).
+		"read_receipt":     req.ReadReceipt,
+		"delivery_receipt": req.DeliveryReceipt,
 	}
 }
 
@@ -848,6 +893,53 @@ func (a *App) saveMessageEml(payload map[string]any) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"saved": true, "path": dest}, nil
+}
+
+// maxForwardedMessageBytes bounds an original attached to a forward. Larger
+// messages would not get past most providers' size limits once base64-encoded
+// for the composer anyway, and the bytes travel through the webview's IPC.
+const maxForwardedMessageBytes = 50 << 20
+
+// rawMessageForForward returns one message's original RFC822 bytes, base64, so
+// the composer can attach it to a forward as message/rfc822 (ADR-0047). The
+// sidecar's bounded JSON protocol cannot carry the bytes, so it writes them to
+// a private temporary file through the same messages.saveRaw path as "Save as
+// .eml"; the file is read back and removed before this returns.
+func (a *App) rawMessageForForward(payload map[string]any) (any, error) {
+	params, err := messageEmlSource(payload)
+	if err != nil {
+		return nil, err
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	dir, err := os.MkdirTemp("", "oreneta-forward-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "message.eml")
+	params["path"] = path
+	if _, err := a.sidecar.Call("messages.saveRaw", params); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxForwardedMessageBytes {
+		return nil, fmt.Errorf("message is too large to forward as an attachment (%d bytes)", info.Size())
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	subject, _ := payload["subject"].(string)
+	return map[string]any{
+		"data":     base64.StdEncoding.EncodeToString(raw),
+		"size":     len(raw),
+		"filename": emlFilename(subject),
+	}, nil
 }
 
 // mboxFilename is the save dialog's default name for a folder export.

@@ -139,6 +139,7 @@ fn a_new_task_is_a_whole_object_that_reads_back_the_same() {
         priority: 0,
         completed_at: None,
         reminder_at: Some(at("2026-04-01T11:30:00Z")),
+        rrule: String::new(),
     };
     let ics = new_object(&fields, "n1@oreneta", at("2026-03-01T00:00:00Z"));
     assert!(ics.starts_with("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Oreneta//"));
@@ -148,12 +149,98 @@ fn a_new_task_is_a_whole_object_that_reads_back_the_same() {
     assert_eq!((todo.uid.as_str(), todo.fields), ("n1@oreneta", fields));
 }
 
+/// A monthly task on the 31st from another client: a date-only due date,
+/// a start, a count, an alarm relative to the due date and properties this
+/// client does not show.
+const MONTHLY: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Other//EN\r\nBEGIN:VTODO\r\nUID:rent@other\r\n\
+DTSTAMP:20260101T000000Z\r\nSUMMARY:Pay the rent\r\nDTSTART;VALUE=DATE:20270131\r\nDUE;VALUE=DATE:20270131\r\n\
+RRULE:FREQ=MONTHLY;COUNT=5\r\nX-APPLE-SORT-ORDER:12\r\nCATEGORIES:home\r\nSEQUENCE:2\r\nSTATUS:NEEDS-ACTION\r\n\
+BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Rent\r\nTRIGGER;RELATED=END:-PT15H\r\nX-WR-ALARMUID:a1\r\nEND:VALARM\r\n\
+END:VTODO\r\nEND:VCALENDAR\r\n";
+
 #[test]
-fn a_repeating_task_is_read_and_flagged_but_not_patched() {
-    let ics = OTHER.replace("SEQUENCE:4", "SEQUENCE:4\r\nRRULE:FREQ=WEEKLY");
-    let todo = parse(&ics).unwrap();
-    assert!(todo.recurring);
-    assert!(patch(&ics, &todo.fields, 1).is_err());
+fn a_repeating_task_the_editor_can_write_is_read_with_its_rule_spelled_out() {
+    let todo = parse(MONTHLY).unwrap();
+    assert!(!todo.recurring, "not locked");
+    assert_eq!(todo.fields.rrule, "FREQ=MONTHLY;BYMONTHDAY=31;COUNT=5");
+    assert_eq!(todo.fields.reminder_at, Some(local_midnight(2027, 1, 31) - 15 * 3600));
+    // An edit of something else leaves the rule as the other client wrote it.
+    let out = patch(MONTHLY, &Fields { title: "Pay rent".into(), ..todo.fields.clone() }, 1).unwrap();
+    assert!(out.contains("RRULE:FREQ=MONTHLY;COUNT=5") && out.contains("DTSTART;VALUE=DATE:20270131"), "{out}");
+}
+
+#[test]
+fn moving_to_the_next_occurrence_writes_due_start_and_rule_and_keeps_the_rest() {
+    let fields = parse(MONTHLY).unwrap().fields;
+    let rule = recurrence::parse(&fields.rrule).unwrap();
+    let due = fields.due_at.unwrap();
+    let next = recurrence::next_local(&rule, due).unwrap();
+    assert_eq!(next, local_midnight(2027, 2, 28), "the 31st becomes the last day of February");
+    let day = NaiveDate::from_ymd_opt(2027, 2, 28).unwrap();
+    let moved = Fields {
+        due_at: Some(next),
+        reminder_at: fields.reminder_at.map(|at| at + (next - due)),
+        rrule: recurrence::format(&recurrence::anchored(&recurrence::advanced(&rule), day), day, true),
+        ..fields.clone()
+    };
+    let out = patch(MONTHLY, &moved, at("2027-01-31T10:00:00Z")).unwrap();
+    for expected in [
+        "DUE;VALUE=DATE:20270228",
+        "DTSTART;VALUE=DATE:20270228",
+        "RRULE:FREQ=MONTHLY;BYMONTHDAY=31;COUNT=4",
+        "X-APPLE-SORT-ORDER:12",
+        "CATEGORIES:home",
+        "TRIGGER;RELATED=END:-PT15H",
+        "X-WR-ALARMUID:a1",
+        "STATUS:NEEDS-ACTION",
+        "SEQUENCE:3",
+    ] {
+        assert!(out.contains(expected), "lost {expected}:\n{out}");
+    }
+    assert_eq!(parse(&out).unwrap().fields, moved, "what was written reads back the same");
+
+    // And on from there, back to the 31st.
+    let again = recurrence::next_local(&recurrence::parse(&moved.rrule).unwrap(), next).unwrap();
+    assert_eq!(again, local_midnight(2027, 3, 31));
+}
+
+#[test]
+fn a_rule_added_here_brings_a_start_and_an_alarm_that_follows_the_task() {
+    let base = parse(&OTHER.replace("DUE;TZID=Europe/Madrid:20260310T180000", "DUE;VALUE=DATE:20260310")).unwrap().fields;
+    let fields = Fields {
+        rrule: "FREQ=WEEKLY;BYDAY=TU".into(),
+        reminder_at: Some(local_midnight(2026, 3, 10) - 3600),
+        ..base
+    };
+    let ics = new_object(&fields, "w@oreneta", 1);
+    assert!(ics.contains("RRULE:FREQ=WEEKLY;BYDAY=TU") && ics.contains("DTSTART;VALUE=DATE:20260310"), "{ics}");
+    assert!(ics.contains("TRIGGER;RELATED=END:-PT60M"), "{ics}");
+    assert_eq!(parse(&ics).unwrap().fields, fields);
+}
+
+#[test]
+fn repetitions_beyond_the_editor_are_read_and_flagged_but_not_patched() {
+    for extra in [
+        "RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1",
+        "RRULE:FREQ=WEEKLY\r\nRDATE;VALUE=DATE:20260320",
+        "RRULE:FREQ=WEEKLY\r\nEXDATE;VALUE=DATE:20260317",
+        "RRULE:FREQ=WEEKLY\r\nRRULE:FREQ=MONTHLY",
+        "RDATE;VALUE=DATE:20260320",
+    ] {
+        let ics = OTHER.replace("SEQUENCE:4", &format!("SEQUENCE:4\r\n{extra}"));
+        let todo = parse(&ics).unwrap();
+        assert!(todo.recurring && todo.fields.rrule.is_empty(), "{extra}");
+        assert!(patch(&ics, &todo.fields, 1).is_err(), "{extra}");
+    }
+    // A changed occurrence alongside the series.
+    let exception = MONTHLY.replace(
+        "END:VCALENDAR",
+        "BEGIN:VTODO\r\nUID:rent@other\r\nRECURRENCE-ID;VALUE=DATE:20270228\r\nSUMMARY:Pay the rent late\r\nEND:VTODO\r\nEND:VCALENDAR",
+    );
+    assert!(parse(&exception).unwrap().recurring);
+    // A rule with no due date to follow it from.
+    let undated = MONTHLY.replace("DUE;VALUE=DATE:20270131\r\n", "");
+    assert!(parse(&undated).unwrap().recurring);
 }
 
 #[test]

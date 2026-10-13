@@ -46,6 +46,10 @@ type App struct {
 
 	coreErrorMu sync.Mutex
 	coreError   string
+
+	// proxyLookup replaces the core's "proxy.route" answer (see netproxy.go).
+	// Only tests set it; nil asks the core.
+	proxyLookup func(account string) (*proxySetting, error)
 }
 
 // setCoreError remembers the last fatal condition the core reported, so the
@@ -184,6 +188,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.traySetUnread(payload)
 	case "i18n.setNativeLabels":
 		return a.setNativeLabels(payload)
+	case "notify.setQuiet":
+		return a.setNotifyQuiet(payload)
 	case "changelog.fetch":
 		return a.changelogFetch()
 	case "update.status":
@@ -425,6 +431,11 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.peopleList(payload)
 	case "people.save", "people.delete", "people.duplicates", "people.link", "people.unlink", "people.dismissDuplicate":
 		return a.peopleWrite(command, payload)
+	// Contact groups and the book's names for senders (ADR-0052).
+	case "people.groupSave", "people.groupDelete":
+		return a.peopleWrite(command, payload)
+	case "people.groups", "people.names":
+		return a.peopleRead(command, payload)
 	case "archive.import":
 		return a.archiveImport(payload)
 	case "cloud.pickFile":
@@ -479,6 +490,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.emptyFolder(payload)
 	case "mail.folderDelete":
 		return a.folderDelete(payload)
+	// Folder moves (ADR-0050): the core checks, renames and reconciles.
+	case "mail.folderMove":
+		return a.folderMove(payload)
 	case "mail.move":
 		return a.mailMove(payload)
 	case "mail.copy":
@@ -487,6 +501,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.saveAttachment(payload)
 	case "mail.saveEml":
 		return a.saveMessageEml(payload)
+	case "mail.rawMessage":
+		return a.rawMessageForForward(payload)
 	case "backup.profileExport":
 		return a.exportProfileArchive(payload)
 	case "backup.profileInspect":
@@ -575,10 +591,19 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"translation.status", "translation.download", "translation.cancel", "translation.remove",
 		"cloud.providers", "cloud.list", "cloud.save", "cloud.check", "cloud.remove", "cloud.upload", "cloud.cancel",
 		"cloud.share", "cloud.revoke", "pop3.retention",
+		// Read receipts (ADR-0048): where a request stands, and the person's
+		// answer to it. A receipt goes only on their click or their "always".
+		"receipts.status", "receipts.answer",
 		// Proposing another time and the organizer's side of it, and the
 		// local schedule check behind both (ADR-0043).
 		"invite.counter", "invite.counterStatus", "invite.declineCounter", "calendar.conflicts",
+		// The organizer of a meeting in a local or CalDAV calendar telling
+		// the people on it, after confirming who (2026-10-12).
+		"invite.notify",
 		"backupSchedule.status", "backupSchedule.save", "backupSchedule.runNow",
+		// Automatic archiving by age (ADR-0054): the core previews, keeps the
+		// confirmed policy and runs it.
+		"autoArchive.status", "autoArchive.preview", "autoArchive.save", "autoArchive.runNow",
 		"thunderbird.profiles", "thunderbird.scan", "thunderbird.preview", "thunderbird.import",
 		"notes.attachments", "notes.attach", "notes.removeAttachment",
 		"chat.accounts", "chat.status", "chat.save", "chat.remove", "chat.conversations", "chat.history",

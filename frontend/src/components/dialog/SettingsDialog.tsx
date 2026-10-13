@@ -52,18 +52,24 @@ import {
 import { useValue } from '@legendapp/state/react'
 import { importOpml, exportOpml } from '../../states/feeds'
 import { exportBackup, importBackup, backupErrorMessage, isWrongPassphrase } from '../../states/backup'
-import { startMailImport } from '../../states/archive'
+import { ARCHIVE_ACCOUNT, startMailImport } from '../../states/archive'
 import { ProfilesGroup } from './ProfilesGroup'
 import { AccountGroupsGroup } from './AccountGroupsGroup'
 import { QuickActionsGroup } from '../quick/QuickActionsGroup'
 import { CategoriesGroup } from '../threads/CategoriesGroup'
 import { SenderListsGroup } from './SenderListsGroup'
 import { TrackingProtectionGroup } from './TrackingProtectionGroup'
+import { ReceiptsGroup } from './ReceiptsGroup'
+import { CalendarGeneralGroup } from './CalendarGeneralGroup'
+import { ContactsGeneralGroup } from './ContactsGeneralGroup'
+import { NotificationsGroup } from './NotificationsGroup'
+import { ReaderFoldingRows } from './ReaderFoldingRows'
 import { TranslationModelsGroup } from './TranslationModelsGroup'
 import { CloudStorageGroup } from './CloudStorageGroup'
 import { ProfileArchiveDialog } from './ProfileArchiveDialog'
 import { RestoreStatusRow } from './RestoreStatusRow'
 import { BackupScheduleGroup } from './BackupScheduleGroup'
+import { AutoArchiveGroup } from './AutoArchiveGroup'
 import { startProfileCheck, startProfileExport, startProfileRestore } from '../../states/profileArchive'
 import { MailImportDialog } from './MailImportDialog'
 import { ThunderbirdImportDialog } from './ThunderbirdImportDialog'
@@ -106,6 +112,7 @@ import { SmimeSettingsSection } from './SmimeSettingsSection'
 import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
+import { RepliesForwardsGroup } from './RepliesForwardsGroup'
 import { OofSettingsCard } from './OofSettingsCard'
 import { SharedMailboxesCard } from './SharedMailboxesCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
@@ -918,6 +925,7 @@ function GeneralSection() {
           checked={simplifyMessages}
           onChange={() => settings$.simplifyMessages.set(!simplifyMessages)}
         />
+        <ReaderFoldingRows />
         <SegmentedRow
           icon={<Eye size={16} strokeWidth={1.75} />}
           title={t('settings.reading.markRead')}
@@ -961,10 +969,13 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
+      <NotificationsGroup />
+
       <LabelsSettingsSection />
 
       <RulesSettingsSection />
       <TemplatesSettingsSection />
+      <ContactsGeneralGroup />
       <ContactSourcesSettingsSection />
       <PgpSettingsSection />
       <SmimeSettingsSection />
@@ -1060,6 +1071,8 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
+      <RepliesForwardsGroup />
+
       <div data-settings-section="signature" tabIndex={-1} aria-label={t('settings.sections.signature')}>
         <SignatureSettingsSection />
       </div>
@@ -1092,6 +1105,8 @@ function GeneralSection() {
       <CategoriesGroup />
       <SenderListsGroup />
       <TrackingProtectionGroup />
+      <ReceiptsGroup />
+      <CalendarGeneralGroup />
       <TranslationModelsGroup />
       <CloudStorageGroup />
       <StorageGroup />
@@ -1728,6 +1743,10 @@ function AccountPanel({ account }: { account: Account }) {
       </SettingsGroup>
       <AccountTogglesSection account={account} isRSS={isRSS} />
       {account.auth_type === 'pop3' && <Pop3RetentionGroup accountId={account.id} />}
+      {/* Automatic archiving by age (ADR-0054): accounts whose mail is on a server. */}
+      {!isRSS && account.auth_type !== 'pop3' && account.auth_type !== 'local_archive' && account.id !== ARCHIVE_ACCOUNT && (
+        <AutoArchiveGroup key={account.id} accountId={account.id} />
+      )}
       {!isRSS && <AccountCalendarsGroup account={account} />}
       {!isRSS && <AccountProxyCard account={account} />}
       {!isRSS && <AccountAliasesCard account={account} />}

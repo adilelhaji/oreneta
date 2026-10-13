@@ -32,6 +32,10 @@ beforeEach(() => {
     importing: null,
     duplicates: [],
     duplicatesOpen: false,
+    groups: [],
+    groupsLoaded: true,
+    groupFilter: '',
+    groupEditing: null,
   })
   ui$.toast.set('')
 })

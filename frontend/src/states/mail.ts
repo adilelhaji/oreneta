@@ -20,7 +20,14 @@ import {
 } from './ui'
 import { accounts$, unifiedAccounts } from './accounts'
 import { accountGroups$, inUnifiedScope } from './accountGroups'
-import { kanban$, forgetDeletedMailViewFolder, removeKanbanColumnsForFolder } from './kanban'
+import {
+  kanban$,
+  forgetDeletedMailViewFolder,
+  removeKanbanColumnsForFolder,
+  switchKanbanColumnFolder,
+} from './kanban'
+import { applyFolderRenames, forgetFolders, type FolderRename } from './folderPrefs'
+import { FOLDER_MOVE_BLOCK_TEXT, folderMoveBlock } from '../lib/folderMoves'
 import { filterThreads, isRssAccount } from '../lib/threadActions'
 import { isUnifiedStarred, unifiedFolderRole, unifiedFolders } from '../lib/unifiedFolders'
 import { isLocalSendId, discardPendingSend } from './pendingSends'
@@ -443,6 +450,8 @@ export async function deleteFolder(accountId: string, folderId: string, name?: s
     // column's thread cache and would make the selected conversation unfindable.
     const openThread = findLocalThread(ui$.selectedThread.get())
     for (const gone of removed) removeKanbanColumnsForFolder(accountId, gone)
+    // Favorites and colors of the deleted subtree go with it (ADR-0050).
+    forgetFolders(accountId, removed)
     // The open conversation and the mailbox view may have been inside any of
     // the deleted folders, not just the one the action targeted.
     if (openThread?.account_id === accountId && removed.includes(openThread?.folder_id ?? '')) {
@@ -463,6 +472,81 @@ export async function deleteFolder(accountId: string, folderId: string, name?: s
     return true
   } catch (error) {
     showToast(error instanceof Error ? error.message : t('folders.delete.failed', { folder: label }), 'error')
+    return false
+  }
+}
+
+// Move a folder under another folder of the same account, or back to the top
+// level with a null parent (ADR-0050). Refused here with the reason when the
+// rules forbid it (special-use folders, into its own subtree, Graph and
+// Exchange accounts); confirmed with both names; the core re-checks, renames
+// on the server and reports every path that changed, which favorites, colors,
+// board columns and the open view then follow.
+export async function moveFolder(accountId: string, folderId: string, parentId: string | null): Promise<boolean> {
+  if (!accountId || !folderId || accountId === 'unified') return false
+  const folders = mail$.foldersByAccount[accountId].peek() ?? []
+  const source = folders.find((folder) => folder.id === folderId)
+  const target = parentId ? folders.find((folder) => folder.id === parentId) ?? null : null
+  if (parentId && !target) return false
+  const account = accounts$.peek().find((item) => item.id === accountId)
+  const block = folderMoveBlock(source, target, folders, account)
+  const label = source?.name || folderId
+  if (block) {
+    const reason = FOLDER_MOVE_BLOCK_TEXT[block]
+    showToast(t(reason.key, { defaultValue: reason.text, folder: label }), 'error')
+    return false
+  }
+  const destination = target ? target.name : t('folders.move.topLevel', { defaultValue: 'Top level' })
+  if (
+    !(await confirmAction({
+      title: t('folders.move.confirmTitle', { folder: label, defaultValue: 'Move {folder}?' }),
+      message: t('folders.move.confirmMessage', {
+        folder: label,
+        destination,
+        defaultValue: 'Move the folder “{folder}” into “{destination}”? Its subfolders and messages move with it.',
+      }),
+      confirmLabel: t('folders.move.confirmButton', { defaultValue: 'Move folder' }),
+    }))
+  ) {
+    return false
+  }
+  try {
+    const res = await invoke<{ folders?: Folder[]; renames?: FolderRename[]; folder?: string }>('mail.folderMove', {
+      account_id: accountId,
+      folder_id: folderId,
+      parent_id: parentId ?? '',
+    })
+    const renames = res?.renames ?? []
+    // Carried before the new list lands, so nothing takes the old paths for gone.
+    applyFolderRenames(accountId, renames)
+    if (res?.folders) {
+      mail$.foldersByAccount[accountId].set(res.folders)
+      if (ui$.selectedAccount.get() === accountId) mail$.folders.set(res.folders)
+    } else {
+      void loadFolders(accountId, false)
+    }
+    const renamed = new Map(renames.map((rename) => [rename.from, rename.to]))
+    for (const board of settings$.kanbanBoards.peek()) {
+      for (const column of board.columns) {
+        const to = column.accountId === accountId ? renamed.get(column.folderId) : undefined
+        if (to) switchKanbanColumnFolder(board.id, column, to)
+      }
+    }
+    const openThread = findLocalThread(ui$.selectedThread.get())
+    if (openThread?.account_id === accountId && renamed.has(openThread.folder_id ?? '')) ui$.selectedThread.set('')
+    if (ui$.selectedAccount.get() === accountId) {
+      const to = renamed.get(ui$.selectedFolder.get())
+      if (to) ui$.selectedFolder.set(to)
+    }
+    showToast(t('folders.move.done', { folder: label, destination, defaultValue: 'Moved {folder} to {destination}' }))
+    return true
+  } catch (error) {
+    showToast(
+      error instanceof Error
+        ? error.message
+        : t('folders.move.failed', { folder: label, defaultValue: 'Could not move {folder}' }),
+      'error',
+    )
     return false
   }
 }

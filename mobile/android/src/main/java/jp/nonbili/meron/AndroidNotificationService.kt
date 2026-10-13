@@ -41,6 +41,10 @@ object AndroidNotificationService {
      *  notifications doesn't mute the mail itself (and vice versa). */
     private const val MAIL_CHANNEL_ID = "meron_new_mail"
 
+    /** Calendar reminders get their own channel: a person who silences mail
+     *  still wants to hear about the meeting in ten minutes. */
+    private const val CALENDAR_CHANNEL_ID = "meron_calendar_reminders"
+
     /** Private extra: the summary row a child stands for, see [activeLines]. */
     private const val EXTRA_SUMMARY_LINE = "jp.nonbili.meron.extra.SUMMARY_LINE"
 
@@ -49,6 +53,9 @@ object AndroidNotificationService {
      *  summary would count them as arrivals and list them as messages. */
     private const val EXTRA_ANCILLARY = "jp.nonbili.meron.extra.ANCILLARY"
     private const val NOTIFICATION_ID = 1001
+
+    /** Reminders are told apart by their tag (the reminder's key); the id is shared. */
+    private const val CALENDAR_REMINDER_ID = 1002
     const val EXTRA_ACCOUNT_ID = "jp.nonbili.meron.extra.ACCOUNT_ID"
     const val EXTRA_FOLDER = "jp.nonbili.meron.extra.FOLDER"
     const val EXTRA_THREAD_KEY = "jp.nonbili.meron.extra.THREAD_KEY"
@@ -77,6 +84,15 @@ object AndroidNotificationService {
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = context.getString(R.string.mobile_android_new_mail_channel_desc)
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CALENDAR_CHANNEL_ID,
+                context.getString(R.string.mobile_android_calendar_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = context.getString(R.string.mobile_android_calendar_channel_desc)
             },
         )
     }
@@ -109,6 +125,36 @@ object AndroidNotificationService {
                 .build()
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Notification permission can change after canNotify() checks it.
+        }
+    }
+
+    /** Posts one calendar reminder (a `pim.refresh` entry, already recorded as
+     *  raised by the core). [key] is stable per event and start, so the same
+     *  reminder posted twice replaces itself. */
+    fun notifyCalendarReminder(
+        base: Context,
+        key: String,
+        title: String,
+        body: String,
+    ) {
+        val context = localizedAppContext(base)
+        if (!canNotify(context)) return
+        ensureChannels(context)
+        val notification =
+            NotificationCompat
+                .Builder(context, CALENDAR_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_mail)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(openAppIntent(context))
+                .setAutoCancel(true)
+                .build()
+        try {
+            NotificationManagerCompat.from(context).notify(key, CALENDAR_REMINDER_ID, notification)
         } catch (_: SecurityException) {
             // Notification permission can change after canNotify() checks it.
         }

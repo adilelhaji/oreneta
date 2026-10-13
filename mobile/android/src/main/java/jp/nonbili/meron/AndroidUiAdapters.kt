@@ -298,6 +298,14 @@ class AndroidMobileHost(
         AndroidNotificationService.notifyNewMail(activity, JSONObject(detailJson))
     }
 
+    override fun notifyCalendarReminder(
+        key: String,
+        title: String,
+        body: String,
+    ) {
+        AndroidNotificationService.notifyCalendarReminder(activity, key, title, body)
+    }
+
     override fun connectGoogleDeviceAccount(onResult: (GoogleDeviceAccountResult) -> Unit) {
         lastGoogleDeviceAuthError = ""
         Log.i(GOOGLE_AUTH_LOG_TAG, "Launching Google account picker")

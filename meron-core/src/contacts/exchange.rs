@@ -36,6 +36,7 @@ pub fn people_from_participants(found: Vec<Participant>) -> Vec<Person> {
             }],
             phones: Vec::new(),
             photo: None,
+            ..Default::default()
         });
     }
     people

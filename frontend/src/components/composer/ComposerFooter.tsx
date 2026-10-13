@@ -6,6 +6,7 @@ import { IconButton } from '../button/IconButton'
 import { SendLaterMenu } from './SendLaterMenu'
 import { TemplateMenu } from './TemplateMenu'
 import { ProtectionComposeControls } from './ProtectionComposeControls'
+import { ReceiptComposeControls } from './ReceiptComposeControls'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -30,6 +31,8 @@ export function ComposerFooter({
   onPgpSignChange,
   onPgpEncryptChange,
   onPgpPassphraseChange,
+  receipts,
+  onReceiptsChange,
   onDiscard,
   onSubmit,
   onSchedule,
@@ -57,6 +60,9 @@ export function ComposerFooter({
   onPgpSignChange: (value: boolean) => void
   onPgpEncryptChange: (value: boolean) => void
   onPgpPassphraseChange: (value: string) => void
+  /** Read and delivery receipts asked for (ADR-0048); hidden when absent. */
+  receipts?: { read: boolean; delivery: boolean }
+  onReceiptsChange?: (value: { read: boolean; delivery: boolean }) => void
   onDiscard: () => void
   onSubmit: () => void
   /** Holds the message until `at` instead of sending it now. */
@@ -122,6 +128,14 @@ export function ComposerFooter({
           onEncryptChange={onPgpEncryptChange}
           onPassphraseChange={onPgpPassphraseChange}
         />
+        {receipts && onReceiptsChange && (
+          <ReceiptComposeControls
+            read={receipts.read}
+            delivery={receipts.delivery}
+            onReadChange={(read) => onReceiptsChange({ ...receipts, read })}
+            onDeliveryChange={(delivery) => onReceiptsChange({ ...receipts, delivery })}
+          />
+        )}
         <button
           onClick={onToggleRich}
           className={`flex h-9 items-center gap-1.5 rounded-control px-2.5 text-caption font-semibold transition-colors cursor-pointer ${

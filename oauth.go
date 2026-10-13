@@ -31,7 +31,11 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 	}
 	if req.AccessToken == "" || req.RefreshToken == "" {
 		a.logf("account.addGmailOAuth: exchanging auth code")
-		tokens, err := a.exchangeGmailOAuthCode(req.AuthCode)
+		client, err := a.oauthHTTPClient()
+		if err != nil {
+			return nil, err
+		}
+		tokens, err := a.exchangeGmailOAuthCode(client, req.AuthCode)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +44,11 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 		req.ExpiresIn = tokens.ExpiresIn
 	}
 	if req.Email == "" || req.AvatarURL == "" {
-		profile, err := fetchGoogleUserInfo(req.AccessToken)
+		client, err := a.oauthHTTPClient()
+		if err != nil {
+			return nil, err
+		}
+		profile, err := fetchGoogleUserInfo(client, req.AccessToken)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +138,11 @@ func (a *App) accountAddOutlookOAuth(payload map[string]any) (any, error) {
 		redirectURI := a.oauthRedirectURI
 		a.oauthVerifier = ""
 		a.oauthMu.Unlock()
-		tokens, err := exchangeOutlookOAuthCodeWithVerifier(req.AuthCode, verifier, redirectURI)
+		client, err := a.oauthHTTPClient()
+		if err != nil {
+			return nil, err
+		}
+		tokens, err := exchangeOutlookOAuthCodeWithVerifier(client, req.AuthCode, verifier, redirectURI)
 		if err != nil {
 			return nil, err
 		}
@@ -200,6 +212,13 @@ func (a *App) accountAddOutlookOAuth(payload map[string]any) (any, error) {
 	}
 	a.logf("account.addOutlookOAuth: saved account=%s", id)
 	return map[string]any{"account": account}, nil
+}
+
+// oauthHTTPClient is the client for sign-in requests (token exchange, Google
+// userinfo). The account does not exist yet, so it follows the app-wide proxy.
+// No overall timeout, as before.
+func (a *App) oauthHTTPClient() (*http.Client, error) {
+	return a.httpClient("", 0)
 }
 
 func (a *App) gmailBegin() (any, error) {
@@ -327,7 +346,13 @@ func (a *App) serveOAuthRedirect(listener net.Listener) {
 		_, _ = io.WriteString(w, "<html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;text-align:center;padding-top:100px;background-color:#f8fafc;color:#1e293b;\"><h1>Authenticated</h1><p>You can close this tab and return to Oreneta.</p></body></html>")
 		go server.Shutdown(context.Background())
 
-		profile, err := exchangeOAuthCode(provider, code, verifier, redirectURI)
+		client, err := a.oauthHTTPClient()
+		if err != nil {
+			a.logf("oauth exchange not attempted (provider=%s): %v", provider, err)
+			fmt.Fprintf(os.Stderr, "oreneta: OAuth exchange not attempted: %v\n", err)
+			return
+		}
+		profile, err := exchangeOAuthCode(client, provider, code, verifier, redirectURI)
 		if err != nil {
 			a.logf("oauth exchange failed (provider=%s): %v", provider, err)
 			fmt.Fprintf(os.Stderr, "oreneta: OAuth exchange failed: %v\n", err)
@@ -347,10 +372,10 @@ func (a *App) serveOAuthRedirect(listener net.Listener) {
 // endpoint; Outlook reads the OIDC id_token returned alongside the tokens (no
 // extra request — Microsoft Graph is a separate resource the IMAP/SMTP token
 // can't address).
-func exchangeOAuthCode(provider, code, verifier, redirectURI string) (*ExchangedProfile, error) {
+func exchangeOAuthCode(client *http.Client, provider, code, verifier, redirectURI string) (*ExchangedProfile, error) {
 	switch provider {
 	case "outlook":
-		tokens, err := exchangeOutlookOAuthCodeWithVerifier(code, verifier, redirectURI)
+		tokens, err := exchangeOutlookOAuthCodeWithVerifier(client, code, verifier, redirectURI)
 		if err != nil {
 			return nil, err
 		}
@@ -363,11 +388,11 @@ func exchangeOAuthCode(provider, code, verifier, redirectURI string) (*Exchanged
 			ExpiresIn:    tokens.ExpiresIn,
 		}, nil
 	default: // gmail
-		tokens, err := exchangeGmailOAuthCodeWithVerifier(code, verifier, redirectURI)
+		tokens, err := exchangeGmailOAuthCodeWithVerifier(client, code, verifier, redirectURI)
 		if err != nil {
 			return nil, err
 		}
-		user, err := fetchGoogleUserInfo(tokens.AccessToken)
+		user, err := fetchGoogleUserInfo(client, tokens.AccessToken)
 		if err != nil {
 			return nil, fmt.Errorf("Google userinfo failed: %w", err)
 		}
@@ -384,7 +409,7 @@ func exchangeOAuthCode(provider, code, verifier, redirectURI string) (*Exchanged
 
 // exchangeOutlookOAuthCodeWithVerifier exchanges an authorization code at the
 // Microsoft token endpoint. Public client (PKCE), so no client secret is sent.
-func exchangeOutlookOAuthCodeWithVerifier(code, verifier, redirectURI string) (*TokenExchangeResult, error) {
+func exchangeOutlookOAuthCodeWithVerifier(client *http.Client, code, verifier, redirectURI string) (*TokenExchangeResult, error) {
 	if verifier == "" {
 		return nil, errors.New("Outlook OAuth code verifier missing")
 	}
@@ -395,7 +420,7 @@ func exchangeOutlookOAuthCodeWithVerifier(code, verifier, redirectURI string) (*
 	values.Set("redirect_uri", redirectURI)
 	values.Set("grant_type", "authorization_code")
 	values.Set("scope", outlookScopes)
-	res, err := http.PostForm(outlookTokenURL, values)
+	res, err := client.PostForm(outlookTokenURL, values)
 	if err != nil {
 		return nil, err
 	}
@@ -443,16 +468,16 @@ func parseIDTokenClaims(idToken string) (email, name string) {
 	return email, claims.Name
 }
 
-func (a *App) exchangeGmailOAuthCode(code string) (*TokenExchangeResult, error) {
+func (a *App) exchangeGmailOAuthCode(client *http.Client, code string) (*TokenExchangeResult, error) {
 	a.oauthMu.Lock()
 	verifier := a.oauthVerifier
 	redirectURI := a.oauthRedirectURI
 	a.oauthVerifier = ""
 	a.oauthMu.Unlock()
-	return exchangeGmailOAuthCodeWithVerifier(code, verifier, redirectURI)
+	return exchangeGmailOAuthCodeWithVerifier(client, code, verifier, redirectURI)
 }
 
-func exchangeGmailOAuthCodeWithVerifier(code, verifier, redirectURI string) (*TokenExchangeResult, error) {
+func exchangeGmailOAuthCodeWithVerifier(client *http.Client, code, verifier, redirectURI string) (*TokenExchangeResult, error) {
 	if verifier == "" {
 		return nil, errors.New("Google OAuth code verifier missing")
 	}
@@ -463,7 +488,7 @@ func exchangeGmailOAuthCodeWithVerifier(code, verifier, redirectURI string) (*To
 	values.Set("code_verifier", verifier)
 	values.Set("redirect_uri", redirectURI)
 	values.Set("grant_type", "authorization_code")
-	res, err := http.PostForm("https://oauth2.googleapis.com/token", values)
+	res, err := client.PostForm("https://oauth2.googleapis.com/token", values)
 	if err != nil {
 		return nil, err
 	}
@@ -482,10 +507,10 @@ func exchangeGmailOAuthCodeWithVerifier(code, verifier, redirectURI string) (*To
 	return &out, nil
 }
 
-func fetchGoogleUserInfo(accessToken string) (*GoogleUserInfo, error) {
+func fetchGoogleUserInfo(client *http.Client, accessToken string) (*GoogleUserInfo, error) {
 	req, _ := http.NewRequest(http.MethodGet, "https://www.googleapis.com/oauth2/v3/userinfo", nil)
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -209,7 +209,7 @@ func (u *updater) check() (any, error) {
 	u.emitLocked(true)
 	u.mu.Unlock()
 
-	manifest, err := fetchUpdateManifest(updateManifestSource())
+	manifest, err := u.fetchManifest(updateManifestSource())
 
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -266,14 +266,22 @@ func updateManifestSource() string {
 	return updateManifestURL
 }
 
-func fetchUpdateManifest(url string) (*updateManifest, error) {
+// fetchManifest reads the manifest through the app-wide proxy.
+func (u *updater) fetchManifest(url string) (*updateManifest, error) {
+	client, err := u.app.httpClient("", 20*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return fetchUpdateManifest(client, url)
+}
+
+func fetchUpdateManifest(client *http.Client, url string) (*updateManifest, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", updateUserAgent())
 	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: 20 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -373,13 +381,15 @@ func (u *updater) downloadTo(asset updateAsset) (string, error) {
 	}
 	req.Header.Set("User-Agent", updateUserAgent())
 	// No overall timeout: a 120 MB DMG on a slow line legitimately takes a
-	// while. The transport still bounds connect/TLS/header time.
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSHandshakeTimeout:   30 * time.Second,
-			ResponseHeaderTimeout: 60 * time.Second,
-		},
+	// while. The transport still bounds connect/TLS/header time. It goes
+	// through the app-wide proxy; an unusable proxy fails the download.
+	transport, err := u.app.httpTransport("")
+	if err != nil {
+		return "", err
 	}
+	transport.TLSHandshakeTimeout = 30 * time.Second
+	transport.ResponseHeaderTimeout = 60 * time.Second
+	client := &http.Client{Transport: transport}
 	res, err := client.Do(req)
 	if err != nil {
 		return "", err

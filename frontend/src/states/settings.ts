@@ -33,6 +33,16 @@ import {
   type ShortcutScheme,
 } from '../lib/shortcuts'
 import type { Account, ChatWallpaper } from '../types'
+import { DEFAULT_REPLY_FORWARD_PREFS, sanitizeReplyForwardPrefs, type ReplyForwardPrefs } from '../lib/replyForward'
+import {
+  DEFAULT_CALENDAR_PREFS,
+  WEEK_START_CHOICES,
+  sanitizeCalendarPrefs,
+  type CalendarPrefs,
+  type WeekStartChoice,
+} from '../lib/calendarWeek'
+import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
+import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
 
 // Persisted user settings. This module maps 1:1 to the `settings` DB table: each
@@ -112,6 +122,16 @@ export type ReadingWidth = 'comfortable' | 'wide' | 'full'
  * staying there. 'manual': never on its own.
  */
 export type MarkReadMode = 'immediately' | 'delayed' | 'manual'
+
+/**
+ * What to do when a message asks for a read receipt (ADR-0048).
+ * 'ask': a bar in the reader, once per message. 'always': send without
+ * asking, except for list mail and mail whose return path is elsewhere,
+ * which are still asked about. 'never': neither ask nor send. Mail in Junk
+ * is never answered whatever the choice.
+ */
+export type ReadReceiptPolicy = 'ask' | 'always' | 'never'
+export const READ_RECEIPT_POLICIES: readonly ReadReceiptPolicy[] = ['ask', 'always', 'never']
 export type KanbanBoardColumn = {
   accountId: string
   folderId: string
@@ -179,6 +199,12 @@ export type Settings = {
    * Off by default: a newsletter or an invoice is laid out on purpose.
    */
   simplifyMessages: boolean
+  /** Fold a reply's quoted history behind "Show quoted text" (ADR-0046). On by default. */
+  readerFoldQuotes: boolean
+  /** Fold marked-up signatures behind "Show signature" (ADR-0046). Off by default. */
+  readerFoldSignatures: boolean
+  /** Scale fixed-width HTML down to the reading pane (ADR-0046). Off by default. */
+  readerFitWidth: boolean
   /**
    * Whether a narrowing survives changing folder.
    *
@@ -205,6 +231,8 @@ export type Settings = {
    * back. Zero sends at once.
    */
   undoSendSeconds: number
+  /** Mail → Replies and forwards: quote, header and forward preferences (ADR-0047). */
+  replyForward: ReplyForwardPrefs
   /** Whether native spell checking is requested in composer prose fields. */
   spellCheck: boolean
   /** Offline grammar checking with Harper (#105): off, or the English it
@@ -240,6 +268,31 @@ export type Settings = {
    * follow this unless they carry their own override (see AccountProxyCard).
    */
   proxy: ProxySettings
+  /**
+   * What to do when a message asks to be told it was read (ADR-0048). Read
+   * by the core too, which is what sends a receipt under "always".
+   */
+  readReceiptPolicy: ReadReceiptPolicy
+  /** Whether a new message asks for a read receipt unless changed there. */
+  requestReadReceipt: boolean
+  /** Whether a new message asks for a delivery receipt unless changed there. */
+  requestDeliveryReceipt: boolean
+  /**
+   * Calendar → General (ADR-0051): the week's first day. A flat row of its own,
+   * not part of `calendar`, so the mobile app can read it as a plain string.
+   */
+  calendarWeekStart: WeekStartChoice
+  /** Calendar → General (ADR-0051): week numbers, work hours, new-event defaults. */
+  calendar: CalendarPrefs
+  /** Sounds, do not disturb and quiet hours (ADR-0049). One row. */
+  notifications: NotificationPrefs
+  /**
+   * Contacts → General (ADR-0052): how names with known parts are written,
+   * and which part lists are ordered by. Flat strings, so the mobile app can
+   * read them too.
+   */
+  contactNameDisplay: NameDisplay
+  contactNameSort: NameSort
 }
 
 /**
@@ -317,6 +370,9 @@ const DB_KEY = {
   quickActions: 'quick_actions',
   stickyFilters: 'sticky_filters',
   simplifyMessages: 'simplify_messages',
+  readerFoldQuotes: 'reader_fold_quotes',
+  readerFoldSignatures: 'reader_fold_signatures',
+  readerFitWidth: 'reader_fit_width',
   listView: 'list_view',
   mailboxViews: 'mailbox_views',
   listSort: 'list_sort',
@@ -325,6 +381,7 @@ const DB_KEY = {
   markReadMode: 'mark_read_mode',
   markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
+  replyForward: 'reply_forward',
   spellCheck: 'spell_check',
   grammarCheck: 'grammar_check',
   signature: 'signature',
@@ -340,6 +397,17 @@ const DB_KEY = {
   language: 'language',
   shortcutOverrides: 'shortcut_overrides',
   proxy: 'proxy',
+  // The core reads this one itself (receipts::POLICY_SETTING).
+  readReceiptPolicy: 'read_receipt_policy',
+  requestReadReceipt: 'request_read_receipt',
+  requestDeliveryReceipt: 'request_delivery_receipt',
+  // Read by the mobile agenda too (calendarWeekStartFromSetting).
+  calendarWeekStart: 'calendar_week_start',
+  calendar: 'calendar_general',
+  notifications: 'notification_prefs',
+  // Read by the mobile contacts list too (ContactsModel).
+  contactNameDisplay: 'contact_name_display',
+  contactNameSort: 'contact_name_sort',
 } satisfies Record<keyof Settings, string>
 
 /** Keys to request from `app.prefsGet` on boot. */
@@ -502,6 +570,9 @@ export const settings$ = observable<Settings>({
   quickActions: [],
   stickyFilters: false,
   simplifyMessages: false,
+  readerFoldQuotes: true,
+  readerFoldSignatures: false,
+  readerFitWidth: false,
   listView: 'table',
   mailboxViews: null,
   // Newest first, which is what a mailbox means when nobody has said otherwise.
@@ -515,6 +586,7 @@ export const settings$ = observable<Settings>({
   // A few seconds by default: long enough to catch the reply sent to the wrong
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
+  replyForward: DEFAULT_REPLY_FORWARD_PREFS,
   spellCheck: true,
   // Opt-in: it downloads nothing, but it loads a sizable checker on first use.
   grammarCheck: 'off',
@@ -531,6 +603,15 @@ export const settings$ = observable<Settings>({
   language: null,
   shortcutOverrides: {},
   proxy: EMPTY_PROXY,
+  // Asked each time: a receipt says you read it, so nothing goes unasked.
+  readReceiptPolicy: 'ask',
+  requestReadReceipt: false,
+  requestDeliveryReceipt: false,
+  calendarWeekStart: 'locale',
+  calendar: DEFAULT_CALENDAR_PREFS,
+  notifications: structuredClone(DEFAULT_NOTIFICATION_PREFS),
+  contactNameDisplay: 'auto',
+  contactNameSort: 'auto',
 })
 
 // lib/shortcuts resolves chords from a local mirror, so keep it in step with the
@@ -834,6 +915,9 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     if (typeof prefs[DB_KEY.simplifyMessages] === 'boolean') {
       settings$.simplifyMessages.set(prefs[DB_KEY.simplifyMessages] as boolean)
     }
+    for (const field of ['readerFoldQuotes', 'readerFoldSignatures', 'readerFitWidth'] as const) {
+      if (typeof prefs[DB_KEY[field]] === 'boolean') settings$[field].set(prefs[DB_KEY[field]] as boolean)
+    }
 
     const listView = prefs[DB_KEY.listView]
     if (Object.hasOwn(prefs, DB_KEY.mailboxViews)) {
@@ -869,6 +953,9 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
     if (MARK_READ_DELAY_CHOICES.includes(markReadDelay as (typeof MARK_READ_DELAY_CHOICES)[number])) {
       settings$.markReadDelaySeconds.set(markReadDelay)
     }
+
+    const replyForward = sanitizeReplyForwardPrefs(prefs[DB_KEY.replyForward])
+    if (replyForward) settings$.replyForward.set(replyForward)
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {
       settings$.spellCheck.set(prefs[DB_KEY.spellCheck] as boolean)
@@ -906,6 +993,31 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const proxy = sanitizeProxy(prefs[DB_KEY.proxy])
     if (proxy) settings$.proxy.set(proxy)
+
+    const receiptPolicy = prefs[DB_KEY.readReceiptPolicy]
+    if (READ_RECEIPT_POLICIES.includes(receiptPolicy as ReadReceiptPolicy)) {
+      settings$.readReceiptPolicy.set(receiptPolicy as ReadReceiptPolicy)
+    }
+    if (typeof prefs[DB_KEY.requestReadReceipt] === 'boolean') {
+      settings$.requestReadReceipt.set(prefs[DB_KEY.requestReadReceipt] as boolean)
+    }
+    if (typeof prefs[DB_KEY.requestDeliveryReceipt] === 'boolean') {
+      settings$.requestDeliveryReceipt.set(prefs[DB_KEY.requestDeliveryReceipt] as boolean)
+    }
+    const notifications = sanitizeNotificationPrefs(prefs[DB_KEY.notifications])
+    if (notifications) settings$.notifications.set(notifications)
+
+    const weekStart = prefs[DB_KEY.calendarWeekStart]
+    if (WEEK_START_CHOICES.includes(weekStart as WeekStartChoice)) {
+      settings$.calendarWeekStart.set(weekStart as WeekStartChoice)
+    }
+    const calendarPrefs = sanitizeCalendarPrefs(prefs[DB_KEY.calendar])
+    if (calendarPrefs) settings$.calendar.set(calendarPrefs)
+
+    const nameDisplay = sanitizeNameDisplay(prefs[DB_KEY.contactNameDisplay])
+    if (nameDisplay) settings$.contactNameDisplay.set(nameDisplay)
+    const nameSort = sanitizeNameSort(prefs[DB_KEY.contactNameSort])
+    if (nameSort) settings$.contactNameSort.set(nameSort)
 
     const hiddenSideNavAccounts = sanitizeStringArray(prefs[DB_KEY.hiddenSideNavAccounts])
     if (hiddenSideNavAccounts) settings$.hiddenSideNavAccounts.set(hiddenSideNavAccounts)

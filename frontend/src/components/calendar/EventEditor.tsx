@@ -14,27 +14,30 @@ import {
   writableCalendars,
   type EditScope,
   type EventDraft,
-  type Frequency,
   type Participant,
-  type Recurrence,
 } from '../../states/calendar'
+import { accounts$ } from '../../states/accounts'
+import { mailsNotices, noticeRecipients, noticeSender, organizerFor } from '../../states/organizerNotices'
 import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
+import { RepeatFields } from './RepeatFields'
 
 /// Creates or edits one event.
 ///
-/// Saving never notifies anyone — the backend declares that explicitly on
-/// every write — so this offers no "send invitations" control it could not
-/// honour. Attendees are shown when an event has them but not edited here:
-/// changing who is invited is what actually mails people, and belongs with
-/// meeting invitations rather than with editing a time.
+/// Saving tells nobody on its own. When the event has people on it, saving or
+/// deleting asks whether to tell them, naming who, and only what the person
+/// chooses is sent: by the account's server for Google and Exchange, by mail
+/// from here for local and CalDAV calendars (2026-10-12). Where nothing could
+/// be sent — someone else organizes it, or no account here sends mail — the
+/// question is not asked and a note says so.
 export function EventEditor() {
   const { t } = useTranslation()
   const draft = useValue(calendar$.editing)
   const saving = useValue(calendar$.saving)
   const error = useValue(calendar$.error)
   const calendars = useValue(calendar$.calendars)
+  const accounts = useValue(accounts$)
   const [local, setLocal] = useState<EventDraft | null>(null)
   const [pendingScope, setPendingScope] = useState<'save' | 'delete' | null>(null)
   // An action waiting on "should the people on it be told?", with the scope
@@ -80,12 +83,23 @@ export function EventEditor() {
   // event being created, has only one answer.
   const repeats = !isNew && event.is_recurring && Boolean(event.series_id)
   // People who could be told. Only those with an address: an attendee the
-  // server named without one cannot be written to. Only an account's own
-  // calendar (Exchange, Google) can tell them: a local or CalDAV save sends
-  // nothing, so the question is not asked there (ADR-0043).
+  // server named without one cannot be written to. An account's own calendar
+  // (Exchange, Google) tells them itself; a local or CalDAV one is told by
+  // mail from here, which needs an account that sends as the organizer.
+  // Without one the question is not asked, since nothing could follow it.
   const kind = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
-  const canNotify = kind !== 'local' && kind !== 'caldav'
-  const invitees = canNotify ? event.attendees.map((person) => person.addr.trim()).filter(Boolean) : []
+  const byMail = mailsNotices(kind)
+  const sender = byMail ? noticeSender(event, accounts) : null
+  const canNotify = !byMail || sender !== null
+  const invitees = !canNotify
+    ? []
+    : byMail
+      ? noticeRecipients(event, sender)
+      : event.attendees.map((person) => person.addr.trim()).filter(Boolean)
+  // A meeting with guests is saved naming its organizer: the identity the
+  // notice goes out from, when it names none yet.
+  const toSave: EventDraft =
+    byMail && sender && event.attendees.length > 0 ? { ...event, organizer: organizerFor(event, sender) } : event
 
   /// Runs an action through the questions it raises, in order: which
   /// occurrences, then whether to tell anyone. Neither is asked when it has
@@ -93,7 +107,7 @@ export function EventEditor() {
   const begin = (action: 'save' | 'delete') => {
     if (repeats) return setPendingScope(action)
     if (invitees.length > 0) return setPendingNotify({ action, scope: 'occurrence' })
-    if (action === 'save') void saveEvent(event)
+    if (action === 'save') void saveEvent(toSave)
     else void deleteEvent(event)
   }
 
@@ -291,7 +305,7 @@ export function EventEditor() {
             </Labelled>
           )}
 
-          {event.attendees.length > 0 && (
+          {event.attendees.length > 0 && !canNotify && (
             <p className="text-caption text-secondary">
               {t('calendar.attendeesNote', {
                 defaultValue: 'This event has {count} guests. Editing it here does not notify them.',
@@ -316,7 +330,7 @@ export function EventEditor() {
             onChoose={(scope: EditScope) => {
               setPendingScope(null)
               if (invitees.length > 0) return setPendingNotify({ action: asking, scope })
-              if (asking === 'save') void saveEvent(event, scope)
+              if (asking === 'save') void saveEvent(toSave, scope)
               else void deleteEvent(event, scope)
             }}
           />
@@ -326,11 +340,12 @@ export function EventEditor() {
           <NotifyAsk
             action={pendingNotify.action}
             people={invitees}
+            from={sender?.identity.email}
             onCancel={() => setPendingNotify(null)}
             onChoose={(notify) => {
               const { action, scope } = pendingNotify
               setPendingNotify(null)
-              if (action === 'save') void saveEvent(event, scope, notify)
+              if (action === 'save') void saveEvent(toSave, scope, notify)
               else void deleteEvent(event, scope, notify)
             }}
           />
@@ -378,7 +393,7 @@ const inputClass =
 /// The usual ladder of reminder times, in minutes before the start.
 const REMINDER_CHOICES = [0, 5, 10, 15, 30, 60, 120, 24 * 60, 2 * 24 * 60, 7 * 24 * 60]
 
-function reminderLabel(minutes: number, t: ReturnType<typeof useTranslation>['t']): string {
+export function reminderLabel(minutes: number, t: ReturnType<typeof useTranslation>['t']): string {
   if (minutes === 0) return t('calendar.reminderAtStart', { defaultValue: 'At the start' })
   if (minutes % (7 * 24 * 60) === 0)
     return t('calendar.reminderWeeks', {
@@ -498,134 +513,6 @@ export function DateAndTime({
 /// The hour and minute selects, bare: the frame around them is the control.
 const clockClass =
   'appearance-none bg-transparent px-2 py-2 text-sm font-medium tabular-nums text-primary outline-none cursor-pointer'
-
-/// How an event repeats: the frequency, the days for a weekly rule, and when
-/// it stops. Absent unless the reader asks for it, since most events happen
-/// once.
-function RepeatFields({
-  rule,
-  start,
-  onChange,
-}: {
-  rule: Recurrence | null
-  start: number
-  onChange: (rule: Recurrence | null) => void
-}) {
-  const { t } = useTranslation()
-  const startWeekday = (new Date(start * 1000).getDay() + 6) % 7
-  const days = rule?.weekdays?.length ? rule.weekdays : [startWeekday]
-
-  const setFreq = (freq: string) => {
-    if (freq === '') return onChange(null)
-    onChange({
-      freq: freq as Frequency,
-      interval: rule?.interval ?? 1,
-      weekdays: freq === 'weekly' ? days : [],
-      until: rule?.until ?? null,
-      count: rule?.count ?? null,
-    })
-  }
-
-  const toggleDay = (day: number) => {
-    if (!rule) return
-    const next = days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort()
-    // A weekly rule with no day at all falls back to the event's own, which is
-    // what the server would do anyway.
-    onChange({ ...rule, weekdays: next.length > 0 ? next : [startWeekday] })
-  }
-
-  const ends: 'never' | 'on' | 'after' = rule?.until ? 'on' : rule?.count ? 'after' : 'never'
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <Labelled label={t('calendar.repeat', { defaultValue: 'Repeats' })}>
-        <select value={rule?.freq ?? ''} onChange={(e) => setFreq(e.target.value)} className={inputClass}>
-          <option value="">{t('calendar.repeatNever', { defaultValue: 'Does not repeat' })}</option>
-          <option value="daily">{t('calendar.repeatDaily', { defaultValue: 'Every day' })}</option>
-          <option value="weekly">{t('calendar.repeatWeekly', { defaultValue: 'Every week' })}</option>
-          <option value="monthly">{t('calendar.repeatMonthly', { defaultValue: 'Every month' })}</option>
-          <option value="yearly">{t('calendar.repeatYearly', { defaultValue: 'Every year' })}</option>
-        </select>
-      </Labelled>
-
-      {rule && (
-        <>
-          {rule.freq === 'weekly' && (
-            <div className="flex gap-1">
-              {WEEKDAY_INITIALS.map((initial, day) => (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() => toggleDay(day)}
-                  aria-pressed={days.includes(day)}
-                  className={`h-7 w-7 rounded-full text-2xs font-semibold transition-colors cursor-pointer ${
-                    days.includes(day) ? 'bg-accent text-on-accent' : 'bg-raised text-secondary hover:text-primary'
-                  }`}
-                >
-                  {initial}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <span className="text-caption font-semibold text-secondary">
-              {t('calendar.repeatEvery', { defaultValue: 'Every' })}
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={99}
-              value={rule.interval}
-              onChange={(e) => onChange({ ...rule, interval: Math.max(1, Number(e.target.value)) })}
-              className={`${inputClass} w-16`}
-            />
-            <span className="text-caption text-secondary">{intervalUnit(rule.freq, rule.interval, t)}</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={ends}
-              onChange={(e) => {
-                const choice = e.target.value
-                if (choice === 'never') onChange({ ...rule, until: null, count: null })
-                else if (choice === 'on') onChange({ ...rule, until: start + 30 * 24 * 3600, count: null })
-                else onChange({ ...rule, until: null, count: 10 })
-              }}
-              className={`${inputClass} w-auto`}
-            >
-              <option value="never">{t('calendar.endsNever', { defaultValue: 'Forever' })}</option>
-              <option value="on">{t('calendar.endsOn', { defaultValue: 'Until a date' })}</option>
-              <option value="after">{t('calendar.endsAfter', { defaultValue: 'After a number of times' })}</option>
-            </select>
-
-            {ends === 'on' && (
-              <input
-                type="date"
-                value={toDateInput(rule.until ?? start)}
-                onChange={(e) => onChange({ ...rule, until: fromDateInput(e.target.value, rule.until ?? start) })}
-                className={`${inputClass} w-auto`}
-              />
-            )}
-            {ends === 'after' && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  value={rule.count ?? 10}
-                  onChange={(e) => onChange({ ...rule, count: Math.max(1, Number(e.target.value)) })}
-                  className={`${inputClass} w-20`}
-                />
-                <span className="text-caption text-secondary">{t('calendar.times', { defaultValue: 'times' })}</span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
 
 /// The people invited to an event, added one address at a time.
 ///
@@ -757,32 +644,6 @@ function asAllDay(event: EventDraft, allDay: boolean): Partial<EventDraft> {
   const start = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 9, 0, 0, 0)
   const seconds = Math.floor(start.getTime() / 1000)
   return { all_day: false, start: seconds, end: seconds + 3600 }
-}
-
-/// Monday first, matching the weekday numbering used throughout.
-const WEEKDAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
-
-/// The unit that follows "every N". Singular and plural are separate keys
-/// rather than one plural rule: the catalogue reads a lone word in braces as a
-/// placeholder, and a word is all these are.
-function intervalUnit(freq: Frequency, count: number, t: ReturnType<typeof useTranslation>['t']): string {
-  const unit = freq === 'daily' ? 'Day' : freq === 'weekly' ? 'Week' : freq === 'monthly' ? 'Month' : 'Year'
-  const single = count === 1
-  return t(`calendar.unit${unit}${single ? 'One' : 'Many'}`, {
-    defaultValue: single ? unit.toLowerCase() : `${unit.toLowerCase()}s`,
-  })
-}
-
-function toDateInput(epochSeconds: number): string {
-  const date = new Date(epochSeconds * 1000)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-function fromDateInput(text: string, fallback: number): number {
-  const [year, month, day] = text.split('-').map(Number)
-  if (!year || !month || !day) return fallback
-  return Math.floor(new Date(year, month - 1, day, 23, 59, 0, 0).getTime() / 1000)
 }
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour)

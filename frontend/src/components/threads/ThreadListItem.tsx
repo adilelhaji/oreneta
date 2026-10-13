@@ -8,6 +8,7 @@ import { clsx } from '../../lib/utils'
 import { useTranslation } from '../../lib/i18n'
 import { isDraftFolder } from '../../states/mail'
 import { settings$ } from '../../states/settings'
+import { useSenderName } from '../../states/contactNames'
 import { densityStyle } from './listDensity'
 import { LabelChips } from './LabelChips'
 
@@ -63,6 +64,9 @@ export function ThreadListItem({
   // RSS feed rows carry a feed_url (and, once cached, a feed_icon). For those,
   // skip the email-based gravatar/favicon resolution and use the feed's icon.
   const isRSS = !!thread.feed_url
+  // A message without a sender name shows the address book's, in the
+  // reader's name order; a header's own name is never rewritten (ADR-0052).
+  const senderName = useSenderName(thread.from_name, thread.from_addr, !isRSS)
   const unread = thread.unread
   const hasDraft = !isRSS && (thread.has_draft || isDraftFolder(thread.folder_id, thread.account_id))
 
@@ -213,7 +217,7 @@ export function ThreadListItem({
           <div className="flex items-center gap-2 min-w-0">
             <div className={clsx('flex min-w-0 items-center gap-1', density.singleLine && 'max-w-[40%] shrink-0')}>
               <span className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}>
-                {thread.from_name || thread.from_addr.split('@')[0]}
+                {senderName || thread.from_addr.split('@')[0]}
                 {!!thread.recipient_overflow && (
                   <span className="ml-1 font-normal text-secondary/80">+{thread.recipient_overflow}</span>
                 )}

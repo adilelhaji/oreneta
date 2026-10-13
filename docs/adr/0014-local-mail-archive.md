@@ -1,6 +1,7 @@
 # ADR-0014: Archivo local de correo e importación EML/MBOX
 
-- Estado: aceptada por delegación.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-11.
 - Alcance: primera entrega de #112 (importación y archivos de datos locales).
 - Aprobación: el responsable delegó el 2026-10-11 las decisiones pendientes

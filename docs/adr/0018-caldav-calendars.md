@@ -1,7 +1,7 @@
 # ADR-0018: Calendarios CalDAV
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
+- Estado: aceptada; tomada por delegación y revisada por el propietario
+  el 2026-10-12.
 - Fecha: 2026-10-11.
 - Alcance: el adaptador CalDAV de #101.
 

@@ -119,3 +119,43 @@ describe('the recipient field', () => {
     expect(f.value()).toBe('')
   })
 })
+
+describe('contact groups in the recipient field (ADR-0052)', () => {
+  const { people$ } = require('../../states/people')
+  const { settings$ } = require('../../states/settings')
+  const { waitFor } = require('@testing-library/react')
+  const group = {
+    id: 'group:local::local:g',
+    source: 'local',
+    account: '',
+    book: 'local',
+    name: 'Climbing club',
+    version: '1',
+    editable: true,
+    members: [
+      { id: 'a', name: 'Ann Lee', given: 'Ann', family: 'Lee', addr: 'ann@example.com' },
+      { id: 'b', name: 'Bo', addr: 'bo@example.com' },
+      { id: 'c', name: 'No Address', addr: '' },
+    ],
+  }
+
+  it('suggests a group by name with its size, and writes its members when chosen', async () => {
+    ;(window as any).go = { main: { App: { Invoke: async () => ({ contacts: [] }) } } }
+    people$.groups.set([group])
+    people$.groupsLoaded.set(true)
+    settings$.contactNameDisplay.set('last_comma_first')
+    try {
+      const f = field('')
+      fireEvent.focus(f.input())
+      f.type('climb')
+      await waitFor(() => expect(f.view.container.textContent).toContain('group, 2 people'))
+      expect(f.value()).toBe('climb')
+      f.press('Enter')
+      expect(f.value()).toBe('"Lee, Ann" <ann@example.com>, Bo <bo@example.com>, ')
+    } finally {
+      delete (window as any).go
+      settings$.contactNameDisplay.set('auto')
+      people$.groups.set([])
+    }
+  })
+})

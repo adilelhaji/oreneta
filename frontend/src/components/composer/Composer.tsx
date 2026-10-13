@@ -357,6 +357,8 @@ export function Composer({ tabId }: { tabId: string }) {
         onPgpSignChange={(value) => update({ pgpSign: value })}
         onPgpEncryptChange={(value) => update({ pgpEncrypt: value })}
         onPgpPassphraseChange={setPgpPassphrase}
+        receipts={{ read: !!draft.readReceipt, delivery: !!draft.deliveryReceipt }}
+        onReceiptsChange={({ read, delivery }) => update({ readReceipt: read, deliveryReceipt: delivery })}
         onDiscard={() => void closeMessageTab(tabId)}
         onSubmit={() => void submit()}
         onSchedule={(at) => void submit(at)}

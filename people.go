@@ -38,6 +38,19 @@ func (a *App) peopleWrite(method string, payload map[string]any) (any, error) {
 	return a.sidecar.Call(method, payload)
 }
 
+// peopleRead carries a read of contact groups or of the book's names for
+// some addresses (ADR-0052). Like peopleList, an engine that has not started
+// answers with none rather than an error.
+func (a *App) peopleRead(method string, payload map[string]any) (any, error) {
+	if a.sidecar == nil || !a.sidecar.Started() {
+		if method == "people.names" {
+			return map[string]any{"names": map[string]any{}}, nil
+		}
+		return map[string]any{"groups": []any{}}, nil
+	}
+	return a.sidecar.Call(method, payload)
+}
+
 // peopleExportVcf writes the people asked for (all when none are named) to a
 // .vcf the reader chooses (ADR-0012).
 func (a *App) peopleExportVcf(payload map[string]any) (any, error) {

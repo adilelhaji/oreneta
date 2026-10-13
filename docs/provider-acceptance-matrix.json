@@ -15,7 +15,10 @@
     { "id": "MAIL-10", "outcome": "Decode MIME text, alternatives and nested attachments", "tests": ["encoded_subject_and_quoted-printable_body_decode", "multipart_alternative_keeps_both_text_and_html", "nested_multipart_keeps_inline_and_downloadable_attachments"] },
     { "id": "MAIL-11", "outcome": "Reject invalid credentials and recover interrupted connections", "tests": ["connect_rejects_bad_credentials", "sync_recovers_after_a_server_restart", "flag_writes_recover_from_a_stale_pooled_connection"] },
     { "id": "MAIL-12", "outcome": "Suggest contacts from observed mail history", "tests": ["contacts_suggest_from_history"] },
-    { "id": "MAIL-13", "outcome": "Sweep acts on the reviewed set only, once, with an item-by-item outcome", "tests": ["sweep_moves_only_the_reviewed_messages_and_only_once"] }
+    { "id": "MAIL-13", "outcome": "Sweep acts on the reviewed set only, once, with an item-by-item outcome", "tests": ["sweep_moves_only_the_reviewed_messages_and_only_once"] },
+    { "id": "MAIL-14", "outcome": "Answer a read receipt only on request and once; say when delivery receipts are not offered", "tests": ["read_and_delivery_receipts"] },
+    { "id": "MAIL-15", "outcome": "Move a folder with its subfolders and cached mail under another folder; refuse special-use folders and moves into its own subtree", "tests": ["folder_move_renames_the_subtree_on_the_server"] },
+    { "id": "MAIL-16", "outcome": "Archive old mail by age only after a confirmed preview; copy, verify, then remove from the server; never twice", "tests": ["automatic_archiving_moves_only_old_read_mail_and_only_once"] }
   ],
   "liveProviders": [
     { "id": "generic-imap-smtp", "status": "not-tested", "reason": "Dedicated external accounts, TLS/auth and recipient authorization required; maddy is not provider certification." },

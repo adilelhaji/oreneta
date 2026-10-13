@@ -4,6 +4,27 @@ import { accounts$ } from './accounts'
 import type { Account } from '../types'
 import { showToast } from './ui'
 import { t } from '../lib/i18n'
+import { settings$ } from './settings'
+import {
+  effectiveWorkDays,
+  localeWeekInfo,
+  resolveFirstDay,
+  systemLocale,
+  weekStartOf,
+  type LocaleWeekInfo,
+  type Weekday,
+} from '../lib/calendarWeek'
+import {
+  buildNotice,
+  cancellationNotSent,
+  cancellationSent,
+  mailsNotices,
+  noticeRecipients,
+  noticeSender,
+  notifyAfterSave,
+  sendNotice,
+  type Notice,
+} from './organizerNotices'
 
 /// Whether an account keeps calendars on its server. Exchange does, and so
 /// does a Google account signed in with Google. Plain IMAP has no calendar
@@ -120,6 +141,13 @@ export type Recurrence = {
   until?: number | null
   /// Or a fixed number of occurrences.
   count?: number | null
+  /// A monthly or yearly rule on the nth weekday (1–4, or -1 for the last)
+  /// instead of a day of the month; the weekday is the first of `weekdays`
+  /// (ADR-0053). Tasks only, for now.
+  month_week?: number | null
+  /// A monthly or yearly rule's day of the month, when it is not the start's
+  /// own (a task moved from the 31st to a shorter month's last day).
+  month_day?: number | null
 }
 
 /// The event being edited, or null when the editor is closed. A new event has
@@ -161,12 +189,30 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
-/// Monday-based, following the European convention of every locale this app
-/// ships real translations for.
-export function startOfWeek(date: Date): Date {
-  const midnight = startOfDay(date)
-  const weekday = (midnight.getDay() + 6) % 7
-  return new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - weekday)
+let cachedWeek: { locale: string; info: LocaleWeekInfo } | null = null
+
+/// The system locale's week (ADR-0051): its first day, weekend and the minimum
+/// days of week 1. The system's, not the interface language's, because only it
+/// carries a region — an English interface in Madrid still has Monday weeks.
+export function localeWeek(): LocaleWeekInfo {
+  const locale = systemLocale()
+  if (cachedWeek?.locale !== locale) cachedWeek = { locale, info: localeWeekInfo(locale) }
+  return cachedWeek.info
+}
+
+/// The day the week opens on: the person's choice, else the locale's.
+export function firstDayOfWeek(choice = settings$.calendarWeekStart.peek()): Weekday {
+  return resolveFirstDay(choice, localeWeek())
+}
+
+/// The working days, ISO-numbered: the chosen ones, else all but the weekend.
+export function workDays(prefs = settings$.calendar.peek()): Weekday[] {
+  return effectiveWorkDays(prefs, localeWeek())
+}
+
+/// Local midnight of the first day of the week, on the configured first day.
+export function startOfWeek(date: Date, firstDay: Weekday = firstDayOfWeek()): Date {
+  return weekStartOf(startOfDay(date), firstDay)
 }
 
 /// The [from, to) window a view needs, in epoch seconds. Boundaries are
@@ -474,6 +520,8 @@ export function newEvent(startAt?: number): EventDraft | null {
   // at save time with a worse message.
   if (!target) return null
   const start = startAt ?? Math.ceil(Date.now() / 1000 / 3600) * 3600
+  // Calendar → General: how long a new event lasts and whether it reminds.
+  const { defaultDuration, defaultReminder } = settings$.calendar.peek()
   const draft: EventDraft = {
     id: '',
     calendar_id: target.id,
@@ -481,7 +529,8 @@ export function newEvent(startAt?: number): EventDraft | null {
     subject: '',
     location: '',
     start,
-    end: start + 3600,
+    end: start + defaultDuration * 60,
+    ...(defaultReminder === null ? {} : { reminder_minutes: defaultReminder }),
     all_day: false,
     is_recurring: false,
     is_cancelled: false,
@@ -638,6 +687,15 @@ export function closeEditor() {
 /// series.
 export type EditScope = 'occurrence' | 'series'
 
+/// The kind of calendar an event is in.
+function kindOf(event: Pick<CalendarEvent, 'calendar_id' | 'accountId'>): CalendarKind | undefined {
+  return calendar$.calendars.peek().find((c) => c.id === event.calendar_id && c.accountId === event.accountId)?.kind
+}
+
+/// Telling the people on an event: Google and Exchange do it themselves when
+/// asked (`notify` reaches them); for a local or CalDAV calendar nothing on a
+/// server mails anyone, so the notice is built and sent from here once the
+/// event is saved (2026-10-12).
 export async function saveEvent(
   draft: EventDraft,
   scope: EditScope = 'occurrence',
@@ -645,15 +703,36 @@ export async function saveEvent(
 ) {
   calendar$.saving.set(true)
   calendar$.error.set('')
+  const byMail = notify && mailsNotices(kindOf(draft))
+  const sender = byMail ? noticeSender(draft, accounts$.peek()) : null
+  // The people the person was shown, and only them.
+  const people = byMail ? noticeRecipients(draft, sender) : []
+  // The guests taken out in the editor, so a CalDAV copy drops them and
+  // nobody it names that the editor never showed.
+  const opened = calendar$.editing.peek()
+  const removed =
+    draft.id && opened?.id === draft.id
+      ? opened.attendees
+          .filter((person) => person.addr && !draft.attendees.some((kept) => sameAddr(kept.addr, person.addr)))
+          .map((person) => person.addr)
+      : []
   try {
+    let savedId = draft.id
     if (draft.id) {
-      await invoke('calendar.update', { account_id: draft.accountId, event: draft, scope, notify })
-    } else {
-      const created = await invoke<{ event?: { meeting_status?: string } }>('calendar.create', {
+      await invoke('calendar.update', {
         account_id: draft.accountId,
         event: draft,
-        notify,
+        scope,
+        notify: byMail ? false : notify,
+        removed_attendees: removed,
       })
+    } else {
+      const created = await invoke<{ event?: { id?: string; meeting_status?: string } }>('calendar.create', {
+        account_id: draft.accountId,
+        event: draft,
+        notify: byMail ? false : notify,
+      })
+      savedId = created?.event?.id ?? ''
       // Said, not assumed: an account without Meet saves the event alone.
       const status = created?.event?.meeting_status
       if (status === 'failed')
@@ -667,6 +746,16 @@ export async function saveEvent(
         showToast(t('calendar.meetPending', { defaultValue: 'Google is still setting up the Meet; it appears shortly.' }))
     }
     closeEditor()
+    if (byMail) {
+      if (sender && savedId) await notifyAfterSave({ ...draft, id: savedId }, scope, sender, people)
+      else
+        showToast(
+          t('calendar.noticeNoSender', {
+            defaultValue: 'The event was saved, but no mail account here can tell the people on it.',
+          }),
+          'error',
+        )
+    }
     const { from, to } = calendar$.peek()
     if (to > from) await loadWindow(from, to, false)
   } catch (err) {
@@ -683,6 +772,28 @@ export async function deleteEvent(
   notify = false,
 ) {
   calendar$.error.set('')
+  // A cancellation from here is built, then the event deleted, then the
+  // cancellation sent. Built first because it is made from the stored event,
+  // which the delete removes; sent last so that a delete the server refuses
+  // (a conflict, a lost connection) tells nobody a meeting is off that is
+  // still on. A failed build deletes nothing; a failed send is said.
+  const byMail = notify && mailsNotices(kindOf(event))
+  let notice: Notice | null = null
+  const sender = byMail ? noticeSender(event, accounts$.peek()) : null
+  if (byMail) {
+    try {
+      if (!sender) throw new Error(t('calendar.noSender', { defaultValue: 'no mail account here can send it' }))
+      notice = await buildNotice(event, scope, 'cancel', sender, noticeRecipients(event, sender))
+    } catch (err) {
+      calendar$.error.set(
+        t('calendar.cancelNotBuilt', {
+          reason: err instanceof Error ? err.message : String(err),
+          defaultValue: 'Nothing was deleted: the cancellation could not be prepared: {reason}',
+        }),
+      )
+      return
+    }
+  }
   try {
     await invoke('calendar.delete', {
       account_id: event.accountId,
@@ -693,7 +804,7 @@ export async function deleteEvent(
       change_key: event.change_key ?? '',
       series_id: event.series_id ?? '',
       scope,
-      notify,
+      notify: byMail ? false : notify,
     })
     closeEditor()
     calendar$.viewing.set(null)
@@ -708,7 +819,20 @@ export async function deleteEvent(
     )
   } catch (err) {
     calendar$.error.set(String(err))
+    return
   }
+  if (notice && sender) {
+    try {
+      await sendNotice(sender, notice)
+      cancellationSent()
+    } catch (err) {
+      cancellationNotSent(err)
+    }
+  }
+}
+
+function sameAddr(a: string, b: string) {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
 

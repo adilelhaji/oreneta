@@ -194,8 +194,20 @@ fn status_error(status: u16, detail: &str) -> CloudError {
     }
 }
 
-fn agent() -> ureq::Agent {
-    crate::proxy::agent().unwrap_or_else(|_| ureq::Agent::new_with_defaults())
+/// The HTTP agent for cloud links, through the app-wide proxy. A proxy that is
+/// configured but cannot be used is an error: falling back to a direct
+/// connection would send the request (and the app password) around the proxy
+/// the person chose.
+fn agent() -> std::result::Result<ureq::Agent, CloudError> {
+    agent_with(crate::proxy::global().as_ref())
+}
+
+fn agent_with(
+    cfg: Option<&crate::proxy::ProxyConfig>,
+) -> std::result::Result<ureq::Agent, CloudError> {
+    crate::proxy::agent_for(cfg).map_err(|e| CloudError::Network {
+        detail: format!("the proxy setting cannot be used: {e:#}"),
+    })
 }
 
 fn auth(account: &CloudAccount, password: &str) -> String {
@@ -222,7 +234,7 @@ fn request(
     password: &str,
     body: Option<(&str, String)>,
 ) -> std::result::Result<(u16, String), CloudError> {
-    let agent = agent();
+    let agent = agent()?;
     let builder = ureq::http::Request::builder()
         .method(method)
         .uri(url)
@@ -363,7 +375,7 @@ pub fn upload(
     let reader = std::fs::File::open(file).map_err(|e| CloudError::File { detail: e.to_string() })?;
     let watched = Watched { inner: reader, done: 0, cancel, progress };
     let put_url = url(&target)?;
-    let result = agent()
+    let result = agent()?
         .put(&put_url)
         .header("Authorization", &auth(account, password))
         .header("Content-Type", "application/octet-stream")

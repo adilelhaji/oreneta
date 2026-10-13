@@ -23,6 +23,10 @@ type SetupOptions = {
   hideAccounts?: boolean
   preferences?: Record<string, unknown>
   readerStress?: boolean
+  /** A Gmail-style reply with quoted history and a fixed 1200px table (ADR-0046). */
+  readerQuote?: boolean
+  /** The first message asks for a read receipt (ADR-0048). */
+  readReceipt?: boolean
   updatesSupported?: boolean
   syncHealth?: boolean
   manualRefresh?: boolean
@@ -55,7 +59,7 @@ function translationStatus(installed: string[] = []) {
     languages: [...new Set(pairs.flatMap((p) => [p.from, p.to]))].sort(),
     used: pairs.filter((p) => p.installed).reduce((n, p) => n + p.size, 0),
     quota: 1024 ** 3,
-    source: 'https://storage.googleapis.com/bergamot-models-sandbox/0.3.3/',
+    source: 'https://github.com/adilelhaji/oreneta/releases/download/translation-models-0.3.3/',
     downloading: {},
   }
 }
@@ -174,15 +178,24 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
             completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
             list_id: 'list:home', title: 'Fix the tap', priority: 2, reminder_at: null, revision: 1,
           },
+          {
+            id: 3, thread_id: '', account_id: '', folder_id: '', note: '', due_at: 1760000000,
+            completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+            list_id: 'list:home', title: 'Water the plants', priority: 1, reminder_at: null, revision: 1,
+            recurrence: { freq: 'weekly', interval: 1, weekdays: [1] },
+          },
         ],
       }
       replies['tasks.get'] = {
         title: 'Fix the tap', note: 'Washer is in the drawer', due_at: null, list_id: 'list:home',
         priority: 2, reminder_at: null, revision: 1, linked: false,
+        recurrence: { freq: 'monthly', interval: 1, weekdays: [], month_week: null },
       }
     })
     await page.getByTitle('Tasks', { exact: true }).click()
     await expect(page.getByText('Fix the tap')).toBeVisible()
+    // A repeating task says how it repeats, and completing it asks (ADR-0053).
+    await expect(page.getByText('Every week')).toBeVisible()
     await audit('tasks')
     await page.getByText('Fix the tap').click()
     await expect(page.getByRole('dialog')).toBeVisible()
@@ -190,6 +203,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       body: await page.screenshot({ path: info.outputPath('task-editor.png'), animations: 'disabled' }),
       contentType: 'image/png',
     })
+    await expect(page.getByLabel('Repeats')).toHaveValue('monthly')
     await audit('task-editor')
     await page.keyboard.press('Escape')
     // Notes: the list with a tagged, pinned note and that note open (ADR-0015).
@@ -290,6 +304,52 @@ test('onboarding remains keyboard reachable in a short zoom-equivalent viewport'
   }
   expect(errors).toEqual([])
 })
+
+for (const width of [1440, 1024]) {
+  test(`keyboard zoom to 200% keeps the mailbox, reader and composer on screen and survives a reload, ${width}px (#181)`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.goto('/')
+    const search = page.getByRole('textbox').first()
+    await expect(search).toBeVisible()
+    const rootSize = () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+    for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+    expect(await rootSize()).toBe('32px')
+    await expect(page.getByText('Size 200%')).toBeVisible()
+    const onScreen = async (where: string) => {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+      const outside = await page.evaluate(() => [...document.querySelectorAll('button, [role=button]')]
+        .filter((element) => { const box = element.getBoundingClientRect(); return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1) })
+        .map((element) => element.getAttribute('aria-label') ?? element.textContent?.trim()))
+      expect(outside, where).toEqual([])
+    }
+    await onScreen('mailbox')
+    // The reader and the composer at the same size.
+    await page.getByRole('row').filter({ hasText: 'Sep 8' }).first().click()
+    await expect(page.getByText('No Conversation Selected')).toBeHidden()
+    await onScreen('reader')
+    await page.keyboard.press(`${mod}+KeyN`)
+    await expect(page.getByPlaceholder('Subject')).toBeVisible()
+    await onScreen('composer')
+    await page.screenshot({ path: info.outputPath('zoom-200-composer.png') })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    // While typing: the text and the focus stay where they were.
+    await search.click()
+    await search.fill('budget')
+    await page.keyboard.press(`${mod}+Minus`)
+    expect(await rootSize()).toBe('28px')
+    await expect(search).toBeFocused()
+    await expect(search).toHaveValue('budget')
+    await page.reload()
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    expect(await rootSize()).toBe('28px')
+    await page.keyboard.press(`${mod}+Digit0`)
+    expect(await rootSize()).toBe('16px')
+    expect(errors).toEqual([])
+  })
+}
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
   for (const width of [1440, 600]) {
@@ -766,6 +826,148 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   }
 }
 
+// S01-07 / ADR-0046: quoted history folds behind a toggle that works with no
+// script in the frame (production CSP), and a fixed-width message can be fitted
+// to the reading pane from its menu.
+test('reader folds quoted text and fits a fixed-width message to the pane', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, readerQuote: true })
+  await page.goto('/')
+  await page
+    .getByRole('table')
+    .getByRole('button', { name: /Pilot checklist/ })
+    .click()
+
+  const frame = page.frameLocator('iframe[title="Message HTML"]').first()
+  await expect(frame.getByText('Fold check reply')).toBeVisible()
+  const quoted = frame.getByText('Quoted synthetic history')
+  await expect(quoted).toBeHidden()
+  await frame.getByText('Show quoted text').click()
+  await expect(quoted).toBeVisible()
+  await frame.getByText('Hide quoted text').click()
+  await expect(quoted).toBeHidden()
+
+  // The plain-text reply folds its ">" quote the same way.
+  const plainQuote = page.getByText(/Please review the plain quoted line/)
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.')).toBeVisible()
+  await expect(plainQuote).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show quoted text', exact: true }).click()
+  await expect(plainQuote).toBeVisible()
+
+  // Off by default: the 1200px table keeps its size and scrolls on its own.
+  const table = frame.locator('table')
+  await expect(table).toHaveAttribute('width', '1200')
+  await expect(frame.locator('.oreneta-table-scroll')).toHaveCount(1)
+
+  await page
+    .getByRole('group', { name: /More message actions — Morgan Rivera/ })
+    .first()
+    .getByRole('button', { name: 'More message actions', exact: true })
+    .click()
+  await page.getByText('Fit to window', { exact: true }).click()
+
+  await expect(frame.locator('html[data-oreneta-fit]')).toHaveCount(1)
+  await expect
+    .poll(() =>
+      table.evaluate((el) => {
+        const doc = el.ownerDocument
+        return el.getBoundingClientRect().right <= doc.documentElement.clientWidth + 1
+      }),
+    )
+    .toBe(true)
+  expect(await frame.locator('.oreneta-table-scroll').count()).toBe(0)
+  const fitted = await table.evaluate((el) => {
+    const doc = el.ownerDocument
+    return {
+      zoom: Number(getComputedStyle(doc.body).zoom),
+      noSideScroll: doc.documentElement.scrollWidth <= doc.documentElement.clientWidth,
+      width: el.getAttribute('width'),
+    }
+  })
+  expect(fitted.zoom).toBeLessThan(1)
+  expect(fitted.zoom).toBeGreaterThan(0.3)
+  expect(fitted.noSideScroll).toBe(true)
+  expect(fitted.width).toBe('1200')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  // The fold survives the reload the fit causes.
+  await expect(quoted).toBeHidden()
+  expect(errors).toEqual([])
+})
+
+test('a read receipt request is asked about in a bar that blocks nothing, and sent only on the click', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, readReceipt: true })
+  await page.goto('/')
+  await page
+    .getByRole('table')
+    .getByRole('button', { name: /Pilot checklist/ })
+    .click()
+
+  const bar = page.getByRole('group', { name: 'Read receipt requested' })
+  await expect(bar).toBeVisible()
+  await expect(bar).toContainText('The sender asked to be told when you read this.')
+  const receiptCalls = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests.filter((r: { command: string }) => r.command.startsWith('receipts.')),
+    )
+  // Opening the message only asked the core where the request stands.
+  expect((await receiptCalls()).every((r: { command: string }) => r.command === 'receipts.status')).toBe(true)
+  // The message itself is not held back behind the question.
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.')).toBeVisible()
+
+  await bar.getByRole('button', { name: 'Send receipt' }).click()
+  await expect(page.getByText('A read receipt was sent.')).toBeVisible()
+  await expect(bar).toHaveCount(0)
+  const answers = (await receiptCalls()).filter((r: { command: string }) => r.command === 'receipts.answer')
+  expect(answers).toHaveLength(1)
+  expect(answers[0].payload).toMatchObject({ id: 'message-1', folder: 'INBOX', send: true })
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// SET-01 / ADR-0049: General → Notifications. Do not disturb is turned on from
+// the More menu, the side navigation says so, and one click there resumes.
+test('do not disturb shows an indicator in the side navigation and Resume clears it', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.getByRole('table')).toBeVisible()
+  const quietPushes = () =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .filter((r: { command: string }) => r.command === 'notify.setQuiet')
+        .map((r: { payload: unknown }) => r.payload),
+    )
+  // Not quiet at start, and the bridge was told so.
+  await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: false, quiet: false })
+  const indicator = page.getByRole('status', { name: 'Do not disturb is on until you turn it off' })
+  await expect(indicator).toHaveCount(0)
+
+  // The side navigation's own More button (the narrow-window header has one too).
+  await page.locator('aside').getByTitle('More', { exact: true }).first().click()
+  await page.getByRole('button', { name: 'Do not disturb until turned off', exact: true }).click()
+  await expect(indicator).toBeVisible()
+  await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: true, quiet: true })
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests
+            .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'notification_prefs')
+            .at(-1)?.payload.value.pause,
+      ),
+    )
+    .toEqual({ until: null })
+
+  await indicator.getByRole('button', { name: 'Resume notifications', exact: true }).click()
+  await expect(indicator).toHaveCount(0)
+  await expect.poll(async () => (await quietPushes()).at(-1)).toMatchObject({ indefinite: false, quiet: false })
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('shared dialog focus returns to opener and busy Escape does not close parent', async ({ page }) => {
   const errors = await prepareStartup(page, true, { navigation: true })
   await page.goto('/')
@@ -979,6 +1181,16 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
     fixture.messages[0].body_html =
       '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
   }
+  if (options.readReceipt) fixture.messages[0].receipt_requested = true
+  if (options.readerQuote) {
+    fixture.account.conversation_html = true
+    fixture.messages[0].body_html =
+      '<div dir="ltr"><p>Fold check reply</p><table width="1200" style="width:1200px"><tr><td style="min-width:1200px;background:#eef">Fixed synthetic table</td></tr></table></div>' +
+      '<div class="gmail_quote gmail_quote_container"><div dir="ltr" class="gmail_attr">On Mon, Oct 12, 2026 at 10:02 AM Alex &lt;alex@example.test&gt; wrote:<br></div>' +
+      '<blockquote class="gmail_quote" style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex"><div>Quoted synthetic history</div></blockquote></div>'
+    fixture.messages[1].body =
+      'Thanks Morgan. I will review the checklist today.\n\nOn Mon, Oct 12, 2026, Morgan Rivera wrote:\n> Hello Alex,\n> Please review the plain quoted line.'
+  }
   await page.addInitScript(
     ({ accounts, folders, template, options, threads, messages, translation }) => {
       const calls: string[] = []
@@ -1010,6 +1222,9 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         },
         'people.list': { people: [] },
         'people.duplicates': { groups: [] },
+        // Contact groups and the book's names for nameless senders (ADR-0052).
+        'people.groups': { groups: [] },
+        'people.names': { names: {} },
         'calendar.list': { calendars: [] },
         'storage.usage': { cacheBytes: 0, dbBytes: 0 },
         'oof.get': { kind: 'imap', settings: { enabled: false, startAt: 0, endAt: 0, subject: '', body: '' } },
@@ -1064,6 +1279,30 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           password_saved: false,
           running: false,
         },
+        // Automatic archiving (ADR-0054): off, as a fresh account has it.
+        'autoArchive.status': {
+          policy: {
+            enabled: false,
+            older_than: { value: 6, unit: 'months' },
+            folders: [{ name: 'INBOX', older_than: null }],
+            destination: 'server',
+            keep_server_copy: false,
+            include_starred: false,
+            include_unread: false,
+          },
+          confirmed: false,
+          last_attempt: null,
+          last_success: null,
+          last_error: null,
+          next_run: null,
+          running: false,
+          local_supported: true,
+          folders: [
+            { name: 'INBOX', display_name: 'INBOX', refused: null },
+            { name: 'Drafts', display_name: 'Drafts', refused: 'drafts' },
+          ],
+          runs: [],
+        },
         'chat.accounts': [],
         'chat.status': {},
         'chat.conversations': [],
@@ -1077,13 +1316,24 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           { id: 'owncloud', name: 'ownCloud', usable: true },
           { id: 'dropbox', name: 'Dropbox', usable: false },
         ],
+        // Folder moves (ADR-0050): nothing moves unless a test says how.
+        'mail.folderMove': { ok: true, renames: [], folders },
         'mail.scheduledSends': { messages: [] },
         'mail.outgoingAttempts': { attempts: [] },
+        // Read receipts (ADR-0048): the core asks, and the person answers.
+        ...(options.readReceipt
+          ? {
+              'receipts.status': { state: 'ask', to: ['morgan@example.test'], automatic: false },
+              'receipts.answer': { state: 'sent', to: ['morgan@example.test'], automatic: false },
+            }
+          : {}),
         'localDrafts.list': { drafts: [] },
         'localDrafts.get': { draft: null },
         'localDrafts.save': { applied: true, revision: 1, deleted: false },
         'localDrafts.delete': { applied: true, revision: 2, deleted: true },
         'tray.setUnread': { ok: true },
+        // Do not disturb and quiet hours reach the bridge as intervals (ADR-0049).
+        'notify.setQuiet': { ok: true },
         'update.status': {
           state: 'idle',
           supported: !!options.updatesSupported,
@@ -1543,6 +1793,48 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   })
 }
 
+// SET-09 / ADR-0047: Mail → Replies and forwards. The preference is changed in
+// Settings, persisted as one row, and shapes the reply the full editor opens.
+test('reply preferences change where the quote goes and how its header reads', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await page.keyboard.press('Control+,')
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  const group = settings.locator('[data-settings-section="repliesForwards"]')
+  await expect(group).toContainText('Replies and forwards')
+  await group.getByRole('button', { name: 'Below the quote', exact: true }).click()
+  await group.getByRole('button', { name: 'Full header', exact: true }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests
+            .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'reply_forward')
+            .at(-1)?.payload.value,
+      ),
+    )
+    .toMatchObject({ replyPosition: 'below', headerStyle: 'outlook', includeOriginal: true, forwardMode: 'inline' })
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+
+  const table = page.getByRole('table')
+  await table.getByRole('button', { name: /Pilot checklist/ }).click()
+  await page.getByPlaceholder('Write a message...').fill('Sounds good')
+  await page.getByTitle('Open full editor', { exact: true }).click()
+  const body = page.getByPlaceholder('Write your message...')
+  await expect(body).toBeVisible()
+  const text = await body.inputValue()
+  // The newest message of the thread is the one answered (pickReplyTarget).
+  expect(text).toMatch(/^-----\nFrom: .+ <[^>]+@example\.test>\nSent: .+2026.+\nTo: .+\nSubject: Pilot checklist[^\n]*\n> /)
+  expect(text).toContain('\n> Thanks Morgan. I will review the checklist today.\n')
+  // Below the quote: the user's own words come after the original.
+  expect(text.endsWith('\n\nSounds good')).toBe(true)
+  await expect(page.getByPlaceholder('Subject', { exact: true })).toHaveValue('Re: Pilot checklist — synthetic conversation')
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('legacy cards/chat stay selected until explicit layout controls change them and persist across reload', async ({
   page,
 }) => {
@@ -1710,6 +2002,10 @@ test('manual discovery, rejected credentials and retry use the existing account 
   await page.goto('/')
   await page.getByRole('textbox', { name: 'Email Address', exact: true }).fill('new@example.test')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  // Nothing is looked up until the person asks.
+  await expect(page.getByRole('button', { name: 'Find settings online', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.calls)).not.toContain('account.autodiscover')
+  await page.getByRole('button', { name: 'Find settings online', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('Server settings found')
   await page.getByLabel('Password', { exact: true }).fill('synthetic-password')
   await page.getByRole('button', { name: 'Save Account', exact: true }).click()
@@ -1735,6 +2031,7 @@ for (const discovery of ['guess', 'failure'] as const) {
     await page.goto('/')
     await page.getByRole('textbox', { name: 'Email Address', exact: true }).fill('person@example.test')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
+    await page.getByRole('button', { name: 'Find settings online', exact: true }).click()
     await expect(page.getByRole('status')).toContainText(
       discovery === 'guess' ? 'No published settings' : 'Could not look up',
     )
@@ -1851,6 +2148,57 @@ test('editing an existing account preserves its identity and stored password', a
     payload: { email: 'alex@intranet', imap_host: 'imap.updated.test' },
   })
   expect(saves[0].payload).not.toHaveProperty('password')
+  expect(errors).toEqual([])
+})
+
+// ADR-0054: nothing is archived automatically until the preview of what
+// would move has been shown and confirmed; the confirmation carries the
+// preview's fingerprint to the core.
+test('automatic archiving turns on only after its preview is confirmed', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { existingEmail: 'alex@intranet' })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    const status = structuredClone(replies['autoArchive.status'])
+    replies['autoArchive.preview'] = {
+      account: 'x',
+      destination: 'server',
+      target: 'Archive',
+      total: 12,
+      fingerprint: 'e2e-print',
+      folders: [{ folder: 'INBOX', cutoff: 1_760_000_000, target: 'Archive', count: 12, oldest: 1, newest: 2 }],
+    }
+    replies['autoArchive.save'] = {
+      ...status,
+      policy: { ...status.policy, enabled: true },
+      confirmed: true,
+      next_run: 0,
+    }
+  })
+  await page.keyboard.press('Control+,')
+  await page
+    .getByRole('navigation')
+    .filter({ has: page.getByRole('button', { name: 'General', exact: true }) })
+    .getByRole('button', { name: /Alex · Demo/ })
+    .click()
+  const group = page.locator('[data-settings-section="autoArchive"]')
+  await expect(group.getByRole('checkbox', { name: 'Drafts' })).toBeDisabled()
+  await group.getByRole('checkbox', { name: 'Archive old messages automatically' }).check()
+  await expect(group.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
+  await expect(group.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled()
+  await group.getByRole('button', { name: 'Preview…', exact: true }).click()
+  await expect(group.getByRole('region', { name: 'What will be archived' })).toContainText('12 messages would be archived now.')
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('autoArchive.save'))).toBe(false)
+  await group.getByRole('button', { name: 'Confirm and turn on', exact: true }).click()
+  await expect(group.getByRole('button', { name: 'Run now', exact: true })).toBeEnabled()
+  const saves = await page.evaluate(() =>
+    (window as any).startupProbe.requests.filter((r: { command: string }) => r.command === 'autoArchive.save'),
+  )
+  expect(saves).toHaveLength(1)
+  expect(saves[0].payload).toMatchObject({ confirm: 'e2e-print', policy: { enabled: true, folders: [{ name: 'INBOX' }] } })
+  expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('autoArchive.runNow'))).toBe(false)
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
   expect(errors).toEqual([])
 })
 
@@ -2068,5 +2416,224 @@ test('a saved theme changes to cobalt only after an explicit picker action', asy
       ),
     )
     .toBe('oreneta-light')
+  expect(errors).toEqual([])
+})
+
+// SET-18 / ADR-0051: Calendar → General. Under a British locale the week opens
+// on Monday; choosing Sunday in Settings persists one flat row and redraws the
+// week view from Sunday, with the weekend still shaded as days off.
+test.describe('calendar week start', () => {
+  test.use({ locale: 'en-GB' })
+  test('changing the first day to Sunday reorders the week view and keeps its shading', async ({ page }) => {
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.addInitScript(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['calendar.events'] = { events: [] }
+      replies['calendar.list'] = {
+        calendars: [{ id: 'local-test', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+      }
+    })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    const week = page.getByRole('button', { name: 'Week', exact: true })
+    await week.click()
+    await expect(week).toHaveAttribute('aria-pressed', 'true')
+
+    const headingDays = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('[data-day-heading]')).map((el) =>
+          new Date(Number(el.dataset.dayHeading)).getDay(),
+        ),
+      )
+    const workdays = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('[data-day-column]')).map((el) => el.dataset.workday),
+      )
+    const firstHeading = page.locator('[data-day-heading]').first()
+
+    // The locale's week: Monday first, Saturday and Sunday off.
+    await expect.poll(headingDays).toEqual([1, 2, 3, 4, 5, 6, 0])
+    await expect(firstHeading).toContainText('Mon')
+    expect(await workdays()).toEqual(['true', 'true', 'true', 'true', 'true', 'false', 'false'])
+    const bands = page.locator('[data-day-column]').first().locator('[data-off-hours]')
+    await expect(bands).toHaveCount(2)
+    await expect(bands.first()).toHaveAttribute('data-off-hours', '0-9')
+
+    await page.keyboard.press('Control+,')
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const group = settings.locator('[data-settings-section="calendarGeneral"]')
+    await expect(group).toContainText('First day of the week')
+    await expect(group.getByRole('combobox', { name: 'First day of the week' })).toHaveValue('locale')
+    await expect(group.getByRole('combobox', { name: 'First day of the week' }).locator('option').first()).toHaveText(
+      'Regional default (Monday)',
+    )
+    await group.getByRole('combobox', { name: 'First day of the week' }).selectOption('sunday')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests
+              .filter((r: any) => r.command === 'app.prefsSet' && r.payload.key === 'calendar_week_start')
+              .at(-1)?.payload.value,
+        ),
+      )
+      .toBe('sunday')
+    await page.keyboard.press('Escape')
+    await expect(settings).toHaveCount(0)
+
+    await expect.poll(headingDays).toEqual([0, 1, 2, 3, 4, 5, 6])
+    await expect(firstHeading).toContainText('Sun')
+    // Shading follows the days, not the columns: Sunday and Saturday stay off.
+    expect(await workdays()).toEqual(['false', 'true', 'true', 'true', 'true', 'true', 'false'])
+    await expect(page.locator('[data-day-column]').first().locator('[data-off-hours]')).toHaveAttribute('data-off-hours', '0-24')
+
+    // The work-week toggle hides the days off.
+    await page.getByRole('button', { name: 'Work week', exact: true }).click()
+    await expect.poll(headingDays).toEqual([1, 2, 3, 4, 5])
+    expect(await page.evaluate(() => (window as any).startupProbe.calls.some((c: string) => c.startsWith('calendar.') && !['calendar.list', 'calendar.events'].includes(c)))).toBe(false)
+    expect(errors).toEqual([])
+  })
+})
+
+// Folder favorites, colors and moves (ADR-0050, SET-07): a folder made a
+// favorite and colored from its menu, then moved with the keyboard path, all
+// under the production CSP; the favorite and its color survive a reload.
+test('folder favorites, colors and a keyboard move', async ({ page }) => {
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.addInitScript(() => {
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    const extra = [
+      { id: 'Clients', account_id: 'synthetic-account', name: 'Clients', role: 'folder', delimiter: '/', unread: 1 },
+      { id: 'Team', account_id: 'synthetic-account', name: 'Team', role: 'folder', delimiter: '/', unread: 0 },
+    ]
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      const result = await invoke(command, payload)
+      if (command === 'mail.folderList' && payload.account_id === 'synthetic-account') {
+        return { folders: [...result.folders, ...extra] }
+      }
+      if (command === 'mail.folderMove') {
+        const base = (window as any).startupProbe.replies['mail.folderList'].folders
+        return {
+          ok: true,
+          folder: 'Clients/Team',
+          renames: [{ from: 'Team', to: 'Clients/Team' }],
+          folders: [...base, extra[0], { ...extra[1], id: 'Clients/Team', name: 'Clients/Team' }],
+        }
+      }
+      return result
+    }
+  })
+  await page.goto('/')
+  const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+  const tree = nav.locator('ul.mail-folder-tree').last()
+  await tree.getByRole('button', { name: 'Clients 1', exact: true }).click({ button: 'right' })
+  await page.getByRole('button', { name: 'Add to favorites' }).click()
+  const favorites = nav.getByRole('region', { name: 'Favorites' })
+  await expect(favorites.getByRole('button', { name: 'Clients 1', exact: true })).toBeVisible()
+
+  await tree.getByRole('button', { name: 'Clients 1', exact: true }).click({ button: 'right' })
+  await page.getByRole('button', { name: 'Teal', exact: true }).click()
+  const colored = nav.getByRole('button', { name: 'Clients Color: Teal 1', exact: true })
+  await expect(colored).toHaveCount(2)
+  // The palette's CSS applies under the production CSP: the light-theme teal.
+  expect(await colored.first().locator('.mail-folder-dot').evaluate((dot) => getComputedStyle(dot).backgroundColor)).toBe(
+    'rgb(0, 121, 107)',
+  )
+
+  // Keyboard path: Shift+F10 on the folder, "Move folder to…", the picker, confirm.
+  await tree.getByRole('button', { name: 'Team', exact: true }).focus()
+  await page.keyboard.press('Shift+F10')
+  await expect(page.getByRole('button', { name: 'Add to favorites' })).toBeFocused()
+  await page.getByRole('button', { name: 'Move folder to…' }).click()
+  const picker = page.getByRole('dialog', { name: 'Move Team to…' })
+  await picker.getByRole('radio', { name: 'Clients' }).check()
+  await picker.getByRole('button', { name: 'Move here' }).click()
+  const confirm = page.getByRole('alertdialog')
+  await expect(confirm).toContainText('“Team” into “Clients”')
+  await confirm.getByRole('button', { name: 'Move folder' }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).startupProbe.requests.find((r: any) => r.command === 'mail.folderMove')?.payload),
+    )
+    .toEqual({ account_id: 'synthetic-account', folder_id: 'Team', parent_id: 'Clients' })
+  await expect(tree.getByRole('button', { name: 'Collapse Clients' })).toBeVisible()
+  await expect(tree.locator('.mail-folder-children').getByRole('button', { name: 'Team', exact: true })).toBeVisible()
+
+  await page.reload()
+  await expect(
+    nav.getByRole('region', { name: 'Favorites' }).getByRole('button', { name: 'Clients Color: Teal 1', exact: true }),
+  ).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// SET-19 (ADR-0052): the reader's name order in the address book, a group as a
+// filter and as a list to change, and a group expanded in the composer — all
+// under the production CSP.
+test('contact names and groups in the address book and the composer', async ({ page }) => {
+  await page.addInitScript(() => {
+    const prefs = JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}')
+    sessionStorage.setItem(
+      'synthetic-prefs',
+      JSON.stringify({ ...prefs, contact_name_display: 'last_comma_first', contact_name_sort: 'last' }),
+    )
+  })
+  const errors = await prepareStartup(page, true)
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'More', exact: true })).toBeVisible()
+  await page.evaluate(() => {
+    const replies = (window as any).startupProbe.replies
+    const person = (id: string, given: string, family: string, addr: string) => ({
+      id, source: 'local', account: '', book: 'local', name: `${given} ${family}`, given, family,
+      organisation: '', note: '', photo: '', emails: [{ addr, label: '' }], phones: [], version: '1', editable: true,
+    })
+    replies['people.list'] = {
+      people: [
+        person('local::local:c', 'Charles', 'Babbage', 'charles@example.test'),
+        person('local::local:a', 'Ada', 'Lovelace', 'ada@example.test'),
+        person('local::local:z', 'Zed', 'Abbot', 'zed@example.test'),
+      ],
+    }
+    replies['people.groups'] = {
+      groups: [
+        {
+          id: 'group:local::local:g', source: 'local', account: '', book: 'local', name: 'Engines', version: '3',
+          editable: true,
+          members: [
+            { id: 'local::local:a', name: 'Ada Lovelace', given: 'Ada', family: 'Lovelace', addr: 'ada@example.test' },
+            { id: 'local::local:c', name: 'Charles Babbage', given: 'Charles', family: 'Babbage', addr: 'charles@example.test' },
+          ],
+        },
+      ],
+    }
+    replies['people.groupSave'] = { ok: true, id: 'group:local::local:g', version: '4' }
+  })
+  await page.getByTitle('People', { exact: true }).click()
+  const list = page.getByRole('listbox', { name: 'People' })
+  await expect(list.getByRole('option')).toHaveText([/Abbot, Zed/, /Babbage, Charles/, /Lovelace, Ada/])
+  await page.getByLabel('Show group').selectOption({ label: 'Engines (2)' })
+  await expect(list.getByRole('option')).toHaveCount(2)
+  await list.getByRole('option', { name: /Lovelace, Ada/ }).click()
+  await expect(page.getByRole('heading', { name: 'Lovelace, Ada' })).toBeVisible()
+  await page.getByRole('button', { name: 'Remove from Engines' }).click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).startupProbe.requests.find((r: any) => r.command === 'people.groupSave')?.payload),
+    )
+    .toEqual({ id: 'group:local::local:g', version: '3', name: 'Engines', members: ['local::local:c'] })
+
+  // Back to the mail, then a new message.
+  await page.getByTitle('People', { exact: true }).click()
+  await page.keyboard.press('Control+n')
+  await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+  const to = page.getByPlaceholder('recipient@example.com')
+  await to.fill('engi')
+  await expect(page.getByText('group, 2 people')).toBeVisible()
+  await to.press('Enter')
+  await expect(page.getByText('Lovelace, Ada', { exact: true })).toBeVisible()
+  await expect(page.getByText('Babbage, Charles', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
   expect(errors).toEqual([])
 })
