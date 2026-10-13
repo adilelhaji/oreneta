@@ -27,7 +27,7 @@
 <body>
 <main>
   <h1>Oreneta Privacy Policy</h1>
-  <p class="updated">Last updated: 12 October 2026</p>
+  <p class="updated">Last updated: 13 October 2026</p>
 
   <h2>The short version</h2>
   <p>Oreneta is a desktop application. It has no server of its own, no
@@ -35,22 +35,33 @@
   Your mail, calendars, contacts, notes and credentials stay on your
   computer and travel only to the servers of the accounts you add, and to
   the few services listed below. Each of those is named here with what it
-  receives, and all but two of them happen only when you turn them on or
-  ask for them.</p>
+  receives, and the tables say which ones happen on their own and which
+  only when you turn them on or ask for them.</p>
 
   <h2>What Oreneta stores, and where</h2>
   <ul>
     <li><strong>Mail, calendars, contacts, tasks, notes and chat</strong> are
     kept in a local database on your computer, so the app works fast and
     offline.</li>
-    <li><strong>Credentials</strong> (passwords, OAuth tokens, app passwords)
-    are kept in your operating system's keychain, or in a local encrypted
-    file where no keychain is available.</li>
-    <li><strong>Backups</strong> you make, by hand or on a schedule, are
-    encrypted with a password you choose and saved where you choose. They
-    never include your account passwords or tokens.</li>
-    <li>Deleting an account deletes its local data; deleting a profile can
-    delete all of that profile's data.</li>
+    <li><strong>Credentials</strong> (account passwords, OAuth tokens, app
+    passwords) are kept in your operating system's keychain. On Linux
+    without a keychain service they are kept in a local encrypted file
+    whose key is stored beside it, which protects them less than a
+    keychain. A proxy password is kept in the local database, not in the
+    keychain.</li>
+    <li><strong>Profile backups</strong>, made by hand or on a schedule,
+    are encrypted with a password you choose and saved where you choose.
+    They never include your account passwords or tokens; they do include
+    your proxy settings, with a proxy password if you set one.</li>
+    <li><strong>The settings backup file</strong> (Settings, Backup, Export)
+    is encrypted only if you give it a password. If you tick Include
+    account passwords, it also carries your account passwords and tokens,
+    and a password is then required.</li>
+    <li>Removing an account deletes its local data and its stored
+    credentials, except what you wrote and had not sent: unsent local
+    drafts, scheduled sends and the record of sends whose outcome was
+    uncertain are kept, and none of them is sent once the account is
+    gone. Deleting a profile can delete all of that profile's data.</li>
   </ul>
 
   <h2>Connections Oreneta makes</h2>
@@ -65,6 +76,18 @@
     <td>The servers of those accounts, and the addresses you entered</td>
     <td>What the protocol needs: your sign-in, and the items you read,
     send or change</td></tr>
+    <tr><td><strong>Keeping a Google or Microsoft sign-in valid</strong>,
+    whenever its access token runs out</td>
+    <td>oauth2.googleapis.com; login.microsoftonline.com</td>
+    <td>The refresh token Oreneta was given when you signed in</td></tr>
+    <tr><td><strong>Pictures in feeds</strong>, on every feed sync: the
+    pictures in new items (on by default for feeds, and off if you turn off
+    remote pictures for that feed account) and the feed's own icon
+    (always). Known trackers are not filtered out of feed pictures.</td>
+    <td>The sites that host the pictures and the icon, which the feed
+    names</td>
+    <td>Your IP address and the picture's address, even if you never open
+    the item</td></tr>
     <tr><td><strong>Update check</strong>, 30 seconds after start and then
     once a day. You can turn it off in Settings.</td>
     <td>github.com (this project's releases)</td>
@@ -78,10 +101,11 @@
     <tr><td><strong>Signing in with Google or Microsoft</strong></td>
     <td>accounts.google.com, oauth2.googleapis.com, www.googleapis.com;
     login.microsoftonline.com</td>
-    <td>The sign-in exchange, in your browser; afterwards, token
-    refreshes</td></tr>
+    <td>You sign in on their page, in your browser. Oreneta then exchanges
+    the code it receives for tokens and, for Google, reads your name,
+    address and picture</td></tr>
     <tr><td><strong>Finding your server settings</strong>, when you press
-    Find settings while adding an account by hand. Typing an address looks
+    Find settings online while adding an account by hand. Typing an address looks
     nothing up, and you can always enter the servers yourself.</td>
     <td>Your mail domain (autoconfig.&lt;domain&gt; and
     &lt;domain&gt;/.well-known/autoconfig), Mozilla's provider database
@@ -89,12 +113,13 @@
     resolver</td>
     <td>Your full address to your own domain; only the domain to Mozilla
     and DNS</td></tr>
-    <tr><td><strong>Your account picture</strong></td>
-    <td>Google (the picture on your Google profile) or an address you
-    set</td><td>A plain download</td></tr>
-    <tr><td><strong>Pictures in messages</strong>. Off for mail accounts
-    until you choose to show them; on for feeds. Known trackers are
-    blocked when they are shown.</td>
+    <tr><td><strong>Your account picture</strong>, when you add a Google
+    account or set a picture address yourself</td>
+    <td>Google's picture servers (lh3.googleusercontent.com) or the address
+    you set</td><td>A plain download</td></tr>
+    <tr><td><strong>Pictures in mail</strong>. Off until you choose to show
+    them. Known trackers are blocked when they are shown, unless you allow
+    them for that message.</td>
     <td>The sites that host the pictures</td>
     <td>Your IP address and the picture's address, which a sender can use
     to learn that you opened the message</td></tr>
@@ -103,68 +128,95 @@
     for mail in Junk, and still asked first for mailing lists or a receipt
     address elsewhere)</td>
     <td>The address the message names, through your own mail server</td>
-    <td>That you opened the message, and when, with its Message-ID</td></tr>
+    <td>That you opened the message, and when, with its subject and
+    Message-ID, your address, and that Oreneta sent the receipt</td></tr>
     <tr><td><strong>Real pictures for correspondents</strong> (off by
     default)</td>
     <td>gravatar.com, then icons.duckduckgo.com</td>
     <td>A SHA-256 hash of each displayed address to Gravatar; the
     address's domain to DuckDuckGo</td></tr>
     <tr><td><strong>Updating the tracker list</strong>, when you press
-    Update (a copy ships with the app)</td>
+    Fetch the current list (a copy ships with the app)</td>
     <td>easylist.to</td><td>A plain download</td></tr>
     <tr><td><strong>Translation languages</strong>, when you download one.
     Translating itself runs on your computer and sends no text
     anywhere.</td>
     <td>github.com (this project's copy of Mozilla's models, checked
     against fixed hashes)</td>
-    <td>Which language pair you chose</td></tr>
+    <td>Which language pair you chose (two pairs when a translation goes
+    through English)</td></tr>
     <tr><td><strong>The assistant</strong>, off until you set it up, and
     only on the messages you choose, after you have seen exactly what will
-    be sent</td>
+    be sent. Every message of the conversation and its attachments' details
+    start selected; untick what you do not want to send.</td>
     <td>The service you configure: a program on your own computer, or a
-    provider you name (HTTPS only)</td>
-    <td>The parts of the messages you selected and your instruction. A
-    remote provider handles them under its own privacy policy.</td></tr>
+    provider you name (HTTPS only). If you set a proxy, the request goes
+    through it, even to a program on your own computer.</td>
+    <td>The text of the messages you selected, with their sender, subject,
+    internal identifiers and the names, types and sizes of their
+    attachments; the action you chose; and your API key, if you entered
+    one. A remote provider handles them under its own privacy
+    policy.</td></tr>
     <tr><td><strong>Sharing a file as a link</strong></td>
     <td>Your own Nextcloud or ownCloud server</td>
-    <td>The file you chose</td></tr>
-    <tr><td><strong>Server rules</strong> (Sieve), when you save rules to
-    the server</td>
-    <td>Your mail server</td><td>The rules you wrote</td></tr>
+    <td>Your sign-in for that server and the file you chose; a public link
+    to the file is created there</td></tr>
+    <tr><td><strong>Server rules</strong> (Sieve), when you check, save or
+    remove rules on the server</td>
+    <td>Your mail server</td><td>Your sign-in and the rules you
+    wrote</td></tr>
     <tr><td><strong>Files in chat</strong>, when you send or save one</td>
-    <td>The upload service your chat server names</td>
-    <td>The file</td></tr>
+    <td>When you send: the upload service your chat server names. When you
+    save a file someone sent you: the address the sender gave for it.</td>
+    <td>The file you send, or a plain download</td></tr>
     <tr><td><strong>The changelog</strong>, when you open it</td>
     <td>github.com (this project's releases)</td>
     <td>A plain download</td></tr>
     <tr><td><strong>Downloading an update</strong>, when you accept it</td>
-    <td>github.com</td><td>A plain download, checked against a SHA-256
-    hash before use</td></tr>
+    <td>github.com</td><td>A plain download, checked before use against
+    the SHA-256 hash published with the same release</td></tr>
   </table></div>
+  <p>Downloads from github.com (updates, translation languages, the
+  changelog) are served from GitHub's download servers
+  (*.githubusercontent.com).</p>
   <p>Meeting links (Meet, Zoom, Teams and others) are only recognised in
   event text and opened in your browser; Oreneta does not contact those
   services itself. A Google Meet link is created through Google Calendar
   only when you tick it.</p>
-  <p>If you set a proxy, connections for your accounts, feeds, file links
-  and translation downloads go through it, and so do the sign-in exchange
-  with Google or Microsoft, finding server settings, your account picture,
-  and the update check and download. An account with its own proxy uses
-  that one for its picture. If the proxy is set but cannot be used, these
-  connections fail instead of going around it. Finding server settings
-  skips the DNS lookup while a proxy is set, because DNS cannot go through
-  it. Pictures shown in messages, correspondents' pictures, and the
-  sign-in page that opens in your browser do not use the app's proxy:
-  your web view and browser connect on their own.</p>
+  <p>If you set a proxy, connections for your accounts, feeds (with their
+  pictures and icons), file links, chat files, translation downloads, the
+  tracker list, the changelog and the assistant go through it, and so do
+  the sign-in exchange and token refreshes with Google or Microsoft,
+  finding server settings, your account picture, and the update check and
+  download.</p>
+  <p>An account can also have its own proxy, or connect directly. IMAP,
+  SMTP, POP3, server rules and Microsoft Graph follow that choice, and so
+  does the account's picture. Exchange (EWS), CalDAV, CardDAV, Google
+  Calendar and Google contacts use the app's proxy instead, or connect
+  directly if the app has none.</p>
+  <p>If the proxy cannot be reached, these connections fail instead of
+  going around it. A proxy left without a server or port is not used
+  (Settings asks for both): most connections then go directly, while the
+  sign-in exchange with Google, finding server settings, your account
+  picture and the update check refuse to connect. If your account picture could not be
+  downloaded, Oreneta keeps its address and your web view loads it from
+  there each time, without the proxy.</p>
+  <p>Finding server settings skips the DNS lookup while a proxy is set,
+  because DNS cannot go through it. Pictures shown in mail,
+  correspondents' pictures, and the sign-in page that opens in your
+  browser do not use the app's proxy: your web view and browser connect on
+  their own.</p>
   <p>Your operating system's web view (for example Microsoft Edge WebView2
   on Windows) may make connections of its own, under its vendor's
   policy.</p>
 
   <h2>Google user data</h2>
-  <p>When you sign in with Google, Oreneta requests access to Gmail (to read
-  and send your mail), your basic profile (to label the account with your
-  name, address and picture), Google Calendar (to show, create, edit and
-  delete the events you ask it to) and your contacts, read only (to suggest
-  addresses).</p>
+  <p>When you sign in with Google, Oreneta requests full access to Gmail
+  (used to read, send, move, label and delete your mail as you ask), your
+  basic profile (to label the account with your name, address and
+  picture), full access to Google Calendar (used to show your calendars and
+  to create, edit and delete the events you ask it to) and your contacts,
+  read only (to suggest addresses).</p>
   <p>Oreneta's use and transfer of information received from Google APIs
   adheres to the
   <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
@@ -175,15 +227,19 @@
     contact features you see, on your own computer.</li>
     <li>It is never sold, never used for advertising, never used to train
     models, and no human other than you reads it.</li>
-    <li>It is never transferred to anyone, with one exception that you
-    control: if you set up the assistant with a remote provider and run it
-    on a Gmail message, the parts you reviewed and confirmed are sent to
-    that provider, for that request only. Nothing is sent without that
-    confirmation, and the assistant is off until you set it up.</li>
+    <li>It is not transferred to anyone except as a feature you use
+    requires, each one listed above under Connections: the assistant with
+    a remote provider (only what you reviewed and confirmed, for that
+    request; the assistant is off until you set it up), pictures in a
+    message you choose to show, read receipts you send, and, if you turn
+    on real pictures for correspondents, a hash of an address to Gravatar
+    and its domain to DuckDuckGo.</li>
   </ul>
 
   <h2>Revoking access</h2>
-  <p>Remove an account in Oreneta's settings and its local data is deleted.
+  <p>Remove an account in Oreneta's settings and its local data and stored
+  credentials are deleted, except unsent drafts and scheduled sends, which
+  are kept as described above.
   You can also revoke Oreneta's access to your Google account at any time at
   <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>,
   and to your Microsoft account at
