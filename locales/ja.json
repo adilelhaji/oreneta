@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "ナビゲーションドロワーに表示",
   "settings.network.accountProxyHint": "アプリのプロキシを使う、常に直接接続する、またはこのアカウント専用のプロキシを設定します。",
   "settings.network.host": "サーバー",
-  "settings.network.incomplete": "プロキシを有効にするにはサーバーとポートを入力してください。",
+  "settings.network.incomplete": "サーバーとポートを入力してください。入力するまで、このプロキシを使う接続は拒否されます。",
   "settings.network.modeDirect": "直接接続",
   "settings.network.modeGlobal": "アプリのプロキシ",
   "settings.network.modeHttp": "HTTP",

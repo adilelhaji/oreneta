@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Kuva navigeerimissahtlis",
   "settings.network.accountProxyHint": "Kasuta rakenduse puhverserverit, ühenda alati otse või määra sellele kontole oma puhverserver.",
   "settings.network.host": "Server",
-  "settings.network.incomplete": "Puhverserveri kasutamiseks sisesta server ja port.",
+  "settings.network.incomplete": "Sisesta server ja port. Seni lükatakse selle puhverserveri kaudu tehtavad ühendused tagasi.",
   "settings.network.modeDirect": "Otse",
   "settings.network.modeGlobal": "Rakenduse puhverserver",
   "settings.network.modeHttp": "HTTP",

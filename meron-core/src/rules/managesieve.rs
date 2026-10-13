@@ -365,7 +365,7 @@ pub async fn remove<S: AsyncRead + AsyncWrite + Unpin>(session: &mut Session<S>)
 /// ManageSieve, so STARTTLS), and the account's own password. Nothing is
 /// sent in the clear: a server without STARTTLS is refused.
 pub async fn connect(creds: &crate::imap::Creds) -> Result<(Session<crate::tls::Stream>, Capabilities)> {
-    let proxy = creds.proxy.resolve();
+    let proxy = creds.proxy.resolve()?;
     let cert_pin = creds.cert_pin.as_deref();
     if creds.password.is_empty() {
         bail!("this account signs in without a password, which ManageSieve cannot use");

@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Visa i navigeringslådan",
   "settings.network.accountProxyHint": "Använd appens proxy, anslut alltid direkt eller ge det här kontot en egen proxy.",
   "settings.network.host": "Server",
-  "settings.network.incomplete": "Ange server och port för att proxyn ska börja gälla.",
+  "settings.network.incomplete": "Ange server och port. Tills dess nekas anslutningar som använder den här proxyn.",
   "settings.network.modeDirect": "Direkt",
   "settings.network.modeGlobal": "Appens proxy",
   "settings.network.modeHttp": "HTTP",

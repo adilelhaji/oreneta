@@ -195,10 +195,10 @@
   Calendar and Google contacts use the app's proxy instead, or connect
   directly if the app has none.</p>
   <p>If the proxy cannot be reached, these connections fail instead of
-  going around it. A proxy left without a server or port is not used
-  (Settings asks for both): most connections then go directly, while the
-  sign-in exchange with Google, finding server settings, your account
-  picture and the update check refuse to connect. If your account picture could not be
+  going around it. The same holds for a proxy you chose but left without a
+  server or port, for the app or for one account, and for a proxy setting
+  that could not be read: every connection that would use it is refused
+  until it is completed, and none goes directly. If your account picture could not be
   downloaded, Oreneta keeps its address and your web view loads it from
   there each time, without the proxy.</p>
   <p>Finding server settings skips the DNS lookup while a proxy is set,

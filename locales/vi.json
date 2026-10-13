@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Hiển thị trong ngăn điều hướng",
   "settings.network.accountProxyHint": "Dùng proxy của ứng dụng, luôn kết nối trực tiếp, hoặc đặt proxy riêng cho tài khoản này.",
   "settings.network.host": "Máy chủ",
-  "settings.network.incomplete": "Nhập máy chủ và cổng để proxy có hiệu lực.",
+  "settings.network.incomplete": "Nhập máy chủ và cổng. Cho đến lúc đó, các kết nối dùng proxy này sẽ bị từ chối.",
   "settings.network.modeDirect": "Trực tiếp",
   "settings.network.modeGlobal": "Proxy của ứng dụng",
   "settings.network.modeHttp": "HTTP",

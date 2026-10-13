@@ -3372,7 +3372,7 @@ fn mobile_protocol_persists_app_and_account_proxies() {
     assert_eq!(stored["result"]["proxy"]["port"], 9050);
     // Saving publishes it, so connections made right after use it without a restart.
     assert_eq!(
-        crate::proxy::global().map(|cfg| cfg.host),
+        crate::proxy::global().unwrap().map(|cfg| cfg.host),
         Some("127.0.0.1".to_string())
     );
 

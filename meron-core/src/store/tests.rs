@@ -5776,4 +5776,12 @@ fn proxy_route_follows_the_account_and_fails_closed() {
     assert!(crate::proxy::route_json(&conn, Some("inherit")).is_err());
     // An account that does not use the app-wide proxy is unaffected.
     assert_eq!(crate::proxy::route_json(&conn, Some("own")).unwrap()["proxy"], own);
+
+    // An account's own proxy left incomplete is refused, not swapped for the
+    // app-wide one or a direct connection (#192).
+    setting_set(&conn, crate::proxy::SETTING_KEY, &global).unwrap();
+    let half = json!({ "mode": "socks5", "host": "a.example" });
+    proxy_test_account(&conn, "half", crate::proxy::ProxyChoice::from_json(&half));
+    let err = crate::proxy::route_json(&conn, Some("half")).unwrap_err().to_string();
+    assert!(err.starts_with("this account's proxy is incomplete"), "{err}");
 }

@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Pokaż w szufladzie nawigacji",
   "settings.network.accountProxyHint": "Użyj serwera proxy aplikacji, łącz się zawsze bezpośrednio albo ustaw własny dla tego konta.",
   "settings.network.host": "Serwer",
-  "settings.network.incomplete": "Podaj serwer i port, aby proxy zaczęło działać.",
+  "settings.network.incomplete": "Podaj serwer i port. Do tego czasu połączenia przez to proxy są odrzucane.",
   "settings.network.modeDirect": "Bezpośrednio",
   "settings.network.modeGlobal": "Proxy aplikacji",
   "settings.network.modeHttp": "HTTP",

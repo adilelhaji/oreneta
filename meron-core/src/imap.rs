@@ -305,7 +305,7 @@ pub async fn connect(creds: &Creds) -> Result<Session> {
         &creds.host,
         creds.port,
         implicit_tls,
-        creds.proxy.resolve().as_ref(),
+        creds.proxy.resolve()?.as_ref(),
         creds.cert_pin.as_deref(),
     )
     .await?;

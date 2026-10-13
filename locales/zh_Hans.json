@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "在导航抽屉中显示",
   "settings.network.accountProxyHint": "使用应用代理、始终直接连接，或为该账户单独设置代理。",
   "settings.network.host": "服务器",
-  "settings.network.incomplete": "请填写服务器和端口，代理才会生效。",
+  "settings.network.incomplete": "请填写服务器和端口。在此之前，使用此代理的连接都会被拒绝。",
   "settings.network.modeDirect": "直连",
   "settings.network.modeGlobal": "应用代理",
   "settings.network.modeHttp": "HTTP",

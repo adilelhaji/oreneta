@@ -254,7 +254,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Client<S> {
 /// Connects and signs in, over TLS from the start or after STLS. A server
 /// offering neither is not sent the password.
 pub async fn connect(creds: &crate::imap::Creds) -> Result<Client<crate::tls::Stream>> {
-    let proxy = creds.proxy.resolve();
+    let proxy = creds.proxy.resolve()?;
     let pin = creds.cert_pin.as_deref();
     let mut client = if creds.tls && !creds.starttls {
         Client::open(crate::tls::connect_stream(&creds.host, creds.port, true, proxy.as_ref(), pin).await?).await?

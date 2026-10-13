@@ -57,7 +57,7 @@ pub async fn check_certificate(creds: &Creds) -> Result<()> {
         // Plaintext submission: no certificate to check.
         return Ok(());
     }
-    let proxy = creds.proxy.resolve();
+    let proxy = creds.proxy.resolve()?;
     let pin = creds.smtp_cert_pin.as_deref();
     let outcome = async {
         let tcp = crate::imap::open_socket(host, port, proxy.as_ref()).await?;
@@ -718,7 +718,7 @@ async fn transport(
         host,
         port,
         implicit_tls,
-        creds.proxy.resolve().as_ref(),
+        creds.proxy.resolve()?.as_ref(),
         creds.smtp_cert_pin.as_deref(),
     )
     .await

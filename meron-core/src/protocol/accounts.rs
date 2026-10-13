@@ -746,7 +746,7 @@ pub(crate) fn set_mobile_proxy(data_dir: &str, params: &Value) -> Result<Value, 
             .map_err(|err| err.to_string())?;
         // Republish immediately: a live Engine (foreground session) would
         // otherwise keep using the proxy it loaded when it was built.
-        crate::proxy::set_global(crate::proxy::parse_global(&value));
+        crate::proxy::publish_global(&value);
         Ok(json!({ "ok": true }))
     })
 }
@@ -769,7 +769,7 @@ pub(crate) fn probe_mobile_cert(params: &Value) -> Result<Value, String> {
         .unwrap_or(false);
     let proxy = crate::proxy::ProxyChoice::from_json(params.get("proxy").unwrap_or(&Value::Null));
     let info = crate::ffi::engine_block_on(async move {
-        crate::tls::probe(&host, port, &protocol, starttls, proxy.resolve().as_ref()).await
+        crate::tls::probe(&host, port, &protocol, starttls, proxy.resolve()?.as_ref()).await
     })?;
     Ok(json!({ "certificate": info }))
 }

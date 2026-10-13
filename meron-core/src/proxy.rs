@@ -9,6 +9,12 @@
 //! [`ProxyChoice`]: inherit the global one (the default), force a direct
 //! connection, or use its own proxy.
 //!
+//! A proxy that was chosen but cannot be used (a mode with no host or port, an
+//! unknown mode, a setting that could not be read) is an error, never "no
+//! proxy": the person asked for their traffic to go through it, so nothing
+//! connects directly in its place (#192). [`global`] and
+//! [`ProxyChoice::resolve`] return that error, and every caller passes it on.
+//!
 //! Hostnames are always resolved by the proxy, never locally: SOCKS5 gets the
 //! domain address type and HTTP CONNECT gets `host:port`. A proxy that leaks
 //! every mail server's name to the local resolver would defeat the point of
@@ -95,7 +101,7 @@ impl ProxyConfig {
 }
 
 /// What an individual account does about proxying.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum ProxyChoice {
     /// Follow the app-wide setting. The default, and what every pre-existing
     /// account deserializes to.
@@ -105,6 +111,11 @@ pub enum ProxyChoice {
     Direct,
     /// This account's own proxy.
     Custom(ProxyConfig),
+    /// An own proxy that cannot be used: a mode with no host or port, or an
+    /// unknown mode. Kept as stored so the settings show it as entered, and
+    /// refused by [`resolve`](Self::resolve) rather than replaced by another
+    /// route (#192).
+    Unusable(Value),
 }
 
 impl ProxyChoice {
@@ -112,9 +123,10 @@ impl ProxyChoice {
         match v["mode"].as_str().unwrap_or("global") {
             "direct" => ProxyChoice::Direct,
             "global" => ProxyChoice::Global,
-            // Anything else is a proxy kind; a malformed custom entry falls back
-            // to the global setting rather than to an unproxied connection.
-            _ => ProxyConfig::from_json(v).map_or(ProxyChoice::Global, ProxyChoice::Custom),
+            // Anything else is a proxy kind; one that cannot be used is kept,
+            // and refused when the account connects.
+            _ => ProxyConfig::from_json(v)
+                .map_or_else(|| ProxyChoice::Unusable(v.clone()), ProxyChoice::Custom),
         }
     }
 
@@ -123,36 +135,67 @@ impl ProxyChoice {
             ProxyChoice::Global => json!({ "mode": "global" }),
             ProxyChoice::Direct => json!({ "mode": "direct" }),
             ProxyChoice::Custom(cfg) => cfg.to_json(),
+            ProxyChoice::Unusable(v) => v.clone(),
         }
     }
 
-    /// The proxy this account actually connects through, if any.
-    pub fn resolve(&self) -> Option<ProxyConfig> {
+    /// The proxy this account connects through: `None` for a direct
+    /// connection, an error when the chosen proxy (its own or the app-wide
+    /// one) cannot be used.
+    pub fn resolve(&self) -> Result<Option<ProxyConfig>> {
         match self {
             ProxyChoice::Global => global(),
-            ProxyChoice::Direct => None,
-            ProxyChoice::Custom(cfg) => Some(cfg.clone()),
+            ProxyChoice::Direct => Ok(None),
+            ProxyChoice::Custom(cfg) => Ok(Some(cfg.clone())),
+            ProxyChoice::Unusable(v) => Err(unusable(v, "this account's proxy")),
         }
     }
 }
 
-/// Parse the app-wide setting. `{"mode":"off"}`, a missing row, or a
-/// half-filled form all mean "no proxy".
-pub fn parse_global(v: &Value) -> Option<ProxyConfig> {
-    ProxyConfig::from_json(v)
+/// Why a stored proxy setting cannot be used.
+fn unusable(v: &Value, whose: &str) -> anyhow::Error {
+    match v.get("mode").and_then(Value::as_str) {
+        Some("http" | "socks5") => anyhow!("{whose} is incomplete (host or port missing)"),
+        Some(other) => anyhow!("{whose} has an unknown mode {other:?}"),
+        None => anyhow!("{whose} has no mode"),
+    }
 }
 
-static GLOBAL: RwLock<Option<ProxyConfig>> = RwLock::new(None);
+/// The app-wide proxy as published: off, a proxy, or a proxy that was chosen
+/// but cannot be used, with the reason.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum GlobalProxy {
+    Off,
+    On(ProxyConfig),
+    Unusable(String),
+}
 
-/// Publish the app-wide proxy. Called once at engine start from the persisted
-/// setting, and again whenever the user saves a new one.
+static GLOBAL: RwLock<GlobalProxy> = RwLock::new(GlobalProxy::Off);
+
+fn publish(state: GlobalProxy) {
+    // A poisoned lock still holds the last state; overwrite it all the same.
+    let mut slot = GLOBAL.write().unwrap_or_else(|err| err.into_inner());
+    *slot = state;
+}
+
+/// Publish the app-wide proxy from its stored setting. Called once at engine
+/// start, and again whenever the setting is saved. A setting that cannot be
+/// used is published as such, so connections fail instead of going direct.
 ///
 /// Existing pooled IMAP sessions and IDLE watchers keep their current sockets;
 /// the new setting takes effect as those reconnect.
+pub fn publish_global(v: &Value) {
+    publish(match strict_global(v) {
+        Ok(None) => GlobalProxy::Off,
+        Ok(Some(cfg)) => GlobalProxy::On(cfg),
+        Err(err) => GlobalProxy::Unusable(format!("{err:#}")),
+    });
+}
+
+/// Publish a known proxy, or none, for callers that already hold a resolved
+/// configuration (and tests).
 pub fn set_global(cfg: Option<ProxyConfig>) {
-    if let Ok(mut slot) = GLOBAL.write() {
-        *slot = cfg;
-    }
+    publish(cfg.map_or(GlobalProxy::Off, GlobalProxy::On));
 }
 
 /// Serializes the tests that write the process-global slot; the default test
@@ -161,9 +204,14 @@ pub fn set_global(cfg: Option<ProxyConfig>) {
 #[cfg(test)]
 pub(crate) static TEST_GLOBAL_LOCK: RwLock<()> = RwLock::new(());
 
-/// The app-wide proxy, if one is configured.
-pub fn global() -> Option<ProxyConfig> {
-    GLOBAL.read().ok().and_then(|slot| slot.clone())
+/// The app-wide proxy: `None` when it is off, an error when one was chosen
+/// but cannot be used.
+pub fn global() -> Result<Option<ProxyConfig>> {
+    match &*GLOBAL.read().unwrap_or_else(|err| err.into_inner()) {
+        GlobalProxy::Off => Ok(None),
+        GlobalProxy::On(cfg) => Ok(Some(cfg.clone())),
+        GlobalProxy::Unusable(reason) => Err(anyhow!("{reason}")),
+    }
 }
 
 /// Load the persisted app-wide proxy into the process-global slot.
@@ -175,9 +223,25 @@ pub fn load_global(conn: &rusqlite::Connection) -> Result<()> {
     let _serialize = TEST_GLOBAL_LOCK
         .read()
         .unwrap_or_else(|err| err.into_inner());
-    let stored = crate::store::settings_get(conn, &[SETTING_KEY.to_string()])?;
-    set_global(parse_global(&stored[SETTING_KEY]));
-    Ok(())
+    publish_from_store(conn)
+}
+
+/// [`load_global`] without the test lock, for a test that already holds it.
+fn publish_from_store(conn: &rusqlite::Connection) -> Result<()> {
+    match crate::store::settings_get(conn, &[SETTING_KEY.to_string()]) {
+        Ok(stored) => {
+            publish_global(&stored[SETTING_KEY]);
+            Ok(())
+        }
+        // Not knowing whether a proxy was chosen is not knowing that none
+        // was: hold every connection until the setting can be read.
+        Err(err) => {
+            publish(GlobalProxy::Unusable(format!(
+                "the proxy setting could not be read: {err:#}"
+            )));
+            Err(err)
+        }
+    }
 }
 
 /// The app-wide proxy read strictly, for callers outside the core (the Go
@@ -189,8 +253,8 @@ pub fn strict_global(v: &Value) -> Result<Option<ProxyConfig>> {
         "off" | "" => Ok(None),
         "http" | "socks5" => ProxyConfig::from_json(v)
             .map(Some)
-            .ok_or_else(|| anyhow!("the proxy setting is incomplete (host or port missing)")),
-        other => Err(anyhow!("unknown proxy mode {other:?}")),
+            .ok_or_else(|| unusable(v, "the proxy setting")),
+        _ => Err(unusable(v, "the proxy setting")),
     }
 }
 
@@ -211,8 +275,7 @@ pub fn route_json(conn: &rusqlite::Connection, account: Option<&str>) -> Result<
         // is being added) gets the default choice: the app-wide proxy.
         Some(id) => match crate::store::load_account(conn, id)?.map(|c| c.proxy) {
             None | Some(ProxyChoice::Global) => global()?,
-            Some(ProxyChoice::Direct) => None,
-            Some(ProxyChoice::Custom(cfg)) => Some(cfg),
+            Some(choice) => choice.resolve()?,
         },
     };
     Ok(json!({ "proxy": route.map(|cfg| cfg.to_json()) }))
@@ -444,7 +507,7 @@ fn socks5_error(code: u8) -> &'static str {
 /// Built per call rather than cached: the setting can change at runtime, and
 /// these requests are network-bound anyway.
 pub fn agent() -> Result<ureq::Agent> {
-    agent_for(global().as_ref())
+    agent_for(global()?.as_ref())
 }
 
 /// Build an HTTP agent for a resolved account route. `None` is deliberately
@@ -520,25 +583,21 @@ mod tests {
     }
 
     #[test]
-    fn half_filled_config_is_not_a_proxy() {
-        // Host without port, port without host, and an unknown scheme all fall
-        // back rather than producing a proxy that can never connect.
-        assert_eq!(
-            parse_global(&json!({ "mode": "socks5", "host": "h" })),
-            None
-        );
-        assert_eq!(
-            parse_global(&json!({ "mode": "socks5", "port": 1080 })),
-            None
-        );
-        assert_eq!(
-            parse_global(&json!({ "mode": "off", "host": "h", "port": 1080 })),
-            None
-        );
-        assert_eq!(
-            ProxyChoice::from_json(&json!({ "mode": "socks5", "host": "h" })),
-            ProxyChoice::Global
-        );
+    fn a_half_filled_account_proxy_is_kept_and_refused_not_replaced() {
+        // Host without port, port without host, and an unknown scheme are not
+        // proxies; nor are they "use the app's proxy" or "connect directly".
+        for stored in [
+            json!({ "mode": "socks5", "host": "h" }),
+            json!({ "mode": "http", "port": 1080 }),
+            json!({ "mode": "ftp", "host": "h", "port": 21 }),
+        ] {
+            let choice = ProxyChoice::from_json(&stored);
+            assert_eq!(choice, ProxyChoice::Unusable(stored.clone()));
+            // Kept as entered, so the settings show what is wrong.
+            assert_eq!(choice.to_json(), stored);
+            let err = choice.resolve().unwrap_err().to_string();
+            assert!(err.starts_with("this account's proxy"), "{err}");
+        }
     }
 
     #[test]
@@ -555,16 +614,68 @@ mod tests {
             password: String::new(),
         };
         assert_eq!(
-            ProxyChoice::Custom(custom.clone()).resolve(),
+            ProxyChoice::Custom(custom.clone()).resolve().unwrap(),
             Some(custom.clone())
         );
-        assert_eq!(ProxyChoice::Direct.resolve(), None);
+        assert_eq!(ProxyChoice::Direct.resolve().unwrap(), None);
         assert_eq!(
-            ProxyChoice::Global.resolve(),
+            ProxyChoice::Global.resolve().unwrap(),
             Some(socks5("global.example", 1080))
         );
         set_global(None);
-        assert_eq!(ProxyChoice::Global.resolve(), None);
+        assert_eq!(ProxyChoice::Global.resolve().unwrap(), None);
+    }
+
+    #[test]
+    fn an_unusable_app_proxy_refuses_every_connection_instead_of_going_direct() {
+        let _guard = TEST_GLOBAL_LOCK
+            .write()
+            .unwrap_or_else(|err| err.into_inner());
+        for stored in [
+            json!({ "mode": "socks5", "host": "h" }),
+            json!({ "mode": "http", "port": 3128 }),
+            json!({ "mode": "ftp", "host": "h", "port": 21 }),
+        ] {
+            publish_global(&stored);
+            let err = global().unwrap_err().to_string();
+            assert!(err.starts_with("the proxy setting"), "{err}");
+            assert!(agent().is_err(), "no HTTP agent, direct or otherwise");
+            assert!(ProxyChoice::Global.resolve().is_err(), "accounts that follow it are refused too");
+            // An account's own choice is its own.
+            assert_eq!(ProxyChoice::Direct.resolve().unwrap(), None);
+        }
+
+        // Off, or nothing saved, is a direct connection.
+        publish_global(&json!({ "mode": "off", "host": "h", "port": 1 }));
+        assert_eq!(global().unwrap(), None);
+        assert!(agent().is_ok());
+        publish_global(&Value::Null);
+        assert_eq!(global().unwrap(), None);
+
+        publish_global(&json!({ "mode": "socks5", "host": "h", "port": 1080 }));
+        assert_eq!(global().unwrap(), Some(socks5("h", 1080)));
+        set_global(None);
+    }
+
+    #[test]
+    fn a_proxy_setting_that_cannot_be_read_holds_every_connection() {
+        let _guard = TEST_GLOBAL_LOCK
+            .write()
+            .unwrap_or_else(|err| err.into_inner());
+        set_global(None);
+        // A store without the settings table: the setting cannot be read.
+        // (`load_global` itself takes the lock this test holds.)
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        assert!(publish_from_store(&conn).is_err());
+        let err = global().unwrap_err().to_string();
+        assert!(err.starts_with("the proxy setting could not be read"), "{err}");
+        assert!(agent().is_err());
+
+        // Once it can be read, what it says applies.
+        crate::store::run_migrations(&conn).unwrap();
+        publish_from_store(&conn).unwrap();
+        assert_eq!(global().unwrap(), None);
+        set_global(None);
     }
 
     /// Accept one connection, run `handler` against it, and hand back what the
