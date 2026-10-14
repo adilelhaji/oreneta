@@ -1004,13 +1004,19 @@ fn serve_counting(feed: String) -> (u16, std::sync::Arc<std::sync::Mutex<Vec<Str
             let request = String::from_utf8_lossy(&buf[..n]);
             let path = request.split_whitespace().nth(1).unwrap_or("").to_string();
             log.lock().unwrap().push(path.clone());
+            // The feed carries an ETag and answers "not modified" to a request
+            // that sends it back, as real feeds do.
+            if path == "/feed.xml" && request.to_ascii_lowercase().contains("if-none-match: \"v1\"") {
+                let _ = stream.write_all(b"HTTP/1.1 304 Not Modified\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n");
+                continue;
+            }
             let (kind, body): (&str, Vec<u8>) = if path == "/feed.xml" {
                 ("application/rss+xml", feed.clone().into_bytes())
             } else {
                 ("image/png", PNG.to_vec())
             };
             let head = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nETag: \"v1\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 body.len()
             );
             let _ = stream.write_all(head.as_bytes());
@@ -1071,6 +1077,31 @@ fn a_feed_item_leaves_out_trackers_and_says_once_what_was_blocked() {
     let body_html = item["body_html"].as_str().unwrap();
     assert!(!body_html.contains("tracker.example"), "{body_html}");
     assert!(body_html.contains("https://cdn.example.com/p/1.jpg"));
+}
+
+#[test]
+fn a_saved_feed_picture_is_shown_from_disk_not_fetched_again() {
+    use_test_media_dir();
+    let root = crate::parse::media_root();
+    let key = "rss-saved/feed-1/item-1/0.png";
+    std::fs::create_dir_all(root.join("rss-saved/feed-1/item-1")).unwrap();
+    std::fs::write(root.join(key), PNG).unwrap();
+    let url = "https://cdn.example.com/p/1.jpg?w=600&h=400";
+    let extra = json!({ "images": [{ "url": url, "key": key }] }).to_string();
+    let html = format!(
+        r#"<img src="{url}"><img src='https://cdn.example.com/p/1.jpg?w=600&amp;h=400'><img src="{url}&crop=1">"#
+    );
+
+    let item = item_message(
+        "rss-saved", "feed-1", "Feed", "item-1", "Post", true, false, &extra, Some(&html), true,
+        &tracker_list(),
+    );
+
+    let body_html = item["body_html"].as_str().unwrap();
+    assert_eq!(body_html.matches(&format!("/media/{key}")).count(), 2, "{body_html}");
+    // Another address that only starts with the saved one is not taken for it.
+    assert!(body_html.contains("crop=1"), "{body_html}");
+    assert_eq!(item["attachments"][0]["key"], key);
 }
 
 #[test]
@@ -1174,7 +1205,9 @@ fn with_remote_pictures_off_a_sync_fetches_neither_pictures_nor_the_icon() {
     assert_eq!(last_error, "", "the sync itself ran");
     assert!(asked.lock().unwrap().is_empty(), "nothing remote was fetched: {:?}", asked.lock().unwrap());
 
-    // With pictures on, the same sync caches the picture and the icon, as before.
+    // With pictures on, the same sync caches the picture and the icon, as before,
+    // although the feed itself has not changed: turning pictures on forgets its
+    // ETag, so the sync is not answered "not modified" with nothing saved.
     store::set_load_remote_images(&db.lock().unwrap(), &account_id, true).unwrap();
     sync_account(&db, &account_id).unwrap();
     let mut fetched = asked.lock().unwrap().clone();

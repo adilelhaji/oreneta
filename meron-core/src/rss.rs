@@ -898,6 +898,8 @@ fn item_message(
     // Inline images as attachments. A cached image carries a media `key` (served
     // from disk, no third-party fetch); an uncached one carries only its `url`,
     // which the UI gates on the account's "load remote images" preference.
+    // Saved pictures are also pointed at in the HTML, below.
+    let mut saved: Vec<(String, String)> = Vec::new();
     let mut attachments: Vec<Value> = json["images"]
         .as_array()
         .map(|arr| {
@@ -910,6 +912,9 @@ fn item_message(
                     // image validation can point at poison (".plain" error bodies
                     // from expired signed URLs), which would render as broken images.
                     let key = img["key"].as_str().filter(|k| key_is_image(&root, k));
+                    if let Some(key) = key {
+                        saved.push((url.to_string(), key.to_string()));
+                    }
                     Some(json!({
                         "filename": image_filename(url),
                         "mime": image_mime(url),
@@ -969,8 +974,11 @@ fn item_message(
     // the account setting, trackers blocked, like mail). Omitted when the feed gave
     // no HTML.
     let body_html = body_html.filter(|html| !html.trim().is_empty()).map(|html| {
+        // A picture saved on disk is shown from there, not fetched again from
+        // its site by the web view (which does not use the app's proxy).
+        let html = point_saved_images_at_media(html, &saved);
         let (html, found) =
-            crate::parse::prepare_html_against(html, load_remote_images, Some(trackers.clone()));
+            crate::parse::prepare_html_against(&html, load_remote_images, Some(trackers.clone()));
         blocked.extend(found);
         html
     });
@@ -998,6 +1006,24 @@ fn item_message(
         "trackers_blocked": blocked,
         "trackers_protected": true,
     })
+}
+
+/// Rewrite each saved picture's address in an item's HTML to its
+/// `/media/<key>` copy, as mail does with `cid:` pictures. Only whole quoted
+/// attribute values are replaced (as written or with `&` escaped), so an
+/// address that merely starts with a saved one is left alone.
+fn point_saved_images_at_media(html: &str, saved: &[(String, String)]) -> String {
+    let mut out = html.to_string();
+    for (url, key) in saved {
+        let local = format!("/media/{key}");
+        let escaped = url.replace('&', "&amp;");
+        for written in [url.as_str(), escaped.as_str()] {
+            for quote in ['"', '\''] {
+                out = out.replace(&format!("{quote}{written}{quote}"), &format!("{quote}{local}{quote}"));
+            }
+        }
+    }
+    out
 }
 
 // ---- Feed fetch + parse -----------------------------------------------------

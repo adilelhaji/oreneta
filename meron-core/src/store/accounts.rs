@@ -386,7 +386,17 @@ pub fn save_account_config(conn: &Connection, id: &str, creds: &Creds) -> Result
 /// overriding the engine default. `json_set` updates just this key in place, so
 /// other prefs are untouched.
 pub fn set_load_remote_images(conn: &Connection, id: &str, enabled: bool) -> Result<()> {
-    set_account_pref(conn, id, "load_remote_images", enabled)
+    set_account_pref(conn, id, "load_remote_images", enabled)?;
+    // A feed's pictures and icon are saved only when a sync gets the whole
+    // feed. Turned on, forget the conditional-request validators, so the next
+    // sync is not answered "not modified" with nothing saved (#191).
+    if enabled && account_engine(conn, id)?.as_deref() == Some("rss") {
+        conn.execute(
+            "UPDATE subscriptions SET etag = '', last_modified = '' WHERE account = ?1",
+            params![id],
+        )?;
+    }
+    Ok(())
 }
 
 /// Set a boolean field in an account's `prefs` JSON column. `key` is a top-level
