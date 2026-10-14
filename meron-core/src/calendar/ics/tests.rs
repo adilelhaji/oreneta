@@ -250,3 +250,11 @@ fn each_change_to_one_occurrence_is_a_newer_version_of_it() {
     assert_eq!(sequences(&twice), vec!["SEQUENCE:3", "SEQUENCE:5"]);
     assert_eq!(names_cy(&twice), 1);
 }
+
+// #193: a subscription follows the route of the account it is listed under.
+#[test]
+fn a_calendar_subscription_follows_the_route_of_its_account() {
+    crate::proxy::route_fixture::check_account_routes(|origin, proxy| {
+        let _ = crate::calendar::subscription::fetch(&format!("{origin}/team.ics"), &proxy);
+    });
+}

@@ -39,7 +39,7 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
   `Result<Option<ProxyConfig>>`: `None` es directo y el error se propaga en
   cada llamador (IMAP, SMTP, POP3, ManageSieve, Graph, renovación de tokens,
   sonda de certificado, chat, enlaces a la nube y todo `proxy::agent()`).
-- **Límites conocidos.** Los libros CardDAV y las listas de tareas CalDAV no
+- **Límites conocidos.** Los libros CardDAV guardados sin cuenta y las listas de tareas CalDAV no
   cuelgan de ninguna cuenta de correo: usan el proxy global (#193). Los
   sockets IMAP ya abiertos y las escuchas IDLE conservan su
   conexión hasta reconectar. Un error de proxy aún no se muestra en la
@@ -49,8 +49,8 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 
 | Conexión | Dónde | Ruta |
 |---|---|---|
-| IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar y contactos, calendarios CalDAV | núcleo, `ProxyChoice::agent()` o la ruta de la cuenta | proxy de la cuenta o global |
-| Libros CardDAV y listas de tareas CalDAV (sin cuenta), feeds, idiomas de traducción, changelog | núcleo, `proxy::agent()` | global |
+| IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar y contactos, calendarios CalDAV y suscripciones de calendario | núcleo, `ProxyChoice::agent()` o la ruta de la cuenta | proxy de la cuenta o global |
+| Libros CardDAV guardados sin cuenta (los que se añaden desde la interfaz) y listas de tareas CalDAV, feeds, idiomas de traducción, changelog | núcleo, `proxy::agent()` | global |
 | Búsqueda de ajustes en móvil | núcleo, `protocol/accounts.rs` | global; con proxy se salta la consulta SRV, y un proxy inutilizable es **error** |
 | Enlaces a la nube (Nextcloud/ownCloud) | núcleo, `cloud/mod.rs` | global; si el proxy no se puede usar, **error** (antes caía en silencio a directo) |
 | Búsqueda de ajustes del servidor (autoconfig, ISPDB) | puente Go, `autodiscover.go` | global |

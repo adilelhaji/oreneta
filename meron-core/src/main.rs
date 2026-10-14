@@ -5847,8 +5847,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let name = req_str(p, "name")?;
             let url = calendar::subscription::normalize_url(&req_str(p, "url")?)?;
             let probe_url = url.clone();
+            let proxy = lookup_route(&engine, p)?;
             let body = tokio::task::spawn_blocking(move || {
-                calendar::subscription::fetch(&probe_url)
+                calendar::subscription::fetch(&probe_url, &proxy)
             })
             .await??;
             let id = format!("sub:{}", uuid::Uuid::new_v4());
@@ -8217,6 +8218,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             if let Some(creds) = engine.accounts.lock().await.get_mut(&id) {
                 creds.proxy = choice;
             }
+            // A pooled Exchange session carries its route from when it connected.
+            engine.clear_pool(&id);
             Ok(json!({ "ok": true }))
         }
 

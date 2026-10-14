@@ -511,6 +511,7 @@ async fn sync_window(
             .collect()
     };
 
+    let proxy = crate::store::account_proxy(&engine.db.lock().unwrap(), account)?;
     for calendar in wanted {
         match calendar.kind {
             // Nothing to fetch: its events only ever came from here.
@@ -520,12 +521,13 @@ async fn sync_window(
                     continue;
                 };
                 let id = calendar.id.clone();
+                let proxy = proxy.clone();
                 // One subscription that cannot be fetched or read is that
                 // calendar's problem: it keeps the events it last had, and the
                 // calendars after it are still refreshed. Returning the error
                 // here stopped the whole account's sync at the first one.
                 let fetched = match tokio::task::spawn_blocking(move || {
-                    calendar::subscription::fetch(&url)
+                    calendar::subscription::fetch(&url, &proxy)
                 })
                 .await
                 {

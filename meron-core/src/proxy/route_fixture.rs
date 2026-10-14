@@ -116,6 +116,10 @@ fn tunnel(mut client: TcpStream, record: &Mutex<Vec<String>>) -> std::io::Result
     let Ok(server) = TcpStream::connect(&target) else {
         return client.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
     };
+    // A peer that goes quiet fails the test instead of hanging it.
+    let quiet = Some(std::time::Duration::from_secs(20));
+    client.set_read_timeout(quiet)?;
+    server.set_read_timeout(quiet)?;
     client.write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")?;
     let (mut from_client, mut to_server) = (client.try_clone()?, server.try_clone()?);
     let upstream = std::thread::spawn(move || {
@@ -150,8 +154,9 @@ impl Drop for GlobalSlot {
 /// the app-wide proxy; an account with no setting of its own follows it.
 ///
 /// `request` sends one request to the given origin under the given account
-/// route. Whatever the server answers is of no interest here, only where the
-/// request went.
+/// route. The tests assume no `HTTP_PROXY` or `ALL_PROXY` in the environment,
+/// as the other tests that use a local server do. Whatever the server answers
+/// is of no interest here, only where the request went.
 pub(crate) fn check_account_routes(request: impl Fn(&str, ProxyChoice)) {
     let _slot = GlobalSlot::take();
     let at = |origin: &Recorder| format!("127.0.0.1:{}", origin.port());
