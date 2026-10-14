@@ -232,6 +232,10 @@ fn resolve_delegate(
         .ok()
         .flatten()
         .unwrap_or_default();
+    // The route is the shared mailbox's own choice, not the delegate's (#193).
+    if let Some(own) = store::load_account(conn, shared_mailbox_id).ok().flatten() {
+        resolved.proxy = own.proxy;
+    }
     Some(resolved)
 }
 
@@ -2849,6 +2853,7 @@ mod tests {
         insert_account(&conn, "shared", "support@corp.example.com", &{
             let mut c = bare_creds("");
             c.delegate_account_id = "parent".to_string();
+            c.proxy = crate::proxy::ProxyChoice::Direct;
             c
         });
         let host = FakeHost { passwords: HashMap::from([("parent".to_string(), "hunter2".to_string())]) };
@@ -2863,6 +2868,9 @@ mod tests {
         assert!(resolved.is_ews());
         // ...but addressed at the shared mailbox's own mailbox, not the delegate's.
         assert_eq!(resolved.target_mailbox, "support@corp.example.com");
+        // ...and it keeps its own route to the network, whatever the delegate's is (#193).
+        assert_eq!(resolved.proxy, crate::proxy::ProxyChoice::Direct);
+        assert_eq!(accounts["parent"].proxy, crate::proxy::ProxyChoice::Global);
         // The delegate itself is now cached too, under its own id.
         assert!(accounts.contains_key("parent"));
     }
