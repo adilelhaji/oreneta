@@ -15,6 +15,7 @@ use anyhow::{Context as _, Result};
 use serde::Deserialize;
 
 use super::{Calendar, CalendarKind, Event, Participant};
+use crate::proxy::ProxyChoice;
 
 const API: &str = "https://www.googleapis.com/calendar/v3";
 
@@ -234,21 +235,22 @@ struct CreatedCalendar {
 
 /// One authenticated call. Blocking, like the rest of this crate's HTTP;
 /// callers wrap it in `spawn_blocking`.
-fn call(token: &str, method: &str, url: &str, body: Option<serde_json::Value>) -> Result<String> {
-    call_with(token, method, url, body, None)
+fn call(token: &str, proxy: &ProxyChoice, method: &str, url: &str, body: Option<serde_json::Value>) -> Result<String> {
+    call_with(token, proxy, method, url, body, None)
 }
 
 /// [`call`] with an optional `If-Match`: the write happens only if the event
 /// is still the version that was read, and is refused with 412 otherwise.
 fn call_with(
     token: &str,
+    proxy: &ProxyChoice,
     method: &str,
     url: &str,
     body: Option<serde_json::Value>,
     if_match: Option<&str>,
 ) -> Result<String> {
     let url = &test_base(url);
-    let agent = crate::proxy::agent()?;
+    let agent = proxy.agent()?;
     let authorization = format!("Bearer {token}");
 
     // A request that carries a body and one that does not are different types
@@ -383,7 +385,7 @@ fn brief(body: &str) -> String {
 }
 
 /// The calendars this account can see.
-pub fn list_calendars(token: &str) -> Result<Vec<Calendar>> {
+pub fn list_calendars(token: &str, proxy: &ProxyChoice) -> Result<Vec<Calendar>> {
     let mut calendars = Vec::new();
     let mut page: Option<String> = None;
     loop {
@@ -392,7 +394,7 @@ pub fn list_calendars(token: &str) -> Result<Vec<Calendar>> {
             None => format!("{API}/users/me/calendarList?maxResults=250"),
         };
         let list: CalendarList =
-            serde_json::from_str(&call(token, "GET", &url, None)?).context("parse calendar list")?;
+            serde_json::from_str(&call(token, proxy, "GET", &url, None)?).context("parse calendar list")?;
         for entry in list.items {
             // A calendar the account removed from its list is not one of its
             // own any more, the same way a deleted Exchange folder is not.
@@ -429,6 +431,7 @@ pub fn list_calendars(token: &str) -> Result<Vec<Calendar>> {
 /// The occurrences on a calendar between two instants, series expanded.
 pub fn events_in_window(
     token: &str,
+    proxy: &ProxyChoice,
     calendar_id: &str,
     from: i64,
     to: i64,
@@ -450,7 +453,7 @@ pub fn events_in_window(
             url.push_str(&urlencode(token));
         }
         let list: EventList =
-            serde_json::from_str(&call(token, "GET", &url, None)?).context("parse events")?;
+            serde_json::from_str(&call(token, proxy, "GET", &url, None)?).context("parse events")?;
         for source in list.items {
             if let Some(event) = to_event(source, calendar_id) {
                 events.push(event);
@@ -476,7 +479,7 @@ fn updates_query(notify: bool) -> &'static str {
 }
 
 /// Creates an event and returns it with the id the server assigned.
-pub fn create_event(token: &str, event: &Event, notify: bool) -> Result<Event> {
+pub fn create_event(token: &str, proxy: &ProxyChoice, event: &Event, notify: bool) -> Result<Event> {
     let mut body = event_body(event, true)?;
     let meeting = meeting_request(event, &meeting_key(event))?;
     if let Some(conference) = &meeting {
@@ -488,7 +491,7 @@ pub fn create_event(token: &str, event: &Event, notify: bool) -> Result<Event> {
         updates_query(notify),
         if meeting.is_some() { "&conferenceDataVersion=1" } else { "" },
     );
-    let created: CreatedEvent = serde_json::from_str(&call(token, "POST", &url, Some(body))?)
+    let created: CreatedEvent = serde_json::from_str(&call(token, proxy, "POST", &url, Some(body))?)
         .context("parse created event")?;
     let (found, status) = google_meeting(created.conference_data.as_ref(), created.hangout_link.as_deref());
     Ok(Event {
@@ -547,6 +550,7 @@ fn meeting_status(found: Option<&super::meeting::Meeting>, status: Option<&str>)
 /// conferencing links, reminders, colours — survives the edit.
 pub fn update_event(
     token: &str,
+    proxy: &ProxyChoice,
     event: &Event,
     whole_series: bool,
     notify: bool,
@@ -571,7 +575,7 @@ pub fn update_event(
                 #[serde(default)]
                 etag: Option<String>,
             }
-            let master: Master = serde_json::from_str(&call(token, "GET", &master_url, None)?)
+            let master: Master = serde_json::from_str(&call(token, proxy, "GET", &master_url, None)?)
                 .context("read the series")?;
             let first = master
                 .start
@@ -600,7 +604,7 @@ pub fn update_event(
     );
     // Sent with the version it was read at, so an edit made elsewhere in
     // between is refused (412) rather than silently overwritten.
-    let answer = call_with(token, "PATCH", &url, Some(body), version.as_deref())?;
+    let answer = call_with(token, proxy, "PATCH", &url, Some(body), version.as_deref())?;
     if whole_series && event.series_id.is_some() {
         // The new version is the master's; the occurrence on screen has its
         // own, which the sync that follows brings.
@@ -644,6 +648,7 @@ fn anchored_to_series(event: &Event, series_start: i64) -> Option<Event> {
 /// stale copy would drop whoever joined in between.
 pub fn respond(
     token: &str,
+    proxy: &ProxyChoice,
     calendar_id: &str,
     event_id: &str,
     response: super::Response,
@@ -656,15 +661,15 @@ pub fn respond(
     // The list is read and written back, so the write is made conditional on
     // the version read: someone added in between is kept by reading again,
     // once, rather than dropped.
-    match answer_once(token, &url, response) {
+    match answer_once(token, proxy, &url, response) {
         Err(err) if format!("{err:#}").contains("changed elsewhere") => {
-            answer_once(token, &url, response)
+            answer_once(token, proxy, &url, response)
         }
         other => other,
     }
 }
 
-fn answer_once(token: &str, url: &str, response: super::Response) -> Result<()> {
+fn answer_once(token: &str, proxy: &ProxyChoice, url: &str, response: super::Response) -> Result<()> {
     #[derive(Deserialize)]
     struct Current {
         #[serde(default)]
@@ -673,7 +678,7 @@ fn answer_once(token: &str, url: &str, response: super::Response) -> Result<()> 
         etag: Option<String>,
     }
     let current: Current =
-        serde_json::from_str(&call(token, "GET", url, None)?).context("read event to answer")?;
+        serde_json::from_str(&call(token, proxy, "GET", url, None)?).context("read event to answer")?;
 
     let mut attendees = current.attendees;
     let mut answered = false;
@@ -694,6 +699,7 @@ fn answer_once(token: &str, url: &str, response: super::Response) -> Result<()> 
 
     call_with(
         token,
+        proxy,
         "PATCH",
         url,
         Some(serde_json::json!({ "attendees": attendees })),
@@ -704,6 +710,7 @@ fn answer_once(token: &str, url: &str, response: super::Response) -> Result<()> 
 
 pub fn delete_event(
     token: &str,
+    proxy: &ProxyChoice,
     calendar_id: &str,
     event_id: &str,
     notify: bool,
@@ -715,17 +722,18 @@ pub fn delete_event(
         updates_query(notify),
     );
     // A delete of something already gone is what was asked for, not a failure.
-    match call(token, "DELETE", &url, None) {
+    match call(token, proxy, "DELETE", &url, None) {
         Ok(_) => Ok(()),
         Err(err) if format!("{err:#}").contains("410") => Ok(()),
         Err(err) => Err(err),
     }
 }
 
-pub fn create_calendar(token: &str, name: &str) -> Result<String> {
+pub fn create_calendar(token: &str, proxy: &ProxyChoice, name: &str) -> Result<String> {
     let url = format!("{API}/calendars");
     let created: CreatedCalendar = serde_json::from_str(&call(
         token,
+        proxy,
         "POST",
         &url,
         Some(serde_json::json!({ "summary": name })),
@@ -734,12 +742,13 @@ pub fn create_calendar(token: &str, name: &str) -> Result<String> {
     Ok(created.id)
 }
 
-pub fn rename_calendar(token: &str, calendar_id: &str, name: &str) -> Result<()> {
+pub fn rename_calendar(token: &str, proxy: &ProxyChoice, calendar_id: &str, name: &str) -> Result<()> {
     // The entry in *this account's* list is what carries the name it shows,
     // which is also the only name a shared calendar lets this account change.
     let url = format!("{API}/users/me/calendarList/{}", urlencode(calendar_id));
     call(
         token,
+        proxy,
         "PATCH",
         &url,
         Some(serde_json::json!({ "summaryOverride": name })),
@@ -752,13 +761,13 @@ pub fn rename_calendar(token: &str, calendar_id: &str, name: &str) -> Result<()>
 /// Google refuses to delete the primary calendar and any calendar this account
 /// does not own; removing it from the list is what "remove" means for those,
 /// and is what the other clients do.
-pub fn delete_calendar(token: &str, calendar_id: &str, owned: bool) -> Result<()> {
+pub fn delete_calendar(token: &str, proxy: &ProxyChoice, calendar_id: &str, owned: bool) -> Result<()> {
     let url = if owned {
         format!("{API}/calendars/{}", urlencode(calendar_id))
     } else {
         format!("{API}/users/me/calendarList/{}", urlencode(calendar_id))
     };
-    call(token, "DELETE", &url, None)?;
+    call(token, proxy, "DELETE", &url, None)?;
     Ok(())
 }
 
@@ -883,6 +892,7 @@ fn event_body(event: &Event, with_rule: bool) -> Result<serde_json::Value> {
 /// opened.
 pub fn event_details(
     token: &str,
+    proxy: &ProxyChoice,
     calendar_id: &str,
     event_id: &str,
 ) -> Result<(Vec<super::Participant>, String)> {
@@ -892,7 +902,7 @@ pub fn event_details(
         urlencode(event_id),
     );
     let source: GoogleEvent =
-        serde_json::from_str(&call(token, "GET", &url, None)?).context("read event")?;
+        serde_json::from_str(&call(token, proxy, "GET", &url, None)?).context("read event")?;
     let description = source
         .description
         .as_deref()
@@ -914,7 +924,7 @@ pub fn event_details(
 ///
 /// An expanded instance does not carry the rule — only the id of the master it
 /// came from — so showing a reader what their series does takes one request.
-pub fn series_rule(token: &str, calendar_id: &str, series_id: &str) -> Result<Option<super::Recurrence>> {
+pub fn series_rule(token: &str, proxy: &ProxyChoice, calendar_id: &str, series_id: &str) -> Result<Option<super::Recurrence>> {
     #[derive(Deserialize)]
     struct Master {
         #[serde(default)]
@@ -926,7 +936,7 @@ pub fn series_rule(token: &str, calendar_id: &str, series_id: &str) -> Result<Op
         urlencode(series_id),
     );
     let master: Master =
-        serde_json::from_str(&call(token, "GET", &url, None)?).context("parse series")?;
+        serde_json::from_str(&call(token, proxy, "GET", &url, None)?).context("parse series")?;
     Ok(master
         .recurrence
         .iter()
@@ -1269,7 +1279,7 @@ mod tests {
         let mut event = stored(None, None);
         event.id = String::new();
         event.add_meeting = Some("meet".into());
-        let created = create_event("token", &event, false).unwrap();
+        let created = create_event("token", &ProxyChoice::Global, &event, false).unwrap();
         assert_eq!(
             created.meeting,
             Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/abc-defg-hij".into() })
@@ -1286,7 +1296,7 @@ mod tests {
         // Not asked: nothing about meetings is sent.
         drop(seen);
         let seen = serve(vec![(200, r#"{"id":"ev2"}"#.into())]);
-        let plain = create_event("token", &stored(None, None), false).unwrap();
+        let plain = create_event("token", &ProxyChoice::Global, &stored(None, None), false).unwrap();
         assert_eq!(plain.meeting_status, None);
         let seen = seen.lock().unwrap();
         assert!(!seen[0].path.contains("conferenceDataVersion"));
@@ -1301,7 +1311,7 @@ mod tests {
         )]);
         let mut event = stored(None, None);
         event.add_meeting = Some("meet".into());
-        let created = create_event("token", &event, false).unwrap();
+        let created = create_event("token", &ProxyChoice::Global, &event, false).unwrap();
         assert_eq!(created.meeting, None);
         assert_eq!(created.meeting_status.as_deref(), Some("failed"));
 
@@ -1309,7 +1319,7 @@ mod tests {
             200,
             r#"{"id":"ev1","conferenceData":{"createRequest":{"status":{"statusCode":"pending"}}}}"#.into(),
         )]);
-        assert_eq!(create_event("token", &event, false).unwrap().meeting_status.as_deref(), Some("pending"));
+        assert_eq!(create_event("token", &ProxyChoice::Global, &event, false).unwrap().meeting_status.as_deref(), Some("pending"));
     }
 
     #[test]
@@ -1318,19 +1328,19 @@ mod tests {
         let seen = serve(vec![(200, r#"{"etag":"\"v2\""}"#.into())]);
         let mut event = stored(Some("\"v1\""), None);
         event.meeting = Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/x".into() });
-        update_event("token", &event, false, false).unwrap();
+        update_event("token", &ProxyChoice::Global, &event, false, false).unwrap();
         assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
 
         // Asking for a Meet on an event that has one makes no second one.
         let seen = serve(vec![(200, r#"{"etag":"\"v3\""}"#.into())]);
         event.add_meeting = Some("meet".into());
-        update_event("token", &event, false, false).unwrap();
+        update_event("token", &ProxyChoice::Global, &event, false, false).unwrap();
         assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
 
         // Removing it sends null, with the version that makes Google read it.
         let seen = serve(vec![(200, r#"{"etag":"\"v4\""}"#.into())]);
         event.add_meeting = Some("none".into());
-        update_event("token", &event, false, false).unwrap();
+        update_event("token", &ProxyChoice::Global, &event, false, false).unwrap();
         let seen = seen.lock().unwrap();
         assert!(seen[0].path.contains("conferenceDataVersion=1"));
         let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
@@ -1338,7 +1348,7 @@ mod tests {
 
         // Another kind is refused before anything is sent.
         event.add_meeting = Some("zoom".into());
-        assert!(update_event("token", &event, false, false).is_err());
+        assert!(update_event("token", &ProxyChoice::Global, &event, false, false).is_err());
     }
 
     #[test]
@@ -1355,7 +1365,7 @@ mod tests {
     #[test]
     fn an_edit_is_sent_with_the_version_it_was_read_at() {
         let seen = serve(vec![(200, r#"{"id":"occurrence-1","etag":"\"v2\""}"#.into())]);
-        let version = update_event("token", &stored(Some("\"v1\""), None), false, false).unwrap();
+        let version = update_event("token", &ProxyChoice::Global, &stored(Some("\"v1\""), None), false, false).unwrap();
         let seen = seen.lock().unwrap();
         assert_eq!(seen[0].method, "PATCH");
         assert_eq!(seen[0].if_match.as_deref(), Some("\"v1\""));
@@ -1365,7 +1375,7 @@ mod tests {
     #[test]
     fn an_edit_made_elsewhere_in_between_is_not_overwritten() {
         let _seen = serve(vec![(412, r#"{"error":{"message":"Precondition Failed"}}"#.into())]);
-        let err = update_event("token", &stored(Some("\"v1\""), None), false, false).unwrap_err();
+        let err = update_event("token", &ProxyChoice::Global, &stored(Some("\"v1\""), None), false, false).unwrap_err();
         assert!(format!("{err:#}").contains("changed elsewhere"), "{err:#}");
     }
 
@@ -1375,7 +1385,7 @@ mod tests {
             (200, r#"{"etag":"\"master\"","start":{"dateTime":"2026-10-05T09:00:00Z"}}"#.into()),
             (200, r#"{"id":"master"}"#.into()),
         ]);
-        update_event("token", &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
+        update_event("token", &ProxyChoice::Global, &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
         let seen = seen.lock().unwrap();
         assert!(seen[1].path.contains("/events/master"));
         assert_eq!(seen[1].if_match.as_deref(), Some("\"master\""), "the master's own version, never the occurrence's");
@@ -1403,7 +1413,7 @@ mod tests {
         occurrence.end = occurrence.start + 90 * 60;
         occurrence.recurrence = None; // the editor had not loaded the rule
 
-        let version = update_event("token", &occurrence, true, false).unwrap();
+        let version = update_event("token", &ProxyChoice::Global, &occurrence, true, false).unwrap();
         assert_eq!(version, None, "the master's version is not the occurrence's");
 
         let seen = seen.lock().unwrap();
@@ -1429,7 +1439,7 @@ mod tests {
             until: None,
             count: None, month_week: None, month_day: None,
         });
-        update_event("token", &occurrence, false, false).unwrap();
+        update_event("token", &ProxyChoice::Global, &occurrence, false, false).unwrap();
         let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].body).unwrap();
         assert!(body.get("recurrence").is_none());
     }
@@ -1444,7 +1454,7 @@ mod tests {
             (200, r#"{"etag":"\"v2\"","attendees":[{"email":"me@x","self":true},{"email":"new@x"}]}"#.into()),
             (200, r#"{}"#.into()),
         ]);
-        respond("token", "primary", "event-1", super::super::Response::Accept).unwrap();
+        respond("token", &ProxyChoice::Global, "primary", "event-1", super::super::Response::Accept).unwrap();
         let seen = seen.lock().unwrap();
         let methods: Vec<&str> = seen.iter().map(|request| request.method.as_str()).collect();
         assert_eq!(methods, vec!["GET", "PATCH", "GET", "PATCH"]);
@@ -1753,5 +1763,14 @@ mod tests {
         assert_eq!(brief(body), "Request had insufficient authentication scopes.");
         // A body that is not the usual envelope still says something.
         assert!(brief("<html>502</html>").contains("502"));
+    }
+
+    // #193: the account's own route, not only the app-wide one.
+    #[test]
+    fn google_calendar_follows_the_route_of_its_account() {
+        crate::proxy::route_fixture::check_account_routes(|origin, proxy| {
+            TEST_BASE.with(|slot| *slot.borrow_mut() = Some(format!("{origin}/calendar/v3")));
+            let _ = list_calendars("token", &proxy);
+        });
     }
 }

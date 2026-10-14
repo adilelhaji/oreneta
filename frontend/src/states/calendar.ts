@@ -905,9 +905,21 @@ export async function createLocalCalendar(accountId: string, name: string): Prom
 /// A calendar collection found on a CalDAV server (#101, ADR-0018).
 export type RemoteCalendar = { url: string; name: string; color: string | null; writable: boolean | null }
 
-/// Asks a CalDAV server which calendars it holds for this sign-in.
-export async function discoverCalDav(server: string, username: string, password: string): Promise<RemoteCalendar[]> {
-  const res = await invoke<{ calendars: RemoteCalendar[] }>('caldav.discover', { server, username, password })
+/// Asks a CalDAV server which calendars it holds for this sign-in. The account
+/// it will be kept under decides the route the request takes (its own proxy,
+/// direct, or the app-wide one).
+export async function discoverCalDav(
+  accountId: string,
+  server: string,
+  username: string,
+  password: string,
+): Promise<RemoteCalendar[]> {
+  const res = await invoke<{ calendars: RemoteCalendar[] }>('caldav.discover', {
+    account: accountId,
+    server,
+    username,
+    password,
+  })
   return res?.calendars ?? []
 }
 

@@ -948,6 +948,16 @@ pub fn load_account(conn: &Connection, id: &str) -> Result<Option<Creds>> {
     Ok(config.as_deref().map(config_to_creds))
 }
 
+/// The route an account's own connections take (#193): its proxy, direct, or
+/// the app-wide setting. A blank or unknown id, such as a CardDAV book kept
+/// with no account, follows the app-wide setting.
+pub fn account_proxy(conn: &Connection, id: &str) -> Result<crate::proxy::ProxyChoice> {
+    if id.is_empty() {
+        return Ok(crate::proxy::ProxyChoice::Global);
+    }
+    Ok(load_account(conn, id)?.map(|creds| creds.proxy).unwrap_or_default())
+}
+
 /// All accounts (mail + rss) as bridge-shaped JSON for `account.list`. Field
 /// names match the desktop bridge's `Account` struct so the UI consumes them
 /// directly.

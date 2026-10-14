@@ -116,6 +116,7 @@ fn main() -> anyhow::Result<()> {
         username: env("EWS_USER"),
         password: env("EWS_PASSWORD"),
         target_mailbox: String::new(),
+        proxy: meron_core::proxy::ProxyChoice::Global,
     });
 
     // A wide window is what settles whether the server expands a series: a

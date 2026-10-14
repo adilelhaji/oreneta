@@ -53,6 +53,7 @@ it('finds the calendars on a CalDAV server and keeps only the ones chosen', asyn
   fireEvent.click(view.getByRole('button', { name: 'Find calendars' }))
   await waitFor(() => expect(view.getByText('Calendars on this server')).toBeTruthy())
   expect(calls.find((c) => c.command === 'caldav.discover')!.payload).toEqual({
+    account: 'a@example.test',
     server: 'dav.example',
     username: 'a',
     password: 'secret',

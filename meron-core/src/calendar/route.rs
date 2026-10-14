@@ -43,8 +43,9 @@ impl Route {
 }
 
 /// The route an account's calendar takes, with a valid access token when the
-/// route needs one. Resolving credentials also refreshes an expired token.
-async fn route_with_token(engine: &Arc<Engine>, account: &str) -> Result<(Route, String)> {
+/// route needs one, and the account's own route to the network (#193).
+/// Resolving credentials also refreshes an expired token.
+async fn route_with_token(engine: &Arc<Engine>, account: &str) -> Result<(Route, String, crate::proxy::ProxyChoice)> {
     let creds = engine.ensure_valid_creds(account).await?;
     let route = Route::of(&creds);
     let token = match route {
@@ -54,7 +55,7 @@ async fn route_with_token(engine: &Arc<Engine>, account: &str) -> Result<(Route,
     if route == Route::Google && token.is_empty() {
         anyhow::bail!("account needs reconnect: {account}");
     }
-    Ok((route, token))
+    Ok((route, token, creds.proxy.clone()))
 }
 
 /// Runs a Google Calendar call off the async runtime, since the HTTP client is
@@ -69,17 +70,17 @@ where
 
 pub async fn list_calendars(engine: &Arc<Engine>, account: &str) -> Result<Vec<Calendar>> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             engine
                 .with_read_session(account, |session| {
                     Box::pin(async move { session.list_calendars().await })
                 })
                 .await
         }
-        (Route::Google, token) => blocking(move || super::google::list_calendars(&token)).await,
+        (Route::Google, token, proxy) => blocking(move || super::google::list_calendars(&token, &proxy)).await,
         // An account without a calendar reports none rather than failing: a
         // mail account that simply has no calendar is not an error to show.
-        (Route::None, _) => Ok(Vec::new()),
+        (Route::None, _, _) => Ok(Vec::new()),
     }
 }
 
@@ -91,7 +92,7 @@ pub async fn events_in_window(
     to: i64,
 ) -> Result<Vec<Event>> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = calendar_id.to_string();
             engine
                 .with_read_session(account, |session| {
@@ -100,11 +101,11 @@ pub async fn events_in_window(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let id = calendar_id.to_string();
-            blocking(move || super::google::events_in_window(&token, &id, from, to)).await
+            blocking(move || super::google::events_in_window(&token, &proxy, &id, from, to)).await
         }
-        (Route::None, _) => Ok(Vec::new()),
+        (Route::None, _, _) => Ok(Vec::new()),
     }
 }
 
@@ -117,7 +118,7 @@ pub async fn create_event(
     notify: bool,
 ) -> Result<Event> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             anyhow::ensure!(
                 event.add_meeting.as_deref().is_none_or(|m| m == "none"),
                 "online meetings can be added here only to Google calendars"
@@ -130,11 +131,11 @@ pub async fn create_event(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let event = event.clone();
-            blocking(move || super::google::create_event(&token, &event, notify)).await
+            blocking(move || super::google::create_event(&token, &proxy, &event, notify)).await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 
@@ -196,7 +197,7 @@ pub async fn update_event(
     // it would remove those who are not.
     let event = &with_addresses(engine, account, event).await?;
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             anyhow::ensure!(
                 event.add_meeting.as_deref().is_none_or(|m| m == "none"),
                 "online meetings can be added here only to Google calendars"
@@ -210,11 +211,11 @@ pub async fn update_event(
                 .await?;
             Ok(None)
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let event = event.clone();
-            blocking(move || super::google::update_event(&token, &event, whole_series, notify)).await
+            blocking(move || super::google::update_event(&token, &proxy, &event, whole_series, notify)).await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 
@@ -233,7 +234,7 @@ pub async fn delete_event(
     notify: bool,
 ) -> Result<()> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = event_id.to_string();
             let change_key = change_key.map(str::to_string);
             engine
@@ -248,7 +249,7 @@ pub async fn delete_event(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let calendar_id = calendar_id.to_string();
             // Deleting a whole series means deleting the master; an occurrence
             // is deleted by its own id, which leaves the rest standing.
@@ -256,9 +257,9 @@ pub async fn delete_event(
                 (true, Some(series)) => series.to_string(),
                 _ => event_id.to_string(),
             };
-            blocking(move || super::google::delete_event(&token, &calendar_id, &target, notify)).await
+            blocking(move || super::google::delete_event(&token, &proxy, &calendar_id, &target, notify)).await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 
@@ -272,7 +273,7 @@ pub async fn respond(
     response: super::Response,
 ) -> Result<()> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = event_id.to_string();
             let change_key = change_key.map(str::to_string);
             engine
@@ -285,13 +286,13 @@ pub async fn respond(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let calendar_id = calendar_id.to_string();
             let event_id = event_id.to_string();
-            blocking(move || super::google::respond(&token, &calendar_id, &event_id, response))
+            blocking(move || super::google::respond(&token, &proxy, &calendar_id, &event_id, response))
                 .await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 
@@ -307,7 +308,7 @@ pub async fn resolve_names(
     query: &str,
 ) -> Result<Vec<super::Participant>> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let query = query.to_string();
             engine
                 .with_read_session(account, |session| {
@@ -347,7 +348,7 @@ pub async fn event_details(
     change_key: Option<&str>,
 ) -> Result<(Vec<super::Participant>, String)> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = event_id.to_string();
             let change_key = change_key.map(str::to_string);
             engine
@@ -358,12 +359,12 @@ pub async fn event_details(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let calendar_id = calendar_id.to_string();
             let event_id = event_id.to_string();
-            blocking(move || super::google::event_details(&token, &calendar_id, &event_id)).await
+            blocking(move || super::google::event_details(&token, &proxy, &calendar_id, &event_id)).await
         }
-        (Route::None, _) => Ok((Vec::new(), String::new())),
+        (Route::None, _, _) => Ok((Vec::new(), String::new())),
     }
 }
 
@@ -382,7 +383,7 @@ pub async fn series_rule(
     series_id: Option<&str>,
 ) -> Result<Option<super::Recurrence>> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = event_id.to_string();
             let change_key = change_key.map(str::to_string);
             engine
@@ -393,20 +394,20 @@ pub async fn series_rule(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let Some(series) = series_id.map(str::to_string) else {
                 return Ok(None);
             };
             let calendar_id = calendar_id.to_string();
-            blocking(move || super::google::series_rule(&token, &calendar_id, &series)).await
+            blocking(move || super::google::series_rule(&token, &proxy, &calendar_id, &series)).await
         }
-        (Route::None, _) => Ok(None),
+        (Route::None, _, _) => Ok(None),
     }
 }
 
 pub async fn create_calendar(engine: &Arc<Engine>, account: &str, name: &str) -> Result<String> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let name = name.to_string();
             engine
                 .with_write_session(account, |session| {
@@ -415,11 +416,11 @@ pub async fn create_calendar(engine: &Arc<Engine>, account: &str, name: &str) ->
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let name = name.to_string();
-            blocking(move || super::google::create_calendar(&token, &name)).await
+            blocking(move || super::google::create_calendar(&token, &proxy, &name)).await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 
@@ -430,7 +431,7 @@ pub async fn rename_calendar(
     name: &str,
 ) -> Result<()> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = calendar_id.to_string();
             let name = name.to_string();
             engine
@@ -441,12 +442,12 @@ pub async fn rename_calendar(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let id = calendar_id.to_string();
             let name = name.to_string();
-            blocking(move || super::google::rename_calendar(&token, &id, &name)).await
+            blocking(move || super::google::rename_calendar(&token, &proxy, &id, &name)).await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 
@@ -457,7 +458,7 @@ pub async fn delete_calendar(
     owned: bool,
 ) -> Result<()> {
     match route_with_token(engine, account).await? {
-        (Route::Exchange, _) => {
+        (Route::Exchange, _, _) => {
             let id = calendar_id.to_string();
             engine
                 .with_write_session(account, |session| {
@@ -466,11 +467,11 @@ pub async fn delete_calendar(
                 })
                 .await
         }
-        (Route::Google, token) => {
+        (Route::Google, token, proxy) => {
             let id = calendar_id.to_string();
-            blocking(move || super::google::delete_calendar(&token, &id, owned)).await
+            blocking(move || super::google::delete_calendar(&token, &proxy, &id, owned)).await
         }
-        (Route::None, _) => anyhow::bail!("this account has no calendar"),
+        (Route::None, _, _) => anyhow::bail!("this account has no calendar"),
     }
 }
 

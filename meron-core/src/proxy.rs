@@ -156,6 +156,18 @@ impl ProxyChoice {
             ProxyChoice::Unusable(v) => Err(unusable(v, "this account's proxy")),
         }
     }
+
+    /// An HTTP agent that follows this choice (#193). A direct account gets
+    /// an agent with no proxy at all, so it does not pick one up from the
+    /// process environment (`HTTP_PROXY`) either.
+    pub fn agent(&self) -> Result<ureq::Agent> {
+        if matches!(self, ProxyChoice::Direct) {
+            return Ok(ureq::Agent::new_with_config(
+                ureq::Agent::config_builder().proxy(None).build(),
+            ));
+        }
+        agent_for(self.resolve()?.as_ref())
+    }
 }
 
 /// Why a stored proxy setting cannot be used.
@@ -580,8 +592,12 @@ pub fn ureq_proxy(cfg: &ProxyConfig) -> Result<ureq::Proxy> {
 }
 
 #[cfg(test)]
+pub(crate) mod route_fixture;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use super::route_fixture::GlobalSlot;
     use tokio::net::TcpListener;
 
     fn socks5(host: &str, port: u16) -> ProxyConfig {
@@ -656,22 +672,6 @@ mod tests {
         );
         set_global(None);
         assert_eq!(ProxyChoice::Global.resolve().unwrap(), None);
-    }
-
-    /// Holds the test lock and leaves the app-wide proxy off when dropped, even
-    /// if an assertion fails, so no later test inherits a broken proxy.
-    struct GlobalSlot(#[allow(dead_code)] std::sync::RwLockWriteGuard<'static, ()>);
-
-    impl GlobalSlot {
-        fn take() -> Self {
-            GlobalSlot(TEST_GLOBAL_LOCK.write().unwrap_or_else(|err| err.into_inner()))
-        }
-    }
-
-    impl Drop for GlobalSlot {
-        fn drop(&mut self) {
-            set_global(None);
-        }
     }
 
     /// Stored values that are not a usable app-wide proxy. None of them may

@@ -8,6 +8,8 @@ pub mod xml;
 #[cfg(test)]
 mod client_tests;
 #[cfg(test)]
+mod http_tests;
+#[cfg(test)]
 mod write_tests;
 #[cfg(test)]
 mod xml_tests;
