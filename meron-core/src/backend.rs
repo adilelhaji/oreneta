@@ -46,6 +46,7 @@ pub async fn connect(
                 username: creds.user.clone(),
                 password: creds.password.clone(),
                 target_mailbox: creds.target_mailbox.clone(),
+                proxy: creds.proxy.clone(),
             },
             account,
             db,

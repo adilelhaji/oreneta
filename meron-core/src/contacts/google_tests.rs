@@ -132,3 +132,12 @@ fn name_parts_and_group_memberships_are_read() {
     assert_eq!(groups[0].name, "Climbing");
     assert_eq!(groups[0].members, vec!["people/c1", "people/c2"]);
 }
+
+// #193: the account's own route, not only the app-wide one.
+#[test]
+fn google_contacts_follow_the_route_of_their_account() {
+    crate::proxy::route_fixture::check_account_routes(|origin, proxy| {
+        TEST_ORIGIN.with(|slot| *slot.borrow_mut() = Some(origin.to_string()));
+        let _ = fetch_connections_and_groups("token", &proxy);
+    });
+}

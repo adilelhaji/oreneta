@@ -135,7 +135,8 @@ fn carddav_target(
         store::contact_source(&db, book)?.context("that address book is no longer set up")?
     };
     let password = crate::secrets::load(&source.id).map(|secrets| secrets.password).unwrap_or_default();
-    let transport = crate::carddav::http::UreqTransport { username: source.username.clone(), password };
+    let proxy = store::account_proxy(&engine.db.lock().unwrap(), &source.account)?;
+    let transport = crate::carddav::http::UreqTransport { username: source.username.clone(), password, proxy };
     Ok((source, transport))
 }
 
@@ -385,9 +386,11 @@ pub async fn sync_source(engine: &Arc<Engine>, id: &str) -> Result<()> {
             let password = crate::secrets::load(id)
                 .map(|secrets| secrets.password)
                 .unwrap_or_default();
+            let proxy = store::account_proxy(&engine.db.lock().unwrap(), &source.account)?;
             let transport = crate::carddav::http::UreqTransport {
                 username: source.username.clone(),
                 password,
+                proxy,
             };
             let url = source.url.clone();
             tokio::task::spawn_blocking(move || {
@@ -428,11 +431,12 @@ pub async fn sync_source(engine: &Arc<Engine>, id: &str) -> Result<()> {
         "google" => match engine.ensure_valid_creds(&source.account).await {
             Ok(creds) if creds.auth_type == "gmail_oauth" => {
                 let token = creds.access_token.clone().unwrap_or_default();
+                let proxy = creds.proxy.clone();
                 if token.is_empty() {
                     Err(anyhow::anyhow!("account needs reconnect: {}", source.account))
                 } else {
                     tokio::task::spawn_blocking(move || {
-                        crate::contacts::google::fetch_connections_and_groups(&token).map(|(people, groups)| {
+                        crate::contacts::google::fetch_connections_and_groups(&token, &proxy).map(|(people, groups)| {
                             let rows = people
                                 .into_iter()
                                 .map(|person| store::SyncedRow { person, ..Default::default() })

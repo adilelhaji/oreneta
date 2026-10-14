@@ -376,18 +376,19 @@ pub fn caldav_target(
     account: &str,
     calendar_id: &str,
 ) -> Result<(calendar::Calendar, crate::carddav::http::UreqTransport)> {
-    let (found, sign_in) = {
+    let (found, sign_in, proxy) = {
         let db = engine.db.lock().unwrap();
         (
             calendar::calendar_of(&db, account, calendar_id)?,
             calendar::caldav::sign_in(&db, account, calendar_id)?,
+            crate::store::account_proxy(&db, account)?,
         )
     };
     let (Some(found), Some((_, username))) = (found, sign_in) else {
         anyhow::bail!("that calendar is no longer here");
     };
     let password = crate::secrets::load(&calendar::caldav::secret_key(account, calendar_id))?.password;
-    Ok((found, crate::carddav::http::UreqTransport { username, password }))
+    Ok((found, crate::carddav::http::UreqTransport { username, password, proxy }))
 }
 
 /// The CalDAV calendar an edit is for, when it is one, refusing a read-only
@@ -510,6 +511,7 @@ async fn sync_window(
             .collect()
     };
 
+    let proxy = crate::store::account_proxy(&engine.db.lock().unwrap(), account)?;
     for calendar in wanted {
         match calendar.kind {
             // Nothing to fetch: its events only ever came from here.
@@ -519,12 +521,13 @@ async fn sync_window(
                     continue;
                 };
                 let id = calendar.id.clone();
+                let proxy = proxy.clone();
                 // One subscription that cannot be fetched or read is that
                 // calendar's problem: it keeps the events it last had, and the
                 // calendars after it are still refreshed. Returning the error
                 // here stopped the whole account's sync at the first one.
                 let fetched = match tokio::task::spawn_blocking(move || {
-                    calendar::subscription::fetch(&url)
+                    calendar::subscription::fetch(&url, &proxy)
                 })
                 .await
                 {

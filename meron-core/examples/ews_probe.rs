@@ -40,6 +40,7 @@ fn main() -> anyhow::Result<()> {
         username: env("EWS_USER"),
         password: env("EWS_PASSWORD"),
         target_mailbox: String::new(),
+        proxy: meron_core::proxy::ProxyChoice::Global,
     });
     let wanted_folder = std::env::var("EWS_FOLDER").unwrap_or_else(|_| "Inbox".to_string());
 

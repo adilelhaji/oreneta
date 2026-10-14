@@ -1,4 +1,5 @@
-//! The transport the app uses: HTTP over `ureq`, through the app-wide proxy.
+//! The transport the app uses: HTTP over `ureq`, through the route of the
+//! account it belongs to (its own proxy, direct, or the app-wide one).
 
 use std::time::Duration;
 
@@ -12,11 +13,14 @@ const TIMEOUT: Duration = Duration::from_secs(30);
 pub struct UreqTransport {
     pub username: String,
     pub password: String,
+    /// The route of the account this server is kept under (#193). A server
+    /// kept under no account follows the app-wide proxy.
+    pub proxy: crate::proxy::ProxyChoice,
 }
 
 impl Transport for UreqTransport {
     fn send(&self, request: &DavRequest) -> Result<HttpReply> {
-        let agent = crate::proxy::agent()?;
+        let agent = self.proxy.agent()?;
         let content_type = request
             .headers
             .iter()

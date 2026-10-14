@@ -60,6 +60,9 @@ pub struct EwsConfig {
     /// account has been granted full access to. Empty for the ordinary
     /// case. See [`distinguished_folder_id`].
     pub target_mailbox: String,
+    /// How this account reaches the network: its own proxy, direct, or the
+    /// app-wide setting (#193).
+    pub proxy: crate::proxy::ProxyChoice,
 }
 
 /// A blocking EWS client bound to one account.
@@ -717,7 +720,7 @@ impl EwsClient {
 
     fn post_soap(&self, request: &[u8]) -> anyhow::Result<Vec<u8>> {
         let url = &self.config.url;
-        let mut response = crate::proxy::agent()?
+        let mut response = self.config.proxy.agent()?
             .post(url)
             .header(
                 "Authorization",
@@ -3103,6 +3106,7 @@ mod tests {
             username: "u".to_string(),
             password: "p".to_string(),
         target_mailbox: String::new(),
+        proxy: crate::proxy::ProxyChoice::Global,
         });
         let envelopes = client
             .fetch_envelopes(&[("AAMkENV=".to_string(), None)])
@@ -3286,6 +3290,7 @@ mod tests {
                 username: "u".to_string(),
                 password: "p".to_string(),
             target_mailbox: String::new(),
+            proxy: crate::proxy::ProxyChoice::Global,
             },
             "acct",
             db.clone(),
@@ -3592,6 +3597,7 @@ mod tests {
                 username: "u".to_string(),
                 password: "p".to_string(),
             target_mailbox: String::new(),
+            proxy: crate::proxy::ProxyChoice::Global,
             },
             "acct",
             db,
@@ -3728,6 +3734,7 @@ mod tests {
             username: "CORP\\user".to_string(),
             password: "pw".to_string(),
         target_mailbox: String::new(),
+        proxy: crate::proxy::ProxyChoice::Global,
         });
         let round = client
             .folder_hierarchy(None)
@@ -3755,6 +3762,7 @@ mod tests {
             username: "u".to_string(),
             password: "p".to_string(),
         target_mailbox: String::new(),
+        proxy: crate::proxy::ProxyChoice::Global,
         });
         let fetched = client
             .fetch_mime(&[("AAMkMIME=".to_string(), None)])
@@ -3917,5 +3925,20 @@ mod tests {
         );
 
         server.join().expect("server thread");
+    }
+
+    // #193: the account's own route, not only the app-wide one.
+    #[test]
+    fn exchange_follows_the_route_of_its_account() {
+        crate::proxy::route_fixture::check_account_routes(|origin, proxy| {
+            let client = EwsClient::new(EwsConfig {
+                url: format!("{origin}/EWS/Exchange.asmx"),
+                username: "u".to_string(),
+                password: "p".to_string(),
+                target_mailbox: String::new(),
+                proxy,
+            });
+            let _ = client.get_oof_settings("me@example.test");
+        });
     }
 }

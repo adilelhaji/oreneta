@@ -18,6 +18,26 @@ const FIELDS: &str = "names,emailAddresses,organizations,phoneNumbers,photos,bio
 const GROUPS_API: &str = "https://people.googleapis.com/v1/contactGroups";
 const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
+// Where tests send the requests this file makes: a local server in place of
+// Google. Never set outside tests.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TEST_ORIGIN: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn reach(url: String) -> String {
+    TEST_ORIGIN.with(|origin| match origin.borrow().as_deref() {
+        Some(origin) => url.replacen("https://people.googleapis.com", origin, 1),
+        None => url,
+    })
+}
+
+#[cfg(not(test))]
+fn reach(url: String) -> String {
+    url
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ConnectionsPage {
@@ -296,8 +316,8 @@ pub fn explain(status: u16, body: &str) -> String {
 }
 
 /// Every contact the account holds. Blocking; callers wrap in `spawn_blocking`.
-pub fn fetch_connections(token: &str) -> Result<Vec<Person>> {
-    fetch_connections_and_groups(token).map(|(people, _)| people)
+pub fn fetch_connections(token: &str, proxy: &crate::proxy::ProxyChoice) -> Result<Vec<Person>> {
+    fetch_connections_and_groups(token, proxy).map(|(people, _)| people)
 }
 
 /// Every contact, and the account's own groups with their members.
@@ -305,8 +325,8 @@ pub fn fetch_connections(token: &str) -> Result<Vec<Person>> {
 /// The groups are `None` when they could not be read — the people are still
 /// worth having, and the caller keeps the groups it had rather than emptying
 /// them.
-pub fn fetch_connections_and_groups(token: &str) -> Result<(Vec<Person>, Option<Vec<GoogleGroup>>)> {
-    let agent = crate::proxy::agent()?;
+pub fn fetch_connections_and_groups(token: &str, proxy: &crate::proxy::ProxyChoice) -> Result<(Vec<Person>, Option<Vec<GoogleGroup>>)> {
+    let agent = proxy.agent()?;
     let authorization = format!("Bearer {token}");
     let mut people = Vec::new();
     let mut memberships: Vec<(String, String)> = Vec::new();
@@ -320,6 +340,7 @@ pub fn fetch_connections_and_groups(token: &str) -> Result<(Vec<Person>, Option<
             url.push_str("&pageToken=");
             url.push_str(token);
         }
+        let url = reach(url);
         let mut response = agent
             .get(&url)
             .header("Authorization", &authorization)
@@ -358,6 +379,7 @@ fn fetch_groups(agent: &ureq::Agent, authorization: &str) -> Result<Vec<GoogleGr
             url.push_str("&pageToken=");
             url.push_str(token);
         }
+        let url = reach(url);
         let mut response = agent
             .get(&url)
             .header("Authorization", authorization)

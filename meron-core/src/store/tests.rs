@@ -5785,3 +5785,24 @@ fn proxy_route_follows_the_account_and_fails_closed() {
     let err = crate::proxy::route_json(&conn, Some("half")).unwrap_err().to_string();
     assert!(err.starts_with("this account's proxy is incomplete"), "{err}");
 }
+
+/// The route the calendar, contact and Exchange paths ask for by account
+/// (#193): the account's own choice, and the app-wide proxy for a server kept
+/// under no account or under one that no longer exists.
+#[test]
+fn account_proxy_is_the_accounts_own_choice_or_the_app_wide_one() {
+    use crate::proxy::ProxyChoice;
+    let conn = test_conn();
+    let own = ProxyChoice::from_json(&serde_json::json!({
+        "mode": "http", "host": "a.example", "port": 3128, "username": "u", "password": "p"
+    }));
+    proxy_test_account(&conn, "own", own.clone());
+    proxy_test_account(&conn, "direct", ProxyChoice::Direct);
+    proxy_test_account(&conn, "inherit", ProxyChoice::Global);
+
+    assert_eq!(account_proxy(&conn, "own").unwrap(), own);
+    assert_eq!(account_proxy(&conn, "direct").unwrap(), ProxyChoice::Direct);
+    assert_eq!(account_proxy(&conn, "inherit").unwrap(), ProxyChoice::Global);
+    assert_eq!(account_proxy(&conn, "").unwrap(), ProxyChoice::Global);
+    assert_eq!(account_proxy(&conn, "gone").unwrap(), ProxyChoice::Global);
+}

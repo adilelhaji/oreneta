@@ -62,7 +62,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
       if (kind === 'caldav') {
         // First the server is asked what it holds; then the chosen ones are kept.
         if (found === null) {
-          const calendars = await discoverCalDav(server.trim(), username.trim(), password)
+          const calendars = await discoverCalDav(chosen, server.trim(), username.trim(), password)
           setFound(calendars)
           setPicked(calendars.filter((calendar) => calendar.writable !== false).map((calendar) => calendar.url))
           setBusy(false)

@@ -1885,13 +1885,26 @@ async fn remove_invitation(
     Ok(holding.len())
 }
 
+/// The route for a server that is looked up before it is kept (#193): that of
+/// the account it will be kept under, when the request names one; otherwise
+/// the app-wide proxy.
+fn lookup_route(engine: &Engine, p: &Value) -> anyhow::Result<meron_core::proxy::ProxyChoice> {
+    let account = p.get("account").and_then(Value::as_str).unwrap_or_default();
+    meron_core::store::account_proxy(&engine.db.lock().unwrap(), account)
+}
+
 /// The transport a bound task list signs in with: its user name, and the
 /// password kept in the keychain for it (ADR-0039).
 fn task_transport(
     binding: &meron_core::task_sync::Binding,
 ) -> anyhow::Result<meron_core::carddav::http::UreqTransport> {
     let secrets = meron_core::secrets::load(&meron_core::task_sync::secret_key(&binding.list_id))?;
-    Ok(meron_core::carddav::http::UreqTransport { username: binding.username.clone(), password: secrets.password })
+    Ok(meron_core::carddav::http::UreqTransport {
+        username: binding.username.clone(),
+        password: secrets.password,
+        // A task list is kept under no mail account, so it has no route of its own.
+        proxy: meron_core::proxy::ProxyChoice::Global,
+    })
 }
 
 /// Syncs one bound task list, answering what happened rather than failing:
@@ -3890,6 +3903,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let transport = meron_core::carddav::http::UreqTransport {
                 username: req_str(p, "username").unwrap_or_default(),
                 password: req_str(p, "password").unwrap_or_default(),
+                proxy: meron_core::proxy::ProxyChoice::Global,
             };
             let found =
                 tokio::task::spawn_blocking(move || meron_core::task_sync::discover(&transport, &server)).await??;
@@ -3908,7 +3922,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             )?;
             let key = meron_core::task_sync::secret_key(&id);
             meron_core::secrets::store(&key, &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() })?;
-            let transport = meron_core::carddav::http::UreqTransport { username, password };
+            let transport = meron_core::carddav::http::UreqTransport {
+                username,
+                password,
+                proxy: meron_core::proxy::ProxyChoice::Global,
+            };
             let db = engine.db.clone();
             let list = id.clone();
             let first = tokio::task::spawn_blocking(move || {
@@ -4017,6 +4035,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let transport = meron_core::carddav::http::UreqTransport {
                 username: req_str(p, "username").unwrap_or_default(),
                 password: req_str(p, "password").unwrap_or_default(),
+                proxy: lookup_route(&engine, p)?,
             };
             let books = tokio::task::spawn_blocking(move || {
                 meron_core::carddav::client::discover(&transport, &server)
@@ -4468,6 +4487,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     username: creds.user.clone(),
                     password: creds.password.clone(),
                     target_mailbox: creds.target_mailbox.clone(),
+                    proxy: creds.proxy.clone(),
                 };
                 let settings = tokio::task::spawn_blocking(move || {
                     exchange::EwsClient::new(config).get_oof_settings(&own_address)
@@ -4498,6 +4518,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     username: creds.user.clone(),
                     password: creds.password.clone(),
                     target_mailbox: creds.target_mailbox.clone(),
+                    proxy: creds.proxy.clone(),
                 };
                 tokio::task::spawn_blocking(move || {
                     exchange::EwsClient::new(config).set_oof_settings(&own_address, &settings)
@@ -5687,6 +5708,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                         username: creds.user.clone(),
                         password: creds.password.clone(),
                         target_mailbox: creds.target_mailbox.clone(),
+                        proxy: creds.proxy.clone(),
                     };
                     tokio::time::timeout(Duration::from_secs(20), exchange::validate(config))
                         .await
@@ -5825,8 +5847,9 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let name = req_str(p, "name")?;
             let url = calendar::subscription::normalize_url(&req_str(p, "url")?)?;
             let probe_url = url.clone();
+            let proxy = lookup_route(&engine, p)?;
             let body = tokio::task::spawn_blocking(move || {
-                calendar::subscription::fetch(&probe_url)
+                calendar::subscription::fetch(&probe_url, &proxy)
             })
             .await??;
             let id = format!("sub:{}", uuid::Uuid::new_v4());
@@ -6271,6 +6294,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let transport = meron_core::carddav::http::UreqTransport {
                 username: req_str(p, "username").unwrap_or_default(),
                 password: req_str(p, "password").unwrap_or_default(),
+                proxy: lookup_route(&engine, p)?,
             };
             let found = tokio::task::spawn_blocking(move || calendar::caldav::discover(&transport, &server)).await??;
             Ok(json!({ "calendars": found }))
@@ -8194,6 +8218,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             if let Some(creds) = engine.accounts.lock().await.get_mut(&id) {
                 creds.proxy = choice;
             }
+            // A pooled Exchange session carries its route from when it connected.
+            engine.clear_pool(&id);
             Ok(json!({ "ok": true }))
         }
 

@@ -31,9 +31,10 @@ const MAX_OCCURRENCES: u16 = 512;
 ///
 /// Blocking, like the rest of the crate's HTTP; callers wrap it in
 /// `spawn_blocking`. Goes through the shared proxy-aware agent, so a
-/// subscription honours the app's proxy like everything else.
-pub fn fetch(url: &str) -> Result<String> {
-    let mut response = crate::proxy::agent()?
+/// subscription follows the route of the account it is listed under: its own
+/// proxy, direct, or the app's proxy.
+pub fn fetch(url: &str, proxy: &crate::proxy::ProxyChoice) -> Result<String> {
+    let mut response = proxy.agent()?
         .get(url)
         .config()
         .http_status_as_error(false)
