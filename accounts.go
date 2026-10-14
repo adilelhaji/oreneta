@@ -340,6 +340,8 @@ func (a *App) accountSetProxy(payload map[string]any) (any, error) {
 	}
 	// Credentials are never logged; the mode alone is enough to debug routing.
 	a.logf("account.setProxy: account=%s mode=%v", id, proxy["mode"])
+	// A picture that could not be fetched may go through the new route now.
+	go a.settleAvatars()
 	return map[string]any{"ok": true}, nil
 }
 
@@ -390,15 +392,15 @@ func (a *App) accountSetAvatar(payload map[string]any) (any, error) {
 		return nil, errors.New("account id required")
 	}
 	avatarURL, _ := payload["avatar_url"].(string)
-	avatarURL = a.downloadAndSaveAvatar(id, avatarURL)
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}
-	if _, err := a.sidecar.Call("account.setAvatar", map[string]any{"account": id, "avatar_url": strings.TrimSpace(avatarURL)}); err != nil {
+	pending, err := a.storeAvatar(id, avatarURL)
+	if err != nil {
 		return nil, err
 	}
-	a.logf("account.setAvatar: account=%s", id)
-	return map[string]any{"ok": true}, nil
+	a.logf("account.setAvatar: account=%s pending=%t", id, pending)
+	return map[string]any{"ok": true, "pending": pending}, nil
 }
 
 // accountSetAliases replaces the whole send-as alias list for an account. The
@@ -600,5 +602,5 @@ func accountFromMap(item any) Account {
 	var acc Account
 	data, _ := json.Marshal(item)
 	_ = json.Unmarshal(data, &acc)
-	return acc
+	return withoutRemoteAvatar(acc)
 }

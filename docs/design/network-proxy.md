@@ -66,8 +66,7 @@ los plazos de antes (6 s autoconfig, 10 s imagen, 20 s manifiesto; la
 descarga sin plazo total pero con límites de TLS y cabeceras).
 
 **Falla cerrado:** si el núcleo no responde, el ajuste no se puede usar o el
-proxy no contesta, la petición falla; nunca se reintenta directa. La imagen
-de la cuenta, en ese caso, se queda con la URL remota sin descargarla.
+proxy no contesta, la petición falla; nunca se reintenta directa.
 
 Con proxy, la búsqueda de ajustes se salta la consulta DNS SRV (RFC 6186):
 DNS no pasa por un proxy HTTP/SOCKS y preguntar al resolvedor local
@@ -112,3 +111,11 @@ rechaza un dominio con sintaxis de URL.
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
   Mozilla; los servidores se pueden escribir sin búsqueda.
+
+**Imagen de la cuenta (#194).** `avatar_url` es siempre una copia local
+(`/media/…`) o vacío. Si la descarga falla, la URL de origen se guarda aparte
+en `accounts.avatar_source`, nunca se muestra, y se reintenta por la ruta de
+la cuenta al arrancar y al cambiar un ajuste de proxy (`settleAvatars`, en
+`avatars.go`). La interfaz dibuja las iniciales mientras no haya copia. Las
+URL remotas que versiones anteriores dejaron en `avatar_url` se asientan en el
+primer arranque. Móvil carga sus imágenes por su cuenta y no se toca.

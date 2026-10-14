@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 62;
+pub const SCHEMA_VERSION: i64 = 63;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -789,6 +789,17 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
     if version < 62 {
         // Automatic archiving by age (ADR-0054).
         tx.execute_batch(crate::auto_archive::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 62)?;
+    }
+    if version < 63 {
+        // Where an account picture came from while it has no local copy (#194):
+        // kept for a retry through the account's route, never shown.
+        let has = tx
+            .prepare("SELECT 1 FROM pragma_table_info('accounts') WHERE name = 'avatar_source'")?
+            .exists([])?;
+        if !has {
+            tx.execute_batch("ALTER TABLE accounts ADD COLUMN avatar_source TEXT NOT NULL DEFAULT '';")?;
+        }
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

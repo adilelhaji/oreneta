@@ -3448,7 +3448,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 62);
+    assert_eq!(version, 63);
 
     for table in [
         "accounts",
@@ -3498,7 +3498,7 @@ fn run_migrations_creates_schema_and_bumps_version() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 62);
+    assert_eq!(version, 63);
 }
 
 #[test]
@@ -3526,7 +3526,7 @@ fn concurrent_first_open_runs_migrations_once() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 62);
+    assert_eq!(version, 63);
 
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -3564,7 +3564,7 @@ fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     assert!(conn.prepare("SELECT spam FROM messages").is_ok());
     assert!(conn.prepare("SELECT in_bar FROM labels").is_ok());
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-    assert_eq!(version, 62);
+    assert_eq!(version, 63);
 }
 
 #[test]
@@ -5805,4 +5805,58 @@ fn account_proxy_is_the_accounts_own_choice_or_the_app_wide_one() {
     assert_eq!(account_proxy(&conn, "inherit").unwrap(), ProxyChoice::Global);
     assert_eq!(account_proxy(&conn, "").unwrap(), ProxyChoice::Global);
     assert_eq!(account_proxy(&conn, "gone").unwrap(), ProxyChoice::Global);
+}
+
+/// The picture is a copy on this computer; where it is to be fetched from is
+/// kept apart and never shown (#194).
+#[test]
+fn an_account_picture_and_its_source_are_set_apart() {
+    let conn = test_conn();
+    proxy_test_account(&conn, "a", crate::proxy::ProxyChoice::Global);
+    let avatar = |id: &str| -> (String, String) {
+        conn.query_row(
+            "SELECT avatar_url, avatar_source FROM accounts WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap()
+    };
+    assert_eq!(avatar("a"), (String::new(), String::new()), "a new account has neither");
+
+    // A copy that could not be made yet: the source waits, the picture stays.
+    set_account_avatar(&conn, "a", Some("/media/avatars/a/old.png"), None).unwrap();
+    set_account_avatar(&conn, "a", None, Some(" https://img.example/me.png ")).unwrap();
+    assert_eq!(
+        avatar("a"),
+        ("/media/avatars/a/old.png".to_string(), "https://img.example/me.png".to_string())
+    );
+
+    // The copy is made: the source is cleared with it.
+    set_account_avatar(&conn, "a", Some("/media/avatars/a/new.png"), Some("")).unwrap();
+    assert_eq!(avatar("a"), ("/media/avatars/a/new.png".to_string(), String::new()));
+
+    // An empty picture clears it; leaving the key out does not.
+    set_account_avatar(&conn, "a", None, None).unwrap();
+    assert_eq!(avatar("a").0, "/media/avatars/a/new.png");
+    set_account_avatar(&conn, "a", Some(""), None).unwrap();
+    assert_eq!(avatar("a").0, "");
+}
+
+#[test]
+fn pending_avatars_are_those_waiting_for_a_copy_or_holding_a_remote_address() {
+    let conn = test_conn();
+    for id in ["local", "waiting", "remote", "none"] {
+        proxy_test_account(&conn, id, crate::proxy::ProxyChoice::Global);
+    }
+    set_account_avatar(&conn, "local", Some("/media/avatars/local/a.png"), None).unwrap();
+    set_account_avatar(&conn, "waiting", Some(""), Some("https://img.example/w.png")).unwrap();
+    // As an earlier version left it after a failed download.
+    set_account_avatar(&conn, "remote", Some("http://img.example/r.png"), None).unwrap();
+
+    let pending = pending_avatars(&conn).unwrap();
+    let ids: Vec<_> = pending.iter().map(|row| row["id"].as_str().unwrap()).collect();
+    assert_eq!(ids.len(), 2, "{pending:?}");
+    assert!(ids.contains(&"waiting") && ids.contains(&"remote"));
+    let remote = pending.iter().find(|row| row["id"] == "remote").unwrap();
+    assert_eq!(remote["avatar_url"], "http://img.example/r.png");
 }

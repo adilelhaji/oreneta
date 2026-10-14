@@ -402,14 +402,24 @@ func (a *App) pruneComposerMedia(payload map[string]any) (any, error) {
 	return map[string]any{"removed": removed}, nil
 }
 
-// downloadAndSaveAvatar downloads a remote image and writes it locally under mediaDir/avatars/<safeAccount>.
-// It returns the local media URL (e.g. "/media/avatars/account-id/uuid.ext"), or the original URL on error.
-func (a *App) downloadAndSaveAvatar(accountID, avatarURL string) string {
-	if avatarURL == "" || strings.HasPrefix(avatarURL, "/media/") {
-		return avatarURL
-	}
-	if !strings.HasPrefix(avatarURL, "http://") && !strings.HasPrefix(avatarURL, "https://") {
-		return avatarURL
+// isRemoteURL reports whether a picture address points at the network.
+func isRemoteURL(value string) bool {
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+}
+
+// saveAvatar keeps a copy of an account picture on this computer, under
+// mediaDir/avatars/<safeAccount>, and returns its local media URL (for
+// example "/media/avatars/account-id/uuid.ext"). A picture that is empty or
+// already local comes back as it is.
+//
+// A remote picture is fetched through the account route (its own proxy, direct,
+// or the app proxy). When that fails it is an error, and the address is never
+// handed back as the picture: the web view would load it directly, without the
+// proxy, every time it drew the avatar (#194). The caller keeps the address
+// apart, only to try again.
+func (a *App) saveAvatar(accountID, avatarURL string) (string, error) {
+	if avatarURL == "" || strings.HasPrefix(avatarURL, "/media/") || !isRemoteURL(avatarURL) {
+		return avatarURL, nil
 	}
 
 	safeAccount := strings.Map(func(r rune) rune {
@@ -419,37 +429,30 @@ func (a *App) downloadAndSaveAvatar(accountID, avatarURL string) string {
 		return '-'
 	}, accountID)
 	if safeAccount == "" {
-		return avatarURL
+		return "", errors.New("account id required")
 	}
 
-	// Through this account's proxy (or the app-wide one). If the proxy is
-	// set but unusable, keep the remote URL rather than fetch it directly.
+	// A proxy that is set but unusable is an error here, not a direct fetch.
 	client, err := a.httpClient(accountID, 10*time.Second)
 	if err != nil {
-		a.logf("download avatar skipped: %v", err)
-		return avatarURL
+		return "", fmt.Errorf("download avatar skipped: %w", err)
 	}
 	resp, err := client.Get(avatarURL)
 	if err != nil {
-		a.logf("download avatar failed: %v", err)
-		return avatarURL
+		return "", fmt.Errorf("download avatar failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		a.logf("download avatar returned status: %s", resp.Status)
-		return avatarURL
+		return "", fmt.Errorf("download avatar returned status: %s", resp.Status)
 	}
 
-	raw, err := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024+1))
 	if err != nil {
-		a.logf("read avatar body failed: %v", err)
-		return avatarURL
+		return "", fmt.Errorf("read avatar body failed: %w", err)
 	}
-
 	if len(raw) > 5*1024*1024 {
-		a.logf("avatar image too large: %d bytes", len(raw))
-		return avatarURL
+		return "", errors.New("avatar image too large")
 	}
 
 	extByMime := map[string]string{
@@ -466,16 +469,13 @@ func (a *App) downloadAndSaveAvatar(accountID, avatarURL string) string {
 
 	root := filepath.Join(mediaDir(), "avatars", safeAccount)
 	if err := os.MkdirAll(root, 0755); err != nil {
-		a.logf("create avatar dir failed: %v", err)
-		return avatarURL
+		return "", fmt.Errorf("create avatar dir failed: %w", err)
 	}
 
 	key := uuid.New().String() + ext
-	dest := filepath.Join(root, key)
-	if err := os.WriteFile(dest, raw, 0644); err != nil {
-		a.logf("write avatar file failed: %v", err)
-		return avatarURL
+	if err := os.WriteFile(filepath.Join(root, key), raw, 0644); err != nil {
+		return "", fmt.Errorf("write avatar file failed: %w", err)
 	}
 
-	return "/media/avatars/" + safeAccount + "/" + key
+	return "/media/avatars/" + safeAccount + "/" + key, nil
 }

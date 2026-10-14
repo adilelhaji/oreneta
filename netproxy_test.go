@@ -412,8 +412,8 @@ func TestAvatarDownloadUsesTheAccountsProxy(t *testing.T) {
 	proxy.answer = func(*http.Request) (int, string) { return http.StatusNotFound, "" }
 	app, asked := proxiedApp(proxy.setting())
 	const remote = "http://avatars.example.test/me.png"
-	if got := app.downloadAndSaveAvatar("acct-7", remote); got != remote {
-		t.Fatalf("got %q, want the remote URL kept", got)
+	if got, err := app.saveAvatar("acct-7", remote); err == nil || got != "" {
+		t.Fatalf("got %q, %v; want no picture and an error, not the remote URL", got, err)
 	}
 	reqs, _ := proxy.seen()
 	if len(reqs) != 1 || reqs[0] != "GET "+remote {
@@ -423,10 +423,10 @@ func TestAvatarDownloadUsesTheAccountsProxy(t *testing.T) {
 		t.Fatalf("route looked up for %v, want acct-7", *asked)
 	}
 
-	// Unusable proxy: no request at all, the remote URL is kept.
+	// Unusable proxy: no request at all, and no picture.
 	broken, _ := proxiedApp(&proxySetting{Mode: "socks5"})
-	if got := broken.downloadAndSaveAvatar("acct-7", remote); got != remote {
-		t.Fatalf("got %q", got)
+	if got, err := broken.saveAvatar("acct-7", remote); err == nil || got != "" {
+		t.Fatalf("got %q, %v; want no picture and an error", got, err)
 	}
 	if reqs, _ := proxy.seen(); len(reqs) != 1 {
 		t.Fatalf("unexpected extra requests %v", reqs)

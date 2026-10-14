@@ -958,6 +958,47 @@ pub fn account_proxy(conn: &Connection, id: &str) -> Result<crate::proxy::ProxyC
     Ok(load_account(conn, id)?.map(|creds| creds.proxy).unwrap_or_default())
 }
 
+/// Set an account's picture and, separately, the address it is to be fetched
+/// from (#194). A value left out (`None`) is left as it was. The picture is a
+/// copy kept on this computer; the address is only for a retry through the
+/// account's route and is never shown, so the web view never loads it.
+pub fn set_account_avatar(
+    conn: &Connection,
+    id: &str,
+    avatar_url: Option<&str>,
+    avatar_source: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE accounts
+         SET avatar_url = COALESCE(?2, avatar_url),
+             avatar_source = COALESCE(?3, avatar_source),
+             updated_at = ?4
+         WHERE id = ?1",
+        params![id, avatar_url.map(str::trim), avatar_source.map(str::trim), now_unix()],
+    )?;
+    Ok(())
+}
+
+/// Accounts whose picture still has to be fetched or settled (#194): one with
+/// a source address waiting for a retry, and one still holding a remote
+/// address as its picture, as earlier versions stored it when a download
+/// failed.
+pub fn pending_avatars(conn: &Connection) -> Result<Vec<serde_json::Value>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, avatar_url, avatar_source FROM accounts
+         WHERE avatar_source <> '' OR avatar_url LIKE 'http://%' OR avatar_url LIKE 'https://%'
+         ORDER BY sort_order, id",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(json!({
+            "id": row.get::<_, String>(0)?,
+            "avatar_url": row.get::<_, String>(1)?,
+            "avatar_source": row.get::<_, String>(2)?,
+        }))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 /// All accounts (mail + rss) as bridge-shaped JSON for `account.list`. Field
 /// names match the desktop bridge's `Account` struct so the UI consumes them
 /// directly.
