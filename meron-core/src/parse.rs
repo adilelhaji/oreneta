@@ -524,8 +524,18 @@ pub fn prepare_html_with(
     load_remote_images: bool,
     block_trackers: bool,
 ) -> (String, Vec<crate::privacy::Blocked>) {
+    prepare_html_against(source, load_remote_images, block_trackers.then(crate::privacy::current))
+}
+
+/// [`prepare_html_with`] against a given tracker list (`None`: no tracking
+/// protection), so a caller that already holds the list uses that one (#191).
+pub fn prepare_html_against(
+    source: &str,
+    load_remote_images: bool,
+    trackers: Option<std::sync::Arc<crate::privacy::FilterSet>>,
+) -> (String, Vec<crate::privacy::Blocked>) {
     let blocked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let trackers = block_trackers.then(|| (crate::privacy::current(), blocked.clone()));
+    let trackers = trackers.map(|set| (set, blocked.clone()));
     // Defence in depth: strip script-bearing markup *before* the CSP `<meta>` is
     // injected, so a CSP bypass alone can't run the email's JS. CSS is kept (the
     // CSP allows `style-src 'unsafe-inline'`); only script vectors are removed.
