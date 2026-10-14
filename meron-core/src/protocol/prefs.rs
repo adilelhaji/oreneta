@@ -32,7 +32,7 @@ pub(crate) fn set_mobile_pref(data_dir: &str, params: &Value) -> Result<Value, S
         // The proxy lives in a process-global slot that socket code reads
         // without a DB handle, so republish it as soon as it changes.
         if key == crate::proxy::SETTING_KEY {
-            crate::proxy::set_global(crate::proxy::parse_global(&value));
+            crate::proxy::publish_global(&value);
         }
         Ok(json!({ "ok": true }))
     })

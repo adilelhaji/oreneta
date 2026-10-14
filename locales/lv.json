@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Rādīt navigācijas atvilktnē",
   "settings.network.accountProxyHint": "Izmantojiet lietotnes starpniekserveri, vienmēr veidojiet tiešu savienojumu vai norādiet šim kontam savu.",
   "settings.network.host": "Serveris",
-  "settings.network.incomplete": "Ievadiet serveri un portu, lai starpniekserveris darbotos.",
+  "settings.network.incomplete": "Ievadiet serveri un portu. Līdz tam savienojumi, kas izmanto šo starpniekserveri, tiek noraidīti.",
   "settings.network.modeDirect": "Tiešs",
   "settings.network.modeGlobal": "Lietotnes starpniekserveris",
   "settings.network.modeHttp": "HTTP",

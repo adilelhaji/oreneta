@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "عرض في درج التنقل",
   "settings.network.accountProxyHint": "استخدم وكيل التطبيق، أو اتصل مباشرة دائمًا، أو خصّص وكيلًا لهذا الحساب.",
   "settings.network.host": "الخادم",
-  "settings.network.incomplete": "أدخل الخادم والمنفذ ليصبح الوكيل فعّالًا.",
+  "settings.network.incomplete": "أدخل الخادم والمنفذ. حتى ذلك الحين، تُرفض الاتصالات التي تستخدم هذا الوكيل.",
   "settings.network.modeDirect": "مباشر",
   "settings.network.modeGlobal": "وكيل التطبيق",
   "settings.network.modeHttp": "HTTP",

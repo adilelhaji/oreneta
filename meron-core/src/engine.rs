@@ -275,7 +275,8 @@ pub const POOLED_READ_TIMEOUT: Duration = Duration::from_secs(10);
 impl Engine {
     pub fn new(host: Box<dyn EngineHost>) -> anyhow::Result<Self> {
         let conn = host.open_db()?;
-        // Publish the app-wide proxy before anything can open a socket.
+        // Publish the app-wide proxy before anything can open a socket. A
+        // setting that cannot be read holds every connection (#192); say why.
         if let Err(err) = crate::proxy::load_global(&conn) {
             eprintln!("meron-core: could not load the proxy setting: {err:#}");
         }
@@ -359,6 +360,9 @@ impl Engine {
     }
 
     pub async fn ensure_valid_creds(&self, account: &str) -> anyhow::Result<imap::Creds> {
+        // Background syncs connect without a command: read again here a proxy
+        // setting that could not be read before (#192).
+        crate::proxy::reload_if_unreadable(&self.db.lock().unwrap());
         let mut accounts = self.accounts.lock().await;
         // Lazily hydrate accounts added out-of-band (the mobile host adds/edits
         // accounts through the stateless command path, not this Engine, so a
@@ -475,7 +479,7 @@ impl Engine {
                     &client_secret,
                     refresh_token,
                     scope,
-                    creds.proxy.resolve(),
+                    creds.proxy.resolve()?,
                 )
                 .await?;
                 creds.access_token = Some(new_access);

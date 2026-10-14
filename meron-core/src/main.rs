@@ -2497,6 +2497,9 @@ async fn prepare_recent_cache(
 
 async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::Result<Value> {
     let p = &req.params;
+    // A proxy setting that could not be read at start is read again before
+    // each command, so a passing failure does not hold connections (#192).
+    proxy::reload_if_unreadable(&engine.db.lock().unwrap());
     meron_core::graph::mail::guard_command(&engine.db.lock().unwrap(),&req.method,p)?;
     match req.method.as_str() {
         "ping" => Ok(ping_response()),
@@ -2625,7 +2628,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // The proxy lives in a process-global slot that socket code reads
             // without a DB handle, so republish it as soon as it changes.
             if key == proxy::SETTING_KEY {
-                proxy::set_global(proxy::parse_global(&value));
+                proxy::publish_global(&value);
             }
             Ok(json!({ "ok": true }))
         }
@@ -7972,7 +7975,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let starttls = p.get("starttls").and_then(Value::as_bool).unwrap_or(false);
             let proxy = proxy::ProxyChoice::from_json(p.get("proxy").unwrap_or(&Value::Null));
             let info =
-                meron_core::tls::probe(&host, port, &protocol, starttls, proxy.resolve().as_ref())
+                meron_core::tls::probe(&host, port, &protocol, starttls, proxy.resolve()?.as_ref())
                     .await?;
             Ok(json!({ "certificate": info }))
         }

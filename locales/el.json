@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Εμφάνιση στο συρτάρι πλοήγησης",
   "settings.network.accountProxyHint": "Χρησιμοποιήστε τον διακομιστή μεσολάβησης της εφαρμογής, συνδεθείτε πάντα απευθείας ή ορίστε ξεχωριστό για αυτόν τον λογαριασμό.",
   "settings.network.host": "Διακομιστής",
-  "settings.network.incomplete": "Εισαγάγετε διακομιστή και θύρα για να τεθεί σε ισχύ ο διακομιστής μεσολάβησης.",
+  "settings.network.incomplete": "Εισαγάγετε διακομιστή και θύρα. Μέχρι τότε, οι συνδέσεις μέσω αυτού του διακομιστή μεσολάβησης απορρίπτονται.",
   "settings.network.modeDirect": "Απευθείας",
   "settings.network.modeGlobal": "Διακομιστής εφαρμογής",
   "settings.network.modeHttp": "HTTP",

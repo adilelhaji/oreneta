@@ -916,7 +916,7 @@ pub fn connector(account: &ChatAccount, plain_loopback: bool) -> Result<Connecto
     Ok(Connector {
         host,
         port: account.port,
-        proxy: crate::proxy::global(),
+        proxy: crate::proxy::global()?,
         cert_pin: None,
         plain_loopback,
     })

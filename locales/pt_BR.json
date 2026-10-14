@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Mostrar na gaveta de navegação",
   "settings.network.accountProxyHint": "Use o proxy do aplicativo, conecte-se sempre direto ou defina um proxy próprio para esta conta.",
   "settings.network.host": "Servidor",
-  "settings.network.incomplete": "Informe um servidor e uma porta para o proxy ter efeito.",
+  "settings.network.incomplete": "Informe um servidor e uma porta. Até lá, as conexões que usam este proxy são recusadas.",
   "settings.network.modeDirect": "Direto",
   "settings.network.modeGlobal": "Proxy do app",
   "settings.network.modeHttp": "HTTP",

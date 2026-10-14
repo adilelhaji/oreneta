@@ -15,11 +15,43 @@ Qué conexiones usan el proxy de la aplicación, cómo, y qué no puede usarlo.
   hereda el global. Un proxy global activado pero incompleto (sin host o
   puerto) o con un modo desconocido es un **error**, no «sin proxy».
 
+### Proxy elegido pero inutilizable (#192)
+
+El núcleo nunca convierte un proxy elegido en una conexión directa:
+
+- **Global.** El slot del proceso tiene cuatro estados: apagado, proxy,
+  inutilizable (con el motivo) y no leído (con el motivo). Solo «nada
+  guardado» y `mode` `"off"` o `""` son «apagado». Un modo con servidor o
+  puerto vacíos, un puerto fuera de 1–65535, un modo desconocido o un valor
+  que no se puede leer como ajuste (no es un objeto, `mode` no es texto) son
+  «inutilizable». `publish_global` lo publica al arrancar y al guardar, en
+  escritorio y en móvil.
+- **No leído.** Si el ajuste no se puede leer al arrancar (o en móvil no se
+  abre el almacén en `init`), el estado es «no leído» y las conexiones se
+  rechazan. `reload_if_unreadable` lo vuelve a leer antes de cada comando
+  del sidecar, de cada `ensure_valid_creds` y de cada comando móvil, así que
+  un fallo pasajero se recupera solo.
+- **Por cuenta.** `ProxyChoice::Unusable` guarda tal cual un proxy propio que
+  no se puede usar (para que los ajustes lo muestren) y lo rechaza; ya no se
+  sustituye por el global ni por una conexión directa. Una entrada vacía o
+  ausente sigue siendo «heredar el global».
+- **Contrato.** `proxy::global()` y `ProxyChoice::resolve()` devuelven
+  `Result<Option<ProxyConfig>>`: `None` es directo y el error se propaga en
+  cada llamador (IMAP, SMTP, POP3, ManageSieve, Graph, renovación de tokens,
+  sonda de certificado, chat, enlaces a la nube y todo `proxy::agent()`).
+- **Límites conocidos.** EWS, CalDAV, CardDAV y las API de Google usan
+  `proxy::agent()`, es decir, el proxy global, y no la elección de la cuenta
+  (#193). Los sockets IMAP ya abiertos y las escuchas IDLE conservan su
+  conexión hasta reconectar. Un error de proxy aún no se muestra en la
+  interfaz como tal (issue de seguimiento).
+
 ## Conexiones
 
 | Conexión | Dónde | Ruta |
 |---|---|---|
-| IMAP, SMTP, POP3, EWS, Graph, feeds, CardDAV/CalDAV, idiomas de traducción, changelog | núcleo | proxy de la cuenta o global (ya existía) |
+| IMAP, SMTP, POP3, ManageSieve, Graph | núcleo | proxy de la cuenta o global |
+| EWS, CardDAV/CalDAV, Google Calendar y contactos, feeds, idiomas de traducción, changelog | núcleo, `proxy::agent()` | global (la elección por cuenta, en #193) |
+| Búsqueda de ajustes en móvil | núcleo, `protocol/accounts.rs` | global; con proxy se salta la consulta SRV, y un proxy inutilizable es **error** |
 | Enlaces a la nube (Nextcloud/ownCloud) | núcleo, `cloud/mod.rs` | global; si el proxy no se puede usar, **error** (antes caía en silencio a directo) |
 | Búsqueda de ajustes del servidor (autoconfig, ISPDB) | puente Go, `autodiscover.go` | global |
 | Intercambio OAuth y userinfo de Google | puente Go, `oauth.go` | global (la cuenta aún no existe) |
@@ -67,8 +99,15 @@ rechaza un dominio con sintaxis de URL.
   resolver; sin proxy va directo; ajustes inválidos, núcleo ausente y proxy
   que no escucha dan error sin tocar el destino; autodiscover, imagen
   (por cuenta) y actualización pasan por el proxy; escape de la dirección.
-- Núcleo: `strict_global` (proxy.rs), `proxy_route_follows_the_account_and_fails_closed`
-  (store/tests.rs), `an_unusable_proxy_is_an_error_and_never_a_direct_connection`
+- Núcleo: `strict_global` y, para #192, `only_nothing_saved_or_off_reads_as_no_proxy`,
+  `an_account_proxy_that_cannot_be_read_is_refused_too`,
+  `a_half_filled_account_proxy_is_kept_and_refused_not_replaced`,
+  `an_unusable_app_proxy_refuses_every_connection_instead_of_going_direct`,
+  `a_proxy_setting_that_cannot_be_read_holds_connections_until_it_can` y
+  `an_account_with_an_unusable_proxy_opens_no_socket` (proxy.rs);
+  `proxy_route_follows_the_account_and_fails_closed` (store/tests.rs);
+  `mobile_autodiscover_refuses_to_look_up_through_an_unusable_proxy`
+  (protocol/tests.rs); `an_unusable_proxy_is_an_error_and_never_a_direct_connection`
   (cloud/tests.rs).
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y

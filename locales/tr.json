@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Gezinme çekmecesinde göster",
   "settings.network.accountProxyHint": "Uygulama proxy'sini kullanın, her zaman doğrudan bağlanın ya da bu hesaba özel bir proxy tanımlayın.",
   "settings.network.host": "Sunucu",
-  "settings.network.incomplete": "Proxy'nin etkili olması için sunucu ve bağlantı noktası girin.",
+  "settings.network.incomplete": "Sunucu ve bağlantı noktası girin. O zamana kadar bu proxy'yi kullanan bağlantılar reddedilir.",
   "settings.network.modeDirect": "Doğrudan",
   "settings.network.modeGlobal": "Uygulama proxy'si",
   "settings.network.modeHttp": "HTTP",

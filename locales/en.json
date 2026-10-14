@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "Show in the navigation drawer",
   "settings.network.accountProxyHint": "Use the app proxy, always connect directly, or give this account its own proxy.",
   "settings.network.host": "Server",
-  "settings.network.incomplete": "Enter a server and port for the proxy to take effect.",
+  "settings.network.incomplete": "Enter a server and port. Until then, connections that use this proxy are refused.",
   "settings.network.modeDirect": "Direct",
   "settings.network.modeGlobal": "App proxy",
   "settings.network.modeHttp": "HTTP",

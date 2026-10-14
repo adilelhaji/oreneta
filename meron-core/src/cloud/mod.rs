@@ -199,7 +199,10 @@ fn status_error(status: u16, detail: &str) -> CloudError {
 /// connection would send the request (and the app password) around the proxy
 /// the person chose.
 fn agent() -> std::result::Result<ureq::Agent, CloudError> {
-    agent_with(crate::proxy::global().as_ref())
+    let proxy = crate::proxy::global().map_err(|e| CloudError::Network {
+        detail: format!("{e:#}"),
+    })?;
+    agent_with(proxy.as_ref())
 }
 
 fn agent_with(

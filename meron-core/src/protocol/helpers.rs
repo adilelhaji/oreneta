@@ -141,6 +141,9 @@ where
         None => store::open_at(&db_path),
     }
     .map_err(|err| format!("{err:#}"))?;
+    // Every stateless mobile command opens the store here: read again a proxy
+    // setting that could not be read before, ahead of any connection (#192).
+    crate::proxy::reload_if_unreadable(&conn);
     f(conn)
 }
 

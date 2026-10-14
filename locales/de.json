@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "In der Navigationsleiste anzeigen",
   "settings.network.accountProxyHint": "App-Proxy verwenden, immer direkt verbinden oder diesem Konto einen eigenen Proxy geben.",
   "settings.network.host": "Server",
-  "settings.network.incomplete": "Server und Port eingeben, damit der Proxy wirksam wird.",
+  "settings.network.incomplete": "Server und Port eingeben. Bis dahin werden Verbindungen über diesen Proxy abgelehnt.",
   "settings.network.modeDirect": "Direkt",
   "settings.network.modeGlobal": "App-Proxy",
   "settings.network.modeHttp": "HTTP",

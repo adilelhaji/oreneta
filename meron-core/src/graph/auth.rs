@@ -648,7 +648,7 @@ impl Microsoft {
         url: &str,
         form: Option<&[(&str, &str)]>,
     ) -> Result<Vec<u8>> {
-        let agent = match proxy.resolve() {
+        let agent = match proxy.resolve().map_err(|_| Failure::Unavailable)? {
             Some(p) => crate::proxy::agent_for(Some(&p)).map_err(|_| Failure::Unavailable)?,
             None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),
         };

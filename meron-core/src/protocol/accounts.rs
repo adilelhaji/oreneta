@@ -85,10 +85,19 @@ pub(crate) fn autodiscover_mobile_account(params: &Value) -> Result<Value, Strin
         return Err("invalid email".to_string());
     }
 
-    let discovered = mobile_provider_mail_settings(&email, &domain)
-        .or_else(|| discover_mobile_autoconfig(&email, &domain))
-        .or_else(|| discover_mobile_srv(&email, &domain))
-        .unwrap_or_else(|| DiscoveredMailSettings {
+    let discovered = match mobile_provider_mail_settings(&email, &domain) {
+        Some(known) => Some(known),
+        // Past the built-in list, discovery goes over the network: an app
+        // proxy that cannot be used is an error here as everywhere, and with
+        // a proxy the SRV lookup is skipped, since DNS cannot go through it
+        // (#192, as on desktop).
+        None => {
+            let proxied = crate::proxy::global().map_err(|err| format!("{err:#}"))?.is_some();
+            discover_mobile_autoconfig(&email, &domain)
+                .or_else(|| (!proxied).then(|| discover_mobile_srv(&email, &domain)).flatten())
+        }
+    }
+    .unwrap_or_else(|| DiscoveredMailSettings {
             imap_host: format!("imap.{domain}"),
             imap_port: 993,
             smtp_host: format!("smtp.{domain}"),
@@ -746,7 +755,7 @@ pub(crate) fn set_mobile_proxy(data_dir: &str, params: &Value) -> Result<Value, 
             .map_err(|err| err.to_string())?;
         // Republish immediately: a live Engine (foreground session) would
         // otherwise keep using the proxy it loaded when it was built.
-        crate::proxy::set_global(crate::proxy::parse_global(&value));
+        crate::proxy::publish_global(&value);
         Ok(json!({ "ok": true }))
     })
 }
@@ -769,7 +778,7 @@ pub(crate) fn probe_mobile_cert(params: &Value) -> Result<Value, String> {
         .unwrap_or(false);
     let proxy = crate::proxy::ProxyChoice::from_json(params.get("proxy").unwrap_or(&Value::Null));
     let info = crate::ffi::engine_block_on(async move {
-        crate::tls::probe(&host, port, &protocol, starttls, proxy.resolve().as_ref()).await
+        crate::tls::probe(&host, port, &protocol, starttls, proxy.resolve()?.as_ref()).await
     })?;
     Ok(json!({ "certificate": info }))
 }

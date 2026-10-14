@@ -1281,7 +1281,7 @@
   "settings.navigationDrawerHint": "在導航抽屜中顯示",
   "settings.network.accountProxyHint": "使用應用程式代理、一律直接連線，或為此帳戶單獨設定代理。",
   "settings.network.host": "伺服器",
-  "settings.network.incomplete": "請輸入伺服器與連接埠，代理才會生效。",
+  "settings.network.incomplete": "請輸入伺服器與連接埠。在此之前，使用此代理的連線都會被拒絕。",
   "settings.network.modeDirect": "直接連線",
   "settings.network.modeGlobal": "應用程式代理",
   "settings.network.modeHttp": "HTTP",

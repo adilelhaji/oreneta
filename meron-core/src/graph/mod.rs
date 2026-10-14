@@ -599,7 +599,7 @@ impl Client {
     }
     fn agent(&self) -> Result<ureq::Agent> {
         // Explicit per-account route, resolved per call so proxy changes apply.
-        Ok(match self.proxy.resolve() {
+        Ok(match self.proxy.resolve().map_err(|_| Error::new(ErrorKind::Transport))? {
             Some(proxy) => crate::proxy::agent_for(Some(&proxy))
                 .map_err(|_| Error::new(ErrorKind::Transport))?,
             // ureq's defaults read HTTP_PROXY. An explicitly resolved direct

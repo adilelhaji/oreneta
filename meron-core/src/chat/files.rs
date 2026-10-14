@@ -168,7 +168,7 @@ pub fn agent(extra_roots: &[Vec<u8>]) -> anyhow::Result<ureq::Agent> {
         .http_status_as_error(false)
         // A link never sends us elsewhere, to plain HTTP least of all.
         .max_redirects(0);
-    if let Some(proxy) = crate::proxy::global() {
+    if let Some(proxy) = crate::proxy::global()? {
         config = config.proxy(Some(crate::proxy::ureq_proxy(&proxy)?));
     }
     if !extra_roots.is_empty() {
