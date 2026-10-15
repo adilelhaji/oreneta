@@ -27,7 +27,7 @@
 <body>
 <main>
   <h1>Oreneta Privacy Policy</h1>
-  <p class="updated">Last updated: 13 October 2026</p>
+  <p class="updated">Last updated: 15 October 2026</p>
 
   <h2>The short version</h2>
   <p>Oreneta is a desktop application. It has no server of its own, no
@@ -76,6 +76,14 @@
     <td>The servers of those accounts, and the addresses you entered</td>
     <td>What the protocol needs: your sign-in, and the items you read,
     send or change</td></tr>
+    <tr><td><strong>Your chat status</strong> (available, away, busy and
+    its text), when a chat account connects and when you change it</td>
+    <td>Your chat server, which passes it only to the contacts you allowed
+    to see it; groups you are in hear only whether you are away or busy,
+    never the text</td>
+    <td>Your status and its text. With "Invisible", on a server that offers
+    it, contacts see you offline; on one that does not, nothing is
+    announced</td></tr>
     <tr><td><strong>Keeping a Google or Microsoft sign-in valid</strong>,
     whenever its access token runs out</td>
     <td>oauth2.googleapis.com; login.microsoftonline.com</td>
@@ -175,6 +183,10 @@
     <td>When you send: the upload service your chat server names. When you
     save a file someone sent you: the address the sender gave for it.</td>
     <td>The file you send, or a plain download</td></tr>
+    <tr><td><strong>Seeing someone's chat status</strong>, when you ask
+    to see it or answer someone who asks to see yours</td>
+    <td>Your chat server, which passes it to that person</td>
+    <td>The request, or your answer (allow or deny)</td></tr>
     <tr><td><strong>The changelog</strong>, when you open it</td>
     <td>github.com (this project's releases)</td>
     <td>A plain download</td></tr>

@@ -15,18 +15,28 @@
 //! Group chats (MUC, XEP-0045) and files (HTTP File Upload, XEP-0363) follow
 //! ADR-0044: a room's messages are kept like a conversation's, once each, and
 //! a file is a message whose link is fetched only when the person saves it.
+//!
+//! Presence, mentions, notifications and private messages in rooms follow
+//! ADR-0055: the person's status lives in a settings row, contacts' and
+//! occupants' only in the session, a mention is worked out from the text,
+//! and a private message is its own conversation, `room@service/nick`.
 
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 pub mod files;
+pub mod mentions;
+pub mod presence;
 pub mod xmpp;
 
 /// A one-to-one conversation.
 pub const KIND_CHAT: &str = "chat";
 /// A group chat (a MUC room).
 pub const KIND_GROUP: &str = "groupchat";
+/// A private conversation with someone in a room (XEP-0045 §7.5), kept as
+/// its own conversation, `room@service/nick`, tied to that room.
+pub const KIND_PRIVATE: &str = "private";
 
 pub const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS chat_accounts (
@@ -159,6 +169,7 @@ pub fn remove_account(conn: &Connection, id: &str) -> Result<()> {
     tx.execute("DELETE FROM chat_reads WHERE chat_account = ?1", [id])?;
     tx.execute("DELETE FROM chat_rooms WHERE chat_account = ?1", [id])?;
     tx.execute("DELETE FROM chat_invitations WHERE chat_account = ?1", [id])?;
+    presence::forget_own(&tx, id)?;
     tx.execute("DELETE FROM chat_accounts WHERE id = ?1", [id])?;
     tx.commit()?;
     Ok(())
@@ -190,6 +201,9 @@ pub struct ChatMessage {
     pub file_url: Option<String>,
     pub file_name: Option<String>,
     pub file_size: Option<i64>,
+    /// An incoming room message that mentions the person: worked out from
+    /// its text and the person's nickname when read (ADR-0055).
+    pub mention: bool,
 }
 
 impl ChatMessage {
@@ -210,6 +224,7 @@ impl ChatMessage {
             file_url: None,
             file_name: None,
             file_size: None,
+            mention: false,
         }
     }
 }
@@ -352,7 +367,7 @@ pub fn after_disconnect(conn: &Connection, account: &str) -> Result<usize> {
 pub fn last_archive_id(conn: &Connection, account: &str) -> Result<Option<String>> {
     Ok(conn
         .query_row(
-            "SELECT stanza_id FROM chat_messages WHERE chat_account = ?1 AND kind = 'chat' AND stanza_id IS NOT NULL
+            "SELECT stanza_id FROM chat_messages WHERE chat_account = ?1 AND kind IN ('chat', 'private') AND stanza_id IS NOT NULL
               ORDER BY stamp DESC, rowid DESC LIMIT 1",
             [account],
             |r| r.get(0),
@@ -390,6 +405,10 @@ pub struct Conversation {
     pub last_stamp: i64,
     pub last_direction: String,
     pub unread: i64,
+    /// `chat`, or `private` for one with someone in a room.
+    pub kind: String,
+    /// For a private one, the room it goes through.
+    pub room: Option<String>,
 }
 
 pub fn conversations(conn: &Connection, account: &str) -> Result<Vec<Conversation>> {
@@ -398,26 +417,33 @@ pub fn conversations(conn: &Connection, account: &str) -> Result<Vec<Conversatio
                 (SELECT COUNT(*) FROM chat_messages u
                   WHERE u.chat_account = m.chat_account AND u.conversation = m.conversation AND u.direction = 'in'
                     AND u.stamp > COALESCE((SELECT read_at FROM chat_reads r
-                                             WHERE r.chat_account = m.chat_account AND r.conversation = m.conversation), 0))
+                                             WHERE r.chat_account = m.chat_account AND r.conversation = m.conversation), 0)),
+                m.kind
            FROM chat_messages m
-          WHERE m.chat_account = ?1 AND m.kind = 'chat'
+          WHERE m.chat_account = ?1 AND m.kind IN ('chat', 'private')
             AND m.rowid = (SELECT rowid FROM chat_messages l WHERE l.chat_account = m.chat_account
                              AND l.conversation = m.conversation ORDER BY l.stamp DESC, l.rowid DESC LIMIT 1)
           ORDER BY m.stamp DESC",
     )?;
     let rows = stmt.query_map([account], |r| {
+        let conversation: String = r.get(0)?;
+        let kind: String = r.get(5)?;
         Ok(Conversation {
-            conversation: r.get(0)?,
+            room: if kind == KIND_PRIVATE { split_private(&conversation).map(|(room, _)| room.to_string()) } else { None },
+            conversation,
             last_body: r.get(1)?,
             last_stamp: r.get(2)?,
             last_direction: r.get(3)?,
             unread: r.get(4)?,
+            kind,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// One conversation, oldest first, at most `limit` of the newest messages.
+/// In a room, what others said that names the person (by their nickname
+/// there now) is marked as a mention.
 pub fn history(conn: &Connection, account: &str, conversation: &str, limit: i64) -> Result<Vec<ChatMessage>> {
     let mut stmt = conn.prepare(
         &format!(
@@ -428,7 +454,13 @@ pub fn history(conn: &Connection, account: &str, conversation: &str, limit: i64)
         ),
     )?;
     let rows = stmt.query_map(params![account, conversation, limit], from_row)?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut messages: Vec<ChatMessage> = rows.collect::<rusqlite::Result<_>>()?;
+    if let Some(nick) = room_nick(conn, account, conversation)? {
+        for message in messages.iter_mut().filter(|m| m.kind == KIND_GROUP && m.direction == "in") {
+            message.mention = mentions::mentions_nick(&message.body, &nick);
+        }
+    }
+    Ok(messages)
 }
 
 const COLUMNS: &str =
@@ -449,6 +481,7 @@ fn from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<ChatMessage> {
         file_url: r.get(10)?,
         file_name: r.get(11)?,
         file_size: r.get(12)?,
+        mention: false,
     })
 }
 
@@ -564,13 +597,54 @@ pub fn room(conn: &Connection, account: &str, room: &str) -> Result<Option<Room>
     Ok(rooms(conn, account)?.into_iter().find(|r| r.room == room))
 }
 
+/// The person's nickname in a joined room, if it is one.
+pub fn room_nick(conn: &Connection, account: &str, room: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row("SELECT nick FROM chat_rooms WHERE chat_account = ?1 AND room = ?2", params![account, room], |r| r.get(0))
+        .optional()?)
+}
+
+/// Keeps the nickname a room gave the person, so mentions and the room's
+/// echo of our messages follow it.
+pub fn set_room_nick(conn: &Connection, account: &str, room: &str, nick: &str) -> Result<()> {
+    let nick = check_nick(nick)?;
+    conn.execute("UPDATE chat_rooms SET nick = ?3 WHERE chat_account = ?1 AND room = ?2", params![account, room, nick])?;
+    Ok(())
+}
+
+/// A private conversation's room and nickname: `room@service/nick`.
+pub fn split_private(conversation: &str) -> Option<(&str, &str)> {
+    let (room, nick) = conversation.split_once('/')?;
+    (!room.is_empty() && !nick.is_empty()).then_some((room, nick))
+}
+
+/// A conversation as typed or passed around: the address in lower case, and
+/// a nickname (for a private one) kept as it is, since rooms tell nicknames
+/// apart by case.
+pub fn normalize_conversation(conversation: &str) -> String {
+    let conversation = conversation.trim();
+    match conversation.split_once('/') {
+        Some((bare, nick)) => format!("{}/{}", bare.to_lowercase(), nick),
+        None => conversation.to_lowercase(),
+    }
+}
+
 /// Leaves a room here: it is not joined again, and what was kept of it on
 /// this computer goes. The room's own archive keeps what it keeps.
 pub fn leave_room(conn: &Connection, account: &str, room: &str) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute("DELETE FROM chat_rooms WHERE chat_account = ?1 AND room = ?2", params![account, room])?;
-    tx.execute("DELETE FROM chat_messages WHERE chat_account = ?1 AND conversation = ?2", params![account, room])?;
-    tx.execute("DELETE FROM chat_reads WHERE chat_account = ?1 AND conversation = ?2", params![account, room])?;
+    // Its private conversations (`room/nick`) go with it. Compared by exact
+    // prefix: `LIKE` would let `_` in one room's name match another room.
+    for table in ["chat_messages", "chat_reads"] {
+        tx.execute(
+            &format!(
+                "DELETE FROM {table} WHERE chat_account = ?1
+                   AND (conversation = ?2 OR substr(conversation, 1, length(?2) + 1) = ?2 || '/')"
+            ),
+            params![account, room],
+        )?;
+    }
     tx.commit()?;
     Ok(())
 }

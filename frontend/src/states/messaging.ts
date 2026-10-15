@@ -2,9 +2,13 @@
 // sends only what the person sends; this keeps what is on screen.
 // Group chats and files (ADR-0044): rooms the person joined, invitations
 // waiting for their answer, and files going up with their progress.
+// Presence, mentions and private messages in rooms (ADR-0055): the person's
+// own status, what the session knows of contacts and of who is in each room,
+// and private conversations `room@service/nick`.
 
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
+import { ui$ } from './ui'
 
 export type ChatAccount = { id: string; jid: string; host: string; port: number }
 export type ChatConversation = {
@@ -13,6 +17,9 @@ export type ChatConversation = {
   last_stamp: number
   last_direction: 'in' | 'out'
   unread: number
+  /** `private`: with someone in a room, through that room. */
+  kind?: 'chat' | 'private'
+  room?: string | null
 }
 export type ChatMessage = {
   account: string
@@ -24,7 +31,9 @@ export type ChatMessage = {
   body: string
   stamp: number
   state: 'sending' | 'sent' | 'accepted' | 'delivered' | 'uncertain' | 'failed' | 'received'
-  kind?: 'chat' | 'groupchat'
+  kind?: 'chat' | 'groupchat' | 'private'
+  /** Someone else in a room named the person. */
+  mention?: boolean
   /** A file shared as a link; fetched only when the person saves it. */
   file_url?: string | null
   file_name?: string | null
@@ -58,6 +67,46 @@ export type ChatUpload = {
 }
 export type PickedFile = { path: string; name: string; size: number }
 export type ChatStatus = { account: string; state: 'online' | 'offline' | 'error' | 'stopped'; message?: string }
+export type OwnShow = 'available' | 'away' | 'dnd' | 'invisible'
+export type ContactShow = 'chat' | 'available' | 'away' | 'xa' | 'dnd' | 'offline'
+export type OwnPresence = {
+  show: OwnShow
+  status: string
+  /** Where it stands on the connection; `withheld`: invisible chosen but the server cannot hide. */
+  applied: 'offline' | 'waiting' | 'announced' | 'invisible' | 'withheld'
+  invisible_supported: boolean | null
+}
+export type ChatOccupant = { nick: string; show: ContactShow; role: string }
+
+export const DEFAULT_OWN_PRESENCE: OwnPresence = {
+  show: 'available',
+  status: '',
+  applied: 'offline',
+  invisible_supported: null,
+}
+
+/** What the open account's session knows about presence (ADR-0055). */
+export const chatPresence$ = observable({
+  own: { ...DEFAULT_OWN_PRESENCE } as OwnPresence,
+  contacts: {} as Record<string, { show: ContactShow; status: string }>,
+  requests: [] as string[],
+  /** Who is in the open room. */
+  occupants: [] as ChatOccupant[],
+})
+
+/** A conversation as the core keeps it: the address in lower case, a nickname as it is. */
+export function normalizeConversation(conversation: string) {
+  const trimmed = conversation.trim()
+  const slash = trimmed.indexOf('/')
+  return slash < 0 ? trimmed.toLowerCase() : `${trimmed.slice(0, slash).toLowerCase()}/${trimmed.slice(slash + 1)}`
+}
+
+/** A private conversation's room and nickname. */
+export function splitPrivate(conversation: string): { room: string; nick: string } | null {
+  const slash = conversation.indexOf('/')
+  if (slash <= 0 || slash === conversation.length - 1) return null
+  return { room: conversation.slice(0, slash), nick: conversation.slice(slash + 1) }
+}
 
 export const messaging$ = observable({
   accounts: [] as ChatAccount[],
@@ -80,7 +129,70 @@ export async function loadMessaging() {
   messaging$.status.set(status ?? {})
   const current = messaging$.account.peek()
   if (!accounts?.some((a) => a.id === current)) messaging$.account.set(accounts?.[0]?.id ?? '')
-  await refreshConversations()
+  await Promise.all([refreshConversations(), loadPresence()])
+}
+
+/** The person's status and what the session knows of others, for the open account. */
+export async function loadPresence() {
+  const account = messaging$.account.peek()
+  if (!account) {
+    chatPresence$.set({ own: { ...DEFAULT_OWN_PRESENCE }, contacts: {}, requests: [], occupants: [] })
+    return
+  }
+  const known = await invoke<{
+    own?: OwnPresence
+    contacts?: Record<string, { show: ContactShow; status: string }>
+    requests?: string[]
+  }>('chat.presence', { account })
+  chatPresence$.own.set({ ...DEFAULT_OWN_PRESENCE, ...(known?.own ?? {}) })
+  chatPresence$.contacts.set(known?.contacts ?? {})
+  const requests = known?.requests
+  chatPresence$.requests.set(Array.isArray(requests) ? requests : [])
+}
+
+/** Sets the person's status; the core says it to contacts allowed to see it. */
+export async function setOwnPresence(show: OwnShow, status: string) {
+  const account = messaging$.account.peek()
+  if (!account) return
+  const saved = await invoke<{ show: OwnShow; status: string }>('chat.setPresence', { account, show, status })
+  if (saved) chatPresence$.own.set({ ...chatPresence$.own.peek(), show: saved.show, status: saved.status })
+}
+
+/** Asks to see someone's status; they decide. */
+export async function askToSeeStatus(jid: string) {
+  await invoke('chat.subscribe', { account: messaging$.account.peek(), jid })
+}
+
+/** Answers someone's request to see the person's status. */
+export async function answerStatusRequest(jid: string, allow: boolean) {
+  await invoke('chat.answerSubscription', { account: messaging$.account.peek(), jid, allow })
+  chatPresence$.requests.set(chatPresence$.requests.peek().filter((j) => j !== jid))
+}
+
+/** Who is in a room now, as the room said on this connection. */
+export async function loadOccupants(room = messaging$.conversation.peek()) {
+  const account = messaging$.account.peek()
+  if (!account || !room) return
+  const list = await invoke<ChatOccupant[]>('chat.occupants', { account, room })
+  if (messaging$.conversation.peek() === room) chatPresence$.occupants.set(Array.isArray(list) ? list : [])
+}
+
+/** A system notification was clicked: the Chat view, its account, that conversation. */
+export async function openChatFromNotification(account: string, conversation: string) {
+  ui$.calendarOpen.set(false)
+  ui$.peopleOpen.set(false)
+  ui$.tasksOpen.set(false)
+  ui$.notesOpen.set(false)
+  ui$.attachmentsOpen.set(false)
+  ui$.messagingOpen.set(true)
+  if (account) messaging$.account.set(account)
+  await loadMessaging()
+  await openConversation(conversation)
+}
+
+/** Opens a private conversation with someone in a room. */
+export async function openPrivate(room: string, nick: string) {
+  await openConversation(`${room}/${nick}`)
 }
 
 export async function refreshConversations() {
@@ -181,8 +293,10 @@ export async function refreshHistory() {
 
 /** Opens a conversation and counts it as read. */
 export async function openConversation(conversation: string) {
-  messaging$.conversation.set(conversation.trim().toLowerCase())
+  messaging$.conversation.set(normalizeConversation(conversation))
+  chatPresence$.occupants.set([])
   await refreshHistory()
+  if (isRoom()) await loadOccupants()
   const account = messaging$.account.peek()
   if (account) {
     await invoke('chat.markRead', { account, conversation: messaging$.conversation.peek() })
@@ -190,11 +304,12 @@ export async function openConversation(conversation: string) {
   }
 }
 
-export async function sendChat(body: string) {
+/** Sends to the open conversation; in a room, with the nicknames picked from the suggestions. */
+export async function sendChat(body: string, mentions: string[] = []) {
   const account = messaging$.account.peek()
   const conversation = messaging$.conversation.peek()
   if (!account || !conversation || !body.trim()) return
-  await invoke('chat.send', { account, conversation, body })
+  await invoke('chat.send', mentions.length ? { account, conversation, body, mentions } : { account, conversation, body })
   await refreshConversations()
 }
 
@@ -225,13 +340,50 @@ type ChatEventDetail = { account?: string; conversation?: string; room?: string 
     total?: number
     id?: string
     error?: ChatUpload['error']
+    jid?: string
+    show?: string
+    status?: string
+    answered?: boolean
+    applied?: OwnPresence['applied']
+    invisible_supported?: boolean | null
   }
+
+let occupantsTimer: ReturnType<typeof setTimeout> | undefined
 
 /**
  * Called for the core's `chat.changed`, `chat.status`, `chat.room`,
- * `chat.invitation`, `chat.progress` and `chat.uploaded`.
+ * `chat.invitation`, `chat.progress` and `chat.uploaded`; and (ADR-0055)
+ * `chat.own`, `chat.presence`, `chat.subscription` and `chat.occupants`.
  */
 export function onChatEvent(name: string, detail: ChatEventDetail) {
+  const current = detail.account === messaging$.account.peek()
+  if (name === 'chat.own' && current) {
+    const { show, status, applied, invisible_supported } = detail
+    chatPresence$.own.set({
+      ...chatPresence$.own.peek(),
+      ...(show ? { show: show as OwnShow } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(applied ? { applied } : {}),
+      ...(invisible_supported !== undefined ? { invisible_supported } : {}),
+    })
+  }
+  if (name === 'chat.presence' && current && detail.jid) {
+    if (detail.show === 'offline') chatPresence$.contacts[detail.jid].delete()
+    else
+      chatPresence$.contacts[detail.jid].set({
+        show: (detail.show ?? 'available') as ContactShow,
+        status: detail.status ?? '',
+      })
+  }
+  if (name === 'chat.subscription' && current && detail.jid) {
+    const others = chatPresence$.requests.peek().filter((j) => j !== detail.jid)
+    chatPresence$.requests.set(detail.answered ? others : [...others, detail.jid])
+  }
+  if (name === 'chat.occupants' && current && detail.room === messaging$.conversation.peek()) {
+    // A room says who is in it one person at a time: ask once they are done.
+    clearTimeout(occupantsTimer)
+    occupantsTimer = setTimeout(() => void loadOccupants(detail.room), 150)
+  }
   if (name === 'chat.status' && detail.account) {
     messaging$.status[detail.account].set(detail as ChatStatus)
   }

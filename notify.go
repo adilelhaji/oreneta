@@ -166,6 +166,8 @@ func (a *App) handleSidecarEvent(name string, detail any) {
 		a.notifyReminder(detail)
 	case "tasks.reminder":
 		a.notifyTaskReminder(detail)
+	case "chat.notify":
+		a.notifyChat(detail)
 	}
 }
 
@@ -372,6 +374,34 @@ func (a *App) notifyTaskReminder(detail any) {
 		body = time.Unix(int64(due), 0).Format("2006-01-02")
 	}
 	dispatchNotification(a, notification{title: title, body: body})
+}
+
+// chatNotificationPrefix marks a notification target as a chat conversation
+// rather than a mail thread; the frontend opens it in the Chat view.
+const chatNotificationPrefix = "chat:"
+
+// notifyChat raises the OS notification for a chat message the core says is
+// worth one (ADR-0055): it already left out what was caught up on, rooms
+// without a mention and a busy status. Do not disturb and quiet hours apply
+// as for mail: a chat message is a message, not a reminder (ADR-0049).
+func (a *App) notifyChat(detail any) {
+	m, ok := detail.(map[string]any)
+	if !ok || notificationsSuppressed(quietMail) {
+		return
+	}
+	account, _ := m["account"].(string)
+	conversation, _ := m["conversation"].(string)
+	title, _ := m["title"].(string)
+	body, _ := m["body"].(string)
+	if account == "" || conversation == "" {
+		return
+	}
+	dispatchNotification(a, notification{
+		title:    firstNonEmpty(title, conversation),
+		body:     body,
+		account:  account,
+		threadID: chatNotificationPrefix + conversation,
+	})
 }
 
 func notificationThreadID(account, folder, threadKey string) string {

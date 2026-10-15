@@ -420,6 +420,432 @@ fn files_come_and_go_over_https_only() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+// ---- Presence, mentions, notifications and private messages (ADR-0055) -----------------
+
+fn stanza<T: TryFrom<tokio_xmpp::parsers::minidom::Element>>(xml: &str) -> T
+where
+    T::Error: std::fmt::Debug,
+{
+    T::try_from(element(xml)).unwrap()
+}
+
+#[test]
+fn the_own_status_is_kept_per_account_and_a_bad_field_falls_back_alone() {
+    use presence::{own, save_own};
+    let c = conn();
+    assert_eq!(own(&c, "a").unwrap(), presence::OwnPresence::default(), "nothing saved: available, no text");
+    let saved = save_own(&c, "a", "away", "  En una reunión\n hasta las 5\u{7}  ").unwrap();
+    assert_eq!((saved.show.as_str(), saved.status.as_str()), ("away", "En una reunión  hasta las 5"));
+    assert_eq!(own(&c, "a").unwrap(), saved);
+    // Another account is untouched.
+    assert_eq!(own(&c, "b").unwrap().show, "available");
+    // At most 200 characters; an unknown status is refused and changes nothing.
+    let long = save_own(&c, "a", "dnd", &"ñ".repeat(250)).unwrap();
+    assert_eq!(long.status.chars().count(), presence::MAX_STATUS);
+    assert!(save_own(&c, "a", "busy", "x").is_err());
+    assert_eq!(own(&c, "a").unwrap().show, "dnd");
+    // A damaged row: the bad field falls back, the good one stays.
+    crate::store::setting_set(&c, "chat_presence:a", &serde_json::json!({ "show": "partying", "status": "Aquí" })).unwrap();
+    assert_eq!(own(&c, "a").unwrap(), presence::OwnPresence { show: "available".into(), status: "Aquí".into() });
+    crate::store::setting_set(&c, "chat_presence:a", &serde_json::json!({ "show": "away", "status": 7 })).unwrap();
+    assert_eq!(own(&c, "a").unwrap(), presence::OwnPresence { show: "away".into(), status: String::new() });
+    // Removing the account forgets it.
+    save_account(&c, &ChatAccount { id: "a".into(), jid: "ana@chat.test".into(), host: String::new(), port: 5222 }, 1).unwrap();
+    remove_account(&c, "a").unwrap();
+    assert_eq!(own(&c, "a").unwrap(), presence::OwnPresence::default());
+}
+
+#[test]
+fn invisible_is_used_only_where_the_server_offers_it_and_never_turns_visible_alone() {
+    use presence::{Applied, plan};
+    assert_eq!(plan("available", None), Applied::Announced);
+    assert_eq!(plan("dnd", Some(false)), Applied::Announced);
+    assert_eq!(plan("invisible", Some(true)), Applied::Invisible);
+    // Not offered: nothing is announced, the person stays hidden.
+    assert_eq!(plan("invisible", Some(false)), Applied::Withheld);
+    // Not known yet: wait for the server to say.
+    assert_eq!(plan("invisible", None), Applied::Waiting);
+    let offers = tokio_xmpp::parsers::disco::DiscoInfoResult::try_from(element(
+        "<query xmlns='http://jabber.org/protocol/disco#info'><identity category='server' type='im'/>\
+         <feature var='urn:xmpp:invisible:0'/><feature var='urn:xmpp:mam:2'/></query>",
+    ))
+    .unwrap();
+    let lacks = tokio_xmpp::parsers::disco::DiscoInfoResult::try_from(element(
+        "<query xmlns='http://jabber.org/protocol/disco#info'><identity category='server' type='im'/>\
+         <feature var='urn:xmpp:mam:2'/></query>",
+    ))
+    .unwrap();
+    assert!(presence::supports_invisible(&offers) && !presence::supports_invisible(&lacks));
+    let hide = presence::invisible_command(true);
+    let show = presence::invisible_command(false);
+    assert!(hide.is("invisible", presence::NS_INVISIBLE) && show.is("visible", presence::NS_INVISIBLE));
+}
+
+#[test]
+fn contacts_hear_availability_and_text_but_rooms_hear_no_text() {
+    use tokio_xmpp::parsers::presence::Show;
+    let away = presence::own_stanza("away", " Comiendo ");
+    assert_eq!((away.show, away.to.is_none()), (Some(Show::Away), true), "announced to no one in particular");
+    assert_eq!(away.statuses.get("").map(String::as_str), Some("Comiendo"));
+    let busy = presence::own_stanza("dnd", "");
+    assert_eq!((busy.show, busy.statuses.is_empty()), (Some(Show::Dnd), true));
+    assert_eq!(presence::own_stanza("available", "").show, None);
+    // A room hears that we are busy, never why.
+    let to_room = presence::room_stanza(jid("team@rooms.chat.test/Ana"), "dnd");
+    assert_eq!((to_room.show, to_room.statuses.is_empty()), (Some(Show::Dnd), true));
+    let room = BareJid::from_str("team@rooms.chat.test").unwrap();
+    let join = xmpp::join_presence_as(&room, "Ana", None, None, "away").unwrap();
+    assert_eq!(join.show, Some(Show::Away));
+    assert!(join.statuses.is_empty());
+    assert!(join.payloads.iter().any(|p| tokio_xmpp::parsers::muc::Muc::try_from(p.clone()).is_ok()), "still a join");
+    // Asking to see someone's status, and answering.
+    let ask = presence::subscription(&BareJid::from_str("pau@chat.test").unwrap(), tokio_xmpp::parsers::presence::Type::Subscribe);
+    assert_eq!((ask.type_, ask.to.unwrap().to_string()), (tokio_xmpp::parsers::presence::Type::Subscribe, "pau@chat.test".to_string()));
+}
+
+#[test]
+fn a_contacts_status_follows_their_best_device_and_requests_wait_for_the_person() {
+    use presence::{ContactPresence, contact_presence};
+    let own = BareJid::from_str("ana@chat.test").unwrap();
+    let phone: tokio_xmpp::parsers::presence::Presence = stanza(
+        "<presence xmlns='jabber:client' from='pau@chat.test/phone'><show>away</show><status>En el tren</status><priority>5</priority></presence>",
+    );
+    assert_eq!(
+        contact_presence(&phone, &own),
+        Some(ContactPresence::Status { jid: "pau@chat.test".into(), resource: "phone".into(), show: "away", status: "En el tren".into(), priority: 5 })
+    );
+    let gone: tokio_xmpp::parsers::presence::Presence = stanza("<presence xmlns='jabber:client' type='unavailable' from='pau@chat.test/desk'/>");
+    assert!(matches!(contact_presence(&gone, &own), Some(ContactPresence::Status { show: "offline", .. })));
+    let asks: tokio_xmpp::parsers::presence::Presence = stanza("<presence xmlns='jabber:client' type='subscribe' from='eva@chat.test'/>");
+    assert_eq!(contact_presence(&asks, &own), Some(ContactPresence::Request { jid: "eva@chat.test".into() }));
+    // Our own other devices, and answers to our own requests, are not contacts' statuses.
+    let mine: tokio_xmpp::parsers::presence::Presence = stanza("<presence xmlns='jabber:client' from='ana@chat.test/phone'/>");
+    assert_eq!(contact_presence(&mine, &own), None);
+    let allowed: tokio_xmpp::parsers::presence::Presence = stanza("<presence xmlns='jabber:client' type='subscribed' from='pau@chat.test'/>");
+    assert_eq!(contact_presence(&allowed, &own), None);
+
+    let mut contacts = presence::Contacts::default();
+    assert_eq!(contacts.update("pau@chat.test", "phone", "away", "En el tren", 5).show, "away");
+    // A device with a higher priority wins, whatever it says.
+    assert_eq!(contacts.update("pau@chat.test", "desk", "dnd", "Concentrado", 10).show, "dnd");
+    // At the same priority, the more available one.
+    contacts.update("pau@chat.test", "desk", "dnd", "", 5);
+    assert_eq!(contacts.seen("pau@chat.test").show, "away");
+    contacts.update("pau@chat.test", "tablet", "chat", "", 5);
+    assert_eq!(contacts.seen("pau@chat.test").show, "chat");
+    for device in ["phone", "desk", "tablet"] {
+        contacts.update("pau@chat.test", device, "offline", "", 0);
+    }
+    assert_eq!(contacts.seen("pau@chat.test"), presence::Seen { show: "offline".into(), status: String::new() });
+    assert!(contacts.all().is_empty(), "gone devices are not kept");
+
+    // What a session knows starts again with a new session.
+    let mut live = presence::Live::default();
+    live.contacts.update("pau@chat.test", "phone", "away", "", 0);
+    live.requests.insert("eva@chat.test".into());
+    live.invisible_supported = Some(true);
+    let snapshot = live.snapshot();
+    assert_eq!(snapshot["contacts"]["pau@chat.test"]["show"], "away");
+    assert_eq!(snapshot["requests"], serde_json::json!(["eva@chat.test"]));
+    assert_eq!(snapshot["own"]["applied"], "offline");
+    live.fresh_session();
+    assert!(live.contacts.all().is_empty() && live.requests.is_empty() && live.invisible_supported.is_none());
+}
+
+#[test]
+fn who_is_in_a_room_follows_its_presence_and_the_room_may_rename_us() {
+    use presence::{OccupantChange, occupant_change};
+    let came: tokio_xmpp::parsers::presence::Presence = stanza(
+        "<presence xmlns='jabber:client' from='team@rooms.chat.test/Pau'><show>dnd</show>\
+         <x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='member' role='moderator'/></x></presence>",
+    );
+    let Some(OccupantChange::Here(pau)) = occupant_change(&came) else { panic!("Pau came") };
+    assert_eq!((pau.nick.as_str(), pau.show.as_str(), pau.role.as_str()), ("Pau", "dnd", "moderator"));
+    let renamed: tokio_xmpp::parsers::presence::Presence = stanza(
+        "<presence xmlns='jabber:client' type='unavailable' from='team@rooms.chat.test/Pau'>\
+         <x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='member' role='participant' nick='Pau R'/><status code='303'/></x></presence>",
+    );
+    assert_eq!(occupant_change(&renamed), Some(OccupantChange::Renamed { from: "Pau".into(), to: "Pau R".into() }));
+    let left: tokio_xmpp::parsers::presence::Presence = stanza(
+        "<presence xmlns='jabber:client' type='unavailable' from='team@rooms.chat.test/Pau R'>\
+         <x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='member' role='none'/></x></presence>",
+    );
+    // About us (110), or not from a room: not someone else in it.
+    let us: tokio_xmpp::parsers::presence::Presence = stanza(
+        "<presence xmlns='jabber:client' from='team@rooms.chat.test/Ana2'>\
+         <x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='none' role='participant'/><status code='110'/><status code='210'/></x></presence>",
+    );
+    assert_eq!(occupant_change(&us), None);
+    assert_eq!(occupant_change(&stanza("<presence xmlns='jabber:client' from='pau@chat.test/phone'/>")), None);
+    assert_eq!(presence::own_nick_in(&us, "Ana").as_deref(), Some("Ana2"), "the room gave us another nickname");
+    assert_eq!(presence::own_nick_in(&us, "Ana2"), None);
+
+    let mut occupants = presence::Occupants::default();
+    assert!(occupants.apply("team@rooms.chat.test", occupant_change(&came).unwrap()));
+    assert!(!occupants.apply("team@rooms.chat.test", occupant_change(&came).unwrap()), "nothing new");
+    assert!(occupants.apply("team@rooms.chat.test", occupant_change(&renamed).unwrap()));
+    assert_eq!(occupants.list("team@rooms.chat.test").iter().map(|o| o.nick.as_str()).collect::<Vec<_>>(), ["Pau R"]);
+    assert!(occupants.list("other@rooms.chat.test").is_empty());
+    assert!(occupants.apply("team@rooms.chat.test", occupant_change(&left).unwrap()));
+    assert!(occupants.list("team@rooms.chat.test").is_empty());
+
+    // The nickname the room gave is kept, so mentions follow it.
+    let c = conn();
+    save_room(&c, "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
+    set_room_nick(&c, "a", "team@rooms.chat.test", "Ana2").unwrap();
+    assert_eq!(room_nick(&c, "a", "team@rooms.chat.test").unwrap().as_deref(), Some("Ana2"));
+    assert!(set_room_nick(&c, "a", "team@rooms.chat.test", "  ").is_err());
+}
+
+#[test]
+fn a_mention_is_the_nickname_as_a_whole_word_or_a_reference_to_us() {
+    use mentions::{find_word, mentions_nick};
+    assert!(mentions_nick("@Ana, ¿vienes?", "Ana"));
+    assert!(mentions_nick("hola ana", "Ana"), "case does not matter");
+    assert!(mentions_nick("¿ÁLVARO?", "Álvaro"), "nor the alphabet");
+    assert!(mentions_nick("pregunta a Ana María", "Ana María"), "a nickname with a space");
+    assert!(mentions_nick("gracias, J.R.", "J.R."));
+    assert!(!mentions_nick("Anabel dijo", "Ana"), "not inside another word");
+    assert!(!mentions_nick("Mariana", "Ana"));
+    assert!(!mentions_nick("ana_b llegó", "Ana"), "_ continues a word");
+    assert!(!mentions_nick("hola", "  "), "an empty nickname mentions nobody");
+    assert_eq!(find_word("Hi 日本 and @Ana!", "ana"), Some((11, 14)), "counted in characters, not bytes");
+
+    let own = BareJid::from_str("ana@chat.test").unwrap();
+    let room = BareJid::from_str("team@rooms.chat.test").unwrap();
+    let mut by_reference = group_message("team@rooms.chat.test/Pau", "r1", "mira esto");
+    by_reference.payloads.push(element(
+        "<reference xmlns='urn:xmpp:reference:0' type='mention' uri='xmpp:team@rooms.chat.test/Ana' begin='0' end='4'/>",
+    ));
+    assert!(mentions::is_mention(&by_reference, "mira esto", &own, &room, "Ana"));
+    let mut by_address = group_message("team@rooms.chat.test/Pau", "r2", "x");
+    by_address.payloads.push(element("<reference xmlns='urn:xmpp:reference:0' type='mention' uri='xmpp:ana@chat.test'/>"));
+    assert!(mentions::references_me(&by_address, &own, &room, "Ana"));
+    // Someone else, another room, or a reference that is not a mention: no.
+    let mut other = group_message("team@rooms.chat.test/Pau", "r3", "x");
+    other.payloads.push(element("<reference xmlns='urn:xmpp:reference:0' type='mention' uri='xmpp:team@rooms.chat.test/Eva'/>"));
+    other.payloads.push(element("<reference xmlns='urn:xmpp:reference:0' type='mention' uri='xmpp:club@rooms.chat.test/Ana'/>"));
+    other.payloads.push(element("<reference xmlns='urn:xmpp:reference:0' type='data' uri='xmpp:ana@chat.test'/>"));
+    assert!(!mentions::is_mention(&other, "x", &own, &room, "Ana"));
+
+    // Picked nicknames still in the text go as references, once each.
+    let out = xmpp::outgoing_group(&room, "g1", "@Pau R y @Eva: ¿café?", None, &["Pau R".into(), "Eva".into(), "Eva".into(), "Joan".into()]);
+    let refs: Vec<_> = out.payloads.iter().filter(|p| p.is("reference", mentions::NS_REFERENCE)).collect();
+    assert_eq!(refs.len(), 2, "Joan is not in the text; Eva once");
+    assert_eq!(
+        (refs[0].attr("uri"), refs[0].attr("begin"), refs[0].attr("end"), refs[0].attr("type")),
+        (Some("xmpp:team@rooms.chat.test/Pau%20R"), Some("1"), Some("6"), Some("mention"))
+    );
+    assert_eq!((refs[1].attr("begin"), refs[1].attr("end")), (Some("10"), Some("13")));
+    // A reference we sent is understood as one, by the person it names.
+    let mut echo = out.clone();
+    echo.from = Some(jid("team@rooms.chat.test/Ana"));
+    assert!(mentions::references_me(&echo, &BareJid::from_str("pau@chat.test").unwrap(), &room, "Pau R"));
+}
+
+#[test]
+fn reading_a_room_marks_what_names_the_person_and_nothing_else() {
+    let c = conn();
+    save_room(&c, "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
+    for (id, direction, sender, body, stamp) in [
+        ("g1", "in", "Pau", "@Ana ¿vienes?", 10),
+        ("g2", "in", "Pau", "Anabel viene", 11),
+        ("g3", "out", "Ana", "Ana aquí", 12),
+    ] {
+        let mut m = ChatMessage::chat("a", "team@rooms.chat.test", id, direction, sender, body, stamp, "received");
+        m.kind = KIND_GROUP.into();
+        record(&c, &m).unwrap();
+    }
+    let marks: Vec<(String, bool)> = history(&c, "a", "team@rooms.chat.test", 10).unwrap().into_iter().map(|m| (m.id, m.mention)).collect();
+    assert_eq!(marks, [("g1".to_string(), true), ("g2".to_string(), false), ("g3".to_string(), false)]);
+    // A direct conversation has no mentions, whatever it says.
+    record(&c, &incoming("d1", None, "Ana, hola", 13)).unwrap();
+    assert!(!history(&c, "a", "pau@chat.test", 10).unwrap()[0].mention);
+    // Another account sees none of it.
+    assert!(history(&c, "b", "team@rooms.chat.test", 10).unwrap().is_empty());
+}
+
+fn group_in(body: &str, mention: bool) -> ChatMessage {
+    let mut m = ChatMessage::chat("a", "team@rooms.chat.test", "g", "in", "Pau", body, 1, "received");
+    m.kind = KIND_GROUP.into();
+    m.mention = mention;
+    m
+}
+
+#[test]
+fn only_a_new_message_from_someone_else_just_sent_notifies() {
+    use presence::{Arrival, should_notify};
+    let direct = incoming("d1", None, "Hola", 1);
+    assert!(should_notify(&direct, Arrival::Live, "available"));
+    assert!(should_notify(&direct, Arrival::Live, "away"));
+    assert!(should_notify(&direct, Arrival::Carbon, "available"), "got by another device: still new here");
+    assert!(!should_notify(&direct, Arrival::Backfill, "available"), "caught up: shown as unread, no popup");
+    assert!(!should_notify(&direct, Arrival::Live, "dnd"), "busy holds them back");
+    let mut mine = direct.clone();
+    mine.direction = "out".into();
+    assert!(!should_notify(&mine, Arrival::Carbon, "available"), "our own, from another device");
+    // In a room, only a mention.
+    assert!(!should_notify(&group_in("hola a todos", false), Arrival::Live, "available"));
+    assert!(should_notify(&group_in("@Ana hola", true), Arrival::Live, "available"));
+    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Backfill, "available"), "room history on joining");
+    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Live, "dnd"));
+    // Privately through a room: like a direct one.
+    let mut private = incoming("p1", None, "psst", 1);
+    private.conversation = "team@rooms.chat.test/Pau".into();
+    private.sender = "Pau".into();
+    private.kind = KIND_PRIVATE.into();
+    assert!(should_notify(&private, Arrival::Live, "available"));
+
+    // What the bridge is told: who, where, and the text cut short.
+    let mut long = group_in(&"a".repeat(400), true);
+    long.sender = "Pau".into();
+    let event = presence::notification(&long);
+    assert_eq!((event["title"].as_str(), event["room"].as_str(), event["mention"].as_bool()), (Some("Pau · team@rooms.chat.test"), Some("team@rooms.chat.test"), Some(true)));
+    assert_eq!(event["body"].as_str().unwrap().chars().count(), 280);
+    let event = presence::notification(&private);
+    assert_eq!((event["title"].as_str(), event["room"].as_str(), event["kind"].as_str()), (Some("Pau · team@rooms.chat.test"), Some("team@rooms.chat.test"), Some("private")));
+    let mut file = direct.clone();
+    file.file_name = Some("Informe.pdf".into());
+    let event = presence::notification(&file);
+    assert_eq!((event["title"].as_str(), event["body"].as_str(), event["room"].is_null()), (Some("pau@chat.test"), Some("Informe.pdf"), true));
+}
+
+/// Runs one stanza through the session's handling and says what it led to.
+fn handle(db: &Arc<std::sync::Mutex<Connection>>, xml: &str, own_show: &str) -> xmpp::Handled {
+    let message: Message = stanza(xml);
+    xmpp::handle_message(db, "a", &BareJid::from_str("ana@chat.test").unwrap(), &message, own_show, &|_| {}, &|_, _| {})
+}
+
+#[test]
+fn what_arrives_notifies_only_when_new_live_and_meant_for_the_person() {
+    let db = Arc::new(std::sync::Mutex::new(conn()));
+    save_room(&db.lock().unwrap(), "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
+    let live = "<message xmlns='jabber:client' type='chat' from='pau@chat.test/phone' to='ana@chat.test/desk' id='d1'><body>Hola</body></message>";
+    let handled = handle(&db, live, "available");
+    assert_eq!(handled.notify.map(|m| (m.id, m.kind)), Some(("d1".to_string(), KIND_CHAT.to_string())));
+    // The same message again (a second copy): kept once, no second popup.
+    assert!(handle(&db, live, "available").notify.is_none());
+    // Kept for us while away (delayed), or caught up from the archive: no popup, but kept.
+    let delayed = "<message xmlns='jabber:client' type='chat' from='pau@chat.test/phone' to='ana@chat.test' id='d2'><body>¿Estás?</body>\
+                   <delay xmlns='urn:xmpp:delay' stamp='2026-10-14T10:00:00Z'/></message>";
+    assert!(handle(&db, delayed, "available").notify.is_none());
+    let archived = "<message xmlns='jabber:client' from='ana@chat.test' to='ana@chat.test/desk'>\
+                    <result xmlns='urn:xmpp:mam:2' queryid='oreneta' id='arch-3'><forwarded xmlns='urn:xmpp:forward:0'>\
+                    <delay xmlns='urn:xmpp:delay' stamp='2026-10-14T11:00:00Z'/>\
+                    <message xmlns='jabber:client' type='chat' from='pau@chat.test/phone' to='ana@chat.test' id='d3'><body>Del archivo</body></message>\
+                    </forwarded></result></message>";
+    assert!(handle(&db, archived, "available").notify.is_none());
+    let kept: Vec<String> = history(&db.lock().unwrap(), "a", "pau@chat.test", 10).unwrap().into_iter().map(|m| m.id).collect();
+    assert_eq!(kept.len(), 3, "{kept:?}");
+    // Busy: kept, no popup.
+    let busy = "<message xmlns='jabber:client' type='chat' from='pau@chat.test/phone' to='ana@chat.test' id='d4'><body>Urgente</body></message>";
+    assert!(handle(&db, busy, "dnd").notify.is_none());
+    assert_eq!(history(&db.lock().unwrap(), "a", "pau@chat.test", 10).unwrap().len(), 4);
+    // Our own, sent from another device: no popup.
+    let sent = "<message xmlns='jabber:client' from='ana@chat.test' to='ana@chat.test/desk'><sent xmlns='urn:xmpp:carbons:2'>\
+                <forwarded xmlns='urn:xmpp:forward:0'><message xmlns='jabber:client' type='chat' from='ana@chat.test/phone' to='pau@chat.test' id='d5'>\
+                <body>Desde el móvil</body></message></forwarded></sent></message>";
+    assert!(handle(&db, sent, "available").notify.is_none());
+
+    // In a room: a mention notifies and is marked; anything else does not.
+    let said = |id: &str, body: &str| {
+        format!("<message xmlns='jabber:client' type='groupchat' from='team@rooms.chat.test/Pau' to='ana@chat.test/desk' id='{id}'><body>{body}</body></message>")
+    };
+    let mention = handle(&db, &said("g1", "@Ana mira"), "available").notify.unwrap();
+    assert_eq!((mention.kind.as_str(), mention.mention), (KIND_GROUP, true));
+    assert!(handle(&db, &said("g2", "hola a todos"), "available").notify.is_none());
+    // The room's history on joining carries a delay: no popup even for a mention.
+    let replay = "<message xmlns='jabber:client' type='groupchat' from='team@rooms.chat.test/Pau' to='ana@chat.test/desk' id='g3'>\
+                  <body>Ana, ayer</body><delay xmlns='urn:xmpp:delay' stamp='2026-10-14T10:00:00Z' from='team@rooms.chat.test'/></message>";
+    assert!(handle(&db, replay, "available").notify.is_none());
+    // Our own nickname speaking is our echo, never a mention.
+    assert!(handle(&db, "<message xmlns='jabber:client' type='groupchat' from='team@rooms.chat.test/Ana' id='g4'><body>Ana dice</body></message>", "available").notify.is_none());
+    // A room we are not in is not taken at all.
+    assert!(handle(&db, "<message xmlns='jabber:client' type='groupchat' from='club@rooms.chat.test/Pau' id='g5'><body>@Ana</body></message>", "available").notify.is_none());
+    assert!(history(&db.lock().unwrap(), "a", "club@rooms.chat.test", 10).unwrap().is_empty());
+}
+
+#[test]
+fn a_private_message_in_a_room_is_its_own_conversation_kept_apart_from_the_room() {
+    let db = Arc::new(std::sync::Mutex::new(conn()));
+    save_room(&db.lock().unwrap(), "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
+    let pm = "<message xmlns='jabber:client' type='chat' from='team@rooms.chat.test/Pau' to='ana@chat.test/desk' id='p1'>\
+              <body>¿Hablamos en privado?</body><x xmlns='http://jabber.org/protocol/muc#user'/></message>";
+    let handled = handle(&db, pm, "available");
+    let new = handled.notify.expect("a private message notifies like a direct one");
+    assert_eq!(
+        (new.conversation.as_str(), new.kind.as_str(), new.sender.as_str(), new.direction.as_str()),
+        ("team@rooms.chat.test/Pau", KIND_PRIVATE, "Pau", "in")
+    );
+    assert!(handled.receipt.is_none());
+    let c = db.lock().unwrap();
+    // Not in the room, listed with the direct ones and tied to its room.
+    assert!(history(&c, "a", "team@rooms.chat.test", 10).unwrap().is_empty());
+    let list = conversations(&c, "a").unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(
+        (list[0].conversation.as_str(), list[0].kind.as_str(), list[0].room.as_deref(), list[0].unread),
+        ("team@rooms.chat.test/Pau", KIND_PRIVATE, Some("team@rooms.chat.test"), 1)
+    );
+    assert_eq!(rooms(&c, "a").unwrap()[0].unread, 0, "the room has nothing new");
+    drop(c);
+
+    // Our reply, seen back from another device, is ours in the same conversation.
+    let sent = "<message xmlns='jabber:client' from='ana@chat.test' to='ana@chat.test/desk'><sent xmlns='urn:xmpp:carbons:2'>\
+                <forwarded xmlns='urn:xmpp:forward:0'><message xmlns='jabber:client' type='chat' from='ana@chat.test/phone' to='team@rooms.chat.test/Pau' id='p2'>\
+                <body>Vale</body></message></forwarded></sent></message>";
+    assert!(handle(&db, sent, "available").notify.is_none());
+    let kept = history(&db.lock().unwrap(), "a", "team@rooms.chat.test/Pau", 10).unwrap();
+    assert_eq!(kept.iter().map(|m| (m.id.as_str(), m.direction.as_str(), m.sender.as_str())).collect::<Vec<_>>(), [("p1", "in", "Pau"), ("p2", "out", "Ana")]);
+    // The room itself writing directly is not a conversation; nor someone's
+    // nickname spelt in another case a different person.
+    assert!(handle(&db, "<message xmlns='jabber:client' type='chat' from='team@rooms.chat.test' id='p3'><body>Aviso</body></message>", "available").notify.is_none());
+    handle(&db, "<message xmlns='jabber:client' type='chat' from='team@rooms.chat.test/pau' id='p4'><body>otro</body></message>", "available");
+    assert_eq!(conversations(&db.lock().unwrap(), "a").unwrap().len(), 2, "Pau and pau are two people");
+    assert_eq!(normalize_conversation(" Team@Rooms.Chat.Test/Pau "), "team@rooms.chat.test/Pau");
+
+    // One of ours bouncing from `room/nick` is not sent.
+    let mut out = ChatMessage::chat("a", "team@rooms.chat.test/Pau", "p5", "out", "Ana", "¿sigues?", 20, "sending");
+    out.kind = KIND_PRIVATE.into();
+    queue_message(&db.lock().unwrap(), &out).unwrap();
+    set_state(&db.lock().unwrap(), "a", "p5", "sent").unwrap();
+    handle(&db, "<message xmlns='jabber:client' type='error' from='team@rooms.chat.test/Pau' id='p5'>\
+                 <error type='cancel'><item-not-found xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></message>", "available");
+    assert_eq!(outgoing(&db.lock().unwrap(), "a", "p5").unwrap().state, "failed");
+
+    // What we send goes to the occupant through the room, without asking a receipt.
+    let room = BareJid::from_str("team@rooms.chat.test").unwrap();
+    let message = xmpp::outgoing_private(&room, "Pau", "p6", "Hola", None).unwrap();
+    assert_eq!((message.to.as_ref().unwrap().to_string(), message.type_.clone()), ("team@rooms.chat.test/Pau".to_string(), MessageType::Chat));
+    assert!(message.payloads.iter().any(|p| p.is("x", "http://jabber.org/protocol/muc#user")));
+    assert!(message.payloads.iter().any(|p| tokio_xmpp::parsers::stanza_id::OriginId::try_from(p.clone()).is_ok_and(|o| o.id == "p6")));
+    assert!(!message.payloads.iter().any(|p| tokio_xmpp::parsers::receipts::Request::try_from(p.clone()).is_ok()));
+    // Its archive id counts for catching up, like a direct one.
+    let mut archived = ChatMessage::chat("a", "team@rooms.chat.test/Pau", "p7", "in", "Pau", "x", 30, "received");
+    archived.kind = KIND_PRIVATE.into();
+    archived.stanza_id = Some("arch-p7".into());
+    record(&db.lock().unwrap(), &archived).unwrap();
+    assert_eq!(last_archive_id(&db.lock().unwrap(), "a").unwrap().as_deref(), Some("arch-p7"));
+}
+
+#[test]
+fn leaving_a_room_takes_its_private_conversations_and_no_other_rooms() {
+    let c = conn();
+    for room in ["team_x@rooms.chat.test", "teamyx@rooms.chat.test"] {
+        save_room(&c, "a", room, "Ana", false, 1).unwrap();
+        let mut pm = ChatMessage::chat("a", &format!("{room}/Pau"), &format!("{room}-p"), "in", "Pau", "psst", 5, "received");
+        pm.kind = KIND_PRIVATE.into();
+        record(&c, &pm).unwrap();
+        mark_read(&c, "a", &format!("{room}/Pau"), 5).unwrap();
+    }
+    record(&c, &incoming("d1", None, "directo", 6)).unwrap();
+    leave_room(&c, "a", "team_x@rooms.chat.test").unwrap();
+    let left: Vec<String> = conversations(&c, "a").unwrap().into_iter().map(|c| c.conversation).collect();
+    assert_eq!(left, ["pau@chat.test", "teamyx@rooms.chat.test/Pau"], "`_` is not a wildcard here");
+    let reads: i64 = c.query_row("SELECT COUNT(*) FROM chat_reads WHERE conversation = 'team_x@rooms.chat.test/Pau'", [], |r| r.get(0)).unwrap();
+    assert_eq!(reads, 0);
+}
+
 /// Against a real Prosody (tests/prosody-xmpp.sh): ORENETA_PROSODY is its
 /// address. Skipped otherwise.
 #[tokio::test(flavor = "multi_thread")]
@@ -477,7 +903,7 @@ async fn against_prosody_messages_arrive_once_and_offline_ones_come_from_the_arc
     // Live: delivered, receipted, accepted by the server.
     let id = format!("t-{}", std::process::id());
     queue(&ana_db.lock().unwrap(), "ana", "pau@chat.test", &id, "ana@chat.test", "Hola Pau", 1).unwrap();
-    ana.send(xmpp::Command::Send { conversation: "pau@chat.test".into(), id: id.clone(), body: "Hola Pau".into(), group: false, file: None }).unwrap();
+    ana.send(xmpp::Command::Send { conversation: "pau@chat.test".into(), id: id.clone(), body: "Hola Pau".into(), group: false, file: None, mentions: vec![] }).unwrap();
     let (pdb, adb, mid) = (pau_db.clone(), ana_db.clone(), id.clone());
     tokio::task::spawn_blocking(move || {
         assert!(wait_until(&|| history(&pdb.lock().unwrap(), "pau", "ana@chat.test", 10).unwrap().iter().any(|m| m.id == mid)));
@@ -491,7 +917,7 @@ async fn against_prosody_messages_arrive_once_and_offline_ones_come_from_the_arc
     pau_task.await.unwrap();
     let id2 = format!("t2-{}", std::process::id());
     queue(&ana_db.lock().unwrap(), "ana", "pau@chat.test", &id2, "ana@chat.test", "¿Estás?", 2).unwrap();
-    ana.send(xmpp::Command::Send { conversation: "pau@chat.test".into(), id: id2.clone(), body: "¿Estás?".into(), group: false, file: None }).unwrap();
+    ana.send(xmpp::Command::Send { conversation: "pau@chat.test".into(), id: id2.clone(), body: "¿Estás?".into(), group: false, file: None, mentions: vec![] }).unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(800)).await;
     for round in 0..2 {
         let (pau, pau_events, pau_task) = start("pau", "pau@chat.test", pau_db.clone());
@@ -584,7 +1010,7 @@ fn say_in_room(db: &Arc<std::sync::Mutex<Connection>>, session: &Session, accoun
     queue_message(&db.lock().unwrap(), &message).unwrap();
     session
         .tx
-        .send(xmpp::Command::Send { conversation: room.into(), id: id.into(), body: body.into(), group: true, file: None })
+        .send(xmpp::Command::Send { conversation: room.into(), id: id.into(), body: body.into(), group: true, file: None, mentions: vec![] })
         .unwrap();
 }
 
@@ -676,7 +1102,7 @@ async fn against_prosody_a_file_goes_up_and_arrives_as_a_link() {
         return;
     };
     let ca = std::fs::read(ca).unwrap();
-    let options = xmpp::Options { room_password: Arc::new(|_| None), file_roots: vec![ca.clone()] };
+    let options = xmpp::Options { room_password: Arc::new(|_| None), file_roots: vec![ca.clone()], ..Default::default() };
     let dir = std::env::temp_dir().join(format!("oreneta-chat-upload-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let ana_db = Arc::new(std::sync::Mutex::new(conn()));
@@ -742,4 +1168,259 @@ async fn against_prosody_a_file_goes_up_and_arrives_as_a_link() {
     ana.tx.send(xmpp::Command::Stop).unwrap();
     pau.tx.send(xmpp::Command::Stop).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---- Against a real Prosody: presence, mentions and private messages (ADR-0055) -------
+
+/// A session whose events are all kept, and what it knows about presence.
+struct Watched {
+    tx: tokio::sync::mpsc::UnboundedSender<xmpp::Command>,
+    events: Arc<std::sync::Mutex<Vec<(String, serde_json::Value)>>>,
+    live: presence::Shared,
+    task: tokio::task::JoinHandle<()>,
+}
+
+fn watch_session(id: &str, jid: &str, db: Arc<std::sync::Mutex<Connection>>) -> Watched {
+    let (host, port) = prosody().unwrap();
+    save_account(&db.lock().unwrap(), &ChatAccount { id: id.into(), jid: jid.into(), host: host.clone(), port }, 1).unwrap();
+    let account = ChatAccount { id: id.into(), jid: jid.into(), host: host.clone(), port };
+    let connector = xmpp::Connector { host, port, proxy: None, cert_pin: None, plain_loopback: true };
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let events: Arc<std::sync::Mutex<Vec<(String, serde_json::Value)>>> = Default::default();
+    let sink = events.clone();
+    let emit: xmpp::Emit = Arc::new(move |name: &str, detail: serde_json::Value| sink.lock().unwrap().push((name.to_string(), detail)));
+    let live: presence::Shared = Default::default();
+    let options = xmpp::Options { live: live.clone(), ..Default::default() };
+    let task = tokio::spawn(xmpp::run(account, "secret".into(), db, connector, rx, emit, options));
+    Watched { tx, events, live, task }
+}
+
+impl Watched {
+    fn saw(&self) -> impl Fn(&dyn Fn(&str, &serde_json::Value) -> bool) -> bool + Send + 'static {
+        let events = self.events.clone();
+        move |what| events.lock().unwrap().iter().any(|(name, detail)| what(name, detail))
+    }
+
+    fn notified(&self, text: &str) -> bool {
+        self.events.lock().unwrap().iter().any(|(name, d)| name == "chat.notify" && d["body"].as_str().is_some_and(|b| b.contains(text)))
+    }
+
+    async fn online(&self) {
+        let saw = self.saw();
+        wait_until("online", move || saw(&|n, d| n == "chat.status" && d["state"] == "online")).await;
+    }
+}
+
+fn say(db: &Arc<std::sync::Mutex<Connection>>, w: &Watched, message: ChatMessage, mentions: Vec<String>) {
+    queue_message(&db.lock().unwrap(), &message).unwrap();
+    w.tx.send(xmpp::Command::Send {
+        conversation: message.conversation.clone(),
+        id: message.id.clone(),
+        body: message.body.clone(),
+        group: message.kind == KIND_GROUP,
+        file: None,
+        mentions,
+    })
+    .unwrap();
+}
+
+fn seen_show(live: &presence::Shared, jid: &str) -> String {
+    live.lock().unwrap().contacts.seen(jid).show
+}
+
+/// Eva asks to see Joan's status and Joan allows it: from then on Eva sees
+/// each change (availability and text), Joan sees nothing of Eva's, busy
+/// keeps Joan's popups back, and "invisible" on a server without XEP-0186
+/// hides Joan without losing what was sent meanwhile, which arrives once.
+#[tokio::test(flavor = "multi_thread")]
+async fn against_prosody_a_status_reaches_only_an_allowed_contact_and_busy_holds_popups_back() {
+    if prosody().is_none() {
+        eprintln!("skipped: no Prosody (see tests/prosody-xmpp.sh)");
+        return;
+    }
+    let tag = format!("{}-{}", std::process::id(), crate::store::now_unix());
+    let eva_db = Arc::new(std::sync::Mutex::new(conn()));
+    let joan_db = Arc::new(std::sync::Mutex::new(conn()));
+    let eva = watch_session("eva", "eva@chat.test", eva_db.clone());
+    let joan = watch_session("joan", "joan@chat.test", joan_db.clone());
+    eva.online().await;
+    joan.online().await;
+    // This server does not offer invisibility: known, and nothing hidden by mistake.
+    let live = eva.live.clone();
+    wait_until("the server's features", move || {
+        let l = live.lock().unwrap();
+        l.invisible_supported == Some(false) && l.applied == presence::Applied::Announced
+    })
+    .await;
+
+    // Eva asks; Joan decides. (On a server that already holds the permission
+    // from an earlier run, Joan is not asked again and Eva just sees Joan.)
+    eva.tx.send(xmpp::Command::Subscribe { jid: "joan@chat.test".into() }).unwrap();
+    let (joan_live, eva_live) = (joan.live.clone(), eva.live.clone());
+    wait_until("Joan is asked", move || {
+        joan_live.lock().unwrap().requests.contains("eva@chat.test") || seen_show(&eva_live, "joan@chat.test") != "offline"
+    })
+    .await;
+    if joan.live.lock().unwrap().requests.contains("eva@chat.test") {
+        assert_eq!(seen_show(&eva.live, "joan@chat.test"), "offline", "nothing before Joan allows it");
+        joan.tx.send(xmpp::Command::AnswerSubscription { jid: "eva@chat.test".into(), allow: true }).unwrap();
+    }
+    let eva_live = eva.live.clone();
+    wait_until("Eva sees Joan", move || seen_show(&eva_live, "joan@chat.test") == "available").await;
+    assert!(joan.live.lock().unwrap().requests.is_empty(), "answered");
+    // Allowing is not asking back: Joan sees nothing of Eva.
+    assert_eq!(seen_show(&joan.live, "eva@chat.test"), "offline");
+
+    // Joan is away, with a text; then busy, without.
+    presence::save_own(&joan_db.lock().unwrap(), "joan", "away", "Comiendo").unwrap();
+    joan.tx.send(xmpp::Command::Presence).unwrap();
+    let eva_live = eva.live.clone();
+    wait_until("away, eating", move || eva_live.lock().unwrap().contacts.seen("joan@chat.test") == presence::Seen { show: "away".into(), status: "Comiendo".into() }).await;
+    presence::save_own(&joan_db.lock().unwrap(), "joan", "dnd", "").unwrap();
+    joan.tx.send(xmpp::Command::Presence).unwrap();
+    let eva_live = eva.live.clone();
+    wait_until("busy", move || eva_live.lock().unwrap().contacts.seen("joan@chat.test") == presence::Seen { show: "dnd".into(), status: String::new() }).await;
+
+    // Busy: the message is kept and shown, but raises no popup.
+    let dm = |id: &str, body: &str| ChatMessage::chat("eva", "joan@chat.test", id, "out", "eva@chat.test", body, crate::store::now_unix(), "sending");
+    let quiet = format!("Mientras estás ocupado {tag}");
+    say(&eva_db, &eva, dm(&format!("q-{tag}"), &quiet), vec![]);
+    let (jdb, id) = (joan_db.clone(), format!("q-{tag}"));
+    wait_until("Joan gets it", move || history(&jdb.lock().unwrap(), "joan", "eva@chat.test", 50).unwrap().iter().any(|m| m.id == id)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert!(!joan.notified(&quiet), "busy: no popup");
+
+    // Available again: a new message raises one.
+    presence::save_own(&joan_db.lock().unwrap(), "joan", "available", "").unwrap();
+    joan.tx.send(xmpp::Command::Presence).unwrap();
+    let eva_live = eva.live.clone();
+    wait_until("Joan available", move || seen_show(&eva_live, "joan@chat.test") == "available").await;
+    let loud = format!("¿Comemos? {tag}");
+    say(&eva_db, &eva, dm(&format!("l-{tag}"), &loud), vec![]);
+    let saw = joan.saw();
+    let wanted = loud.clone();
+    wait_until("a popup", move || saw(&|n, d| n == "chat.notify" && d["body"] == wanted && d["kind"] == "chat" && d["title"] == "eva@chat.test")).await;
+
+    // Invisible, which this server cannot do: nothing is announced, so Eva
+    // sees Joan offline; what Eva writes meanwhile waits on the server.
+    presence::save_own(&joan_db.lock().unwrap(), "joan", "invisible", "").unwrap();
+    joan.tx.send(xmpp::Command::Presence).unwrap();
+    let (eva_live, joan_live) = (eva.live.clone(), joan.live.clone());
+    wait_until("Joan hidden", move || {
+        seen_show(&eva_live, "joan@chat.test") == "offline" && joan_live.lock().unwrap().applied == presence::Applied::Withheld
+    })
+    .await;
+    let waiting = format!("¿Dónde estás? {tag}");
+    say(&eva_db, &eva, dm(&format!("w-{tag}"), &waiting), vec![]);
+    let (adb, id) = (eva_db.clone(), format!("w-{tag}"));
+    wait_until("the server took it", move || outgoing(&adb.lock().unwrap(), "eva", &id).unwrap().state == "accepted").await;
+    // Choosing to be seen again: announced, and what waited arrives once, without a popup.
+    presence::save_own(&joan_db.lock().unwrap(), "joan", "available", "").unwrap();
+    joan.tx.send(xmpp::Command::Presence).unwrap();
+    let eva_live = eva.live.clone();
+    wait_until("Joan back", move || seen_show(&eva_live, "joan@chat.test") == "available").await;
+    let (jdb, id) = (joan_db.clone(), format!("w-{tag}"));
+    wait_until("what waited", move || history(&jdb.lock().unwrap(), "joan", "eva@chat.test", 50).unwrap().iter().any(|m| m.id == id)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    let kept = history(&joan_db.lock().unwrap(), "joan", "eva@chat.test", 50).unwrap();
+    assert_eq!(kept.iter().filter(|m| m.id == format!("w-{tag}")).count(), 1);
+    assert!(!joan.notified(&waiting), "caught up, not live");
+
+    for w in [eva, joan] {
+        w.tx.send(xmpp::Command::Stop).unwrap();
+        w.task.await.unwrap();
+    }
+}
+
+/// In a room: who is there is known, a mention is marked and raises a
+/// popup while other talk does not, and a private message to someone in it
+/// is its own conversation both ways, kept apart from the room.
+#[tokio::test(flavor = "multi_thread")]
+async fn against_prosody_mentions_notify_and_private_messages_stay_apart_from_the_room() {
+    if prosody().is_none() {
+        eprintln!("skipped: no Prosody (see tests/prosody-xmpp.sh)");
+        return;
+    }
+    let tag = format!("{}-{}", std::process::id(), crate::store::now_unix());
+    let room = format!("mentions-{tag}@rooms.chat.test");
+    let ana_db = Arc::new(std::sync::Mutex::new(conn()));
+    let pau_db = Arc::new(std::sync::Mutex::new(conn()));
+    let ana = watch_session("ana", "ana@chat.test", ana_db.clone());
+    ana.online().await;
+    save_room(&ana_db.lock().unwrap(), "ana", &room, "Ana", false, 1).unwrap();
+    ana.tx.send(xmpp::Command::Join { room: room.clone(), nick: "Ana".into(), password: None }).unwrap();
+    let saw = ana.saw();
+    wait_until("Ana in", move || saw(&|n, d| n == "chat.room" && d["state"] == "joined")).await;
+    let pau = watch_session("pau", "pau@chat.test", pau_db.clone());
+    pau.online().await;
+    save_room(&pau_db.lock().unwrap(), "pau", &room, "Pau", false, 1).unwrap();
+    pau.tx.send(xmpp::Command::Join { room: room.clone(), nick: "Pau".into(), password: None }).unwrap();
+    // Each knows the other is there: what completion offers.
+    let (al, pl, r) = (ana.live.clone(), pau.live.clone(), room.clone());
+    wait_until("occupants", move || {
+        al.lock().unwrap().occupants.list(&r).iter().any(|o| o.nick == "Pau") && pl.lock().unwrap().occupants.list(&r).iter().any(|o| o.nick == "Ana")
+    })
+    .await;
+    assert!(!ana.live.lock().unwrap().occupants.list(&room).iter().any(|o| o.nick == "Ana"), "not ourselves");
+
+    let group = |id: &str, body: &str, nick: &str| {
+        let mut m = ChatMessage::chat("pau", &room, id, "out", nick, body, crate::store::now_unix(), "sending");
+        m.kind = KIND_GROUP.into();
+        m
+    };
+    let named = format!("@Ana ¿vienes? {tag}");
+    say(&pau_db, &pau, group(&format!("m1-{tag}"), &named, "Pau"), vec!["Ana".into()]);
+    let other = format!("Nada para nadie {tag}");
+    say(&pau_db, &pau, group(&format!("m2-{tag}"), &other, "Pau"), vec![]);
+    let (adb, r, id) = (ana_db.clone(), room.clone(), format!("m2-{tag}"));
+    wait_until("Ana hears both", move || history(&adb.lock().unwrap(), "ana", &r, 50).unwrap().iter().any(|m| m.id == id)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let heard = history(&ana_db.lock().unwrap(), "ana", &room, 50).unwrap();
+    let marks: Vec<(bool, &str)> = heard.iter().filter(|m| m.id.ends_with(&tag)).map(|m| (m.mention, m.sender.as_str())).collect();
+    assert_eq!(marks, [(true, "Pau"), (false, "Pau")]);
+    let saw = ana.saw();
+    let wanted = named.clone();
+    assert!(saw(&|n, d| n == "chat.notify" && d["body"] == wanted && d["mention"] == true && d["kind"] == "groupchat"));
+    assert!(!ana.notified(&other), "talk without a mention raises no popup");
+    // Pau's own message is no mention for Pau.
+    assert!(!pau.notified(&named));
+
+    // Privately, to Ana's place in the room.
+    let secret = format!("Esto solo para ti {tag}");
+    let mut private = ChatMessage::chat("pau", &format!("{room}/Ana"), &format!("p1-{tag}"), "out", "Pau", &secret, crate::store::now_unix(), "sending");
+    private.kind = KIND_PRIVATE.into();
+    say(&pau_db, &pau, private, vec![]);
+    let (adb, conversation, id) = (ana_db.clone(), format!("{room}/Pau"), format!("p1-{tag}"));
+    wait_until("Ana gets it privately", move || history(&adb.lock().unwrap(), "ana", &conversation, 50).unwrap().iter().any(|m| m.id == id)).await;
+    let got = history(&ana_db.lock().unwrap(), "ana", &format!("{room}/Pau"), 50).unwrap();
+    assert_eq!((got[0].kind.as_str(), got[0].sender.as_str(), got[0].direction.as_str()), (KIND_PRIVATE, "Pau", "in"));
+    assert!(!history(&ana_db.lock().unwrap(), "ana", &room, 50).unwrap().iter().any(|m| m.body == secret), "not in the room");
+    let listed = conversations(&ana_db.lock().unwrap(), "ana").unwrap();
+    assert!(listed.iter().any(|c| c.conversation == format!("{room}/Pau") && c.room.as_deref() == Some(room.as_str())));
+    let saw = ana.saw();
+    let wanted = secret.clone();
+    wait_until("a private popup", move || saw(&|n, d| n == "chat.notify" && d["body"] == wanted && d["kind"] == "private")).await;
+
+    // Ana answers privately; the server takes it and Pau has it apart too.
+    let answer = format!("Recibido {tag}");
+    let mut reply = ChatMessage::chat("ana", &format!("{room}/Pau"), &format!("p2-{tag}"), "out", "Ana", &answer, crate::store::now_unix(), "sending");
+    reply.kind = KIND_PRIVATE.into();
+    say(&ana_db, &ana, reply, vec![]);
+    let (pdb, conversation, id) = (pau_db.clone(), format!("{room}/Ana"), format!("p2-{tag}"));
+    wait_until("Pau gets the answer", move || {
+        history(&pdb.lock().unwrap(), "pau", &conversation, 50).unwrap().iter().any(|m| m.id == id && m.sender == "Ana" && m.direction == "in")
+    })
+    .await;
+    let (adb, id) = (ana_db.clone(), format!("p2-{tag}"));
+    wait_until("accepted", move || outgoing(&adb.lock().unwrap(), "ana", &id).unwrap().state == "accepted").await;
+    assert!(!history(&pau_db.lock().unwrap(), "pau", &room, 50).unwrap().iter().any(|m| m.body == answer));
+
+    // Leaving takes the room's private conversations here.
+    ana.tx.send(xmpp::Command::Leave { room: room.clone(), nick: "Ana".into() }).unwrap();
+    leave_room(&ana_db.lock().unwrap(), "ana", &room).unwrap();
+    assert!(conversations(&ana_db.lock().unwrap(), "ana").unwrap().iter().all(|c| !c.conversation.starts_with(&room)));
+    for w in [ana, pau] {
+        w.tx.send(xmpp::Command::Stop).unwrap();
+        w.task.await.unwrap();
+    }
 }
