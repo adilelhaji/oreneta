@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { ConnectivityBanner } from './ConnectivityBanner'
 import { AccountProxyCard, ProxySettingsSection } from '../dialog/ProxySettingsCard'
 import { accounts$ } from '../../states/accounts'
 import { connectivity$, setSyncError } from '../../states/connectivity'
+import { settings$ } from '../../states/settings'
 import { ui$ } from '../../states/ui'
 import i18n from '../../lib/i18n'
 import type { Account } from '../../types'
@@ -25,17 +26,28 @@ const appRefusal =
 const accountRefusal =
   "sync INBOX: connect: proxy setting unusable (account): this account's proxy has an unknown type \"ftp\""
 
+// Past tense and unverified: the person may have fixed it since.
+const appText = (name: string) =>
+  `Connections for ${name} were refused because the app proxy setting was incomplete or could not be used — recovery not verified`
+const accountText = (name: string) =>
+  `Connections for ${name} were refused because the account's own proxy setting was incomplete or could not be used — recovery not verified`
+const savedAppProxy = settings$.proxy.peek()
+
 beforeEach(() => {
+  ;(window as any).go = { main: { App: { Invoke: async () => ({}) } } }
   i18n.changeLanguage('en')
   accounts$.set([account('work'), account('home', { mode: 'socks5', host: 'proxy.home', port: 1080 })])
   connectivity$.set({ byAccount: {}, unattributed: null })
   ui$.settingsOpen.set(false)
   ui$.accountSettingsId.set('')
   ui$.settingsFocus.set({ section: '', request: 0 })
+  ui$.toast.set('')
 })
 afterEach(() => {
   cleanup()
   ui$.settingsOpen.set(false)
+  settings$.proxy.set(savedAppProxy)
+  delete (window as any).go
 })
 
 function openEntry(name: string) {
@@ -48,9 +60,7 @@ describe('ConnectivityBanner proxy refusals (#201)', () => {
   it('names the app proxy and opens Settings → Network when the app-wide proxy is incomplete', () => {
     setSyncError('work', appRefusal)
     const entry = openEntry('Work')
-    expect(
-      entry.getByText('Connections for Work are refused: the app proxy setting is incomplete or cannot be used.'),
-    ).toBeTruthy()
+    expect(entry.getByText(appText('Work'))).toBeTruthy()
     expect(entry.queryByText('Unresolved sync issue — recovery not verified')).toBeNull()
     expect(entry.queryByRole('button', { name: 'Account settings' })).toBeNull()
 
@@ -63,11 +73,7 @@ describe('ConnectivityBanner proxy refusals (#201)', () => {
   it("opens that account's proxy settings when the account's own proxy is incomplete", () => {
     setSyncError('home', accountRefusal)
     const entry = openEntry('Home')
-    expect(
-      entry.getByText(
-        "Connections for Home are refused: the account's own proxy setting is incomplete or cannot be used.",
-      ),
-    ).toBeTruthy()
+    expect(entry.getByText(accountText('Home'))).toBeTruthy()
 
     fireEvent.click(entry.getByRole('button', { name: 'Account proxy settings' }))
     expect(ui$.settingsOpen.peek()).toBe(true)
@@ -112,6 +118,48 @@ describe('ConnectivityBanner proxy refusals (#201)', () => {
     const entry = openEntry('Work')
     expect(entry.queryByRole('button', { name: 'Network settings' })).toBeNull()
     expect(entry.getByRole('button', { name: 'Account settings' })).toBeTruthy()
+  })
+})
+
+describe('saving the proxy setting a refusal blamed (#201)', () => {
+  it('drops the app proxy from the message, which stays an unverified failure', () => {
+    setSyncError('work', appRefusal)
+    setSyncError('home', accountRefusal)
+    const view = render(<ConnectivityBanner />)
+    fireEvent.click(view.getByRole('button', { name: 'Account sync' }))
+    act(() => settings$.proxy.set({ mode: 'http', host: 'proxy.corp', port: 3128, username: '', password: '' }))
+
+    const work = within(view.getByRole('listitem', { name: 'Work' }))
+    expect(work.queryByText(appText('Work'))).toBeNull()
+    expect(work.getByText('Unresolved sync issue — recovery not verified')).toBeTruthy()
+    expect(work.getByRole('button', { name: 'Account settings' })).toBeTruthy()
+    // An account's own proxy is not the app's: still blamed.
+    expect(within(view.getByRole('listitem', { name: 'Home' })).getByText(accountText('Home'))).toBeTruthy()
+  })
+
+  it("drops the account's own proxy once that account's setting is saved, and only for it", async () => {
+    setSyncError('home', accountRefusal)
+    setSyncError('work', appRefusal)
+    const view = render(<ConnectivityBanner />)
+    fireEvent.click(view.getByRole('button', { name: 'Account sync' }))
+    const card = render(<AccountProxyCard account={accounts$.peek()[1]} />)
+    fireEvent.change(card.container.querySelector('select')!, { target: { value: 'direct' } })
+
+    const home = within(view.getByRole('listitem', { name: 'Home' }))
+    await waitFor(() => expect(home.getByText('Unresolved sync issue — recovery not verified')).toBeTruthy())
+    expect(home.queryByText(accountText('Home'))).toBeNull()
+    expect(within(view.getByRole('listitem', { name: 'Work' })).getByText(appText('Work'))).toBeTruthy()
+  })
+
+  it('keeps blaming the proxy when the account setting could not be saved', async () => {
+    ;(window as any).go = { main: { App: { Invoke: async () => Promise.reject(new Error('store locked')) } } }
+    setSyncError('home', accountRefusal)
+    const view = render(<ConnectivityBanner />)
+    fireEvent.click(view.getByRole('button', { name: 'Account sync' }))
+    const card = render(<AccountProxyCard account={accounts$.peek()[1]} />)
+    fireEvent.change(card.container.querySelector('select')!, { target: { value: 'direct' } })
+    await waitFor(() => expect(ui$.toast.peek()).toBeTruthy())
+    expect(within(view.getByRole('listitem', { name: 'Home' })).getByText(accountText('Home'))).toBeTruthy()
   })
 })
 

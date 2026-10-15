@@ -1,7 +1,8 @@
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { accounts$ } from './accounts'
-import { proxyProblemFromSyncError, type ProxyProblem } from '../components/banner/connectivityBannerHelpers'
+import { settings$ } from './settings'
+import { proxyProblemFromSyncError, proxyProblemScope, type ProxyProblem } from '../lib/proxyProblems'
 
 export type SyncObservation = {
   failure: boolean
@@ -59,6 +60,31 @@ export function setSyncError(account: string | null, message = '') {
   if (account) store(account, observation)
   else connectivity$.unattributed.set(observation)
 }
+
+/**
+ * A proxy setting was saved: the failures it may have caused no longer say
+ * the proxy is at fault. They stay failures, unverified, until mail activity
+ * or a new error says more. `account` names the account whose own setting
+ * changed; without it, the app-wide proxy changed.
+ */
+export function forgetProxyProblems(account?: string) {
+  const current = connectivity$.byAccount.peek()
+  const accounts = accounts$.peek()
+  const caused = (id: string, problem: ProxyProblem) =>
+    account ? id === account : proxyProblemScope(problem, accounts.find((item) => item.id === id)) === 'app'
+  const cleared = Object.entries(current).filter(([id, observation]) => observation.proxy && caused(id, observation.proxy))
+  if (cleared.length) {
+    connectivity$.byAccount.set({
+      ...current,
+      ...Object.fromEntries(cleared.map(([id, observation]) => [id, { ...observation, proxy: null }])),
+    })
+  }
+  const unattributed = connectivity$.unattributed.peek()
+  if (!account && unattributed?.proxy) connectivity$.unattributed.set({ ...unattributed, proxy: null })
+}
+
+// Every change to the app-wide proxy is saved as it is made (settings.ts).
+settings$.proxy.onChange(() => forgetProxyProblems())
 
 export function dismissSyncError(account: string | null) {
   const previous = account ? syncObservation(account) : connectivity$.unattributed.peek()

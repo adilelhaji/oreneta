@@ -29,6 +29,13 @@ export function AccountDialogGraph({ ctl }: { ctl: AccountDialogController }) {
   )
   const busy = progress.state === 'authorizing' || progress.state === 'syncing'
   const label = (key: string, defaultValue: string) => t(`accounts.graph.${key}`, { defaultValue })
+  // The core's Graph error kinds for a proxy setting it refuses (#201).
+  const proxyRefusal =
+    progress.error === 'app_proxy_unusable'
+      ? 'accounts.graph.proxyUnusableApp'
+      : progress.error === 'account_proxy_unusable'
+        ? 'accounts.graph.proxyUnusableAccount'
+        : null
   return (
     <section className="flex flex-col gap-3" aria-label="Microsoft Graph">
       <p className="text-ui font-semibold">Microsoft Graph — {label('readOnly', 'Read-only')}</p>
@@ -58,7 +65,13 @@ export function AccountDialogGraph({ ctl }: { ctl: AccountDialogController }) {
             : `${label('syncing', 'Preparing folders and Inbox…')} ${progress.pages ?? 0} ${label('pages', 'pages')}, ${progress.changes ?? 0} ${label('changes', 'changes')}`}
         </p>
       )}
-      {progress.state === 'failed' && (
+      {progress.state === 'failed' && proxyRefusal && (
+        // Signing in again changes nothing until the proxy setting is fixed (#201).
+        <p role="alert" className="text-caption text-danger">
+          {t(proxyRefusal)}
+        </p>
+      )}
+      {progress.state === 'failed' && !proxyRefusal && (
         <p role="alert" className="text-caption text-danger">
           {label('failed', 'Setup did not finish. You can sign in again to retry.')} ({progress.error})
           {progress.retry_after_seconds

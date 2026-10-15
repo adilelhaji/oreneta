@@ -4,6 +4,7 @@ import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { settings$, isProxyUsable, type ProxyMode, type ProxySettings } from '../../states/settings'
 import { setAccountProxy } from '../../states/accounts'
+import { forgetProxyProblems } from '../../states/connectivity'
 import type { Account, AccountProxy } from '../../types'
 import { NumberRow, SelectRow, SettingsGroup, TextRow } from './AccountSettingsRows'
 
@@ -124,7 +125,9 @@ export function AccountProxyCard({ account }: { account: Account }) {
     setEndpoint(nextEndpoint)
     const payload: AccountProxy =
       nextMode === 'global' || nextMode === 'direct' ? { mode: nextMode } : { mode: nextMode, ...nextEndpoint }
-    void setAccountProxy(account.id, payload)
+    // Once saved, a proxy failure of this account no longer says the proxy is
+    // at fault: the setting it blamed has changed (#201).
+    void setAccountProxy(account.id, payload).then((saved) => saved && forgetProxyProblems(account.id))
   }
 
   const custom = mode === 'http' || mode === 'socks5'
