@@ -34,6 +34,7 @@ import {
 } from '../lib/shortcuts'
 import type { Account, ChatWallpaper } from '../types'
 import { DEFAULT_REPLY_FORWARD_PREFS, sanitizeReplyForwardPrefs, type ReplyForwardPrefs } from '../lib/replyForward'
+import { DEFAULT_PRINT_OPTIONS, sanitizePrintOptions, type PrintOptions } from '../lib/printOptions'
 import {
   DEFAULT_CALENDAR_PREFS,
   WEEK_START_CHOICES,
@@ -233,6 +234,8 @@ export type Settings = {
   undoSendSeconds: number
   /** Mail → Replies and forwards: quote, header and forward preferences (ADR-0047). */
   replyForward: ReplyForwardPrefs
+  /** General → Print: headers, scope, order and attachment list (ADR-0060). */
+  print: PrintOptions
   /** Whether native spell checking is requested in composer prose fields. */
   spellCheck: boolean
   /** Offline grammar checking with Harper (#105): off, or the English it
@@ -382,6 +385,7 @@ const DB_KEY = {
   markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   replyForward: 'reply_forward',
+  print: 'print_options',
   spellCheck: 'spell_check',
   grammarCheck: 'grammar_check',
   signature: 'signature',
@@ -587,6 +591,8 @@ export const settings$ = observable<Settings>({
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
   replyForward: DEFAULT_REPLY_FORWARD_PREFS,
+  // A copy: the headers are nested, and the defaults must stay as they are.
+  print: structuredClone(DEFAULT_PRINT_OPTIONS),
   spellCheck: true,
   // Opt-in: it downloads nothing, but it loads a sizable checker on first use.
   grammarCheck: 'off',
@@ -971,6 +977,8 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const replyForward = sanitizeReplyForwardPrefs(prefs[DB_KEY.replyForward])
     if (replyForward) settings$.replyForward.set(replyForward)
+    const print = sanitizePrintOptions(prefs[DB_KEY.print])
+    if (print) settings$.print.set(print)
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {
       settings$.spellCheck.set(prefs[DB_KEY.spellCheck] as boolean)

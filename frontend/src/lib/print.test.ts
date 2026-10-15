@@ -13,7 +13,9 @@ describe('the print frame (#35)', () => {
       printedLabel: 'Printed',
       toLabel: 'To',
       ccLabel: 'Cc',
+      bccLabel: 'Bcc',
       attachmentsLabel: 'Attachments',
+      oneMessageNotice: 'Only this message is printed.',
     })
     const frame = document.querySelector('iframe')!
     const sandbox = frame.getAttribute('sandbox')

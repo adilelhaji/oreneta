@@ -6,25 +6,15 @@
 // conversation, so what comes out is what was asked for.
 
 import { buildPrintDocument } from './printDocument'
-import type { Message } from '../types'
 
 /**
- * Prints a conversation.
+ * Prints a conversation, or the one message of it the options ask for.
  *
  * Resolves once the print dialog has been asked for, not once anything has
  * been printed: what the reader does with the dialog is theirs, and no part of
  * it comes back to us.
  */
-export function printConversation(args: {
-  subject: string
-  messages: Message[]
-  printedLabel: string
-  toLabel: string
-  ccLabel: string
-  attachmentsLabel: string
-  allowRemoteImages?: boolean
-  incompleteNotice?: string
-}): Promise<void> {
+export function printConversation(args: Omit<Parameters<typeof buildPrintDocument>[0], 'printedAt'>): Promise<void> {
   const html = buildPrintDocument({ ...args, printedAt: new Date() })
 
   return new Promise((resolve) => {

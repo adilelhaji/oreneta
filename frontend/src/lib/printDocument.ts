@@ -11,6 +11,7 @@
 
 import type { Message } from '../types'
 import { stripTrackingPixels } from '../components/chat/readerHtml'
+import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './printOptions'
 
 /** Escapes text for placing in HTML. */
 export function escapeHtml(text: string): string {
@@ -84,8 +85,10 @@ const STYLE = `
   .body a[href^="#"]::after, .body a[href=""]::after { content: ""; }
 `
 
-/** One message: who wrote it, when, to whom, and what it said. */
-function senderBlock(message: Message, labels: { toLabel: string; ccLabel: string; attachmentsLabel: string }): string {
+type BlockLabels = { toLabel: string; ccLabel: string; bccLabel: string; attachmentsLabel: string }
+
+/** One message: who wrote it, and as much of when and to whom as was asked for. */
+function senderBlock(message: Message, labels: BlockLabels, options: PrintOptions): string {
   const name = message.from_name.trim()
   const address = message.from_addr.trim()
   // The name alone is not enough on paper — two people share a first name and
@@ -93,15 +96,17 @@ function senderBlock(message: Message, labels: { toLabel: string; ccLabel: strin
   const who = name
     ? `<span class="who">${escapeHtml(name)}</span> &lt;${escapeHtml(address)}&gt;`
     : `<span class="who">${escapeHtml(address)}</span>`
-  const stamp = message.date ? ` · ${escapeHtml(new Date(message.date * 1000).toLocaleString())}` : ''
-  const files = (message.attachments ?? []).map((file) => file.filename).filter(Boolean)
+  const { headers } = options
+  const stamp = headers.date && message.date ? ` · ${escapeHtml(new Date(message.date * 1000).toLocaleString())}` : ''
+  const files = options.attachments ? (message.attachments ?? []).map((file) => file.filename).filter(Boolean) : []
 
   return [
     '<article class="message">',
     '<div class="header">',
     `<div>${who}${stamp}</div>`,
-    addressLine(labels.toLabel, message.to),
-    addressLine(labels.ccLabel, message.cc),
+    headers.to ? addressLine(labels.toLabel, message.to) : '',
+    headers.cc ? addressLine(labels.ccLabel, message.cc) : '',
+    headers.bcc ? addressLine(labels.bccLabel, message.bcc) : '',
     '</div>',
     `<div class="body">${printableBody(message)}</div>`,
     files.length > 0
@@ -114,35 +119,70 @@ function senderBlock(message: Message, labels: { toLabel: string; ccLabel: strin
 }
 
 /**
- * A whole conversation as one self-contained HTML document.
+ * The messages that go on paper, in the order they go there.
  *
- * `title` names the page; a printed sheet with no subject on it is a sheet
- * nobody can file.
+ * Sorted by date rather than trusted in the order they were loaded, and
+ * stably, so two messages sent in the same second keep the order they came in.
+ * One message is the one asked about, or the newest when none was named.
+ */
+export function printedMessages(messages: Message[], options: PrintOptions, messageId?: string): Message[] {
+  const oldestFirst = [...messages].sort((a, b) => a.date - b.date)
+  if (options.scope === 'message') {
+    const chosen = messages.find((message) => message.id === messageId) ?? oldestFirst.at(-1)
+    return chosen ? [chosen] : []
+  }
+  return options.order === 'newest' ? [...messages].sort((a, b) => b.date - a.date) : oldestFirst
+}
+
+/**
+ * A whole conversation, or one message of it, as one self-contained HTML
+ * document.
+ *
+ * `title` names the page whatever the options say; a printed sheet with no
+ * subject on it is a sheet nobody can file, so leaving the heading off is a
+ * choice the reader makes, not a default.
  */
 export function buildPrintDocument(args: {
   subject: string
+  /** Every loaded message of the conversation; the options decide which print. */
   messages: Message[]
   printedLabel: string
   printedAt: Date
   toLabel: string
   ccLabel: string
+  bccLabel: string
   attachmentsLabel: string
+  /** What goes on paper (SET-05); what the app has always printed if absent. */
+  options?: PrintOptions
+  /** "This message" when the scope is one message; the newest if absent. */
+  messageId?: string
   /** Whether the account loads remote images; otherwise the printout does not
    * either, whatever the message asks for (#35). */
   allowRemoteImages?: boolean
   /** Said at the top when older messages of the conversation were not loaded. */
   incompleteNotice?: string
+  /** Said at the top when one message is printed out of a conversation that
+   * has others: a single message on paper does not show what it answers. */
+  oneMessageNotice: string
 }): string {
-  const subject = args.subject.trim() || '(no subject)'
-  const messages = args.messages.map((message) => senderBlock(message, args)).join('\n')
+  const options = args.options ?? DEFAULT_PRINT_OPTIONS
+  const printed = printedMessages(args.messages, options, args.messageId)
+  const single = options.scope === 'message'
+  // One message prints under its own subject, which may be a reply's.
+  const subject = (single && printed[0]?.subject.trim()) || args.subject.trim() || '(no subject)'
+  const messages = printed.map((message) => senderBlock(message, args, options)).join('\n')
   // The message's own policy is stripped with its other <meta> tags, so the
   // printout states its own: no scripts, no frames, no forms, and remote
   // images only where the reader allows them.
   const images = args.allowRemoteImages ? "'self' data: blob: https: http:" : "'self' data: blob:"
   const policy = `default-src 'none'; script-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; img-src ${images}; style-src 'unsafe-inline'; font-src 'self' data:`
-  const notice = args.incompleteNotice
-    ? `<div class="thread-meta incomplete">${escapeHtml(args.incompleteNotice)}</div>`
-    : ''
+  // What was left out is said, whatever was chosen (#35): the older messages
+  // that never loaded, or — for one message — that the conversation has more.
+  // A conversation with messages on the server but not here has others too.
+  const othersLeftOut = args.messages.length > printed.length || !!args.incompleteNotice
+  const omission = single ? (othersLeftOut ? args.oneMessageNotice : '') : (args.incompleteNotice ?? '')
+  const notice = omission ? `<div class="thread-meta incomplete">${escapeHtml(omission)}</div>` : ''
+  const heading = options.headers.subject ? `<h1>${escapeHtml(subject)}</h1>\n` : ''
 
   return `<!doctype html>
 <html>
@@ -153,8 +193,7 @@ export function buildPrintDocument(args: {
 <style>${STYLE}</style>
 </head>
 <body>
-<h1>${escapeHtml(subject)}</h1>
-<div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString())}</div>
+${heading}<div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString())}</div>
 ${notice}
 ${messages}
 </body>

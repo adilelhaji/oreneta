@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
-import { buildPrintDocument, escapeHtml, printableBody } from './printDocument'
+import { buildPrintDocument, escapeHtml, printableBody, printedMessages } from './printDocument'
+import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './printOptions'
 import type { Message } from '../types'
 
 const message = (over: Partial<Message> = {}): Message =>
@@ -21,6 +22,8 @@ const message = (over: Partial<Message> = {}): Message =>
     ...over,
   }) as Message
 
+const ONE_MESSAGE = 'Only this message of the conversation is printed.'
+
 const build = (messages: Message[], subject = 'Lunch') =>
   buildPrintDocument({
     subject,
@@ -29,7 +32,9 @@ const build = (messages: Message[], subject = 'Lunch') =>
     printedAt: new Date(1_700_000_000_000),
     toLabel: 'To',
     ccLabel: 'Cc',
+    bccLabel: 'Bcc',
     attachmentsLabel: 'Attachments:',
+    oneMessageNotice: ONE_MESSAGE,
   })
 
 describe('a conversation on paper', () => {
@@ -156,6 +161,190 @@ function args() {
     printedAt: new Date(1_700_000_000_000),
     toLabel: 'To',
     ccLabel: 'Cc',
+    bccLabel: 'Bcc',
     attachmentsLabel: 'Attachments',
+    oneMessageNotice: ONE_MESSAGE,
   }
 }
+
+// SET-05 (#213, ADR-0060): the printout carries exactly what General → Print
+// asks for, and nothing it was told to leave off.
+describe('print options', () => {
+  const opts = (over: Partial<PrintOptions> = {}, headers: Partial<PrintOptions['headers']> = {}): PrintOptions => ({
+    ...DEFAULT_PRINT_OPTIONS,
+    ...over,
+    headers: { ...DEFAULT_PRINT_OPTIONS.headers, ...headers },
+  })
+  const thread = [
+    message({ id: 'm-2', subject: 'Re: Lunch', body: 'Second thing', date: 1_700_000_200 }),
+    message({ id: 'm-1', body: 'First thing', date: 1_700_000_100 }),
+    message({ id: 'm-3', subject: 'Re: Lunch', body: 'Third thing', date: 1_700_000_300 }),
+  ]
+  const page = (options: PrintOptions, messageId?: string) =>
+    buildPrintDocument({ ...args(), messages: thread, options, messageId })
+  const doc = (html: string) => new DOMParser().parseFromString(html, 'text/html')
+  const header = (html: string) => doc(html).querySelector('.message .header')?.textContent ?? ''
+  const order = (html: string) =>
+    [...doc(html).querySelectorAll('.message .body')].map((body) => body.textContent?.trim())
+  const stamp = new Date(1_700_000_000 * 1000).toLocaleString()
+  const sent = message({
+    to: 'bea@example.com',
+    cc: 'carl@example.com',
+    bcc: 'dee@example.com',
+    attachments: [{ filename: 'report.pdf', mime: 'application/pdf', size: 10, key: 'k1' }] as Message['attachments'],
+    has_attachments: true,
+  })
+  const one = (options: PrintOptions) => buildPrintDocument({ ...args(), messages: [sent], options })
+  const allHeaders = { subject: true, date: true, to: true, cc: true, bcc: true }
+
+  it('prints what it always has when nothing was chosen', () => {
+    const before = buildPrintDocument({ ...args(), messages: thread })
+    expect(page(DEFAULT_PRINT_OPTIONS)).toBe(before)
+    expect(order(before)).toEqual(['First thing', 'Second thing', 'Third thing'])
+    expect(one(DEFAULT_PRINT_OPTIONS)).toContain('Attachments report.pdf')
+    // Bcc names people the others were not told about: off unless asked.
+    expect(one(DEFAULT_PRINT_OPTIONS)).not.toContain('dee@example.com')
+  })
+
+  it('prints every header field that is on', () => {
+    const all = one(opts({}, allHeaders))
+    const text = header(all)
+    expect(text).toContain('Ann Example')
+    expect(text).toContain(stamp)
+    expect(text).toContain('To bea@example.com')
+    expect(text).toContain('Cc carl@example.com')
+    expect(text).toContain('Bcc dee@example.com')
+    expect(doc(all).querySelector('h1')?.textContent).toBe('Lunch')
+  })
+
+  it('leaves off every header field that is off, and only that one', () => {
+    for (const field of ['date', 'to', 'cc', 'bcc'] as const) {
+      const text = header(one(opts({}, { ...allHeaders, [field]: false })))
+      const shown = {
+        date: text.includes(stamp),
+        to: text.includes('bea@example.com'),
+        cc: text.includes('carl@example.com'),
+        bcc: text.includes('dee@example.com'),
+      }
+      expect(shown).toEqual({ date: true, to: true, cc: true, bcc: true, [field]: false })
+    }
+  })
+
+  it('leaves the subject heading off when asked, but still names the page', () => {
+    const html = one(opts({}, { subject: false }))
+    expect(doc(html).querySelector('h1')).toBeNull()
+    expect(html).toContain('<title>Lunch</title>')
+  })
+
+  it('always says who wrote each message, whatever is off', () => {
+    const bare = one(opts({ attachments: false }, { subject: false, date: false, to: false, cc: false, bcc: false }))
+    expect(header(bare).trim()).toBe('Ann Example <ann@example.com>')
+  })
+
+  it('lists attachments only when asked', () => {
+    expect(one(opts({ attachments: true }))).toContain('Attachments report.pdf')
+    const without = one(opts({ attachments: false }))
+    expect(without).not.toContain('report.pdf')
+    expect(doc(without).querySelector('.attachments')).toBeNull()
+  })
+
+  it('prints the whole conversation oldest first, by date rather than load order', () => {
+    expect(order(page(opts({ scope: 'conversation', order: 'oldest' })))).toEqual([
+      'First thing',
+      'Second thing',
+      'Third thing',
+    ])
+  })
+
+  it('prints the whole conversation newest first when asked', () => {
+    expect(order(page(opts({ scope: 'conversation', order: 'newest' })))).toEqual([
+      'Third thing',
+      'Second thing',
+      'First thing',
+    ])
+  })
+
+  it('keeps messages sent in the same second in the order they came', () => {
+    const same = [message({ id: 'a', body: 'Alpha' }), message({ id: 'b', body: 'Beta' })]
+    expect(printedMessages(same, opts({ order: 'oldest' })).map((item) => item.id)).toEqual(['a', 'b'])
+    expect(printedMessages(same, opts({ order: 'newest' })).map((item) => item.id)).toEqual(['a', 'b'])
+  })
+
+  it('prints only the message asked about, under its own subject', () => {
+    const html = page(opts({ scope: 'message' }), 'm-2')
+    expect(order(html)).toEqual(['Second thing'])
+    expect(doc(html).querySelector('h1')?.textContent).toBe('Re: Lunch')
+  })
+
+  it('prints the newest message when one message is asked for without naming it', () => {
+    expect(order(page(opts({ scope: 'message' })))).toEqual(['Third thing'])
+    expect(printedMessages([], opts({ scope: 'message' }))).toEqual([])
+  })
+
+  it('ignores the order for one message', () => {
+    expect(order(page(opts({ scope: 'message', order: 'newest' }), 'm-1'))).toEqual(['First thing'])
+  })
+})
+
+// #35 stays true under every option: remote content stays blocked and what is
+// left out is said.
+describe('the #35 guarantees under every print option', () => {
+  const remote = message({
+    id: 'm-r',
+    body_html:
+      '<p>Hello</p><img width="1" height="1" src="https://t.example/x.gif"><img src="https://cdn.example/logo.png">',
+  })
+  const older = message({ id: 'm-o', body: 'Older', date: 1_600_000_000 })
+  const csp = (html: string) =>
+    new DOMParser()
+      .parseFromString(html, 'text/html')
+      .querySelector('meta[http-equiv="Content-Security-Policy"]')
+      ?.getAttribute('content') ?? ''
+  const every: PrintOptions[] = []
+  for (const scope of ['conversation', 'message'] as const)
+    for (const order of ['oldest', 'newest'] as const)
+      for (const attachments of [true, false])
+        for (const on of [true, false])
+          every.push({ scope, order, attachments, headers: { subject: on, date: on, to: on, cc: on, bcc: on } })
+
+  it('keeps remote images blocked and tracking pixels out, whatever is chosen', () => {
+    for (const options of every) {
+      const html = buildPrintDocument({ ...args(), messages: [older, remote], options, messageId: 'm-r' })
+      const policy = csp(html)
+      expect(policy).toContain("default-src 'none'")
+      expect(policy).toContain("script-src 'none'")
+      expect(policy).not.toMatch(/img-src[^;]*https?:/)
+      expect(html).not.toContain('t.example/x.gif')
+    }
+  })
+
+  it('says older messages were not loaded, in either order', () => {
+    const notice = 'Older messages are not included.'
+    for (const order of ['oldest', 'newest'] as const) {
+      const html = buildPrintDocument({
+        ...args(),
+        messages: [remote],
+        incompleteNotice: notice,
+        options: { ...DEFAULT_PRINT_OPTIONS, order },
+      })
+      expect(html).toContain(notice)
+      // Said before the first message, where it is read first.
+      expect(html.indexOf(notice)).toBeLessThan(html.indexOf('<article'))
+    }
+  })
+
+  it('says when one message is printed out of a conversation that has others', () => {
+    const single = { ...DEFAULT_PRINT_OPTIONS, scope: 'message' as const }
+    expect(buildPrintDocument({ ...args(), messages: [older, remote], options: single, messageId: 'm-r' })).toContain(
+      ONE_MESSAGE,
+    )
+    // Others on the server but not loaded count too.
+    expect(
+      buildPrintDocument({ ...args(), messages: [remote], options: single, incompleteNotice: 'Older not loaded.' }),
+    ).toContain(ONE_MESSAGE)
+    // Nothing is left out of a conversation of one.
+    expect(buildPrintDocument({ ...args(), messages: [remote], options: single })).not.toContain(ONE_MESSAGE)
+    // And the whole conversation never claims to be one message.
+    expect(buildPrintDocument({ ...args(), messages: [older, remote] })).not.toContain(ONE_MESSAGE)
+  })
+})
