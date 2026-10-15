@@ -430,6 +430,18 @@
           {
             "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
             "result": "meron-core/src/folder_move.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/tests/folder_moves.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/folder_move.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "frontend/src/states/folderMove.test.ts"
           }
         ],
         "native": [],
@@ -574,6 +586,10 @@
           {
             "sha": "4c85ff052b18895141de3594ee17d23699232d87",
             "result": "frontend/src/components/composer/ReceiptComposeControls.test.tsx"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/tests/delivery_receipts.rs"
           }
         ],
         "native": [],
@@ -899,6 +915,18 @@
           {
             "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
             "result": "frontend/src/lib/contactNames.test.ts"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/pim/exchange_book/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/book/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "frontend/src/components/people/ExchangeGroups.test.tsx"
           }
         ],
         "native": [],
@@ -1006,6 +1034,18 @@
           {
             "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
             "result": "integration_caldav_recurring_tasks_test.go"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/task_sync/exchange/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/tasks/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "frontend/src/components/tasks/ExchangeTaskLists.test.tsx"
           }
         ],
         "native": [],
