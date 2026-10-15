@@ -1083,8 +1083,8 @@
       "issue": 86,
       "section": "Widgets/General",
       "outcome": "Sidebar widgets, agenda and contextual history with reliable scope",
-      "status": "partial",
-      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); a standalone agenda widget, panel resizing and remembering the last section are absent",
+      "status": "implemented-unverified",
+      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); an agenda section with the next 7 days of enabled calendars and dated tasks, overdue first, each opening its item; the sidebar, thread list and board pane resizable by pointer and keyboard within limits and kept across restarts; the last section restored per window (#212, ADR-0059); native checks remain",
       "code": "docs/design/contextual-sidebar.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1101,6 +1101,22 @@
           {
             "sha": "5a776161ebcc5923c0e0ff4d7fc541cf43af07be",
             "result": "frontend/src/components/chat/PersonHistory.test.tsx"
+          },
+          {
+            "sha": "e35c2b116aabc7c59018a3816a486fad332fc8e6",
+            "result": "frontend/src/components/chat/SidebarAgenda.test.tsx"
+          },
+          {
+            "sha": "e35c2b116aabc7c59018a3816a486fad332fc8e6",
+            "result": "frontend/src/components/chat/ConversationDetailsPanel.test.tsx"
+          },
+          {
+            "sha": "e35c2b116aabc7c59018a3816a486fad332fc8e6",
+            "result": "frontend/src/components/resizer/PaneResizer.test.tsx"
+          },
+          {
+            "sha": "e35c2b116aabc7c59018a3816a486fad332fc8e6",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
