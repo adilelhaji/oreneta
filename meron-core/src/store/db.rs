@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 64;
+pub const SCHEMA_VERSION: i64 = 65;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -802,10 +802,12 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         }
         tx.pragma_update(None, "user_version", 63)?;
     }
-    if version < 64 {
-        // Exchange distribution lists and task lists (ADR-0058).
+    if version < 65 {
+        // Exchange distribution lists and task lists, and folder renames for
+        // the interface (ADR-0058). Version 64 is #210's.
         super::contact_groups::migrate_member_addresses(&tx)?;
         crate::task_sync::exchange::migrate(&tx)?;
+        tx.execute_batch(crate::folder_move::RENAMES_SCHEMA)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

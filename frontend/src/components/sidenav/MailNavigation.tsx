@@ -3,7 +3,7 @@ import { useValue } from '@legendapp/state/react'
 import { ChevronRight, Layers, Mail, X } from 'lucide-react'
 import { accounts$ } from '../../states/accounts'
 import { accountGroups$, inUnifiedScope, showAccountGroup, type AccountGroup } from '../../states/accountGroups'
-import { mail$, inboxUnread, moveFolder } from '../../states/mail'
+import { folderList, mail$, inboxUnread, moveFolder } from '../../states/mail'
 import {
   dismissDroppedNote,
   folderPrefs$,
@@ -15,7 +15,6 @@ import {
 import { settings$ } from '../../states/settings'
 import { clearBulkSelection, ui$ } from '../../states/ui'
 import { openMailAccount } from '../../states/kanban'
-import { invoke } from '../../lib/bridge'
 import { buildFolderTree, type TreeNode } from '../../lib/folderTree'
 import { folderIcon } from '../../lib/folderIcon'
 import { unifiedFolders } from '../../lib/unifiedFolders'
@@ -654,9 +653,9 @@ export function MailNavigation() {
   useEffect(() => {
     if (!missing) return
     for (const accountId of missing.split('\n')) {
-      void invoke<{ folders?: Folder[] }>('mail.folderList', { account_id: accountId, refresh: false })
+      void folderList(accountId, false)
         .then((res) => {
-          if (!mail$.foldersByAccount[accountId].peek()) mail$.foldersByAccount[accountId].set(res?.folders ?? [])
+          if (!mail$.foldersByAccount[accountId].peek()) mail$.foldersByAccount[accountId].set(res)
         })
         .catch(() => {})
     }

@@ -144,7 +144,34 @@ fn ews_distribution_list_stale_local_edit_never_overwrites_a_server_change() {
     assert_eq!((name.as_str(), version.as_str()), ("Equip (Outlook)", "ck-other"));
     assert!(members.contains(&o.person_id("mailto:joan@example.net")), "{members:?}");
     assert_eq!(server.join().expect("server").len(), 1, "nothing was written");
-    assert_eq!(stored(&db).version, "ck-d1", "the local copy is as it was");
+    // The server's copy is kept here, so looking again and retrying starts
+    // from it.
+    let group = stored(&db);
+    assert_eq!((group.name.as_str(), group.version.as_str()), ("Equip (Outlook)", "ck-other"));
+    assert_eq!(shown(&db).len(), 2, "with its members, Joan included");
+}
+
+#[test]
+fn ews_distribution_list_gone_from_the_server_is_a_conflict_that_drops_it_here() {
+    let db = store();
+    let (url, server) = serve(vec![Step::Reply(crate::exchange::tests::scripted::error_response(
+        "GetItem",
+        "ErrorItemNotFound",
+        "The specified object was not found in the store.",
+    ))]);
+    let o = origin(A);
+    let written = save_group(&client(url), &db, &o, Some(&stored(&db)), "ck-d1", "Equip", &[], 2).expect("save");
+    assert_eq!(written, GroupWrite::Conflict { current: None });
+    server.join().expect("server");
+    assert!(contact_groups::get(&db.lock().unwrap(), &contact_groups::group_id(&o, "D1")).unwrap().is_none());
+}
+
+#[test]
+fn ews_distribution_list_is_never_written_without_the_version_it_was_read_at() {
+    // No server: nothing may reach it.
+    let written = client("http://127.0.0.1:1".into()).update_list("D1", "", Some("x"), &[], &[]).unwrap();
+    assert_eq!(written, ListWrite::Conflict);
+    assert_eq!(client("http://127.0.0.1:1".into()).delete_list("D1", "").unwrap(), ListWrite::Conflict);
 }
 
 #[test]
@@ -206,13 +233,13 @@ fn ews_distribution_list_create_and_delete() {
     // Deleting from a stale version is refused; from the current one it goes.
     let group = contact_groups::get(&db.lock().unwrap(), &contact_groups::group_id(&o, "D2")).unwrap().unwrap();
     let (url, server) = serve(vec![Step::Reply(got(&[list_xml("D2", "ck-moved", "Nova", &[])])), Step::Reply(got(&[list_xml("D2", "ck-moved", "Nova", &[])]))]);
-    assert!(matches!(delete_group(&client(url), &db, &o, &group, "ck-n").unwrap(), GroupWrite::Conflict { .. }));
+    assert!(matches!(delete_group(&client(url), &db, &o, &group, "ck-n", 9).unwrap(), GroupWrite::Conflict { .. }));
     assert!(!server.join().expect("server").iter().any(|r| r.contains("DeleteItem")));
     let (url, server) = serve(vec![
         Step::Reply(got(&[list_xml("D2", "ck-n", "Nova", &[])])),
         Step::Reply(ok("DeleteItem", "")),
     ]);
-    assert_eq!(delete_group(&client(url), &db, &o, &group, "ck-n").unwrap(), GroupWrite::Deleted);
+    assert_eq!(delete_group(&client(url), &db, &o, &group, "ck-n", 9).unwrap(), GroupWrite::Deleted);
     assert!(server.join().expect("server")[1].contains(r#"DeleteType="MoveToDeletedItems""#));
     assert!(contact_groups::get(&db.lock().unwrap(), &group.id).unwrap().is_none());
 }

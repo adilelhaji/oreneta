@@ -117,7 +117,8 @@
   no existe arrastrar mensajes a la navegación (solo entre columnas del
   tablero y fuentes RSS); cuando exista, una favorita debe aceptarlo igual
   que su carpeta.
-- Reglas de correo cuyo destino es una carpeta movida: siguen apuntando a
-  la ruta vieja.
+- Reglas de correo para todas las cuentas cuyo destino es una carpeta
+  movida: siguen apuntando a la ruta vieja. Las de la propia cuenta ya la
+  siguen (ADR-0058).
 - Evidencia nativa en Windows y de proveedores reales (la fila exige
   `requiresNative`).

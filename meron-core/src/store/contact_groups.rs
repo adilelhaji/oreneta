@@ -83,15 +83,24 @@ pub fn migrate_member_addresses(conn: &Connection) -> Result<()> {
 /// is shown from the card and needs none.
 pub fn label_members(conn: &Connection, group_id: &str, labels: &[(String, String, String)]) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
+    label_in(&tx, group_id, labels)?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn label_in(conn: &Connection, group_id: &str, labels: &[(String, String, String)]) -> Result<()> {
     for (person, name, addr) in labels {
-        tx.execute(
+        conn.execute(
             "UPDATE contact_group_members SET name = ?3, addr = ?4 WHERE group_id = ?1 AND person_id = ?2",
             params![group_id, person, name, addr],
         )?;
     }
-    tx.commit()?;
     Ok(())
 }
+
+/// The labels of each group's members who are no card of the book, by the
+/// group's UID: see [`label_members`].
+pub type GroupLabels = [(String, Vec<(String, String, String)>)];
 
 /// The id a group is kept under: apart from people's, so the two can never
 /// be confused.
@@ -206,6 +215,18 @@ fn insert(
 /// Replaces every group of one book with what a sync just read, like
 /// [`super::replace_book_rows`] does for its people.
 pub fn replace_book_groups(conn: &Connection, origin: &BookOrigin, rows: &[GroupRow], now: i64) -> Result<usize> {
+    replace_book_groups_labelled(conn, origin, rows, &[], now)
+}
+
+/// [`replace_book_groups`], with the labels of members who are no card of
+/// the book written in the same transaction (ADR-0058).
+pub fn replace_book_groups_labelled(
+    conn: &Connection,
+    origin: &BookOrigin,
+    rows: &[GroupRow],
+    labels: &GroupLabels,
+    now: i64,
+) -> Result<usize> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "DELETE FROM contact_group_members WHERE group_id IN
@@ -225,15 +246,31 @@ pub fn replace_book_groups(conn: &Connection, origin: &BookOrigin, rows: &[Group
         insert(&tx, origin, row, &members, now)?;
         written += 1;
     }
+    for (uid, members) in labels {
+        label_in(&tx, &group_id(origin, uid.trim()), members)?;
+    }
     tx.commit()?;
     Ok(written)
 }
 
 /// Records one synced group as the server now holds it, after a write there.
 pub fn put_synced_group(conn: &Connection, origin: &BookOrigin, row: &GroupRow, now: i64) -> Result<String> {
+    put_synced_group_labelled(conn, origin, row, &[], now)
+}
+
+/// [`put_synced_group`], with the labels of members who are no card of the
+/// book written in the same transaction (ADR-0058).
+pub fn put_synced_group_labelled(
+    conn: &Connection,
+    origin: &BookOrigin,
+    row: &GroupRow,
+    labels: &[(String, String, String)],
+    now: i64,
+) -> Result<String> {
     let tx = conn.unchecked_transaction()?;
     let members: Vec<String> = row.members.iter().map(|uid| origin.person_id(uid.trim())).collect();
     let id = insert(&tx, origin, row, &members, now)?;
+    label_in(&tx, &id, labels)?;
     tx.commit()?;
     Ok(id)
 }

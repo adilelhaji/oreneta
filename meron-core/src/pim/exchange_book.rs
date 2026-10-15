@@ -112,18 +112,34 @@ pub fn store_book(conn: &Connection, origin: &BookOrigin, book: &Book, now: i64)
         .collect();
     store::replace_book_rows(conn, origin, &rows, now)?;
     let groups: Vec<contact_groups::GroupRow> = book.lists.iter().map(group_row).collect();
-    contact_groups::replace_book_groups(conn, origin, &groups, now)?;
-    for list in &book.lists {
-        contact_groups::label_members(conn, &contact_groups::group_id(origin, &list.id), &labels(origin, list))?;
-    }
+    let labelled: Vec<(String, Vec<(String, String, String)>)> =
+        book.lists.iter().map(|list| (list.id.clone(), labels(origin, list))).collect();
+    contact_groups::replace_book_groups_labelled(conn, origin, &groups, &labelled, now)?;
     Ok(())
 }
 
 /// Records one list as the server now holds it, after a write there.
 fn record(conn: &Connection, origin: &BookOrigin, list: &DistributionList, now: i64) -> Result<String> {
-    let id = contact_groups::put_synced_group(conn, origin, &group_row(list), now)?;
-    contact_groups::label_members(conn, &id, &labels(origin, list))?;
-    Ok(id)
+    contact_groups::put_synced_group_labelled(conn, origin, &group_row(list), &labels(origin, list), now)
+}
+
+/// A conflict, with the copy on the server now kept here as the version to
+/// look at again and retry from; a list gone from the server goes here too.
+fn conflict_recorded(
+    db: &Mutex<Connection>,
+    origin: &BookOrigin,
+    stored: &contact_groups::StoredGroup,
+    current: Option<DistributionList>,
+    now: i64,
+) -> Result<GroupWrite> {
+    let conn = lock(db);
+    match &current {
+        Some(list) => {
+            record(&conn, origin, list, now)?;
+        }
+        None => contact_groups::forget_group(&conn, &stored.id)?,
+    }
+    Ok(conflict(origin, current))
 }
 
 /// What a write to a list came to.
@@ -223,10 +239,10 @@ pub fn save_group(
         return Ok(GroupWrite::Saved { id: group, version: list.change_key });
     };
     let Some(server) = client.read_list(&stored.uid)? else {
-        return Ok(GroupWrite::Conflict { current: None });
+        return conflict_recorded(db, origin, stored, None, now);
     };
     if server.change_key != read_at {
-        return Ok(conflict(origin, Some(server)));
+        return conflict_recorded(db, origin, stored, Some(server), now);
     }
     // Only the members the editor could see: one it could not stays.
     let (add, remove_keys) = {
@@ -257,7 +273,10 @@ pub fn save_group(
     };
     let rename = (server.name != name).then_some(name);
     match client.update_list(&stored.uid, read_at, rename, &add, &remove_keys)? {
-        ListWrite::Conflict => Ok(conflict(origin, client.read_list(&stored.uid)?)),
+        ListWrite::Conflict => {
+            let current = client.read_list(&stored.uid)?;
+            conflict_recorded(db, origin, stored, current, now)
+        }
         ListWrite::Saved { .. } => {
             let list = client.read_list(&stored.uid)?.context("the list is gone from the server")?;
             let id = record(&lock(db), origin, &list, now)?;
@@ -273,13 +292,17 @@ pub fn delete_group(
     origin: &BookOrigin,
     stored: &contact_groups::StoredGroup,
     read_at: &str,
+    now: i64,
 ) -> Result<GroupWrite> {
     match client.delete_list(&stored.uid, read_at)? {
         ListWrite::Saved { .. } => {
             contact_groups::forget_group(&lock(db), &stored.id)?;
             Ok(GroupWrite::Deleted)
         }
-        ListWrite::Conflict => Ok(conflict(origin, client.read_list(&stored.uid)?)),
+        ListWrite::Conflict => {
+            let current = client.read_list(&stored.uid)?;
+            conflict_recorded(db, origin, stored, current, now)
+        }
     }
 }
 

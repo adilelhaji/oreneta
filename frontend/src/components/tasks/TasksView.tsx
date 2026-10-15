@@ -102,10 +102,15 @@ export function TasksView() {
   const exchangeWithout = accounts.filter(
     (account) => !!account.ews_url && !lists.some((list) => list.ews_account === account.id),
   )
+  // One at a time: the first read of a folder can take a while.
+  const [addingExchange, setAddingExchange] = useState('')
   const addExchange = (account: string, email: string) => {
-    addExchangeTaskList(account, email).catch((error) =>
-      showToast(error instanceof Error ? error.message : t('tasks.syncFailed', { defaultValue: 'Sync failed' }), 'error'),
-    )
+    setAddingExchange(account)
+    addExchangeTaskList(account, email)
+      .catch((error) =>
+        showToast(error instanceof Error ? error.message : t('tasks.syncFailed', { defaultValue: 'Sync failed' }), 'error'),
+      )
+      .finally(() => setAddingExchange(''))
   }
 
   useEffect(() => {
@@ -278,7 +283,9 @@ export function TasksView() {
             key={account.id}
             type="button"
             onClick={() => addExchange(account.id, account.email)}
-            className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer"
+            disabled={!!addingExchange}
+            aria-busy={addingExchange === account.id}
+            className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer disabled:cursor-wait disabled:opacity-50"
           >
             + {t('tasks.addExchangeList', { email: account.email, defaultValue: 'Exchange tasks of {email}' })}
           </button>
@@ -535,6 +542,21 @@ function ConflictBar({ task }: { task: Task }) {
     setBusy(true)
     await resolveTaskConflict(task.id, keep)
     setBusy(false)
+  }
+  // A change Exchange can never take (ADR-0058): nothing to choose between,
+  // the task waits to be changed, and the list's other changes went on.
+  if (task.conflict?.startsWith('rejected: ')) {
+    return (
+      <div className="flex basis-full items-center gap-1.5 rounded-control bg-warning-soft px-2.5 py-1.5 text-caption text-primary">
+        <AlertTriangle size={14} strokeWidth={1.75} className="shrink-0 text-warning" aria-hidden="true" />
+        <span>
+          {t('tasks.conflictRejected', {
+            reason: task.conflict.slice('rejected: '.length),
+            defaultValue: 'The server cannot take this change: {reason}. Change the task to send it.',
+          })}
+        </span>
+      </div>
+    )
   }
   const reason =
     task.conflict === 'deleted'

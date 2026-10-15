@@ -501,9 +501,14 @@ func sidecarCallTimeout(method string) time.Duration {
 	case "receipts.status", "receipts.answer":
 		return 60 * time.Second
 	// A group written to a CardDAV book reads the card and writes it back
-	// (ADR-0052), each request bounded by the core.
+	// (ADR-0052); an Exchange list is read, written and read again
+	// (ADR-0058). Each request is bounded by the core.
 	case "people.groupSave", "people.groupDelete":
-		return 30 * time.Second
+		return 60 * time.Second
+	// An Exchange account's whole Contacts folder, in pages and batches
+	// (ADR-0058).
+	case "exchange.contacts.sync":
+		return 2 * time.Minute
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second
 	case "folders.list", "folders.create", "folders.archive", "messages.recent", "messages.sync", "rss.markRead", "rss.markAllRead", "watch.start", "watch.stop", "discard_draft", "account.addRss", "feed.add", "rss.importOpml":

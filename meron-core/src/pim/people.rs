@@ -738,7 +738,7 @@ pub async fn group_delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             let db = engine.db.clone();
             let stored = stored.clone();
             let written = tokio::task::spawn_blocking(move || {
-                super::exchange_book::delete_group(&client, &db, &origin, &stored, &version)
+                super::exchange_book::delete_group(&client, &db, &origin, &stored, &version, now_unix())
             })
             .await??;
             Ok(written.to_json(&id))

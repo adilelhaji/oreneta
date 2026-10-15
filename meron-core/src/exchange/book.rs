@@ -316,6 +316,11 @@ impl EwsClient {
         add: &[NewMember],
         remove_keys: &[String],
     ) -> Result<ListWrite> {
+        // Never written blind: without the version it was read at, a change
+        // made since could not be told apart (ADR-0012).
+        if read_at.is_empty() {
+            return Ok(ListWrite::Conflict);
+        }
         let mut updates = String::new();
         if let Some(name) = rename {
             updates.push_str(&format!(
@@ -350,6 +355,9 @@ impl EwsClient {
     /// first: one changed or gone since answers a conflict and nothing is
     /// deleted.
     pub fn delete_list(&self, id: &str, read_at: &str) -> Result<ListWrite> {
+        if read_at.is_empty() {
+            return Ok(ListWrite::Conflict);
+        }
         match self.read_list(id)? {
             None => return Ok(ListWrite::Saved { id: id.to_string(), change_key: String::new() }),
             Some(current) if current.change_key != read_at => return Ok(ListWrite::Conflict),

@@ -93,9 +93,16 @@ calendar, the directory and automatic replies, it covers (ADR-0058):
 
 - **Folders by path:** subfolders appear under their parents (`Inbox/Clients`)
   and can be moved by drag or "Move folder to…" (`MoveFolder`). The move is
-  checked against a fresh folder listing first and never repeated.
-- **Delivery receipts:** asked of Exchange with each message
-  (`IsDeliveryReceiptRequested`) when the composer's switch is on.
+  checked against a fresh folder listing first and never repeated. Before
+  this, an Exchange subfolder was named by its own name alone (`Clients`).
+  The first listing after the update carries everything kept under that
+  name to the path: cached mail, rules of the account, snoozed
+  conversations, tasks, automatic archiving, favorites, colors, board
+  columns and saved searches. Only a name two folders shared cannot be
+  told apart: that cache is read again.
+- **Delivery receipts:** asked in the request to Exchange with each message
+  (`IsDeliveryReceiptRequested`) when the composer's switch is on. That a
+  real Exchange server honours it next to the MIME is not yet verified.
 - **Contacts and distribution lists:** Settings → People → "Read Exchange
   contacts" brings in the Contacts folder. Its people are read only; its
   distribution lists are contact groups that can be created, renamed,

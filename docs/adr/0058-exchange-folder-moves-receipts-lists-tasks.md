@@ -38,14 +38,34 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
 - **Una `/` dentro de un nombre de Exchange** se escribe como `∕` (barra de
   división, U+2215), que se lee igual: Exchange la admite en un nombre y la
   ruta la usa entre nombres.
-- **Lo guardado con el nombre antiguo sigue a su carpeta.** Al listar, una
-  caché guardada con el nombre de antes (sin ruta) que ya no es ninguna
-  carpeta pasa a la ruta nueva, igual que en un movimiento (ADR-0050):
-  mensajes, estado de sincronización, ids de Exchange. Nada se vuelve a
-  descargar. Si dos carpetas compartían ese nombre, la caché mezclaba las
-  dos: se borra y ambas se leen de nuevo. Las favoritas y los colores de
-  las subcarpetas de Exchange guardados antes de este cambio apuntan al
-  nombre viejo y se quitan una vez, con el aviso de ADR-0050.
+- **Todo lo guardado con el nombre antiguo sigue a su carpeta.** Al listar,
+  lo que estaba guardado con el nombre de antes (sin ruta) de una carpeta
+  que era la única con ese nombre, y cuya ruta aún no tiene nada, pasa a la
+  ruta nueva en una transacción, igual que en un movimiento: mensajes,
+  estado de sincronización, ids de Exchange, conversaciones pospuestas,
+  tareas hechas de una conversación, el registro de las reglas, el progreso
+  del archivado automático, las reglas de la cuenta que mueven correo allí
+  y la política de archivado automático (que sigue confirmada: nombra las
+  mismas carpetas). Nada se vuelve a descargar. Una prueba recorre todas
+  las columnas que nombran una carpeta y falla si una nueva no está
+  decidida (`folder_move::FOLDER_REFERENCES` o `NOT_MAIL_FOLDERS`). Las
+  reglas «para todas las cuentas» conservan su nombre: nombran una carpeta
+  de cada cuenta, y cambiarlo para una rompería las demás.
+- **La interfaz también lo sigue.** Los cambios de nombre quedan guardados
+  (`folder_renames`) hasta que la interfaz pide la lista de carpetas, que
+  los trae (`renames`, como al mover); favoritas, colores, columnas de los
+  tableros, búsquedas guardadas, la carpeta abierta y la última abierta los
+  siguen. No se quita ninguna favorita.
+- **Un nombre que tenían varias carpetas** (`Archivo` arriba y
+  `Bandeja de entrada/Archivo`) mezclaba las dos en la caché: se borra esa
+  caché y ambas se leen de nuevo. Todo esto pasa una sola vez por cuenta, la
+  primera vez que se listan sus carpetas con esta versión
+  (`ews_folder_paths`); después, una carpeta nueva que se llama como otra
+  es solo una carpeta nueva. Lo que nombraba ese nombre se queda en la
+  que sigue llamándose así, o deja de encontrar su carpeta: no se puede
+  saber cuál era.
+- **Un estado de sincronización que el servidor ya no acepta**
+  (`ErrorInvalidSyncStateData`) vuelve a empezar la carpeta, una vez.
 - **Mover es `MoveFolder`** con el id de la carpeta y el del padre nuevo
   (o la raíz del buzón, `msgfolderroot`, para el nivel superior); las
   subcarpetas y los elementos van con ella. Las reglas de ADR-0050 son las
@@ -71,8 +91,12 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
 - Solo se escribe si quien envía la pidió (ADR-0048: el interruptor del
   redactor, que empieza con el ajuste global). Sin pedirla, la petición al
   servidor no cambia en nada.
-- El envío responde `delivery_receipt: "requested"` para Exchange. Graph
-  sigue respondiendo `"unsupported"` hasta #210: dicho, no escondido.
+- El envío responde `delivery_receipt: "requested"` para Exchange: la
+  petición va en la solicitud. Que un servidor Exchange real la atienda
+  junto al MIME no está comprobado todavía (N5); hasta entonces la
+  documentación dice «se pide en la solicitud» y la interfaz no promete
+  más. Graph sigue respondiendo `"unsupported"` hasta #210: dicho, no
+  escondido.
 - La confirmación de lectura sigue en la cabecera MIME
   (`Disposition-Notification-To`), como decía ADR-0048; no se duplica en
   `IsReadReceiptRequested`.
@@ -96,7 +120,7 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   - alguien que no es contacto aquí (una dirección escrita o una entrada
     del directorio) se guarda como `mailto:<dirección>` con el nombre y la
     dirección que dio el servidor (columnas nuevas `name` y `addr` de
-    `contact_group_members`, esquema 64). Se ve en el grupo y el redactor
+    `contact_group_members`, esquema 65). Se ve en el grupo y el redactor
     lo expande igual que a un contacto. Sin esto, una lista hecha con el
     directorio de la organización (lo habitual) se vería vacía;
   - una entrada sin dirección utilizable (una lista dentro de la lista, un
@@ -116,7 +140,17 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
     (`ErrorIrresolvableConflict`) y se devuelve la copia de allí;
   - borrar una lista la manda a Elementos eliminados, tras comprobar su
     clave como arriba (`DeleteItem` no compara claves);
-  - tras escribir se vuelve a leer la lista y se guarda tal como quedó.
+  - tras escribir se vuelve a leer la lista y se guarda tal como quedó;
+    un conflicto también guarda aquí la copia de allí (o quita la lista si
+    ya no está), así que «mírala otra vez y reinténtalo» parte de ella;
+  - nunca se escribe sin la clave leída: sin ella no se envía nada y es un
+    conflicto.
+- **Límite aceptado:** crear una lista no es idempotente. Si la respuesta a
+  la creación se pierde, la lista puede quedar creada en el servidor y
+  aparecer en la siguiente lectura de la libreta; volver a crearla a mano
+  haría una segunda. Las listas no tienen dónde guardar un id nuestro que se
+  pueda buscar, como las tareas, y buscar por nombre confundiría dos listas
+  que se llaman igual.
 - Un grupo de Exchange solo puede tener personas de la misma libreta, como
   uno de CardDAV. Un miembro nuevo que es contacto se escribe por su id y su
   primera dirección; una persona sin dirección no puede entrar.
@@ -125,7 +159,7 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
 
 - **Una lista por cuenta de Exchange**, enlazada a su carpeta Tareas: «Tareas
   de Exchange de <cuenta>» en la vista de Tareas. Columna nueva
-  `task_lists.ews_account` (esquema 64). Se lee entera antes de añadirla; si
+  `task_lists.ews_account` (esquema 65). Se lee entera antes de añadirla; si
   falla, no se añade. Se va con la cuenta (y sus tareas). El resto del
   modelo es el de ADR-0039: cambios aquí primero, marcados como pendientes;
   se sincroniza al abrir Tareas y con «Sincronizar».
@@ -148,7 +182,17 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   cambiada en los dos lados o cambiada aquí y borrada allí. «Conservar la
   mía» vuelve a poner la tarea en cola sobre la versión de allí (o la crea
   de nuevo); «Usar la del servidor» toma la de allí. Borrar comprueba la
-  clave antes, porque `DeleteItem` no lo hace.
+  clave antes, porque `DeleteItem` no lo hace. Nunca se escribe sin la
+  clave leída: sin ella es un conflicto y no se envía nada.
+- **Un cambio que Exchange nunca aceptaría** («cada N años» con N > 1, una
+  regla sin vencimiento) se sabe antes de enviar: esa tarea queda apartada
+  con el motivo (`rejected: …`) y las demás de la lista siguen. Se vuelve a
+  intentar cuando la tarea cambia. El editor tampoco ofrece «cada N años»
+  en una lista de Exchange.
+- **Lectura por páginas** en orden de creación; el desplazamiento cuenta
+  todo lo que el servidor lista (la carpeta puede tener otras cosas) y una
+  tarea listada dos veces es una. Cada lista se sincroniza de una en una;
+  listas distintas no se esperan.
 - **Sin duplicados al reintentar:** antes de crear una tarea se guarda aquí
   un id nuestro (`remote_href = new:<uuid>`) y se escribe en la tarea como
   propiedad con nombre (`PublicStrings`, `OrenetaTaskUid`). Si la respuesta
@@ -171,7 +215,7 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   una regla mensual, «cualquier día laborable», anual en otro mes que el
   del vencimiento, o una regla sin vencimiento — se muestra y se puede
   borrar, pero no editar, con el aviso de ADR-0053. «Cada N años» con N > 1
-  no existe en EWS: escribirla falla con el motivo.
+  no existe en EWS (ver arriba).
 - Mover una tarea entre una lista de Exchange y otra lista se rechaza, como
   con CalDAV.
 
@@ -183,8 +227,9 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   respuesta leída con `quick-xml` (ya era dependencia directa) por nombre
   local, como el lector WebDAV. Un fallo SOAP entero falla; un error por
   elemento se informa con su código.
-- **Esquema 64:** `contact_group_members.name` y `.addr`;
-  `task_lists.ews_account`.
+- **Esquema 65** (el 64 es de #210, que entra antes):
+  `contact_group_members.name` y `.addr`; `task_lists.ews_account`;
+  `folder_renames` y `ews_folder_paths`.
 
 ## Alternativas descartadas
 
@@ -247,5 +292,10 @@ Todas con respuestas SOAP grabadas, sin servidor real:
   leídas y escritas, solo lo cambiado, edición, conflictos y su
   resolución, error, creación con respuesta perdida sin duplicado,
   ocurrencia completada, borrado, dos cuentas aparte.
-- Frontend: `folderMoves.test.ts`, `ExchangeGroups.test.tsx`,
+- `folder_move.rs`: todas las columnas que nombran una carpeta están
+  decididas; tareas, pospuestas, registro, progreso de archivado, reglas de
+  la cuenta y política confirmada siguen al cambio de nombre, y nada de otra
+  cuenta; los cambios de nombre se leen una vez por cuenta.
+- Frontend: `folderMoves.test.ts`, `folderMove.test.ts` (cambios de nombre
+  de una lista de carpetas), `ExchangeGroups.test.tsx`,
   `ExchangeTaskLists.test.tsx`.

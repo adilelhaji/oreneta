@@ -517,26 +517,14 @@ export async function moveFolder(accountId: string, folderId: string, parentId: 
       parent_id: parentId ?? '',
     })
     const renames = res?.renames ?? []
-    // Carried before the new list lands, so nothing takes the old paths for gone.
-    applyFolderRenames(accountId, renames)
     if (res?.folders) {
+      // Carried before the new list lands, so nothing takes the old paths for gone.
+      followFolderRenames(accountId, renames)
       mail$.foldersByAccount[accountId].set(res.folders)
       if (ui$.selectedAccount.get() === accountId) mail$.folders.set(res.folders)
     } else {
+      followFolderRenames(accountId, renames)
       void loadFolders(accountId, false)
-    }
-    const renamed = new Map(renames.map((rename) => [rename.from, rename.to]))
-    for (const board of settings$.kanbanBoards.peek()) {
-      for (const column of board.columns) {
-        const to = column.accountId === accountId ? renamed.get(column.folderId) : undefined
-        if (to) switchKanbanColumnFolder(board.id, column, to)
-      }
-    }
-    const openThread = findLocalThread(ui$.selectedThread.get())
-    if (openThread?.account_id === accountId && renamed.has(openThread.folder_id ?? '')) ui$.selectedThread.set('')
-    if (ui$.selectedAccount.get() === accountId) {
-      const to = renamed.get(ui$.selectedFolder.get())
-      if (to) ui$.selectedFolder.set(to)
     }
     showToast(t('folders.move.done', { folder: label, destination, defaultValue: 'Moved {folder} to {destination}' }))
     return true
@@ -549,6 +537,52 @@ export async function moveFolder(accountId: string, folderId: string, parentId: 
     )
     return false
   }
+}
+
+/**
+ * Folders whose names changed — by a move here (ADR-0050), or by the core
+ * naming an Exchange account's folders by their paths (ADR-0058) — carry
+ * along everything this window keeps by name: favorites and colors, board
+ * columns, saved searches, the open folder and the open conversation.
+ * Called before the new folder list lands, so nothing takes the old names
+ * for folders that went away.
+ */
+export function followFolderRenames(accountId: string, renames: FolderRename[]) {
+  if (!renames.length) return
+  applyFolderRenames(accountId, renames)
+  const renamed = new Map(renames.map((rename) => [rename.from, rename.to]))
+  for (const board of settings$.kanbanBoards.peek()) {
+    for (const column of board.columns) {
+      const to = column.accountId === accountId ? renamed.get(column.folderId) : undefined
+      if (to) switchKanbanColumnFolder(board.id, column, to)
+    }
+  }
+  const searches = settings$.savedSearches.peek()
+  if (searches.some((search) => search.account === accountId && renamed.has(search.folder ?? ''))) {
+    settings$.savedSearches.set(
+      searches.map((search) =>
+        search.account === accountId && search.folder && renamed.has(search.folder)
+          ? { ...search, folder: renamed.get(search.folder)! }
+          : search,
+      ),
+    )
+  }
+  const openThread = findLocalThread(ui$.selectedThread.get())
+  if (openThread?.account_id === accountId && renamed.has(openThread.folder_id ?? '')) ui$.selectedThread.set('')
+  if (ui$.selectedAccount.get() === accountId) {
+    const to = renamed.get(ui$.selectedFolder.get())
+    if (to) ui$.selectedFolder.set(to)
+  }
+}
+
+/** A folder list as the core answers it, with any renames it reports followed first. */
+export async function folderList(accountId: string, refresh: boolean | undefined): Promise<Folder[]> {
+  const result = await invoke<{ folders?: Folder[]; renames?: FolderRename[] }>('mail.folderList', {
+    account_id: accountId,
+    refresh,
+  })
+  followFolderRenames(accountId, result?.renames ?? [])
+  return result?.folders || []
 }
 
 export function findLocalThread(threadId: string): Message | undefined {
@@ -712,16 +746,12 @@ export async function loadFolders(accountId: string, refresh = true) {
       const foldersList = await Promise.all(
         accounts.map(async (acc) => {
           try {
-            const res = await invoke<{ folders: Folder[] }>('mail.folderList', {
-              account_id: acc.id,
-              // Propagate the caller's refresh so sub-accounts get a real folder
-              // LIST sync in the unified view. Without it a freshly added account
-              // only ever has its synthetic INBOX row, so the folder picker and
-              // "Move to" lists show just Inbox. The sync is async + deduped; the
-              // mail.synced({folders:true}) it emits triggers a refresh:false reload.
-              refresh,
-            })
-            const folders = res.folders || []
+            // Propagate the caller's refresh so sub-accounts get a real folder
+            // LIST sync in the unified view. Without it a freshly added account
+            // only ever has its synthetic INBOX row, so the folder picker and
+            // "Move to" lists show just Inbox. The sync is async + deduped; the
+            // mail.synced({folders:true}) it emits triggers a refresh:false reload.
+            const folders = await folderList(acc.id, refresh)
             mail$.foldersByAccount[acc.id].set(folders)
             return folders
           } catch {
@@ -745,16 +775,15 @@ export async function loadFolders(accountId: string, refresh = true) {
     return
   }
 
-  const result = await invoke<{ folders: Folder[] }>('mail.folderList', { account_id: accountId, refresh })
-  mail$.folders.set(result.folders)
-  mail$.foldersByAccount[accountId].set(result.folders)
+  const folders = await folderList(accountId, refresh)
+  mail$.folders.set(folders)
+  mail$.foldersByAccount[accountId].set(folders)
 }
 
 export async function refreshAccountFoldersCache(accountId: string, refresh = false): Promise<Folder[]> {
   if (!accountId || accountId === 'unified') return []
   try {
-    const result = await invoke<{ folders: Folder[] }>('mail.folderList', { account_id: accountId, refresh })
-    const folders = result.folders || []
+    const folders = await folderList(accountId, refresh)
     mail$.foldersByAccount[accountId].set(folders)
     return folders
   } catch (error) {
@@ -851,11 +880,7 @@ export async function ensureAccountFolders(
     return cached
   }
   try {
-    const result = await invoke<{ folders: Folder[] }>('mail.folderList', {
-      account_id: accountId,
-      refresh: options.refreshIfBootstrapOnly || options.forceRefresh,
-    })
-    const folders = result.folders || []
+    const folders = await folderList(accountId, options.refreshIfBootstrapOnly || options.forceRefresh)
     mail$.foldersByAccount[accountId].set(folders)
     if (options.waitForRefresh && (options.refreshIfBootstrapOnly || options.forceRefresh) && folders.length === 0) {
       for (let attempt = 0; attempt < 10; attempt += 1) {

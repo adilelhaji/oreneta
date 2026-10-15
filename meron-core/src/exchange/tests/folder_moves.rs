@@ -134,6 +134,83 @@ async fn a_cache_kept_under_a_flat_name_follows_its_folder_to_its_path() {
     assert_eq!(crate::store::ews_item_for_uid(&conn, "acct", "INBOX/Clients", 1).unwrap().map(|item| item.0), Some("item-Clients".to_string()));
     assert_eq!(crate::store::get_folder_unread(&conn, "acct", "INBOX/Clients").unwrap(), 1, "cached messages follow");
     assert!(!crate::store::folder_exists(&conn, "acct", "Clients").unwrap());
+    // What else names the folder follows it, and the interface hears of it.
+    let mut renames = crate::folder_move::take_renames(&conn, "acct").unwrap();
+    renames.sort();
+    assert_eq!(
+        renames,
+        [("2026".to_string(), "Work/2026".to_string()), ("Clients".to_string(), "INBOX/Clients".to_string())]
+    );
+    assert!(crate::folder_move::take_renames(&conn, "other").unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_flat_name_adopted_takes_tasks_snoozes_and_rules_with_it_and_tells_the_interface() {
+    let db = test_db();
+    {
+        let conn = db.lock().unwrap();
+        crate::store::upsert_folders(&conn, "acct", &[crate::imap::Folder { name: "Clients".into(), ..Default::default() }]).unwrap();
+        conn.execute("INSERT INTO snoozed_threads(account, thread_key, folder, until) VALUES('acct', 't', 'Clients', 1)", []).unwrap();
+        conn.execute("INSERT INTO tasks(account, thread_key, folder, note, created_at) VALUES('acct', 't', 'Clients', '', 1)", []).unwrap();
+        let rule = serde_json::json!({ "id": "r", "account": "acct", "name": "r", "enabled": true, "conditions": [],
+                                        "actions": [{ "type": "moveTo", "folder": "Clients" }] });
+        crate::store::replace_rules(&conn, &[("r".into(), "acct".into(), true, rule.to_string())]).unwrap();
+    }
+    let (url, server) = serve(vec![Step::Reply(hierarchy(&mailbox())), Step::Reply(distinguished_response())]);
+    session(url, db.clone(), "acct").list_folders().await.expect("listing");
+    server.join().expect("server");
+    let conn = db.lock().unwrap();
+    for table in ["snoozed_threads", "tasks"] {
+        let folder: String = conn.query_row(&format!("SELECT folder FROM {table}"), [], |row| row.get(0)).unwrap();
+        assert_eq!(folder, "INBOX/Clients", "{table}");
+    }
+    assert!(crate::store::rules(&conn).unwrap()[0].contains("INBOX/Clients"));
+    assert_eq!(
+        crate::folder_move::take_renames(&conn, "acct").unwrap(),
+        [("Clients".to_string(), "INBOX/Clients".to_string())]
+    );
+}
+
+#[test]
+fn a_flat_name_a_top_level_folder_still_has_is_dropped_once_when_another_shared_it() {
+    let conn = crate::store::open_in_memory_for_test().unwrap();
+    crate::store::upsert_folders(&conn, "acct", &[crate::imap::Folder { name: "Archive".into(), ..Default::default() }]).unwrap();
+    crate::store::set_folder_sync_state(&conn, "acct", "Archive", "mixed").unwrap();
+    let pairs = [("Archive".to_string(), "Archive".to_string()), ("Archive".to_string(), "INBOX/Archive".to_string())];
+    adopt_flat_folder_names(&conn, "acct", &pairs).unwrap();
+    assert_eq!(crate::store::get_folder_sync_state(&conn, "acct", "Archive").unwrap(), None, "the mixed cache is read again");
+    assert!(crate::folder_move::take_renames(&conn, "acct").unwrap().is_empty(), "nothing was renamed");
+    // Once both are read under their own names, nothing happens any more.
+    crate::store::upsert_folders(
+        &conn,
+        "acct",
+        &[
+            crate::imap::Folder { name: "Archive".into(), ..Default::default() },
+            crate::imap::Folder { name: "INBOX/Archive".into(), ..Default::default() },
+        ],
+    )
+    .unwrap();
+    crate::store::set_folder_sync_state(&conn, "acct", "Archive", "its own").unwrap();
+    adopt_flat_folder_names(&conn, "acct", &pairs).unwrap();
+    assert_eq!(crate::store::get_folder_sync_state(&conn, "acct", "Archive").unwrap().as_deref(), Some("its own"));
+}
+
+#[tokio::test]
+async fn a_sync_state_the_server_refuses_starts_the_folder_again_once() {
+    let db = test_db();
+    crate::store::set_folder_sync_state(&db.lock().unwrap(), "acct", "INBOX", "c3RhbGU=").unwrap();
+    let (url, server) = serve(vec![
+        Step::Reply(error_response("SyncFolderItems", "ErrorInvalidSyncStateData", "The sync state is invalid.")),
+        Step::Reply(super::THREE_ITEM_SYNC_RESPONSE.to_string()),
+        Step::Reply(super::ok_response("GetItem", "<m:Items/>")),
+    ]);
+    let mut session = session(url, db.clone(), "acct");
+    session.folders.insert("INBOX".to_string(), ("AAMkINBOX=".to_string(), None));
+    session.fetch_recent("INBOX", 5).await.expect("synced again");
+    let requests = server.join().expect("server");
+    assert!(requests[0].contains("c3RhbGU="), "{}", requests[0]);
+    assert!(!requests[1].contains("c3RhbGU="), "started again with no state: {}", requests[1]);
+    assert_eq!(crate::store::get_folder_sync_state(&db.lock().unwrap(), "acct", "INBOX").unwrap().as_deref(), Some("c3RhdGU="));
 }
 
 #[test]

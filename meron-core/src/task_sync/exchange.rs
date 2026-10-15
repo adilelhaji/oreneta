@@ -116,13 +116,28 @@ fn from_snapshot(text: &str) -> Option<Fields> {
     })
 }
 
-/// One sync at a time: two at once would send the same change twice.
-static SYNCING: Mutex<()> = Mutex::new(());
+/// One sync of a list at a time: two at once would send the same change
+/// twice. Lists apart do not wait for each other.
+fn list_lock(list_id: &str) -> std::sync::Arc<Mutex<()>> {
+    static LOCKS: std::sync::OnceLock<Mutex<HashMap<String, std::sync::Arc<Mutex<()>>>>> = std::sync::OnceLock::new();
+    let mut locks = LOCKS.get_or_init(Default::default).lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    locks.entry(list_id.to_string()).or_default().clone()
+}
+
+/// The conflict mark of a change Exchange can never take, with its reason.
+/// It holds up nothing else: the list goes on, and the task is tried again
+/// once it is changed (ADR-0058).
+const REJECTED: &str = "rejected: ";
+
+fn mark_rejected(conn: &Connection, id: i64, reason: &str) -> Result<()> {
+    mark_conflict(conn, id, &format!("{REJECTED}{reason}"))
+}
 
 /// Syncs one list kept in an Exchange account. The outcome is recorded on
 /// the list as well as returned.
 pub fn sync(db: &Mutex<Connection>, client: &EwsClient, list_id: &str, now: i64) -> Result<Report> {
-    let _one = SYNCING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let lock_of_list = list_lock(list_id);
+    let _one = lock_of_list.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     binding(&lock(db), list_id)?.context("this list is not kept in an Exchange account")?;
     let result = push(db, client, list_id, now).and_then(|mut report| {
         let tasks = client.read_tasks()?;
@@ -178,11 +193,13 @@ fn queue(conn: &Connection, list_id: &str) -> Result<Vec<Pending>> {
 }
 
 /// Keeps the server's copy of a task just written as the version read. A
-/// change made here while it was being sent stays pending.
+/// change made here while it was being sent stays pending; one set aside as
+/// unwritable before is not any more.
 fn written_here(conn: &Connection, id: i64, remote: &RemoteTask, seq: i64) -> Result<()> {
     conn.execute(
         "UPDATE tasks SET remote_href = ?2, remote_etag = ?3, remote_ics = ?4,
-                pending = CASE WHEN sync_seq = ?5 THEN '' ELSE pending END
+                pending = CASE WHEN sync_seq = ?5 THEN '' ELSE pending END,
+                conflict = CASE WHEN conflict LIKE 'rejected: %' THEN '' ELSE conflict END
           WHERE id = ?1",
         params![id, remote.id, remote.change_key, snapshot(&remote.fields), seq],
     )?;
@@ -246,7 +263,9 @@ fn push(db: &Mutex<Connection>, client: &EwsClient, list_id: &str, now: i64) -> 
     let mut report = Report::default();
     let (queue, blocked) = {
         let conn = lock(db);
-        let blocked = conn.prepare("SELECT 1 FROM tasks WHERE list_id = ?1 AND conflict <> ''")?.exists(params![list_id])?;
+        let blocked = conn
+            .prepare("SELECT 1 FROM tasks WHERE list_id = ?1 AND conflict <> '' AND conflict NOT LIKE 'rejected: %'")?
+            .exists(params![list_id])?;
         (queue(&conn, list_id)?, blocked)
     };
     if blocked {
@@ -300,14 +319,38 @@ fn push(db: &Mutex<Connection>, client: &EwsClient, list_id: &str, now: i64) -> 
                     marker
                 }
             };
-            let (id, _) = client.create_task(&task.fields, &marker, now)?;
+            let (id, _) = match client.create_task(&task.fields, &marker, now) {
+                Ok(created) => created,
+                Err(error) => match crate::exchange::tasks::unwritable_reason(&error) {
+                    // Nothing was sent: no id to look for next time.
+                    Some(reason) => {
+                        let conn = lock(db);
+                        conn.execute("UPDATE tasks SET remote_href = '' WHERE id = ?1", params![task.id])?;
+                        mark_rejected(&conn, task.id, &reason)?;
+                        report.rejected += 1;
+                        continue;
+                    }
+                    None => return Err(error),
+                },
+            };
             let remote = client.read_task(&id)?.context("Exchange did not keep the task it created")?;
             written_here(&lock(db), task.id, &remote, task.seq)?;
             report.pushed += 1;
             continue;
         }
         let before = from_snapshot(&task.ics).unwrap_or_default();
-        match client.update_task(&task.href, &task.etag, &before, &task.fields, now)? {
+        let written = match client.update_task(&task.href, &task.etag, &before, &task.fields, now) {
+            Ok(written) => written,
+            Err(error) => match crate::exchange::tasks::unwritable_reason(&error) {
+                Some(reason) => {
+                    mark_rejected(&lock(db), task.id, &reason)?;
+                    report.rejected += 1;
+                    continue;
+                }
+                None => return Err(error),
+            },
+        };
+        match written {
             ListWrite::Saved { .. } => {
                 let remote = client.read_task(&task.href)?.context("the task is gone from the server")?;
                 written_here(&lock(db), task.id, &remote, task.seq)?;
@@ -356,7 +399,10 @@ fn reconcile(conn: &Connection, list_id: &str, tasks: &[RemoteTask], now: i64, r
     };
     let mut seen: HashSet<&str> = HashSet::new();
     for remote in tasks {
-        seen.insert(remote.id.as_str());
+        // A task listed twice (pages that shifted under the read) is one task.
+        if !seen.insert(remote.id.as_str()) {
+            continue;
+        }
         let Some(local) = known.get(&remote.id) else {
             // Made here, with its answer lost: it is ours, not a new one.
             if let Some(id) = remote.marker.as_deref().and_then(|marker| new_here.get(marker)) {

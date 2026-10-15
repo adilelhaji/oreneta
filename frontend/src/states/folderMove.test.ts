@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { accounts$ } from './accounts'
-import { deleteFolder, mail$, moveFolder } from './mail'
+import { deleteFolder, loadFolders, mail$, moveFolder } from './mail'
 import { folderPrefs$ } from './folderPrefs'
 import { settings$ } from './settings'
 import { settleConfirm, ui$ } from './ui'
@@ -156,5 +156,41 @@ describe('moving a folder (ADR-0050)', () => {
     expect(await pending).toBe(true)
     expect(folderPrefs$.favorites.get()).toEqual([{ accountId: 'acc', folderId: 'Projects' }])
     expect(folderPrefs$.colors.get()).toEqual([])
+  })
+})
+
+describe('folders renamed by a listing (ADR-0058)', () => {
+  it('carries favorites, colors, columns, saved searches and the open folder to the new names', async () => {
+    const searches = settings$.savedSearches.peek()
+    settings$.savedSearches.set([
+      { id: 's1', name: 'Invoices', query: 'invoice', account: 'acc', folder: 'Work/2026' },
+      { id: 's2', name: 'Elsewhere', query: 'x', account: 'other', folder: 'Work/2026' },
+    ] as never)
+    responses['mail.folderList'] = {
+      renames: [
+        { from: 'Work', to: 'INBOX/Work' },
+        { from: 'Work/2026', to: 'INBOX/Work/2026' },
+      ],
+      folders: [folder('INBOX', 'inbox'), folder('Projects'), folder('INBOX/Work'), folder('INBOX/Work/2026')],
+    }
+    await loadFolders('acc', false)
+    expect(mail$.foldersByAccount.get().acc.map((item) => item.id)).toContain('INBOX/Work/2026')
+    expect(folderPrefs$.favorites.get()).toEqual([
+      { accountId: 'acc', folderId: 'INBOX/Work/2026' },
+      { accountId: 'acc', folderId: 'Projects' },
+    ])
+    expect(folderPrefs$.colors.get()).toEqual([{ accountId: 'acc', folderId: 'INBOX/Work', color: 'red' }])
+    expect(folderPrefs$.dropped.get()).toBe(0)
+    expect(settings$.kanbanBoards.get()[0].columns).toEqual([{ accountId: 'acc', folderId: 'INBOX/Work/2026' }])
+    expect(settings$.savedSearches.get().map((search) => search.folder)).toEqual(['INBOX/Work/2026', 'Work/2026'])
+    expect(ui$.selectedFolder.get()).toBe('INBOX/Work/2026')
+    settings$.savedSearches.set(searches)
+  })
+
+  it('changes nothing when the listing renamed nothing', async () => {
+    responses['mail.folderList'] = { folders: [folder('INBOX', 'inbox'), folder('Work'), folder('Work/2026')] }
+    await loadFolders('acc', false)
+    expect(folderPrefs$.favorites.get()[0]).toEqual({ accountId: 'acc', folderId: 'Work/2026' })
+    expect(ui$.selectedFolder.get()).toBe('Work/2026')
   })
 })

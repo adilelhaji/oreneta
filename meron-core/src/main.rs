@@ -6580,10 +6580,19 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
             let mut folders = serde_json::to_value(store::get_folders(&engine.db.lock().unwrap(), &account)?)?;
             meron_core::graph::mail::decorate_folders(&engine.db.lock().unwrap(),&account,&mut folders)?;
+            // Renames a folder listing made (ADR-0058), for the interface to
+            // carry favorites, colors, board columns and searches across.
+            let renames = meron_core::folder_move::take_renames(&engine.db.lock().unwrap(), &account)?;
             if p.get("refresh").and_then(Value::as_bool).unwrap_or(true) {
                 spawn_folder_sync(engine.clone(), out.clone(), account);
             }
-            Ok(json!({ "folders": folders }))
+            if renames.is_empty() {
+                return Ok(json!({ "folders": folders }));
+            }
+            Ok(json!({
+                "folders": folders,
+                "renames": renames.iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>(),
+            }))
         }
 
         "folders.create" => {

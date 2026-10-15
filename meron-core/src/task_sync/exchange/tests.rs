@@ -363,3 +363,70 @@ fn ews_task_lists_of_two_accounts_stay_apart() {
     let left: i64 = conn.query_row("SELECT COUNT(*) FROM tasks WHERE list_id = ?1", params![list], |row| row.get(0)).unwrap();
     assert_eq!(left, 0);
 }
+
+#[test]
+fn ews_task_paging_counts_every_item_and_keeps_each_task_once() {
+    let (url, server) = serve(vec![
+        Step::Reply(found(&[("Task", "T1"), ("Message", "M1")], false)),
+        // The first task again: the pages shifted under the read.
+        Step::Reply(found(&[("Task", "T1"), ("Task", "T2")], true)),
+        Step::Reply(got(&[plain("T1", "ck1", "Un"), plain("T2", "ck2", "Dos")])),
+    ]);
+    let tasks = client(url).read_tasks().expect("read");
+    assert_eq!(tasks.iter().map(|task| task.id.as_str()).collect::<Vec<_>>(), ["T1", "T2"]);
+    let requests = server.join().unwrap();
+    assert!(requests[0].contains(r#"FieldURI="item:DateTimeCreated""#), "a stable order: {}", requests[0]);
+    assert!(requests[1].contains(r#"Offset="2""#), "the item that is no task counts: {}", requests[1]);
+    assert_eq!(requests[2].matches(r#"<t:ItemId Id="T1"/>"#).count(), 1, "{}", requests[2]);
+}
+
+#[test]
+fn ews_task_change_exchange_cannot_take_is_set_aside_and_the_rest_goes_on() {
+    let (db, list) = synced();
+    edit_title(&db, "Informe final");
+    let yearly = |interval| crate::calendar::Recurrence { freq: crate::calendar::Frequency::Yearly, interval, ..Default::default() };
+    let due = crate::exchange::tasks::tests::local_day_midnight(2026, 10, 13);
+    let id = task_lists::create(
+        &db.lock().unwrap(),
+        &TaskFields { list_id: list.clone(), title: "Biennal".into(), priority: 1, due_at: Some(due), recurrence: Some(yearly(2)), ..Default::default() },
+        5,
+    )
+    .unwrap();
+    let mut steps = vec![updated("T1", "ck2"), Step::Reply(got(&[plain("T1", "ck2", "Informe final")]))];
+    steps.extend(read(&[("T1", plain("T1", "ck2", "Informe final"))]));
+    let (url, server) = serve(steps);
+    let report = sync(&db, &client(url), &list, 20).expect("sync");
+    assert_eq!((report.pushed, report.rejected, report.stopped), (1, 1, false), "{report:?}");
+    assert!(!server.join().unwrap().iter().any(|r| r.contains("<m:CreateItem")), "nothing of it was sent");
+    let row = rows(&db).into_iter().find(|row| row.0 == "Biennal").unwrap();
+    assert_eq!((row.1.as_str(), row.3.as_str()), ("", "put"), "kept, with nothing to look for on the server");
+    assert_eq!(row.4, "rejected: Exchange cannot repeat a task every 2 years");
+
+    // Changed to a rule Exchange takes, it goes, and the mark with it.
+    {
+        let conn = db.lock().unwrap();
+        let (fields, revision, _) = task_lists::get(&conn, id).unwrap().unwrap();
+        task_lists::update(&conn, id, revision, &TaskFields { recurrence: Some(yearly(1)), ..fields }).unwrap();
+    }
+    let made = plain("T5", "ck5", "Biennal");
+    let mut steps = vec![
+        Step::Reply(ok("CreateItem", r#"<m:Items><t:Task><t:ItemId Id="T5" ChangeKey="ck5"/></t:Task></m:Items>"#)),
+        Step::Reply(got(&[made.clone()])),
+    ];
+    steps.extend(read(&[("T1", plain("T1", "ck2", "Informe final")), ("T5", made)]));
+    let (url, server) = serve(steps);
+    let report = sync(&db, &client(url), &list, 30).expect("sync");
+    assert_eq!((report.pushed, report.rejected), (1, 0));
+    assert!(server.join().unwrap()[0].contains("<t:AbsoluteYearlyRecurrence>"));
+    let row = rows(&db).into_iter().find(|row| row.0 == "Biennal").unwrap();
+    assert_eq!((row.1.as_str(), row.4.as_str()), ("T5", ""));
+}
+
+#[test]
+fn ews_task_is_never_written_without_the_version_it_was_read_at() {
+    // No server: nothing may reach it.
+    let nowhere = client("http://127.0.0.1:1".into());
+    let fields = Fields { title: "x".into(), ..Default::default() };
+    assert_eq!(nowhere.update_task("T1", "", &Fields::default(), &fields, 0).unwrap(), ListWrite::Conflict);
+    assert_eq!(nowhere.delete_task("T1", "").unwrap(), ListWrite::Conflict);
+}

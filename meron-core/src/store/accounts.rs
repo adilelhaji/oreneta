@@ -846,6 +846,10 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     // What a POP3 account downloaded, and when it deletes from the server (#97).
     ("pop3_seen", "account"),
     ("pop3_policy", "account"),
+    // Folder renames waiting for the interface, and the Exchange accounts
+    // whose folders are named by path already (ADR-0058).
+    ("folder_renames", "account"),
+    ("ews_folder_paths", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

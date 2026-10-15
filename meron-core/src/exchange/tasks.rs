@@ -41,6 +41,29 @@ pub struct RemoteTask {
     pub marker: Option<String>,
 }
 
+/// A change Exchange cannot take, known before anything is sent: the same
+/// change would be refused every time, so it is set aside with its reason
+/// rather than holding up the list (ADR-0058).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unwritable(pub String);
+
+impl std::fmt::Display for Unwritable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Unwritable {}
+
+fn unwritable(reason: &str) -> anyhow::Error {
+    anyhow::Error::new(Unwritable(reason.to_string()))
+}
+
+/// Why a write failed, when Exchange could never take it.
+pub fn unwritable_reason(error: &anyhow::Error) -> Option<String> {
+    error.chain().find_map(|cause| cause.downcast_ref::<Unwritable>()).map(|reason| reason.0.clone())
+}
+
 fn instant(text: &str) -> Option<i64> {
     let text = text.trim();
     chrono::DateTime::parse_from_rfc3339(text)
@@ -149,7 +172,7 @@ fn rule_of(node: &Node, due: NaiveDate) -> Option<Recurrence> {
 /// The `<t:Recurrence>` of a rule (an RRULE value) whose current
 /// occurrence is due on `due`.
 fn recurrence_xml(rrule: &str, due: NaiveDate) -> Result<String> {
-    let rule = recurrence::parse(rrule).map_err(|_| anyhow::anyhow!("this task's rule cannot be read"))?;
+    let rule = recurrence::parse(rrule).map_err(|_| unwritable("this task's rule cannot be read"))?;
     let rule = recurrence::anchored(&rule, due);
     let interval = rule.interval.max(1);
     let index = |n: i8| WEEK_INDEX.iter().find(|(_, k)| *k == n).map(|(name, _)| *name).unwrap_or("First");
@@ -170,7 +193,7 @@ fn recurrence_xml(rrule: &str, due: NaiveDate) -> Result<String> {
             day(rule.weekdays.first().copied().unwrap_or(0)),
             index(n)
         ),
-        (Frequency::Yearly, _) if interval > 1 => bail!("Exchange cannot repeat a task every {interval} years"),
+        (Frequency::Yearly, _) if interval > 1 => return Err(unwritable(&format!("Exchange cannot repeat a task every {interval} years"))),
         (Frequency::Yearly, None) => format!(
             "<t:AbsoluteYearlyRecurrence><t:DayOfMonth>{}</t:DayOfMonth><t:Month>{month}</t:Month></t:AbsoluteYearlyRecurrence>",
             rule.month_day.unwrap_or(due.day() as u8)
@@ -201,12 +224,13 @@ pub fn parse_task(node: &Node) -> Option<RemoteTask> {
     let id = node.child("ItemId")?;
     let due = node.text_of("DueDate").and_then(due_day);
     let completed = node.text_of("Status") == Some("Completed") || node.text_of("IsComplete") == Some("true");
+    // A completed task with no date at all is completed now, not in 1970.
     let completed_at = completed.then(|| {
-        [node.text_of("CompleteDate"), node.text_of("LastModifiedTime")]
+        [node.text_of("CompleteDate"), node.text_of("LastModifiedTime"), node.text_of("DateTimeCreated")]
             .into_iter()
             .flatten()
             .find_map(instant)
-            .unwrap_or(0)
+            .unwrap_or_else(|| chrono::Utc::now().timestamp())
     });
     let reminder_at = (node.text_of("ReminderIsSet") == Some("true"))
         .then(|| node.text_of("ReminderDueBy").and_then(instant))
@@ -271,10 +295,12 @@ fn delete(field: &str) -> String {
 /// show (categories, other people, work) is left as it is.
 fn changes(before: &Fields, after: &Fields, now: i64) -> Result<String> {
     let mut out = String::new();
-    if before.title != after.title {
+    // Compared as written: a character XML cannot carry is never sent, and
+    // must not look like a change on every sync.
+    if escape(&before.title) != escape(&after.title) {
         out.push_str(&set("item:Subject", format!("<t:Subject>{}</t:Subject>", escape(&after.title))));
     }
-    if before.note != after.note {
+    if escape(&before.note) != escape(&after.note) {
         out.push_str(&set("item:Body", format!(r#"<t:Body BodyType="Text">{}</t:Body>"#, escape(&after.note))));
     }
     if before.priority != after.priority {
@@ -303,7 +329,7 @@ fn changes(before: &Fields, after: &Fields, now: i64) -> Result<String> {
                 out.push_str(&set("task:Recurrence", recurrence_xml(&after.rrule, due)?));
                 out.push_str(&set("task:StartDate", format!("<t:StartDate>{}T00:00:00Z</t:StartDate>", due.format("%Y-%m-%d"))));
             }
-            (false, None) => bail!("a repeating task needs a due date to repeat from"),
+            (false, None) => return Err(unwritable("a repeating task needs a due date to repeat from")),
         }
     }
     if before.completed_at.is_some() != after.completed_at.is_some() {
@@ -346,29 +372,35 @@ impl EwsClient {
 
     /// Item ids in the Tasks folder matching `restriction` (all of them
     /// when empty), page by page.
+    ///
+    /// Oldest first, so pages do not shift as tasks are added. The offset
+    /// counts every item the server listed — the folder may hold other kinds
+    /// — and an id is kept once.
     fn task_ids(&self, restriction: &str) -> Result<Vec<String>> {
-        let mut ids = Vec::new();
+        let mut ids: Vec<String> = Vec::new();
+        let mut offset = 0usize;
         loop {
             let document = self.call_raw(&format!(
-                r#"<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="{PAGE}" Offset="{}" BasePoint="Beginning"/>{restriction}<m:ParentFolderIds>{}</m:ParentFolderIds></m:FindItem>"#,
-                ids.len(),
+                r#"<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="{PAGE}" Offset="{offset}" BasePoint="Beginning"/>{restriction}<m:SortOrder><t:FieldOrder Order="Ascending"><t:FieldURI FieldURI="item:DateTimeCreated"/></t:FieldOrder></m:SortOrder><m:ParentFolderIds>{}</m:ParentFolderIds></m:FindItem>"#,
                 self.tasks_folder()
             ))?;
             let message = soap::single(&document, "FindItem").context("FindItem tasks")?;
             let root = message.child("RootFolder").context("the tasks listing has no root folder")?;
-            let before = ids.len();
-            ids.extend(
-                root.child("Items")
-                    .into_iter()
-                    .flat_map(|items| items.children_named("Task"))
-                    .filter_map(|task| task.child("ItemId").and_then(|id| id.attr("Id")).map(str::to_string)),
-            );
+            let listed = root.child("Items").map(|items| items.children.len()).unwrap_or(0);
+            for task in root.child("Items").into_iter().flat_map(|items| items.children_named("Task")) {
+                if let Some(id) = task.child("ItemId").and_then(|id| id.attr("Id"))
+                    && !ids.iter().any(|known| known == id)
+                {
+                    ids.push(id.to_string());
+                }
+            }
             if root.attr("IncludesLastItemInRange") != Some("false") {
                 break;
             }
-            if ids.len() == before {
+            if listed == 0 {
                 bail!("the tasks listing stopped giving items before its end");
             }
+            offset += listed;
         }
         Ok(ids)
     }
@@ -414,7 +446,7 @@ impl EwsClient {
             task.push_str(&due_xml(at)?);
         }
         if !fields.rrule.is_empty() {
-            let due = due.context("a repeating task needs a due date to repeat from")?;
+            let due = due.ok_or_else(|| unwritable("a repeating task needs a due date to repeat from"))?;
             task.push_str(&recurrence_xml(&fields.rrule, due)?);
             task.push_str(&format!("<t:StartDate>{}T00:00:00Z</t:StartDate>", due.format("%Y-%m-%d")));
         }
@@ -434,6 +466,11 @@ impl EwsClient {
     /// Writes what changed from `before` (the copy read at `read_at`) to
     /// `after`, never over a change made since (`NeverOverwrite`).
     pub fn update_task(&self, id: &str, read_at: &str, before: &Fields, after: &Fields, now: i64) -> Result<ListWrite> {
+        // Never written blind: without the version it was read at, a change
+        // made since could not be told apart (ADR-0012).
+        if read_at.is_empty() {
+            return Ok(ListWrite::Conflict);
+        }
         let updates = changes(before, after, now)?;
         if updates.is_empty() {
             return Ok(ListWrite::Saved { id: id.to_string(), change_key: read_at.to_string() });
@@ -447,6 +484,9 @@ impl EwsClient {
 
     /// Deletes a task to Deleted Items if it is still as it was read.
     pub fn delete_task(&self, id: &str, read_at: &str) -> Result<ListWrite> {
+        if read_at.is_empty() {
+            return Ok(ListWrite::Conflict);
+        }
         match self.read_task(id)? {
             None => return Ok(ListWrite::Saved { id: id.to_string(), change_key: String::new() }),
             Some(current) if current.change_key != read_at => return Ok(ListWrite::Conflict),

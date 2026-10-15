@@ -1078,14 +1078,28 @@ impl EwsSession {
         })?;
 
         // Rounds are capped server-side, so a first enumeration takes several.
+        let mut reset = false;
         loop {
             let client = self.client.clone();
             let target = folder_ref.clone();
             let resumed = state.clone();
-            let round = tokio::task::spawn_blocking(move || {
+            let round = match tokio::task::spawn_blocking(move || {
                 client.item_sync(&target, resumed, SYNC_BATCH)
             })
-            .await??;
+            .await?
+            {
+                Ok(round) => round,
+                // A state the server no longer accepts — a folder moved or
+                // renamed elsewhere, or kept under another name before its
+                // path (ADR-0058) — starts the folder again, once.
+                Err(error) if state.is_some() && !reset && invalid_sync_state(&error) => {
+                    ews_debug(&format!("item sync {folder}: sync state refused, starting again"));
+                    state = None;
+                    reset = true;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             let changes = round.changes.inner.len();
             self.apply_changes(folder, round.changes.inner)?;
             state = Some(round.sync_state.clone());
@@ -1778,6 +1792,16 @@ fn holds_mail(folder_class: Option<&String>) -> bool {
     }
 }
 
+/// Whether a sync failed because the server no longer accepts the state it
+/// was resumed from.
+fn invalid_sync_state(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<::ews::response::ResponseError>()
+            .is_some_and(|error| error.response_code == ::ews::response::ResponseCode::ErrorInvalidSyncStateData)
+    })
+}
+
 // ---- Folder paths and moves (ADR-0058) ----------------------------------------
 
 /// The separator of a folder's path, as IMAP accounts have one.
@@ -1841,41 +1865,61 @@ fn folder_paths(folders: &[ListedFolder]) -> std::collections::HashMap<String, (
 ///
 /// Before ADR-0058 a folder's wire name was its own name alone, so
 /// `Inbox/Clients` was cached as `Clients`. `pairs` holds `(old name, path)`
-/// for every listed folder. A cache whose old name is no folder of the
-/// listing any more follows its folder, as a move does (ADR-0050); one whose
-/// old name two folders shared mixed both, so it is dropped and both are read
-/// again. Nothing happens once every cache is under its path.
+/// for every listed folder, a top-level one included (its old name is its
+/// path). A cache under an old name only one folder had, whose path has no
+/// cache yet, follows that folder with everything that names it, as a move
+/// does (ADR-0050), and the renames are kept for the interface. A cache under
+/// an old name several folders had (`Archive` and `Inbox/Archive`) mixed
+/// them, so it is dropped and they are read again; once each has its own
+/// path cached, nothing happens any more.
 fn adopt_flat_folder_names(
     conn: &rusqlite::Connection,
     account: &str,
     pairs: &[(String, String)],
 ) -> anyhow::Result<()> {
-    let listed: std::collections::HashSet<&str> = pairs.iter().map(|(_, path)| path.as_str()).collect();
+    // Once per account: after that, a folder named like another (a new
+    // `Inbox/Archive` beside `Archive`) is just a new folder, not a sign of
+    // a cache kept under a shared old name.
+    let adopted = conn
+        .prepare("SELECT 1 FROM ews_folder_paths WHERE account = ?1")?
+        .exists(rusqlite::params![account])?;
+    if adopted {
+        return Ok(());
+    }
     let mut by_old: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
     for (old, path) in pairs {
-        if old != path && !listed.contains(old.as_str()) {
-            by_old.entry(old.as_str()).or_default().push(path.as_str());
-        }
+        by_old.entry(old.as_str()).or_default().push(path.as_str());
     }
+    let mut renames = Vec::new();
+    let mut dropped = Vec::new();
     for (old, paths) in by_old {
-        if !crate::store::folder_exists(conn, account, old)? {
+        if paths.iter().all(|path| *path == old) || !crate::store::folder_exists(conn, account, old)? {
             continue;
         }
-        match paths.as_slice() {
-            [path] if !crate::store::folder_exists(conn, account, path)? => {
-                let plan = crate::folder_move::FolderMovePlan {
-                    source: old.to_string(),
-                    target: path.to_string(),
-                    delimiter: FOLDER_DELIMITER.to_string(),
-                    renames: vec![(old.to_string(), path.to_string())],
-                };
-                crate::folder_move::reconcile_folder_move(conn, account, &plan, None)?;
-            }
-            _ => {
-                crate::store::delete_folder(conn, account, old)?;
+        let mut unadopted = Vec::new();
+        for path in paths.iter().filter(|path| **path != old) {
+            if !crate::store::folder_exists(conn, account, path)? {
+                unadopted.push(*path);
             }
         }
+        match (paths.as_slice(), unadopted.as_slice()) {
+            ([path], [_]) => renames.push((old.to_string(), path.to_string())),
+            // Only one folder had the name and its path is cached already:
+            // what is left under the old name is stale.
+            ([_], []) => dropped.push(old.to_string()),
+            // Several had it, and one of them was never read under its path:
+            // the old cache is a mixture.
+            (_, [_, ..]) => dropped.push(old.to_string()),
+            _ => {}
+        }
     }
+    for old in dropped {
+        crate::store::delete_folder(conn, account, &old)?;
+    }
+    let tx = conn.unchecked_transaction()?;
+    crate::folder_move::adopt_renames(&tx, account, &renames, FOLDER_DELIMITER)?;
+    tx.execute("INSERT OR IGNORE INTO ews_folder_paths(account) VALUES(?1)", rusqlite::params![account])?;
+    tx.commit()?;
     Ok(())
 }
 

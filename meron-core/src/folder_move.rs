@@ -129,29 +129,175 @@ pub fn plan_folder_move(
     Ok(FolderMovePlan { source: source.to_string(), target, delimiter, renames })
 }
 
+/// Every table that names one of an account's mail folders, as
+/// `(table, account column, folder column)`: what follows a folder when its
+/// name changes (ADR-0050, ADR-0058). Cached search hits are not here: they
+/// are dropped instead, as a search over the old names.
+pub const FOLDER_REFERENCES: &[(&str, &str, &str)] = &[
+    ("messages", "account", "folder"),
+    ("folder_state", "account", "folder"),
+    ("ews_item_ids", "account", "folder"),
+    // A conversation snoozed, or a task made from one, stays with its mail.
+    ("snoozed_threads", "account", "folder"),
+    ("tasks", "account", "folder"),
+    // What a rule did, so the record names where the mail is now.
+    ("rule_log", "account", "folder"),
+    // Automatic archiving's progress (ADR-0054), so a run resumes.
+    ("auto_archive_items", "account", "folder"),
+    // The local archive's own folders (ADR-0014), renamed by its session.
+    ("archive_messages", "account", "folder"),
+];
+
+/// Columns named like a folder that are not an account's mail folder, and
+/// why: the test that lists every such column checks each is decided.
+pub const NOT_MAIL_FOLDERS: &[(&str, &str)] = &[
+    // The folder rows themselves, renamed first.
+    ("folders", "name"),
+    // A search over the old names: dropped, not renamed.
+    ("mail_search_hits", "folder"),
+    // Where in the local archive a copy went: the archive's own name, which a
+    // later rename of the server folder does not move.
+    ("auto_archive_items", "local_folder"),
+    // Paths on this computer and on a cloud drive.
+    ("backup_schedule", "folder"),
+    ("cloud_accounts", "folder"),
+    // Microsoft Graph folders are kept by their opaque ids, never by name.
+    ("graph_delta", "folder_id"),
+    ("graph_folders", "search_folder"),
+    ("graph_memberships", "folder_id"),
+    ("graph_round_links", "folder_id"),
+    ("graph_rounds", "folder_id"),
+    ("graph_staged_items", "folder_id"),
+];
+
+/// Renames `from` to `to` everywhere the account names it, inside the
+/// caller's transaction: the folder row, every table of
+/// [`FOLDER_REFERENCES`], the account's own rules that file mail there, and
+/// its automatic archiving policy. The policy names the same folders after
+/// as before, so one confirmed before stays confirmed (ADR-0054). Rules for
+/// every account keep their name: it means a folder of each, and changing
+/// it for one would break it for the others.
+fn rename_references(conn: &Connection, account: &str, from: &str, to: &str, delimiter: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE folders SET name = ?3, delimiter = COALESCE(NULLIF(delimiter, ''), ?4)
+          WHERE account = ?1 AND name = ?2",
+        params![account, from, to, delimiter],
+    )?;
+    for (table, account_column, folder_column) in FOLDER_REFERENCES {
+        conn.execute(
+            &format!("UPDATE {table} SET {folder_column} = ?3 WHERE {account_column} = ?1 AND {folder_column} = ?2"),
+            params![account, from, to],
+        )?;
+    }
+    conn.execute("DELETE FROM mail_search_hits WHERE account = ?1 AND folder = ?2", params![account, from])?;
+
+    let rules: Vec<(String, String)> = {
+        let mut stmt = conn.prepare("SELECT id, definition FROM rules WHERE account = ?1")?;
+        let rows = stmt.query_map(params![account], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    for (id, definition) in rules {
+        let Ok(mut rule) = serde_json::from_str::<Value>(&definition) else { continue };
+        let mut changed = false;
+        for action in rule.get_mut("actions").and_then(Value::as_array_mut).into_iter().flatten() {
+            if action.get("type").and_then(Value::as_str) == Some("moveTo")
+                && action.get("folder").and_then(Value::as_str) == Some(from)
+            {
+                action["folder"] = Value::String(to.to_string());
+                changed = true;
+            }
+        }
+        if changed {
+            conn.execute("UPDATE rules SET definition = ?2 WHERE id = ?1", params![id, rule.to_string()])?;
+        }
+    }
+
+    let stored: Option<(String, Option<String>)> = conn
+        .query_row(
+            "SELECT policy, confirmed FROM auto_archive_policies WHERE account = ?1",
+            params![account],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    if let Some((text, confirmed)) = stored
+        && let Ok(mut policy) = serde_json::from_str::<crate::auto_archive::Policy>(&text)
+        && policy.folders.iter().any(|choice| choice.name == from)
+    {
+        let was_confirmed =
+            confirmed.as_deref() == Some(crate::auto_archive::fingerprint(account, &policy).as_str());
+        for choice in policy.folders.iter_mut().filter(|choice| choice.name == from) {
+            choice.name = to.to_string();
+        }
+        let confirmed = if was_confirmed { Some(crate::auto_archive::fingerprint(account, &policy)) } else { confirmed };
+        conn.execute(
+            "UPDATE auto_archive_policies SET policy = ?2, confirmed = ?3 WHERE account = ?1",
+            params![account, serde_json::to_string(&policy)?, confirmed],
+        )?;
+    }
+    Ok(())
+}
+
+/// Schema 65 (ADR-0058): folder renames the interface has not heard of yet —
+/// the ones a folder listing made, which no move answered with.
+/// Also the Exchange accounts whose cache was brought to path names once.
+pub const RENAMES_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS folder_renames (
+  account   TEXT NOT NULL,
+  position  INTEGER NOT NULL,
+  from_name TEXT NOT NULL,
+  to_name   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ews_folder_paths (
+  account TEXT PRIMARY KEY
+);";
+
+/// Keeps renames for the interface to carry its favorites, colors, board
+/// columns and saved searches across ([`take_renames`]).
+pub fn record_renames(conn: &Connection, account: &str, renames: &[(String, String)]) -> Result<()> {
+    for (from, to) in renames {
+        conn.execute(
+            "INSERT INTO folder_renames(account, position, from_name, to_name)
+             VALUES(?1, (SELECT COALESCE(MAX(position), 0) + 1 FROM folder_renames WHERE account = ?1), ?2, ?3)",
+            params![account, from, to],
+        )?;
+    }
+    Ok(())
+}
+
+/// The renames kept for `account`, oldest first, forgotten once read.
+pub fn take_renames(conn: &Connection, account: &str) -> Result<Vec<(String, String)>> {
+    let tx = conn.unchecked_transaction()?;
+    let renames = {
+        let mut stmt =
+            tx.prepare("SELECT from_name, to_name FROM folder_renames WHERE account = ?1 ORDER BY position")?;
+        let rows = stmt.query_map(params![account], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    tx.execute("DELETE FROM folder_renames WHERE account = ?1", params![account])?;
+    tx.commit()?;
+    Ok(renames)
+}
+
+/// The folder renames of a cache brought to new names without a move
+/// (ADR-0058), in the caller's transaction: every reference follows, and
+/// the renames are kept for the interface.
+pub fn adopt_renames(conn: &Connection, account: &str, renames: &[(String, String)], delimiter: &str) -> Result<()> {
+    for (from, to) in renames {
+        rename_references(conn, account, from, to, delimiter)?;
+    }
+    record_renames(conn, account, renames)
+}
+
 /// Bring the local cache in line with a move the server has made: folder rows,
-/// cached messages, sync state and Exchange item ids follow their folder, and
-/// cached search hits that pointed into the old names are dropped. Message
-/// UIDs are kept; if the server changed UIDVALIDITY with the rename, the next
-/// sync of the folder notices and refetches, as it does for any other change.
+/// cached messages, sync state, Exchange item ids and everything else that
+/// names the folder follow it ([`rename_references`]), and cached search hits
+/// that pointed into the old names are dropped. Message UIDs are kept; if the
+/// server changed UIDVALIDITY with the rename, the next sync of the folder
+/// notices and refetches, as it does for any other change.
 pub fn reconcile_folder_move(conn: &Connection, account: &str, plan: &FolderMovePlan, parent: Option<&str>) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     for (from, to) in &plan.renames {
-        tx.execute(
-            "UPDATE folders SET name = ?3, delimiter = COALESCE(NULLIF(delimiter, ''), ?4)
-              WHERE account = ?1 AND name = ?2",
-            params![account, from, to, plan.delimiter],
-        )?;
-        for table in ["messages", "folder_state", "ews_item_ids"] {
-            tx.execute(
-                &format!("UPDATE {table} SET folder = ?3 WHERE account = ?1 AND folder = ?2"),
-                params![account, from, to],
-            )?;
-        }
-        tx.execute(
-            "DELETE FROM mail_search_hits WHERE account = ?1 AND folder = ?2",
-            params![account, from],
-        )?;
+        rename_references(&tx, account, from, to, &plan.delimiter)?;
     }
     // A local-store parent may have been stored without a delimiter; it has
     // children now, and the tree needs to know how to split them.
@@ -359,6 +505,116 @@ mod tests {
         assert_eq!(state, 42);
         let hits: i64 = conn.query_row("SELECT COUNT(*) FROM mail_search_hits", [], |row| row.get(0)).unwrap();
         assert_eq!(hits, 0, "search hits into the old names are dropped");
+    }
+
+    #[test]
+    fn every_column_naming_a_folder_follows_a_rename_or_is_decided_otherwise() {
+        let conn = db(&[]);
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let mut undecided = Vec::new();
+        for table in tables {
+            let columns: Vec<String> = conn
+                .prepare(&format!("PRAGMA table_info({table})"))
+                .unwrap()
+                .query_map([], |row| row.get(1))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            for column in columns.iter().filter(|column| column.contains("folder") || (table == "folders" && *column == "name")) {
+                let decided = FOLDER_REFERENCES.iter().any(|(t, _, c)| *t == table && c == column)
+                    || NOT_MAIL_FOLDERS.iter().any(|(t, c)| *t == table && c == column);
+                if !decided {
+                    undecided.push(format!("{table}.{column}"));
+                }
+            }
+        }
+        assert!(undecided.is_empty(), "decide whether these follow a renamed folder (ADR-0058): {undecided:?}");
+    }
+
+    #[test]
+    fn everything_naming_a_folder_follows_it_and_nothing_of_another_account() {
+        use crate::auto_archive::{fingerprint, FolderChoice, Policy};
+        let conn = tree();
+        let policy = Policy { folders: vec![FolderChoice { name: "Work".into(), older_than: None }], ..Default::default() };
+        for account in [ACCOUNT, "other@example.com"] {
+            conn.execute("INSERT INTO snoozed_threads(account, thread_key, folder, until) VALUES(?1, 't', 'Work', 1)", params![account]).unwrap();
+            conn.execute(
+                "INSERT INTO tasks(account, thread_key, folder, note, created_at) VALUES(?1, 't', 'Work', '', 1)",
+                params![account],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO rule_log(at, account, rule_id, rule_name, folder, uid, subject, from_addr, action, outcome)
+                 VALUES(1, ?1, 'r', 'R', 'Work', 1, '', '', 'markRead', 'ok')",
+                params![account],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO auto_archive_items(account, folder, uid, message_id, local_folder, local_uid, state, updated_at)
+                 VALUES(?1, 'Work', 1, '<m>', 'Archived/x/Work', 0, 'copied', 1)",
+                params![account],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO auto_archive_policies(account, policy, confirmed) VALUES(?1, ?2, ?3)",
+                params![account, serde_json::to_string(&policy).unwrap(), fingerprint(account, &policy)],
+            )
+            .unwrap();
+        }
+        let rule = |id: &str, account: &str| {
+            json!({ "id": id, "account": account, "name": id, "enabled": true, "conditions": [],
+                    "actions": [{ "type": "moveTo", "folder": "Work" }, { "type": "markRead" }] })
+            .to_string()
+        };
+        crate::store::replace_rules(
+            &conn,
+            &[
+                ("mine".into(), ACCOUNT.into(), true, rule("mine", ACCOUNT)),
+                ("every".into(), String::new(), true, rule("every", "")),
+            ],
+        )
+        .unwrap();
+
+        let plan = plan_folder_move(&conn, ACCOUNT, "Work", Some("Projects"), None).unwrap();
+        reconcile_folder_move(&conn, ACCOUNT, &plan, Some("Projects")).unwrap();
+
+        let folder_of = |table: &str, account: &str| -> String {
+            conn.query_row(&format!("SELECT folder FROM {table} WHERE account = ?1"), params![account], |row| row.get(0))
+                .unwrap()
+        };
+        for table in ["snoozed_threads", "tasks", "rule_log", "auto_archive_items"] {
+            assert_eq!(folder_of(table, ACCOUNT), "Projects/Work", "{table}");
+            assert_eq!(folder_of(table, "other@example.com"), "Work", "{table} of another account");
+        }
+        let local: String = conn.query_row("SELECT local_folder FROM auto_archive_items WHERE account = ?1", params![ACCOUNT], |row| row.get(0)).unwrap();
+        assert_eq!(local, "Archived/x/Work", "the archive's own copy stays where it went");
+        let rules = crate::store::rules(&conn).unwrap();
+        assert!(rules[0].contains("\"folder\":\"Projects/Work\""), "{}", rules[0]);
+        assert!(rules[1].contains("\"folder\":\"Work\""), "a rule for every account keeps its name: {}", rules[1]);
+        let stored = crate::auto_archive::load(&conn, ACCOUNT).unwrap();
+        assert_eq!(stored.policy.folders[0].name, "Projects/Work");
+        assert!(crate::auto_archive::is_confirmed(ACCOUNT, &stored), "the same policy stays confirmed");
+        let other = crate::auto_archive::load(&conn, "other@example.com").unwrap();
+        assert_eq!(other.policy.folders[0].name, "Work");
+    }
+
+    #[test]
+    fn renames_kept_for_the_interface_are_read_once_per_account() {
+        let conn = tree();
+        let tx = conn.unchecked_transaction().unwrap();
+        adopt_renames(&tx, ACCOUNT, &[("Work".into(), "Projects/Work".into())], "/").unwrap();
+        record_renames(&tx, "other@example.com", &[("A".into(), "B/A".into())]).unwrap();
+        tx.commit().unwrap();
+        assert!(store::folder_exists(&conn, ACCOUNT, "Projects/Work").unwrap());
+        assert_eq!(take_renames(&conn, ACCOUNT).unwrap(), [("Work".to_string(), "Projects/Work".to_string())]);
+        assert!(take_renames(&conn, ACCOUNT).unwrap().is_empty(), "read once");
+        assert_eq!(take_renames(&conn, "other@example.com").unwrap().len(), 1);
     }
 
     #[test]
