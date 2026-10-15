@@ -37,7 +37,10 @@ Registro de la implementación de ADR-0032.
     demás lo añade la persona, y la vista previa cambia con cada casilla
     (#196, `AssistantReviewDialog.test.tsx`);
   - un borrador no cuenta como el más reciente, salvo si la conversación
-    solo tiene borradores; un envío pendiente (enviando, enviado o fallido)
+    solo tiene borradores: entonces empieza marcado el borrador más
+    reciente, porque el diálogo solo enseña la lista de mensajes cuando hay
+    una vista previa y con nada marcado no se podría añadir ninguno; el aviso
+    de privacidad lo dice; un envío pendiente (enviando, enviado o fallido)
     sí cuenta, porque es un mensaje de la persona y no un borrador;
   - la selección vuelve a ese valor solo cuando llega un mensaje más
     reciente: una sincronización, un cambio de marca o páginas antiguas
