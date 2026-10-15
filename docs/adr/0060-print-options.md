@@ -69,6 +69,11 @@
     demás mensajes de la conversación, si los hay, no.»; una conversación
     cargada y completa de un solo mensaje no lleva aviso;
   - no se avisa de lo que la persona eligió quitar (cabeceras, adjuntos).
+- **Sin conversación cargada no se imprime nada:** antes de que termine la
+  carga, o si falla, no hay mensajes; una página vacía pasaría por una
+  impresión. Se avisa con un mensaje de error («Esta conversación aún no se
+  ha cargado…») y no se abre el diálogo de impresión. La página nunca afirma
+  «solo se imprime este mensaje» si no imprime ninguno.
 - **Contenido remoto:** la política CSP propia de la página, la retirada de
   píxeles de seguimiento y el marco sin scripts no dependen de ninguna
   opción; las pruebas lo comprueban con todas las combinaciones.

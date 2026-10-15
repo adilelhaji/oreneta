@@ -12,6 +12,7 @@ import { accounts$ } from './accounts'
 import { isDraftFolder, mail$ } from './mail'
 import { isLocalSendId } from './pendingSends'
 import { settings$ } from './settings'
+import { showToast } from './ui'
 
 /**
  * What sets a message apart from mail that was sent or received: a copy still
@@ -39,6 +40,13 @@ export function printFromReader(
   // The message asked about prints even when it is not among the loaded ones,
   // rather than another message standing in for it.
   const messages = message && !loaded.some((item) => item.id === message.id) ? [...loaded, message] : loaded
+  // Before the conversation has loaded (or after it failed to) there is
+  // nothing to put on paper: an empty page would look like a printout, so
+  // nothing is printed and the person is told why.
+  if (!messages.length) {
+    showToast(t('print.notLoaded'), 'error')
+    return Promise.resolve()
+  }
   const marks: Record<string, string> = {}
   for (const item of messages) {
     const mark = printMark(item)

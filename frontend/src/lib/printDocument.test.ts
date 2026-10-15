@@ -370,6 +370,22 @@ describe('the #35 guarantees under every print option', () => {
     // The whole conversation has its own notice for what did not load.
     expect(buildPrintDocument({ ...args(), messages: [remote], conversationUnknown: true })).not.toContain(ONE_MAYBE)
   })
+
+  it('never claims "this message" when there is no message to print', () => {
+    const single = { ...DEFAULT_PRINT_OPTIONS, scope: 'message' as const }
+    for (const incompleteNotice of [undefined, 'Older not loaded.']) {
+      const html = buildPrintDocument({
+        ...args(),
+        messages: [],
+        options: single,
+        conversationUnknown: true,
+        incompleteNotice,
+      })
+      expect(html).not.toContain(ONE_MESSAGE)
+      expect(html).not.toContain(ONE_MAYBE)
+      expect(html).not.toContain('<article')
+    }
+  })
 })
 
 // Review of #213: a draft or an unsent copy is never passed off as mail that

@@ -1019,6 +1019,7 @@
   "print.draft": "下書き",
   "print.incomplete": "この会話の古いメッセージは読み込まれていないため含まれていません。",
   "print.message": "メッセージを印刷…",
+  "print.notLoaded": "この会話はまだ読み込まれていないため、何も印刷されませんでした。",
   "print.notSent": "未送信",
   "print.oneMessage": "この会話のうちこのメッセージだけを印刷します。ほかのメッセージは含まれていません。",
   "print.oneMessageUnknown": "このメッセージだけを印刷します。会話にほかのメッセージがあっても印刷されません。",

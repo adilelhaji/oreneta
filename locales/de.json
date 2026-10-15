@@ -1019,6 +1019,7 @@
   "print.draft": "Entwurf",
   "print.incomplete": "Ältere Nachrichten dieser Unterhaltung wurden nicht geladen und sind nicht enthalten.",
   "print.message": "Nachricht drucken…",
+  "print.notLoaded": "Diese Unterhaltung ist noch nicht geladen, daher wurde nichts gedruckt.",
   "print.notSent": "Nicht gesendet",
   "print.oneMessage": "Nur diese Nachricht der Unterhaltung wird gedruckt; die anderen sind nicht enthalten.",
   "print.oneMessageUnknown": "Nur diese Nachricht wird gedruckt; weitere Nachrichten der Unterhaltung, falls vorhanden, nicht.",

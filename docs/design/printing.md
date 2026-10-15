@@ -14,6 +14,9 @@ Code: `frontend/src/lib/print.ts`, `lib/printDocument.ts`, `lib/printOptions.ts`
   - the conversation menu (⋯ → Print…) prints as the remembered options say;
   - a message's context menu (Print message…) prints only that message, with
     the remembered header and attachment choices.
+- Before the conversation has loaded (or after loading failed) nothing is
+  printed: an error toast says the conversation has not loaded yet, rather
+  than an empty page that would pass for a printout.
 - A draft (drafts folder) or a local copy not yet sent (undo window, failed
   send awaiting retry) carries a "Draft" / "Not sent" mark on paper wherever
   it prints.

@@ -1019,6 +1019,7 @@
   "print.draft": "Bozza",
   "print.incomplete": "I messaggi più vecchi di questa conversazione non sono stati caricati e non sono inclusi.",
   "print.message": "Stampa messaggio…",
+  "print.notLoaded": "Questa conversazione non è ancora stata caricata, quindi non è stato stampato nulla.",
   "print.notSent": "Non inviato",
   "print.oneMessage": "Viene stampato solo questo messaggio della conversazione; gli altri non sono inclusi.",
   "print.oneMessageUnknown": "Viene stampato solo questo messaggio; gli altri messaggi della conversazione, se ce ne sono, no.",

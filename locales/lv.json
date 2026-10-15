@@ -1019,6 +1019,7 @@
   "print.draft": "Melnraksts",
   "print.incomplete": "Vecākie šīs sarunas ziņojumi netika ielādēti un nav iekļauti.",
   "print.message": "Drukāt ziņojumu…",
+  "print.notLoaded": "Šī saruna vēl nav ielādēta, tāpēc nekas netika drukāts.",
   "print.notSent": "Nav nosūtīts",
   "print.oneMessage": "No sarunas tiek drukāts tikai šis ziņojums; pārējie nav iekļauti.",
   "print.oneMessageUnknown": "Tiek drukāts tikai šis ziņojums; citi sarunas ziņojumi, ja tādi ir, netiek drukāti.",

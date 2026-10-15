@@ -1019,6 +1019,7 @@
   "print.draft": "Rascunho",
   "print.incomplete": "As mensagens mais antigas desta conversa não foram carregadas e não estão incluídas.",
   "print.message": "Imprimir mensagem…",
+  "print.notLoaded": "Esta conversa ainda não foi carregada, por isso nada foi impresso.",
   "print.notSent": "Não enviada",
   "print.oneMessage": "Só esta mensagem da conversa é impressa; as outras não estão incluídas.",
   "print.oneMessageUnknown": "Só esta mensagem é impressa; as outras mensagens da conversa, se existirem, não.",

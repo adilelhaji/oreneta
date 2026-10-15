@@ -1019,6 +1019,7 @@
   "print.draft": "Bản nháp",
   "print.incomplete": "Các thư cũ hơn trong cuộc hội thoại này chưa được tải nên không có trong bản in.",
   "print.message": "In thư…",
+  "print.notLoaded": "Cuộc hội thoại này chưa được tải nên chưa có gì được in.",
   "print.notSent": "Chưa gửi",
   "print.oneMessage": "Chỉ thư này trong cuộc hội thoại được in; các thư khác không có trong bản in.",
   "print.oneMessageUnknown": "Chỉ thư này được in; các thư khác trong cuộc hội thoại, nếu có, sẽ không được in.",

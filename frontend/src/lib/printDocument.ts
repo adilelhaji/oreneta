@@ -210,11 +210,14 @@ export function buildPrintDocument(args: {
   // A conversation with messages on the server but not here has others too;
   // one that was not loaded at all may have, and the page says only that.
   const othersLeftOut = args.messages.length > printed.length || !!args.incompleteNotice
-  const singleOmission = othersLeftOut
-    ? args.oneMessageNotice
-    : args.conversationUnknown
-      ? args.oneMessageUnknownNotice
-      : ''
+  // Nothing printed is nothing to speak for: no claim about "this message".
+  const singleOmission = !printed.length
+    ? ''
+    : othersLeftOut
+      ? args.oneMessageNotice
+      : args.conversationUnknown
+        ? args.oneMessageUnknownNotice
+        : ''
   const omission = single ? singleOmission : (args.incompleteNotice ?? '')
   const notice = omission ? `<div class="thread-meta incomplete">${escapeHtml(omission)}</div>` : ''
   const heading = options.headers.subject ? `<h1>${escapeHtml(subject)}</h1>\n` : ''

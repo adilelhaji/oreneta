@@ -1019,6 +1019,7 @@
   "print.draft": "Wersja robocza",
   "print.incomplete": "Starsze wiadomości tej rozmowy nie zostały wczytane i nie są uwzględnione.",
   "print.message": "Drukuj wiadomość…",
+  "print.notLoaded": "Ta rozmowa nie została jeszcze wczytana, więc nic nie wydrukowano.",
   "print.notSent": "Nie wysłano",
   "print.oneMessage": "Drukowana jest tylko ta wiadomość z rozmowy; pozostałe nie są uwzględnione.",
   "print.oneMessageUnknown": "Drukowana jest tylko ta wiadomość; inne wiadomości z rozmowy, jeśli są, nie są drukowane.",

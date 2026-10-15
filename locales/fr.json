@@ -1019,6 +1019,7 @@
   "print.draft": "Brouillon",
   "print.incomplete": "Les messages plus anciens de cette conversation n’ont pas été chargés et ne sont pas inclus.",
   "print.message": "Imprimer le message…",
+  "print.notLoaded": "Cette conversation n’est pas encore chargée, rien n’a donc été imprimé.",
   "print.notSent": "Non envoyé",
   "print.oneMessage": "Seul ce message de la conversation est imprimé ; les autres ne sont pas inclus.",
   "print.oneMessageUnknown": "Seul ce message est imprimé ; les autres messages de la conversation, s’il y en a, ne le sont pas.",

@@ -1019,6 +1019,7 @@
   "print.draft": "Utkast",
   "print.incomplete": "Äldre meddelanden i konversationen har inte lästs in och ingår inte.",
   "print.message": "Skriv ut meddelande…",
+  "print.notLoaded": "Konversationen har inte lästs in än, så inget skrevs ut.",
   "print.notSent": "Inte skickat",
   "print.oneMessage": "Bara det här meddelandet i konversationen skrivs ut; de andra ingår inte.",
   "print.oneMessageUnknown": "Bara det här meddelandet skrivs ut; andra meddelanden i konversationen, om det finns några, skrivs inte ut.",

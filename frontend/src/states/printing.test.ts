@@ -5,6 +5,7 @@ import { accounts$ } from './accounts'
 import { mail$ } from './mail'
 import { printFromReader } from './printing'
 import { settings$ } from './settings'
+import { ui$ } from './ui'
 
 const message = (over: Partial<Message> = {}): Message =>
   ({
@@ -96,6 +97,20 @@ describe('printing from the reader (SET-05)', () => {
     expect(printed().querySelector('.incomplete')?.textContent).toBe(
       'Only this message is printed; other messages of the conversation, if any, are not.',
     )
+  })
+
+  it('prints nothing, and says why, before the conversation has loaded', () => {
+    mail$.messages.set([])
+    for (const scope of ['message', 'conversation'] as const) {
+      settings$.print.set({ ...DEFAULT_PRINT_OPTIONS, scope })
+      ui$.toast.set('')
+      void printFromReader(first)
+      // No page at all: an empty sheet would pass for a printout.
+      expect(document.querySelectorAll('iframe')).toHaveLength(0)
+      expect(ui$.toast.peek()).toBe('This conversation has not loaded yet, so nothing was printed.')
+      expect(ui$.toastTone.peek()).toBe('error')
+    }
+    ui$.toast.set('')
   })
 
   it('says nothing is left out when the loaded conversation is that one message', () => {

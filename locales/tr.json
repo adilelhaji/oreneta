@@ -1019,6 +1019,7 @@
   "print.draft": "Taslak",
   "print.incomplete": "Bu konuşmadaki eski iletiler yüklenmedi ve dahil edilmedi.",
   "print.message": "İletiyi yazdır…",
+  "print.notLoaded": "Bu konuşma henüz yüklenmedi, bu yüzden hiçbir şey yazdırılmadı.",
   "print.notSent": "Gönderilmedi",
   "print.oneMessage": "Konuşmadan yalnızca bu ileti yazdırılır; diğerleri dahil değildir.",
   "print.oneMessageUnknown": "Yalnızca bu ileti yazdırılır; konuşmada başka ileti varsa onlar yazdırılmaz.",

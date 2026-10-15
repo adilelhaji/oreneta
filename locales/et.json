@@ -1019,6 +1019,7 @@
   "print.draft": "Mustand",
   "print.incomplete": "Selle vestluse vanemaid kirju ei laaditud ja need pole kaasatud.",
   "print.message": "Prindi kiri…",
+  "print.notLoaded": "See vestlus pole veel laaditud, seega ei prinditud midagi.",
   "print.notSent": "Saatmata",
   "print.oneMessage": "Vestlusest prinditakse ainult see kiri; teised pole kaasatud.",
   "print.oneMessageUnknown": "Prinditakse ainult see kiri; vestluse teisi kirju, kui neid on, ei prindita.",

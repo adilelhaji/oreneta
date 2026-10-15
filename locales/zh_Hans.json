@@ -1019,6 +1019,7 @@
   "print.draft": "草稿",
   "print.incomplete": "此对话中较早的邮件尚未加载，未包含在内。",
   "print.message": "打印邮件…",
+  "print.notLoaded": "此对话尚未加载，因此没有打印任何内容。",
   "print.notSent": "未发送",
   "print.oneMessage": "只打印了此对话中的这封邮件，其他邮件未包含在内。",
   "print.oneMessageUnknown": "只打印这封邮件；对话中的其他邮件（如有）不会打印。",

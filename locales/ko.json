@@ -1019,6 +1019,7 @@
   "print.draft": "초안",
   "print.incomplete": "이 대화의 이전 메시지는 불러오지 않아 포함되지 않았습니다.",
   "print.message": "메시지 인쇄…",
+  "print.notLoaded": "이 대화를 아직 불러오지 않아 아무것도 인쇄하지 않았습니다.",
   "print.notSent": "보내지 않음",
   "print.oneMessage": "대화에서 이 메시지만 인쇄됩니다. 다른 메시지는 포함되지 않습니다.",
   "print.oneMessageUnknown": "이 메시지만 인쇄됩니다. 대화에 다른 메시지가 있더라도 인쇄되지 않습니다.",

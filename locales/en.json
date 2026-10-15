@@ -1019,6 +1019,7 @@
   "print.draft": "Draft",
   "print.incomplete": "Older messages of this conversation were not loaded and are not included.",
   "print.message": "Print message…",
+  "print.notLoaded": "This conversation has not loaded yet, so nothing was printed.",
   "print.notSent": "Not sent",
   "print.oneMessage": "Only this message of the conversation is printed; the others are not included.",
   "print.oneMessageUnknown": "Only this message is printed; other messages of the conversation, if any, are not.",
