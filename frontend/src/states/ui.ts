@@ -128,6 +128,16 @@ export function parseFilters(raw: unknown): FilterFacet[] | undefined {
   // an empty list nobody asked for.
   return facets.length > 0 ? facets : undefined
 }
+/**
+ * A section of the conversation details sidebar that can be reopened on its
+ * own (ADR-0059). One person's history is not: it needs the person, who may
+ * not be in the next conversation.
+ */
+export type SidebarSection = 'overview' | 'media' | 'files' | 'agenda'
+
+export const parseSidebarSection = (raw: unknown): SidebarSection | undefined =>
+  raw === 'overview' || raw === 'media' || raw === 'files' || raw === 'agenda' ? raw : undefined
+
 export type SetupMode = 'gmail' | 'outlook' | 'graph' | 'custom' | 'ews' | 'rss'
 export type MobilePane = 'threads' | 'conversation'
 export type ToastTone = 'success' | 'error' | 'info'
@@ -197,6 +207,8 @@ export const ui$ = observable({
   // Narrowings currently applied, in no particular order.
   filters: [] as FilterFacet[],
   // Modals / panels.
+  // The details sidebar's section last shown; persisted (see below).
+  sidebarSection: 'overview' as SidebarSection,
   setupOpen: false,
   setupMode: 'gmail' as SetupMode,
   reconnectAccountId: '',
@@ -398,6 +410,9 @@ export function focusQuickReply() {
 // account) and depend on the loaded accounts list, so they share one bespoke
 // restore below rather than per-field seeding.
 const filterSession = persistedField(ui$.filters, 'session_filter_mode', parseFilters)
+// The app has one window, the main one; its key names it so a second window
+// would keep its own (ADR-0059).
+const sidebarSession = persistedField(ui$.sidebarSection, 'session_sidebar_section_main', parseSidebarSection)
 
 let restoringNav = false
 function persistNav(key: string, value: string) {
@@ -431,7 +446,7 @@ ui$.query.onChange(() => clearBulkSelection())
 ui$.filters.onChange(() => clearBulkSelection())
 
 /** Prefs keys this module owns; boot requests them in its single prefsGet. */
-export const UI_SESSION_KEYS = ['session_account', 'session_folder', filterSession.key]
+export const UI_SESSION_KEYS = ['session_account', 'session_folder', filterSession.key, sidebarSession.key]
 
 /**
  * Seed ui$ navigation from the persisted last session. Call once at boot after
@@ -458,4 +473,5 @@ export function restoreUiSession(prefs: Record<string, unknown>, accounts: Accou
     restoringNav = false
   }
   filterSession.restore(prefs)
+  sidebarSession.restore(prefs)
 }

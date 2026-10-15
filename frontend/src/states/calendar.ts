@@ -425,7 +425,8 @@ export async function setCalendarEnabled(accountId: string, calendarId: string, 
   if (to > from) await loadWindow(from, to, false)
 }
 
-function isFeedAccount(id: string): boolean {
+/// Feed accounts and the unified view keep no calendar.
+export function isFeedAccount(id: string): boolean {
   return id.startsWith('rss:') || id === 'unified'
 }
 

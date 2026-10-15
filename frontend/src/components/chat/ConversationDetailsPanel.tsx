@@ -1,5 +1,7 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type RefObject } from 'react'
+import { useValue } from '@legendapp/state/react'
 import {
+  CalendarDays,
   ChevronLeft,
   Copy,
   Download,
@@ -17,13 +19,18 @@ import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { openExternal } from '../../lib/native'
+import { DETAILS_PANEL_WIDTH } from '../../lib/paneResize'
 import { downloadAttachment } from '../../states/mail'
+import { settings$ } from '../../states/settings'
+import { ui$, type SidebarSection } from '../../states/ui'
 import { Avatar } from '../avatar/Avatar'
 import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
+import { PaneResizer } from '../resizer/PaneResizer'
 import { fileIconFor, formatFileSize } from './messageHelpers'
 import { PersonHistory } from './PersonHistory'
+import { SidebarAgenda } from './SidebarAgenda'
 
 export type ConversationMediaItem = {
   type: 'image' | 'video'
@@ -75,7 +82,34 @@ interface ConversationDetailsPanelProps {
   onOpenEvent?: (start: number) => void
 }
 
-type View = 'overview' | 'media' | 'files' | 'person'
+/** What the reader keeps beside the sidebar when it sits next to it (ADR-0059). */
+const READER_ROOM = 360
+
+/**
+ * The widest the sidebar may be beside the reader, in the row it shares with
+ * it. As an overlay, or unknown (no layout yet, or a test without one), it is
+ * its own limit.
+ */
+function useRoomFor(aside: RefObject<HTMLElement | null>): number {
+  const [room, setRoom] = useState<number>(DETAILS_PANEL_WIDTH.max)
+  useEffect(() => {
+    const row = aside.current?.parentElement
+    if (!row || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      // As an overlay (below the push-aside breakpoint) it shares no row with the reader.
+      if (!window.matchMedia?.('(min-width: 1100px)').matches) return setRoom(DETAILS_PANEL_WIDTH.max)
+      const width = row.getBoundingClientRect().width
+      if (width > 0) {
+        setRoom(Math.max(DETAILS_PANEL_WIDTH.min, Math.min(DETAILS_PANEL_WIDTH.max, Math.floor(width - READER_ROOM))))
+      }
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [aside])
+  return room
+}
 
 export function ConversationDetailsPanel({
   media,
@@ -94,12 +128,24 @@ export function ConversationDetailsPanel({
   onOpenEvent,
 }: ConversationDetailsPanelProps) {
   const { t } = useTranslation()
-  const [view, setView] = useState<View>('overview')
+  // The section is remembered across restarts (ADR-0059); one person's history
+  // sits on top of it and is not, as it needs that person.
+  const section = useValue(ui$.sidebarSection)
   const [person, setPerson] = useState<Participant | null>(null)
+  const view = person ? 'person' : section
+  const setView = (next: SidebarSection) => {
+    setPerson(null)
+    ui$.sidebarSection.set(next)
+  }
   const [personMenu, setPersonMenu] = useState<{ x: number; y: number; person: Participant } | null>(null)
+  const asideRef = useRef<HTMLElement | null>(null)
+  const storedWidth = useValue(settings$.detailsPanelWidth)
+  const room = useRoomFor(asideRef)
+  const width = Math.min(storedWidth, room)
 
+  // Another conversation may not have this person in it.
   useEffect(() => {
-    setView('overview')
+    setPerson(null)
   }, [scopeTitle])
 
   // Close the overlay drawer on Escape (matches the gallery/search behavior).
@@ -110,14 +156,29 @@ export function ConversationDetailsPanel({
       {/* Backdrop — only below the push-aside breakpoint, where the panel is an overlay. */}
       <div className="min-[1100px]:hidden absolute inset-0 z-20 bg-black/40 animate-fade-in" onClick={onClose} />
 
+      {/* As an overlay it sits above the conversation header (z-40), which
+          otherwise hid its own header: the title, Back and Close. */}
       <aside
+        ref={asideRef}
+        data-details-panel
+        style={{ '--details-panel-width': `${width}px` } as CSSProperties}
         className="
-          absolute inset-y-0 right-0 z-30 w-[340px] max-w-[85vw] shadow-overlay
+          absolute inset-y-0 right-0 z-50 w-[var(--details-panel-width)] max-w-[85vw] shadow-overlay
           min-[1100px]:relative min-[1100px]:inset-auto min-[1100px]:z-auto min-[1100px]:shadow-none min-[1100px]:max-w-none
           flex shrink-0 flex-col border-l border-border bg-header
           animate-slide-in-right
         "
       >
+        {/* Resizable beside the reader only; as an overlay it is capped to the window. */}
+        <PaneResizer
+          label={t('layout.resizeDetails')}
+          value={width}
+          limits={{ min: DETAILS_PANEL_WIDTH.min, max: room }}
+          edge="start"
+          sizeAt={(clientX) => (asideRef.current?.getBoundingClientRect().right ?? clientX) - clientX}
+          onResize={(size) => settings$.detailsPanelWidth.set(size)}
+          className="absolute left-0 top-0 hidden h-full -translate-x-1 min-[1100px]:block"
+        />
         {/* Header */}
         {view === 'overview' ? (
           <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
@@ -131,12 +192,18 @@ export function ConversationDetailsPanel({
                   ? t('chat.media')
                   : view === 'person' && person
                     ? t('person.title', { name: person.name || person.email, defaultValue: 'With {name}' })
-                    : t('chat.files')}
+                    : view === 'agenda'
+                      ? t('sidebar.agenda')
+                      : t('chat.files')}
               </h3>
-              <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
-                {scopeTitle}
-              </p>
-              {scopeSubtitle && (
+              {view === 'agenda' ? (
+                <p className="mt-0.5 truncate text-caption font-medium text-secondary">{t('sidebar.agendaRange')}</p>
+              ) : (
+                <p className="mt-0.5 truncate text-caption font-medium text-secondary" title={scopeTitle}>
+                  {scopeTitle}
+                </p>
+              )}
+              {view !== 'agenda' && scopeSubtitle && (
                 <p className="truncate text-2xs text-secondary/80" title={scopeSubtitle}>
                   {scopeSubtitle}
                 </p>
@@ -156,7 +223,10 @@ export function ConversationDetailsPanel({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {view === 'agenda' ? (
+            // Not about this conversation, so it does not wait for it to load.
+            <SidebarAgenda />
+          ) : loading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 size={20} className="animate-spin text-secondary" strokeWidth={1.75} />
             </div>
@@ -167,6 +237,7 @@ export function ConversationDetailsPanel({
               participants={participants}
               onOpenMedia={() => setView('media')}
               onOpenFiles={() => setView('files')}
+              onOpenAgenda={() => setView('agenda')}
               onComposeTo={onComposeTo}
               onOpenPersonMenu={setPersonMenu}
             />
@@ -302,7 +373,6 @@ export function ConversationDetailsPanel({
               })}
               onClick={() => {
                 setPerson(personMenu.person)
-                setView('person')
                 setPersonMenu(null)
               }}
             />
@@ -335,6 +405,7 @@ function Overview({
   participants,
   onOpenMedia,
   onOpenFiles,
+  onOpenAgenda,
   onComposeTo,
   onOpenPersonMenu,
 }: {
@@ -343,22 +414,22 @@ function Overview({
   participants: Participant[]
   onOpenMedia: () => void
   onOpenFiles: () => void
+  onOpenAgenda: () => void
   onComposeTo: (person: Participant) => void
   onOpenPersonMenu: (menu: { x: number; y: number; person: Participant }) => void
 }) {
   const { t } = useTranslation()
   return (
     <div>
-      {(mediaCount > 0 || filesCount > 0) && (
-        <div className="border-b border-border bg-chats p-3">
-          {mediaCount > 0 && (
-            <SummaryRow icon={Image} label={t('chat.mediaItems', { count: mediaCount })} onClick={onOpenMedia} />
-          )}
-          {filesCount > 0 && (
-            <SummaryRow icon={File} label={t('chat.fileItems', { count: filesCount })} onClick={onOpenFiles} />
-          )}
-        </div>
-      )}
+      <div className="border-b border-border bg-chats p-3">
+        <SummaryRow icon={CalendarDays} label={t('sidebar.agenda')} onClick={onOpenAgenda} />
+        {mediaCount > 0 && (
+          <SummaryRow icon={Image} label={t('chat.mediaItems', { count: mediaCount })} onClick={onOpenMedia} />
+        )}
+        {filesCount > 0 && (
+          <SummaryRow icon={File} label={t('chat.fileItems', { count: filesCount })} onClick={onOpenFiles} />
+        )}
+      </div>
       <div className="p-3">
         <div className="mb-2 flex items-center gap-2 px-2 text-caption font-bold uppercase tracking-wide text-secondary">
           <Users size={16} strokeWidth={1.75} />

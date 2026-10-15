@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, DragEvent, PointerEventHandler } from 'react'
+import type { CSSProperties, DragEvent } from 'react'
 import { Search, X, Plus, SquarePen, MoreHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -73,15 +73,19 @@ import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
+import { PaneResizer } from '../resizer/PaneResizer'
+import { THREAD_LIST_WIDTH } from '../../lib/paneResize'
 import { accountGroups$ } from '../../states/accountGroups'
 
 type ThreadListProps = {
   width?: number
-  onResizeStart?: PointerEventHandler<HTMLDivElement>
+  /** Shows the separator that resizes the list (ADR-0059). */
+  resizable?: boolean
 }
 
-export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
+export function ThreadList({ width, resizable }: ThreadListProps = {}) {
   const { t } = useTranslation()
+  const listRef = useRef<HTMLElement | null>(null)
   const query = useValue(ui$.query)
   const busy = useValue(ui$.busy)
   const mobilePane = useValue(ui$.mobilePane)
@@ -342,6 +346,7 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
 
   return (
     <section
+      ref={listRef}
       data-thread-list
       // The remembered width is a preference, not a claim on the window: on a
       // narrow one the list gives way (down to 280px) before the reader does.
@@ -353,14 +358,16 @@ export function ThreadList({ width, onResizeStart }: ThreadListProps = {}) {
       }}
       style={width ? ({ '--thread-list-width': `${width}px` } as CSSProperties) : undefined}
     >
-      {onResizeStart && (
-        <div
-          className="absolute right-0 top-0 z-20 hidden h-full w-2 translate-x-1 cursor-col-resize min-[769px]:block"
-          onPointerDown={onResizeStart}
-          title={t('layout.resizeThreadList')}
-        >
-          <div className="mx-auto h-full w-px bg-transparent hover:bg-accent" />
-        </div>
+      {resizable && (
+        <PaneResizer
+          label={t('layout.resizeThreadList')}
+          value={width ?? settings$.threadListWidth.peek()}
+          limits={THREAD_LIST_WIDTH}
+          edge="end"
+          sizeAt={(clientX) => clientX - (listRef.current?.getBoundingClientRect().left ?? 0)}
+          onResize={(size) => settings$.threadListWidth.set(size)}
+          className="absolute right-0 top-0 hidden h-full translate-x-1 min-[769px]:block"
+        />
       )}
       {bulkInThisList ? (
         <BulkActionBar items={bulkItems} allItems={filteredThreads.map(bulkItemFor)} className="min-h-16" />

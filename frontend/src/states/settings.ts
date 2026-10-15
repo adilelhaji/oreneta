@@ -43,6 +43,7 @@ import {
 } from '../lib/calendarWeek'
 import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
+import { clampPaneSize, DETAILS_PANEL_WIDTH, KANBAN_PANE_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
 
 // Persisted user settings. This module maps 1:1 to the `settings` DB table: each
@@ -248,6 +249,8 @@ export type Settings = {
   kanbanBoards: KanbanBoard[]
   threadListWidth: number
   kanbanPaneWidth: number
+  /** Pixel width of the conversation details sidebar beside the reader (ADR-0059). */
+  detailsPanelWidth: number
   /** Pixel width used by every expanded kanban column. */
   kanbanColumnWidth: number
   /** kanbanColumnKey -> whether the column is collapsed to a vertical bar. */
@@ -388,6 +391,7 @@ const DB_KEY = {
   kanbanBoards: 'kanban_boards',
   threadListWidth: 'thread_list_width',
   kanbanPaneWidth: 'kanban_pane_width',
+  detailsPanelWidth: 'details_panel_width',
   kanbanColumnWidth: 'kanban_column_width',
   kanbanMinimizedColumns: 'kanban_minimized_columns',
   hiddenSideNavAccounts: 'hidden_sidenav_accounts',
@@ -594,6 +598,7 @@ export const settings$ = observable<Settings>({
   kanbanBoards: [],
   threadListWidth: 350,
   kanbanPaneWidth: 33,
+  detailsPanelWidth: 340,
   kanbanColumnWidth: KANBAN_COLUMN_DEFAULT_WIDTH,
   kanbanMinimizedColumns: {},
   hiddenSideNavAccounts: [],
@@ -990,12 +995,17 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const threadListWidth = prefs[DB_KEY.threadListWidth]
     if (typeof threadListWidth === 'number' && Number.isFinite(threadListWidth)) {
-      settings$.threadListWidth.set(Math.min(560, Math.max(280, threadListWidth)))
+      settings$.threadListWidth.set(clampPaneSize(threadListWidth, THREAD_LIST_WIDTH))
     }
 
     const paneWidth = prefs[DB_KEY.kanbanPaneWidth]
     if (typeof paneWidth === 'number' && Number.isFinite(paneWidth)) {
-      settings$.kanbanPaneWidth.set(paneWidth)
+      settings$.kanbanPaneWidth.set(clampPaneSize(paneWidth, KANBAN_PANE_WIDTH))
+    }
+
+    const detailsWidth = prefs[DB_KEY.detailsPanelWidth]
+    if (typeof detailsWidth === 'number' && Number.isFinite(detailsWidth)) {
+      settings$.detailsPanelWidth.set(clampPaneSize(detailsWidth, DETAILS_PANEL_WIDTH))
     }
 
     const columnWidth = prefs[DB_KEY.kanbanColumnWidth]
