@@ -1,7 +1,9 @@
 import { afterEach, expect, it } from 'bun:test'
 import { cleanup, render } from '@testing-library/react'
-import { ReportNotice, REPORT_OUTCOME_TEXT, reportReason } from './ReportNotice'
+import { ReportNotice, REPORT_OUTCOME_TEXT, isolate, serverWords, statusPhrase } from './ReportNotice'
 import { MessageContent } from './MessageContent'
+import { formatThreadDate } from '../../lib/date'
+import { deliveryReceiptToast } from '../../lib/deliveryReceipt'
 
 afterEach(() => cleanup())
 
@@ -30,63 +32,110 @@ const view = (outgoing: boolean) =>
     activeSearchMatch: false,
   }) as any
 
-it('shows on a sent message what each report said, with the reason for a failure', () => {
+const at = 1_760_000_000
+const text = (node: { container: HTMLElement }) => node.container.textContent ?? ''
+
+it('shows on a sent message what each report claims, failures first, with when and why', () => {
   const sent = message({
     delivery: [
-      { kind: 'delivery', recipient: 'bob@example.test', outcome: 'delivered', reported_at: 1 },
+      { kind: 'delivery', recipient: 'bob@example.test', outcome: 'delivered', reported_at: at, listed: true },
+      { kind: 'disposition', recipient: 'bob@example.test', outcome: 'displayed', reported_at: at, listed: true },
+      { kind: 'delivery', recipient: 'slow@example.test', outcome: 'delayed', reported_at: at, listed: true },
       {
         kind: 'delivery',
         recipient: 'nobody@example.test',
         outcome: 'failed',
         status: '5.1.1',
-        diagnostic: 'User unknown',
-        reported_at: 1,
+        diagnostic: '550 5.1.1 <nobody@example.test>: Recipient address rejected',
+        reported_at: at,
+        listed: true,
       },
-      { kind: 'delivery', recipient: 'slow@example.test', outcome: 'delayed', reported_at: 1 },
-      { kind: 'disposition', recipient: 'bob@example.test', outcome: 'displayed', reported_at: 2 },
     ],
   })
   const shown = render(<ReportNotice message={sent} outgoing />)
   expect(shown.getByRole('group', { name: 'Delivery and read reports' })).toBeTruthy()
-  expect(shown.getByText('Delivered to bob@example.test')).toBeTruthy()
-  expect(shown.getByText('Not delivered to nobody@example.test')).toBeTruthy()
-  expect(shown.getByText('Reason: 5.1.1 · User unknown')).toBeTruthy()
-  expect(shown.getByText('Delayed for slow@example.test; the server is still trying')).toBeTruthy()
-  expect(shown.getByText('Displayed to bob@example.test')).toBeTruthy()
+  const lines = shown.getAllByRole('listitem').map((item) => item.textContent ?? '')
+  const date = isolate(formatThreadDate(at))
+  // Failures first, then the delay, then what went through.
+  expect(lines[0]).toContain(`The report says it was not delivered to ${isolate('nobody@example.test')}`)
+  expect(lines[0]).toContain('Reason: The address does not exist')
+  // The server's own words, without the codes already said.
+  expect(lines[0]).toContain('<nobody@example.test>: Recipient address rejected')
+  expect(lines[0]).not.toContain('550 5.1.1')
+  expect(lines[1]).toContain(`As of ${date}, the report says delivery to ${isolate('slow@example.test')} is delayed`)
+  expect(lines[2]).toContain(`The report says it was delivered to ${isolate('bob@example.test')}`)
+  expect(lines[2]).toContain(`Reported ${date}`)
+  expect(lines[3]).toContain(`${isolate('bob@example.test')}’s mail program says it was displayed`)
+  expect(text(shown)).not.toContain('Not a recipient of this message')
 })
 
-it('shows on a report what it says, and nothing on a message without reports', () => {
-  const bounce = message({
-    folder_id: 'INBOX',
-    report: {
-      kind: 'disposition',
-      original_message_id: 'plan-1@example.test',
-      recipients: [{ recipient: 'bob@example.test', outcome: 'notDisplayed' }],
-    },
+it('marks a report about somebody the message was not addressed to', () => {
+  const sent = message({
+    delivery: [{ kind: 'delivery', recipient: 'stranger@example.test', outcome: 'delivered', reported_at: at, listed: false }],
   })
-  const shown = render(<ReportNotice message={bounce} outgoing={false} />)
-  expect(shown.getByText('Read report about a message you sent')).toBeTruthy()
-  expect(shown.getByText('Handled for bob@example.test without being displayed')).toBeTruthy()
-  cleanup()
+  expect(text(render(<ReportNotice message={sent} outgoing />))).toContain('Not a recipient of this message')
+})
 
-  // Reports about a message are only shown on one this account sent, and a
-  // report only on a received one.
-  expect(render(<ReportNotice message={message()} outgoing />).container.textContent).toBe('')
-  expect(render(<ReportNotice message={bounce} outgoing />).container.textContent).toBe('')
-  expect(render(<ReportNotice message={message({ delivery: [] })} outgoing={false} />).container.textContent).toBe('')
+it('heads a report about a message of this account as such, and any other neutrally', () => {
+  const report = {
+    kind: 'disposition',
+    original_message_id: 'plan-1@example.test',
+    recipients: [{ recipient: 'bob@example.test', outcome: 'notDisplayed' }],
+  }
+  const linked = render(<ReportNotice message={message({ folder_id: 'INBOX', report, report_linked: true })} outgoing={false} />)
+  expect(text(linked)).toContain('Read report about a message you sent')
+  expect(text(linked)).toContain('mail program says it handled the message without displaying it')
+  cleanup()
+  const stranger = render(<ReportNotice message={message({ folder_id: 'INBOX', report })} outgoing={false} />)
+  expect(text(stranger)).toContain('Read report')
+  expect(text(stranger)).not.toContain('a message you sent')
+  cleanup()
+  const bounce = { ...report, kind: 'delivery', recipients: [{ recipient: 'x@example.test', outcome: 'failed', status: '5.2.2' }] }
+  const delivery = render(<ReportNotice message={message({ folder_id: 'INBOX', report: bounce })} outgoing={false} />)
+  expect(text(delivery)).toContain('Delivery report')
+  expect(text(delivery)).toContain('Reason: The mailbox is full')
+})
+
+it('shows nothing where there is nothing to show', () => {
+  const report = { kind: 'delivery', original_message_id: 'x', recipients: [{ recipient: 'a', outcome: 'failed' }] }
+  expect(text(render(<ReportNotice message={message()} outgoing />))).toBe('')
+  expect(text(render(<ReportNotice message={message({ report })} outgoing />))).toBe('')
+  expect(text(render(<ReportNotice message={message({ delivery: [] })} outgoing={false} />))).toBe('')
 })
 
 it('is part of the reader, above the body', () => {
-  const sent = message({ delivery: [{ kind: 'delivery', recipient: 'bob@example.test', outcome: 'relayed', reported_at: 1 }] })
+  const sent = message({ delivery: [{ kind: 'delivery', recipient: 'bob@example.test', outcome: 'relayed', reported_at: at }] })
   const shown = render(<MessageContent message={sent} view={view(true)} galleryOffset={0} />)
-  expect(shown.getByText('Passed on for bob@example.test; no further report will come')).toBeTruthy()
+  expect(text(shown)).toContain('no further report will come')
 })
 
-it('names every outcome the core can report, and builds the reason from what is there', () => {
+it('names every outcome, reads common status codes and keeps only the server words', () => {
   expect(Object.keys(REPORT_OUTCOME_TEXT).sort()).toEqual(
     ['delayed', 'delivered', 'displayed', 'failed', 'notDisplayed', 'relayed'].sort(),
   )
-  expect(reportReason({ recipient: 'a', outcome: 'failed', status: '5.2.2' })).toBe('5.2.2')
-  expect(reportReason({ recipient: 'a', outcome: 'failed', diagnostic: 'Mailbox full' })).toBe('Mailbox full')
-  expect(reportReason({ recipient: 'a', outcome: 'failed' })).toBe('')
+  expect(statusPhrase('5.1.1')).toBe('noAddress')
+  expect(statusPhrase('5.1.10')).toBe('noAddress')
+  expect(statusPhrase('4.2.2')).toBe('mailboxFull')
+  expect(statusPhrase('5.7.1')).toBe('policy')
+  expect(statusPhrase('4.4.1')).toBe('temporary')
+  expect(statusPhrase('5.3.0')).toBeNull()
+  expect(statusPhrase(undefined)).toBeNull()
+  expect(serverWords({ recipient: 'a', outcome: 'failed', status: '5.2.2', diagnostic: '552 5.2.2 Mailbox full' })).toBe('Mailbox full')
+  expect(serverWords({ recipient: 'a', outcome: 'failed', diagnostic: 'Host unreachable' })).toBe('Host unreachable')
+  expect(isolate('בוב@example.test')).toBe('⁨בוב@example.test⁩')
+})
+
+it('tells the sender why a delivery receipt was not requested on Microsoft 365', () => {
+  expect(deliveryReceiptToast({ delivery_receipt: 'requested' })).toBe('Sent')
+  expect(deliveryReceiptToast({ delivery_receipt: 'unsupported' })).toContain('does not offer delivery receipts')
+  expect(deliveryReceiptToast({ delivery_receipt: 'unsupported', delivery_receipt_reason: 'needsChanges' })).toContain(
+    'needs changes allowed',
+  )
+  expect(deliveryReceiptToast({ delivery_receipt: 'unsupported', delivery_receipt_reason: 'bcc' })).toContain('Bcc')
+  expect(deliveryReceiptToast({ delivery_receipt: 'unsupported', delivery_receipt_reason: 'protected' })).toContain(
+    'signed or encrypted',
+  )
+  expect(deliveryReceiptToast({ delivery_receipt: 'unsupported', delivery_receipt_reason: 'other' })).toContain(
+    'does not offer delivery receipts',
+  )
 })

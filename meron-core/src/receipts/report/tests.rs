@@ -219,6 +219,11 @@ fn db() -> rusqlite::Connection {
     crate::store::upsert_folders(&conn, ACCOUNT, &[folder("INBOX", None), folder("Sent", Some("sent"))]).unwrap();
     conn
 }
+/// A message this account sent, cached in its Sent folder.
+fn sent_message(conn: &rusqlite::Connection, account: &str, uid: u32, id: &str) {
+    let message = crate::parse::Message { message_id: id.into(), ..Default::default() };
+    crate::store::save_cached_message(conn, account, "Sent", uid, &message).unwrap();
+}
 fn one(recipient: &str, outcome: Outcome, kind: Kind, id: &str) -> Report {
     Report {
         kind,
@@ -233,6 +238,7 @@ fn outcome_of(conn: &rusqlite::Connection, account: &str, id: &str) -> Vec<(Stri
 #[test]
 fn a_final_word_replaces_a_delay_and_is_never_replaced_by_one() {
     let conn = db();
+    sent_message(&conn, ACCOUNT, 1, "P@x");
     record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delayed, Kind::Delivery, "<P@x>"), 100).unwrap();
     assert_eq!(outcome_of(&conn, ACCOUNT, "p@x"), vec![("bob@example.net".into(), Outcome::Delayed)]);
     // Delivered, even with an earlier date than the delay notice.
@@ -251,9 +257,27 @@ fn a_final_word_replaces_a_delay_and_is_never_replaced_by_one() {
 #[test]
 fn a_report_naming_no_message_is_not_kept_and_reports_stay_with_their_account() {
     let conn = db();
-    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, ""), 1).unwrap();
-    let count: i64 = conn.query_row("SELECT count(*) FROM delivery_reports", [], |r| r.get(0)).unwrap();
-    assert_eq!(count, 0);
+    let count = |conn: &rusqlite::Connection| -> i64 {
+        conn.query_row("SELECT count(*) FROM delivery_reports", [], |r| r.get(0)).unwrap()
+    };
+    assert!(!record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, ""), 1).unwrap());
+    // A message this account never had: nothing is kept, whatever it claims.
+    assert!(!record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, "p@x"), 1).unwrap());
+    assert_eq!(count(&conn), 0);
+    // One sent through this app is known even before its Sent copy is.
+    crate::store::outgoing::begin_attempt(
+        &conn,
+        "a1",
+        ACCOUNT,
+        crate::store::outgoing::AttemptKind::Now,
+        "<Sent-Here@x>",
+        &serde_json::json!({}),
+        1,
+    )
+    .unwrap();
+    assert!(record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "sent-here@x"), 1).unwrap());
+    assert_eq!(count(&conn), 1);
+    sent_message(&conn, "other@example.org", 1, "p@x");
     record(&conn, "other@example.org", &one("bob@example.net", Outcome::Failed, Kind::Delivery, "p@x"), 1).unwrap();
     assert!(outcomes(&conn, ACCOUNT, "p@x").unwrap().is_empty());
     assert_eq!(outcome_of(&conn, "other@example.org", "p@x").len(), 1);
@@ -274,7 +298,7 @@ fn a_report_is_linked_to_its_sent_message_and_one_matching_nothing_stays_a_norma
     let linked = outcomes(&conn, ACCOUNT, &sent.message_id).unwrap();
     assert_eq!(linked.len(), 1);
     assert_eq!((linked[0].outcome, linked[0].status.as_str()), (Outcome::Failed, "5.1.1"));
-    assert_eq!(linked[0].reported_at, parsed.date);
+    assert_eq!(linked[0].reported_at, parsed.date.min(crate::store::now_unix()));
     // The report itself is still an ordinary cached message, with what it says.
     let cached = crate::store::get_cached_message(&conn, ACCOUNT, "INBOX", 7).unwrap().unwrap();
     assert_eq!(cached.report, parsed.report);
@@ -285,11 +309,30 @@ fn a_report_is_linked_to_its_sent_message_and_one_matching_nothing_stays_a_norma
     let parsed = crate::parse::parse_message(stranger.as_bytes(), None);
     crate::store::save_cached_message(&conn, ACCOUNT, "INBOX", 8, &parsed).unwrap();
     assert_eq!(outcomes(&conn, ACCOUNT, &sent.message_id).unwrap().len(), 1);
-    assert!(crate::store::get_cached_message(&conn, ACCOUNT, "INBOX", 8).unwrap().is_some());
+    assert!(outcomes(&conn, ACCOUNT, "someone-else@example.org").unwrap().is_empty());
+    assert!(crate::store::get_cached_message(&conn, ACCOUNT, "INBOX", 8).unwrap().unwrap().report.is_some());
 
     // A read receipt this account sent (in Sent) is not one it received.
     let ours = wrap("disposition-notification", "message/disposition-notification", THUNDERBIRD_MDN, "text/rfc822-headers", ORIGINAL)
         .replace("Plan-1@Example.com", "theirs@example.net");
     crate::store::save_cached_message(&conn, ACCOUNT, "Sent", 9, &crate::parse::parse_message(ours.as_bytes(), None)).unwrap();
     assert!(outcomes(&conn, ACCOUNT, "theirs@example.net").unwrap().is_empty());
+}
+
+#[test]
+fn a_report_dated_in_the_future_cannot_outrank_a_later_one() {
+    assert_eq!(reported_at(2_000, 1_000), 1_000);
+    assert_eq!(reported_at(500, 1_000), 500);
+    assert_eq!(reported_at(0, 1_000), 1_000);
+}
+
+#[test]
+fn format_characters_cannot_disguise_an_address_or_a_reason() {
+    // A right-to-left override would show the address reversed; isolates and
+    // zero-width marks would hide what the text is.
+    let fields = "Reporting-MTA: dns; mx.example.net\r\n\r\nFinal-Recipient: rfc822; bob\u{202E}@example.net\u{2066}\r\n\
+Action: failed\r\nStatus: 5.1.1\r\nDiagnostic-Code: smtp; 550 user\u{200B} unknown\u{2069}\u{FEFF}\r\n";
+    let found = report(&wrap("delivery-status", "message/delivery-status", fields, "message/rfc822", ORIGINAL)).unwrap();
+    assert_eq!(found.recipients[0].recipient, "bob@example.net");
+    assert_eq!(found.recipients[0].diagnostic, "550 user unknown");
 }

@@ -57,9 +57,10 @@ sin leer nunca el cuerpo de un error.
     contienen, ni carpetas de búsqueda, ni dentro de sí misma, ni adonde ya
     está, ni al lado de otra con el mismo nombre (sin distinguir mayúsculas);
   - una petición, nunca repetida. Después se vuelve a leer el árbol, haya
-    ido bien, mal o en duda. Si se perdió la respuesta, el error lo dice y
-    pedirlo otra vez encuentra la carpeta en su sitio («ya está ahí»), sin
-    segunda petición;
+    ido bien, mal o en duda. Sin respuesta, con 5xx o con un éxito que no
+    dice el padre pedido, el resultado es incierto, nunca «no se movió»; la
+    interfaz vuelve a leer la lista y pedirlo otra vez encuentra la carpeta
+    en su sitio («ya está ahí», como información), sin segunda petición;
   - con ids inmutables la carpeta conserva su nombre local; si Graph
     devuelve otro id, se informa como renombrado.
 - **Deshacer** es la acción inversa, que pasa por el mismo camino que la
@@ -114,6 +115,11 @@ sin leer nunca el cuerpo de un error.
   'String 0x001A')`). Si es `REPORT.*` (`IPM.Note.NDR`, `DR`, `IPNRN`,
   `IPNNRN`), se lee su MIME y lo interpreta el núcleo como cualquier otro
   informe (ADR-0057). Si el MIME es demasiado grande, se muestra el texto.
+- Al sincronizar una carpeta, una consulta por clase de elemento
+  (`$filter` sobre `singleValueExtendedProperties`, `$select=id`, hasta 20)
+  encuentra los informes que aún no se han leído y se lee su MIME, también
+  los guardados antes; cada uno, una sola vez. Es de mejor esfuerzo: si la
+  consulta falla, los informes se leen al abrirlos.
 
 ## Interfaz
 

@@ -494,7 +494,9 @@ export async function moveFolder(accountId: string, folderId: string, parentId: 
   const label = source?.name || folderId
   if (block) {
     const reason = FOLDER_MOVE_BLOCK_TEXT[block]
-    showToast(t(reason.key, { defaultValue: reason.text, folder: label }), 'error')
+    // Already there is news, not a failure: after a move whose outcome was
+    // unknown, the refreshed tree may show it done (ADR-0057).
+    showToast(t(reason.key, { defaultValue: reason.text, folder: label }), block === 'sameParent' ? 'info' : 'error')
     return false
   }
   const destination = target ? target.name : t('folders.move.topLevel', { defaultValue: 'Top level' })
@@ -542,6 +544,16 @@ export async function moveFolder(accountId: string, folderId: string, parentId: 
     showToast(t('folders.move.done', { folder: label, destination, defaultValue: 'Moved {folder} to {destination}' }))
     return true
   } catch (error) {
+    // Refused, or of unknown outcome: either way the tree is read again, so
+    // it shows where the folder is now rather than where it was.
+    void invoke<{ folders?: Folder[] }>('mail.folderList', { account_id: accountId, refresh: false }).then(
+      (res) => {
+        if (!res?.folders?.length) return
+        mail$.foldersByAccount[accountId].set(res.folders)
+        if (ui$.selectedAccount.peek() === accountId) mail$.folders.set(res.folders)
+      },
+      () => undefined,
+    )
     showToast(
       error instanceof Error
         ? error.message

@@ -28,14 +28,18 @@
   - una sola petición, `POST /me/mailFolders/{id}/move` con
     `{"destinationId": …}` (la raíz del buzón para el nivel superior), con
     `Prefer: IdType="ImmutableId"`, sin redirecciones y sin repetirla nunca.
-    La respuesta tiene que decir el padre pedido; si no, no es confirmación;
+    La respuesta tiene que decir el padre pedido. Un éxito de otra forma
+    (otro padre, ninguno, una respuesta ilegible) o un 5xx no es ni
+    confirmación ni rechazo: es **incierto**. Solo un rechazo del servidor
+    (4xx) se dice «no se movió»;
   - después, haya ido bien, mal o en duda, se vuelve a leer el árbol de
     carpetas: la caché dice dónde está la carpeta en el servidor, no dónde se
     intentó dejar;
-  - **resultado incierto** (se perdió la respuesta): se dice «no se sabe si
-    se movió; no se ha repetido», y como el árbol ya se leyó de nuevo, volver
-    a pedirlo encuentra la carpeta en su sitio («ya está ahí») y no manda
-    una segunda petición;
+  - **resultado incierto**: se dice «no se sabe si se movió; no se ha
+    repetido». El árbol ya se leyó de nuevo en el núcleo y la interfaz
+    vuelve a pedir la lista, así que volver a pedirlo encuentra la carpeta en
+    su sitio: «ya está ahí», dicho como información y no como error, sin
+    segunda petición;
   - con ids inmutables la carpeta conserva su id, y por tanto su nombre
     local: no hay renombrados y los mensajes en caché se quedan. Si Graph
     devuelve otro id, se informa ese renombrado para que favoritas, colores
@@ -50,17 +54,29 @@
   - **la política** es la de ADR-0048, ahora en una función pequeña y
     compartida, `receipts::delivery_receipt(pedida, la_vía_la_lleva)`: se
     pide solo si la persona la quiere y la vía puede llevarla (SMTP con
-    DSN; Graph con cambios además de envío). Si no, el mensaje sale igual,
-    por `sendMail`, sin la petición, y el envío responde
-    `delivery_receipt: "unsupported"` como hoy. Sin pedirla, nada cambia;
+    DSN; Graph con cambios además de envío). Sin pedirla, nada cambia;
+  - **prudencia hasta tener evidencia de Microsoft 365:** no se sabe todavía
+    si un borrador hecho desde MIME conserva los destinatarios Cco ni la
+    firma o el cifrado byte a byte. Perder un Cco sería silencioso. Así que
+    el borrador solo se usa para un mensaje sin Cco y sin firma ni cifrado.
+    En los demás casos (o sin cambios permitidos) el mensaje sale como
+    siempre por `sendMail`, sin la petición, y el envío responde
+    `delivery_receipt: "unsupported"` con `delivery_receipt_reason`
+    (`needsChanges`, `bcc` o `protected`), que el redactor explica;
   - un fallo antes del último paso (borrador o marca) es «no enviado»
     (`NotSent`): nada salió, se borra el borrador y el intento queda como
     rechazado, nunca como incierto. Si el borrador no se pudo borrar, o su
     creación quedó sin respuesta, se dice que puede quedar una copia en
     Borradores;
-  - el último paso es un envío como los demás (#143): 202 aceptado; sin
-    respuesta o 5xx, incierto, sin deshacer ni repetir; un rechazo borra el
-    borrador;
+  - el último paso es un envío como los demás (#143, contrato de #29): 202
+    aceptado; sin respuesta, 5xx, cualquier otro 2xx o una respuesta
+    ilegible, **incierto**, sin deshacer ni repetir, diciendo que puede
+    quedar una copia en Borradores; solo un rechazo (4xx) borra el borrador
+    y deja el intento como rechazado. `sendMail` sigue la misma regla;
+  - el borrador puede verse en Borradores desde otros clientes durante el
+    instante que tarda el envío. Si la aplicación se cierra entre crear el
+    borrador y enviarlo, el borrador queda allí y el intento queda abierto
+    en `outgoing_attempts` (#29), que la persona resuelve;
   - la copia de Enviados la guarda Microsoft, como con `sendMail`.
 - **Leer los informes que llegan** (todos los tipos de cuenta):
   - el analizador MIME del núcleo reconoce un `multipart/report` de primer
@@ -79,15 +95,34 @@
     DSN, en la copia o las cabeceras del original que devuelve
     (`message/rfc822`, `text/rfc822-headers`, `message/global[-headers]`).
     Se guarda por cuenta en `delivery_reports` (esquema 64) al guardar el
-    cuerpo en caché, sea cual sea el protocolo que lo trajo. Una palabra
-    final sustituye a un retraso y nunca al revés; si no, gana el informe
-    más reciente. Un informe en Enviados o Borradores (una confirmación que
-    envió esta cuenta) no cuenta como recibido;
-  - **dónde se ve:** en el mensaje enviado con ese Message-ID, en la misma
-    cuenta, una línea por destinatario («Entregado a…», «No entregado a…»
-    con el motivo, «Retrasado…», «Mostrado a…»); y en el propio informe, lo
-    que dice. Un informe que no casa con ningún mensaje enviado se queda
-    como un mensaje normal. Nada se envía ni se contesta por leerlos;
+    cuerpo en caché, sea cual sea el protocolo que lo trajo, **solo si la
+    cuenta tiene ese mensaje** (en su caché o en `outgoing_attempts`); si
+    no, no se guarda nada y el informe se queda como un mensaje normal, así
+    que la tabla no crece con lo que no vincula nada. Una palabra final
+    sustituye a un retraso y nunca al revés; si no, gana el informe más
+    reciente, con su fecha acotada por el momento en que se lee (una fecha
+    futura no puede ganar). Un informe en Enviados o Borradores (una
+    confirmación que envió esta cuenta) no cuenta como recibido;
+  - **cuándo se vincula:** cuando se lee el cuerpo del informe. En Graph,
+    al sincronizar una carpeta se piden (una consulta, por clase de
+    elemento) hasta 20 informes aún no leídos y se lee su MIME, también los
+    guardados antes de esta versión; cada uno se lee una sola vez. En IMAP y
+    EWS depende de que el cuerpo se descargue (precarga o al abrirlo); un
+    informe guardado en caché antes de esta versión no se vuelve a leer;
+  - **dónde se ve, y cómo:** un informe es una afirmación de quien lo
+    envía, y se dice así: «El informe dice que se entregó a…», «El programa
+    de correo de … dice que se mostró», con su fecha, «a fecha de …» para un
+    retraso, los fallos primero, y marcado cuando nombra a alguien a quien
+    el mensaje no iba dirigido. El motivo de un fallo se da con una frase
+    para los códigos RFC 3463 comunes (x.1.1/x.1.10 la dirección no existe,
+    x.2.2 buzón lleno, x.7.x rechazado por la política del servidor, 4.x.x
+    problema temporal) y las palabras del servidor aparte, sin repetir el
+    código; direcciones y motivos van aislados (bidi) y sin caracteres de
+    formato (Cf), para que un texto de derecha a izquierda no reordene la
+    frase. En el propio informe se ve lo que dice, con el título «Informe de
+    entrega» o «Informe de lectura», y «sobre un mensaje que enviaste» solo
+    si casa con uno de esta cuenta. Nada se envía ni se contesta por
+    leerlos;
   - en Graph, un mensaje sin adjuntos se lee de su JSON, que en un informe
     solo trae el texto para personas. Al leer un mensaje se pide también su
     clase (`$expand` de la propiedad extendida `String 0x001A`); si es
@@ -132,4 +167,10 @@
 - La lectura de un solo mensaje por id de UID (`messages.read`, fuera de un
   hilo) no lleva todavía los informes, igual que `receipt_requested`.
 - La versión de esquema 64 puede chocar con otras ramas abiertas a la vez;
-  la que se fusione después renumera.
+  si otra rama se fusiona antes, esta renumera su migración.
+- Un informe que llega antes de que la cuenta tenga en caché el mensaje
+  enviado (y que no se envió desde esta aplicación) no se guarda y no se
+  vuelve a intentar.
+- Confirmación de entrega en Graph para mensajes con Cco o firmados o
+  cifrados, cuando la evidencia N5 muestre que el borrador los conserva
+  (comprobando también los destinatarios del borrador antes de enviarlo).

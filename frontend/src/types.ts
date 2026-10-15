@@ -197,8 +197,11 @@ export type DeliveryReport = {
 
 export type DeliveryOutcome = ReportRecipient & {
   kind: 'delivery' | 'disposition'
-  /** The report's own date (seconds), 0 when it had none. */
+  /** The report's own date (seconds), bounded by when it was read. */
   reported_at: number
+  /** Whether the recipient it names is one the message was addressed to;
+   * null when the message's recipients are not known here. */
+  listed?: boolean | null
 }
 
 export type Message = {
@@ -271,6 +274,8 @@ export type Message = {
   /** The delivery or read report this message is, as the core read it from
    * its machine-readable part (ADR-0057). Absent or null: not a report. */
   report?: DeliveryReport | null
+  /** Whether that report names a message of this account (ADR-0057). */
+  report_linked?: boolean
   /**
    * Whether this is worth interrupting for, as the core judged it.
    *

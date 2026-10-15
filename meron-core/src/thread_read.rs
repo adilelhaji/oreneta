@@ -511,19 +511,37 @@ pub fn thread_message_json(
     })
 }
 
-/// Adds to an outgoing message what the delivery and read reports this
-/// account received say about it (ADR-0057), keyed by its Message-ID. An
-/// incoming message, one without a Message-ID or one nobody reported on is
+/// Adds what delivery and read reports say (ADR-0057), keyed by Message-ID
+/// within this account. On an outgoing message: what the reports received
+/// say about it, each marked with whether the recipient it names is one the
+/// message was addressed to (a report is a claim by whoever sent it). On a
+/// report: whether it names a message of this account (`report_linked`), so
+/// it is not presented as being about one when it is not. Anything else is
 /// left as it is.
 pub fn attach_delivery(conn: &rusqlite::Connection, account_id: &str, message: &mut Value) -> anyhow::Result<()> {
     if message["outgoing"] != Value::Bool(true) {
+        if let Some(original) = message["report"]["original_message_id"].as_str().map(str::to_string) {
+            let linked = !crate::receipts::report::outcomes(conn, account_id, &original)?.is_empty();
+            message["report_linked"] = Value::Bool(linked);
+        }
         return Ok(());
     }
     let message_id = message["message_id"].as_str().unwrap_or_default().to_string();
     let reports = crate::receipts::report::outcomes(conn, account_id, &message_id)?;
-    if !reports.is_empty() {
-        message["delivery"] = serde_json::to_value(reports)?;
+    if reports.is_empty() {
+        return Ok(());
     }
+    let addressed: HashSet<String> = ["to", "cc", "bcc"]
+        .iter()
+        .flat_map(|field| parse::split_address_list(message[*field].as_str().unwrap_or_default()))
+        .collect();
+    let mut delivery = serde_json::to_value(reports)?;
+    for item in delivery.as_array_mut().into_iter().flatten() {
+        let recipient = item["recipient"].as_str().unwrap_or_default().to_lowercase();
+        // Unknown when the message's recipients are not known here.
+        item["listed"] = if addressed.is_empty() { Value::Null } else { Value::Bool(addressed.contains(&recipient)) };
+    }
+    message["delivery"] = delivery;
     Ok(())
 }
 
@@ -594,14 +612,24 @@ mod tests {
                 diagnostic: "User unknown".into(),
             }],
         };
-        crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000).unwrap();
+        let sent = crate::parse::Message {
+            message_id: "Plan-1@Example.com".into(),
+            to: "Bob <bob@example.net>".into(),
+            ..Default::default()
+        };
+        // Kept only once this account has the message it names.
+        assert!(!crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000).unwrap());
+        crate::store::save_cached_message(&conn, "acc", "Sent", 20, &sent).unwrap();
+        assert!(crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000).unwrap());
 
-        let sent = crate::parse::Message { message_id: "Plan-1@Example.com".into(), ..Default::default() };
         let mut value = thread_message_json("acc", "tid", "Sent", &header(20, true), Some(&sent), &HashSet::new());
         super::attach_delivery(&conn, "acc", &mut value).unwrap();
         assert_eq!(value["delivery"][0]["outcome"], "failed");
         assert_eq!(value["delivery"][0]["status"], "5.1.1");
         assert_eq!(value["delivery"][0]["diagnostic"], "User unknown");
+        assert_eq!(value["delivery"][0]["reported_at"], 1_760_000_000);
+        // A report is a claim: this one names somebody the message was not for.
+        assert_eq!(value["delivery"][0]["listed"], false);
         assert_eq!(value["report"], serde_json::Value::Null);
 
         // The same Message-ID received (not sent here) shows nothing; another
@@ -613,12 +641,28 @@ mod tests {
         super::attach_delivery(&conn, "other", &mut other).unwrap();
         assert!(other.get("delivery").is_none());
 
-        // The report message itself carries what it says, as a normal message.
+        // The report message itself carries what it says, as a normal message,
+        // and whether it names a message of this account.
         let bounce = crate::parse::Message { report: Some(failed.clone()), ..Default::default() };
-        let value = thread_message_json("acc", "tid", "INBOX", &header(22, false), Some(&bounce), &HashSet::new());
+        let mut value = thread_message_json("acc", "tid", "INBOX", &header(22, false), Some(&bounce), &HashSet::new());
+        super::attach_delivery(&conn, "acc", &mut value).unwrap();
         assert_eq!(value["report"]["kind"], "delivery");
         assert_eq!(value["report"]["recipients"][0]["outcome"], "failed");
+        assert_eq!(value["report_linked"], true);
         assert_eq!(value["outgoing"], false);
+        let stranger = crate::parse::Message {
+            report: Some(Report { original_message_id: "someone-else@example.org".into(), ..failed.clone() }),
+            ..Default::default()
+        };
+        let mut value = thread_message_json("acc", "tid", "INBOX", &header(23, false), Some(&stranger), &HashSet::new());
+        super::attach_delivery(&conn, "acc", &mut value).unwrap();
+        assert_eq!(value["report_linked"], false);
+
+        // Addressed to the one it names: marked as such.
+        let to_nobody = crate::parse::Message { to: "nobody@example.net".into(), ..sent };
+        let mut value = thread_message_json("acc", "tid", "Sent", &header(20, true), Some(&to_nobody), &HashSet::new());
+        super::attach_delivery(&conn, "acc", &mut value).unwrap();
+        assert_eq!(value["delivery"][0]["listed"], true);
     }
 
     #[test]

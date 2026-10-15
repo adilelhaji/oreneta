@@ -145,6 +145,34 @@ describe('moving a folder (ADR-0050)', () => {
     expect(folderPrefs$.colors.get()[0].folderId).toBe('Work')
   })
 
+  // ADR-0057: whatever the core answered, the tree is read again, so after a
+  // move of unknown outcome it shows where the folder is.
+  it('reads the folder list again after a refusal or an unknown outcome', async () => {
+    const moved = [folder('INBOX', 'inbox'), folder('Projects'), folder('Projects/Work')]
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: unknown) => {
+      calls.push({ command, payload })
+      if (command === 'mail.folderMove') throw new Error('Microsoft Graph: no clear answer came back, so whether the folder moved is unknown')
+      if (command === 'mail.folderList') return { folders: moved }
+      return {}
+    }
+    const pending = moveFolder('acc', 'Work', 'Projects')
+    settleConfirm(true)
+    expect(await pending).toBe(false)
+    expect(ui$.toast.get()).toContain('unknown')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(calls.some((call) => call.command === 'mail.folderList')).toBe(true)
+    expect(mail$.foldersByAccount.get().acc.map((item) => item.id)).toContain('Projects/Work')
+  })
+
+  it('says a folder already in place is already there, as news rather than a failure', async () => {
+    expect(await moveFolder('acc', 'Work/2026', 'Work')).toBe(false)
+    expect(ui$.toastTone.get()).toBe('info')
+    expect(ui$.toast.get()).toBe('The folder is already there')
+    expect(calls).toEqual([])
+    expect(await moveFolder('acc', 'Sent', 'Projects')).toBe(false)
+    expect(ui$.toastTone.get()).toBe('error')
+  })
+
   it('deleting a folder drops its favorites and colors with it', async () => {
     responses['mail.folderDelete'] = {
       ok: true,

@@ -1302,6 +1302,18 @@ async fn an_uncertain_folder_move_is_not_repeated_and_a_retry_finds_it_moved() {
 }
 
 #[tokio::test]
+async fn a_server_failure_after_a_folder_move_is_not_called_a_refusal() {
+    let (db, source, session) = folder_session();
+    // A 5xx that came after the server moved it.
+    *source.answer.lock().unwrap() =
+        Some((Error { kind: ErrorKind::Unavailable, status: Some(503), retry_after_seconds: None }, true));
+    let error = refused(&session, &local("work"), Some(&local("projects"))).await;
+    assert!(error.contains("unknown") && !error.contains("not moved"), "{error}");
+    assert_eq!(parent_of(&db, "work").as_deref(), Some("projects"));
+    assert_eq!(moves(&source).len(), 1);
+}
+
+#[tokio::test]
 async fn a_refused_folder_move_changes_nothing_and_says_why() {
     let (db, source, session) = folder_session();
     *source.answer.lock().unwrap() =
@@ -1436,10 +1448,20 @@ fn a_failure_before_sending_sends_nothing_and_removes_the_draft() {
     assert!(error.downcast_ref::<NotSent>().unwrap().draft_left);
     assert_eq!(calls(&source), vec!["draft"]);
 
+    // Failed on the server's side, or answered unreadably: maybe one too.
+    for kind in [ErrorKind::Unavailable, ErrorKind::InvalidResponse] {
+        let source = sender();
+        source.fail.lock().unwrap().insert("draft", Error::new(kind));
+        let error = send_requesting_delivery(&source, b"x").unwrap_err();
+        assert!(error.downcast_ref::<NotSent>().unwrap().draft_left, "{kind:?}");
+    }
+
+    // Refused before anything was made: nothing left anywhere.
     let source = sender();
     source.fail.lock().unwrap().insert("draft", Error::new(ErrorKind::TooLarge));
     let error = send_requesting_delivery(&source, b"x").unwrap_err();
-    assert_eq!(error.downcast_ref::<NotSent>().unwrap().error.kind, ErrorKind::TooLarge);
+    let not_sent = error.downcast_ref::<NotSent>().unwrap();
+    assert_eq!((not_sent.error.kind, not_sent.draft_left), (ErrorKind::TooLarge, false));
 }
 
 #[test]
@@ -1450,8 +1472,10 @@ fn an_unanswered_send_is_neither_undone_nor_repeated() {
         source.fail.lock().unwrap().insert("send", unknown);
         let error = send_requesting_delivery(&source, b"x").unwrap_err();
         assert!(error.downcast_ref::<NotSent>().is_none());
-        assert_eq!(kind_of(&error), Some(expected));
-        // Microsoft may have it: the draft is not touched and not sent again.
+        assert_eq!(error.chain().find_map(|e| e.downcast_ref::<Error>()).map(|e| e.kind), Some(expected));
+        // Microsoft may have it: the draft is not touched and not sent again,
+        // and the person is told a copy may remain in Drafts.
+        assert!(error.to_string().contains("may remain in Drafts"), "{error}");
         assert_eq!(calls(&source), vec!["draft", "receipt:d1", "send:d1"]);
     }
 }
@@ -1472,22 +1496,30 @@ fn a_refused_send_removes_the_draft_and_stays_a_refusal() {
 #[tokio::test]
 async fn a_graph_send_asks_for_a_delivery_receipt_exactly_when_the_policy_says() {
     use crate::smtp::DeliveryReceipt;
+    let draft = vec!["draft", "receipt:d1", "send:d1"];
+    let plain = vec!["sendMail"];
+    // (asked, writes, bcc, protected) → what became of it, why, and how it went.
     let cases = [
-        (true, true, DeliveryReceipt::Requested, vec!["draft", "receipt:d1", "send:d1"]),
-        (true, false, DeliveryReceipt::Unsupported, vec!["sendMail"]),
-        (false, true, DeliveryReceipt::NotAsked, vec!["sendMail"]),
-        (false, false, DeliveryReceipt::NotAsked, vec!["sendMail"]),
+        ((true, true, false, false), DeliveryReceipt::Requested, None, draft.clone()),
+        ((true, false, false, false), DeliveryReceipt::Unsupported, Some(Withheld::NeedsChanges), plain.clone()),
+        // Until a real tenant shows a draft keeps them (ADR-0057).
+        ((true, true, true, false), DeliveryReceipt::Unsupported, Some(Withheld::Bcc), plain.clone()),
+        ((true, true, false, true), DeliveryReceipt::Unsupported, Some(Withheld::Protected), plain.clone()),
+        ((false, true, false, false), DeliveryReceipt::NotAsked, None, plain.clone()),
+        ((false, false, true, true), DeliveryReceipt::NotAsked, None, plain.clone()),
     ];
-    for (asked, writes, expected, steps) in cases {
+    for ((asked, writes, bcc, protected), expected, why, steps) in cases {
         let (db, _, session) = writable_session();
         crate::store::setting_set(&db.lock().unwrap(), &auth::marker(ACCOUNT), &json!({"writes": writes, "send": true})).unwrap();
         let source = Arc::new(sender());
         let session = Session { source: source.clone(), ..session };
-        let receipt = session.send_mime_with_receipt(b"x".to_vec(), asked).await.unwrap();
-        assert_eq!(receipt, expected, "asked {asked}, writes {writes}");
-        assert_eq!(calls(&source), steps, "asked {asked}, writes {writes}");
-        assert_eq!(delivery_receipt(&db.lock().unwrap(), ACCOUNT, asked), expected);
+        let case = (asked, writes, bcc, protected);
+        let outcome = session.send_mime_with_receipt(b"x".to_vec(), asked, bcc, protected).await.unwrap();
+        assert_eq!(outcome, (expected, why), "{case:?}");
+        assert_eq!(calls(&source), steps, "{case:?}");
+        assert_eq!(delivery_receipt(&db.lock().unwrap(), ACCOUNT, asked, bcc, protected), (expected, why), "{case:?}");
     }
+    assert_eq!(Withheld::NeedsChanges.as_str(), "needsChanges");
 }
 
 // ---- #210: reports read through Graph ----
@@ -1522,4 +1554,69 @@ async fn a_report_too_large_for_its_mime_still_shows_its_text() {
     let body = session.read_message("INBOX", 2, Some(media)).await.unwrap();
     assert!(body.body.contains("Delivered"));
     assert!(body.report.is_none());
+}
+
+/// A source that lists the reports in a folder and hands their MIME over.
+struct Reports {
+    inner: Writer,
+    listed: Vec<String>,
+    mime: Mutex<HashMap<String, Vec<u8>>>,
+    reads: Mutex<Vec<String>>,
+}
+impl Source for Reports {
+    fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
+        self.inner.folders(p, c)
+    }
+    fn well_known(&self, a: &str) -> Result<Folder> {
+        self.inner.well_known(a)
+    }
+    fn delta(&self, f: &ResourceId, c: Option<&Checkpoint>) -> Result<Page<Message>> {
+        self.inner.delta(f, c)
+    }
+    fn message(&self, id: &ResourceId) -> Result<Message> {
+        self.inner.message(id)
+    }
+    fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
+        assert_eq!(folder.opaque(), "in");
+        assert!(limit > 0);
+        self.listed.iter().map(|id| ResourceId::new(ACCOUNT, ResourceKind::Message, id)).collect()
+    }
+    fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
+        self.reads.lock().unwrap().push(id.opaque().to_owned());
+        self.mime.lock().unwrap().get(id.opaque()).cloned().ok_or_else(|| Error::new(ErrorKind::NotFound))
+    }
+}
+
+/// #210: a report that arrived is read at sync, so the sent message it
+/// names shows what it says before anybody opens it; it is read once.
+#[tokio::test]
+async fn reports_are_read_at_sync_and_linked_without_being_opened() {
+    let (db, writer, session) = writable_session();
+    let lease = session.lease.clone();
+    drop(session);
+    let writer = Arc::into_inner(writer).unwrap();
+    // m3 is the message this account sent; m2 is a bounce about it; m1 a
+    // report whose MIME says nothing readable.
+    let sent = crate::parse::Message { message_id: "plan-1@example.test".into(), ..Default::default() };
+    crate::store::save_cached_message(&db.lock().unwrap(), ACCOUNT, "INBOX", 3, &sent).unwrap();
+    let source = Arc::new(Reports {
+        inner: writer,
+        listed: vec!["m2".into(), "m1".into()],
+        mime: Mutex::new(HashMap::from([
+            ("m2".to_string(), NDR.as_bytes().to_vec()),
+            ("m1".to_string(), b"Subject: odd\r\n\r\nnot a report".to_vec()),
+        ])),
+        reads: Mutex::new(vec![]),
+    });
+    let session = Session { db: db.clone(), lease, source: source.clone(), lock: Arc::new(Mutex::new(())) };
+    enqueue(&source.inner.inner, page("in", "sync-1", true, vec![]));
+    session.sync_folder("INBOX", 50).await.unwrap();
+    let linked = crate::receipts::report::outcomes(&db.lock().unwrap(), ACCOUNT, "plan-1@example.test").unwrap();
+    assert_eq!(linked.len(), 1);
+    assert_eq!(linked[0].status, "5.1.10");
+    assert_eq!(source.reads.lock().unwrap().clone(), vec!["m2", "m1"]);
+    // The next sync reads neither again.
+    enqueue(&source.inner.inner, page("in", "sync-2", true, vec![]));
+    session.sync_folder("INBOX", 50).await.unwrap();
+    assert_eq!(source.reads.lock().unwrap().len(), 2);
 }

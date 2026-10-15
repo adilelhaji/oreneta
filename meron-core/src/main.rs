@@ -9542,7 +9542,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             )?;
         }
         match perform_send_transaction(engine, p, &account, &to).await {
-            Ok(SendTransaction { raw, archived_by_server, delivery_receipt }) => {
+            Ok(SendTransaction { raw, archived_by_server, delivery_receipt, delivery_receipt_reason }) => {
                 {
                     let db = engine.db.lock().unwrap();
                     outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
@@ -9574,12 +9574,18 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                         "accepted"
                     }
                 };
-                Ok(json!({
+                let mut answer = json!({
                     "ok": true,
                     "outcome": outcome,
                     "attempt_id": attempt_id,
                     "delivery_receipt": delivery_receipt.as_str(),
-                }))
+                });
+                // Why a delivery receipt asked for on Graph was not requested
+                // (#210): "needsChanges", "bcc" or "protected".
+                if let Some(reason) = delivery_receipt_reason {
+                    answer["delivery_receipt_reason"] = json!(reason);
+                }
+                Ok(answer)
             }
             Err(err) if smtp::is_uncertain(&err) => {
                 let reason = format!("{err:#}");
@@ -9600,6 +9606,9 @@ struct SendTransaction {
     archived_by_server: bool,
     /// What became of a delivery receipt request (ADR-0048).
     delivery_receipt: smtp::DeliveryReceipt,
+    /// Why a delivery receipt the sender asked for was not requested, when
+    /// the route could have carried one (#210).
+    delivery_receipt_reason: Option<&'static str>,
 }
 
 /// Builds, protects and transmits one message. Everything up to the server's
@@ -9786,18 +9795,22 @@ async fn perform_send_transaction(
             // account allows changes as well as sending (#210, ADR-0057).
             // Exchange has no way to carry it here yet (ADR-0048). Without
             // it the message goes without one, and the sender is told.
+            // Nor, until a real tenant shows a draft keeps them, for a message
+            // with Bcc recipients or signed or encrypted: those go as before.
             let asked = receipts.delivery;
-            let delivery_receipt = engine
+            let has_bcc = !bcc.trim().is_empty();
+            let protected = protection.is_some();
+            let (delivery_receipt, delivery_receipt_reason) = engine
                 .with_write_session(&account, |session| {
                     let raw = raw.clone();
-                    Box::pin(async move { session.send_mime_with_receipt(raw, asked).await })
+                    Box::pin(async move { session.send_mime_with_receipt(raw, asked, has_bcc, protected).await })
                 })
                 .await
                 .map_err(if creds.is_graph() { classify_graph_send_error } else { classify_ews_send_error })?;
             // The server files its own copy, so the caller's Sent step only
             // refreshes the local view — the upload is suppressed for
             // Exchange in `should_append_sent_copy`.
-            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt });
+            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt, delivery_receipt_reason });
         }
         // What the sender asked for, with the keys it needs: built before
         // either branch, and applied by both, so no path sends in the clear
@@ -9821,7 +9834,12 @@ async fn perform_send_transaction(
             receipts,
         )
         .await?;
-        Ok(SendTransaction { raw: sent.raw, archived_by_server: false, delivery_receipt: sent.delivery_receipt })
+        Ok(SendTransaction {
+            raw: sent.raw,
+            archived_by_server: false,
+            delivery_receipt: sent.delivery_receipt,
+            delivery_receipt_reason: None,
+        })
 }
 
 /// An Exchange submission that failed without a verdict.

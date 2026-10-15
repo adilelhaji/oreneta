@@ -104,12 +104,12 @@
 
 ## Pendiente
 
-- **Confirmación de entrega en EWS y Graph:** los dos envían MIME
-  (`CreateItem` con `MimeContent` y `SendAndSaveCopy`; `sendMail` con el
-  MIME en base64), sin sobre donde poner la petición. Graph tiene
-  `isDeliveryReceiptRequested` y EWS `IsDeliveryReceiptRequested`, pero
-  solo en el envío como objeto JSON/XML, que este código no usa. Hoy se
-  responde «unsupported».
+- **Confirmación de entrega en EWS:** envía MIME (`CreateItem` con
+  `MimeContent` y `SendAndSaveCopy`), sin sobre donde poner la petición;
+  `IsDeliveryReceiptRequested` solo existe en el envío como objeto XML.
+  Hoy responde «unsupported» (#211). En Graph se pide desde ADR-0057 sobre
+  un borrador, solo en cuentas con cambios y, de momento, sin Cco ni firma o
+  cifrado; si no, responde «unsupported» con el motivo.
 - **Mensajes en caché de antes de esta versión:** no tienen la petición
   guardada y no muestran la barra hasta que se vuelven a descargar. No se
   invalida la caché entera por esto.
@@ -117,8 +117,10 @@
   analizador MIME, no se ve la petición (`isReadReceiptRequested` del
   recurso no se lee todavía).
 - **Interpretar las confirmaciones y avisos de entrega recibidos** (mostrar
-  «leído por…» en el mensaje enviado): hecho en ADR-0057 (#210), igual que
-  la confirmación de entrega en Graph.
+  lo que dicen en el mensaje enviado): hecho en ADR-0057 (#210). Se vinculan
+  cuando el informe se lee (en Graph, al sincronizar; en IMAP y EWS, cuando
+  su cuerpo se descarga o se abre); los guardados en caché antes de esa
+  versión solo se vinculan si se vuelven a leer.
 - **Prueba con servidor real:** el maddy 0.8 de la integración no anuncia
   DSN, así que la prueba comprueba que la de entrega se informa como no
   disponible y que la de lectura llega de bob a alice tras su clic. Un

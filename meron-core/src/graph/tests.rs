@@ -872,19 +872,27 @@ fn a_folder_move_posts_the_destination_and_returns_the_reported_id() {
     assert_eq!(body_of(request), json!({"destinationId": "P2"}));
 }
 
+/// A success that does not say the folder is where it was sent is no
+/// confirmation, and no refusal either: it may have moved (#210).
 #[test]
-fn a_folder_reported_under_another_parent_or_without_one_is_not_a_confirmation() {
+fn a_folder_move_answered_with_an_unexpected_success_is_uncertain_not_refused() {
     let fixture = Fixture::new(|_| {
         vec![
             (201, String::new(), json!({"id":"F1","parentFolderId":"ELSEWHERE"}).to_string()),
             (201, String::new(), json!({"id":"F1"}).to_string()),
             (204, String::new(), String::new()),
+            (202, String::new(), String::new()),
+            (201, String::new(), "not json".to_string()),
         ]
     });
     let client = writer(&fixture, "Mail.ReadWrite");
-    for _ in 0..3 {
-        assert_eq!(client.move_folder(&folder("F1"), &folder("P2")).unwrap_err().kind, ErrorKind::InvalidResponse);
+    for _ in 0..5 {
+        assert_eq!(client.move_folder(&folder("F1"), &folder("P2")).unwrap_err().kind, ErrorKind::Uncertain);
     }
+    // A refusal stays a refusal.
+    let refused = Fixture::new(|_| vec![(400, String::new(), String::new())]);
+    let error = writer(&refused, "Mail.ReadWrite").move_folder(&folder("F1"), &folder("P2")).unwrap_err();
+    assert_eq!((error.kind, error.status), (ErrorKind::InvalidResponse, Some(400)));
 }
 
 #[test]
@@ -907,8 +915,7 @@ fn a_folder_move_keeps_its_error_category_and_a_lost_answer_is_uncertain_and_sen
         vec![
             (403, String::new(), String::new()),
             (409, String::new(), String::new()),
-            (429, "Retry-After: 12
-".to_string(), String::new()),
+            (429, "Retry-After: 12\r\n".to_string(), String::new()),
         ]
     });
     let client = writer(&fixture, "Mail.ReadWrite");
@@ -925,12 +932,7 @@ fn a_folder_move_keeps_its_error_category_and_a_lost_answer_is_uncertain_and_sen
 #[test]
 fn a_delivery_receipt_is_a_draft_from_the_mime_marked_then_sent() {
     use base64::Engine as _;
-    let raw = b"From: a@example.com
-To: b@example.com
-Subject: Hi
-Message-ID: <m1@example.com>
-
-Hello";
+    let raw = b"From: a@example.com\r\nTo: b@example.com\r\nSubject: Hi\r\nMessage-ID: <m1@example.com>\r\n\r\nHello";
     let fixture = Fixture::new(|_| {
         vec![
             (201, String::new(), json!({"id":"D/1","isDraft":true}).to_string()),
@@ -947,16 +949,12 @@ Hello";
     assert!(requests[0].starts_with("POST /v1.0/me/messages "), "{}", requests[0]);
     assert!(requests[0].to_ascii_lowercase().contains("content-type: text/plain"));
     assert!(requests[0].to_ascii_lowercase().contains("prefer: idtype=\"immutableid\""));
-    let body = requests[0].split("
-
-").nth(1).unwrap();
+    let body = requests[0].split("\r\n\r\n").nth(1).unwrap();
     assert_eq!(base64::engine::general_purpose::STANDARD.decode(body).unwrap(), raw);
     assert!(requests[1].starts_with("PATCH /v1.0/me/messages/D%2F1 "), "{}", requests[1]);
     assert_eq!(body_of(&requests[1]), json!({"isDeliveryReceiptRequested": true}));
     assert!(requests[2].starts_with("POST /v1.0/me/messages/D%2F1/send "), "{}", requests[2]);
-    assert_eq!(requests[2].split("
-
-").nth(1), Some(""), "the send carries no body");
+    assert_eq!(requests[2].split("\r\n\r\n").nth(1), Some(""), "the send carries no body");
 }
 
 #[test]
@@ -969,6 +967,40 @@ fn a_delivery_receipt_draft_needs_changes_and_respects_the_request_bound() {
     let big = vec![b'a'; MAX_SEND_REQUEST];
     assert_eq!(writer(&fixture, "Mail.ReadWrite Mail.Send").create_mime_draft(&big).unwrap_err().kind, ErrorKind::TooLarge);
     assert!(fixture.requests().is_empty());
+}
+
+/// #29: once a send reached Microsoft, only a refusal says it did not go.
+/// Any other success than 202, or one that cannot be read, may have gone.
+#[test]
+fn a_send_answered_with_an_unexpected_success_is_uncertain_not_refused() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            (200, String::new(), String::new()),
+            (201, String::new(), "{}".to_string()),
+            (200, String::new(), String::new()),
+            (400, String::new(), String::new()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite Mail.Send");
+    assert_eq!(client.send_draft(&message("D1")).unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(client.send_draft(&message("D1")).unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(client.send_mime(b"x").unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(client.send_mime(b"x").unwrap_err().kind, ErrorKind::InvalidResponse);
+    assert_eq!(fixture.requests().len(), 4, "nothing is sent twice");
+}
+
+#[test]
+fn reports_in_a_folder_are_found_by_their_item_class() {
+    let fixture = Fixture::new(|_| vec![ok(json!({"value":[{"id":"R1"},{"id":"R2"}]}))]);
+    let found = writer(&fixture, "Mail.Read").report_ids(&folder("F/1"), 20).unwrap();
+    assert_eq!(found, vec![message("R1"), message("R2")]);
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("GET /v1.0/me/mailFolders/F%2F1/messages?$select=id&$top=20&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20%27String%200x001A%27%20and%20(ep/value%20eq%20%27REPORT.IPM.Note.NDR%27"), "{request}");
+    assert!(request.contains("REPORT.IPM.Note.IPNRN"), "{request}");
+    // A read-basic grant does not read messages.
+    let none = Fixture::new(|_| vec![]);
+    assert_eq!(writer(&none, "Mail.ReadBasic").report_ids(&folder("F1"), 20).unwrap_err().kind, ErrorKind::ConsentRequired);
+    assert!(none.requests().is_empty());
 }
 
 #[test]

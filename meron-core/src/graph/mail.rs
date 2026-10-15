@@ -107,6 +107,10 @@ pub trait Source: Send + Sync {
     fn send_draft(&self, _draft: &ResourceId) -> Result<()> {
         Err(Error::new(ErrorKind::ConsentRequired))
     }
+    /// Delivery and read reports in a folder, by item class (#210).
+    fn report_ids(&self, _folder: &ResourceId, _limit: usize) -> Result<Vec<ResourceId>> {
+        Ok(Vec::new())
+    }
 }
 impl Source for Client {
     fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
@@ -156,6 +160,9 @@ impl Source for Client {
     }
     fn send_draft(&self, draft: &ResourceId) -> Result<()> {
         Client::send_draft(self, draft)
+    }
+    fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
+        Client::report_ids(self, folder, limit)
     }
 }
 pub struct NativeSource {
@@ -223,6 +230,9 @@ impl Source for NativeSource {
     }
     fn send_draft(&self, draft: &ResourceId) -> Result<()> {
         self.client()?.send_draft(draft)
+    }
+    fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
+        self.client()?.report_ids(folder, limit)
     }
 }
 fn auth_error(error: auth::Failure) -> Error {
@@ -819,10 +829,13 @@ pub struct FolderMoveError {
 impl std::fmt::Display for FolderMoveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let reason = match self.error.kind {
-            ErrorKind::Uncertain => {
+            // The request reached the server and no refusal came back (a
+            // success of another shape is already `Uncertain`; a 5xx may
+            // come after the change was made).
+            ErrorKind::Uncertain | ErrorKind::Unavailable => {
                 return write!(
                     f,
-                    "Microsoft Graph: no answer came back, so whether the folder moved is unknown; it was not repeated, and the folder list now shows where it is"
+                    "Microsoft Graph: no clear answer came back, so whether the folder moved is unknown; it was not repeated, and the folder list now shows where it is"
                 );
             }
             ErrorKind::Throttled => match self.error.retry_after_seconds {
@@ -849,12 +862,54 @@ pub struct FolderMoved {
     pub renames: Vec<(String, String)>,
 }
 
+/// Why a send that asked for a delivery receipt went without one (#210).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Withheld {
+    /// The account does not allow changes, which the draft needs.
+    NeedsChanges,
+    /// It has Bcc recipients: whether a draft made from MIME keeps them is
+    /// not yet shown with Microsoft 365, and losing them would be silent.
+    Bcc,
+    /// It is signed or encrypted: whether the draft keeps the protection
+    /// byte for byte is not yet shown either.
+    Protected,
+}
+impl Withheld {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Withheld::NeedsChanges => "needsChanges",
+            Withheld::Bcc => "bcc",
+            Withheld::Protected => "protected",
+        }
+    }
+}
+
 /// What becomes of a delivery receipt request from this account (ADR-0048,
-/// ADR-0057): Graph carries it only on a draft, so only an account whose
-/// grant was recorded with changes as well as sending asks for one. The
-/// grant itself is checked again on every request.
-pub fn delivery_receipt(conn: &Connection, account: &str, asked: bool) -> crate::smtp::DeliveryReceipt {
-    crate::receipts::delivery_receipt(asked, writes_enabled(conn, account))
+/// ADR-0057). Graph carries it only on a draft, so only an account whose
+/// grant was recorded with changes as well as sending asks for one, and only
+/// for a message with no Bcc and no signing or encryption, until a real
+/// tenant shows a draft keeps those. Otherwise the message goes as before,
+/// without the request, and says why. The grant is checked again on every
+/// request.
+pub fn delivery_receipt(
+    conn: &Connection,
+    account: &str,
+    asked: bool,
+    bcc: bool,
+    protected: bool,
+) -> (crate::smtp::DeliveryReceipt, Option<Withheld>) {
+    let withheld = if !asked {
+        None
+    } else if !writes_enabled(conn, account) {
+        Some(Withheld::NeedsChanges)
+    } else if bcc {
+        Some(Withheld::Bcc)
+    } else if protected {
+        Some(Withheld::Protected)
+    } else {
+        None
+    };
+    (crate::receipts::delivery_receipt(asked, withheld.is_none()), withheld)
 }
 
 /// Sends a message that asks for a delivery receipt (#210, ADR-0057). The
@@ -865,16 +920,21 @@ pub fn delivery_receipt(conn: &Connection, account: &str, asked: bool) -> crate:
 /// answer is uncertain and is neither undone nor repeated; a refusal removes
 /// the draft.
 pub fn send_requesting_delivery(source: &dyn Source, raw: &[u8]) -> anyhow::Result<()> {
-    let draft = source
-        .create_mime_draft(raw)
-        .map_err(|error| NotSent { draft_left: error.kind == ErrorKind::Uncertain, error })?;
+    // Unanswered, failed on the server's side or answered in a way that
+    // cannot be read: a draft may exist all the same.
+    let draft = source.create_mime_draft(raw).map_err(|error| NotSent {
+        draft_left: matches!(error.kind, ErrorKind::Uncertain | ErrorKind::Unavailable | ErrorKind::InvalidResponse),
+        error,
+    })?;
     if let Err(error) = source.request_delivery_receipt(&draft) {
         let draft_left = source.delete_message(&draft).is_err();
         return Err(NotSent { error, draft_left }.into());
     }
     match source.send_draft(&draft) {
         Ok(()) => Ok(()),
-        Err(error) if matches!(error.kind, ErrorKind::Uncertain | ErrorKind::Unavailable) => Err(error.into()),
+        Err(error) if matches!(error.kind, ErrorKind::Uncertain | ErrorKind::Unavailable) => {
+            Err(anyhow::Error::from(error).context("the copy made to ask for a delivery receipt may remain in Drafts"))
+        }
         Err(error) => match source.delete_message(&draft) {
             Ok(()) => Err(error.into()),
             Err(_) => Err(anyhow::Error::from(error).context("a copy may be left in Drafts")),
@@ -1207,9 +1267,50 @@ impl Session {
         let folder = folder.to_owned();
         self.work(move |s| {
             while !sync_page(s.source.as_ref(), &s.db, &s.lease, &folder)? {}
+            s.read_new_reports(&folder);
             s.cached_recent(&folder, limit).map_err(clean_error)
         })
         .await
+    }
+    /// Delivery and read reports in the folder are read as MIME at sync, a
+    /// few each time (#210): so the sent message they name shows what they
+    /// say without the report being opened, and one cached before this
+    /// version is read again. Best effort: whatever fails is left to the next
+    /// sync, or to the report being opened.
+    fn read_new_reports(&self, folder: &str) {
+        const PER_SYNC: usize = 20;
+        let account = &self.lease.account;
+        let Ok(remote) = self.folder(folder) else { return };
+        let Ok(ids) = self.source.report_ids(&remote, PER_SYNC) else { return };
+        for id in ids {
+            let pending: Option<u32> = {
+                let conn = self.db.lock().unwrap();
+                conn.query_row(
+                    "SELECT i.uid FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id
+                      WHERE i.account=?1 AND i.remote_id=?2 AND m.folder_id=?3
+                        AND NOT EXISTS(SELECT 1 FROM messages WHERE account=?1 AND folder=?4 AND uid=i.uid
+                              AND (json_extract(json,'$.report') IS NOT NULL OR json_extract(json,'$.report_read')=1))",
+                    params![account, id.opaque(), remote.opaque(), folder],
+                    |r| r.get(0),
+                )
+                .optional()
+                .ok()
+                .flatten()
+            };
+            let Some(uid) = pending else { continue };
+            let Ok(raw) = self.source.message_mime(&id) else { break };
+            let parsed = crate::parse::parse_message(&raw, None);
+            let conn = self.db.lock().unwrap();
+            if check(&conn, &self.lease).is_err() || crate::store::save_cached_message(&conn, account, folder, uid, &parsed).is_err() {
+                break;
+            }
+            // Read once: a report whose MIME says nothing readable is not
+            // fetched again on every sync.
+            let _ = conn.execute(
+                "UPDATE messages SET json=json_set(json,'$.report_read',1) WHERE account=?1 AND folder=?2 AND uid=?3",
+                params![account, folder, uid],
+            );
+        }
     }
     pub fn list_folders(&self) -> anyhow::Result<Vec<crate::imap::Folder>> {
         let conn = self.db.lock().unwrap();
@@ -1365,11 +1466,17 @@ impl Session {
     /// [`send_requesting_delivery`]), otherwise as before. Sent once; the
     /// caller records the attempt and decides what an error means. Answers
     /// what became of the request.
-    pub async fn send_mime_with_receipt(&self, raw: Vec<u8>, asked: bool) -> anyhow::Result<crate::smtp::DeliveryReceipt> {
-        let receipt = delivery_receipt(&self.db.lock().unwrap(), &self.lease.account, asked);
+    pub async fn send_mime_with_receipt(
+        &self,
+        raw: Vec<u8>,
+        asked: bool,
+        bcc: bool,
+        protected: bool,
+    ) -> anyhow::Result<(crate::smtp::DeliveryReceipt, Option<Withheld>)> {
+        let (receipt, withheld) = delivery_receipt(&self.db.lock().unwrap(), &self.lease.account, asked, bcc, protected);
         if receipt != crate::smtp::DeliveryReceipt::Requested {
             self.send_mime(raw).await?;
-            return Ok(receipt);
+            return Ok((receipt, withheld));
         }
         let this = self.clone();
         tokio::task::spawn_blocking(move || {
@@ -1388,7 +1495,7 @@ impl Session {
             result
         })
         .await??;
-        Ok(receipt)
+        Ok((receipt, None))
     }
 
     /// Move a folder, with its subfolders and messages, under `parent` (a

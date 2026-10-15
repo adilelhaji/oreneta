@@ -37,12 +37,23 @@ estados y la misma recuperación que SMTP y EWS.
     tiene cambios (`Mail.ReadWrite`) además de envío, el mismo MIME se
     convierte en borrador (`POST /me/messages`), se marca (`PATCH`) y se
     envía (`POST /me/messages/{id}/send`, 202);
-  - sin cambios, o sin pedirla, se envía como siempre por `sendMail` y el
-    envío dice `delivery_receipt: "unsupported"` o `"none"`;
+  - solo para un mensaje **sin Cco y sin firma ni cifrado**: hasta que un
+    inquilino real muestre que el borrador hecho desde MIME conserva los Cco
+    y la protección, perderlos sería silencioso;
+  - sin pedirla, se envía como siempre por `sendMail` (`"none"`). Pedida
+    pero sin cambios, con Cco o protegido, también por `sendMail`, con
+    `delivery_receipt: "unsupported"` y `delivery_receipt_reason`
+    (`needsChanges`, `bcc`, `protected`), que el redactor explica;
   - un fallo al crear o marcar el borrador es «no enviado»: se borra el
     borrador y el intento queda rechazado, nunca incierto; si pudo quedar
-    una copia en Borradores, se dice. El envío del borrador sigue la tabla
-    de abajo; un rechazo borra el borrador.
+    una copia en Borradores (sin respuesta, 5xx o respuesta ilegible al
+    crearlo, o no se pudo borrar), se dice;
+  - el envío del borrador sigue la tabla de abajo. Un incierto dice además
+    que puede quedar una copia en Borradores; un rechazo borra el borrador;
+  - mientras dura el envío, el borrador puede verse en Borradores desde
+    otros clientes. Si la aplicación se cierra entre crearlo y enviarlo,
+    se queda allí y el intento sigue abierto en `outgoing_attempts` (#29),
+    para que la persona lo resuelva.
 - **Límite.** El cuerpo de la petición admite hasta 4 MB. Un mensaje más
   grande se rechaza antes de enviar, con «demasiado grande para enviarlo por
   Microsoft Graph». Es un rechazo definitivo y no se ha enviado nada. Subir
@@ -66,6 +77,7 @@ Cada estado se distingue como en #29:
 | 400, 401, 403, 404, 413, 429 | `rejected` con el motivo (la petición no se aceptó) | Solo a propósito |
 | Demasiado grande antes de enviar | `rejected` | Solo a propósito, tras reducirlo |
 | Conexión perdida tras enviar, tiempo agotado, 5xx | `uncertain` | Nunca automático |
+| Otro 2xx o respuesta ilegible tras enviar (#210) | `uncertain` | Nunca automático |
 
 - **Incierto.** Un 5xx o un 504 pueden llegar después de que Microsoft
   aceptara el envío, así que no se toman como rechazo.

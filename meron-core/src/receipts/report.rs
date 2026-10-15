@@ -269,8 +269,28 @@ fn diagnostic_text(value: &str) -> String {
     clean(&text.split_whitespace().collect::<Vec<_>>().join(" "), MAX_TEXT)
 }
 
+/// Text from a report, safe to show: no control characters, and no format
+/// characters (bidirectional overrides and isolates, zero-width marks) that
+/// could make an address or a reason read as something else.
 fn clean(value: &str, limit: usize) -> String {
-    value.chars().filter(|c| !c.is_control()).take(limit).collect::<String>().trim().to_string()
+    value.chars().filter(|c| !c.is_control() && !is_format(*c)).take(limit).collect::<String>().trim().to_string()
+}
+
+/// Unicode format characters (general category Cf) that change how text
+/// around them is shown.
+fn is_format(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{061C}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{FFF9}'..='\u{FFFB}'
+    )
 }
 
 /// An MDN's disposition type (RFC 8098 §3.2.6): `displayed`, or one of the
@@ -323,14 +343,31 @@ CREATE TABLE IF NOT EXISTS delivery_reports (
 );
 ";
 
-/// Keeps what a report says, for the account that received it. A final word
+/// Whether this account has the message `original` (a key): cached in one
+/// of its folders, or sent through it here (`outgoing_attempts`).
+fn known_message(conn: &rusqlite::Connection, account: &str, original: &str) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM messages WHERE account = ?1
+                         AND lower(COALESCE(json_extract(json, '$.message_id'), '')) = ?2)
+             OR EXISTS(SELECT 1 FROM outgoing_attempts WHERE account = ?1
+                         AND lower(trim(trim(message_id), '<>')) = ?2)",
+        rusqlite::params![account, original],
+        |row| row.get(0),
+    )?)
+}
+
+/// Keeps what a report says, for the account that received it, when it
+/// names a message this account has; anything else (a report about a
+/// message it never had, or naming none) is not kept, so the table cannot
+/// fill with what links to nothing. True when it was kept. A final word
 /// (delivered, failed, relayed) replaces a delay and is never replaced by
 /// one; otherwise the later report wins. Recording the same report again
-/// changes nothing. A report that names no message is not kept.
-pub fn record(conn: &rusqlite::Connection, account: &str, report: &Report, reported_at: i64) -> Result<()> {
+/// changes nothing. `reported_at` is the report's own date, which the
+/// caller bounds by the present, so a date in the future cannot win.
+pub fn record(conn: &rusqlite::Connection, account: &str, report: &Report, reported_at: i64) -> Result<bool> {
     let original = super::key(&report.original_message_id);
-    if original.is_empty() {
-        return Ok(());
+    if original.is_empty() || !known_message(conn, account, &original)? {
+        return Ok(false);
     }
     for item in &report.recipients {
         conn.execute(
@@ -354,7 +391,14 @@ pub fn record(conn: &rusqlite::Connection, account: &str, report: &Report, repor
             ],
         )?;
     }
-    Ok(())
+    Ok(true)
+}
+
+/// A report's date bounded by the present (`now`): a report dated in the
+/// future cannot outrank a later one, and one without a date counts from
+/// when it was read.
+pub fn reported_at(date: i64, now: i64) -> i64 {
+    if date <= 0 { now } else { date.min(now) }
 }
 
 /// What the reports received so far say about one message.

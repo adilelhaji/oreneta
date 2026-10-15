@@ -584,14 +584,16 @@ impl Client {
         self.require_id(destination, ResourceKind::Folder)?;
         let url = self.route(&["me", "mailFolders", &id.opaque, "move"]);
         let body = serde_json::json!({ "destinationId": destination.opaque });
+        // A success that does not say where the folder went (another parent,
+        // none, or no readable answer) is not a refusal: it may have moved.
         let item = self
-            .write("POST", &url, Some(&body), &[200, 201])?
-            .ok_or_else(|| Error::new(ErrorKind::InvalidResponse))?;
-        // A folder reported somewhere else did not go where it was sent.
+            .write("POST", &url, Some(&body), &[200, 201])
+            .map_err(applied_or_unknown)?
+            .ok_or_else(|| Error::new(ErrorKind::Uncertain))?;
         if item.fields.parent_folder_id.as_deref() != Some(destination.opaque.as_str()) {
-            return Err(Error::new(ErrorKind::InvalidResponse));
+            return Err(Error::new(ErrorKind::Uncertain));
         }
-        self.response_id(ResourceKind::Folder, &item.id)
+        self.response_id(ResourceKind::Folder, &item.id).map_err(applied_or_unknown)
     }
     /// Remove one message from the mailbox's view. Graph keeps it among the
     /// recoverable items; callers use this only from Deleted Items or Drafts.
@@ -728,7 +730,7 @@ impl Client {
         self.grant.authorize_send()?;
         let encoded = encode_mime(raw)?;
         let url = self.route(&["me", "sendMail"]);
-        self.post_raw(&url, encoded.as_bytes(), &[202]).map(|_| ())
+        self.post_raw(&url, encoded.as_bytes(), &[202]).map(|_| ()).map_err(applied_or_unknown)
     }
 
     /// A draft made from a complete MIME message (#210): the first step of a
@@ -754,7 +756,35 @@ impl Client {
         self.grant.authorize_send()?;
         self.require_id(draft, ResourceKind::Message)?;
         let url = self.route(&["me", "messages", &draft.opaque, "send"]);
-        self.post_raw(&url, b"", &[202]).map(|_| ())
+        self.post_raw(&url, b"", &[202]).map(|_| ()).map_err(applied_or_unknown)
+    }
+
+    /// The reports in a folder (#210): ids of up to `limit` items whose class
+    /// is a delivery or read report, so they can be read as MIME at sync
+    /// without waiting to be opened. Best effort for the caller: a refusal
+    /// of this query leaves reports to be read when opened.
+    pub fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
+        #[derive(Deserialize)]
+        struct Id {
+            id: String,
+        }
+        self.grant.authorize(true)?;
+        self.require_id(folder, ResourceKind::Folder)?;
+        let mut url = self.route(&["me", "mailFolders", &folder.opaque, "messages"]);
+        let classes = REPORT_CLASSES
+            .iter()
+            .map(|class| format!("ep/value%20eq%20'{class}'"))
+            .collect::<Vec<_>>()
+            .join("%20or%20");
+        url.set_query(Some(&format!(
+            "$select=id&$top={}&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20'String%200x001A'%20and%20({classes}))",
+            limit.clamp(1, 50)
+        )));
+        let page: WirePage<Id> = self.get(&url)?;
+        if page.value.len() > MAX_ITEMS {
+            return Err(Error::new(ErrorKind::InvalidResponse));
+        }
+        page.value.iter().take(limit).map(|item| self.response_id(ResourceKind::Message, &item.id)).collect()
     }
     /// One POST of a MIME body (or none). No redirects, no retry; a
     /// transport failure is `Uncertain`, as for every write.
@@ -950,6 +980,23 @@ impl Client {
                 ureq::Error::BodyExceedsLimit(_) => Error::new(ErrorKind::TooLarge),
                 _ => Error::new(ErrorKind::InvalidResponse),
             })
+    }
+}
+
+/// The item classes Exchange files delivery and read reports under: not
+/// delivered, delivered, read, not read.
+const REPORT_CLASSES: [&str; 4] =
+    ["REPORT.IPM.Note.NDR", "REPORT.IPM.Note.DR", "REPORT.IPM.Note.IPNRN", "REPORT.IPM.Note.IPNNRN"];
+
+/// After a write that reached the server: an answer that is a success of
+/// another shape, or that cannot be read, does not say the write was not
+/// applied. It is `Uncertain`, never a refusal (#29, #210).
+fn applied_or_unknown(error: Error) -> Error {
+    let success = error.status.is_none_or(|status| (200..300).contains(&status));
+    if error.kind == ErrorKind::InvalidResponse && success {
+        Error { kind: ErrorKind::Uncertain, ..error }
+    } else {
+        error
     }
 }
 
