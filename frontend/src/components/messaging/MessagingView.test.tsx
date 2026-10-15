@@ -541,7 +541,8 @@ it('in a group, @ offers who is there, the picked names go with the message, and
   // Only the message naming the person is marked.
   expect(screen.getAllByText('Mentions you')).toHaveLength(1)
   expect(screen.getByText('@ana ¿vienes?').className).toContain('ring-2')
-  expect(screen.getByText('Hola equipo').className).not.toContain('ring-2')
+  const open = screen.getByRole('region', { name: 'team@rooms.chat.test' })
+  expect(within(open).getByText('Hola equipo').className).not.toContain('ring-2')
 
   const box = screen.getByLabelText('Message') as HTMLTextAreaElement
   fireEvent.change(box, { target: { value: 'Hola @pa', selectionStart: 8 } })
@@ -612,7 +613,8 @@ it('a private message in a group is its own conversation, opened from a name in 
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: /Pau \(team@rooms.chat.test\)/ }))
   })
-  await waitFor(() => expect(screen.getByText('¿Hablamos en privado?')).toBeTruthy())
+  const open = screen.getByRole('region', { name: 'team@rooms.chat.test/Pau' })
+  await waitFor(() => expect(within(open).getByText('¿Hablamos en privado?')).toBeTruthy())
   expect(screen.getByText('Private message in team@rooms.chat.test')).toBeTruthy()
   // The nickname keeps its capitals; nothing about a contact's status here.
   expect(calls.find((c) => c.command === 'chat.markRead')?.payload).toEqual({
