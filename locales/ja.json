@@ -962,6 +962,7 @@
   "notify.newMessage": "新しいメッセージ",
   "notify.newMessageCount": "{count, plural, one {1 件の新しいメッセージ} other {{count} 件の新しいメッセージ}}",
   "notify.noSubject": "(メールの件名はありません)",
+  "notify.reminderStarted": "{time} に開始",
   "notify.unknownSender": "不明な送信者",
   "oof.audienceAll": "全員",
   "oof.audienceKnown": "既知の連絡先",

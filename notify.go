@@ -20,6 +20,7 @@ type nativeLabels struct {
 	trayShow, trayHide, trayHideTooltip, trayQuit         string
 	trayDoNotDisturb                                      string
 	newMessage, newMessageCount, noSubject, unknownSender string
+	reminderStarted                                       string
 }
 
 var (
@@ -31,6 +32,7 @@ var (
 		newMessage:       "New message",
 		newMessageCount:  "{count, plural, one {1 new message} other {{count} new messages}}",
 		noSubject:        "(no subject)", unknownSender: "unknown sender",
+		reminderStarted: "Started at {time}",
 	}
 )
 
@@ -56,6 +58,7 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	set(&currentLabels.newMessageCount, "newMessageCount")
 	set(&currentLabels.noSubject, "noSubject")
 	set(&currentLabels.unknownSender, "unknownSender")
+	set(&currentLabels.reminderStarted, "reminderStarted")
 	labels := currentLabels
 	// Released before trayMenuMu is taken: trayReady holds trayMenuMu while it
 	// reads the labels, so holding both here in the other order would deadlock.
@@ -332,20 +335,33 @@ func (a *App) notifyReminder(detail any) {
 	start, _ := m["start"].(float64)
 	account, _ := m["account"].(string)
 
+	localTime, _ := m["local_time"].(string)
+	localDate, _ := m["local_date"].(string)
+	started, _ := m["started"].(bool)
+	labels := a.currentNativeLabels()
+
 	if subject == "" {
-		subject = a.currentNativeLabels().noSubject
+		subject = labels.noSubject
 	}
 
 	// The body answers "when", which is the whole point of a reminder; the
 	// place follows, since that is what decides whether to set off now. The
 	// core says the start on the clock of the zone the machine is in now
 	// (local_time, ADR-0056): Go reads its zone once, at start, so after a
-	// change of zone its own reading would be the old clock's.
+	// change of zone its own reading would be the old clock's. It also says
+	// the date when it is not today's (local_date), and whether the event had
+	// already started, as one reminded late, after a sleep, can have.
 	var body string
-	if localTime, _ := m["local_time"].(string); !allDay && localTime != "" {
-		body = localTime
-	} else if !allDay && start > 0 {
+	switch {
+	case allDay:
+		body = localDate
+	case localTime != "":
+		body = strings.TrimSpace(localDate + " " + localTime)
+	case start > 0:
 		body = time.Unix(int64(start), 0).Format("15:04")
+	}
+	if started && !allDay && body != "" {
+		body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
 	}
 	if location != "" {
 		if body != "" {

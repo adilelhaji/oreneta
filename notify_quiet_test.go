@@ -142,7 +142,21 @@ func TestReminderShowsTheCoresLocalTime(t *testing.T) {
 	a.handleSidecarEvent("calendar.reminder", map[string]any{
 		"subject": "Holiday", "start": start, "all_day": true, "location": "Home", "local_time": nil,
 	})
-	want := []string{"09:00 · Room 2", time.Unix(int64(start), 0).Format("15:04"), "Home"}
+	// Given late, after a sleep: it says the event started.
+	a.handleSidecarEvent("calendar.reminder", map[string]any{
+		"subject": "Review", "start": start, "local_time": "09:00", "started": true, "local_date": nil,
+	})
+	// Not today: the date comes first; an all-day event shows only its date.
+	a.handleSidecarEvent("calendar.reminder", map[string]any{
+		"subject": "Flight", "start": start, "local_time": "06:30", "local_date": "2026-10-21", "started": false,
+	})
+	a.handleSidecarEvent("calendar.reminder", map[string]any{
+		"subject": "Trip", "start": start, "all_day": true, "local_time": nil, "local_date": "2026-10-21", "started": false,
+	})
+	want := []string{
+		"09:00 · Room 2", time.Unix(int64(start), 0).Format("15:04"), "Home",
+		"Started at 09:00", "2026-10-21 06:30", "2026-10-21",
+	}
 	if len(*got) != len(want) {
 		t.Fatalf("%d notifications, want %d: %+v", len(*got), len(want), *got)
 	}
@@ -150,6 +164,26 @@ func TestReminderShowsTheCoresLocalTime(t *testing.T) {
 		if (*got)[i].body != body {
 			t.Errorf("notification %d body = %q, want %q", i, (*got)[i].body, body)
 		}
+	}
+
+	// In the reader's language, as the frontend sets it.
+	nativeLabelsMu.Lock()
+	prev := currentLabels
+	nativeLabelsMu.Unlock()
+	t.Cleanup(func() {
+		nativeLabelsMu.Lock()
+		currentLabels = prev
+		nativeLabelsMu.Unlock()
+	})
+	if _, err := a.setNativeLabels(map[string]any{"reminderStarted": "Empezó a las {time}"}); err != nil {
+		t.Fatal(err)
+	}
+	*got = nil
+	a.handleSidecarEvent("calendar.reminder", map[string]any{
+		"subject": "Review", "start": start, "local_time": "09:00", "started": true, "location": "Sala 1",
+	})
+	if len(*got) != 1 || (*got)[0].body != "Empezó a las 09:00 · Sala 1" {
+		t.Fatalf("translated: %+v", *got)
 	}
 }
 

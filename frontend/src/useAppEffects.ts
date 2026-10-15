@@ -98,6 +98,8 @@ export function useAppEffects() {
       newMessageCount: translationTemplate('notify.newMessageCount'),
       noSubject: t('notify.noSubject'),
       unknownSender: t('notify.unknownSender'),
+      // Go puts the time (and the date, when not today) in place of {time}.
+      reminderStarted: translationTemplate('notify.reminderStarted'),
     }).catch(() => {})
     // Reflect the resolved locale to <html lang>/dir, driving :lang() CJK glyph
     // selection (see index.css) and RTL. Synced to a paint-time cache in settings.

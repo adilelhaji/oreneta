@@ -962,6 +962,7 @@
   "notify.newMessage": "Yeni mesaj",
   "notify.newMessageCount": "{count, plural, one {1 yeni mesaj} other {{count} yeni mesaj}}",
   "notify.noSubject": "(e-posta konusu yok)",
+  "notify.reminderStarted": "{time} itibarıyla başladı",
   "notify.unknownSender": "bilinmeyen gönderen",
   "oof.audienceAll": "Herkes",
   "oof.audienceKnown": "Bilinen kişiler",

@@ -962,6 +962,7 @@
   "notify.newMessage": "새 메시지",
   "notify.newMessageCount": "{count, plural, one {새 메시지 1개} other {{count} 새 메시지}}",
   "notify.noSubject": "(이메일 제목 없음)",
+  "notify.reminderStarted": "{time}에 시작됨",
   "notify.unknownSender": "알 수 없는 발신자",
   "oof.audienceAll": "모든 사람",
   "oof.audienceKnown": "알고 있는 연락처",

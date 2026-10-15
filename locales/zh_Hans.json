@@ -962,6 +962,7 @@
   "notify.newMessage": "新消息",
   "notify.newMessageCount": "{count, plural, one {1 条新消息} other {{count} 新消息}}",
   "notify.noSubject": "（没有电子邮件主题）",
+  "notify.reminderStarted": "已于 {time} 开始",
   "notify.unknownSender": "未知发件人",
   "oof.audienceAll": "所有人",
   "oof.audienceKnown": "已知联系人",

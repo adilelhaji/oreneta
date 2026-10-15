@@ -86,8 +86,23 @@ fn a() -> Vec<String> {
     vec!["a".to_string()]
 }
 
+fn rereads(look: &Look) -> Vec<&str> {
+    look.reread.iter().map(|reread| reread.account.as_str()).collect()
+}
+
 fn clock(instant: i64) -> String {
     chrono::Local.timestamp_opt(instant, 0).earliest().unwrap().format("%H:%M").to_string()
+}
+
+/// `local_date` as this machine's clock gives it for an event at `start`
+/// seen at `now`.
+fn other_day(start: i64, now: i64) -> Value {
+    let date = |instant: i64| chrono::Local.timestamp_opt(instant, 0).earliest().unwrap().date_naive();
+    if date(start) == date(now) {
+        Value::Null
+    } else {
+        json!(date(start).format("%Y-%m-%d").to_string())
+    }
 }
 
 #[test]
@@ -105,6 +120,7 @@ fn a_reminder_is_given_once_when_its_time_comes() {
         vec![json!({
             "account": "a", "event": "soon", "subject": "Subject soon", "location": "Room 1",
             "start": NOW + 600, "all_day": false, "minutes": 15, "local_time": clock(NOW + 600),
+            "started": false, "local_date": other_day(NOW + 600, NOW),
         })],
         "only the one whose reminder time has come and that has not started",
     );
@@ -217,15 +233,18 @@ fn a_paused_accounts_missed_reminders_are_not_saved_up() {
     let account = crate::archive::ACCOUNT;
     crate::archive::ensure_account(&engine.db.lock().unwrap(), NOW).unwrap();
     let standup = event("standup", at("2026-10-20T09:00:00Z"), Some(15));
-    put_on(&engine, account, calendar::CalendarKind::Local, &[standup]);
+    // Rings at 08:45 too, but starts at 09:30.
+    let review = event("review", at("2026-10-20T09:30:00Z"), Some(45));
+    put_on(&engine, account, calendar::CalendarKind::Local, &[standup, review]);
     let accounts = vec![account.to_string()];
     assert!(look(&engine, &accounts, at("2026-10-20T08:30:00Z"), &Madrid).reminders.is_empty());
     crate::store::set_account_pref(&engine.db.lock().unwrap(), account, "paused", true).unwrap();
     assert!(look(&engine, &accounts, at("2026-10-20T08:50:00Z"), &Madrid).reminders.is_empty(), "paused");
     crate::store::set_account_pref(&engine.db.lock().unwrap(), account, "paused", false).unwrap();
-    assert!(
-        look(&engine, &accounts, at("2026-10-20T09:10:00Z"), &Madrid).reminders.is_empty(),
-        "it came due while the reader asked not to hear, and the meeting has started",
+    assert_eq!(
+        names(&look(&engine, &accounts, at("2026-10-20T09:10:00Z"), &Madrid)),
+        ["review"],
+        "the standup came due while the reader asked not to hear and has started; the review has not",
     );
 
     // Removing the account forgets its looks with it (ADR-0011).
@@ -298,10 +317,11 @@ fn after_a_time_zone_change_timed_reminders_keep_their_instant_and_all_day_ones_
 }
 
 /// A floating time is read in the zone the machine is in when its calendar
-/// is read: the accounts that can hold one are named for reading again,
-/// once, when the zone changes. Daylight saving is not a change.
+/// is read: the accounts that can hold one are named for reading again when
+/// the zone changes, and again every quarter of an hour until each of their
+/// calendars was read after the change. Daylight saving is not a change.
 #[test]
-fn a_time_zone_change_asks_once_to_reread_calendars_that_can_hold_floating_times() {
+fn a_time_zone_change_asks_to_reread_floating_calendars_until_they_are_read() {
     let engine = engine_with(&[]);
     put_on(&engine, "c", calendar::CalendarKind::CalDav, &[]);
     put_on(&engine, "s", calendar::CalendarKind::Subscribed, &[]);
@@ -310,8 +330,55 @@ fn a_time_zone_change_asks_once_to_reread_calendars_that_can_hold_floating_times
     assert!(look(&engine, &accounts, summer, &Madrid).reread.is_empty(), "no previous look");
     let winter = at("2026-10-26T10:00:00Z");
     assert!(look(&engine, &accounts, winter, &Madrid).reread.is_empty(), "the clocks went back: same zone");
-    assert_eq!(look(&engine, &accounts, winter + 60, &Tokyo).reread, ["c", "s"]);
-    assert!(look(&engine, &accounts, winter + 120, &Tokyo).reread.is_empty(), "once");
+
+    let changed = winter + 60;
+    let first = look(&engine, &accounts, changed, &Tokyo);
+    assert_eq!(rereads(&first), ["c", "s"]);
+    assert_eq!((first.reread[0].from, first.reread[0].to), (changed - 86_400 * 31, changed + 86_400 * 366));
+    assert!(look(&engine, &accounts, changed + 60, &Tokyo).reread.is_empty(), "not again while it may still run");
+    // Fifteen minutes on, neither was read: both are asked for again, the
+    // same window, so a read still running is not started twice.
+    let retry = changed + when::REREAD_RETRY;
+    let again = look(&engine, &accounts, retry, &Tokyo);
+    assert_eq!(rereads(&again), ["c", "s"]);
+    assert_eq!(again.reread, first.reread);
+    // "c" was read after the change; "s" only before it.
+    {
+        let db = engine.db.lock().unwrap();
+        calendar::mark_calendar_synced(&db, "c", "local:home", changed + 30).unwrap();
+        calendar::mark_calendar_synced(&db, "s", "local:home", changed - 30).unwrap();
+    }
+    assert_eq!(rereads(&look(&engine, &accounts, retry + when::REREAD_RETRY, &Tokyo)), ["s"]);
+    calendar::mark_calendar_synced(&engine.db.lock().unwrap(), "s", "local:home", retry).unwrap();
+    assert!(look(&engine, &accounts, retry + 2 * when::REREAD_RETRY, &Tokyo).reread.is_empty(), "done");
+    assert!(look(&engine, &accounts, retry + 9 * when::REREAD_RETRY, &Tokyo).reread.is_empty(), "and forgotten");
+}
+
+#[test]
+fn a_muted_account_reads_again_and_a_paused_one_keeps_its_zone_change_until_resumed() {
+    let engine = Arc::new(Engine::new(Box::new(MemoryHost)).unwrap());
+    let account = crate::archive::ACCOUNT;
+    crate::archive::ensure_account(&engine.db.lock().unwrap(), NOW).unwrap();
+    put_on(&engine, account, calendar::CalendarKind::Subscribed, &[]);
+    let accounts = vec![account.to_string()];
+    let set = |pref: &str, on: bool| {
+        crate::store::set_account_pref(&engine.db.lock().unwrap(), account, pref, on).unwrap();
+    };
+    let start = at("2026-10-20T10:00:00Z");
+    assert!(look(&engine, &accounts, start, &Madrid).reread.is_empty());
+
+    set("muted", true);
+    assert_eq!(rereads(&look(&engine, &accounts, start + 60, &Tokyo)), [account], "muted: still read again");
+    set("muted", false);
+
+    let back = start + 120;
+    assert_eq!(rereads(&look(&engine, &accounts, back, &Madrid)), [account], "back home: another change");
+    set("paused", true);
+    // Paused: nothing is read, but the change is kept.
+    assert!(look(&engine, &accounts, back + 3_600, &Los_Angeles).reread.is_empty());
+    assert!(look(&engine, &accounts, back + 7_200, &Los_Angeles).reread.is_empty());
+    set("paused", false);
+    assert_eq!(rereads(&look(&engine, &accounts, back + 7_260, &Los_Angeles)), [account], "on resuming");
 }
 
 /// A floating 09:00 read in Madrid (07:00Z); the reader is in Tokyo before it
@@ -327,7 +394,7 @@ fn a_floating_event_read_again_in_the_new_zone_is_reminded_at_its_time_there() {
     assert!(look(&engine, &accounts, at("2026-10-19T22:00:00Z"), &Madrid).reminders.is_empty());
 
     let moved = look(&engine, &accounts, at("2026-10-19T23:00:00Z"), &Tokyo);
-    assert_eq!(moved.reread, ["c"]);
+    assert_eq!(rereads(&moved), ["c"]);
     assert!(moved.reminders.is_empty());
     let in_tokyo = at("2026-10-20T09:00:00+09:00");
     put_on(&engine, "c", calendar::CalendarKind::CalDav, &[floating(in_tokyo)]);
@@ -363,4 +430,120 @@ fn an_all_day_reminder_follows_this_machines_zone() {
     let midnight = chrono::Local.from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap()).earliest().unwrap().timestamp();
     assert!(take_due(&engine, &a(), midnight - 3_600 - 60).is_empty());
     assert_eq!(take_due(&engine, &a(), midnight - 3_600).len(), 1);
+}
+
+// ---- When the store fails (#209 review) -----------------------------------------
+
+/// The store cannot answer what is due: the look is not recorded, so the
+/// gap is not used up and the next look gives what came due in it.
+#[test]
+fn a_look_the_store_could_not_answer_is_not_recorded() {
+    let engine = engine_with(&[event("standup", at("2026-10-20T09:00:00Z"), Some(15))]);
+    let asleep = at("2026-10-20T08:30:00Z");
+    assert!(look(&engine, &a(), asleep, &Madrid).reminders.is_empty());
+    let rename = |from: &str, to: &str| {
+        engine.db.lock().unwrap().execute_batch(&format!("ALTER TABLE {from} RENAME TO {to}")).unwrap();
+    };
+    rename("calendar_reminders_fired", "fired_aside");
+    let woke = at("2026-10-20T09:10:00Z");
+    assert!(look(&engine, &a(), woke, &Madrid).reminders.is_empty(), "the store failed");
+    assert_eq!(when::previous_look(&engine.db.lock().unwrap(), "a").unwrap().map(|p| p.at), Some(asleep));
+    rename("fired_aside", "calendar_reminders_fired");
+    assert_eq!(names(&look(&engine, &a(), woke + 60, &Madrid)), ["standup"], "given at the next look");
+}
+
+/// A reminder that could not be recorded as given is not given (it could be
+/// given twice), and the look is not recorded, so the next one gives it.
+#[test]
+fn a_reminder_that_could_not_be_recorded_is_given_at_the_next_look() {
+    let engine = engine_with(&[
+        event("standup", at("2026-10-20T09:00:00Z"), Some(15)),
+        event("call", at("2026-10-20T09:00:00Z"), Some(20)),
+    ]);
+    let asleep = at("2026-10-20T08:30:00Z");
+    assert!(look(&engine, &a(), asleep, &Madrid).reminders.is_empty());
+    engine
+        .db
+        .lock()
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER refuse_standup BEFORE INSERT ON calendar_reminders_fired
+             WHEN NEW.event_id LIKE 'standup@%' BEGIN SELECT RAISE(FAIL, 'disk full'); END;",
+        )
+        .unwrap();
+    let woke = at("2026-10-20T09:10:00Z");
+    assert_eq!(names(&look(&engine, &a(), woke, &Madrid)), ["call"], "the one recorded is given");
+    engine.db.lock().unwrap().execute_batch("DROP TRIGGER refuse_standup").unwrap();
+    assert_eq!(names(&look(&engine, &a(), woke + 60, &Madrid)), ["standup"], "and the other at the next look");
+    assert!(look(&engine, &a(), woke + 120, &Madrid).reminders.is_empty(), "each once");
+}
+
+// ---- "At the start" reminders (#209 review) -------------------------------------
+
+/// A reminder set for the start used to be never given: the event had to be
+/// still ahead when its time came, and its time is the start. It is given at
+/// the first look from its start, while the event is on.
+#[test]
+fn an_at_the_start_reminder_is_given_when_its_event_starts() {
+    let start = at("2026-10-20T09:00:00Z");
+    let engine = engine_with(&[event("standup", start, Some(0))]);
+    assert!(look(&engine, &a(), start - 30, &Madrid).reminders.is_empty());
+    let given = look(&engine, &a(), start + 30, &Madrid);
+    assert_eq!(names(&given), ["standup"]);
+    assert_eq!(given.reminders[0]["started"], true);
+    assert!(look(&engine, &a(), start + 90, &Madrid).reminders.is_empty(), "once");
+}
+
+#[test]
+fn an_all_day_at_the_start_reminder_rings_at_the_local_midnight() {
+    let engine = engine_with(&[all_day("holiday", "2026-10-21", 0)]);
+    let midnight = at("2026-10-21T00:00:00+02:00");
+    assert!(look(&engine, &a(), midnight - 60, &Madrid).reminders.is_empty());
+    assert_eq!(names(&look(&engine, &a(), midnight + 20, &Madrid)), ["holiday"]);
+}
+
+/// An event with no length counts as on for the minute it starts, so its
+/// "at the start" reminder is given by the look in that minute; one that
+/// comes later has missed it.
+#[test]
+fn a_zero_length_events_at_the_start_reminder_is_given_in_its_first_minute() {
+    let start = at("2026-10-20T09:00:00Z");
+    let deadline = calendar::Event { end: start, ..event("deadline", start, Some(0)) };
+    let engine = engine_with(&[deadline.clone()]);
+    assert!(look(&engine, &a(), start - 30, &Madrid).reminders.is_empty());
+    assert_eq!(names(&look(&engine, &a(), start + 59, &Madrid)), ["deadline"]);
+
+    let late = engine_with(&[deadline]);
+    assert!(look(&late, &a(), start - 30, &Madrid).reminders.is_empty());
+    assert!(look(&late, &a(), start + 60, &Madrid).reminders.is_empty(), "its minute is over");
+}
+
+// ---- What a reminder says (#209 review) -----------------------------------------
+
+#[test]
+fn a_reminder_detail_says_when_on_the_readers_clock() {
+    let now = at("2026-10-20T08:45:00+02:00");
+    let meeting = event("meeting", at("2026-10-20T09:00:00+02:00"), Some(15));
+    let detail = reminder_detail("a", &meeting, &Madrid, now);
+    assert_eq!(detail["local_time"], "09:00");
+    assert_eq!(detail["started"], false);
+    assert_eq!(detail["local_date"], Value::Null, "today");
+
+    // Given late, after a sleep: it started.
+    let late = reminder_detail("a", &meeting, &Madrid, now + 30 * 60);
+    assert_eq!(late["started"], true);
+    // In Tokyo the same instant is 16:00, still that day; in Los Angeles it is
+    // 00:00 on the 20th while the reader's clock says the 19th.
+    assert_eq!(reminder_detail("a", &meeting, &Tokyo, now)["local_time"], "16:00");
+    let la = reminder_detail("a", &meeting, &Los_Angeles, at("2026-10-19T23:45:00-07:00"));
+    assert_eq!((la["local_time"].clone(), la["local_date"].clone()), (json!("00:00"), json!("2026-10-20")));
+
+    // An all-day event has no time; its date is the stored one.
+    let holiday = all_day("holiday", "2026-10-21", 15);
+    let detail = reminder_detail("a", &holiday, &Madrid, at("2026-10-20T23:45:00+02:00"));
+    assert_eq!(detail["local_time"], Value::Null);
+    assert_eq!(detail["local_date"], "2026-10-21");
+    assert_eq!(detail["started"], false);
+    let on_the_day = reminder_detail("a", &holiday, &Madrid, at("2026-10-21T00:10:00+02:00"));
+    assert_eq!((on_the_day["started"].clone(), on_the_day["local_date"].clone()), (json!(true), Value::Null));
 }

@@ -962,6 +962,7 @@
   "notify.newMessage": "Nytt meddelande",
   "notify.newMessageCount": "{count, plural, one {1 nytt meddelande} other {{count} nya meddelanden}}",
   "notify.noSubject": "(inget e-postämne)",
+  "notify.reminderStarted": "Började {time}",
   "notify.unknownSender": "okänd avsändare",
   "oof.audienceAll": "Alla",
   "oof.audienceKnown": "Kända kontakter",

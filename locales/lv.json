@@ -962,6 +962,7 @@
   "notify.newMessage": "Jauna ziņa",
   "notify.newMessageCount": "{count, plural, one {1 jauna ziņa} other {{count} jauni ziņojumi}}",
   "notify.noSubject": "(nav e-pasta tēmas)",
+  "notify.reminderStarted": "Sākās {time}",
   "notify.unknownSender": "nezināms sūtītājs",
   "oof.audienceAll": "Visi",
   "oof.audienceKnown": "Zināmi kontakti",
