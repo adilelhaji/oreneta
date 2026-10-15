@@ -205,9 +205,12 @@
   that could not be read: every connection that would use it is refused
   until it is completed or can be read again, and none goes directly.
   Connections already open when the proxy changes keep going until they
-  reconnect. If your account picture could not be
-  downloaded, Oreneta keeps its address and your web view loads it from
-  there each time, without the proxy.</p>
+  reconnect. Your account picture is only ever a copy kept on your
+  computer. If it could not be downloaded, Oreneta shows your initials (or,
+  if you turned on real pictures for addresses, the one for your address),
+  keeps the address out of sight, and tries again through the same route
+  when it starts and when a proxy setting changes; your web view never
+  loads that address.</p>
   <p>Finding server settings skips the DNS lookup while a proxy is set,
   because DNS cannot go through it. Pictures shown in mail, pictures and
   videos shown in a feed item that are not saved on your computer,
