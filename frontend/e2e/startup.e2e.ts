@@ -2662,6 +2662,13 @@ async function agendaSidebarStartup(page: Page, options: SetupOptions) {
         },
       ],
     }
+    probe.replies['tasks.get'] = {
+      title: 'Overdue synthetic task', note: '', due_at: at(-1, 0), list_id: 'list:home', priority: 2,
+      reminder_at: null, revision: 1, linked: false, recurrence: null,
+    }
+    // An all-day event is a date stored at midnight UTC: today's local date.
+    const today = new Date()
+    const holiday = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 1000
     const invoke = app.Invoke
     app.Invoke = async (command: string, payload: Record<string, unknown>) => {
       if (command !== 'calendar.events') return invoke(command, payload)
@@ -2674,6 +2681,11 @@ async function agendaSidebarStartup(page: Page, options: SetupOptions) {
               {
                 id: 'planning', calendar_id: 'primary', subject: 'Synthetic planning meeting', start: at(1, 9),
                 end: at(1, 10), all_day: false, is_recurring: false, is_cancelled: false, free_busy: 'busy',
+                my_response: '', attendees: [],
+              },
+              {
+                id: 'holiday', calendar_id: 'primary', subject: 'Synthetic holiday', start: holiday,
+                end: holiday + 86_400, all_day: true, is_recurring: false, is_cancelled: false, free_busy: 'free',
                 my_response: '', attendees: [],
               },
             ]
@@ -2712,7 +2724,16 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
       await expect(panel.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible()
       await expect(panel.getByRole('region', { name: 'Overdue' }).getByText('Overdue synthetic task')).toBeVisible()
       await expect(panel.getByRole('region', { name: 'Tomorrow' }).getByText('Synthetic planning meeting')).toBeVisible()
+      await expect(panel.getByRole('region', { name: 'Today' }).getByText('Synthetic holiday')).toBeVisible()
       await expectInsideWindow(page, panel, width, 'agenda')
+      // From the keyboard: Enter on a task opens its editor; closing it comes back here.
+      await panel.getByRole('button', { name: /Overdue synthetic task/ }).focus()
+      await page.keyboard.press('Enter')
+      const editor = page.getByRole('dialog')
+      await expect(editor).toBeVisible()
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+      await expect(editor).toBeHidden()
+      await expect(panel.getByText('Overdue synthetic task')).toBeVisible()
       // Its own header is on top and usable at every width: back to the overview and in again.
       await panel.getByRole('button', { name: 'Back', exact: true }).click()
       await expect(panel.getByRole('heading', { name: 'Agenda', exact: true })).toBeHidden()
@@ -2739,6 +2760,9 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
         expect(Math.abs((await panel.boundingBox())!.width - dragged)).toBeLessThanOrEqual(1)
         // The widest it goes still leaves the reader its room; the narrowest is 280.
         await page.keyboard.press('End')
+        const widest = Number(await handle.getAttribute('aria-valuemax'))
+        await expect(handle).toHaveAttribute('aria-valuenow', String(widest))
+        expect(Math.abs((await panel.boundingBox())!.width - widest)).toBeLessThanOrEqual(1)
         expect((await reader.boundingBox())!.width).toBeGreaterThanOrEqual(360 - 1)
         await expectInsideWindow(page, panel, width, 'widest')
         await page.keyboard.press('Home')
@@ -2751,6 +2775,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
           .toBe(344)
       } else {
         // An overlay over the reader at this width, capped to the window: no separator.
+        await expect(panel).toHaveAttribute('data-layout', 'overlay')
         await expect(handle).toBeHidden()
         expect(Math.round((await panel.boundingBox())!.width)).toBe(Math.min(340, Math.floor(width * 0.85)))
       }
@@ -2789,9 +2814,49 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   }
 }
 
+// Just above the push-aside breakpoint the widest sidebar is what leaves the
+// reader 360 px, and below it a remembered 560 px overlay is held to 85 %.
+for (const width of [1100, 1180, 600]) {
+  test(`details sidebar width limits with a remembered 560 px at ${width}px (#212)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = await agendaSidebarStartup(page, { preferences: { details_panel_width: 560 } })
+    await page.goto('/')
+    const panel = await openAgendaSidebar(page)
+    const drawn = (await panel.boundingBox())!.width
+    if (width < 1100) {
+      await expect(panel).toHaveAttribute('data-layout', 'overlay')
+      expect(Math.round(drawn)).toBe(Math.floor(width * 0.85))
+    } else {
+      const handle = panel.getByRole('separator', { name: 'Resize details panel' })
+      const reader = (await page.locator('[data-message-pane] section').first().boundingBox())!.width
+      if ((await panel.getAttribute('data-layout')) === 'beside') {
+        const max = Number(await handle.getAttribute('aria-valuemax'))
+        expect(max).toBeLessThan(560)
+        await expect(handle).toHaveAttribute('aria-valuenow', String(max))
+        expect(Math.abs(drawn - max)).toBeLessThanOrEqual(1)
+        expect(reader).toBeGreaterThanOrEqual(360 - 1)
+      } else {
+        // No room beside the reader at all: an overlay, without a separator.
+        await expect(handle).toBeHidden()
+      }
+    }
+    await expectInsideWindow(page, panel, width, `${width}`)
+    expect(errors).toEqual([])
+  })
+}
+
 test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels) (#212)', async ({ browser }) => {
-  for (const theme of ['oreneta-light', 'oreneta-dark']) {
-    const context = await browser.newContext({ viewport: { width: 720, height: 900 }, deviceScaleFactor: 2, locale: 'en-US' })
+  // West and east of Greenwich: today's all-day event stays on today.
+  for (const [theme, timezoneId] of [
+    ['oreneta-light', 'America/Sao_Paulo'],
+    ['oreneta-dark', 'Australia/Sydney'],
+  ]) {
+    const context = await browser.newContext({
+      viewport: { width: 720, height: 900 },
+      deviceScaleFactor: 2,
+      locale: 'en-US',
+      timezoneId,
+    })
     try {
       const page = await context.newPage()
       const errors = await agendaSidebarStartup(page, { theme, preferences: { session_sidebar_section_main: 'agenda' } })
@@ -2800,6 +2865,7 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
       // The remembered section, straight away.
       await expect(panel.getByRole('heading', { name: 'Agenda', exact: true })).toBeVisible()
       await expect(panel.getByText('Synthetic planning meeting')).toBeInViewport()
+      await expect(panel.getByRole('region', { name: 'Today' }).getByText('Synthetic holiday')).toBeVisible()
       await expectInsideWindow(page, panel, 720, `${theme} 720`)
       expect(await page.evaluate(() => (window as any).startupProbe.unexpected)).toEqual([])
       expect(errors).toEqual([])

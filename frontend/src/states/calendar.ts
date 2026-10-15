@@ -2,7 +2,7 @@ import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { accounts$ } from './accounts'
 import type { Account } from '../types'
-import { showToast } from './ui'
+import { showToast, ui$ } from './ui'
 import { t } from '../lib/i18n'
 import { settings$ } from './settings'
 import {
@@ -542,6 +542,19 @@ export function newEvent(startAt?: number): EventDraft | null {
   }
   calendar$.editing.set(draft)
   return draft
+}
+
+/// Shows the calendar's day view on the local day of `date`, in place of the
+/// other views that take the same pane.
+export function openCalendarOn(date: Date) {
+  calendar$.anchor.set(startOfDay(date).getTime())
+  calendar$.view.set('day')
+  ui$.peopleOpen.set(false)
+  ui$.tasksOpen.set(false)
+  ui$.notesOpen.set(false)
+  ui$.attachmentsOpen.set(false)
+  ui$.messagingOpen.set(false)
+  ui$.calendarOpen.set(true)
 }
 
 export function openEvent(event: CalendarEvent) {

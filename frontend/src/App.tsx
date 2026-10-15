@@ -1,13 +1,11 @@
 import { useRef } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from './lib/i18n'
 import { ui$ } from './states/ui'
 import { mail$ } from './states/mail'
 import { compose$ } from './states/compose'
 import { accounts$ } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { settings$ } from './states/settings'
-import { KANBAN_PANE_WIDTH } from './lib/paneResize'
 import { useAppEffects } from './useAppEffects'
 import { SideNav } from './components/sidenav/SideNav'
 import { MailNavigation } from './components/sidenav/MailNavigation'
@@ -24,7 +22,7 @@ import { QuickActionDialog } from './components/quick/QuickActionDialog'
 import { AwaitingDialog } from './components/awaiting/AwaitingDialog'
 import { MergeDialog } from './components/merge/MergeDialog'
 import { MessagePane } from './components/chat/MessagePane'
-import { PaneResizer } from './components/resizer/PaneResizer'
+import { KanbanPaneResizer } from './components/resizer/PaneResizers'
 import { AboutDialog } from './components/dialog/AboutDialog'
 import { ChangelogDialog } from './components/dialog/ChangelogDialog'
 import { CommandPalette } from './components/palette/CommandPalette'
@@ -48,8 +46,8 @@ import { DesignCatalogue } from './components/dialog/DesignCatalogue'
 import { SweepDialog } from './components/dialog/SweepDialog'
 
 export default function App() {
-  const { t } = useTranslation()
   const mainRef = useRef<HTMLElement | null>(null)
+  const kanbanPaneRef = useRef<HTMLDivElement | null>(null)
   const system = useValue(ui$.system)
   const accounts = useValue(accounts$)
   const activeBoardId = useValue(kanban$.activeBoardId)
@@ -142,24 +140,12 @@ export default function App() {
           </ErrorBoundary>
         ) : showKanbanMessagePane ? (
           <div
+            ref={kanbanPaneRef}
             className="relative flex shrink-0 overflow-hidden border-l border-border bg-chat max-[600px]:w-full"
             style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
           >
             {/* The width is a percentage of the app shell, kept in settings. */}
-            <PaneResizer
-              label={t('layout.resizeConversation')}
-              value={kanbanPaneWidth}
-              limits={KANBAN_PANE_WIDTH}
-              edge="start"
-              step={2}
-              valueText={(value) => `${value}%`}
-              sizeAt={(clientX) => {
-                const rect = mainRef.current?.getBoundingClientRect()
-                return rect && rect.width > 0 ? ((rect.right - clientX) / rect.width) * 100 : kanbanPaneWidth
-              }}
-              onResize={(size) => settings$.kanbanPaneWidth.set(size)}
-              className="absolute left-0 top-0 h-full -translate-x-1"
-            />
+            <KanbanPaneResizer pane={kanbanPaneRef} shell={mainRef} />
             <ErrorBoundary label="conversation">
               <MessagePane />
             </ErrorBoundary>

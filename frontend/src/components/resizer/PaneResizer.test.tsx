@@ -5,18 +5,20 @@ import { PaneResizer } from './PaneResizer'
 
 afterEach(cleanup)
 
-function Harness({ edge, initial = 340 }: { edge: 'start' | 'end'; initial?: number }) {
+function Harness({ edge, initial = 340, rtl = false }: { edge: 'start' | 'end'; initial?: number; rtl?: boolean }) {
   const [size, setSize] = useState(initial)
   return (
-    <PaneResizer
-      label="Resize pane"
-      value={size}
-      limits={{ min: 280, max: 560 }}
-      edge={edge}
-      // A pane whose far edge is at x = 1000 (start) or whose near edge is at x = 0 (end).
-      sizeAt={(x) => (edge === 'start' ? 1000 - x : x)}
-      onResize={setSize}
-    />
+    <div style={{ direction: rtl ? 'rtl' : 'ltr' }}>
+      <PaneResizer
+        label="Resize pane"
+        value={size}
+        limits={{ min: 280, max: 560 }}
+        edge={edge}
+        // A pane whose far edge is at x = 1000 (start) or whose near edge is at x = 0 (end).
+        sizeAt={(x) => (edge === 'start' ? 1000 - x : x)}
+        onResize={setSize}
+      />
+    </div>
   )
 }
 
@@ -83,6 +85,44 @@ describe('pane resizer (#212)', () => {
     expect(document.body.style.cursor).toBe('')
     fireEvent.pointerMove(window, { clientX: 600 })
     expect(handle.getAttribute('aria-valuenow')).toBe('280')
+  })
+
+  it('follows a drag that comes back to where it started and runs past the limit', () => {
+    const screen = render(<Harness edge="end" />)
+    const handle = separator(screen)
+    fireEvent.pointerDown(handle, { button: 0, clientX: 340, pointerId: 1 })
+    fireEvent.pointerMove(window, { clientX: 400 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('400')
+    fireEvent.pointerMove(window, { clientX: 340 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('340')
+    fireEvent.pointerMove(window, { clientX: 900 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('560')
+    fireEvent.pointerMove(window, { clientX: 500 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('500')
+    fireEvent.pointerUp(window)
+  })
+
+  it('ends the drag when the pointer capture is lost, as over the reader frame', () => {
+    const screen = render(<Harness edge="end" />)
+    const handle = separator(screen)
+    fireEvent.pointerDown(handle, { button: 0, clientX: 340, pointerId: 1 })
+    expect(document.body.style.cursor).toBe('col-resize')
+    expect(document.body.style.userSelect).toBe('none')
+    handle.dispatchEvent(new Event('lostpointercapture'))
+    expect(document.body.style.cursor).toBe('')
+    expect(document.body.style.userSelect).toBe('')
+    fireEvent.pointerMove(window, { clientX: 400 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('340')
+  })
+
+  it('follows the reading direction: in right-to-left the arrows swap', () => {
+    const screen = render(<Harness edge="end" rtl />)
+    const handle = separator(screen)
+    expect(getComputedStyle(handle).direction).toBe('rtl')
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('356')
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('340')
   })
 
   it('ignores a secondary button', () => {

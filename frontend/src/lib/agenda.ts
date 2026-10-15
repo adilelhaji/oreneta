@@ -2,7 +2,7 @@
 // together, in the order the day will bring them. Pure, so the order is
 // testable without a calendar or a clock.
 
-import type { CalendarEvent } from '../states/calendar'
+import { allDayLocalDays, type CalendarEvent } from '../states/calendar'
 import type { Task } from '../states/tasks'
 
 /** How many days the widget looks ahead, today included. */
@@ -26,18 +26,30 @@ const addDays = (ms: number, days: number) => {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days).getTime()
 }
 
-/** The window asked of the calendars, as epoch seconds: today's midnight to the end of the last day. */
+/** The days shown, as epoch seconds: today's local midnight to the end of the last day. */
 export function agendaWindow(now: number, days = AGENDA_WIDGET_DAYS): { from: number; to: number } {
   const today = startOfDay(now)
   return { from: Math.floor(today / 1000), to: Math.floor(addDays(today, days) / 1000) }
 }
 
 /**
+ * The window asked of the calendars: the days shown and one more on each side.
+ * An all-day event is stored at midnight UTC, which is up to a day away from
+ * a local midnight; buildAgenda keeps only what falls on the days shown.
+ */
+export function agendaQueryWindow(now: number, days = AGENDA_WIDGET_DAYS): { from: number; to: number } {
+  const { from, to } = agendaWindow(now, days)
+  return { from: from - 86_400, to: to + 86_400 }
+}
+
+/**
  * Builds the agenda shown in the sidebar.
  *
  * - Events: not cancelled and not over yet, starting before the window ends.
- *   One already under way (or an all-day one from an earlier day still
- *   running) is listed under today.
+ *   One already under way is listed under today. An all-day event is a run of
+ *   dates stored at midnight UTC (allDayLocalDays), so it is placed by those
+ *   dates, never by the instants; it is over once its last date is past. An
+ *   event of several days appears once, on its first day in the window.
  * - Tasks: open, with a due date on or before the window's last day. A task's
  *   due date is a day, never a time (lib/date), so one due before today is
  *   overdue and comes first under its own heading.
@@ -62,17 +74,29 @@ export function buildAgenda(
 
   const seen = new Set<string>()
   for (const event of events) {
-    if (event.is_cancelled || event.end <= nowSeconds || event.start * 1000 >= end) continue
+    if (event.is_cancelled) continue
+    let first: number
+    if (event.all_day) {
+      const dates = allDayLocalDays(event)
+      if (dates[dates.length - 1] < today) continue
+      first = dates[0]
+    } else {
+      if (event.end <= nowSeconds) continue
+      first = startOfDay(event.start * 1000)
+    }
+    if (first >= end) continue
     // The same occurrence asked of two overlapping windows, or merged twice,
     // is still one meeting.
     const key = `event:${event.accountId}:${event.calendar_id}:${event.id}:${event.start}`
     if (seen.has(key)) continue
     seen.add(key)
-    add(Math.max(startOfDay(event.start * 1000), today), {
+    const day = Math.max(first, today)
+    add(day, {
       kind: 'event',
       key,
       title: event.subject,
-      at: event.start,
+      // An all-day event has no hour: it is ordered by its day.
+      at: event.all_day ? Math.floor(day / 1000) : event.start,
       allDay: event.all_day,
       event,
     })

@@ -73,8 +73,7 @@ import { ThreadListItem, type QuickRowAction } from './ThreadListItem'
 import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
-import { PaneResizer } from '../resizer/PaneResizer'
-import { THREAD_LIST_WIDTH } from '../../lib/paneResize'
+import { ThreadListResizer } from '../resizer/PaneResizers'
 import { accountGroups$ } from '../../states/accountGroups'
 
 type ThreadListProps = {
@@ -359,15 +358,7 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
       style={width ? ({ '--thread-list-width': `${width}px` } as CSSProperties) : undefined}
     >
       {resizable && (
-        <PaneResizer
-          label={t('layout.resizeThreadList')}
-          value={width ?? settings$.threadListWidth.peek()}
-          limits={THREAD_LIST_WIDTH}
-          edge="end"
-          sizeAt={(clientX) => clientX - (listRef.current?.getBoundingClientRect().left ?? 0)}
-          onResize={(size) => settings$.threadListWidth.set(size)}
-          className="absolute right-0 top-0 hidden h-full translate-x-1 min-[769px]:block"
-        />
+        <ThreadListResizer list={listRef} />
       )}
       {bulkInThisList ? (
         <BulkActionBar items={bulkItems} allItems={filteredThreads.map(bulkItemFor)} className="min-h-16" />

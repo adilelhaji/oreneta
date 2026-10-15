@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
-import { SidebarAgenda } from './SidebarAgenda'
+import { SidebarAgenda, untilNextDay } from './SidebarAgenda'
 import { accounts$ } from '../../states/accounts'
 import { calendar$, type CalendarEvent } from '../../states/calendar'
 import type { Task } from '../../states/tasks'
 import { ui$ } from '../../states/ui'
 
-const at = (day: number, hour = 0, minute = 0) => new Date(2026, 9, day, hour, minute).getTime()
+const at = (day: number, hour = 0, minute = 0, second = 0) => new Date(2026, 9, day, hour, minute, second).getTime()
 const sec = (ms: number) => Math.floor(ms / 1000)
 const NOW = at(15, 10)
+// All-day events are dates stored at midnight UTC (states/calendar allDayLocalDays).
+const utcDay = (day: number) => Date.UTC(2026, 9, day)
 
 const event = (id: string, start: number, end: number, extra: Partial<CalendarEvent> = {}) => ({
   id,
@@ -56,7 +58,7 @@ beforeEach(() => {
   replies = {
     'calendar.events': (p) =>
       p.account_id === 'work'
-        ? { events: [event('Design review', at(15, 14), at(15, 15)), event('Offsite', at(16), at(17), { all_day: true })] }
+        ? { events: [event('Design review', at(15, 14), at(15, 15)), event('Offsite', utcDay(16), utcDay(17), { all_day: true })] }
         : { events: [event('Dentist', at(15, 11), at(15, 12))] },
     'tasks.list': () => ({
       tasks: [
@@ -96,7 +98,8 @@ describe('sidebar agenda widget (#212)', () => {
     // Every account with mail is asked for the week ahead; a feed is not.
     const asked = requests.filter((r) => r.command === 'calendar.events')
     expect(asked.map((r) => r.payload.account_id).sort()).toEqual(['home', 'work'])
-    expect(asked[0].payload).toMatchObject({ from: sec(at(15)), to: sec(at(22)), refresh: true })
+    // The days shown and one more on each side, for all-day dates stored at midnight UTC.
+    expect(asked[0].payload).toMatchObject({ from: sec(at(15)) - 86_400, to: sec(at(22)) + 86_400, refresh: true })
     expect(requests.find((r) => r.command === 'tasks.list')?.payload).toEqual({ include_completed: false })
 
     const headings = screen.getAllByRole('heading').map((h) => h.textContent)
@@ -123,6 +126,10 @@ describe('sidebar agenda widget (#212)', () => {
     expect(calendar$.view.get()).toBe('day')
     expect(calendar$.anchor.get()).toBe(at(15))
     expect(calendar$.viewing.get()).toMatchObject({ subject: 'Dentist', accountId: 'home' })
+    // An all-day event opens on its date, not on the day its UTC instant falls on here.
+    fireEvent.click(screen.getByRole('button', { name: /Offsite/ }))
+    expect(calendar$.anchor.get()).toBe(at(16))
+    expect(calendar$.viewing.get()).toMatchObject({ subject: 'Offsite' })
   })
 
   it('opens a task in its editor, keeping its conversation', async () => {
@@ -134,15 +141,40 @@ describe('sidebar agenda widget (#212)', () => {
     expect(ui$.taskEditor.get()).toEqual({ threadId: '', id: 1, dueAt: sec(at(12)), note: '' })
   })
 
-  it('is reachable and operable from the keyboard', async () => {
+  it('makes every item a native button that takes focus (the browser gives it Enter and Space)', async () => {
     const screen = render(<SidebarAgenda now={() => NOW} />)
     await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
-    // Native buttons: in the tab order, and Enter/Space activate them.
     for (const button of screen.getAllByRole('button')) {
       expect(button.tagName).toBe('BUTTON')
       expect(button.getAttribute('type')).toBe('button')
-      expect(button.tabIndex).toBe(0)
+      button.focus()
+      expect(document.activeElement).toBe(button)
     }
+    // Enter on a focused item is checked in the production entry (e2e), where
+    // the browser turns it into the click a test DOM does not synthesize.
+  })
+
+  it('reads the tasks again when the task editor closes', async () => {
+    const screen = render(<SidebarAgenda now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText('Book flights')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /Book flights/ }))
+    replies['tasks.list'] = () => ({ tasks: [task(2, at(17), { title: 'Book flights (moved)' })] })
+    ui$.taskEditor.set(null)
+    await waitFor(() => expect(screen.getByText('Book flights (moved)')).toBeTruthy())
+    expect(screen.queryByText('Send the invoice')).toBeNull()
+  })
+
+  it('moves Today and Tomorrow on at local midnight', async () => {
+    let clock = at(15, 23, 59, 59) + 900
+    expect(untilNextDay(clock)).toBe(150)
+    const screen = render(<SidebarAgenda now={() => clock} />)
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Tomorrow' })).toBeTruthy())
+    expect(within(screen.getByRole('region', { name: 'Tomorrow' })).getByText('Offsite')).toBeTruthy()
+    clock = at(16, 0, 0, 1)
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Today' })).getByText('Offsite')).toBeTruthy(), {
+      timeout: 2000,
+    })
+    expect(screen.queryByRole('region', { name: 'Tomorrow' })).toBeNull()
   })
 
   it('says when a calendar could not be read instead of showing a shorter week as complete', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { useValue } from '@legendapp/state/react'
 import {
   CalendarDays,
@@ -19,7 +19,7 @@ import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { openExternal } from '../../lib/native'
-import { DETAILS_PANEL_WIDTH } from '../../lib/paneResize'
+import { DETAILS_PANEL_WIDTH, sidebarLayout } from '../../lib/paneResize'
 import { downloadAttachment } from '../../states/mail'
 import { settings$ } from '../../states/settings'
 import { ui$, type SidebarSection } from '../../states/ui'
@@ -28,6 +28,7 @@ import { IconButton } from '../button/IconButton'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import { PaneResizer } from '../resizer/PaneResizer'
+import { useElementWidth, useWideWindow } from '../resizer/useElementWidth'
 import { fileIconFor, formatFileSize } from './messageHelpers'
 import { PersonHistory } from './PersonHistory'
 import { SidebarAgenda } from './SidebarAgenda'
@@ -82,35 +83,6 @@ interface ConversationDetailsPanelProps {
   onOpenEvent?: (start: number) => void
 }
 
-/** What the reader keeps beside the sidebar when it sits next to it (ADR-0059). */
-const READER_ROOM = 360
-
-/**
- * The widest the sidebar may be beside the reader, in the row it shares with
- * it. As an overlay, or unknown (no layout yet, or a test without one), it is
- * its own limit.
- */
-function useRoomFor(aside: RefObject<HTMLElement | null>): number {
-  const [room, setRoom] = useState<number>(DETAILS_PANEL_WIDTH.max)
-  useEffect(() => {
-    const row = aside.current?.parentElement
-    if (!row || typeof ResizeObserver === 'undefined') return
-    const measure = () => {
-      // As an overlay (below the push-aside breakpoint) it shares no row with the reader.
-      if (!window.matchMedia?.('(min-width: 1100px)').matches) return setRoom(DETAILS_PANEL_WIDTH.max)
-      const width = row.getBoundingClientRect().width
-      if (width > 0) {
-        setRoom(Math.max(DETAILS_PANEL_WIDTH.min, Math.min(DETAILS_PANEL_WIDTH.max, Math.floor(width - READER_ROOM))))
-      }
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(row)
-    return () => observer.disconnect()
-  }, [aside])
-  return room
-}
-
 export function ConversationDetailsPanel({
   media,
   files,
@@ -140,8 +112,10 @@ export function ConversationDetailsPanel({
   const [personMenu, setPersonMenu] = useState<{ x: number; y: number; person: Participant } | null>(null)
   const asideRef = useRef<HTMLElement | null>(null)
   const storedWidth = useValue(settings$.detailsPanelWidth)
-  const room = useRoomFor(asideRef)
-  const width = Math.min(storedWidth, room)
+  // Beside the reader on a wide window where its row leaves the reader its
+  // room; an overlay otherwise, the board's narrow conversation pane included.
+  const { beside, max } = sidebarLayout(useWideWindow(1100), useElementWidth(asideRef, true))
+  const width = beside ? Math.min(storedWidth, max) : storedWidth
 
   // Another conversation may not have this person in it.
   useEffect(() => {
@@ -153,31 +127,33 @@ export function ConversationDetailsPanel({
 
   return (
     <>
-      {/* Backdrop — only below the push-aside breakpoint, where the panel is an overlay. */}
-      <div className="min-[1100px]:hidden absolute inset-0 z-20 bg-black/40 animate-fade-in" onClick={onClose} />
+      {/* Backdrop — only where the panel is an overlay. */}
+      {!beside && <div className="absolute inset-0 z-20 bg-black/40 animate-fade-in" onClick={onClose} />}
 
       {/* As an overlay it sits above the conversation header (z-40), which
           otherwise hid its own header: the title, Back and Close. */}
       <aside
         ref={asideRef}
         data-details-panel
+        data-layout={beside ? 'beside' : 'overlay'}
         style={{ '--details-panel-width': `${width}px` } as CSSProperties}
-        className="
-          absolute inset-y-0 right-0 z-50 w-[var(--details-panel-width)] max-w-[85vw] shadow-overlay
-          min-[1100px]:relative min-[1100px]:inset-auto min-[1100px]:z-auto min-[1100px]:shadow-none min-[1100px]:max-w-none
-          flex shrink-0 flex-col border-l border-border bg-header
-          animate-slide-in-right
-        "
+        className={`flex w-[var(--details-panel-width)] shrink-0 flex-col border-s border-border bg-header animate-slide-in-right ${
+          beside ? 'relative' : 'absolute inset-y-0 right-0 z-50 max-w-[85vw] shadow-overlay'
+        }`}
       >
         {/* Resizable beside the reader only; as an overlay it is capped to the window. */}
         <PaneResizer
           label={t('layout.resizeDetails')}
           value={width}
-          limits={{ min: DETAILS_PANEL_WIDTH.min, max: room }}
+          limits={{ min: DETAILS_PANEL_WIDTH.min, max }}
           edge="start"
-          sizeAt={(clientX) => (asideRef.current?.getBoundingClientRect().right ?? clientX) - clientX}
+          sizeAt={(clientX, rtl) => {
+            const rect = asideRef.current?.getBoundingClientRect()
+            if (!rect) return width
+            return rtl ? clientX - rect.left : rect.right - clientX
+          }}
           onResize={(size) => settings$.detailsPanelWidth.set(size)}
-          className="absolute left-0 top-0 hidden h-full -translate-x-1 min-[1100px]:block"
+          className={`absolute start-0 top-0 h-full -translate-x-1 rtl:translate-x-1 ${beside ? '' : 'hidden'}`}
         />
         {/* Header */}
         {view === 'overview' ? (
