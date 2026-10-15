@@ -23,15 +23,3 @@ export function connectivityAccountLabel(accountId: string | null, accounts: Acc
     ? `${displayName} (${email})`
     : displayName
 }
-
-// Core errors add one of these contexts around failures opening or negotiating
-// the proxy connection. Extract only the host:port; the rest remains diagnostic
-// detail in the log and may be too technical for the banner.
-export function proxyEndpointFromSyncError(error: string): string | null {
-  const endpoint = String.raw`(\[[^\]]+\]:\d+|[^\s:]+:\d+)`
-  return (
-    new RegExp(String.raw`\bconnect to proxy\s+${endpoint}`, 'i').exec(error)?.[1] ??
-    new RegExp(String.raw`\b(?:http|socks5) proxy\s+${endpoint}`, 'i').exec(error)?.[1] ??
-    null
-  )
-}

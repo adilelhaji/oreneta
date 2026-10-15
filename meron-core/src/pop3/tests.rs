@@ -309,7 +309,7 @@ async fn the_password_is_never_sent_to_a_server_without_tls() {
         oauth_client_secret: String::new(),
         oauth_token_url: String::new(),
         oauth_scope: String::new(),
-        proxy: crate::proxy::ProxyChoice::default(),
+        proxy: crate::proxy::ProxyChoice::Direct,
         cert_pin: None,
         smtp_cert_pin: None,
         ews_url: String::new(),

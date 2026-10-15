@@ -42,8 +42,57 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 - **Límites conocidos.** Los libros CardDAV guardados sin cuenta y las listas de tareas CalDAV no
   cuelgan de ninguna cuenta de correo: usan el proxy global (#193). Los
   sockets IMAP ya abiertos y las escuchas IDLE conservan su
-  conexión hasta reconectar. Un error de proxy aún no se muestra en la
-  interfaz como tal (issue de seguimiento).
+  conexión hasta reconectar.
+
+### Qué ve la persona cuando se rechaza el proxy (#201)
+
+- **Forma del error.** Es un `proxy::UnusableProxy`, cuyo texto empieza
+  por `UNUSABLE_PREFIX` y dice de quién es el ajuste:
+  `proxy setting unusable (app): …` (proxy global, también si no se pudo
+  leer) o `proxy setting unusable (account): …` (proxy propio de la
+  cuenta). Lo es todo rechazo de un ajuste inutilizable (sin servidor o
+  puerto, tipo desconocido, ajuste ilegible) y, en las peticiones HTTP
+  (`ProxyChoice::agent`, `proxy::agent`, `proxied_agent`,
+  `scoped_ureq_proxy`: Graph, renovación de tokens, nube, archivos del
+  chat…), un servidor que el cliente HTTP no admite: con un espacio, con
+  el puerto escrito en el campo del servidor o con letras fuera de ASCII.
+  Es un contrato: escritorio y móvil leen el error de sincronización como
+  texto.
+- **Escritorio** (`ConnectivityBanner`): en lugar de «Unresolved sync
+  issue», la cuenta dice que su conexión se rechazó por el ajuste del
+  proxy de la app o por el suyo propio, con «recovery not verified», y el
+  botón abre Ajustes → Red (sección `network`) o el proxy de esa cuenta
+  (`accountNetwork`). Un proxy que no contesta (`connect to proxy
+  host:port`) muestra su dirección y abre el proxy propio de la cuenta si
+  lo tiene, si no el global. Del error solo se guarda esa clasificación.
+  Al guardar el proxy global (o el de la cuenta) se borra la
+  clasificación de los fallos que culpaban a ese ajuste: siguen como
+  «Unresolved sync issue — recovery not verified».
+- **Móvil** (`MobileConnectivity.kt`): la misma distinción y el mismo
+  destino en el aviso de error de sincronización; sin cuenta conocida
+  abre Ajustes → Red. Los ajustes abren en la sección de red, cuya
+  posición sale de la misma lista que construye la pantalla
+  (`SettingsRows`).
+- **Microsoft Graph:** el rechazo es `ErrorKind::AppProxyUnusable` o
+  `AccountProxyUnusable` (y `auth::Failure` igual al renovar el token),
+  no `Transport` ni `Unavailable`, ni una petición de volver a iniciar
+  sesión. Su texto es `Microsoft Graph: proxy setting unusable (app)`.
+  El diálogo de alta de Graph muestra el mensaje del proxy en lugar del
+  código (`app_proxy_unusable`).
+- **Sin reintento:** `is_transient_sync_error` nunca toma un rechazo de
+  proxy por un fallo de red pasajero, diga lo que diga su motivo.
+- **Límites conocidos (#201).**
+  - Un fallo sin cuenta (fila «unattributed» del escritorio) no muestra
+    el mensaje del proxy ni el botón de Red.
+  - Solo la sincronización de correo lo muestra así. El envío, los
+    calendarios, los contactos, el chat, RSS y las actualizaciones
+    enseñan sus propios errores genéricos.
+  - En los sockets de correo (IMAP, SMTP, POP3, ManageSieve) un servidor
+    que el cliente HTTP no admitiría no se rechaza de antemano: falla al
+    conectar con el proxy y se muestra como proxy que no contesta, o como
+    fallo genérico si la dirección no se puede leer. Un servidor escrito
+    como URL (`http://proxy.corp`) tampoco se rechaza en HTTP: falla al
+    conectar.
 
 ## Conexiones
 
@@ -59,6 +108,11 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 | Intercambio OAuth y userinfo de Google | puente Go, `oauth.go` | global (la cuenta aún no existe) |
 | Imagen de la cuenta | puente Go, `paste_image.go` | proxy de esa cuenta |
 | Comprobación y descarga de actualizaciones | puente Go, `update.go` | global |
+| Renovación de tokens OAuth de IMAP/SMTP | núcleo, `imap::refresh_oauth_token` con `ProxyChoice::agent()` | proxy de la cuenta o global; directa no usa `HTTP_PROXY`; con el global apagado sí lo respeta (defaults de `ureq`) |
+
+Cambio de #201: la renovación de tokens OAuth de IMAP/SMTP sigue la
+elección de la cuenta. Antes una cuenta «directa» la hacía con los
+defaults de `ureq`, que leen `HTTP_PROXY`; ahora va directa de verdad.
 
 En el puente Go, `netproxy.go` pide la ruta al núcleo y construye un
 `http.Transport` con `Proxy` de `net/http` (`http://` para HTTP CONNECT,
@@ -132,7 +186,18 @@ una copia local. Móvil carga sus imágenes por su cuenta y no se toca.
   `proxy_route_follows_the_account_and_fails_closed` (store/tests.rs);
   `mobile_autodiscover_refuses_to_look_up_through_an_unusable_proxy`
   (protocol/tests.rs); `an_unusable_proxy_is_an_error_and_never_a_direct_connection`
-  (cloud/tests.rs).
+  (cloud/tests.rs). Para #201:
+  `every_refusal_says_proxy_setting_unusable_and_whose_setting_it_is`
+  (proxy.rs); `a_proxy_setting_that_cannot_be_used_is_a_proxy_error_and_not_retried`
+  (graph/tests.rs), `a_proxy_setting_that_cannot_be_used_is_a_proxy_failure_not_unavailable`
+  (graph/auth/tests.rs), `a_proxy_refusal_while_refreshing_the_grant_stays_a_proxy_error`
+  (graph/mail/tests.rs); `an_unusable_proxy_setting_is_not_retried_as_a_passing_failure`
+  y `graph_failures_do_not_enter_imap_retry_policy` (main.rs);
+  `a_server_the_http_client_cannot_use_is_that_setting_being_unusable`
+  (proxy.rs), `a_proxy_server_the_http_client_cannot_use_is_a_proxy_error_too`
+  (graph/tests.rs), `a_proxy_server_the_http_client_cannot_use_is_a_proxy_failure_too`
+  (graph/auth/tests.rs), `a_shared_mailbox_refused_by_its_proxy_names_whose_setting_it_is`
+  (engine.rs).
 - Núcleo, asistente (#195, assistant.rs):
   `a_local_provider_is_reached_directly_even_with_an_app_proxy_set`,
   `a_remote_provider_still_goes_through_the_app_proxy`,
@@ -143,6 +208,25 @@ una copia local. Móvil carga sus imágenes por su cuenta y no se toca.
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
   Mozilla; los servidores se pueden escribir sin búsqueda.
+  `ConnectivityBanner.test.tsx`, `lib/proxyProblems.test.ts` y
+  `AccountDialogGraph.test.tsx`
+  (#201): un proxy global incompleto abre Ajustes → Red, uno propio abre
+  el proxy de esa cuenta, y cualquier otro fallo sigue abriendo la cuenta.
+- Móvil (`MobileConnectivityTest.kt`, `SettingsRowsTest.kt`, #201): la
+  misma distinción, y la sección de red donde la ponen las filas de encima.
+- Las pruebas que publican un proxy global inutilizable toman
+  `TEST_GLOBAL_LOCK` para escribir. Las que conectan por la ruta global
+  con un servidor local toman `steady_global()` para leer (RSS, nube,
+  archivos del chat, intercambio de código OAuth en móvil) o usan
+  `ProxyChoice::Direct` (Google Calendar, EWS, POP3), para no ver ese
+  proxy a medias. `load_global` también toma la lectura, y con él
+  `Engine::new`, `ffi::init` y la restauración de copias: una prueba que
+  ya tiene `steady_global()` no puede hacer nada de eso, así que las que
+  abren un motor no lo toman.
+- `the_oauth_token_refresh_follows_the_account_route` (imap.rs): la
+  renovación de tokens va por el proxy propio, directa aunque haya
+  global, por el global, y un proxy propio inutilizable la rechaza sin
+  enviar nada.
 - Imagen de la cuenta (`avatar_download_test.go`, `oauth_avatar_test.go`,
   `Avatar.test.tsx`, `accounts.test.ts`, y en el núcleo
   `an_account_picture_and_its_source_are_set_apart`,

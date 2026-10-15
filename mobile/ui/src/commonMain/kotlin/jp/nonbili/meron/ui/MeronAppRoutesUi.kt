@@ -995,6 +995,10 @@ internal fun MailRouteContent(
                             val failedAccount = failure.accountId?.let { id -> coreAccounts.firstOrNull { it.id == id } }
                             val accountLabel = mobileConnectivityAccountLabel(failure.accountId, coreAccounts)
                             val proxyEndpoint = mobileProxyEndpointFromSyncError(failure.message)
+                            // A proxy setting the core refuses (#201), and which
+                            // proxy setting fixes a proxy failure of either kind.
+                            val proxyUnusable = mobileUnusableProxyScopeFromSyncError(failure.message)
+                            val proxyScope = mobileProxySettingsScope(failure.message, failedAccount)
                             val authLike = isAuthError(failure.message)
                             // A certificate we cannot validate is not a retryable
                             // failure: nothing changes until the user looks at the
@@ -1006,6 +1010,17 @@ internal fun MailRouteContent(
                                     when {
                                         untrustedCert -> {
                                             tr("accounts.certificate.title")
+                                        }
+
+                                        proxyUnusable != null && accountLabel != null -> {
+                                            tr(
+                                                if (proxyUnusable == MobileProxyScope.App) {
+                                                    "connectivity.proxyUnusableApp"
+                                                } else {
+                                                    "connectivity.proxyUnusableAccount"
+                                                },
+                                                mapOf("account" to accountLabel),
+                                            )
                                         }
 
                                         proxyEndpoint != null && accountLabel != null -> {
@@ -1027,7 +1042,8 @@ internal fun MailRouteContent(
                                 actionLabel =
                                     when {
                                         untrustedCert -> tr("accounts.certificate.show")
-                                        proxyEndpoint != null -> tr("settings.network.proxy")
+                                        proxyScope == MobileProxyScope.App -> tr("connectivity.networkSettings")
+                                        proxyScope == MobileProxyScope.Account -> tr("connectivity.accountProxySettings")
                                         authLike && failedAccount != null -> "Reconnect"
                                         else -> tr("connectivity.retry")
                                     },
@@ -1037,14 +1053,12 @@ internal fun MailRouteContent(
                                             showServerCertificate(failedAccount!!.id, failure.message)
                                         }
 
-                                        proxyEndpoint != null -> {
+                                        proxyScope != null -> {
                                             previousTopScreen = Screen.Mail
-                                            val customAccountProxy =
-                                                failedAccount?.proxy?.mode == "http" ||
-                                                    failedAccount?.proxy?.mode == "socks5"
-                                            accountSettingsTargetId = failedAccount?.id?.takeIf { customAccountProxy }
+                                            val ownProxy = proxyScope == MobileProxyScope.Account
+                                            accountSettingsTargetId = failedAccount?.id?.takeIf { ownProxy }
                                             accountSettingsProxyTargetId = accountSettingsTargetId
-                                            settingsGeneralTarget = !customAccountProxy
+                                            settingsGeneralTarget = !ownProxy
                                             screen = Screen.Settings
                                         }
 

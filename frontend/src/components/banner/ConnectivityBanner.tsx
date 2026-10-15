@@ -6,6 +6,7 @@ import { accounts$ } from '../../states/accounts'
 import { connectivity$, dismissSyncError, requestAccountSync, type SyncObservation } from '../../states/connectivity'
 import { focusSettingsSection } from '../../states/ui'
 import { connectivityAccountLabel } from './connectivityBannerHelpers'
+import { proxySettingsTarget } from '../../lib/proxyProblems'
 import { Button } from '../button/Button'
 import { IconButton } from '../button/IconButton'
 
@@ -75,6 +76,17 @@ export function ConnectivityBanner() {
                     : observation?.lastActivityAt
                       ? 'partial'
                       : 'unknown'
+              // A failure that was the proxy's is said to be so, and its action
+              // opens the setting that fixes it instead of the account (#201).
+              const proxy = state === 'failed' ? observation?.proxy : null
+              const proxyTarget = proxy ? proxySettingsTarget(proxy, account) : null
+              const stateText = !proxy
+                ? t(`connectivity.health.${state}`)
+                : proxy.kind === 'unreachable'
+                  ? t('connectivity.proxyFailedAccount', { proxy: proxy.endpoint, account: label })
+                  : t(proxy.scope === 'app' ? 'connectivity.proxyUnusableApp' : 'connectivity.proxyUnusableAccount', {
+                      account: label,
+                    })
               return (
                 <li
                   key={account.id}
@@ -84,7 +96,7 @@ export function ConnectivityBanner() {
                 >
                   <div className="min-w-0 flex-1 basis-52 wrap-anywhere">
                     <p className="font-semibold">{label}</p>
-                    <p className="text-caption text-secondary">{t(`connectivity.health.${state}`)}</p>
+                    <p className={`text-caption ${proxy ? 'text-danger' : 'text-secondary'}`}>{stateText}</p>
                     {observation?.failure && state !== 'failed' && (
                       <p className="text-caption text-danger">{t('connectivity.health.failed')}</p>
                     )}
@@ -101,9 +113,23 @@ export function ConnectivityBanner() {
                       </p>
                     )}
                   </div>
-                  <Button variant="secondary" size="sm" onClick={() => focusSettingsSection('account', account.id)}>
-                    {t('connectivity.health.settings')}
-                  </Button>
+                  {proxyTarget ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => focusSettingsSection(proxyTarget.section, proxyTarget.accountId)}
+                    >
+                      {t(
+                        proxyTarget.section === 'network'
+                          ? 'connectivity.networkSettings'
+                          : 'connectivity.accountProxySettings',
+                      )}
+                    </Button>
+                  ) : (
+                    <Button variant="secondary" size="sm" onClick={() => focusSettingsSection('account', account.id)}>
+                      {t('connectivity.health.settings')}
+                    </Button>
+                  )}
                   {!account.paused && !account.needs_reconnect && (
                     <Button
                       variant="secondary"

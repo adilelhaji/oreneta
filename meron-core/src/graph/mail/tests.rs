@@ -1113,3 +1113,12 @@ async fn a_failed_read_is_an_error_not_an_empty_message() {
     *reader.mime.lock().unwrap() = Some(Err(Error::new(ErrorKind::NotFound)));
     assert!(session.read_message("INBOX", 1, Some(media)).await.is_err());
 }
+
+#[test]
+fn a_proxy_refusal_while_refreshing_the_grant_stays_a_proxy_error() {
+    // The grant is fine and the refresh never left (#201): not "sign in again".
+    assert_eq!(auth_error(auth::Failure::AppProxyUnusable).kind, ErrorKind::AppProxyUnusable);
+    assert_eq!(auth_error(auth::Failure::AccountProxyUnusable).kind, ErrorKind::AccountProxyUnusable);
+    let batch = BatchError { done: 0, total: 2, error: Error::new(ErrorKind::AccountProxyUnusable) };
+    assert_eq!(batch.to_string(), "Microsoft Graph: not changed: proxy setting unusable (account)");
+}

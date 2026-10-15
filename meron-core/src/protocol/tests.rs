@@ -772,6 +772,8 @@ fn mobile_protocol_appends_new_accounts() {
 
 #[test]
 fn mobile_protocol_exchanges_oauth_code_and_persists_account() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let data_dir = unique_data_dir("oauth-code");
     let token_url = one_shot_oauth_token_server();
     let userinfo_url = one_shot_json_server(
@@ -847,6 +849,8 @@ fn mobile_protocol_exchanges_oauth_code_and_persists_account() {
 
 #[test]
 fn mobile_protocol_exchanges_oauth_code_uses_id_token_claims() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let data_dir = unique_data_dir("oauth-code-claims");
     let token_url =
         one_shot_oauth_token_server_with_id_token("outlook.user@example.com", "Outlook User");

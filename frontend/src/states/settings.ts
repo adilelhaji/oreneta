@@ -642,6 +642,19 @@ settings$.messageFontScale.onChange(syncFonts)
 // doesn't immediately echo them back.
 let hydrating = false
 
+const savedListeners = new Map<keyof Settings, Set<() => void>>()
+
+/**
+ * Runs `listener` each time a change to `field` has been written to the store,
+ * and not when the write failed: the core keeps using what it had then.
+ */
+export function onSettingSaved(field: keyof Settings, listener: () => void): () => void {
+  const listeners = savedListeners.get(field) ?? new Set()
+  listeners.add(listener)
+  savedListeners.set(field, listeners)
+  return () => listeners.delete(listener)
+}
+
 // The single persistence path: when a field changes, write just that field to
 // its row. Replaces the old per-field onChange handlers scattered across states.
 settings$.onChange(({ changes }) => {
@@ -651,7 +664,9 @@ settings$.onChange(({ changes }) => {
     const field = change.path[0] as keyof Settings | undefined
     if (!field || seen.has(field) || !(field in DB_KEY)) continue
     seen.add(field)
-    void invoke('app.prefsSet', { key: DB_KEY[field], value: settings$[field].get() }).catch(() => {})
+    void invoke('app.prefsSet', { key: DB_KEY[field], value: settings$[field].get() })
+      .then(() => savedListeners.get(field)?.forEach((listener) => listener()))
+      .catch(() => {})
   }
 })
 

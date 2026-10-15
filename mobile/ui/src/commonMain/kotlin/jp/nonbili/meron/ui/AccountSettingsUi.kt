@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -162,9 +161,8 @@ internal fun SettingsAccountDetailPage(
             },
         )
     }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (focusProxy && !isRss) 9 else 0)
-    LazyColumn(modifier.appScrollbar(listState), state = listState) {
-        item {
+    val rows = settingsRows {
+        row {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -197,8 +195,8 @@ internal fun SettingsAccountDetailPage(
             }
         }
 
-        item { SettingsSectionLabel(tr("settings.account.profile")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.account.profile")) }
+        row {
             SettingsTextRow(
                 value = displayName,
                 label = tr("accounts.fields.accountName"),
@@ -209,7 +207,7 @@ internal fun SettingsAccountDetailPage(
             )
         }
         if (!isRss) {
-            item {
+            row {
                 SettingsTextRow(
                     value = senderName,
                     label = tr("settings.account.senderName"),
@@ -220,8 +218,8 @@ internal fun SettingsAccountDetailPage(
                 )
             }
         }
-        item { SettingsSectionLabel(tr("settings.account.chatBackground")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.account.chatBackground")) }
+        row {
             SettingsRow(
                 icon = Icons.Filled.Image,
                 title = tr("settings.account.chatBackground"),
@@ -241,8 +239,8 @@ internal fun SettingsAccountDetailPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.account.visibility")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.account.visibility")) }
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Inbox,
                 title = tr("settings.account.showInUnifiedInbox"),
@@ -253,7 +251,7 @@ internal fun SettingsAccountDetailPage(
                 persist()
             }
         }
-        item {
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Visibility,
                 title = tr("settings.account.showInSideNav"),
@@ -266,26 +264,26 @@ internal fun SettingsAccountDetailPage(
         }
 
         if (!isRss) {
-            item { SettingsSectionLabel(tr("settings.sections.signature")) }
-            item {
+            row { SettingsSectionLabel(tr("settings.sections.signature")) }
+            row {
                 SettingsAccountSignatureRow(
                     spec = account.signature,
                     onSave = onSaveSignature,
                 )
             }
 
-            item { SettingsSectionLabel(tr("settings.sections.network")) }
+            row(SETTINGS_ROW_NETWORK) { SettingsSectionLabel(tr("settings.sections.network")) }
             // Only password accounts have user-editable endpoints: OAuth
             // providers hand us theirs, and RSS has none.
             if (account.authType == "password") {
-                item {
+                row {
                     SettingsServerRow(
                         account = account,
                         onSave = onSaveServerSettings,
                     )
                 }
             }
-            item {
+            row {
                 SettingsProxyRow(
                     spec = account.proxy,
                     accountScoped = true,
@@ -294,8 +292,8 @@ internal fun SettingsAccountDetailPage(
             }
         }
 
-        item { SettingsSectionLabel(tr("settings.account.notificationsSync")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.account.notificationsSync")) }
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.NotificationsOff,
                 title = tr("settings.account.muteNotifications"),
@@ -306,7 +304,7 @@ internal fun SettingsAccountDetailPage(
                 persist()
             }
         }
-        item {
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.PauseCircle,
                 title = tr("settings.account.pauseAccount"),
@@ -318,7 +316,7 @@ internal fun SettingsAccountDetailPage(
             }
         }
         if (isRss) {
-            item {
+            row {
                 SettingsTextRow(
                     value = intervalText,
                     label = tr("settings.account.syncIntervalMinutes"),
@@ -332,8 +330,8 @@ internal fun SettingsAccountDetailPage(
             }
         }
 
-        item { SettingsSectionLabel(tr("settings.account.content")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.account.content")) }
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Image,
                 title = tr("settings.account.loadRemoteImages"),
@@ -344,7 +342,7 @@ internal fun SettingsAccountDetailPage(
                 persist()
             }
         }
-        item {
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Code,
                 title = tr("settings.account.renderHtmlMessages"),
@@ -357,26 +355,28 @@ internal fun SettingsAccountDetailPage(
         }
 
         if (!isRss) {
-            item { SettingsSectionLabel(tr("settings.account.aliases")) }
-            itemsIndexed(aliasEntries) { index, (email, name) ->
-                AliasEditorRow(
-                    email = email,
-                    name = name,
-                    onEmailChange = { value ->
-                        aliasEntries = aliasEntries.toMutableList().also { it[index] = value to it[index].second }
-                        persist()
-                    },
-                    onNameChange = { value ->
-                        aliasEntries = aliasEntries.toMutableList().also { it[index] = it[index].first to value }
-                        persist()
-                    },
-                    onRemove = {
-                        aliasEntries = aliasEntries.toMutableList().also { it.removeAt(index) }
-                        persist()
-                    },
-                )
+            row { SettingsSectionLabel(tr("settings.account.aliases")) }
+            aliasEntries.forEachIndexed { index, (email, name) ->
+                row {
+                    AliasEditorRow(
+                        email = email,
+                        name = name,
+                        onEmailChange = { value ->
+                            aliasEntries = aliasEntries.toMutableList().also { it[index] = value to it[index].second }
+                            persist()
+                        },
+                        onNameChange = { value ->
+                            aliasEntries = aliasEntries.toMutableList().also { it[index] = it[index].first to value }
+                            persist()
+                        },
+                        onRemove = {
+                            aliasEntries = aliasEntries.toMutableList().also { it.removeAt(index) }
+                            persist()
+                        },
+                    )
+                }
             }
-            item {
+            row {
                 SettingsRow(
                     icon = Icons.Filled.Add,
                     title = tr("settings.account.addAlias"),
@@ -387,9 +387,9 @@ internal fun SettingsAccountDetailPage(
         }
 
         if (canMoveUp || canMoveDown) {
-            item { SettingsSectionLabel(tr("settings.account.order")) }
+            row { SettingsSectionLabel(tr("settings.account.order")) }
             if (canMoveUp) {
-                item {
+                row {
                     SettingsRow(
                         icon = Icons.Filled.KeyboardArrowUp,
                         title = tr("mobile.accounts.moveUp"),
@@ -399,7 +399,7 @@ internal fun SettingsAccountDetailPage(
                 }
             }
             if (canMoveDown) {
-                item {
+                row {
                     SettingsRow(
                         icon = Icons.Filled.KeyboardArrowDown,
                         title = tr("mobile.accounts.moveDown"),
@@ -410,8 +410,8 @@ internal fun SettingsAccountDetailPage(
             }
         }
 
-        item { SettingsSectionLabel(tr("settings.dangerZone")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.dangerZone")) }
+        row {
             SettingsRow(
                 icon = Icons.Filled.Delete,
                 title = tr("settings.account.removeAccount"),
@@ -420,7 +420,16 @@ internal fun SettingsAccountDetailPage(
                 destructive = true,
             )
         }
-        item { Spacer(Modifier.height(24.dp)) }
+        row { Spacer(Modifier.height(24.dp)) }
+    }
+    // Opened from a refused proxy: at the network section, wherever
+    // the rows above it put it (#201).
+    val listState =
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = rows.startIndex(SETTINGS_ROW_NETWORK.takeIf { focusProxy }),
+        )
+    LazyColumn(modifier.appScrollbar(listState), state = listState) {
+        items(rows.size) { index -> rows.content(index)() }
     }
 }
 

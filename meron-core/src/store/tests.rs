@@ -5783,7 +5783,7 @@ fn proxy_route_follows_the_account_and_fails_closed() {
     let half = json!({ "mode": "socks5", "host": "a.example" });
     proxy_test_account(&conn, "half", crate::proxy::ProxyChoice::from_json(&half));
     let err = crate::proxy::route_json(&conn, Some("half")).unwrap_err().to_string();
-    assert!(err.starts_with("this account's proxy is incomplete"), "{err}");
+    assert!(err.starts_with("proxy setting unusable (account): this account's proxy is incomplete"), "{err}");
 }
 
 /// The route the calendar, contact and Exchange paths ask for by account

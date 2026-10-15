@@ -321,16 +321,21 @@ export async function setAccountAvatar(accountId: string, avatarUrl: string) {
   }
 }
 
-// Point one account at its own proxy, at the app-wide one, or at a direct
-// connection. Takes effect as the account's connections are re-established.
-export async function setAccountProxy(accountId: string, proxy: AccountProxy) {
+/**
+ * Point one account at its own proxy, at the app-wide one, or at a direct
+ * connection. Takes effect as the account's connections are re-established.
+ * Resolves to whether it was saved.
+ */
+export async function setAccountProxy(accountId: string, proxy: AccountProxy): Promise<boolean> {
   const previous = accounts$.get()
   accounts$.set(previous.map((acc) => (acc.id === accountId ? { ...acc, proxy } : acc)))
   try {
     await invoke('account.setProxy', { id: accountId, proxy })
+    return true
   } catch (error) {
     accounts$.set(previous)
     showToast(error instanceof Error ? error.message : t('accounts.toast.failedToUpdateProxy'), 'error')
+    return false
   }
 }
 

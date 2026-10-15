@@ -827,3 +827,61 @@ fn send_refusals_keep_their_category_and_a_lost_answer_is_uncertain() {
     assert_eq!(writer(&silent, "Mail.Send").send_mime(b"x").unwrap_err().kind, ErrorKind::Uncertain);
     assert_eq!(silent.requests().len(), 1);
 }
+
+// ---- #201: a proxy setting that cannot be used ----
+
+#[test]
+fn a_proxy_setting_that_cannot_be_used_is_a_proxy_error_and_not_retried() {
+    // The account's own proxy, half filled in: refused before anything is
+    // sent, and said to be that setting rather than a transport failure.
+    let origin = Fixture::new(|_| vec![]);
+    let mut client = origin.client();
+    client.proxy = crate::proxy::ProxyChoice::from_json(&json!({ "mode": "socks5", "host": "proxy.example" }));
+    let own = client.folders(None, None).unwrap_err();
+    assert_eq!(own.kind, ErrorKind::AccountProxyUnusable);
+    assert_eq!(own.to_string(), "Microsoft Graph: proxy setting unusable (account)");
+    assert_eq!(own.retry_after_seconds, None);
+
+    // Following an app-wide proxy that cannot be used names that one.
+    let app = {
+        let _slot = crate::proxy::route_fixture::GlobalSlot::take();
+        crate::proxy::publish_global(&json!({ "mode": "http", "port": 3128 }));
+        client.proxy = crate::proxy::ProxyChoice::Global;
+        client.folders(None, None).unwrap_err()
+    };
+    assert_eq!(app.kind, ErrorKind::AppProxyUnusable);
+    assert_eq!(app.to_string(), "Microsoft Graph: proxy setting unusable (app)");
+    assert!(origin.requests().is_empty(), "nothing was sent");
+
+    // Neither is retried as a passing network failure, even under words
+    // that would otherwise read as one.
+    for err in [own, app] {
+        let wrapped = anyhow::Error::new(err).context("sync INBOX: timed out");
+        assert!(!crate::engine::is_transient_sync_error(&wrapped), "{wrapped:#}");
+    }
+}
+
+#[test]
+fn a_proxy_server_the_http_client_cannot_use_is_a_proxy_error_too() {
+    // A port typed into the server field: ureq cannot be pointed at it, so
+    // nothing is sent and the setting is named, not "Transport" (#201).
+    let origin = Fixture::new(|_| vec![]);
+    let mut client = origin.client();
+    let pasted = crate::proxy::ProxyConfig {
+        kind: crate::proxy::ProxyKind::Http,
+        host: "proxy.corp:3128".into(),
+        port: 3128,
+        username: String::new(),
+        password: String::new(),
+    };
+    client.proxy = crate::proxy::ProxyChoice::Custom(pasted.clone());
+    assert_eq!(client.folders(None, None).unwrap_err().kind, ErrorKind::AccountProxyUnusable);
+    let app = {
+        let _slot = crate::proxy::route_fixture::GlobalSlot::take();
+        crate::proxy::set_global(Some(pasted));
+        client.proxy = crate::proxy::ProxyChoice::Global;
+        client.folders(None, None).unwrap_err()
+    };
+    assert_eq!(app.kind, ErrorKind::AppProxyUnusable);
+    assert!(origin.requests().is_empty(), "nothing was sent");
+}

@@ -16,6 +16,9 @@ export type SettingsSection =
   | 'account'
   | 'accountSignature'
   | 'autoArchive'
+  // Opened from the account sync panel for a refused proxy (#201); not offered by search.
+  | 'network'
+  | 'accountNetwork'
 export type SettingsDestination = {
   id: string
   section: SettingsSection

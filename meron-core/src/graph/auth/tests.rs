@@ -836,3 +836,54 @@ fn withdrawn_send_consent_falls_back_to_reading() {
     let kept = manager.record(EMAIL, &crate::proxy::ProxyChoice::Direct).unwrap();
     assert!(!kept.can_send());
 }
+
+#[test]
+fn a_proxy_setting_that_cannot_be_used_is_a_proxy_failure_not_unavailable() {
+    // #201: Microsoft was never asked, so it is not "unavailable"; the
+    // failure says whose proxy setting refused the request.
+    use crate::graph::tests::Fixture;
+    let f =Fixture::new(|_| vec![(200, String::new(), "{}".into())]);
+    let own = crate::proxy::ProxyChoice::from_json(&json!({ "mode": "ftp", "host": "h", "port": 21 }));
+    let failure = Microsoft.http(&own, f.base.as_str(), None).err();
+    assert_eq!(failure, Some(Failure::AccountProxyUnusable));
+    assert_eq!(
+        failure.unwrap().to_string(),
+        "Graph authorization: proxy setting unusable (account)"
+    );
+
+    let failure = {
+        let _slot = crate::proxy::route_fixture::GlobalSlot::take();
+        crate::proxy::publish_global(&json!({ "mode": "socks5", "host": "h" }));
+        Microsoft
+            .http(&crate::proxy::ProxyChoice::Global, f.base.as_str(), None)
+            .err()
+    };
+    assert_eq!(failure, Some(Failure::AppProxyUnusable));
+    assert!(f.requests().is_empty(), "nothing was sent");
+
+    // A refusal met by a Graph request maps across unchanged.
+    assert_eq!(
+        graph_failure(super::super::Error::new(super::super::ErrorKind::AppProxyUnusable)),
+        Failure::AppProxyUnusable
+    );
+    assert_eq!(
+        graph_failure(super::super::Error::new(super::super::ErrorKind::AccountProxyUnusable)),
+        Failure::AccountProxyUnusable
+    );
+}
+
+#[test]
+fn a_proxy_server_the_http_client_cannot_use_is_a_proxy_failure_too() {
+    // #201: a server with a space in it is the account's setting at fault.
+    use crate::graph::tests::Fixture;
+    let f = Fixture::new(|_| vec![(200, String::new(), "{}".into())]);
+    let own = crate::proxy::ProxyChoice::Custom(crate::proxy::ProxyConfig {
+        kind: crate::proxy::ProxyKind::Socks5,
+        host: "proxy corp".into(),
+        port: 1080,
+        username: String::new(),
+        password: String::new(),
+    });
+    assert_eq!(Microsoft.http(&own, f.base.as_str(), None).err(), Some(Failure::AccountProxyUnusable));
+    assert!(f.requests().is_empty(), "nothing was sent");
+}

@@ -1053,7 +1053,7 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
     }
     #[test]
     fn graph_failures_do_not_enter_imap_retry_policy() {
-        for kind in [meron_core::graph::ErrorKind::Throttled,meron_core::graph::ErrorKind::Transport,meron_core::graph::ErrorKind::Unavailable,meron_core::graph::ErrorKind::Reauthenticate] {
+        for kind in [meron_core::graph::ErrorKind::Throttled,meron_core::graph::ErrorKind::Transport,meron_core::graph::ErrorKind::Unavailable,meron_core::graph::ErrorKind::Reauthenticate,meron_core::graph::ErrorKind::AppProxyUnusable,meron_core::graph::ErrorKind::AccountProxyUnusable] {
             let error=meron_core::graph::Error{kind,status:None,retry_after_seconds:Some(30)};
             assert!(!is_transient_sync_error(&anyhow::Error::new(error).context("timeout must not override Graph retry policy")));
         }
@@ -1127,6 +1127,17 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
     fn socks_host_unreachable_is_transient() {
         let error = anyhow::anyhow!("SOCKS5 connect failed: host unreachable");
         assert!(is_transient_sync_error(&error));
+    }
+
+    #[test]
+    fn an_unusable_proxy_setting_is_not_retried_as_a_passing_failure() {
+        // Even under words the retry would otherwise take for a network
+        // failure: only fixing the setting helps (#201).
+        let refused = meron_core::proxy::ProxyChoice::from_json(&serde_json::json!({ "mode": "http", "port": 3128 }))
+            .resolve()
+            .unwrap_err()
+            .context("connect timed out");
+        assert!(!is_transient_sync_error(&refused), "{refused:#}");
     }
 
     #[tokio::test]

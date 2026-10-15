@@ -374,7 +374,7 @@ pub async fn refresh_oauth_token(
     client_secret: &str,
     refresh_token: &str,
     scope: Option<&str>,
-    proxy: Option<crate::proxy::ProxyConfig>,
+    proxy: crate::proxy::ProxyChoice,
 ) -> Result<(String, i64)> {
     let token_url = token_url.to_string();
     let client_id = client_id.to_string();
@@ -397,7 +397,8 @@ pub async fn refresh_oauth_token(
 
         // Keep non-2xx as a response (not a transport error) so we can surface
         // the JSON error body the provider returns for an invalid/revoked token.
-        let mut resp = crate::proxy::agent_for(proxy.as_ref())?
+        // The account's own route (#193); a proxy it cannot use is said to be one (#201).
+        let mut resp = proxy.agent()?
             .post(&token_url)
             .config()
             .http_status_as_error(false)
@@ -2588,5 +2589,30 @@ mod tests {
         assert_eq!(thread_key(None, "msgid", "inreply", "", 7), "inreply");
         assert_eq!(thread_key(None, "msgid", "", "", 7), "msgid");
         assert_eq!(thread_key(None, "", "", "", 7), "uid:7");
+    }
+
+    #[test]
+    fn the_oauth_token_refresh_follows_the_account_route() {
+        use crate::proxy::{ProxyChoice, ProxyScope, UnusableProxy, route_fixture};
+        let refresh = |token_url: &str, proxy: ProxyChoice| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(super::refresh_oauth_token(token_url, "client", "", "refresh", None, proxy))
+        };
+        // Its own proxy, direct (past an app-wide proxy) or the app-wide one, as
+        // the account's mail goes (#193). The fixture answers with no token:
+        // only where the request went counts here.
+        route_fixture::check_account_routes(|origin, proxy| {
+            let _ = refresh(origin, proxy);
+        });
+
+        // Its own proxy, half filled in: refused as that setting, nothing sent (#201).
+        let origin = route_fixture::Recorder::origin();
+        let own = ProxyChoice::from_json(&serde_json::json!({ "mode": "http", "port": 3128 }));
+        let err = refresh(&origin.url(), own).unwrap_err();
+        assert_eq!(UnusableProxy::find(&err).map(|refusal| refusal.scope), Some(ProxyScope::Account), "{err:#}");
+        assert!(origin.requests().is_empty(), "the token endpoint was never asked");
     }
 }

@@ -130,3 +130,43 @@ internal fun mobileProxyEndpointFromSyncError(error: String): String? {
     return Regex("""\bconnect to proxy\s+$endpoint""", RegexOption.IGNORE_CASE).find(error)?.groupValues?.get(1)
         ?: Regex("""\b(?:http|socks5) proxy\s+$endpoint""", RegexOption.IGNORE_CASE).find(error)?.groupValues?.get(1)
 }
+
+/** Whose proxy setting it is: the app-wide one or the account's own. */
+internal enum class MobileProxyScope { App, Account }
+
+/**
+ * The core refuses a proxy that was chosen but cannot be used (no server or
+ * port, an unknown type, a setting it could not read) with one form of text,
+ * `UNUSABLE_PREFIX` in meron-core/src/proxy.rs (#201):
+ * "proxy setting unusable (app): …" or "proxy setting unusable (account): …".
+ * Change both together.
+ */
+internal fun mobileUnusableProxyScopeFromSyncError(error: String): MobileProxyScope? =
+    when (Regex("""\bproxy setting unusable \((app|account)\)""").find(error)?.groupValues?.get(1)) {
+        "app" -> MobileProxyScope.App
+        "account" -> MobileProxyScope.Account
+        else -> null
+    }
+
+/**
+ * Which proxy settings a sync failure opens, or null when the failure was not
+ * the proxy's. A refusal names its setting; for a proxy that did not answer it
+ * is the account's own when the account has one, otherwise the app-wide one it
+ * follows. Without a known account there are no account settings to open, so
+ * it is the general Network settings.
+ */
+internal fun mobileProxySettingsScope(
+    error: String,
+    account: AccountSummary?,
+): MobileProxyScope? {
+    val scope =
+        mobileUnusableProxyScopeFromSyncError(error)
+            ?: if (mobileProxyEndpointFromSyncError(error) == null) {
+                return null
+            } else if (account?.proxy?.mode == "http" || account?.proxy?.mode == "socks5") {
+                MobileProxyScope.Account
+            } else {
+                MobileProxyScope.App
+            }
+    return if (scope == MobileProxyScope.Account && account == null) MobileProxyScope.App else scope
+}

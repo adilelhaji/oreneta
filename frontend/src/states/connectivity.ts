@@ -1,6 +1,8 @@
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { accounts$ } from './accounts'
+import { onSettingSaved } from './settings'
+import { proxyProblemFromSyncError, proxyProblemScope, type ProxyProblem } from '../lib/proxyProblems'
 
 export type SyncObservation = {
   failure: boolean
@@ -8,10 +10,15 @@ export type SyncObservation = {
   lastActivityAt: number | null
   request: 'idle' | 'pending' | 'requested' | 'unconfirmed'
   revision: number
+  // The last failure was the proxy's (#201), so the banner can say so and open
+  // the setting that fixes it. Null for any other failure.
+  proxy: ProxyProblem | null
 }
 
 // Session observations, not proof of complete mailbox/service freshness. Raw
-// server diagnostics are deliberately not retained or rendered by this surface.
+// server diagnostics are deliberately not retained or rendered by this surface:
+// of an error only whether it was the proxy's is kept, with the proxy's own
+// address when it did not answer.
 export const connectivity$ = observable({
   byAccount: {} as Record<string, SyncObservation>,
   unattributed: null as SyncObservation | null,
@@ -23,6 +30,7 @@ const emptyObservation = (): SyncObservation => ({
   lastActivityAt: null,
   request: 'idle',
   revision: ++revision,
+  proxy: null,
 })
 
 export function syncObservation(account: string): SyncObservation | undefined {
@@ -36,7 +44,7 @@ function store(account: string, observation: SyncObservation) {
   connectivity$.byAccount.set({ ...connectivity$.byAccount.peek(), [account]: observation })
 }
 
-export function setSyncError(account: string | null, _message?: string) {
+export function setSyncError(account: string | null, message = '') {
   if (account && !knownAccount(account)) return
   const previous = account ? syncObservation(account) : connectivity$.unattributed.peek()
   const observation: SyncObservation = {
@@ -45,10 +53,40 @@ export function setSyncError(account: string | null, _message?: string) {
     dismissed: false,
     request: 'idle',
     revision: ++revision,
+    // Replaced, not merged: a later failure that is not the proxy's must not
+    // keep sending the person to the proxy setting.
+    proxy: proxyProblemFromSyncError(message),
   }
   if (account) store(account, observation)
   else connectivity$.unattributed.set(observation)
 }
+
+/**
+ * A proxy setting was saved: the failures it may have caused no longer say
+ * the proxy is at fault. They stay failures, unverified, until mail activity
+ * or a new error says more. `account` names the account whose own setting
+ * changed; without it, the app-wide proxy changed.
+ */
+export function forgetProxyProblems(account?: string) {
+  const current = connectivity$.byAccount.peek()
+  const accounts = accounts$.peek()
+  const caused = (id: string, problem: ProxyProblem) =>
+    account ? id === account : proxyProblemScope(problem, accounts.find((item) => item.id === id)) === 'app'
+  const cleared = Object.entries(current).filter(([id, observation]) => observation.proxy && caused(id, observation.proxy))
+  if (cleared.length) {
+    connectivity$.byAccount.set({
+      ...current,
+      ...Object.fromEntries(cleared.map(([id, observation]) => [id, { ...observation, proxy: null }])),
+    })
+  }
+  const unattributed = connectivity$.unattributed.peek()
+  if (!account && unattributed?.proxy) connectivity$.unattributed.set({ ...unattributed, proxy: null })
+}
+
+// Every change to the app-wide proxy is saved as it is made (settings.ts).
+// Only a change the store accepted can have fixed it: until then the core
+// keeps using the setting it refused.
+onSettingSaved('proxy', () => forgetProxyProblems())
 
 export function dismissSyncError(account: string | null) {
   const previous = account ? syncObservation(account) : connectivity$.unattributed.peek()

@@ -483,7 +483,7 @@ impl Engine {
                     &client_secret,
                     refresh_token,
                     scope,
-                    creds.proxy.resolve()?,
+                    creds.proxy.clone(),
                 )
                 .await?;
                 creds.access_token = Some(new_access);
@@ -1340,6 +1340,9 @@ pub fn is_transient_io_error(error: &std::io::Error) -> bool {
 
 pub fn is_transient_sync_error(error: &anyhow::Error) -> bool {
     if error.downcast_ref::<crate::graph::Error>().is_some() { return false; }
+    // A proxy setting that cannot be used stays so until someone fixes it
+    // (#201), whatever words its reason happens to contain.
+    if crate::proxy::UnusableProxy::find(error).is_some() { return false; }
     for cause in error.chain() {
         if let Some(io_error) = cause.downcast_ref::<std::io::Error>()
             && is_transient_io_error(io_error)
@@ -2921,6 +2924,37 @@ mod tests {
         let mut accounts = HashMap::new();
 
         assert!(resolve_delegate(&conn, &host, &mut accounts, "shared", "parent").is_none());
+    }
+
+    #[test]
+    fn a_shared_mailbox_refused_by_its_proxy_names_whose_setting_it_is() {
+        use crate::proxy::{ProxyChoice, ProxyScope, UnusableProxy};
+        let conn = test_conn();
+        insert_account(&conn, "parent", "ana@corp.example.com", &bare_creds("https://mail.corp.example.com/EWS/Exchange.asmx"));
+        let shared = |id: &str, email: &str, proxy: ProxyChoice| {
+            insert_account(&conn, id, email, &{
+                let mut c = bare_creds("");
+                c.delegate_account_id = "parent".to_string();
+                c.proxy = proxy;
+                c
+            });
+        };
+        // Its own proxy, half filled in, while the delegate follows the app's.
+        shared("own", "support@corp.example.com", ProxyChoice::from_json(&serde_json::json!({ "mode": "http", "port": 3128 })));
+        // Following the app-wide proxy, which cannot be used.
+        shared("follows", "sales@corp.example.com", ProxyChoice::Global);
+        let host = FakeHost { passwords: HashMap::from([("parent".to_string(), "hunter2".to_string())]) };
+        let mut accounts = HashMap::new();
+        let scope = |id: &str, accounts: &mut HashMap<String, Creds>| {
+            let resolved = resolve_delegate(&conn, &host, accounts, id, "parent").expect("resolves");
+            let err = resolved.proxy.agent().err().expect("refused");
+            UnusableProxy::find(&err).map(|refusal| refusal.scope)
+        };
+
+        assert_eq!(scope("own", &mut accounts), Some(ProxyScope::Account));
+        let _slot = crate::proxy::route_fixture::GlobalSlot::take();
+        crate::proxy::publish_global(&serde_json::json!({ "mode": "socks5", "host": "proxy.example" }));
+        assert_eq!(scope("follows", &mut accounts), Some(ProxyScope::App));
     }
 
     #[test]
