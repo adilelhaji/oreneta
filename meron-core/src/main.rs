@@ -8289,8 +8289,19 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
             let avatar_url = p.get("avatar_url").and_then(Value::as_str);
             let avatar_source = p.get("avatar_source").and_then(Value::as_str);
-            store::set_account_avatar(&engine.db.lock().unwrap(), &id, avatar_url, avatar_source)?;
-            Ok(json!({ "ok": true }))
+            // `expect_*` make a retry that read the account earlier apply only
+            // while it still holds what it read.
+            let expect_url = p.get("expect_avatar_url").and_then(Value::as_str);
+            let expect_source = p.get("expect_avatar_source").and_then(Value::as_str);
+            let applied = store::set_account_avatar_if(
+                &engine.db.lock().unwrap(),
+                &id,
+                avatar_url,
+                avatar_source,
+                expect_url,
+                expect_source,
+            )?;
+            Ok(json!({ "ok": true, "applied": applied }))
         }
 
         // Accounts whose picture is still to be fetched, or that hold a remote

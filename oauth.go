@@ -108,7 +108,9 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 		return nil, err
 	}
 	if avatarSource != "" {
-		_, _ = a.sidecar.Call("account.setAvatar", map[string]any{"account": id, "avatar_source": avatarSource})
+		if _, err := a.sidecar.Call("account.setAvatar", map[string]any{"account": id, "avatar_source": avatarSource}); err != nil {
+			a.logf("account.addGmailOAuth: account=%s picture address not kept: %v", id, err)
+		}
 	}
 	_, _ = a.sidecar.Call("watch.start", map[string]any{"account": id})
 

@@ -5860,3 +5860,55 @@ fn pending_avatars_are_those_waiting_for_a_copy_or_holding_a_remote_address() {
     let remote = pending.iter().find(|row| row["id"] == "remote").unwrap();
     assert_eq!(remote["avatar_url"], "http://img.example/r.png");
 }
+
+/// A retry that read the account earlier applies only while the account still
+/// holds what it read, so it cannot undo what somebody chose meanwhile (#194).
+#[test]
+fn a_late_avatar_update_does_not_overwrite_a_newer_choice() {
+    let conn = test_conn();
+    proxy_test_account(&conn, "a", crate::proxy::ProxyChoice::Global);
+    set_account_avatar(&conn, "a", Some(""), Some("https://img.example/old.png")).unwrap();
+
+    // Read: ("", old). Meanwhile the person picks another picture.
+    set_account_avatar(&conn, "a", None, Some("https://img.example/new.png")).unwrap();
+
+    let applied = set_account_avatar_if(
+        &conn, "a", Some("/media/avatars/a/old.png"), Some(""), Some(""), Some("https://img.example/old.png"),
+    )
+    .unwrap();
+    assert!(!applied, "the retry of the old address must not apply");
+    let (url, source): (String, String) = conn
+        .query_row("SELECT avatar_url, avatar_source FROM accounts WHERE id = 'a'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap();
+    assert_eq!((url.as_str(), source.as_str()), ("", "https://img.example/new.png"));
+
+    let applied = set_account_avatar_if(
+        &conn, "a", Some("/media/avatars/a/new.png"), Some(""), Some(""), Some("https://img.example/new.png"),
+    )
+    .unwrap();
+    assert!(applied);
+}
+
+/// An account saved again with a picture of its own drops whatever address was
+/// waiting to be fetched (#194).
+#[test]
+fn saving_an_account_with_a_picture_drops_the_waiting_source() {
+    let conn = test_conn();
+    proxy_test_account(&conn, "a", crate::proxy::ProxyChoice::Global);
+    set_account_avatar(&conn, "a", None, Some("https://img.example/old.png")).unwrap();
+    // Saved again with no picture: the waiting address stays.
+    proxy_test_account(&conn, "a", crate::proxy::ProxyChoice::Global);
+    assert_eq!(pending_avatars(&conn).unwrap().len(), 1);
+
+    let creds = proxy_test_creds(crate::proxy::ProxyChoice::Global);
+    let meta = AccountMeta {
+        engine: "mail".to_string(),
+        provider: "custom".to_string(),
+        email: "user@example.com".to_string(),
+        display_name: String::new(),
+        avatar_url: "/media/avatars/a/mine.png".to_string(),
+        sender_name: String::new(),
+    };
+    upsert_account(&conn, "a", &meta, &creds).unwrap();
+    assert!(pending_avatars(&conn).unwrap().is_empty());
+}

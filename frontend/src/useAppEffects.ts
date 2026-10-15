@@ -22,7 +22,7 @@ import {
   inboxUnread,
 } from './states/mail'
 import { flushComposeDrafts, openMailtoCompose, openThreadTabById, restoreLocalDrafts } from './states/compose'
-import { accounts$ } from './states/accounts'
+import { accounts$, refreshAccountPictures } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
 import { settings$, applyDocumentLanguage } from './states/settings'
@@ -222,6 +222,19 @@ export function useAppEffects() {
     })
     return () => {
       if (typeof offMailto === 'function') offMailto()
+    }
+  }, [])
+
+  // A picture that could not be fetched when the account was added is tried
+  // again through the account's route; show it once it arrives (#194).
+  useEffect(() => {
+    const eventsOn = (window as any).runtime?.EventsOn
+    if (!eventsOn) return
+    const off = eventsOn('accounts.picturesChanged', () => {
+      void refreshAccountPictures()
+    })
+    return () => {
+      if (typeof off === 'function') off()
     }
   }, [])
 

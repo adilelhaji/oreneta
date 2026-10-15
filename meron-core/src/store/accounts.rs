@@ -354,6 +354,9 @@ pub fn upsert_account(
            -- an avatar is set or cleared.
            avatar_url   = CASE WHEN excluded.avatar_url = '' THEN accounts.avatar_url
                                ELSE excluded.avatar_url END,
+           -- A picture that arrives with the account replaces whatever was
+           -- waiting to be fetched (#194).
+           avatar_source = CASE WHEN excluded.avatar_url <> '' THEN '' ELSE accounts.avatar_source END,
            config       = excluded.config,
            updated_at   = excluded.updated_at,
            sender_name = excluded.sender_name",
@@ -957,7 +960,6 @@ pub fn account_proxy(conn: &Connection, id: &str) -> Result<crate::proxy::ProxyC
     }
     Ok(load_account(conn, id)?.map(|creds| creds.proxy).unwrap_or_default())
 }
-
 /// Set an account's picture and, separately, the address it is to be fetched
 /// from (#194). A value left out (`None`) is left as it was. The picture is a
 /// copy kept on this computer; the address is only for a retry through the
@@ -968,25 +970,51 @@ pub fn set_account_avatar(
     avatar_url: Option<&str>,
     avatar_source: Option<&str>,
 ) -> Result<()> {
-    conn.execute(
+    set_account_avatar_if(conn, id, avatar_url, avatar_source, None, None).map(|_| ())
+}
+
+/// [`set_account_avatar`], applied only while the account still holds the
+/// picture and source the caller read (`None` stands for "whatever it is").
+/// A retry that took a while to fetch its copy must not overwrite what
+/// somebody chose meanwhile. Returns whether the update was applied.
+pub fn set_account_avatar_if(
+    conn: &Connection,
+    id: &str,
+    avatar_url: Option<&str>,
+    avatar_source: Option<&str>,
+    expect_url: Option<&str>,
+    expect_source: Option<&str>,
+) -> Result<bool> {
+    let changed = conn.execute(
         "UPDATE accounts
          SET avatar_url = COALESCE(?2, avatar_url),
              avatar_source = COALESCE(?3, avatar_source),
              updated_at = ?4
-         WHERE id = ?1",
-        params![id, avatar_url.map(str::trim), avatar_source.map(str::trim), now_unix()],
+         WHERE id = ?1
+           AND (?5 IS NULL OR avatar_url = ?5)
+           AND (?6 IS NULL OR avatar_source = ?6)",
+        params![
+            id,
+            avatar_url.map(str::trim),
+            avatar_source.map(str::trim),
+            now_unix(),
+            expect_url,
+            expect_source
+        ],
     )?;
-    Ok(())
+    Ok(changed > 0)
 }
 
+
+
 /// Accounts whose picture still has to be fetched or settled (#194): one with
-/// a source address waiting for a retry, and one still holding a remote
-/// address as its picture, as earlier versions stored it when a download
-/// failed.
+/// a source address waiting for a retry, and one still holding an address that
+/// is not a local copy (a remote one, as earlier versions stored it when a
+/// download failed).
 pub fn pending_avatars(conn: &Connection) -> Result<Vec<serde_json::Value>> {
     let mut stmt = conn.prepare(
         "SELECT id, avatar_url, avatar_source FROM accounts
-         WHERE avatar_source <> '' OR avatar_url LIKE 'http://%' OR avatar_url LIKE 'https://%'
+         WHERE avatar_source <> '' OR (avatar_url <> '' AND avatar_url NOT LIKE '/media/%')
          ORDER BY sort_order, id",
     )?;
     let rows = stmt.query_map([], |row| {

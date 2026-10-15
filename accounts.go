@@ -341,7 +341,7 @@ func (a *App) accountSetProxy(payload map[string]any) (any, error) {
 	// Credentials are never logged; the mode alone is enough to debug routing.
 	a.logf("account.setProxy: account=%s mode=%v", id, proxy["mode"])
 	// A picture that could not be fetched may go through the new route now.
-	go a.settleAvatars()
+	a.requestAvatarSettle(avatarSettleDelay)
 	return map[string]any{"ok": true}, nil
 }
 

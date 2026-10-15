@@ -90,6 +90,21 @@ asistente ya no la lanza al pulsar «Continue» ni en la configuración manual.
 Además, la dirección va codificada en el parámetro `emailaddress` y se
 rechaza un dominio con sintaxis de URL.
 
+## Imagen de la cuenta (#194)
+
+`avatar_url` es siempre una copia local (`/media/…`) o vacío; la interfaz
+dibuja las iniciales mientras no haya copia. Si la descarga por la ruta de la
+cuenta falla, la URL de origen se guarda aparte en `accounts.avatar_source`
+(esquema 63), nunca se muestra, y se reintenta al arrancar, al restaurar una
+copia de seguridad y al cambiar un ajuste de proxy (con 2 s de espera y una
+sola ejecución en marcha, porque el ajuste se guarda en cada pulsación).
+`account.setAvatar` aplica el resultado de un reintento solo si la cuenta
+sigue como se leyó (`expect_avatar_url`, `expect_avatar_source`), de modo que
+una descarga lenta no pisa lo que la persona eligió entretanto. Un guardado
+desde ajustes que no se puede descargar conserva la imagen anterior y
+responde `pending: true`. `account.list` vacía cualquier dirección que no sea
+una copia local. Móvil carga sus imágenes por su cuenta y no se toca.
+
 ## Pruebas
 
 - Go (`netproxy_test.go`): proxy HTTP de prueba que registra peticiones y
@@ -111,11 +126,9 @@ rechaza un dominio con sintaxis de URL.
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
   Mozilla; los servidores se pueden escribir sin búsqueda.
-
-**Imagen de la cuenta (#194).** `avatar_url` es siempre una copia local
-(`/media/…`) o vacío. Si la descarga falla, la URL de origen se guarda aparte
-en `accounts.avatar_source`, nunca se muestra, y se reintenta por la ruta de
-la cuenta al arrancar y al cambiar un ajuste de proxy (`settleAvatars`, en
-`avatars.go`). La interfaz dibuja las iniciales mientras no haya copia. Las
-URL remotas que versiones anteriores dejaron en `avatar_url` se asientan en el
-primer arranque. Móvil carga sus imágenes por su cuenta y no se toca.
+- Imagen de la cuenta (`avatar_download_test.go`, `oauth_avatar_test.go`,
+  `Avatar.test.tsx`, `accounts.test.ts`, y en el núcleo
+  `an_account_picture_and_its_source_are_set_apart`,
+  `a_late_avatar_update_does_not_overwrite_a_newer_choice`): una descarga
+  fallida nunca guarda ni entrega una dirección remota, el reintento usa la
+  ruta de la cuenta y guarda la copia, y las solicitudes se agrupan.

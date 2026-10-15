@@ -402,9 +402,22 @@ func (a *App) pruneComposerMedia(payload map[string]any) (any, error) {
 	return map[string]any{"removed": removed}, nil
 }
 
-// isRemoteURL reports whether a picture address points at the network.
+// isLocalAvatar reports whether a picture address is none, or a copy kept on
+// this computer. Those are the only two things an account picture may be.
+func isLocalAvatar(value string) bool {
+	return value == "" || strings.HasPrefix(value, "/media/")
+}
+
+// isRemoteURL reports whether a picture address points at the network. The
+// scheme is read without regard to case.
 func isRemoteURL(value string) bool {
-	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+	value = strings.TrimSpace(value)
+	for _, scheme := range []string{"http://", "https://"} {
+		if len(value) >= len(scheme) && strings.EqualFold(value[:len(scheme)], scheme) {
+			return true
+		}
+	}
+	return false
 }
 
 // saveAvatar keeps a copy of an account picture on this computer, under
@@ -416,11 +429,16 @@ func isRemoteURL(value string) bool {
 // or the app proxy). When that fails it is an error, and the address is never
 // handed back as the picture: the web view would load it directly, without the
 // proxy, every time it drew the avatar (#194). The caller keeps the address
-// apart, only to try again.
+// apart, only to try again. Any other kind of address (a data: URL, one that
+// starts with //) is refused for the same reason.
 func (a *App) saveAvatar(accountID, avatarURL string) (string, error) {
-	if avatarURL == "" || strings.HasPrefix(avatarURL, "/media/") || !isRemoteURL(avatarURL) {
+	if isLocalAvatar(avatarURL) {
 		return avatarURL, nil
 	}
+	if !isRemoteURL(avatarURL) {
+		return "", errors.New("unsupported picture address")
+	}
+	avatarURL = strings.TrimSpace(avatarURL)
 
 	safeAccount := strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {

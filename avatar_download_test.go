@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func pngServer(t *testing.T) *httptest.Server {
@@ -78,7 +79,7 @@ func TestSaveAvatarNeverReturnsTheRemoteAddress(t *testing.T) {
 	}{
 		"a server error":         {directApp(), refusing.URL},
 		"an image that is huge":  {directApp(), notAnImage.URL},
-		"an unreachable address": {directApp(), "http://127.0.0.1:1/me.png"},
+		"an unreachable address": {directApp(), closedServerURL(t) + "/me.png"},
 		"an unusable proxy": {
 			&App{proxyLookup: func(string) (*proxySetting, error) { return &proxySetting{Mode: "http"}, nil }},
 			"http://avatars.example.test/me.png",
@@ -107,30 +108,38 @@ func avatarPending(rows ...map[string]any) sidecarResponsePlan {
 	return sidecarResponsePlan{Result: map[string]any{"accounts": list}}
 }
 
-func avatarOK() sidecarResponsePlan { return sidecarResponsePlan{Result: map[string]any{"ok": true}} }
+func avatarOK() sidecarResponsePlan {
+	return sidecarResponsePlan{Result: map[string]any{"ok": true, "applied": true}}
+}
 
 // A picture that cannot be fetched is kept only as its source; what the
 // account shows is never a remote address.
 func TestSettleAvatarsKeepsAFailedPictureOnlyAsItsSource(t *testing.T) {
 	isolateTestProfile(t)
-	const remote = "http://127.0.0.1:1/me.png"
+	remote := closedServerURL(t) + "/me.png"
 	app, writer := avatarApp(t,
 		avatarPending(
+			// Already waiting for that address: nothing to write again.
 			map[string]any{"id": "waiting", "avatar_url": "", "avatar_source": remote},
 			// As earlier versions left it after a failed download.
 			map[string]any{"id": "old", "avatar_url": remote, "avatar_source": ""},
 		),
-		avatarOK(), avatarOK(),
+		avatarOK(),
 	)
 
 	app.settleAvatars()
 
-	if len(writer.calls) != 3 {
+	if len(writer.calls) != 2 {
 		t.Fatalf("calls = %#v", writer.calls)
 	}
 	assertCall(t, writer.calls[0], "account.pendingAvatars", map[string]any{})
-	assertCall(t, writer.calls[1], "account.setAvatar", map[string]any{"account": "waiting", "avatar_source": remote})
-	assertCall(t, writer.calls[2], "account.setAvatar", map[string]any{"account": "old", "avatar_url": "", "avatar_source": remote})
+	assertCall(t, writer.calls[1], "account.setAvatar", map[string]any{
+		"account":              "old",
+		"avatar_url":           "",
+		"avatar_source":        remote,
+		"expect_avatar_url":    remote,
+		"expect_avatar_source": "",
+	})
 }
 
 // A later retry through the account route stores the local copy and drops the
@@ -150,13 +159,15 @@ func TestSettleAvatarsStoresTheCopyOnceItCanBeFetched(t *testing.T) {
 	defer server.Close()
 	row := map[string]any{"id": "acct", "avatar_url": "", "avatar_source": server.URL}
 
-	app, writer := avatarApp(t, avatarPending(row), avatarOK(), avatarPending(row), avatarOK())
+	app, writer := avatarApp(t, avatarPending(row), avatarPending(row), avatarOK())
 	app.settleAvatars()
-	assertCall(t, writer.calls[1], "account.setAvatar", map[string]any{"account": "acct", "avatar_source": server.URL})
+	if len(writer.calls) != 1 {
+		t.Fatalf("a fetch that fails again should write nothing: %#v", writer.calls)
+	}
 
 	up.Store(true)
 	app.settleAvatars()
-	last := writer.calls[3]
+	last := writer.calls[2]
 	if last.Method != "account.setAvatar" || last.Params["avatar_source"] != "" {
 		t.Fatalf("retry call = %#v", last)
 	}
@@ -173,7 +184,7 @@ func TestSettleAvatarsStoresTheCopyOnceItCanBeFetched(t *testing.T) {
 // picture as it is and waits for a retry, without raising an error.
 func TestAccountSetAvatarKeepsThePreviousPictureWhenTheDownloadFails(t *testing.T) {
 	isolateTestProfile(t)
-	const remote = "http://127.0.0.1:1/me.png"
+	remote := closedServerURL(t) + "/me.png"
 	app, writer := avatarApp(t, avatarOK())
 
 	res, err := app.accountSetAvatar(map[string]any{"id": "acct", "avatar_url": remote})
@@ -236,5 +247,130 @@ func TestAccountListNeverHandsOutARemotePicture(t *testing.T) {
 		if got[id] != avatar {
 			t.Errorf("%s: avatar = %q, want %q", id, got[id], avatar)
 		}
+	}
+}
+
+// closedServerURL is the address of a server that has just been shut down, so
+// connecting to it is refused at once.
+func closedServerURL(t *testing.T) string {
+	t.Helper()
+	server := httptest.NewServer(http.NotFoundHandler())
+	url := server.URL
+	server.Close()
+	return url
+}
+
+// Only a copy kept on this computer, or nothing, is an account picture; the
+// scheme is read without regard to case, and nothing else slips through.
+func TestOnlyLocalCopiesAreAccountPictures(t *testing.T) {
+	for _, value := range []string{"HTTPS://img.example/a.png", " https://img.example/a.png", "Http://img.example/a.png"} {
+		if !isRemoteURL(value) || isLocalAvatar(value) {
+			t.Errorf("%q should count as a remote address", value)
+		}
+	}
+	for _, value := range []string{"", "/media/avatars/a/b.png"} {
+		if isRemoteURL(value) || !isLocalAvatar(value) {
+			t.Errorf("%q should count as local", value)
+		}
+	}
+	direct := directApp()
+	for _, value := range []string{"//img.example/a.png", "data:image/png;base64,AAAA", "ftp://img.example/a.png", "file:///etc/passwd"} {
+		if got, err := direct.saveAvatar("acct", value); err == nil || got != "" {
+			t.Errorf("saveAvatar(%q) = %q, %v; want it refused", value, got, err)
+		}
+	}
+
+	app, _ := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"accounts": []any{
+			map[string]any{"id": "upper", "email": "a@example.com", "avatar_url": "HTTPS://img.example/a.png"},
+			map[string]any{"id": "relative", "email": "b@example.com", "avatar_url": "//img.example/b.png"},
+			map[string]any{"id": "data", "email": "c@example.com", "avatar_url": "data:image/png;base64,AAAA"},
+		},
+	}})
+	res, err := app.accountList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, acc := range res.(map[string]any)["accounts"].([]Account) {
+		if acc.AvatarURL != "" {
+			t.Errorf("%s: the interface was given %q", acc.ID, acc.AvatarURL)
+		}
+	}
+}
+
+// A retry reads the account first and the core applies its result only while
+// the account is still as it was read, so a slow retry cannot undo a choice
+// made meanwhile; the copy it made is then thrown away.
+func TestSettleAvatarsAsksTheCoreToApplyOnlyWhatItRead(t *testing.T) {
+	isolateTestProfile(t)
+	server := pngServer(t)
+	row := map[string]any{"id": "acct", "avatar_url": "/media/avatars/acct/mine.png", "avatar_source": server.URL}
+	app, writer := avatarApp(t,
+		avatarPending(row),
+		sidecarResponsePlan{Result: map[string]any{"ok": true, "applied": false}},
+	)
+
+	app.settleAvatars()
+
+	call := writer.calls[1]
+	if call.Params["expect_avatar_url"] != "/media/avatars/acct/mine.png" || call.Params["expect_avatar_source"] != server.URL {
+		t.Fatalf("setAvatar did not carry what was read: %#v", call.Params)
+	}
+	local, _ := call.Params["avatar_url"].(string)
+	path, err := resolveMediaPath(strings.TrimPrefix(local, "/media/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("the copy %q was kept although the core did not apply it", local)
+	}
+}
+
+// The retry goes through the route of the account the picture belongs to.
+func TestSettleAvatarsUsesTheRouteOfTheAccount(t *testing.T) {
+	isolateTestProfile(t)
+	proxy := newTestHTTPProxy(t)
+	proxy.answer = func(*http.Request) (int, string) { return http.StatusNotFound, "" }
+	app, asked := proxiedApp(proxy.setting())
+	const remote = "http://avatars.example.test/me.png"
+	row := map[string]any{"id": "acct-7", "avatar_url": "", "avatar_source": remote}
+	base, _ := newMailHandlerTestApp(t, avatarPending(row))
+	app.sidecar = base.sidecar
+
+	app.settleAvatars()
+
+	if len(*asked) != 1 || (*asked)[0] != "acct-7" {
+		t.Fatalf("route looked up for %v, want acct-7", *asked)
+	}
+	if reqs, _ := proxy.seen(); len(reqs) != 1 || reqs[0] != "GET "+remote {
+		t.Fatalf("proxy saw %v", reqs)
+	}
+}
+
+// The proxy settings save on every keystroke; the pictures are tried again
+// once, after the last change, never once per keystroke.
+func TestAvatarSettleRequestsAreCoalesced(t *testing.T) {
+	var runs atomic.Int32
+	release := make(chan struct{})
+	started := make(chan struct{}, 8)
+	app := &App{avatarRun: func() {
+		runs.Add(1)
+		started <- struct{}{}
+		<-release
+	}}
+
+	app.requestAvatarSettle(0)
+	<-started // the first run is under way
+	for i := 0; i < 20; i++ {
+		app.requestAvatarSettle(0)
+	}
+	close(release)
+	<-started // one more run, for everything that arrived meanwhile
+	deadline := time.Now().Add(2 * time.Second)
+	for app.avatarRunning.Load() && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := runs.Load(); got != 2 {
+		t.Fatalf("runs = %d, want 2 (the one under way, and one for all later requests)", got)
 	}
 }

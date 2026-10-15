@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -46,6 +47,10 @@ type App struct {
 
 	// One settleAvatars run at a time (avatars.go).
 	avatarSettleMu sync.Mutex
+	avatarRunning  atomic.Bool
+	avatarDirty    atomic.Bool
+	// Replaces settleAvatars when set. Only tests set it.
+	avatarRun func()
 
 	coreErrorMu sync.Mutex
 	coreError   string
@@ -114,7 +119,7 @@ func (a *App) Startup(ctx context.Context) {
 		fmt.Fprintf(os.Stderr, "oreneta: core failed to start: %v (path: %s)\n", err, coreBinaryPath())
 	} else {
 		a.logf("core started")
-		go a.settleAvatars()
+		a.requestAvatarSettle(0)
 	}
 	a.setupNotificationListener()
 	a.setupResumeListener()
@@ -642,7 +647,7 @@ func (a *App) appPrefsSet(payload map[string]any) (any, error) {
 	res, err := a.sidecar.Call("app.prefsSet", payload)
 	// A picture that could not be fetched may go through the new route now.
 	if key, _ := payload["key"].(string); err == nil && key == "proxy" {
-		go a.settleAvatars()
+		a.requestAvatarSettle(avatarSettleDelay)
 	}
 	return res, err
 }
