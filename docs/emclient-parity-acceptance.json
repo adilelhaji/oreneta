@@ -1043,6 +1043,26 @@
           {
             "sha": "02732d66614b8b1141e588911d7fe09824a86b33",
             "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "meron-core/src/chat/tests.rs"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "meron-core/tests/prosody-xmpp.sh"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "frontend/src/lib/chatMentions.test.ts"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "notify_chat_test.go"
           }
         ],
         "native": [],
