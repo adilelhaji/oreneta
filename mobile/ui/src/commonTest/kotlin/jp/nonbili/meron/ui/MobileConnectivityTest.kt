@@ -1,6 +1,7 @@
 package jp.nonbili.meron.ui
 
 import jp.nonbili.meron.shared.AccountSummary
+import jp.nonbili.meron.shared.ProxySpec
 import kotlinx.coroutines.CancellationException
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
@@ -48,6 +49,53 @@ class MobileConnectivityTest {
             mobileProxyEndpointFromSyncError("connect to proxy ::1:9050: Connection refused"),
         )
         assertNull(mobileProxyEndpointFromSyncError("connect imap.example:993: timed out"))
+    }
+
+    @Test
+    fun aRefusedProxySettingNamesWhoseSettingItIs() {
+        // As meron-core/src/proxy.rs writes it (#201), from IMAP and from Graph.
+        assertEquals(
+            MobileProxyScope.App,
+            mobileUnusableProxyScopeFromSyncError(
+                "sync INBOX: proxy setting unusable (app): the app's proxy is incomplete (server or port missing)",
+            ),
+        )
+        assertEquals(
+            MobileProxyScope.Account,
+            mobileUnusableProxyScopeFromSyncError(
+                "sync INBOX: proxy setting unusable (account): this account's proxy has an unknown type \"ftp\"",
+            ),
+        )
+        assertEquals(
+            MobileProxyScope.App,
+            mobileUnusableProxyScopeFromSyncError("folders sync: Microsoft Graph: proxy setting unusable (app)"),
+        )
+        assertNull(mobileUnusableProxyScopeFromSyncError("connect to proxy 127.0.0.1:1: Connection refused"))
+        assertNull(mobileUnusableProxyScopeFromSyncError("Microsoft Graph: Transport"))
+        assertNull(mobileUnusableProxyScopeFromSyncError("proxy setting unusable (other): x"))
+    }
+
+    @Test
+    fun proxyFailuresOpenTheSettingThatFixesThem() {
+        val follows = AccountSummary(id = "work", email = "work@example.com")
+        val own =
+            AccountSummary(
+                id = "home",
+                email = "home@example.com",
+                proxy = ProxySpec(mode = "socks5", host = "proxy.home", port = 1080),
+            )
+        val appRefusal = "sync INBOX: proxy setting unusable (app): the app's proxy is incomplete"
+        val accountRefusal = "sync INBOX: proxy setting unusable (account): this account's proxy is incomplete"
+        // A refusal names its setting, whatever the account uses.
+        assertEquals(MobileProxyScope.App, mobileProxySettingsScope(appRefusal, own))
+        assertEquals(MobileProxyScope.Account, mobileProxySettingsScope(accountRefusal, follows))
+        // A proxy that did not answer: the account's own, or the app's it follows.
+        val unreachable = "sync INBOX: connect to proxy proxy.home:1080: Connection refused"
+        assertEquals(MobileProxyScope.Account, mobileProxySettingsScope(unreachable, own))
+        assertEquals(MobileProxyScope.App, mobileProxySettingsScope(unreachable, follows))
+        assertEquals(MobileProxyScope.App, mobileProxySettingsScope(unreachable, null))
+        // Anything else is not the proxy's.
+        assertNull(mobileProxySettingsScope("sync INBOX: connect imap.example:993: timed out", own))
     }
 
     @Test
