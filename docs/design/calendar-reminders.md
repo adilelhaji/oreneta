@@ -26,7 +26,9 @@ Fila SET-29 del [libro de paridad](../emclient-parity-acceptance.md).
   vencidos). Un hueco se mira como mucho 14 días hacia atrás; un reloj
   atrasado no abre hueco.
 - **Al empezar** (0 minutos): se da en la primera mirada desde el inicio. Un
-  evento sin duración cuenta como en curso durante su primer minuto.
+  evento que empieza en el mismo segundo de la mirada aún no ha empezado, así
+  que también lo da una primera mirada sin otra anterior. Un evento sin
+  duración cuenta como en curso durante su primer minuto.
 - **Al despertar** el escritorio mira en el acto (`system.resumed`), sin
   esperar al minuto siguiente.
 - **Si el almacén falla**, el aviso afectado no se da y la mirada no se

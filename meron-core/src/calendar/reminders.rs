@@ -231,7 +231,10 @@ pub fn due<Tz: TimeZone>(
         if now_timing.fire_at > now {
             continue;
         }
-        let ahead = now_timing.start > now;
+        // Starting this very second is not started yet: the moment an "at the
+        // start" reminder exists for, which a first look (no previous one to
+        // have missed it since) would otherwise never give.
+        let ahead = now_timing.start >= now;
         let came_due_since = previous.is_some_and(|previous| {
             // When it rang as the previous look saw it: in this zone, unless
             // the zone changed since; then in that look's offset, which is all
@@ -472,6 +475,29 @@ mod tests {
         mark_reread(&conn, "acct", since + 60).unwrap();
         forget_looks(&conn, "acct").unwrap();
         assert_eq!(reread_due(&conn, "acct", since + 120).unwrap(), None, "forgotten with the account");
+    }
+
+    /// A look in the very second an event starts, with no previous look (just
+    /// upgraded, a new account): an "at the start" reminder is given, for a
+    /// timed event and one with no length; so is any other not yet given.
+    #[test]
+    fn a_first_look_at_the_very_start_gives_the_reminder() {
+        let conn = store();
+        let start = at("2026-10-20T09:00:00Z");
+        put(
+            &conn,
+            &[
+                timed("standup", start, 0),
+                Event { end: start, ..timed("deadline", start, 0) },
+                timed("synced-late", start, 15),
+                timed("started", start - 1, 0),
+            ],
+        );
+        let due = due(&conn, "acct", start, &Madrid, None).unwrap();
+        assert_eq!(ids(&due), ["deadline", "standup", "synced-late"]);
+        give(&conn, &due, start);
+        let previous = Some(Previous { at: start, offset: 2 * 3_600 });
+        assert!(super::due(&conn, "acct", start, &Madrid, previous).unwrap().is_empty(), "once");
     }
 
     #[test]

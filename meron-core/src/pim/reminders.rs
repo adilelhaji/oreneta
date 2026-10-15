@@ -61,7 +61,7 @@ where
         "all_day": event.all_day,
         "minutes": event.reminder_minutes,
         "local_time": local_time,
-        "started": start <= now,
+        "started": start < now,
         "local_date": local_date,
     })
 }
