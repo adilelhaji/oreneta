@@ -67,7 +67,8 @@ export function ProxySettingsSection() {
   const incomplete = proxy.mode !== 'off' && !isProxyUsable(proxy)
 
   return (
-    <SettingsGroup title={t('settings.sections.network')}>
+    // "network": where the connectivity banner sends a refused app proxy (#201).
+    <SettingsGroup section="network" title={t('settings.sections.network')}>
       <SelectRow
         icon={<Network size={16} strokeWidth={1.75} />}
         title={t('settings.network.proxy')}
@@ -130,7 +131,8 @@ export function AccountProxyCard({ account }: { account: Account }) {
   const incomplete = custom && (!endpoint.host.trim() || !endpoint.port)
 
   return (
-    <SettingsGroup title={t('settings.sections.network')}>
+    // "accountNetwork": where the connectivity banner sends a refused account proxy (#201).
+    <SettingsGroup section="accountNetwork" title={t('settings.sections.network')}>
       <SelectRow
         icon={<Network size={16} strokeWidth={1.75} />}
         title={t('settings.network.proxy')}

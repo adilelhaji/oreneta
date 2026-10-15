@@ -1,6 +1,7 @@
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { accounts$ } from './accounts'
+import { proxyProblemFromSyncError, type ProxyProblem } from '../components/banner/connectivityBannerHelpers'
 
 export type SyncObservation = {
   failure: boolean
@@ -8,10 +9,15 @@ export type SyncObservation = {
   lastActivityAt: number | null
   request: 'idle' | 'pending' | 'requested' | 'unconfirmed'
   revision: number
+  // The last failure was the proxy's (#201), so the banner can say so and open
+  // the setting that fixes it. Null for any other failure.
+  proxy: ProxyProblem | null
 }
 
 // Session observations, not proof of complete mailbox/service freshness. Raw
-// server diagnostics are deliberately not retained or rendered by this surface.
+// server diagnostics are deliberately not retained or rendered by this surface:
+// of an error only whether it was the proxy's is kept, with the proxy's own
+// address when it did not answer.
 export const connectivity$ = observable({
   byAccount: {} as Record<string, SyncObservation>,
   unattributed: null as SyncObservation | null,
@@ -23,6 +29,7 @@ const emptyObservation = (): SyncObservation => ({
   lastActivityAt: null,
   request: 'idle',
   revision: ++revision,
+  proxy: null,
 })
 
 export function syncObservation(account: string): SyncObservation | undefined {
@@ -36,7 +43,7 @@ function store(account: string, observation: SyncObservation) {
   connectivity$.byAccount.set({ ...connectivity$.byAccount.peek(), [account]: observation })
 }
 
-export function setSyncError(account: string | null, _message?: string) {
+export function setSyncError(account: string | null, message = '') {
   if (account && !knownAccount(account)) return
   const previous = account ? syncObservation(account) : connectivity$.unattributed.peek()
   const observation: SyncObservation = {
@@ -45,6 +52,9 @@ export function setSyncError(account: string | null, _message?: string) {
     dismissed: false,
     request: 'idle',
     revision: ++revision,
+    // Replaced, not merged: a later failure that is not the proxy's must not
+    // keep sending the person to the proxy setting.
+    proxy: proxyProblemFromSyncError(message),
   }
   if (account) store(account, observation)
   else connectivity$.unattributed.set(observation)
