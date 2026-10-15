@@ -9,8 +9,20 @@ import { t } from '../lib/i18n'
 import { printConversation } from '../lib/print'
 import type { Message } from '../types'
 import { accounts$ } from './accounts'
-import { mail$ } from './mail'
+import { isDraftFolder, mail$ } from './mail'
+import { isLocalSendId } from './pendingSends'
 import { settings$ } from './settings'
+
+/**
+ * What sets a message apart from mail that was sent or received: a copy still
+ * in the undo window or waiting to be retried has not gone out, and a draft
+ * never has. Printed on the message, so paper cannot pass either off as sent.
+ */
+function printMark(message: Message): string | undefined {
+  if (isLocalSendId(message.id)) return t('print.notSent')
+  if (isDraftFolder(message.folder_id, message.account_id)) return t('print.draft')
+  return undefined
+}
 
 /**
  * Prints the conversation `thread` belongs to.
@@ -27,17 +39,27 @@ export function printFromReader(
   // The message asked about prints even when it is not among the loaded ones,
   // rather than another message standing in for it.
   const messages = message && !loaded.some((item) => item.id === message.id) ? [...loaded, message] : loaded
+  const marks: Record<string, string> = {}
+  for (const item of messages) {
+    const mark = printMark(item)
+    if (mark) marks[item.id] = mark
+  }
   return printConversation({
     subject: thread.subject,
     messages,
     options: message ? { ...remembered, scope: 'message' } : remembered,
     messageId: message?.id,
+    marks,
     // The printout loads what the reader would (#35).
     allowRemoteImages:
       accounts$.peek().find((account) => account.id === thread.account_id)?.load_remote_images ?? false,
     // The cursor is the open conversation's: older messages are on the server.
     incompleteNotice: loaded.length > 0 && mail$.messagesCursor.peek() ? t('print.incomplete') : undefined,
     oneMessageNotice: t('print.oneMessage'),
+    oneMessageUnknownNotice: t('print.oneMessageUnknown'),
+    // Nothing of this conversation is loaded: whether it has other messages
+    // is not known here, and the page says only that they are not printed.
+    conversationUnknown: loaded.length === 0,
     printedLabel: t('print.printedOn'),
     toLabel: t('print.to'),
     ccLabel: t('print.cc'),

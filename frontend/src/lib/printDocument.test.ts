@@ -23,6 +23,7 @@ const message = (over: Partial<Message> = {}): Message =>
   }) as Message
 
 const ONE_MESSAGE = 'Only this message of the conversation is printed.'
+const ONE_MAYBE = 'Only this message is printed; other messages of the conversation, if any, are not.'
 
 const build = (messages: Message[], subject = 'Lunch') =>
   buildPrintDocument({
@@ -35,6 +36,7 @@ const build = (messages: Message[], subject = 'Lunch') =>
     bccLabel: 'Bcc',
     attachmentsLabel: 'Attachments:',
     oneMessageNotice: ONE_MESSAGE,
+    oneMessageUnknownNotice: ONE_MAYBE,
   })
 
 describe('a conversation on paper', () => {
@@ -164,6 +166,7 @@ function args() {
     bccLabel: 'Bcc',
     attachmentsLabel: 'Attachments',
     oneMessageNotice: ONE_MESSAGE,
+    oneMessageUnknownNotice: ONE_MAYBE,
   }
 }
 
@@ -197,7 +200,7 @@ describe('print options', () => {
   const one = (options: PrintOptions) => buildPrintDocument({ ...args(), messages: [sent], options })
   const allHeaders = { subject: true, date: true, to: true, cc: true, bcc: true }
 
-  it('prints what it always has when nothing was chosen', () => {
+  it('uses the default options when none are given', () => {
     const before = buildPrintDocument({ ...args(), messages: thread })
     expect(page(DEFAULT_PRINT_OPTIONS)).toBe(before)
     expect(order(before)).toEqual(['First thing', 'Second thing', 'Third thing'])
@@ -264,10 +267,11 @@ describe('print options', () => {
     ])
   })
 
-  it('keeps messages sent in the same second in the order they came', () => {
+  it('keeps messages sent in the same second in the order they came, and reverses it exactly', () => {
     const same = [message({ id: 'a', body: 'Alpha' }), message({ id: 'b', body: 'Beta' })]
     expect(printedMessages(same, opts({ order: 'oldest' })).map((item) => item.id)).toEqual(['a', 'b'])
-    expect(printedMessages(same, opts({ order: 'newest' })).map((item) => item.id)).toEqual(['a', 'b'])
+    // Newest first is oldest first turned over, ties included.
+    expect(printedMessages(same, opts({ order: 'newest' })).map((item) => item.id)).toEqual(['b', 'a'])
   })
 
   it('prints only the message asked about, under its own subject', () => {
@@ -346,5 +350,67 @@ describe('the #35 guarantees under every print option', () => {
     expect(buildPrintDocument({ ...args(), messages: [remote], options: single })).not.toContain(ONE_MESSAGE)
     // And the whole conversation never claims to be one message.
     expect(buildPrintDocument({ ...args(), messages: [older, remote] })).not.toContain(ONE_MESSAGE)
+  })
+
+  it('says other messages may not be printed when the conversation was not loaded, without claiming any', () => {
+    const single = { ...DEFAULT_PRINT_OPTIONS, scope: 'message' as const }
+    const html = buildPrintDocument({ ...args(), messages: [remote], options: single, conversationUnknown: true })
+    expect(html).toContain(ONE_MAYBE)
+    expect(html).not.toContain(ONE_MESSAGE)
+    // Known others are stated as such, unknown or not.
+    expect(
+      buildPrintDocument({
+        ...args(),
+        messages: [older, remote],
+        options: single,
+        messageId: 'm-r',
+        conversationUnknown: true,
+      }),
+    ).toContain(ONE_MESSAGE)
+    // The whole conversation has its own notice for what did not load.
+    expect(buildPrintDocument({ ...args(), messages: [remote], conversationUnknown: true })).not.toContain(ONE_MAYBE)
+  })
+})
+
+// Review of #213: a draft or an unsent copy is never passed off as mail that
+// went out.
+describe('drafts and unsent messages on paper', () => {
+  const sent = message({ id: 'm-1', body: 'Sent reply', date: 1_700_000_100 })
+  const draft = message({ id: 'd-1', body: 'My draft', date: 1_700_000_300 })
+  const unsent = message({ id: 'sent-1', body: 'Still in undo', date: 1_700_000_200 })
+  const marks = { 'd-1': 'Draft', 'sent-1': 'Not sent' }
+  const single = { ...DEFAULT_PRINT_OPTIONS, scope: 'message' as const }
+  const doc = (html: string) => new DOMParser().parseFromString(html, 'text/html')
+  const bodies = (html: string) =>
+    [...doc(html).querySelectorAll('.message .body')].map((body) => body.textContent?.trim())
+  const markOf = (html: string, body: string) =>
+    [...doc(html).querySelectorAll('.message')]
+      .find((article) => article.querySelector('.body')?.textContent?.trim() === body)
+      ?.querySelector('.mark')?.textContent ?? null
+
+  it('does not take a draft or an unsent copy for "this message" when another is there', () => {
+    const html = buildPrintDocument({ ...args(), messages: [sent, draft, unsent], options: single, marks })
+    expect(bodies(html)).toEqual(['Sent reply'])
+    expect(doc(html).querySelector('.mark')).toBeNull()
+  })
+
+  it('falls back to the newest one, marked, when nothing else is there', () => {
+    const html = buildPrintDocument({ ...args(), messages: [draft, unsent], options: single, marks })
+    expect(bodies(html)).toEqual(['My draft'])
+    expect(markOf(html, 'My draft')).toBe('Draft')
+  })
+
+  it('marks them in the whole conversation, and only them', () => {
+    const html = buildPrintDocument({ ...args(), messages: [sent, draft, unsent], marks })
+    expect(bodies(html)).toEqual(['Sent reply', 'Still in undo', 'My draft'])
+    expect(markOf(html, 'My draft')).toBe('Draft')
+    expect(markOf(html, 'Still in undo')).toBe('Not sent')
+    expect(markOf(html, 'Sent reply')).toBeNull()
+  })
+
+  it('marks the one asked for by name', () => {
+    const html = buildPrintDocument({ ...args(), messages: [sent, draft], options: single, messageId: 'd-1', marks })
+    expect(bodies(html)).toEqual(['My draft'])
+    expect(markOf(html, 'My draft')).toBe('Draft')
   })
 })

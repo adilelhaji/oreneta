@@ -31,22 +31,43 @@
 - **CCO apagado por omisión:** solo existe en las copias enviadas y nombra a
   personas de las que los demás destinatarios no sabían; va al papel solo si
   se pide.
+- **CCO encendido se recuerda, y se avisa:** como las demás opciones, queda
+  encendido hasta que se apague. Riesgo aceptado: quien lo deja encendido y
+  luego imprime una conversación para otra persona le revela los
+  destinatarios ocultos. La ayuda del ajuste lo dice («sigue activado hasta
+  que lo desactives»). Se prefiere a apagarlo solo tras cada impresión porque
+  la issue pide que las elecciones se recuerden y un ajuste que cambia por su
+  cuenta sorprende; el valor por omisión sigue siendo apagado.
 - **Qué es «este mensaje»:**
   - desde el menú de un mensaje («Imprimir mensaje…», nuevo), ese mensaje,
     sea cual sea el alcance recordado; las demás opciones se aplican;
   - desde el menú de la conversación con el alcance «Un mensaje», el mensaje
-    más reciente de los cargados, que es el que la conversación muestra
-    primero y el que representa en la lista;
+    más reciente de los cargados que no sea un borrador (carpeta de
+    borradores) ni una copia local sin enviar (en la ventana de deshacer o
+    pendiente de reintento). Es el mensaje al que el lector lleva la vista
+    (el más antiguo queda arriba) y el que la vista tradicional abre
+    desplegado. Si todos los cargados son borradores o copias sin
+    enviar, se imprime el más reciente de ellos, marcado;
+  - un borrador o una copia sin enviar que se imprime (en la conversación
+    entera o pedido con «Imprimir mensaje…») lleva en el papel la marca
+    «Borrador» o «No enviado», traducida: el papel no puede hacerlos pasar
+    por correo que salió;
   - un mensaje se imprime con su propio asunto (puede ser el de una
     respuesta).
 - **Orden por fecha, no por orden de carga,** con orden estable: dos mensajes
-  del mismo segundo conservan el orden en que llegaron.
+  del mismo segundo conservan el orden en que llegaron. «Más reciente
+  primero» es exactamente ese orden al revés, empates incluidos.
 - **El título de la página (`<title>`) se mantiene** aunque se quite el
-  asunto: es el nombre del PDF o del trabajo de impresión.
+  asunto: es el título de la ventana y el nombre del PDF o del trabajo de
+  impresión. La ayuda del ajuste del asunto lo dice.
 - **Lo que queda fuera se dice** (#35), arriba, antes del primer mensaje:
   - conversación: el aviso de mensajes antiguos no cargados, como antes;
   - un mensaje: «Solo se imprime este mensaje de la conversación…» cuando la
     conversación tiene otros, cargados o aún en el servidor;
+  - un mensaje cuya conversación no está cargada aquí: no se sabe si tiene
+    otros, así que se dice sin afirmarlo: «Solo se imprime este mensaje; los
+    demás mensajes de la conversación, si los hay, no.»; una conversación
+    cargada y completa de un solo mensaje no lleva aviso;
   - no se avisa de lo que la persona eligió quitar (cabeceras, adjuntos).
 - **Contenido remoto:** la política CSP propia de la página, la retirada de
   píxeles de seguimiento y el marco sin scripts no dependen de ninguna
@@ -64,6 +85,13 @@
 - **«Este mensaje» desde la cabecera como el mensaje visible o enfocado:** el
   lector no tiene hoy un mensaje seleccionado; inventarlo cambiaría la vista
   de conversación, fuera de este alcance.
+- **«Este mensaje» como el más reciente recibido, sin borradores ni envíos
+  propios:** en una conversación cuya última palabra es una respuesta propia
+  imprimiría un mensaje anterior a lo que se ve desplegado; se excluyen solo
+  los borradores y las copias sin enviar, que no son correo que salió.
+- **Apagar CCO tras cada impresión:** más prudente frente a la revelación,
+  pero contradice que las elecciones se recuerden y cambia un ajuste sin que
+  la persona lo toque; se acepta el riesgo con el aviso en la ayuda.
 - **Avisar también de las cabeceras o adjuntos quitados:** es una elección de
   quien imprime, no una omisión oculta.
 

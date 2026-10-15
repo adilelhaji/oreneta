@@ -75,6 +75,7 @@ const STYLE = `
   .header { font-size: 9pt; color: #333; margin-bottom: 3mm; break-after: avoid; }
   .header .label { color: #777; }
   .who { font-weight: 700; color: #111; font-size: 10pt; }
+  .mark { font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 0.05em; font-size: 8.5pt; }
   .body { font-size: 10.5pt; }
   .body img { max-width: 100%; height: auto; }
   .body table { max-width: 100%; border-collapse: collapse; }
@@ -88,7 +89,7 @@ const STYLE = `
 type BlockLabels = { toLabel: string; ccLabel: string; bccLabel: string; attachmentsLabel: string }
 
 /** One message: who wrote it, and as much of when and to whom as was asked for. */
-function senderBlock(message: Message, labels: BlockLabels, options: PrintOptions): string {
+function senderBlock(message: Message, labels: BlockLabels, options: PrintOptions, mark?: string): string {
   const name = message.from_name.trim()
   const address = message.from_addr.trim()
   // The name alone is not enough on paper — two people share a first name and
@@ -103,6 +104,9 @@ function senderBlock(message: Message, labels: BlockLabels, options: PrintOption
   return [
     '<article class="message">',
     '<div class="header">',
+    // A draft or an unsent message says so on paper: nothing else would tell
+    // it apart from mail that went out.
+    mark ? `<div class="mark">${escapeHtml(mark)}</div>` : '',
     `<div>${who}${stamp}</div>`,
     headers.to ? addressLine(labels.toLabel, message.to) : '',
     headers.cc ? addressLine(labels.ccLabel, message.cc) : '',
@@ -122,16 +126,30 @@ function senderBlock(message: Message, labels: BlockLabels, options: PrintOption
  * The messages that go on paper, in the order they go there.
  *
  * Sorted by date rather than trusted in the order they were loaded, and
- * stably, so two messages sent in the same second keep the order they came in.
- * One message is the one asked about, or the newest when none was named.
+ * stably, so two messages sent in the same second keep the order they came in;
+ * newest first is that order reversed, exactly.
+ *
+ * One message is the one asked about. When none was named it is the newest
+ * that is not `marked` (a draft or an unsent copy): "this message" means mail
+ * that was sent or received. Only when every message is marked does the
+ * newest marked one stand in, and its mark goes on paper with it.
  */
-export function printedMessages(messages: Message[], options: PrintOptions, messageId?: string): Message[] {
+export function printedMessages(
+  messages: Message[],
+  options: PrintOptions,
+  messageId?: string,
+  marked: (message: Message) => boolean = () => false,
+): Message[] {
   const oldestFirst = [...messages].sort((a, b) => a.date - b.date)
   if (options.scope === 'message') {
-    const chosen = messages.find((message) => message.id === messageId) ?? oldestFirst.at(-1)
+    const newestFirst = [...oldestFirst].reverse()
+    const chosen =
+      messages.find((message) => message.id === messageId) ??
+      newestFirst.find((message) => !marked(message)) ??
+      newestFirst[0]
     return chosen ? [chosen] : []
   }
-  return options.order === 'newest' ? [...messages].sort((a, b) => b.date - a.date) : oldestFirst
+  return options.order === 'newest' ? oldestFirst.reverse() : oldestFirst
 }
 
 /**
@@ -154,8 +172,13 @@ export function buildPrintDocument(args: {
   attachmentsLabel: string
   /** What goes on paper (SET-05); what the app has always printed if absent. */
   options?: PrintOptions
-  /** "This message" when the scope is one message; the newest if absent. */
+  /** "This message" when the scope is one message; the newest sent or
+   * received one if absent. */
   messageId?: string
+  /** What sets a message apart from sent or received mail, by id: "Draft",
+   * "Not sent". Printed on the message, and never chosen as "this message"
+   * when another one is there. */
+  marks?: Record<string, string>
   /** Whether the account loads remote images; otherwise the printout does not
    * either, whatever the message asks for (#35). */
   allowRemoteImages?: boolean
@@ -164,13 +187,19 @@ export function buildPrintDocument(args: {
   /** Said at the top when one message is printed out of a conversation that
    * has others: a single message on paper does not show what it answers. */
   oneMessageNotice: string
+  /** Said instead when it is not known whether the conversation has others,
+   * because it was not loaded: it must not claim there are. */
+  oneMessageUnknownNotice: string
+  /** The conversation the message belongs to was not loaded here. */
+  conversationUnknown?: boolean
 }): string {
   const options = args.options ?? DEFAULT_PRINT_OPTIONS
-  const printed = printedMessages(args.messages, options, args.messageId)
+  const marks = args.marks ?? {}
+  const printed = printedMessages(args.messages, options, args.messageId, (message) => !!marks[message.id])
   const single = options.scope === 'message'
   // One message prints under its own subject, which may be a reply's.
   const subject = (single && printed[0]?.subject.trim()) || args.subject.trim() || '(no subject)'
-  const messages = printed.map((message) => senderBlock(message, args, options)).join('\n')
+  const messages = printed.map((message) => senderBlock(message, args, options, marks[message.id])).join('\n')
   // The message's own policy is stripped with its other <meta> tags, so the
   // printout states its own: no scripts, no frames, no forms, and remote
   // images only where the reader allows them.
@@ -178,9 +207,15 @@ export function buildPrintDocument(args: {
   const policy = `default-src 'none'; script-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; img-src ${images}; style-src 'unsafe-inline'; font-src 'self' data:`
   // What was left out is said, whatever was chosen (#35): the older messages
   // that never loaded, or — for one message — that the conversation has more.
-  // A conversation with messages on the server but not here has others too.
+  // A conversation with messages on the server but not here has others too;
+  // one that was not loaded at all may have, and the page says only that.
   const othersLeftOut = args.messages.length > printed.length || !!args.incompleteNotice
-  const omission = single ? (othersLeftOut ? args.oneMessageNotice : '') : (args.incompleteNotice ?? '')
+  const singleOmission = othersLeftOut
+    ? args.oneMessageNotice
+    : args.conversationUnknown
+      ? args.oneMessageUnknownNotice
+      : ''
+  const omission = single ? singleOmission : (args.incompleteNotice ?? '')
   const notice = omission ? `<div class="thread-meta incomplete">${escapeHtml(omission)}</div>` : ''
   const heading = options.headers.subject ? `<h1>${escapeHtml(subject)}</h1>\n` : ''
 

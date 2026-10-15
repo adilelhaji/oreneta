@@ -91,8 +91,56 @@ describe('printing from the reader (SET-05)', () => {
     mail$.messagesCursor.set('cursor-of-the-open-conversation')
     void printFromReader(unloaded, unloaded)
     expect(bodies()).toEqual(['Not loaded'])
-    // The cursor belongs to another conversation: nothing is claimed about this one.
+    // The cursor belongs to another conversation: nothing is claimed about
+    // this one beyond that the rest of it, if any, is not on the page.
+    expect(printed().querySelector('.incomplete')?.textContent).toBe(
+      'Only this message is printed; other messages of the conversation, if any, are not.',
+    )
+  })
+
+  it('says nothing is left out when the loaded conversation is that one message', () => {
+    mail$.messages.set([first])
+    void printFromReader(first, first)
+    expect(bodies()).toEqual(['Hi'])
     expect(printed().querySelector('.incomplete')).toBeNull()
+  })
+
+  it('keeps remote images blocked for Print message… unless the account loads them', () => {
+    void printFromReader(first, first)
+    const csp = () =>
+      printed().querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') ?? ''
+    expect(csp()).not.toMatch(/img-src[^;]*https?:/)
+    expect(csp()).toContain("script-src 'none'")
+
+    accounts$.set([{ id: 'acct', load_remote_images: true } as Account])
+    void printFromReader(first, first)
+    expect(csp()).toMatch(/img-src[^;]*https:/)
+  })
+
+  it('leaves drafts and unsent copies out of "this message" and marks them when they print', () => {
+    const draft = message({
+      id: 'd-1',
+      folder_id: 'Drafts',
+      body_html: undefined,
+      body: 'My draft',
+      date: 1_700_000_400,
+    })
+    const unsent = message({ id: 'sent-1', body_html: undefined, body: 'In the undo window', date: 1_700_000_300 })
+    mail$.messages.set([first, second, unsent, draft])
+
+    settings$.print.set({ ...DEFAULT_PRINT_OPTIONS, scope: 'message' })
+    void printFromReader(first)
+    expect(bodies()).toEqual(['Second thing'])
+    expect(printed().querySelector('.mark')).toBeNull()
+
+    settings$.print.set(structuredClone(DEFAULT_PRINT_OPTIONS))
+    void printFromReader(first)
+    expect(bodies()).toEqual(['Hi', 'Second thing', 'In the undo window', 'My draft'])
+    expect([...printed().querySelectorAll('.mark')].map((mark) => mark.textContent)).toEqual(['Not sent', 'Draft'])
+
+    void printFromReader(draft, draft)
+    expect(bodies()).toEqual(['My draft'])
+    expect(printed().querySelector('.mark')?.textContent).toBe('Draft')
   })
 
   it('keeps remote images blocked unless the account loads them, and says older messages are missing', () => {

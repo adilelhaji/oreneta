@@ -30,6 +30,7 @@ export function PrintGroup() {
       <ToggleRow
         icon={<Heading {...icon} />}
         title={t('print.settings.subject')}
+        hint={t('print.settings.subjectHint')}
         checked={options.headers.subject}
         onChange={() => toggleHeader('subject')}
       />
