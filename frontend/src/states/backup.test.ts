@@ -137,6 +137,8 @@ describe('importBackup', () => {
     await importBackup('/tmp/secret-backup.json', 'correct horse')
 
     expect(calls[0].payload).toEqual({ path: '/tmp/secret-backup.json', passphrase: 'correct horse' })
+    // A restore that needed a passphrase re-bootstraps like any other.
+    expect(boot).toHaveBeenCalledTimes(1)
   })
 
   it('defaults every missing count to zero', async () => {
