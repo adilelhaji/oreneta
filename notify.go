@@ -337,9 +337,14 @@ func (a *App) notifyReminder(detail any) {
 	}
 
 	// The body answers "when", which is the whole point of a reminder; the
-	// place follows, since that is what decides whether to set off now.
+	// place follows, since that is what decides whether to set off now. The
+	// core says the start on the clock of the zone the machine is in now
+	// (local_time, ADR-0056): Go reads its zone once, at start, so after a
+	// change of zone its own reading would be the old clock's.
 	var body string
-	if !allDay && start > 0 {
+	if localTime, _ := m["local_time"].(string); !allDay && localTime != "" {
+		body = localTime
+	} else if !allDay && start > 0 {
 		body = time.Unix(int64(start), 0).Format("15:04")
 	}
 	if location != "" {

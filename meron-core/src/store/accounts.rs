@@ -905,6 +905,8 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
     for (table, column) in REMOVED_WITH_ACCOUNT {
         tx.execute(&format!("DELETE FROM {table} WHERE {column} = ?1"), params![id])?;
     }
+    // When its reminders were last looked at (ADR-0056) lives in `meta`.
+    crate::calendar::reminders::forget_looks(&tx, id)?;
     // An account's id is its address, so adding the same address again would
     // otherwise send these on its own, at whatever hour they come due. They
     // stay, given up, for the person to send or delete by hand.

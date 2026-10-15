@@ -127,6 +127,32 @@ func TestQuietHoursGateNewMailAndReminders(t *testing.T) {
 	}
 }
 
+// A reminder says its start on the clock the core read when it gave it
+// (ADR-0056), which follows a change of zone; Go's own zone is read once.
+func TestReminderShowsTheCoresLocalTime(t *testing.T) {
+	got := captureNotifications(t, time.UnixMilli(0))
+	a := &App{}
+	start := float64(1_800_000_000)
+	a.handleSidecarEvent("calendar.reminder", map[string]any{
+		"subject": "Stand-up", "start": start, "location": "Room 2", "local_time": "09:00",
+	})
+	// From a core that does not say it: Go's clock, as before.
+	a.handleSidecarEvent("calendar.reminder", map[string]any{"subject": "Old", "start": start})
+	// An all-day event has no time to show.
+	a.handleSidecarEvent("calendar.reminder", map[string]any{
+		"subject": "Holiday", "start": start, "all_day": true, "location": "Home", "local_time": nil,
+	})
+	want := []string{"09:00 · Room 2", time.Unix(int64(start), 0).Format("15:04"), "Home"}
+	if len(*got) != len(want) {
+		t.Fatalf("%d notifications, want %d: %+v", len(*got), len(want), *got)
+	}
+	for i, body := range want {
+		if (*got)[i].body != body {
+			t.Errorf("notification %d body = %q, want %q", i, (*got)[i].body, body)
+		}
+	}
+}
+
 func TestMutedAccountStillSilentWhenNotQuiet(t *testing.T) {
 	got := captureNotifications(t, time.UnixMilli(0))
 	(&App{}).handleSidecarEvent("mail.newMessages", map[string]any{"account": "acc", "muted": true})
