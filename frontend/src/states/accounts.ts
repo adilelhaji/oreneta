@@ -307,7 +307,12 @@ export async function setAccountAvatar(accountId: string, avatarUrl: string) {
     accounts$.set(previous.map((acc) => (acc.id === accountId ? { ...acc, avatar_url: nextUrl } : acc)))
   }
   try {
-    await invoke('account.setAvatar', { id: accountId, avatar_url: nextUrl })
+    const res = await invoke<{ avatar_url?: string }>('account.setAvatar', { id: accountId, avatar_url: nextUrl })
+    // A remote picture that was fetched comes back as its local copy.
+    const stored = res?.avatar_url
+    if (typeof stored === 'string' && stored !== nextUrl && (stored === '' || stored.startsWith('/media/'))) {
+      accounts$.set(accounts$.get().map((acc) => (acc.id === accountId ? { ...acc, avatar_url: stored } : acc)))
+    }
     return true
   } catch (error) {
     accounts$.set(previous)

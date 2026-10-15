@@ -395,12 +395,18 @@ func (a *App) accountSetAvatar(payload map[string]any) (any, error) {
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}
-	pending, err := a.storeAvatar(id, avatarURL)
+	stored, pending, err := a.storeAvatar(id, avatarURL)
 	if err != nil {
 		return nil, err
 	}
 	a.logf("account.setAvatar: account=%s pending=%t", id, pending)
-	return map[string]any{"ok": true, "pending": pending}, nil
+	res := map[string]any{"ok": true, "pending": pending}
+	if !pending {
+		// The copy a remote picture became: the interface shows it without
+		// reading the account list again.
+		res["avatar_url"] = stored
+	}
+	return res, nil
 }
 
 // accountSetAliases replaces the whole send-as alias list for an account. The

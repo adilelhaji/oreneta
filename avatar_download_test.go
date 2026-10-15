@@ -194,6 +194,9 @@ func TestAccountSetAvatarKeepsThePreviousPictureWhenTheDownloadFails(t *testing.
 	if got := res.(map[string]any); got["ok"] != true || got["pending"] != true {
 		t.Fatalf("result = %#v, want ok and pending", got)
 	}
+	if _, ok := res.(map[string]any)["avatar_url"]; ok {
+		t.Fatalf("a pending picture handed the interface a picture: %#v", res)
+	}
 	if len(writer.calls) != 1 {
 		t.Fatalf("calls = %#v", writer.calls)
 	}
@@ -212,6 +215,10 @@ func TestAccountSetAvatarStoresACopyAndClearsTheSource(t *testing.T) {
 	local, _ := writer.calls[0].Params["avatar_url"].(string)
 	if !strings.HasPrefix(local, "/media/avatars/acct/") || writer.calls[0].Params["avatar_source"] != "" {
 		t.Fatalf("call = %#v", writer.calls[0])
+	}
+	// The interface is handed the copy so it can show it at once.
+	if got := res.(map[string]any)["avatar_url"]; got != local {
+		t.Fatalf("result avatar_url = %#v, want %q", got, local)
 	}
 
 	// A picture that is already local, or none at all, also clears the source.

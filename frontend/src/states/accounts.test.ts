@@ -127,6 +127,25 @@ describe('account pictures', () => {
     expect(accounts$.peek()[0].avatar_url).toBe('/media/avatars/a/old.png')
   })
 
+  it('shows the copy a remote picture became as soon as it is fetched', async () => {
+    accounts$.set([{ ...account('a'), avatar_url: '/media/avatars/a/old.png' }, account('b')])
+    bridge(() => ({ ok: true, pending: false, avatar_url: '/media/avatars/a/fetched.png' }))
+
+    expect(await setAccountAvatar('a', 'https://img.example/me.png')).toBe(true)
+
+    expect(accounts$.peek()[0].avatar_url).toBe('/media/avatars/a/fetched.png')
+    expect(accounts$.peek()[1].avatar_url).toBe(account('b').avatar_url)
+  })
+
+  it('never shows an address the core hands back that is not a local copy', async () => {
+    accounts$.set([{ ...account('a'), avatar_url: '/media/avatars/a/old.png' }])
+    bridge(() => ({ ok: true, pending: false, avatar_url: 'https://img.example/me.png' }))
+
+    await setAccountAvatar('a', 'https://img.example/me.png')
+
+    expect(accounts$.peek()[0].avatar_url).toBe('/media/avatars/a/old.png')
+  })
+
   it('shows a local copy at once, and the initials when it is cleared', async () => {
     accounts$.set([{ ...account('a'), avatar_url: '' }])
     bridge(() => ({ ok: true }))

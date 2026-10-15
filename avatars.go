@@ -159,9 +159,10 @@ func discardAvatarCopy(local string) {
 
 // storeAvatar is what a person choosing a picture runs: the picture becomes a
 // local copy, or, when a remote one cannot be fetched now, the previous
-// picture stays and the address waits for a retry. It reports whether the
-// picture is still pending.
-func (a *App) storeAvatar(id, requested string) (pending bool, err error) {
+// picture stays and the address waits for a retry. It returns the picture now
+// stored (a local copy, or "" for none), which the interface shows at once, and
+// whether a remote picture is still pending.
+func (a *App) storeAvatar(id, requested string) (stored string, pending bool, err error) {
 	requested = strings.TrimSpace(requested)
 	local, saveErr := a.saveAvatar(id, requested)
 	params := map[string]any{"account": id}
@@ -171,16 +172,16 @@ func (a *App) storeAvatar(id, requested string) (pending bool, err error) {
 		params["avatar_source"] = requested
 		pending = true
 	case saveErr != nil:
-		return false, saveErr
+		return "", false, saveErr
 	default:
 		params["avatar_url"] = local
 		params["avatar_source"] = ""
 	}
 	if _, err := a.sidecar.Call("account.setAvatar", params); err != nil {
 		discardAvatarCopy(local)
-		return false, fmt.Errorf("account.setAvatar: %w", err)
+		return "", false, fmt.Errorf("account.setAvatar: %w", err)
 	}
-	return pending, nil
+	return local, pending, nil
 }
 
 // tellPicturesChanged lets the interface read the pictures again after a retry
