@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'bun:test'
 import { agendaQueryWindow, agendaWindow, buildAgenda } from './agenda'
 import type { CalendarEvent } from '../states/calendar'
 import type { Task } from '../states/tasks'
@@ -48,104 +48,83 @@ const task = (id: number, due: number | null, extra: Partial<Task> = {}): Task =
 
 const titles = (groups: ReturnType<typeof buildAgenda>) => groups.map((g) => [g.key, g.items.map((i) => i.title)])
 
-// West of Greenwich, on it, and east of it: an all-day date read as an
-// instant lands on the previous day in the first and lingers into the next
-// in the last. Bun follows a change of TZ at run time; the offsets checked
-// first make a run that did not switch zones fail rather than pass by luck.
-const ZONES = [
-  { zone: 'UTC', noonUtcHour: 12 },
-  { zone: 'America/Sao_Paulo', noonUtcHour: 9 },
-  { zone: 'Australia/Sydney', noonUtcHour: 23 },
-]
-
-for (const { zone, noonUtcHour } of ZONES) {
-  describe(`agenda widget order (#212), ${zone}`, () => {
-    const previous = process.env.TZ
-    beforeAll(() => {
-      process.env.TZ = zone
-    })
-    afterAll(() => {
-      if (previous === undefined) delete process.env.TZ
-      else process.env.TZ = previous
-    })
-
-    it('runs in the zone it names', () => {
-      expect(new Date(Date.UTC(2026, 9, 15, 12)).getHours()).toBe(noonUtcHour)
-    })
-
-    it('lists overdue tasks first, then each day: all-day events, timed events by start, then tasks by priority', () => {
-      const groups = buildAgenda(
-        [
-          event('standup', at(15, 11), at(15, 11, 15)),
-          allDay('holiday', 16),
-          event('review', at(15, 9, 30), at(15, 10, 30)), // under way
-          event('lunch', at(16, 13), at(16, 14)),
-          event('early', at(16, 8), at(16, 9)),
-        ],
-        [
-          task(1, at(13), { title: 'old invoice' }),
-          task(2, at(15), { title: 'normal today', priority: 1 }),
-          task(3, at(15), { title: 'urgent today', priority: 2 }),
-          task(4, at(16), { title: 'tomorrow task' }),
-        ],
-        at(15, 10),
-      )
-      expect(titles(groups)).toEqual([
-        ['overdue', ['old invoice']],
-        [at(15), ['review', 'standup', 'urgent today', 'normal today']],
-        [at(16), ['holiday', 'early', 'lunch', 'tomorrow task']],
-      ])
-    })
-
-    it('places an all-day event on its own date from morning to late evening', () => {
-      const events = [allDay('yesterday', 14), allDay('today', 15), allDay('tomorrow', 16)]
-      for (const now of [at(15, 0, 30), at(15, 10), at(15, 23, 30)]) {
-        expect(titles(buildAgenda(events, [], now))).toEqual([
-          [at(15), ['today']],
-          [at(16), ['tomorrow']],
-        ])
-      }
-    })
-
-    it('shows an all-day event of several days once, under today while it runs, until its last date', () => {
-      const trip = allDay('trip', 13, 4) // 13th to 16th
-      expect(titles(buildAgenda([trip, { ...trip }], [], at(15, 10)))).toEqual([[at(15), ['trip']]])
-      expect(titles(buildAgenda([trip], [], at(16, 23, 30)))).toEqual([[at(16), ['trip']]])
-      expect(titles(buildAgenda([trip], [], at(17, 0, 30)))).toEqual([])
-    })
-
-    it('leaves out what is over, cancelled, done, undated or past the seventh day', () => {
-      const groups = buildAgenda(
-        [
-          event('finished', at(15, 8), at(15, 9)),
-          event('cancelled', at(15, 12), at(15, 13), { is_cancelled: true }),
-          event('day seven', at(21, 9), at(21, 10)),
-          event('day eight', at(22, 9), at(22, 10)),
-          allDay('all day seven', 21),
-          allDay('all day eight', 22),
-        ],
-        [
-          task(1, at(16), { completed_at: sec(at(14)) }),
-          task(2, null),
-          task(3, at(21), { title: 'last day' }),
-          task(4, at(22), { title: 'too late' }),
-        ],
-        at(15, 10),
-      )
-      expect(titles(groups)).toEqual([[at(21), ['all day seven', 'day seven', 'last day']]])
-    })
-
-    it('names a linked task by its conversation', () => {
-      const groups = buildAgenda([], [task(9, at(15), { title: '', subject: 'Re: budget', linked: true })], at(15, 10))
-      expect(groups[0].items[0]).toMatchObject({ kind: 'task', title: 'Re: budget' })
-    })
-
-    it('shows today through the seventh day by local midnights, and asks a day more on each side', () => {
-      expect(agendaWindow(at(15, 10))).toEqual({ from: sec(at(15)), to: sec(at(22)) })
-      expect(agendaQueryWindow(at(15, 10))).toEqual({ from: sec(at(15)) - 86_400, to: sec(at(22)) + 86_400 })
-      // Across the end of summer time in Europe (25 October) the window still
-      // ends on a local midnight.
-      expect(agendaWindow(at(24, 23))).toEqual({ from: sec(at(24)), to: sec(at(31)) })
-    })
+// The zone is the process's own: CI runs this file in UTC and again west and
+// east of it (America/Sao_Paulo, Australia/Sydney; test.yml), where an
+// all-day date read as an instant lands a day early or lingers a day late.
+// Switching TZ inside one Bun process is not used: it leaks into later files.
+describe('agenda widget order (#212)', () => {
+  it('lists overdue tasks first, then each day: all-day events, timed events by start, then tasks by priority', () => {
+    const groups = buildAgenda(
+      [
+        event('standup', at(15, 11), at(15, 11, 15)),
+        allDay('holiday', 16),
+        event('review', at(15, 9, 30), at(15, 10, 30)), // under way
+        event('lunch', at(16, 13), at(16, 14)),
+        event('early', at(16, 8), at(16, 9)),
+      ],
+      [
+        task(1, at(13), { title: 'old invoice' }),
+        task(2, at(15), { title: 'normal today', priority: 1 }),
+        task(3, at(15), { title: 'urgent today', priority: 2 }),
+        task(4, at(16), { title: 'tomorrow task' }),
+      ],
+      at(15, 10),
+    )
+    expect(titles(groups)).toEqual([
+      ['overdue', ['old invoice']],
+      [at(15), ['review', 'standup', 'urgent today', 'normal today']],
+      [at(16), ['holiday', 'early', 'lunch', 'tomorrow task']],
+    ])
   })
-}
+
+  it('places an all-day event on its own date from morning to late evening', () => {
+    const events = [allDay('yesterday', 14), allDay('today', 15), allDay('tomorrow', 16)]
+    for (const now of [at(15, 0, 30), at(15, 10), at(15, 23, 30)]) {
+      expect(titles(buildAgenda(events, [], now))).toEqual([
+        [at(15), ['today']],
+        [at(16), ['tomorrow']],
+      ])
+    }
+  })
+
+  it('shows an all-day event of several days once, under today while it runs, until its last date', () => {
+    const trip = allDay('trip', 13, 4) // 13th to 16th
+    expect(titles(buildAgenda([trip, { ...trip }], [], at(15, 10)))).toEqual([[at(15), ['trip']]])
+    expect(titles(buildAgenda([trip], [], at(16, 23, 30)))).toEqual([[at(16), ['trip']]])
+    expect(titles(buildAgenda([trip], [], at(17, 0, 30)))).toEqual([])
+  })
+
+  it('leaves out what is over, cancelled, done, undated or past the seventh day', () => {
+    const groups = buildAgenda(
+      [
+        event('finished', at(15, 8), at(15, 9)),
+        event('cancelled', at(15, 12), at(15, 13), { is_cancelled: true }),
+        event('day seven', at(21, 9), at(21, 10)),
+        event('day eight', at(22, 9), at(22, 10)),
+        allDay('all day seven', 21),
+        allDay('all day eight', 22),
+      ],
+      [
+        task(1, at(16), { completed_at: sec(at(14)) }),
+        task(2, null),
+        task(3, at(21), { title: 'last day' }),
+        task(4, at(22), { title: 'too late' }),
+      ],
+      at(15, 10),
+    )
+    expect(titles(groups)).toEqual([[at(21), ['all day seven', 'day seven', 'last day']]])
+  })
+
+  it('names a linked task by its conversation', () => {
+    const groups = buildAgenda([], [task(9, at(15), { title: '', subject: 'Re: budget', linked: true })], at(15, 10))
+    expect(groups[0].items[0]).toMatchObject({ kind: 'task', title: 'Re: budget' })
+  })
+
+  it('shows today through the seventh day by local midnights, and asks a day more on each side', () => {
+    expect(agendaWindow(at(15, 10))).toEqual({ from: sec(at(15)), to: sec(at(22)) })
+    expect(agendaQueryWindow(at(15, 10))).toEqual({ from: sec(at(15)) - 86_400, to: sec(at(22)) + 86_400 })
+    // Across the end of summer time in Europe (25 October) the window still
+    // ends on a local midnight.
+    expect(agendaWindow(at(24, 23))).toEqual({ from: sec(at(24)), to: sec(at(31)) })
+  })
+})
