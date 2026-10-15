@@ -13,7 +13,7 @@ any native/provider ledger row to verified.
 
 ## Status summary (2026-10-12)
 
-48 rows: 1 verified, 23 implemented-unverified, 24 partial, 0 absent, 0 unassessed, 0 blocked.
+48 rows: 1 verified, 22 implemented-unverified, 25 partial, 0 absent, 0 unassessed, 0 blocked.
 The only verified row (SET-16A) needs neither native nor provider evidence.
 No native Windows (N4) or real-provider (N5) evidence exists yet; it is
 scheduled once on the final version, so every row that requires it stays at
@@ -54,7 +54,7 @@ GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
 | SET-20 | #103 | Tasks/General | partial | yes | - |
 | SET-21 | #111 | Chat/General | partial | yes | - |
 | SET-22 | #109 | Online Meetings/General | partial | yes | - |
-| SET-23 | #86 | Widgets/General | implemented-unverified | yes | - |
+| SET-23 | #86 | Widgets/General | partial | yes | - |
 | SET-24 | #54 | Advanced/Logging | implemented-unverified | yes | - |
 | SET-25 | #112 | Settings/Import and Export | partial | yes | - |
 | SET-26 | #116 | Settings/QR Export | partial | yes | - |
