@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use super::*;
-use crate::exchange::book::tests::{contact_xml, got, list_xml, member_xml};
+use crate::exchange::book::tests::{got, list_xml, member_xml};
 use crate::exchange::book::{Book, Contact, Member};
 use crate::exchange::tests::scripted::{client, error_response, ok, serve, Step};
 

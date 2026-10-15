@@ -56,12 +56,12 @@ fn local(raw: &[u8]) -> String {
     }
 }
 
-fn element(start: &quick_xml::events::BytesStart) -> Result<Node> {
+fn element(start: &quick_xml::events::BytesStart, decoder: quick_xml::encoding::Decoder) -> Result<Node> {
     let mut attrs = Vec::new();
     for attr in start.attributes() {
         let attr = attr.context("an attribute of the Exchange answer could not be read")?;
         let key = local(attr.key.as_ref());
-        let value = attr.unescape_value().context("an attribute of the Exchange answer could not be read")?;
+        let value = attr.decode_and_unescape_value(decoder).context("an attribute of the Exchange answer could not be read")?;
         attrs.push((key, value.into_owned()));
     }
     Ok(Node { name: local(start.name().as_ref()), attrs, ..Default::default() })
@@ -74,9 +74,9 @@ pub fn parse(xml: &[u8]) -> Result<Node> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf).context("the Exchange answer is not XML")? {
-            Event::Start(start) => stack.push(element(&start)?),
+            Event::Start(start) => stack.push(element(&start, reader.decoder())?),
             Event::Empty(start) => {
-                let node = element(&start)?;
+                let node = element(&start, reader.decoder())?;
                 stack.last_mut().expect("root").children.push(node);
             }
             Event::End(_) => {
