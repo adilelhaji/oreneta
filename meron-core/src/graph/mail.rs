@@ -194,6 +194,9 @@ fn auth_error(error: auth::Failure) -> Error {
         auth::Failure::Denied => ErrorKind::AccessDenied,
         auth::Failure::ConsentRequired => ErrorKind::ConsentRequired,
         auth::Failure::Unavailable => ErrorKind::Unavailable,
+        // The sign-in is fine; the proxy setting refused the refresh (#201).
+        auth::Failure::AppProxyUnusable => ErrorKind::AppProxyUnusable,
+        auth::Failure::AccountProxyUnusable => ErrorKind::AccountProxyUnusable,
         _ => ErrorKind::Reauthenticate,
     })
 }
@@ -758,7 +761,7 @@ impl std::fmt::Display for BatchError {
             ErrorKind::NotFound => "a message is no longer there".to_owned(),
             ErrorKind::Conflict => "it changed on the server meanwhile".to_owned(),
             ErrorKind::Reauthenticate => "the account needs to sign in again".to_owned(),
-            kind => format!("{kind:?}"),
+            kind => kind.describe(),
         };
         if self.done == 0 {
             write!(f, "Microsoft Graph: not changed: {reason}")

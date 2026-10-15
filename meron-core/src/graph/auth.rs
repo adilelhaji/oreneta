@@ -58,10 +58,27 @@ pub enum Failure {
     Unavailable,
     Storage,
     InvalidResponse,
+    /// The proxy chosen for the account cannot be used (#201); see
+    /// [`super::ErrorKind::AppProxyUnusable`]. Not `Unavailable`: Microsoft
+    /// was never asked.
+    AppProxyUnusable,
+    AccountProxyUnusable,
+}
+impl Failure {
+    fn proxy_kind(self) -> Option<super::ErrorKind> {
+        match self {
+            Failure::AppProxyUnusable => Some(super::ErrorKind::AppProxyUnusable),
+            Failure::AccountProxyUnusable => Some(super::ErrorKind::AccountProxyUnusable),
+            _ => None,
+        }
+    }
 }
 impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Graph authorization: {self:?}")
+        match self.proxy_kind() {
+            Some(kind) => write!(f, "Graph authorization: {}", kind.describe()),
+            None => write!(f, "Graph authorization: {self:?}"),
+        }
     }
 }
 impl std::error::Error for Failure {}
@@ -613,6 +630,8 @@ fn graph_failure(error: super::Error) -> Failure {
         super::ErrorKind::ConsentRequired => Failure::ConsentRequired,
         super::ErrorKind::AccessDenied => Failure::Denied,
         super::ErrorKind::InvalidResponse => Failure::InvalidResponse,
+        super::ErrorKind::AppProxyUnusable => Failure::AppProxyUnusable,
+        super::ErrorKind::AccountProxyUnusable => Failure::AccountProxyUnusable,
         _ => Failure::Unavailable,
     }
 }
@@ -648,7 +667,11 @@ impl Microsoft {
         url: &str,
         form: Option<&[(&str, &str)]>,
     ) -> Result<Vec<u8>> {
-        let agent = match proxy.resolve().map_err(|_| Failure::Unavailable)? {
+        // A proxy setting that cannot be used is said to be one (#201).
+        let refused = |err: anyhow::Error| {
+            graph_failure(super::Error::new(super::ErrorKind::proxy_refusal(&err)))
+        };
+        let agent = match proxy.resolve().map_err(refused)? {
             Some(p) => crate::proxy::agent_for(Some(&p)).map_err(|_| Failure::Unavailable)?,
             None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),
         };

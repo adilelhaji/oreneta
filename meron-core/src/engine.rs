@@ -1340,6 +1340,9 @@ pub fn is_transient_io_error(error: &std::io::Error) -> bool {
 
 pub fn is_transient_sync_error(error: &anyhow::Error) -> bool {
     if error.downcast_ref::<crate::graph::Error>().is_some() { return false; }
+    // A proxy setting that cannot be used stays so until someone fixes it
+    // (#201), whatever words its reason happens to contain.
+    if crate::proxy::UnusableProxy::find(error).is_some() { return false; }
     for cause in error.chain() {
         if let Some(io_error) = cause.downcast_ref::<std::io::Error>()
             && is_transient_io_error(io_error)

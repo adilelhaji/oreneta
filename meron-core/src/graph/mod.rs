@@ -42,6 +42,42 @@ pub enum ErrorKind {
     Uncertain,
     /// Over the bound this client reads (#142); nothing was kept.
     TooLarge,
+    /// Refused before anything was sent because the proxy chosen for the
+    /// account cannot be used (#201): the app-wide one, or the account's own.
+    /// Kept apart from `Transport`: trying again changes nothing until the
+    /// setting is fixed.
+    AppProxyUnusable,
+    AccountProxyUnusable,
+}
+
+impl ErrorKind {
+    /// Whose proxy setting refused the request, when that is what happened.
+    pub fn proxy_scope(self) -> Option<crate::proxy::ProxyScope> {
+        match self {
+            ErrorKind::AppProxyUnusable => Some(crate::proxy::ProxyScope::App),
+            ErrorKind::AccountProxyUnusable => Some(crate::proxy::ProxyScope::Account),
+            _ => None,
+        }
+    }
+
+    /// The kind for a route the proxy setting refused. `ProxyChoice::resolve`
+    /// fails only with such a refusal; anything else stays a transport failure.
+    pub(crate) fn proxy_refusal(error: &anyhow::Error) -> Self {
+        match crate::proxy::UnusableProxy::find(error).map(|refusal| refusal.scope) {
+            Some(crate::proxy::ProxyScope::App) => ErrorKind::AppProxyUnusable,
+            Some(crate::proxy::ProxyScope::Account) => ErrorKind::AccountProxyUnusable,
+            None => ErrorKind::Transport,
+        }
+    }
+
+    /// The kind as the apps read it: the proxy refusal in the form they
+    /// recognise (see `proxy::UNUSABLE_PREFIX`), any other by its name.
+    pub(crate) fn describe(self) -> String {
+        match self.proxy_scope() {
+            Some(scope) => format!("{} ({scope})", crate::proxy::UNUSABLE_PREFIX),
+            None => format!("{self:?}"),
+        }
+    }
 }
 
 /// Only locally generated categories; never provider text, URLs or tokens.
@@ -63,7 +99,7 @@ impl Error {
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Microsoft Graph: {:?}", self.kind)
+        write!(f, "Microsoft Graph: {}", self.kind.describe())
     }
 }
 impl std::error::Error for Error {}
@@ -599,7 +635,12 @@ impl Client {
     }
     fn agent(&self) -> Result<ureq::Agent> {
         // Explicit per-account route, resolved per call so proxy changes apply.
-        Ok(match self.proxy.resolve().map_err(|_| Error::new(ErrorKind::Transport))? {
+        // A proxy setting that cannot be used is said to be one (#201).
+        Ok(match self
+            .proxy
+            .resolve()
+            .map_err(|err| Error::new(ErrorKind::proxy_refusal(&err)))?
+        {
             Some(proxy) => crate::proxy::agent_for(Some(&proxy))
                 .map_err(|_| Error::new(ErrorKind::Transport))?,
             // ureq's defaults read HTTP_PROXY. An explicitly resolved direct
