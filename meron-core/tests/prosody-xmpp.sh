@@ -31,10 +31,12 @@ openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
 printf 'subjectAltName=IP:127.0.0.1,DNS:localhost\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\nkeyUsage=critical,digitalSignature\n' > "$C/upload.ext"
 openssl x509 -req -in "$C/upload.csr" -CA "$C/ca.pem" -CAkey "$C/ca.key" -CAcreateserial -days 2 \
   -extfile "$C/upload.ext" -out "$C/upload.pem" 2>/dev/null
+DEBUG_LOG=""
+if [ -n "${ORENETA_PROSODY_DEBUG:-}" ]; then DEBUG_LOG="debug = \"$DIR/prosody.debug.log\"; "; fi
 cat > "$DIR/prosody.cfg.lua" <<CONF
 pidfile = "$DIR/prosody.pid"
 data_path = "$DIR/data"
-log = { info = "$DIR/prosody.log"; error = "$DIR/prosody.err" }
+log = { ${DEBUG_LOG}info = "$DIR/prosody.log"; error = "$DIR/prosody.err" }
 daemonize = true
 interfaces = { "127.0.0.1" }
 c2s_ports = { $PORT }

@@ -410,8 +410,35 @@ enum Asked {
 type Answer = (Asked, Result<tokio_xmpp::IqResponse, tokio_xmpp::IqFailure>);
 type Pending = FuturesUnordered<Pin<Box<dyn Future<Output = Answer> + Send>>>;
 
-fn ask(pending: &Pending, what: Asked, token: tokio_xmpp::IqResponseToken) {
-    pending.push(Box::pin(async move { (what, token.await) }));
+// DIAGNOSTIC ONLY (branch diag/prosody-upload-flake, not for merge).
+pub(crate) fn trace(line: String) {
+    let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    eprintln!("[trace {ms}] {line}");
+}
+
+fn describe(what: &Asked) -> String {
+    match what {
+        Asked::Mam(room) => format!("mam {room:?}"),
+        Asked::Items => "disco#items".into(),
+        Asked::Info(jid) => format!("disco#info {jid}"),
+        Asked::Slot(id) => format!("slot {id}"),
+        Asked::Ignored => "ignored".into(),
+    }
+}
+
+fn ask(who: &str, pending: &Pending, what: Asked, token: tokio_xmpp::IqResponseToken) {
+    let label = format!("{who} {}", describe(&what));
+    trace(format!("ask {label}"));
+    pending.push(Box::pin(async move {
+        let answer = token.await;
+        let outcome = match &answer {
+            Ok(tokio_xmpp::IqResponse::Result(_)) => "result".to_string(),
+            Ok(tokio_xmpp::IqResponse::Error(e)) => format!("error {:?}", e.defined_condition),
+            Err(e) => format!("failure {e}"),
+        };
+        trace(format!("answer {label}: {outcome}"));
+        (what, answer)
+    }));
 }
 
 /// The upload service, found once per session.
@@ -446,6 +473,7 @@ pub async fn run(
     let pending: Pending = FuturesUnordered::new();
     let mut pending = pending;
     let mut uploads = Uploads::default();
+    let mut who = account.jid.clone();
     let (done_tx, mut done_rx) = tokio::sync::mpsc::unbounded_channel::<(Upload, String, Result<(), FileError>)>();
     let changed = |conversation: &str| emit("chat.changed", json!({ "account": account.id, "conversation": conversation }));
     let room_state = |room: &str, state: &str, detail: Value| {
@@ -468,7 +496,9 @@ pub async fn run(
             event = client.next() => {
                 let Some(event) = event else { break };
                 match event {
-                    Event::Online { resumed, .. } => {
+                    Event::Online { resumed, bound_jid, .. } => {
+                        who = bound_jid.to_string();
+                        trace(format!("online {bound_jid} resumed={resumed} searching={} waiting={} asked={}", uploads.searching, uploads.waiting.len(), uploads.asked.len()));
                         // Whatever was in flight when the connection went is now
                         // uncertain; the archive settles what the server got.
                         if let Ok(n) = super::after_disconnect(&db.lock().unwrap(), &account.id) {
@@ -479,7 +509,7 @@ pub async fn run(
                         let _ = client.send_iq(None, tokio_xmpp::IqRequest::Set(carbons::Enable.into())).await;
                         let after = super::last_archive_id(&db.lock().unwrap(), &account.id).ok().flatten();
                         let token = client.send_iq(None, tokio_xmpp::IqRequest::Set(archive_query(after).into())).await;
-                        ask(&pending, Asked::Mam(None), token);
+                        ask(&who, &pending, Asked::Mam(None), token);
                         // A resumed stream is still in its rooms; a new one joins them again.
                         if !resumed {
                             let rooms = super::rooms(&db.lock().unwrap(), &account.id).unwrap_or_default();
@@ -490,6 +520,7 @@ pub async fn run(
                         }
                     }
                     Event::Disconnected(error) => {
+                        trace(format!("disconnected {}: {error}", account.jid));
                         let _ = super::after_disconnect(&db.lock().unwrap(), &account.id);
                         emit("chat.status", json!({ "account": account.id, "state": "offline", "message": error.to_string() }));
                         // Questions asked on the old stream get no answer: uploads
@@ -524,13 +555,13 @@ pub async fn run(
                                 room_state(&room, "joined", Value::Null);
                                 if created {
                                     let token = client.send_iq(Some(Jid::from(from.clone())), tokio_xmpp::IqRequest::Set(instant_room())).await;
-                                    ask(&pending, Asked::Ignored, token);
+                                    ask(&who, &pending, Asked::Ignored, token);
                                 }
                                 // The room's own archive, from where we left it, when it has one.
                                 let after = super::last_room_archive_id(&db.lock().unwrap(), &account.id, &room).ok().flatten();
                                 if after.is_some() {
                                     let token = client.send_iq(Some(Jid::from(from.clone())), tokio_xmpp::IqRequest::Set(archive_query(after).into())).await;
-                                    ask(&pending, Asked::Mam(Some(room.clone())), token);
+                                    ask(&who, &pending, Asked::Mam(Some(room.clone())), token);
                                 }
                             }
                             Some(RoomPresence::Out) => room_state(&room, "out", Value::Null),
@@ -540,7 +571,7 @@ pub async fn run(
                             None => {}
                         }
                     }
-                    Event::Stanza(_) => {}
+                    Event::Stanza(other) => trace(format!("{who} other stanza {other:?}")),
                 }
             }
             Some((what, answer)) = pending.next(), if !pending.is_empty() => {
@@ -553,7 +584,7 @@ pub async fn run(
                                     if let Some(last) = fin.set.last {
                                         let to = room.as_deref().and_then(|r| Jid::from_str(r).ok());
                                         let token = client.send_iq(to, tokio_xmpp::IqRequest::Set(archive_query(Some(last)).into())).await;
-                                        ask(&pending, Asked::Mam(room), token);
+                                        ask(&who, &pending, Asked::Mam(room), token);
                                     }
                                 }
                             }
@@ -566,7 +597,7 @@ pub async fn run(
                                 for item in items.items.into_iter().take(20) {
                                     let token = client.send_iq(Some(item.jid.clone()), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
                                     uploads.searching += 1;
-                                    ask(&pending, Asked::Info(item.jid), token);
+                                    ask(&who, &pending, Asked::Info(item.jid), token);
                                 }
                             }
                         }
@@ -648,6 +679,7 @@ pub async fn run(
                         }
                     }
                     Some(Command::Upload(upload)) => {
+                        trace(format!("{who} upload {} size={} service={:?} searching={}", upload.id, upload.size, uploads.service, uploads.searching));
                         if upload.cancel.load(Ordering::Relaxed) {
                             uploaded(&upload, Err(FileError::Cancelled));
                             continue;
@@ -657,9 +689,9 @@ pub async fn run(
                             // Find the upload service: the server itself, or one of its components.
                             let domain = Jid::from(BareJid::from_parts(None, own.domain()));
                             let token = client.send_iq(Some(domain.clone()), tokio_xmpp::IqRequest::Get(DiscoItemsQuery { node: None, rsm: None }.into())).await;
-                            ask(&pending, Asked::Items, token);
+                            ask(&who, &pending, Asked::Items, token);
                             let token = client.send_iq(Some(domain.clone()), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
-                            ask(&pending, Asked::Info(domain), token);
+                            ask(&who, &pending, Asked::Info(domain), token);
                             uploads.searching = 2;
                         } else {
                             next_uploads(&mut client, &mut pending, &mut uploads, &uploaded).await;
@@ -761,7 +793,7 @@ async fn next_uploads(
         }
         let request = files::slot_request(&upload.name, upload.size);
         let token = client.send_iq(Some(service.clone()), tokio_xmpp::IqRequest::Get(request.into())).await;
-        ask(pending, Asked::Slot(upload.id.clone()), token);
+        ask("next_uploads", pending, Asked::Slot(upload.id.clone()), token);
         uploads.asked.insert(upload.id.clone(), upload);
     }
 }

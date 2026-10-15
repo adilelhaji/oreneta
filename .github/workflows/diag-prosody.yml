@@ -1,0 +1,57 @@
+name: diag-prosody
+
+# DIAGNOSTIC ONLY (branch diag/prosody-upload-flake, never merged): repeats
+# the chat tests against Prosody to catch the intermittent "never saw: too
+# large" failure with the engine's traces, every session's events and
+# Prosody's debug log.
+on:
+  push:
+    branches: ['diag/**']
+
+jobs:
+  prosody-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config perl prosody
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: meron-core
+      - name: Build the tests
+        run: cargo test --manifest-path meron-core/Cargo.toml --lib --no-run
+      - name: Repeat the Prosody tests
+        env:
+          ORENETA_PROSODY: 127.0.0.1:15222
+          ORENETA_PROSODY_CA: /tmp/oreneta-xmpp/certs/ca.pem
+        run: |
+          sudo systemctl stop prosody || true
+          out="$RUNNER_TEMP/diag"
+          mkdir -p "$out"
+          run() {
+            mode=$1; i=$2; shift 2
+            dir="$out/$mode-$i"
+            mkdir -p "$dir"
+            sudo ORENETA_PROSODY_DEBUG=1 bash meron-core/tests/prosody-xmpp.sh /tmp/oreneta-xmpp 15222
+            if timeout 180 cargo test --manifest-path meron-core/Cargo.toml --lib chat::tests::against_prosody "$@" -- --nocapture > "$dir/test.log" 2>&1; then
+              echo "$mode $i ok" >> "$out/summary.txt"
+            else
+              echo "$mode $i FAILED" >> "$out/summary.txt"
+              sudo cp /tmp/oreneta-xmpp/prosody.debug.log /tmp/oreneta-xmpp/prosody.log /tmp/oreneta-xmpp/prosody.err "$dir/" || true
+            fi
+          }
+          for i in $(seq 1 40); do run parallel "$i"; done
+          for i in $(seq 1 20); do run serial "$i" --test-threads=1; done
+          sudo chmod -R a+r "$out"
+          grep -c FAILED "$out/summary.txt" || true
+          { echo '```'; cat "$out/summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-prosody-${{ github.sha }}
+          path: ${{ runner.temp }}/diag/

@@ -435,7 +435,9 @@ async fn against_prosody_messages_arrive_once_and_offline_ones_come_from_the_arc
         let connector = xmpp::Connector { host: host.into(), port, proxy: None, cert_pin: None, plain_loopback: true };
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let (etx, erx) = std::sync::mpsc::channel::<(String, serde_json::Value)>();
+        let who = format!("1to1:{id}");
         let emit: xmpp::Emit = Arc::new(move |name: &str, detail: serde_json::Value| {
+            xmpp::trace(format!("event {who} {name} {detail}"));
             let _ = etx.send((name.to_string(), detail));
         });
         let task = tokio::spawn(xmpp::run(account, "secret".into(), db, connector, rx, emit, xmpp::Options::default()));
@@ -536,7 +538,9 @@ fn start_session(id: &str, jid: &str, db: Arc<std::sync::Mutex<Connection>>, opt
     let connector = xmpp::Connector { host, port, proxy: None, cert_pin: None, plain_loopback: true };
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let (etx, erx) = std::sync::mpsc::channel::<(String, serde_json::Value)>();
+    let who = format!("{id}:{}", std::thread::current().name().unwrap_or("?"));
     let emit: xmpp::Emit = Arc::new(move |name: &str, detail: serde_json::Value| {
+        xmpp::trace(format!("event {who} {name} {detail}"));
         let _ = etx.send((name.to_string(), detail));
     });
     let task = tokio::spawn(xmpp::run(account, "secret".into(), db, connector, rx, emit, options));
@@ -549,15 +553,17 @@ async fn wait_event(session: &Session, what: &'static str, matches: impl Fn(&str
     tokio::task::spawn_blocking(move || {
         let events = events.lock().unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let mut seen = Vec::new();
         while std::time::Instant::now() < deadline {
             if let Ok((name, detail)) = events.recv_timeout(std::time::Duration::from_millis(200)) {
                 assert_ne!(detail["state"], "error", "{name}: {detail}");
                 if matches(&name, &detail) {
                     return detail;
                 }
+                seen.push(format!("{name} {detail}"));
             }
         }
-        panic!("never saw: {what}");
+        panic!("never saw: {what}; saw instead: {seen:?}");
     })
     .await
     .unwrap()
