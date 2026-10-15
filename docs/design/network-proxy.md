@@ -42,8 +42,31 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 - **Límites conocidos.** Los libros CardDAV guardados sin cuenta y las listas de tareas CalDAV no
   cuelgan de ninguna cuenta de correo: usan el proxy global (#193). Los
   sockets IMAP ya abiertos y las escuchas IDLE conservan su
-  conexión hasta reconectar. Un error de proxy aún no se muestra en la
-  interfaz como tal (issue de seguimiento).
+  conexión hasta reconectar.
+
+### Qué ve la persona cuando se rechaza el proxy (#201)
+
+- **Forma del error.** Todo rechazo es un `proxy::UnusableProxy`, cuyo
+  texto empieza por `UNUSABLE_PREFIX` y dice de quién es el ajuste:
+  `proxy setting unusable (app): …` (proxy global, también si no se pudo
+  leer) o `proxy setting unusable (account): …` (proxy propio de la
+  cuenta). Es un contrato: escritorio y móvil leen el error de
+  sincronización como texto.
+- **Escritorio** (`ConnectivityBanner`): en lugar de «Unresolved sync
+  issue», la cuenta dice que su conexión se rechaza por el ajuste del
+  proxy de la app o por el suyo propio, y el botón abre Ajustes → Red
+  (sección `network`) o el proxy de esa cuenta (`accountNetwork`). Un
+  proxy que no contesta (`connect to proxy host:port`) muestra su
+  dirección y abre el proxy propio de la cuenta si lo tiene, si no el
+  global. Del error solo se guarda esa clasificación.
+- **Móvil** (`MobileConnectivity.kt`): la misma distinción y el mismo
+  destino en el aviso de error de sincronización.
+- **Microsoft Graph:** el rechazo es `ErrorKind::AppProxyUnusable` o
+  `AccountProxyUnusable` (y `auth::Failure` igual al renovar el token),
+  no `Transport` ni `Unavailable`, ni una petición de volver a iniciar
+  sesión. Su texto es `Microsoft Graph: proxy setting unusable (app)`.
+- **Sin reintento:** `is_transient_sync_error` nunca toma un rechazo de
+  proxy por un fallo de red pasajero, diga lo que diga su motivo.
 
 ## Conexiones
 
@@ -108,7 +131,17 @@ rechaza un dominio con sintaxis de URL.
   `proxy_route_follows_the_account_and_fails_closed` (store/tests.rs);
   `mobile_autodiscover_refuses_to_look_up_through_an_unusable_proxy`
   (protocol/tests.rs); `an_unusable_proxy_is_an_error_and_never_a_direct_connection`
-  (cloud/tests.rs).
+  (cloud/tests.rs). Para #201:
+  `every_refusal_says_proxy_setting_unusable_and_whose_setting_it_is`
+  (proxy.rs); `a_proxy_setting_that_cannot_be_used_is_a_proxy_error_and_not_retried`
+  (graph/tests.rs), `a_proxy_setting_that_cannot_be_used_is_a_proxy_failure_not_unavailable`
+  (graph/auth/tests.rs), `a_proxy_refusal_while_refreshing_the_grant_stays_a_proxy_error`
+  (graph/mail/tests.rs); `an_unusable_proxy_setting_is_not_retried_as_a_passing_failure`
+  y `graph_failures_do_not_enter_imap_retry_policy` (main.rs).
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
   Mozilla; los servidores se pueden escribir sin búsqueda.
+  `ConnectivityBanner.test.tsx` y `connectivityBannerHelpers.test.ts`
+  (#201): un proxy global incompleto abre Ajustes → Red, uno propio abre
+  el proxy de esa cuenta, y cualquier otro fallo sigue abriendo la cuenta.
+- Móvil (`MobileConnectivityTest.kt`, #201): la misma distinción.
