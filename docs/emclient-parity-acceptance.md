@@ -13,7 +13,7 @@ any native/provider ledger row to verified.
 
 ## Status summary (2026-10-12)
 
-48 rows: 1 verified, 22 implemented-unverified, 25 partial, 0 absent, 0 unassessed, 0 blocked.
+48 rows: 1 verified, 23 implemented-unverified, 24 partial, 0 absent, 0 unassessed, 0 blocked.
 The only verified row (SET-16A) needs neither native nor provider evidence.
 No native Windows (N4) or real-provider (N5) evidence exists yet; it is
 scheduled once on the final version, so every row that requires it stays at
@@ -33,7 +33,7 @@ GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
 | SET-02 | #114 | General/Shortcuts; Swipe | partial | yes | - |
 | SET-03 | #113 | General/Backup; Storage | partial | yes | - |
 | SET-04 | #54 | General/Password protection | partial | yes | - |
-| SET-05 | #35 | General/Print | partial | yes | - |
+| SET-05 | #35 | General/Print | implemented-unverified | yes | - |
 | SET-06 | #105 | General/Spell Checker | partial | yes | - |
 | SET-07 | #87 | General/Folders | partial | yes | - |
 | SET-08 | #33 | Appearance/Toolbars | partial | yes | - |
