@@ -2669,7 +2669,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         "assistant.execute" => {
             let request: assistant::ExecuteRequest = serde_json::from_value(p.clone())?;
-            assistant::execute_cancellable(proxy::agent()?, request).await
+            assistant::execute_cancellable(assistant::agent(&request.provider)?, request).await
         }
 
         "assistant.cancel" => assistant::cancel(&req_str(p, "execution_id")?),

@@ -52,6 +52,8 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 | IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar y contactos, calendarios CalDAV y suscripciones de calendario | núcleo, `ProxyChoice::agent()` o la ruta de la cuenta | proxy de la cuenta o global |
 | Libros CardDAV guardados sin cuenta (los que se añaden desde la interfaz) y listas de tareas CalDAV, feeds, idiomas de traducción, changelog | núcleo, `proxy::agent()` | global |
 | Búsqueda de ajustes en móvil | núcleo, `protocol/accounts.rs` | global; con proxy se salta la consulta SRV, y un proxy inutilizable es **error** |
+| Asistente con proveedor remoto | núcleo, `assistant::agent` | global |
+| Asistente local (un programa en este equipo) | núcleo, `assistant::agent` | siempre directo, sin proxy de la aplicación ni del entorno (#195) |
 | Enlaces a la nube (Nextcloud/ownCloud) | núcleo, `cloud/mod.rs` | global; si el proxy no se puede usar, **error** (antes caía en silencio a directo) |
 | Búsqueda de ajustes del servidor (autoconfig, ISPDB) | puente Go, `autodiscover.go` | global |
 | Intercambio OAuth y userinfo de Google | puente Go, `oauth.go` | global (la cuenta aún no existe) |
@@ -75,6 +77,12 @@ revelaría el dominio fuera del proxy. Se cae a la suposición
 `imap.<dominio>`/`smtp.<dominio>`.
 
 ## Lo que no usa el proxy
+
+El asistente local (#195): su dirección solo puede ser este equipo
+(`localhost`, `127.0.0.0/8` o `::1`, comprobado sobre el host ya analizado)
+y se llama con `ProxyChoice::Direct`, así que ni el proxy de la aplicación
+ni `HTTP_PROXY` ven el correo que la persona eligió no enviar fuera. Un
+proxy global inutilizable tampoco lo bloquea.
 
 Las imágenes y medios remotos que carga la vista web (imágenes en mensajes,
 fotos de Gravatar/DuckDuckGo) y la página de inicio de sesión que se abre en
@@ -109,6 +117,12 @@ rechaza un dominio con sintaxis de URL.
   `mobile_autodiscover_refuses_to_look_up_through_an_unusable_proxy`
   (protocol/tests.rs); `an_unusable_proxy_is_an_error_and_never_a_direct_connection`
   (cloud/tests.rs).
+- Núcleo, asistente (#195, assistant.rs):
+  `a_local_provider_is_reached_directly_even_with_an_app_proxy_set`,
+  `a_remote_provider_still_goes_through_the_app_proxy`,
+  `an_unusable_app_proxy_refuses_a_remote_provider_but_never_holds_a_local_one`,
+  `local_mode_accepts_every_form_of_this_computer_including_ipv6` y
+  `local_mode_refuses_hosts_that_are_not_this_computer`.
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
   Mozilla; los servidores se pueden escribir sin búsqueda.

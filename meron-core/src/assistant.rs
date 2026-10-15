@@ -242,17 +242,14 @@ fn validate_endpoint(provider: &ProviderConfig) -> Result<Url> {
         "assistant model is required"
     );
     let url = Url::parse(provider.endpoint.trim()).context("assistant endpoint is invalid")?;
-    let host = url.host_str().context("assistant endpoint has no host")?;
+    let host = url.host().context("assistant endpoint has no host")?;
     match provider.mode {
         ProviderMode::Local => {
             ensure!(
                 matches!(url.scheme(), "http" | "https"),
                 "local assistant endpoint must use HTTP(S)"
             );
-            ensure!(
-                matches!(host, "localhost" | "127.0.0.1" | "::1"),
-                "local assistant endpoint must be loopback"
-            );
+            ensure!(is_loopback(&host), "local assistant endpoint must be loopback");
         }
         ProviderMode::Remote => {
             ensure!(
@@ -262,6 +259,28 @@ fn validate_endpoint(provider: &ProviderConfig) -> Result<Url> {
         }
     }
     Ok(url)
+}
+
+/// Whether a parsed host is this computer. Compared by parsed host, not by
+/// text: `host_str()` writes IPv6 in brackets (`[::1]`), so a text match
+/// refused IPv6 loopback (#195).
+fn is_loopback(host: &url::Host<&str>) -> bool {
+    match host {
+        url::Host::Ipv4(ip) => ip.is_loopback(),
+        url::Host::Ipv6(ip) => ip.is_loopback(),
+        url::Host::Domain(name) => name.eq_ignore_ascii_case("localhost"),
+    }
+}
+
+/// The HTTP agent a provider is reached with (#195). A program on this
+/// computer is always reached directly: the person chose not to send the
+/// mail anywhere, so neither the app's proxy nor one from the environment
+/// (`HTTP_PROXY`) may see it. A remote provider follows the app's proxy.
+pub fn agent(provider: &ProviderConfig) -> Result<ureq::Agent> {
+    match provider.mode {
+        ProviderMode::Local => crate::proxy::ProxyChoice::Direct.agent(),
+        ProviderMode::Remote => crate::proxy::agent(),
+    }
 }
 
 pub fn manifest(context: &[ContextItem]) -> Result<ContextManifest> {
@@ -589,6 +608,44 @@ mod tests {
     }
 
     #[test]
+    fn local_mode_accepts_every_form_of_this_computer_including_ipv6() {
+        for endpoint in [
+            "http://[::1]:11434/v1/chat/completions",
+            "https://[::1]:8443/v1",
+            "http://127.0.0.1:11434/v1",
+            "http://127.0.0.2:11434/v1",
+            "http://localhost:11434/v1",
+            "http://LocalHost:11434/v1",
+        ] {
+            assert!(
+                prepare(provider(ProviderMode::Local, endpoint), "summary", "", &[item("m1", "a1")]).is_ok(),
+                "{endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn local_mode_refuses_hosts_that_are_not_this_computer() {
+        for endpoint in [
+            "http://ai.example.test/v1",
+            "http://192.168.1.10:11434/v1",
+            "http://0.0.0.0:11434/v1",
+            "http://[::]:11434/v1",
+            "http://[::2]:11434/v1",
+            "http://[fe80::1]:11434/v1",
+            "http://localhost.example.test:11434/v1",
+            "http://notlocalhost:11434/v1",
+        ] {
+            let error = prepare(provider(ProviderMode::Local, endpoint), "summary", "", &[item("m1", "a1")])
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("must be loopback"), "{endpoint}: {error}");
+        }
+        // A scheme that is not HTTP is refused before the host is looked at.
+        assert!(prepare(provider(ProviderMode::Local, "ftp://[::1]/v1"), "summary", "", &[item("m1", "a1")]).is_err());
+    }
+
+    #[test]
     fn context_is_bounded_account_scoped_and_rejects_duplicates() {
         let mut duplicate = item("m1", "a1");
         duplicate.body = "x".repeat(MAX_ITEM_BYTES + 1);
@@ -771,7 +828,11 @@ mod tests {
     }
 
     fn run(endpoint: &str, id: &str, context: Vec<ContextItem>) -> ExecuteRequest {
-        let provider = provider(ProviderMode::Local, endpoint);
+        run_as(ProviderMode::Local, endpoint, id, context)
+    }
+
+    fn run_as(mode: ProviderMode, endpoint: &str, id: &str, context: Vec<ContextItem>) -> ExecuteRequest {
+        let provider = provider(mode, endpoint);
         let prepared = prepare(provider.clone(), "summary", "", &context).unwrap();
         ExecuteRequest {
             provider,
@@ -882,6 +943,65 @@ mod tests {
             .to_string();
         assert!(error.contains("500"), "{error}");
         assert!(!error.contains("Untrusted body"), "errors are logged: {error}");
+    }
+
+    /// `host:port` of a local test server, as a proxy sees it in `CONNECT`.
+    fn address(port: u16) -> String {
+        format!("127.0.0.1:{port}")
+    }
+
+    #[test]
+    fn a_local_provider_is_reached_directly_even_with_an_app_proxy_set() {
+        use crate::proxy::route_fixture::{GlobalSlot, Recorder};
+        let _slot = GlobalSlot::take();
+        let (origin, app) = (Recorder::origin(), Recorder::proxy());
+        crate::proxy::set_global(Some(app.as_config()));
+        let request = run(
+            &format!("{}/v1/chat/completions", origin.url()),
+            "exec-local-direct",
+            vec![item("m1", "a1")],
+        );
+        execute(&agent(&request.provider).unwrap(), request).unwrap();
+        assert!(origin.saw("POST /v1/chat/completions"), "origin: {:?}", origin.requests());
+        // Other tests may use the app proxy meanwhile; none of them asks for
+        // this server.
+        assert!(!app.saw(&address(origin.port())), "app proxy: {:?}", app.requests());
+    }
+
+    #[test]
+    fn a_remote_provider_still_goes_through_the_app_proxy() {
+        use crate::proxy::route_fixture::{GlobalSlot, Recorder};
+        let _slot = GlobalSlot::take();
+        let app = Recorder::proxy();
+        crate::proxy::set_global(Some(app.as_config()));
+        // A remote provider must use HTTPS, which the test servers do not
+        // speak. A port nobody listens on makes the proxy answer 502 at once;
+        // all that matters is that the request asked the proxy first.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let request = run_as(
+            ProviderMode::Remote,
+            &format!("https://{}/v1/chat/completions", address(port)),
+            "exec-remote-proxy",
+            vec![item("m1", "a1")],
+        );
+        assert!(execute(&agent(&request.provider).unwrap(), request).is_err());
+        assert!(app.saw(&format!("CONNECT {}", address(port))), "app proxy: {:?}", app.requests());
+    }
+
+    #[test]
+    fn an_unusable_app_proxy_refuses_a_remote_provider_but_never_holds_a_local_one() {
+        use crate::proxy::route_fixture::GlobalSlot;
+        let local = provider(ProviderMode::Local, "http://[::1]:11434/v1/chat/completions");
+        let remote = provider(ProviderMode::Remote, "https://ai.example.test/v1/chat/completions");
+        let _slot = GlobalSlot::take();
+        // Chosen but incomplete. Other tests follow the app-wide proxy without
+        // the lock, so it stays unusable only while the agents are built; an
+        // agent's route is fixed when it is built.
+        crate::proxy::publish_global(&json!({ "mode": "http", "host": "", "port": 0 }));
+        let (local_agent, remote_agent) = (agent(&local), agent(&remote));
+        crate::proxy::set_global(None);
+        assert!(remote_agent.is_err(), "never a silent direct connection");
+        assert!(local_agent.is_ok(), "a program on this computer never needed the proxy");
     }
 
     #[tokio::test]
