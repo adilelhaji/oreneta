@@ -296,9 +296,11 @@ export async function setAccountAvatar(accountId: string, avatarUrl: string) {
   }
 }
 
-// Point one account at its own proxy, at the app-wide one, or at a direct
-// connection. Takes effect as the account's connections are re-established.
-/** Save an account's proxy choice; resolves to whether it was saved. */
+/**
+ * Point one account at its own proxy, at the app-wide one, or at a direct
+ * connection. Takes effect as the account's connections are re-established.
+ * Resolves to whether it was saved.
+ */
 export async function setAccountProxy(accountId: string, proxy: AccountProxy): Promise<boolean> {
   const previous = accounts$.get()
   accounts$.set(previous.map((acc) => (acc.id === accountId ? { ...acc, proxy } : acc)))

@@ -2590,4 +2590,29 @@ mod tests {
         assert_eq!(thread_key(None, "msgid", "", "", 7), "msgid");
         assert_eq!(thread_key(None, "", "", "", 7), "uid:7");
     }
+
+    #[test]
+    fn the_oauth_token_refresh_follows_the_account_route() {
+        use crate::proxy::{ProxyChoice, ProxyScope, UnusableProxy, route_fixture};
+        let refresh = |token_url: &str, proxy: ProxyChoice| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(super::refresh_oauth_token(token_url, "client", "", "refresh", None, proxy))
+        };
+        // Its own proxy, direct (past an app-wide proxy) or the app-wide one, as
+        // the account's mail goes (#193). The fixture answers with no token:
+        // only where the request went counts here.
+        route_fixture::check_account_routes(|origin, proxy| {
+            let _ = refresh(origin, proxy);
+        });
+
+        // Its own proxy, half filled in: refused as that setting, nothing sent (#201).
+        let origin = route_fixture::Recorder::origin();
+        let own = ProxyChoice::from_json(&serde_json::json!({ "mode": "http", "port": 3128 }));
+        let err = refresh(&origin.url(), own).unwrap_err();
+        assert_eq!(UnusableProxy::find(&err).map(|refusal| refusal.scope), Some(ProxyScope::Account), "{err:#}");
+        assert!(origin.requests().is_empty(), "the token endpoint was never asked");
+    }
 }

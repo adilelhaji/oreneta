@@ -106,6 +106,11 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 | Intercambio OAuth y userinfo de Google | puente Go, `oauth.go` | global (la cuenta aún no existe) |
 | Imagen de la cuenta | puente Go, `paste_image.go` | proxy de esa cuenta |
 | Comprobación y descarga de actualizaciones | puente Go, `update.go` | global |
+| Renovación de tokens OAuth de IMAP/SMTP | núcleo, `imap::refresh_oauth_token` con `ProxyChoice::agent()` | proxy de la cuenta o global; directa no usa `HTTP_PROXY`; con el global apagado sí lo respeta (defaults de `ureq`) |
+
+Cambio de #201: la renovación de tokens OAuth de IMAP/SMTP sigue la
+elección de la cuenta. Antes una cuenta «directa» la hacía con los
+defaults de `ureq`, que leen `HTTP_PROXY`; ahora va directa de verdad.
 
 En el puente Go, `netproxy.go` pide la ruta al núcleo y construye un
 `http.Transport` con `Proxy` de `net/http` (`http://` para HTTP CONNECT,
@@ -179,6 +184,15 @@ rechaza un dominio con sintaxis de URL.
 - Móvil (`MobileConnectivityTest.kt`, `SettingsRowsTest.kt`, #201): la
   misma distinción, y la sección de red donde la ponen las filas de encima.
 - Las pruebas que publican un proxy global inutilizable toman
-  `TEST_GLOBAL_LOCK` para escribir; las que conectan por la ruta global
-  toman `steady_global()` para leer o usan `ProxyChoice::Direct`, para no
-  ver ese proxy a medias.
+  `TEST_GLOBAL_LOCK` para escribir. Las que conectan por la ruta global
+  con un servidor local toman `steady_global()` para leer (RSS, nube,
+  archivos del chat, intercambio de código OAuth en móvil) o usan
+  `ProxyChoice::Direct` (Google Calendar, EWS, POP3), para no ver ese
+  proxy a medias. `load_global` también toma la lectura, y con él
+  `Engine::new`, `ffi::init` y la restauración de copias: una prueba que
+  ya tiene `steady_global()` no puede hacer nada de eso, así que las que
+  abren un motor no lo toman.
+- `the_oauth_token_refresh_follows_the_account_route` (imap.rs): la
+  renovación de tokens va por el proxy propio, directa aunque haya
+  global, por el global, y un proxy propio inutilizable la rechaza sin
+  enviar nada.

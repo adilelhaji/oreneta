@@ -334,7 +334,14 @@ pub fn set_global(cfg: Option<ProxyConfig>) {
 
 /// Serializes the tests that write the process-global slot; the default test
 /// runner is multi-threaded, and a stray publish from another test would make
-/// assertions about the global flaky.
+/// assertions about the global flaky. Tests that publish take it to write
+/// (`route_fixture::GlobalSlot`); tests that connect through the app-wide
+/// route take it to read ([`steady_global`]).
+///
+/// [`load_global`] takes the read side too, so opening an engine
+/// (`Engine::new`), `ffi::init` and a backup restore all do. A test already
+/// holding a read guard must not do any of those: a second read on one thread
+/// can wait forever behind a writer that is waiting in between.
 #[cfg(test)]
 pub(crate) static TEST_GLOBAL_LOCK: RwLock<()> = RwLock::new(());
 
