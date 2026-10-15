@@ -277,14 +277,16 @@ pub async fn read_thread_page(
         if !message_id_key.is_empty() && !seen_message_ids.insert(message_id_key) {
             continue;
         }
-        messages.push(thread_message_json(
+        let mut message = thread_message_json(
             account,
             thread_id,
             &slot.folder,
             header,
             cached.as_ref(),
             &mine,
-        ));
+        );
+        attach_delivery(&engine.db.lock().unwrap(), account, &mut message)?;
+        messages.push(message);
     }
 
     let mut out = json!({ "messages": messages });
@@ -453,6 +455,16 @@ pub fn thread_message_json(
     let from_addr = cached
         .map(|message| message.from_addr.as_str())
         .unwrap_or(header.from_addr.as_str());
+    let outgoing = store::is_outgoing(
+        mine,
+        folder,
+        from_addr,
+        cached.is_some_and(|message| message.delivered),
+    );
+    // A delivery or read report this message is (ADR-0057): what it says,
+    // shown on the report itself. One this account sent (a receipt it
+    // answered) is not a report it received.
+    let report = if outgoing { None } else { cached.and_then(|message| message.report.as_ref()) };
     json!({
         "id": id,
         "account_id": account_id,
@@ -461,12 +473,7 @@ pub fn thread_message_json(
         // Classified in the core (own address *or* Sent-folder provenance) so
         // both frontends render alias-sent mail as outgoing without knowing
         // the account's aliases.
-        "outgoing": store::is_outgoing(
-            mine,
-            folder,
-            from_addr,
-            cached.is_some_and(|message| message.delivered),
-        ),
+        "outgoing": outgoing,
         "from_name": cached.map(|message| message.from_name.as_str()).unwrap_or(header.from_name.as_str()),
         "from_addr": cached.map(|message| message.from_addr.as_str()).unwrap_or(header.from_addr.as_str()),
         "to": cached.map(|message| message.to.as_str()).unwrap_or(""),
@@ -500,7 +507,24 @@ pub fn thread_message_json(
         // A read receipt request (ADR-0048): only that there is one; what to
         // do about it is asked separately (`receipts.status`).
         "receipt_requested": cached.is_some_and(|message| message.receipt.is_some()),
+        "report": report,
     })
+}
+
+/// Adds to an outgoing message what the delivery and read reports this
+/// account received say about it (ADR-0057), keyed by its Message-ID. An
+/// incoming message, one without a Message-ID or one nobody reported on is
+/// left as it is.
+pub fn attach_delivery(conn: &rusqlite::Connection, account_id: &str, message: &mut Value) -> anyhow::Result<()> {
+    if message["outgoing"] != Value::Bool(true) {
+        return Ok(());
+    }
+    let message_id = message["message_id"].as_str().unwrap_or_default().to_string();
+    let reports = crate::receipts::report::outcomes(conn, account_id, &message_id)?;
+    if !reports.is_empty() {
+        message["delivery"] = serde_json::to_value(reports)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -552,6 +576,49 @@ mod tests {
         let plain = crate::parse::Message::default();
         let value = thread_message_json("acc", "tid", "INBOX", &header(13, false), Some(&plain), &HashSet::new());
         assert_eq!(value["receipt_requested"], false);
+    }
+
+    /// ADR-0057: a sent message shows what the reports about it said; the
+    /// report shows what it says itself; neither leaks to anything else.
+    #[test]
+    fn a_sent_message_shows_its_reports_and_a_report_shows_what_it_says() {
+        use crate::receipts::report::{Kind, Outcome, RecipientReport, Report};
+        let conn = crate::store::open_at(":memory:").unwrap();
+        let failed = Report {
+            kind: Kind::Delivery,
+            original_message_id: "plan-1@example.com".into(),
+            recipients: vec![RecipientReport {
+                recipient: "nobody@example.net".into(),
+                outcome: Outcome::Failed,
+                status: "5.1.1".into(),
+                diagnostic: "User unknown".into(),
+            }],
+        };
+        crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000).unwrap();
+
+        let sent = crate::parse::Message { message_id: "Plan-1@Example.com".into(), ..Default::default() };
+        let mut value = thread_message_json("acc", "tid", "Sent", &header(20, true), Some(&sent), &HashSet::new());
+        super::attach_delivery(&conn, "acc", &mut value).unwrap();
+        assert_eq!(value["delivery"][0]["outcome"], "failed");
+        assert_eq!(value["delivery"][0]["status"], "5.1.1");
+        assert_eq!(value["delivery"][0]["diagnostic"], "User unknown");
+        assert_eq!(value["report"], serde_json::Value::Null);
+
+        // The same Message-ID received (not sent here) shows nothing; another
+        // account sees nothing either.
+        let mut incoming = thread_message_json("acc", "tid", "INBOX", &header(21, true), Some(&sent), &HashSet::new());
+        super::attach_delivery(&conn, "acc", &mut incoming).unwrap();
+        assert!(incoming.get("delivery").is_none());
+        let mut other = thread_message_json("other", "tid", "Sent", &header(20, true), Some(&sent), &HashSet::new());
+        super::attach_delivery(&conn, "other", &mut other).unwrap();
+        assert!(other.get("delivery").is_none());
+
+        // The report message itself carries what it says, as a normal message.
+        let bounce = crate::parse::Message { report: Some(failed.clone()), ..Default::default() };
+        let value = thread_message_json("acc", "tid", "INBOX", &header(22, false), Some(&bounce), &HashSet::new());
+        assert_eq!(value["report"]["kind"], "delivery");
+        assert_eq!(value["report"]["recipients"][0]["outcome"], "failed");
+        assert_eq!(value["outgoing"], false);
     }
 
     #[test]

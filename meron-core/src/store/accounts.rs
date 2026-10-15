@@ -843,6 +843,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     ("tracker_exceptions", "account"),
     // How read receipt requests were answered (ADR-0048).
     ("receipt_answers", "account"),
+    // What delivery and read reports said about sent messages (ADR-0057).
+    ("delivery_reports", "account"),
     // What a POP3 account downloaded, and when it deletes from the server (#97).
     ("pop3_seen", "account"),
     ("pop3_policy", "account"),

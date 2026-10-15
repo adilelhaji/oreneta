@@ -94,6 +94,19 @@ pub trait Source: Send + Sync {
     fn delete_message(&self, _id: &ResourceId) -> Result<()> {
         Err(Error::new(ErrorKind::ConsentRequired))
     }
+    // Folder moves and delivery receipts (#210).
+    fn move_folder(&self, _id: &ResourceId, _to: &ResourceId) -> Result<ResourceId> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn create_mime_draft(&self, _raw: &[u8]) -> Result<ResourceId> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn request_delivery_receipt(&self, _draft: &ResourceId) -> Result<()> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
+    fn send_draft(&self, _draft: &ResourceId) -> Result<()> {
+        Err(Error::new(ErrorKind::ConsentRequired))
+    }
 }
 impl Source for Client {
     fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
@@ -131,6 +144,18 @@ impl Source for Client {
     }
     fn delete_message(&self, id: &ResourceId) -> Result<()> {
         Client::delete_message(self, id)
+    }
+    fn move_folder(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        Client::move_folder(self, id, to)
+    }
+    fn create_mime_draft(&self, raw: &[u8]) -> Result<ResourceId> {
+        Client::create_mime_draft(self, raw)
+    }
+    fn request_delivery_receipt(&self, draft: &ResourceId) -> Result<()> {
+        Client::request_delivery_receipt(self, draft)
+    }
+    fn send_draft(&self, draft: &ResourceId) -> Result<()> {
+        Client::send_draft(self, draft)
     }
 }
 pub struct NativeSource {
@@ -186,6 +211,18 @@ impl Source for NativeSource {
     }
     fn delete_message(&self, id: &ResourceId) -> Result<()> {
         self.client()?.delete_message(id)
+    }
+    fn move_folder(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        self.client()?.move_folder(id, to)
+    }
+    fn create_mime_draft(&self, raw: &[u8]) -> Result<ResourceId> {
+        self.client()?.create_mime_draft(raw)
+    }
+    fn request_delivery_receipt(&self, draft: &ResourceId) -> Result<()> {
+        self.client()?.request_delivery_receipt(draft)
+    }
+    fn send_draft(&self, draft: &ResourceId) -> Result<()> {
+        self.client()?.send_draft(draft)
     }
 }
 fn auth_error(error: auth::Failure) -> Error {
@@ -772,6 +809,79 @@ impl std::fmt::Display for BatchError {
 }
 impl std::error::Error for BatchError {}
 
+/// A folder move that did not happen, or whose outcome is unknown (#210).
+/// Never repeated: after it the folder list is read again from the server,
+/// which says where the folder is.
+#[derive(Debug)]
+pub struct FolderMoveError {
+    pub error: Error,
+}
+impl std::fmt::Display for FolderMoveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let reason = match self.error.kind {
+            ErrorKind::Uncertain => {
+                return write!(
+                    f,
+                    "Microsoft Graph: no answer came back, so whether the folder moved is unknown; it was not repeated, and the folder list now shows where it is"
+                );
+            }
+            ErrorKind::Throttled => match self.error.retry_after_seconds {
+                Some(seconds) => format!("the server asked to wait {seconds}s"),
+                None => "the server asked to wait".to_owned(),
+            },
+            ErrorKind::ConsentRequired => "this account does not allow changes; allow them in its settings".to_owned(),
+            ErrorKind::AccessDenied => "the server does not allow moving this folder".to_owned(),
+            ErrorKind::NotFound => "the folder or its destination is no longer there".to_owned(),
+            ErrorKind::Conflict => "a folder with that name is already there, or it changed on the server meanwhile".to_owned(),
+            ErrorKind::Reauthenticate => "the account needs to sign in again".to_owned(),
+            kind => kind.describe(),
+        };
+        write!(f, "Microsoft Graph: the folder was not moved: {reason}")
+    }
+}
+impl std::error::Error for FolderMoveError {}
+
+/// What a folder move did (#210). With immutable ids a folder keeps its id,
+/// and so its local name; `renames` lists the one that did not.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FolderMoved {
+    pub folder: String,
+    pub renames: Vec<(String, String)>,
+}
+
+/// What becomes of a delivery receipt request from this account (ADR-0048,
+/// ADR-0057): Graph carries it only on a draft, so only an account whose
+/// grant was recorded with changes as well as sending asks for one. The
+/// grant itself is checked again on every request.
+pub fn delivery_receipt(conn: &Connection, account: &str, asked: bool) -> crate::smtp::DeliveryReceipt {
+    crate::receipts::delivery_receipt(asked, writes_enabled(conn, account))
+}
+
+/// Sends a message that asks for a delivery receipt (#210, ADR-0057). The
+/// request is a property of the message, which `sendMail` with MIME cannot
+/// carry, so the MIME becomes a draft, the draft is marked, and the draft is
+/// sent. Until the last step nothing has left: a failure there is `NotSent`,
+/// and the draft is removed. The last step is a send like any other: a lost
+/// answer is uncertain and is neither undone nor repeated; a refusal removes
+/// the draft.
+pub fn send_requesting_delivery(source: &dyn Source, raw: &[u8]) -> anyhow::Result<()> {
+    let draft = source
+        .create_mime_draft(raw)
+        .map_err(|error| NotSent { draft_left: error.kind == ErrorKind::Uncertain, error })?;
+    if let Err(error) = source.request_delivery_receipt(&draft) {
+        let draft_left = source.delete_message(&draft).is_err();
+        return Err(NotSent { error, draft_left }.into());
+    }
+    match source.send_draft(&draft) {
+        Ok(()) => Ok(()),
+        Err(error) if matches!(error.kind, ErrorKind::Uncertain | ErrorKind::Unavailable) => Err(error.into()),
+        Err(error) => match source.delete_message(&draft) {
+            Ok(()) => Err(error.into()),
+            Err(_) => Err(anyhow::Error::from(error).context("a copy may be left in Drafts")),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -877,7 +987,8 @@ pub fn guard_command(conn: &Connection, method: &str, p: &Value) -> anyhow::Resu
         return Ok(());
     }
     // #141: the message changes Graph supports, for an account whose grant
-    // was recorded with them. Copying stays within one account.
+    // was recorded with them. Copying stays within one account. #210: moving
+    // a folder within the account is one of those changes.
     // #143: sending, for an account whose grant was recorded with Mail.Send.
     if method == "send" {
         let mut graph = Vec::new();
@@ -889,7 +1000,7 @@ pub fn guard_command(conn: &Connection, method: &str, p: &Value) -> anyhow::Resu
     }
     if matches!(
         method,
-        "messages.markRead" | "messages.markStarred" | "messages.delete" | "messages.move" | "messages.copy"
+        "messages.markRead" | "messages.markStarred" | "messages.delete" | "messages.move" | "messages.copy" | "folders.move"
     ) {
         let mut graph = Vec::new();
         collect_graph_accounts(conn, p, &mut graph)?;
@@ -1156,7 +1267,7 @@ impl Session {
                 let id=ResourceId::new(account,ResourceKind::Message,&id)?;
                 let body=match media.as_ref().filter(|_|has_attachments) {
                     Some(media)=>s.read_with_attachments(&id,uid,media)?,
-                    None=>s.read_json(&id,uid)?,
+                    None=>s.read_json_or_report(&id,uid,media.as_ref())?,
                 };
                 let conn=s.db.lock().unwrap();check(&conn,&s.lease)?;
                 crate::store::save_cached_message(&conn,account,&folder,uid,&body)?;
@@ -1167,6 +1278,21 @@ impl Session {
     fn read_json(&self, id: &ResourceId, uid: u32) -> anyhow::Result<crate::parse::Message> {
         let message=self.source.message(id)?;
         if &message.id!=id {return Err(Error::new(ErrorKind::InvalidResponse).into());}
+        Ok(parsed_body(&message.fields,uid)?)
+    }
+    /// A message without attachments, from its JSON body; a delivery or read
+    /// report from its MIME, which is where what it says is (ADR-0057). A
+    /// report too large to read as MIME still shows its text.
+    fn read_json_or_report(&self, id: &ResourceId, uid: u32, media: Option<&crate::parse::MediaCtx>) -> anyhow::Result<crate::parse::Message> {
+        let message=self.source.message(id)?;
+        if &message.id!=id {return Err(Error::new(ErrorKind::InvalidResponse).into());}
+        if message.fields.is_report() {
+            match self.source.message_mime(id) {
+                Ok(raw)=>return Ok(crate::parse::parse_message(&raw,media)),
+                Err(e) if e.kind==ErrorKind::TooLarge=>{},
+                Err(e)=>return Err(e.into()),
+            }
+        }
         Ok(parsed_body(&message.fields,uid)?)
     }
     fn read_with_attachments(&self, id: &ResourceId, uid: u32, media: &crate::parse::MediaCtx) -> anyhow::Result<crate::parse::Message> {
@@ -1232,6 +1358,142 @@ impl Session {
             result.map_err(anyhow::Error::from)
         })
         .await?
+    }
+
+    /// Submit a message, asking for a delivery receipt exactly when
+    /// [`delivery_receipt`] says so (#210): then through a draft (see
+    /// [`send_requesting_delivery`]), otherwise as before. Sent once; the
+    /// caller records the attempt and decides what an error means. Answers
+    /// what became of the request.
+    pub async fn send_mime_with_receipt(&self, raw: Vec<u8>, asked: bool) -> anyhow::Result<crate::smtp::DeliveryReceipt> {
+        let receipt = delivery_receipt(&self.db.lock().unwrap(), &self.lease.account, asked);
+        if receipt != crate::smtp::DeliveryReceipt::Requested {
+            self.send_mime(raw).await?;
+            return Ok(receipt);
+        }
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let _guard = this.lock.lock().unwrap();
+            check(&this.db.lock().unwrap(), &this.lease).map_err(clean_error)?;
+            let result = send_requesting_delivery(this.source.as_ref(), &raw);
+            if let Err(e) = &result {
+                let failed = e
+                    .downcast_ref::<NotSent>()
+                    .map(|not_sent| &not_sent.error)
+                    .or_else(|| e.downcast_ref::<Error>());
+                if let Some(error) = failed.filter(|error| error.kind == ErrorKind::Reauthenticate) {
+                    let _ = record_failure(&this.db.lock().unwrap(), &this.lease, error);
+                }
+            }
+            result
+        })
+        .await??;
+        Ok(receipt)
+    }
+
+    /// Move a folder, with its subfolders and messages, under `parent` (a
+    /// folder of this account by its local name; `None` for the top level).
+    /// The rules are checked on the synchronized tree before anything is
+    /// asked: no special folder (or one holding a special folder), no search
+    /// folder, not into itself or a subfolder, not where it already is, and
+    /// not beside a folder of the same name. One request, never repeated;
+    /// whatever its outcome, the tree is read again so the cache shows where
+    /// the folder is. See docs/design/graph-message-actions.md (#210).
+    pub async fn move_folder(&self, source: &str, parent: Option<&str>) -> anyhow::Result<FolderMoved> {
+        let (source, parent) = (source.to_owned(), parent.map(str::to_owned));
+        self.write(move |s| {
+            let (id, destination) = s.plan_folder_move(&source, parent.as_deref())?;
+            let destination = match destination {
+                Some(destination) => destination,
+                None => {
+                    let root = s.source.well_known("msgfolderroot")?;
+                    checked_id(&root.id, &s.lease.account, ResourceKind::Folder)?;
+                    root.id
+                }
+            };
+            let outcome = s.source.move_folder(&id, &destination);
+            // Best effort: a move that landed is not turned into an error
+            // because the refresh after it failed; the next sync finishes.
+            let _ = sync_tree(s.source.as_ref(), &s.db, &s.lease);
+            match outcome {
+                Ok(moved) => {
+                    let folder = local_folder(moved.opaque(), "folder");
+                    let renames = if moved == id { Vec::new() } else { vec![(source.clone(), folder.clone())] };
+                    Ok(FolderMoved { folder, renames })
+                }
+                Err(error) => Err(FolderMoveError { error }.into()),
+            }
+        })
+        .await
+    }
+    /// The checks of a folder move, on the synchronized tree: the folder's
+    /// id and its destination's (`None`: the mailbox root).
+    fn plan_folder_move(&self, source: &str, parent: Option<&str>) -> anyhow::Result<(ResourceId, Option<ResourceId>)> {
+        struct Row { remote: String, local: String, name: String, parent: Option<String>, role: String, search: bool }
+        let conn = self.db.lock().unwrap();
+        check(&conn, &self.lease)?;
+        let account = &self.lease.account;
+        let mut stmt = conn.prepare("SELECT remote_id,local_name,display_name,parent_id,role,search_folder FROM graph_folders WHERE account=?1 AND active=1")?;
+        let rows = stmt
+            .query_map([account], |r| Ok(Row { remote: r.get(0)?, local: r.get(1)?, name: r.get(2)?, parent: r.get(3)?, role: r.get(4)?, search: r.get(5)? }))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let find = |local: &str| rows.iter().find(|row| row.local == local);
+        let moved = find(source).ok_or_else(|| anyhow::anyhow!("This folder is not in the synchronized folder list"))?;
+        if moved.role != "folder" {
+            anyhow::bail!("{} is a special folder and cannot be moved", moved.name);
+        }
+        if moved.search {
+            anyhow::bail!("{} is a search folder and cannot be moved", moved.name);
+        }
+        // The folder and everything under it, by the tree Graph reported.
+        let mut subtree = HashSet::from([moved.remote.clone()]);
+        loop {
+            let before = subtree.len();
+            for row in &rows {
+                if row.parent.as_ref().is_some_and(|parent| subtree.contains(parent)) {
+                    subtree.insert(row.remote.clone());
+                }
+            }
+            if subtree.len() == before {
+                break;
+            }
+        }
+        if let Some(special) = rows.iter().find(|row| row.remote != moved.remote && subtree.contains(&row.remote) && row.role != "folder") {
+            anyhow::bail!("{} holds {}, a special folder, and cannot be moved", moved.name, special.name);
+        }
+        let destination = match parent {
+            Some(parent) => {
+                let target = find(parent).ok_or_else(|| anyhow::anyhow!("The destination is not in the synchronized folder list"))?;
+                if target.search {
+                    anyhow::bail!("{} is a search folder and cannot hold folders", target.name);
+                }
+                if subtree.contains(&target.remote) {
+                    anyhow::bail!("{} cannot be moved into itself or one of its subfolders", moved.name);
+                }
+                Some(target)
+            }
+            None => None,
+        };
+        // A parent that is no folder in the list is the mailbox root.
+        let at_top = |row: &Row| !row.parent.as_ref().is_some_and(|parent| rows.iter().any(|other| &other.remote == parent));
+        let already = match destination {
+            Some(target) => moved.parent.as_deref() == Some(target.remote.as_str()),
+            None => at_top(moved),
+        };
+        if already {
+            anyhow::bail!("{} is already there", moved.name);
+        }
+        let beside = |row: &&Row| match destination {
+            Some(target) => row.parent.as_deref() == Some(target.remote.as_str()),
+            None => at_top(*row),
+        };
+        if rows.iter().filter(beside).any(|row| row.remote != moved.remote && row.name.to_lowercase() == moved.name.to_lowercase()) {
+            anyhow::bail!("A folder named {} is already there", moved.name);
+        }
+        Ok((
+            ResourceId::new(account, ResourceKind::Folder, &moved.remote)?,
+            destination.map(|target| ResourceId::new(account, ResourceKind::Folder, &target.remote)).transpose()?,
+        ))
     }
 
     /// Mark messages read or unread (#141). See docs/design/graph-message-actions.md.
@@ -1330,10 +1592,12 @@ impl Session {
             // does not allow, or one the server refused, leaves reading as it
             // was and is reported on the action itself.
             if let Err(e) = &result {
-                if let Some(batch) = e.downcast_ref::<BatchError>() {
-                    if batch.error.kind == ErrorKind::Reauthenticate {
-                        let _ = record_failure(&this.db.lock().unwrap(), &this.lease, &batch.error);
-                    }
+                let failed = e
+                    .downcast_ref::<BatchError>()
+                    .map(|batch| &batch.error)
+                    .or_else(|| e.downcast_ref::<FolderMoveError>().map(|moved| &moved.error));
+                if let Some(error) = failed.filter(|error| error.kind == ErrorKind::Reauthenticate) {
+                    let _ = record_failure(&this.db.lock().unwrap(), &this.lease, error);
                 }
             }
             result

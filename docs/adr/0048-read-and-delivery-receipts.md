@@ -117,7 +117,8 @@
   analizador MIME, no se ve la petición (`isReadReceiptRequested` del
   recurso no se lee todavía).
 - **Interpretar las confirmaciones y avisos de entrega recibidos** (mostrar
-  «leído por…» en el mensaje enviado): fuera de esta fila.
+  «leído por…» en el mensaje enviado): hecho en ADR-0057 (#210), igual que
+  la confirmación de entrega en Graph.
 - **Prueba con servidor real:** el maddy 0.8 de la integración no anuncia
   DSN, así que la prueba comprueba que la de entrega se informa como no
   disponible y que la de lectura llega de bob a alice tras su clic. Un

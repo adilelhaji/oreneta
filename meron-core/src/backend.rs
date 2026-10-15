@@ -444,6 +444,20 @@ impl Session {
         }
     }
 
+    /// Transmits a message whose sender may have asked for a delivery
+    /// receipt (#210, ADR-0057), answering what became of the request.
+    /// Microsoft Graph carries it when the account allows changes; the other
+    /// sessions carry none and send as [`Self::send_mime`] does.
+    pub async fn send_mime_with_receipt(&mut self, raw: Vec<u8>, asked: bool) -> Result<crate::smtp::DeliveryReceipt> {
+        match self {
+            Session::Graph(session) => session.send_mime_with_receipt(raw, asked).await,
+            _ => {
+                self.send_mime(raw).await?;
+                Ok(crate::receipts::delivery_receipt(asked, false))
+            }
+        }
+    }
+
     pub async fn store_seen(&mut self, uids: &[u32], seen: bool) -> Result<()> {
         match self {
             Session::Local(_) => Ok(()),

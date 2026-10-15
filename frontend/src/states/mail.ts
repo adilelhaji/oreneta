@@ -478,10 +478,11 @@ export async function deleteFolder(accountId: string, folderId: string, name?: s
 
 // Move a folder under another folder of the same account, or back to the top
 // level with a null parent (ADR-0050). Refused here with the reason when the
-// rules forbid it (special-use folders, into its own subtree, Graph and
-// Exchange accounts); confirmed with both names; the core re-checks, renames
-// on the server and reports every path that changed, which favorites, colors,
-// board columns and the open view then follow.
+// rules forbid it (special-use folders, into its own subtree, Exchange
+// accounts, Graph accounts without changes); confirmed with both names; the
+// core re-checks, moves it on the server (an IMAP RENAME, or Graph's folder
+// move, ADR-0057) and reports every name that changed, which favorites,
+// colors, board columns and the open view then follow.
 export async function moveFolder(accountId: string, folderId: string, parentId: string | null): Promise<boolean> {
   if (!accountId || !folderId || accountId === 'unified') return false
   const folders = mail$.foldersByAccount[accountId].peek() ?? []

@@ -304,6 +304,34 @@ pub struct MessageFields {
     pub cc_recipients: Option<Vec<Recipient>>,
     pub body: Option<Body>,
     pub flag: Option<Flag>,
+    /// Only the item class (`String 0x001A`), asked for when one message is
+    /// read, so a delivery or read report is read as MIME (#210).
+    pub single_value_extended_properties: Option<Vec<ExtendedProperty>>,
+}
+impl MessageFields {
+    /// Whether Exchange filed this as a report (`REPORT.*`): a delivery
+    /// report (`REPORT.IPM.Note.DR`/`NDR`) or a read report (`IPNRN`/`IPNNRN`).
+    /// Its JSON body is only the text for a person; the MIME carries what the
+    /// report says (ADR-0057).
+    pub fn is_report(&self) -> bool {
+        self.single_value_extended_properties.iter().flatten().any(|property| {
+            is_item_class(&property.id)
+                && property.value.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("REPORT."))
+        })
+    }
+}
+/// Whether an extended property id names the MAPI item class (tag 0x001A,
+/// a string). Graph answers it in its own spelling (`String 0x1a`).
+fn is_item_class(id: &str) -> bool {
+    let mut parts = id.split_whitespace();
+    let (Some(kind), Some(tag), None) = (parts.next(), parts.next(), parts.next()) else { return false };
+    let tag = tag.strip_prefix("0x").or_else(|| tag.strip_prefix("0X"));
+    kind.eq_ignore_ascii_case("String") && tag.and_then(|hex| u32::from_str_radix(hex, 16).ok()) == Some(0x001A)
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ExtendedProperty {
+    pub id: String,
+    pub value: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -363,6 +391,28 @@ impl AttachmentInfo {
 struct WriteFields {
     parent_folder_id: Option<String>,
 }
+
+/// A send that asked for a delivery receipt and stopped before Microsoft was
+/// asked to send (#210): the draft it is built on could not be made or
+/// marked, so nothing left. Kept apart from a failed send, so it is never
+/// taken for one whose outcome is unknown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotSent {
+    pub error: Error,
+    /// A copy may be left in Drafts: its creation went unanswered, or
+    /// removing it afterwards failed.
+    pub draft_left: bool,
+}
+impl fmt::Display for NotSent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Microsoft Graph: nothing was sent ({})", self.error.kind.describe())?;
+        if self.draft_left {
+            write!(f, "; a copy may be left in Drafts")?;
+        }
+        Ok(())
+    }
+}
+impl std::error::Error for NotSent {}
 
 #[derive(Deserialize)]
 struct WirePage<T> {
@@ -489,7 +539,12 @@ impl Client {
     pub fn message(&self, id: &ResourceId) -> Result<Message> {
         self.grant.authorize(true)?;
         self.require_id(id, ResourceKind::Message)?;
-        let url = self.route(&["me", "messages", &id.opaque]);
+        let mut url = self.route(&["me", "messages", &id.opaque]);
+        // The item class tells a report from a message (#210); nothing else
+        // is expanded.
+        // Spaces as %20: OData reads a `+` in a filter literally on some
+        // servers.
+        url.set_query(Some("$expand=singleValueExtendedProperties($filter=id%20eq%20'String%200x001A')"));
         let item: WireItem<MessageFields> = self.get(&url)?;
         if item.id != id.opaque {
             return Err(Error::new(ErrorKind::InvalidResponse));
@@ -518,6 +573,25 @@ impl Client {
     /// Copy one message within this mailbox. Returns the new copy's id.
     pub fn copy_message(&self, id: &ResourceId, destination: &ResourceId) -> Result<ResourceId> {
         self.relocate(id, destination, "copy")
+    }
+    /// Move one folder, with everything in it, under another folder of this
+    /// mailbox (`destination`: its root for the top level). Returns the id
+    /// Graph reports for it afterwards (#210). A lost answer is `Uncertain`
+    /// and is never repeated here.
+    pub fn move_folder(&self, id: &ResourceId, destination: &ResourceId) -> Result<ResourceId> {
+        self.grant.authorize_write()?;
+        self.require_id(id, ResourceKind::Folder)?;
+        self.require_id(destination, ResourceKind::Folder)?;
+        let url = self.route(&["me", "mailFolders", &id.opaque, "move"]);
+        let body = serde_json::json!({ "destinationId": destination.opaque });
+        let item = self
+            .write("POST", &url, Some(&body), &[200, 201])?
+            .ok_or_else(|| Error::new(ErrorKind::InvalidResponse))?;
+        // A folder reported somewhere else did not go where it was sent.
+        if item.fields.parent_folder_id.as_deref() != Some(destination.opaque.as_str()) {
+            return Err(Error::new(ErrorKind::InvalidResponse));
+        }
+        self.response_id(ResourceKind::Folder, &item.id)
     }
     /// Remove one message from the mailbox's view. Graph keeps it among the
     /// recoverable items; callers use this only from Deleted Items or Drafts.
@@ -651,26 +725,54 @@ impl Client {
     /// never repeated here; a message over the request bound is refused
     /// before anything is sent.
     pub fn send_mime(&self, raw: &[u8]) -> Result<()> {
-        use base64::Engine as _;
         self.grant.authorize_send()?;
-        let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
-        if encoded.len() > MAX_SEND_REQUEST {
-            return Err(Error::new(ErrorKind::TooLarge));
-        }
+        let encoded = encode_mime(raw)?;
         let url = self.route(&["me", "sendMail"]);
+        self.post_raw(&url, encoded.as_bytes(), &[202]).map(|_| ())
+    }
+
+    /// A draft made from a complete MIME message (#210): the first step of a
+    /// send that asks for a delivery receipt, which is a property of the
+    /// message that `sendMail` with MIME cannot carry. Needs
+    /// `Mail.ReadWrite`; nothing is sent.
+    pub fn create_mime_draft(&self, raw: &[u8]) -> Result<ResourceId> {
+        self.grant.authorize_write()?;
+        let encoded = encode_mime(raw)?;
+        let url = self.route(&["me", "messages"]);
+        let item = self
+            .post_raw(&url, encoded.as_bytes(), &[201])?
+            .ok_or_else(|| Error::new(ErrorKind::InvalidResponse))?;
+        self.response_id(ResourceKind::Message, &item.id)
+    }
+    /// Asks for a delivery receipt on a draft (`isDeliveryReceiptRequested`).
+    pub fn request_delivery_receipt(&self, draft: &ResourceId) -> Result<()> {
+        self.patch_message(draft, serde_json::json!({ "isDeliveryReceiptRequested": true }))
+    }
+    /// Sends a draft (`POST /me/messages/{id}/send`, empty body). 202 means
+    /// accepted for delivery; a lost answer is `Uncertain`, never repeated.
+    pub fn send_draft(&self, draft: &ResourceId) -> Result<()> {
+        self.grant.authorize_send()?;
+        self.require_id(draft, ResourceKind::Message)?;
+        let url = self.route(&["me", "messages", &draft.opaque, "send"]);
+        self.post_raw(&url, b"", &[202]).map(|_| ())
+    }
+    /// One POST of a MIME body (or none). No redirects, no retry; a
+    /// transport failure is `Uncertain`, as for every write.
+    fn post_raw(&self, url: &Url, body: &[u8], success: &[u16]) -> Result<Option<WireItem<WriteFields>>> {
         let response = self
             .agent()?
             .post(url.as_str())
             .header("Authorization", &format!("Bearer {}", self.grant.token))
             .header("Content-Type", "text/plain")
+            .header("Prefer", "IdType=\"ImmutableId\"")
             .config()
             .max_redirects(0)
             .http_status_as_error(false)
             .timeout_global(Some(TIMEOUT))
             .build()
-            .send(encoded.as_bytes())
+            .send(body)
             .map_err(|_| Error::new(ErrorKind::Uncertain))?;
-        self.write_reply(response, &[202]).map(|_| ())
+        self.write_reply(response, success)
     }
 
     /// The whole message as MIME, to show its attachments and inline images
@@ -849,6 +951,17 @@ impl Client {
                 _ => Error::new(ErrorKind::InvalidResponse),
             })
     }
+}
+
+/// A message as Graph takes it with MIME: base64, in a request of at most
+/// `MAX_SEND_REQUEST`. A larger one is refused before anything is sent.
+fn encode_mime(raw: &[u8]) -> Result<String> {
+    use base64::Engine as _;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
+    if encoded.len() > MAX_SEND_REQUEST {
+        return Err(Error::new(ErrorKind::TooLarge));
+    }
+    Ok(encoded)
 }
 
 /// Graph documents both /mailFolders/{id} and /mailfolders('{id}') links.

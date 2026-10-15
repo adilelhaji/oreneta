@@ -1122,3 +1122,404 @@ fn a_proxy_refusal_while_refreshing_the_grant_stays_a_proxy_error() {
     let batch = BatchError { done: 0, total: 2, error: Error::new(ErrorKind::AccountProxyUnusable) };
     assert_eq!(batch.to_string(), "Microsoft Graph: not changed: proxy setting unusable (account)");
 }
+
+// ---- #210: folder moves ----
+
+/// A mailbox whose tree follows the moves made on it. Each move is recorded;
+/// `answer` decides what the next one answers and whether the server applied
+/// it anyway (a lost answer); `renamed` gives the moved folder a new id.
+struct Folders {
+    tree: Mutex<Vec<Folder>>,
+    moves: Mutex<Vec<String>>,
+    answer: Mutex<Option<(Error, bool)>>,
+    renamed: Mutex<Option<String>>,
+}
+impl Source for Folders {
+    fn well_known(&self, alias: &str) -> Result<Folder> {
+        match alias {
+            "msgfolderroot" => Ok(folder("root", "Root", "", 0)),
+            "inbox" => Ok(folder("in", "Inbox", "root", 0)),
+            "sentitems" => Ok(folder("sent", "Sent Items", "holder", 0)),
+            _ => Err(Error::new(ErrorKind::NotFound)),
+        }
+    }
+    fn folders(&self, parent: Option<&ResourceId>, _: Option<&Checkpoint>) -> Result<Page<Folder>> {
+        let parent = parent.map(ResourceId::opaque).unwrap_or("root");
+        let tree = self.tree.lock().unwrap();
+        let children = |id: &str| tree.iter().filter(|f| f.fields.parent_folder_id.as_deref() == Some(id)).count() as u32;
+        let items = tree
+            .iter()
+            .filter(|f| f.fields.parent_folder_id.as_deref() == Some(parent))
+            .cloned()
+            .map(|mut f| {
+                f.fields.child_folder_count = children(f.id.opaque());
+                f
+            })
+            .collect();
+        Ok(Page { items, checkpoint: None })
+    }
+    fn delta(&self, _: &ResourceId, _: Option<&Checkpoint>) -> Result<Page<Message>> {
+        Err(Error::new(ErrorKind::NotFound))
+    }
+    fn message(&self, _: &ResourceId) -> Result<Message> {
+        Err(Error::new(ErrorKind::NotFound))
+    }
+    fn move_folder(&self, id: &ResourceId, to: &ResourceId) -> Result<ResourceId> {
+        self.moves.lock().unwrap().push(format!("move:{}:{}", id.opaque(), to.opaque()));
+        let answer = self.answer.lock().unwrap().take();
+        let applied = answer.as_ref().is_none_or(|(_, applied)| *applied);
+        let mut moved = id.clone();
+        if applied {
+            let mut tree = self.tree.lock().unwrap();
+            if let Some(new) = self.renamed.lock().unwrap().take() {
+                moved = ResourceId::new(ACCOUNT, ResourceKind::Folder, &new)?;
+            }
+            for f in tree.iter_mut() {
+                if &f.id == id {
+                    f.fields.parent_folder_id = Some(to.opaque().to_owned());
+                    f.id = moved.clone();
+                } else if f.fields.parent_folder_id.as_deref() == Some(id.opaque()) {
+                    f.fields.parent_folder_id = Some(moved.opaque().to_owned());
+                }
+            }
+        }
+        match answer {
+            Some((error, _)) => Err(error),
+            None => Ok(moved),
+        }
+    }
+}
+fn search_folder(id: &str, name: &str) -> Folder {
+    Folder {
+        id: ResourceId::new(ACCOUNT, ResourceKind::Folder, id).unwrap(),
+        fields: serde_json::from_value(json!({"@odata.type":"#microsoft.graph.mailSearchFolder","displayName":name,"parentFolderId":"root","childFolderCount":0,"unreadItemCount":0,"totalItemCount":0})).unwrap(),
+    }
+}
+/// Inbox; Work holding 2026; Projects holding another 2026; a Holder with
+/// Sent Items inside; a search folder.
+fn folder_session() -> (Db, Arc<Folders>, Session) {
+    let db = Arc::new(Mutex::new(crate::store::open_at(":memory:").unwrap()));
+    let lease = begin_profile(
+        &db.lock().unwrap(),
+        ACCOUNT,
+        &auth::Principal { tenant: "tenant".into(), object: "person".into(), email: ACCOUNT.into() },
+        "Reader",
+    )
+    .unwrap();
+    let source = Arc::new(Folders {
+        tree: Mutex::new(vec![
+            folder("in", "Inbox", "root", 0),
+            folder("work", "Work", "root", 0),
+            folder("w26", "2026", "work", 0),
+            folder("projects", "Projects", "root", 0),
+            folder("p26", "2026", "projects", 0),
+            folder("holder", "Holder", "root", 0),
+            folder("sent", "Sent Items", "holder", 0),
+            search_folder("unread", "Unread mail"),
+        ]),
+        moves: Mutex::new(vec![]),
+        answer: Mutex::new(None),
+        renamed: Mutex::new(None),
+    });
+    sync_tree(source.as_ref(), &db, &lease).unwrap();
+    let session = Session { db: db.clone(), lease, source: source.clone(), lock: Arc::new(Mutex::new(())) };
+    (db, source, session)
+}
+fn local(id: &str) -> String {
+    local_folder(id, "folder")
+}
+fn parent_of(db: &Db, id: &str) -> Option<String> {
+    db.lock()
+        .unwrap()
+        .query_row("SELECT parent_id FROM graph_folders WHERE account=?1 AND remote_id=?2 AND active=1", [ACCOUNT, id], |r| r.get(0))
+        .unwrap()
+}
+fn moves(source: &Folders) -> Vec<String> {
+    source.moves.lock().unwrap().clone()
+}
+async fn refused(session: &Session, source: &str, parent: Option<&str>) -> String {
+    session.move_folder(source, parent).await.unwrap_err().to_string()
+}
+
+#[tokio::test]
+async fn a_folder_move_goes_to_the_server_once_and_the_tree_follows() {
+    let (db, source, session) = folder_session();
+    let moved = session.move_folder(&local("work"), Some(&local("projects"))).await.unwrap();
+    assert_eq!(moves(&source), vec!["move:work:projects"]);
+    // Immutable ids: the folder keeps its id and so its local name; its
+    // subfolder comes along by itself.
+    assert_eq!(moved, FolderMoved { folder: local("work"), renames: vec![] });
+    assert_eq!(parent_of(&db, "work").as_deref(), Some("projects"));
+    assert_eq!(parent_of(&db, "w26").as_deref(), Some("work"));
+    let mut folders = serde_json::to_value(crate::store::get_folders(&db.lock().unwrap(), ACCOUNT).unwrap()).unwrap();
+    decorate_folders(&db.lock().unwrap(), ACCOUNT, &mut folders).unwrap();
+    let work = folders.as_array().unwrap().iter().find(|f| f["name"] == json!(local("work"))).unwrap().clone();
+    assert_eq!(work["parent_id"], json!(local("projects")));
+}
+
+#[tokio::test]
+async fn a_folder_moved_to_the_top_level_goes_under_the_mailbox_root() {
+    let (db, source, session) = folder_session();
+    session.move_folder(&local("w26"), None).await.unwrap();
+    assert_eq!(moves(&source), vec!["move:w26:root"]);
+    assert_eq!(parent_of(&db, "w26").as_deref(), Some("root"));
+}
+
+#[tokio::test]
+async fn a_folder_move_against_the_rules_is_refused_before_anything_is_sent() {
+    let (_, source, session) = folder_session();
+    let s = &session;
+    assert!(refused(s, &local("sent"), Some(&local("work"))).await.contains("special folder"));
+    assert!(refused(s, "INBOX", Some(&local("work"))).await.contains("special folder"));
+    assert!(refused(s, &local("holder"), Some(&local("work"))).await.contains("holds Sent Items"));
+    assert!(refused(s, &local("work"), Some(&local("w26"))).await.contains("into itself"));
+    assert!(refused(s, &local("work"), Some(&local("work"))).await.contains("into itself"));
+    assert!(refused(s, &local("w26"), Some(&local("work"))).await.contains("already there"));
+    assert!(refused(s, &local("work"), None).await.contains("already there"));
+    assert!(refused(s, &local("w26"), Some(&local("projects"))).await.contains("A folder named 2026"));
+    assert!(refused(s, &local("unread"), Some(&local("work"))).await.contains("search folder"));
+    assert!(refused(s, &local("work"), Some(&local("unread"))).await.contains("search folder"));
+    assert!(refused(s, "graph.unknown", Some(&local("work"))).await.contains("synchronized"));
+    assert!(refused(s, &local("work"), Some("graph.unknown")).await.contains("synchronized"));
+    assert!(moves(&source).is_empty());
+}
+
+#[tokio::test]
+async fn an_uncertain_folder_move_is_not_repeated_and_a_retry_finds_it_moved() {
+    let (db, source, session) = folder_session();
+    // The server moved it; only the answer was lost.
+    *source.answer.lock().unwrap() = Some((Error::new(ErrorKind::Uncertain), true));
+    let error = session.move_folder(&local("work"), Some(&local("projects"))).await.unwrap_err();
+    assert!(error.to_string().contains("unknown"), "{error}");
+    assert!(error.to_string().contains("not repeated"), "{error}");
+    assert_eq!(moves(&source).len(), 1);
+    // The tree was read again: it shows where the folder is.
+    assert_eq!(parent_of(&db, "work").as_deref(), Some("projects"));
+    // Asking again finds it there and sends nothing: no second move.
+    let again = refused(&session, &local("work"), Some(&local("projects"))).await;
+    assert!(again.contains("already there"), "{again}");
+    assert_eq!(moves(&source).len(), 1);
+}
+
+#[tokio::test]
+async fn a_refused_folder_move_changes_nothing_and_says_why() {
+    let (db, source, session) = folder_session();
+    *source.answer.lock().unwrap() =
+        Some((Error { kind: ErrorKind::AccessDenied, status: Some(403), retry_after_seconds: None }, false));
+    let error = refused(&session, &local("work"), Some(&local("projects"))).await;
+    assert!(error.contains("was not moved"), "{error}");
+    assert_eq!(parent_of(&db, "work").as_deref(), Some("root"));
+    // Without changes granted, the source refuses before sending.
+    *source.answer.lock().unwrap() = Some((Error::new(ErrorKind::ConsentRequired), false));
+    let error = refused(&session, &local("work"), Some(&local("projects"))).await;
+    assert!(error.contains("allow them in its settings"), "{error}");
+    // A refused move is the action's problem, not the account's health.
+    let health: Option<String> = db
+        .lock()
+        .unwrap()
+        .query_row("SELECT error FROM graph_profiles WHERE account=?1", [ACCOUNT], |r| r.get(0))
+        .unwrap();
+    assert_eq!(health, None);
+}
+
+#[tokio::test]
+async fn a_folder_whose_id_changed_with_the_move_reports_its_new_name() {
+    let (db, source, session) = folder_session();
+    *source.renamed.lock().unwrap() = Some("work-moved".into());
+    let moved = session.move_folder(&local("work"), Some(&local("projects"))).await.unwrap();
+    assert_eq!(moved, FolderMoved { folder: local("work-moved"), renames: vec![(local("work"), local("work-moved"))] });
+    assert_eq!(parent_of(&db, "work-moved").as_deref(), Some("projects"));
+    assert_eq!(parent_of(&db, "w26").as_deref(), Some("work-moved"));
+}
+
+#[tokio::test]
+async fn folder_moves_stay_within_their_account() {
+    let (db, source, session) = folder_session();
+    // Another account's folder, under a local name this account does not have.
+    db.lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO graph_folders(account,remote_id,local_name,display_name,parent_id,role) VALUES('other@example.test','x',?1,'Other','root','folder')",
+            [local("x")],
+        )
+        .unwrap();
+    let error = refused(&session, &local("work"), Some(&local("x"))).await;
+    assert!(error.contains("synchronized"), "{error}");
+    assert!(moves(&source).is_empty());
+}
+
+// ---- #210: delivery receipts ----
+
+/// Records each sending step and fails the one named.
+struct Sender {
+    calls: Mutex<Vec<String>>,
+    fail: Mutex<HashMap<&'static str, Error>>,
+}
+impl Sender {
+    fn step(&self, name: &'static str, call: String) -> Result<()> {
+        self.calls.lock().unwrap().push(call);
+        match self.fail.lock().unwrap().remove(name) {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+}
+impl Source for Sender {
+    fn folders(&self, _: Option<&ResourceId>, _: Option<&Checkpoint>) -> Result<Page<Folder>> {
+        Err(Error::new(ErrorKind::NotFound))
+    }
+    fn well_known(&self, _: &str) -> Result<Folder> {
+        Err(Error::new(ErrorKind::NotFound))
+    }
+    fn delta(&self, _: &ResourceId, _: Option<&Checkpoint>) -> Result<Page<Message>> {
+        Err(Error::new(ErrorKind::NotFound))
+    }
+    fn message(&self, _: &ResourceId) -> Result<Message> {
+        Err(Error::new(ErrorKind::NotFound))
+    }
+    fn send_mime(&self, _: &[u8]) -> Result<()> {
+        self.step("sendMail", "sendMail".into())
+    }
+    fn create_mime_draft(&self, _: &[u8]) -> Result<ResourceId> {
+        self.step("draft", "draft".into())?;
+        ResourceId::new(ACCOUNT, ResourceKind::Message, "d1")
+    }
+    fn request_delivery_receipt(&self, draft: &ResourceId) -> Result<()> {
+        self.step("receipt", format!("receipt:{}", draft.opaque()))
+    }
+    fn send_draft(&self, draft: &ResourceId) -> Result<()> {
+        self.step("send", format!("send:{}", draft.opaque()))
+    }
+    fn delete_message(&self, id: &ResourceId) -> Result<()> {
+        self.step("delete", format!("delete:{}", id.opaque()))
+    }
+}
+fn sender() -> Sender {
+    Sender { calls: Mutex::new(vec![]), fail: Mutex::new(HashMap::new()) }
+}
+fn calls(sender: &Sender) -> Vec<String> {
+    sender.calls.lock().unwrap().clone()
+}
+fn kind_of(error: &anyhow::Error) -> Option<ErrorKind> {
+    error.downcast_ref::<Error>().map(|e| e.kind)
+}
+
+#[test]
+fn a_delivery_receipt_is_asked_on_a_draft_that_is_then_sent() {
+    let source = sender();
+    send_requesting_delivery(&source, b"x").unwrap();
+    assert_eq!(calls(&source), vec!["draft", "receipt:d1", "send:d1"]);
+}
+
+#[test]
+fn a_failure_before_sending_sends_nothing_and_removes_the_draft() {
+    // The receipt could not be asked: the draft goes, nothing was sent.
+    let source = sender();
+    source.fail.lock().unwrap().insert("receipt", Error { kind: ErrorKind::Conflict, status: Some(409), retry_after_seconds: None });
+    let error = send_requesting_delivery(&source, b"x").unwrap_err();
+    let not_sent = error.downcast_ref::<NotSent>().expect("not sent");
+    assert_eq!((not_sent.error.kind, not_sent.draft_left), (ErrorKind::Conflict, false));
+    assert_eq!(calls(&source), vec!["draft", "receipt:d1", "delete:d1"]);
+
+    // And if removing it fails too, that is said.
+    let source = sender();
+    source.fail.lock().unwrap().insert("receipt", Error::new(ErrorKind::Uncertain));
+    source.fail.lock().unwrap().insert("delete", Error::new(ErrorKind::Throttled));
+    let error = send_requesting_delivery(&source, b"x").unwrap_err();
+    assert!(error.downcast_ref::<NotSent>().unwrap().draft_left);
+    assert!(error.to_string().contains("nothing was sent") && error.to_string().contains("Drafts"), "{error}");
+
+    // The draft itself went unanswered: one may exist; nothing was sent.
+    let source = sender();
+    source.fail.lock().unwrap().insert("draft", Error::new(ErrorKind::Uncertain));
+    let error = send_requesting_delivery(&source, b"x").unwrap_err();
+    assert!(error.downcast_ref::<NotSent>().unwrap().draft_left);
+    assert_eq!(calls(&source), vec!["draft"]);
+
+    let source = sender();
+    source.fail.lock().unwrap().insert("draft", Error::new(ErrorKind::TooLarge));
+    let error = send_requesting_delivery(&source, b"x").unwrap_err();
+    assert_eq!(error.downcast_ref::<NotSent>().unwrap().error.kind, ErrorKind::TooLarge);
+}
+
+#[test]
+fn an_unanswered_send_is_neither_undone_nor_repeated() {
+    for unknown in [Error::new(ErrorKind::Uncertain), Error { kind: ErrorKind::Unavailable, status: Some(504), retry_after_seconds: None }] {
+        let source = sender();
+        let expected = unknown.kind;
+        source.fail.lock().unwrap().insert("send", unknown);
+        let error = send_requesting_delivery(&source, b"x").unwrap_err();
+        assert!(error.downcast_ref::<NotSent>().is_none());
+        assert_eq!(kind_of(&error), Some(expected));
+        // Microsoft may have it: the draft is not touched and not sent again.
+        assert_eq!(calls(&source), vec!["draft", "receipt:d1", "send:d1"]);
+    }
+}
+
+#[test]
+fn a_refused_send_removes_the_draft_and_stays_a_refusal() {
+    let source = sender();
+    source.fail.lock().unwrap().insert("send", Error { kind: ErrorKind::AccessDenied, status: Some(403), retry_after_seconds: None });
+    let error = send_requesting_delivery(&source, b"x").unwrap_err();
+    assert!(error.downcast_ref::<NotSent>().is_none());
+    assert_eq!(kind_of(&error), Some(ErrorKind::AccessDenied));
+    assert_eq!(calls(&source), vec!["draft", "receipt:d1", "send:d1", "delete:d1"]);
+}
+
+/// The policy (ADR-0048, ADR-0057): the receipt is asked for exactly when
+/// the sender wants one and the account allows changes as well as sending;
+/// otherwise the message goes by `sendMail` without it, and says so.
+#[tokio::test]
+async fn a_graph_send_asks_for_a_delivery_receipt_exactly_when_the_policy_says() {
+    use crate::smtp::DeliveryReceipt;
+    let cases = [
+        (true, true, DeliveryReceipt::Requested, vec!["draft", "receipt:d1", "send:d1"]),
+        (true, false, DeliveryReceipt::Unsupported, vec!["sendMail"]),
+        (false, true, DeliveryReceipt::NotAsked, vec!["sendMail"]),
+        (false, false, DeliveryReceipt::NotAsked, vec!["sendMail"]),
+    ];
+    for (asked, writes, expected, steps) in cases {
+        let (db, _, session) = writable_session();
+        crate::store::setting_set(&db.lock().unwrap(), &auth::marker(ACCOUNT), &json!({"writes": writes, "send": true})).unwrap();
+        let source = Arc::new(sender());
+        let session = Session { source: source.clone(), ..session };
+        let receipt = session.send_mime_with_receipt(b"x".to_vec(), asked).await.unwrap();
+        assert_eq!(receipt, expected, "asked {asked}, writes {writes}");
+        assert_eq!(calls(&source), steps, "asked {asked}, writes {writes}");
+        assert_eq!(delivery_receipt(&db.lock().unwrap(), ACCOUNT, asked), expected);
+    }
+}
+
+// ---- #210: reports read through Graph ----
+
+const NDR: &str = "From: Microsoft Outlook <postmaster@contoso.example>\r\nTo: reader@example.test\r\nSubject: Undeliverable: Plan\r\nMessage-ID: <ndr1@contoso.example>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=\"r\"\r\n\r\n--r\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nYour message to nobody@contoso.example couldn't be delivered.\r\n--r\r\nContent-Type: message/delivery-status\r\n\r\nReporting-MTA: dns;AM0PR01MB0001.eurprd01.prod.example\r\n\r\nFinal-Recipient: rfc822;nobody@contoso.example\r\nAction: failed\r\nStatus: 5.1.10\r\nDiagnostic-Code: smtp;550 5.1.10 RESOLVER.ADR.RecipientNotFound; Recipient not found by SMTP address lookup\r\n\r\n--r\r\nContent-Type: text/rfc822-headers\r\n\r\nFrom: reader@example.test\r\nSubject: Plan\r\nMessage-ID: <plan-1@example.test>\r\n\r\n--r--\r\n";
+
+#[tokio::test]
+async fn a_report_without_attachments_is_read_from_its_mime() {
+    let (_, reader, session, mut media) = reading_session("report");
+    let mut fields = envelope("in", "m2");
+    fields["body"] = json!({"contentType":"text","content":"Your message couldn't be delivered."});
+    fields["singleValueExtendedProperties"] = json!([{"id":"String 0x1a","value":"REPORT.IPM.Note.NDR"}]);
+    reader.inner.inner.full.lock().unwrap().insert("m2".into(), message("m2", fields));
+    *reader.mime.lock().unwrap() = Some(Ok(NDR.as_bytes().to_vec()));
+    media.uid = 2;
+    let body = session.read_message("INBOX", 2, Some(media)).await.unwrap();
+    let report = body.report.expect("read as a report");
+    assert_eq!(report.original_message_id, "plan-1@example.test");
+    assert_eq!(report.recipients[0].status, "5.1.10");
+    assert_eq!(reader.mime_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_report_too_large_for_its_mime_still_shows_its_text() {
+    let (_, reader, session, mut media) = reading_session("report-large");
+    let mut fields = envelope("in", "m2");
+    fields["body"] = json!({"contentType":"text","content":"Delivered"});
+    fields["singleValueExtendedProperties"] = json!([{"id":"String 0x1a","value":"REPORT.IPM.Note.DR"}]);
+    reader.inner.inner.full.lock().unwrap().insert("m2".into(), message("m2", fields));
+    *reader.mime.lock().unwrap() = Some(Err(Error::new(ErrorKind::TooLarge)));
+    media.uid = 2;
+    let body = session.read_message("INBOX", 2, Some(media)).await.unwrap();
+    assert!(body.body.contains("Delivered"));
+    assert!(body.report.is_none());
+}
