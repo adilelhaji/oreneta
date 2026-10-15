@@ -1103,27 +1103,27 @@
             "result": "frontend/src/components/chat/PersonHistory.test.tsx"
           },
           {
-            "sha": "6b56e7fa61685cd7c6bfb51d2d339eb620168296",
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/components/chat/SidebarAgenda.test.tsx"
           },
           {
-            "sha": "6b56e7fa61685cd7c6bfb51d2d339eb620168296",
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/components/chat/ConversationDetailsPanel.test.tsx"
           },
           {
-            "sha": "6b56e7fa61685cd7c6bfb51d2d339eb620168296",
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/components/resizer/PaneResizer.test.tsx"
           },
           {
-            "sha": "6b56e7fa61685cd7c6bfb51d2d339eb620168296",
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/e2e/startup.e2e.ts"
           },
           {
-            "sha": "6b56e7fa61685cd7c6bfb51d2d339eb620168296",
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/lib/agenda.test.ts"
           },
           {
-            "sha": "6b56e7fa61685cd7c6bfb51d2d339eb620168296",
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
             "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
