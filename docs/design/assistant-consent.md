@@ -31,6 +31,21 @@ Registro de la implementación de ADR-0032.
 - **Aplicación:**
   - apagado por omisión;
   - JSON en bloque de código, y las «acciones» de la respuesta se ignoran;
+  - el diálogo de revisión de una conversación empieza con solo el mensaje
+    más reciente marcado (la fecha mayor; con fechas iguales o
+    desconocidas, el último de la lista) y ningún detalle de adjunto; lo
+    demás lo añade la persona, y la vista previa cambia con cada casilla
+    (#196, `AssistantReviewDialog.test.tsx`);
+  - un borrador no cuenta como el más reciente, salvo si la conversación
+    solo tiene borradores: entonces empieza marcado el borrador más
+    reciente, porque el diálogo solo enseña la lista de mensajes cuando hay
+    una vista previa y con nada marcado no se podría añadir ninguno; el aviso
+    de privacidad lo dice; un envío pendiente (enviando, enviado o fallido)
+    sí cuenta, porque es un mensaje de la persona y no un borrador;
+  - la selección vuelve a ese valor solo cuando llega un mensaje más
+    reciente: una sincronización, un cambio de marca o páginas antiguas
+    conservan lo marcado, y la misma petición no se vuelve a previsualizar
+    ni se borra el resultado mostrado;
   - el diálogo de reescritura enseña el destino y el cuerpo exacto, exige
     confirmar otra vez si cambia la petición, no cambia nada hasta «Usar» y
     al parar cancela y descarta la respuesta tardía.

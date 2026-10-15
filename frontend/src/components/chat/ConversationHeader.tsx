@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import {
   Archive,
@@ -87,6 +87,12 @@ export function ConversationHeader({
     .filter((account) => account.id === activeThread.account_id)
     .flatMap((account) => accountIdentities(account).map((identity) => identity.email))
   const summary = summariseThread(activeThread, loadedMessages, !!messagesCursor, ownAddresses)
+  // One array per change of the loaded messages, not per render: the
+  // assistant review keys its selection and preview on what it is given (#196).
+  const threadMessages = useMemo(
+    () => loadedMessages.filter((message) => message.thread_id === activeThread.thread_id),
+    [loadedMessages, activeThread.thread_id],
+  )
 
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
@@ -421,12 +427,7 @@ export function ConversationHeader({
           </div>
         </div>
       </header>
-      {assistantOpen && (
-        <AssistantReviewDialog
-          messages={loadedMessages.filter((message) => message.thread_id === activeThread.thread_id)}
-          onClose={() => setAssistantOpen(false)}
-        />
-      )}
+      {assistantOpen && <AssistantReviewDialog messages={threadMessages} onClose={() => setAssistantOpen(false)} />}
       {senderMenu && !isRSS && (
         <FloatingContextMenu
           x={senderMenu.x}

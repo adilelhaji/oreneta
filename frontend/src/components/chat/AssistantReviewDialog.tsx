@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, FileText, ListChecks, Loader2, LockKeyhole, Sparkles, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import type { Message } from '../../types'
-import { contextFor } from './assistantContext'
+import { contextFor, newestMessageIndex } from './assistantContext'
 import {
   assistant$,
   cancelAssistantExecution,
@@ -10,6 +10,7 @@ import {
   parseAssistantResponse,
   previewAssistantAction,
   type AssistantAction,
+  type AssistantContextItem,
   type AssistantPreview,
   type AssistantResult,
 } from '../../states/assistant'
@@ -23,6 +24,7 @@ import {
 } from '../../states/compose'
 import { saveTask } from '../../states/tasks'
 import { accounts$ } from '../../states/accounts'
+import { isDraftFolder } from '../../states/mail'
 
 export function AssistantReviewDialog({ messages, onClose }: { messages: Message[]; onClose: () => void }) {
   const { t } = useTranslation()
@@ -32,24 +34,31 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
   const [busy, setBusy] = useState(false)
   const [reviewed, setReviewed] = useState(false)
   const availableContext = useMemo(() => contextFor(messages), [messages])
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
+  // Privacy by default (#196): only the conversation's most recent message
+  // that is not a draft starts selected. The other messages and every
+  // attachment's details are added by the person, never sent because nobody
+  // unticked them.
+  const newestKey = useMemo(() => {
+    const newest = messages[newestMessageIndex(messages, (m) => isDraftFolder(m.folder_id, m.account_id))]
+    return newest ? `${newest.account_id}:${newest.message_id || newest.id}` : ''
+  }, [messages])
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set(newestKey ? [newestKey] : []))
   const [selectedAttachmentKeys, setSelectedAttachmentKeys] = useState<Set<string>>(() => new Set())
   const [authorization, setAuthorization] = useState('')
   const [result, setResult] = useState<AssistantResult | null>(null)
   const [executionId, setExecutionId] = useState('')
   const [selectedTasks, setSelectedTasks] = useState<Set<number>>(() => new Set())
   const cancelledExecutions = useRef(new Set<string>())
+  // Names each message's checkbox after its subject, for screen readers.
+  const idPrefix = useId()
+  // Back to the default only when a newer message arrives: a sync, a flag
+  // change or older pages loading keep what the person ticked. A ticked
+  // message that leaves the conversation drops out of `context` below.
   useEffect(() => {
-    setSelectedKeys(new Set(availableContext.map((item) => `${item.account_id}:${item.message_id}`)))
-    setSelectedAttachmentKeys(
-      new Set(
-        availableContext.flatMap((item) =>
-          (item.attachments ?? []).map((_, index) => `${item.account_id}:${item.message_id}:attachment:${index}`),
-        ),
-      ),
-    )
-  }, [availableContext])
-  const context = useMemo(
+    setSelectedKeys(new Set(newestKey ? [newestKey] : []))
+    setSelectedAttachmentKeys(new Set())
+  }, [newestKey])
+  const selectedContext = useMemo(
     () =>
       availableContext
         .filter((item) => selectedKeys.has(`${item.account_id}:${item.message_id}`))
@@ -61,6 +70,11 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
         })),
     [availableContext, selectedKeys, selectedAttachmentKeys],
   )
+  // Keyed by content, not identity: the conversation hands over a new array
+  // whenever any message changes, and the same request must not be
+  // previewed again, nor a shown result cleared.
+  const contextJson = JSON.stringify(selectedContext)
+  const context = useMemo<AssistantContextItem[]>(() => JSON.parse(contextJson), [contextJson])
   const provider = assistant$.get()
 
   useEffect(() => {
@@ -298,13 +312,15 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
               <div className="border-b border-border/60 px-3 py-2 text-caption text-secondary">
                 {t('assistant.selectHint', { defaultValue: 'Select the messages to include.' })}
               </div>
-              {availableContext.map((candidate) => {
+              {availableContext.map((candidate, index) => {
                 const key = `${candidate.account_id}:${candidate.message_id}`
                 const selected = selectedKeys.has(key)
+                const subjectId = `${idPrefix}-subject-${index}`
                 return (
                   <div key={key} className="flex gap-2 border-b border-border/40 px-3 py-2 last:border-b-0">
                     <input
                       type="checkbox"
+                      aria-labelledby={subjectId}
                       checked={selected}
                       onChange={() => {
                         setSelectedKeys((current) => {
@@ -318,7 +334,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                       className="mt-0.5 accent-accent"
                     />
                     <span className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold text-primary">
+                      <div id={subjectId} className="truncate text-xs font-semibold text-primary">
                         {candidate.subject || '(no subject)'}
                       </div>
                       <div className="truncate text-caption text-secondary">
