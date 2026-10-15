@@ -30,6 +30,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::calendar::caldav::{self, Object, RemoteCalendar};
 use crate::carddav::client::{credentials_may_follow, starting_point_for, Transport, Written};
 
+pub mod exchange;
 pub mod vtodo;
 
 /// The keychain entry holding a bound list's password.

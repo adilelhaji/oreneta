@@ -7,6 +7,7 @@
 //! params, and answers the JSON the host forwards unchanged.
 
 pub mod calendar;
+pub mod exchange_book;
 pub mod people;
 pub mod refresh;
 pub mod reminders;

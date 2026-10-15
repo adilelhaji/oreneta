@@ -3,9 +3,11 @@
 //! A move is a rename of the folder's hierarchical name: `Work` dropped on
 //! `Projects` becomes `Projects/Work` (with the server's own delimiter), and
 //! every subfolder follows. IMAP does that with one RENAME, which takes the
-//! inferiors along (RFC 3501 6.3.5); the local store renames its own rows.
-//! Microsoft Graph and Exchange Web Services do not manage folders in this
-//! core yet, so their sessions refuse it and the UI shows the move disabled.
+//! inferiors along (RFC 3501 6.3.5); the local store renames its own rows;
+//! Exchange Web Services moves the folder by id with `MoveFolder`, its names
+//! being paths from the top of the mailbox (ADR-0058). Microsoft Graph does
+//! not manage folders in this core yet, so its session refuses it and the UI
+//! shows the move disabled.
 //!
 //! The checks run here, on the cached folder list, whatever the caller says:
 //! a special-use folder (or one with a special-use folder inside it) never
@@ -187,7 +189,7 @@ pub async fn move_folder(engine: &Arc<Engine>, params: &Value) -> Result<Value> 
         .map(crate::mail_model::canon_folder);
 
     let creds = engine.ensure_valid_creds(&account).await?;
-    if creds.is_graph() || creds.is_ews() {
+    if creds.is_graph() {
         anyhow::bail!("Moving folders is not supported on this account yet");
     }
     let fallback = creds.is_local_store().then_some("/");

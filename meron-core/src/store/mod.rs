@@ -2554,7 +2554,7 @@ pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
     let tombstoned = conn.execute(
         "UPDATE tasks SET pending = 'delete', sync_seq = sync_seq + 1
           WHERE id = ?1 AND remote_etag <> ''
-            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '')",
+            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '' OR ews_account <> '')",
         params![id],
     )?;
     if tombstoned == 0 {

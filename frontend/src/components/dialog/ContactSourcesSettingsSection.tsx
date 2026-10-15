@@ -10,6 +10,7 @@ import {
   discoverBooks,
   loadContactSources,
   removeSource,
+  syncExchangeContacts,
   syncGoogleContacts,
   syncSource,
   type DiscoveredBook,
@@ -39,6 +40,21 @@ export function ContactSourcesSettingsSection() {
   const googleWithout = accounts.filter(
     (account) => account.auth_type === 'gmail_oauth' && !sources.some((source) => source.id === `google-${account.id}`),
   )
+  // The same for Exchange accounts: their Contacts folder and distribution
+  // lists (ADR-0058).
+  const exchangeWithout = accounts.filter(
+    (account) => !!account.ews_url && !sources.some((source) => source.id === `exchange-${account.id}`),
+  )
+  const readAccountBook = (read: () => Promise<string | null>, name: string) => {
+    setBusy(true)
+    void read()
+      .then((problem) => {
+        if (problem) showToast(problem, 'error')
+        else showToast(t('contacts.added', { name }))
+      })
+      .catch((error) => showToast(error instanceof Error ? error.message : t('contacts.addFailed'), 'error'))
+      .finally(() => setBusy(false))
+  }
 
   const [server, setServer] = useState('')
   const [username, setUsername] = useState('')
@@ -152,7 +168,18 @@ export function ContactSourcesSettingsSection() {
           </ul>
         )}
 
-        {googleWithout.map((account) => (
+        {[
+          ...googleWithout.map((account) => ({
+            account,
+            label: t('contacts.readGoogle'),
+            read: () => syncGoogleContacts(account.id, account.email),
+          })),
+          ...exchangeWithout.map((account) => ({
+            account,
+            label: t('contacts.readExchange'),
+            read: () => syncExchangeContacts(account.id, account.email),
+          })),
+        ].map(({ account, label, read }) => (
           <div
             key={account.id}
             className="flex items-center justify-between gap-2 rounded-control border border-border bg-panel px-3 py-2"
@@ -161,21 +188,10 @@ export function ContactSourcesSettingsSection() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
-                setBusy(true)
-                void syncGoogleContacts(account.id, account.email)
-                  .then((problem) => {
-                    if (problem) showToast(problem, 'error')
-                    else showToast(t('contacts.added', { name: account.email }))
-                  })
-                  .catch((error) =>
-                    showToast(error instanceof Error ? error.message : t('contacts.addFailed'), 'error'),
-                  )
-                  .finally(() => setBusy(false))
-              }}
+              onClick={() => readAccountBook(read, account.email)}
               className="shrink-0 rounded-control px-3 py-1.5 text-caption font-semibold text-accent transition-colors hover:bg-accent/10 cursor-pointer disabled:opacity-50"
             >
-              {t('contacts.readGoogle')}
+              {label}
             </button>
           </div>
         ))}

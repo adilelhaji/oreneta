@@ -93,7 +93,9 @@ impl Session {
             Session::Local(_) => Ok(()),
             Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::prepare_folder_delete(session).await,
-            Session::Ews(_) => ews_unsupported("prepare_folder_delete"),
+            // Stateless per call: no mailbox is selected that would need
+            // leaving first.
+            Session::Ews(_) => Ok(()),
         }
     }
 
@@ -109,12 +111,14 @@ impl Session {
     /// Rename `from` to `to` (ADR-0050). IMAP's RENAME carries the inferiors
     /// with it; the local store has no server, so it is handed the whole
     /// subtree in `renames` (the source first) and renames each row itself.
+    /// Exchange moves the folder by id, and its subfolders go with it
+    /// (ADR-0058).
     pub async fn rename_folder(&mut self, from: &str, to: &str, renames: &[(String, String)]) -> Result<()> {
         match self {
             Session::Local(session) => session.rename_folders(renames),
             Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::rename_folder(session, from, to).await,
-            Session::Ews(_) => ews_unsupported("rename_folder"),
+            Session::Ews(session) => session.move_folder(from, to).await,
         }
     }
 
@@ -440,7 +444,17 @@ impl Session {
             Session::Imap(_) => Err(anyhow::anyhow!(
                 "IMAP accounts send through SMTP, not the mail session"
             )),
-            Session::Ews(session) => session.send_mime(raw).await,
+            Session::Ews(session) => session.send_mime(raw, false).await,
+        }
+    }
+
+    /// Transmits a message and asks the server to report its delivery
+    /// (ADR-0048). Exchange takes the request on the item it submits
+    /// (ADR-0058); any other session refuses rather than send without it.
+    pub async fn send_mime_requesting_delivery(&mut self, raw: Vec<u8>) -> Result<()> {
+        match self {
+            Session::Ews(session) => session.send_mime(raw, true).await,
+            _ => Err(anyhow::anyhow!("this account cannot ask for a delivery receipt here")),
         }
     }
 

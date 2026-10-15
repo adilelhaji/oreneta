@@ -890,6 +890,8 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
             OR person_id IN (SELECT id FROM people WHERE account = ?1)",
         params![id],
     )?;
+    // Task lists kept in the account's Tasks folder go with it (ADR-0058).
+    crate::task_sync::exchange::forget_account(&tx, id)?;
     // A person's addresses and numbers have no account column of their own.
     for child in ["person_emails", "person_phones"] {
         tx.execute(

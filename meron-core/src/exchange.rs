@@ -38,6 +38,10 @@ use ::ews::{
 
 use crate::calendar::{Calendar, Event, Participant};
 
+pub mod book;
+mod soap;
+pub mod tasks;
+
 /// A folder or item reference as `(id, change_key)`. The change key is
 /// required by write operations (Exchange rejects stale ones) and optional
 /// for reads.
@@ -76,6 +80,18 @@ pub struct EwsClient {
 impl EwsClient {
     pub fn new(config: EwsConfig) -> Self {
         Self { config }
+    }
+
+    /// A client for an Exchange account's own credentials, as the mail
+    /// session builds one (`backend::connect`).
+    pub fn for_account(creds: &crate::imap::Creds) -> Self {
+        Self::new(EwsConfig {
+            url: creds.ews_url.clone(),
+            username: creds.user.clone(),
+            password: creds.password.clone(),
+            target_mailbox: creds.target_mailbox.clone(),
+            proxy: creds.proxy.clone(),
+        })
     }
 
     /// A distinguished folder reference, addressed at this client's
@@ -625,7 +641,12 @@ impl EwsClient {
     /// Sends a fully-formed MIME message. The server transmits it and saves
     /// the copy into Sent itself (`SendAndSaveCopy`), so no separate append
     /// is needed.
-    pub fn send_mime(&self, mime: &[u8]) -> anyhow::Result<()> {
+    ///
+    /// `delivery_receipt` asks Exchange to report the delivery
+    /// (`IsDeliveryReceiptRequested`, ADR-0048, ADR-0058). The MIME has no
+    /// envelope to carry that request, as SMTP's has; the item does, next to
+    /// its content, and properties set on the item apply over the MIME.
+    pub fn send_mime(&self, mime: &[u8], delivery_receipt: bool) -> anyhow::Result<()> {
         let response = self.call(CreateItem {
             message_disposition: Some(MessageDisposition::SendAndSaveCopy),
             // Only meaningful for calendar items; a mail message has none.
@@ -636,6 +657,9 @@ impl EwsClient {
                     character_set: None,
                     content: base64::engine::general_purpose::STANDARD.encode(mime),
                 }),
+                // Left out unless asked: an absent element changes nothing in
+                // the submission.
+                is_delivery_receipt_requested: delivery_receipt.then_some(true),
                 ..Message::default()
             })],
         })?;
@@ -702,6 +726,22 @@ impl EwsClient {
         })?;
         into_successes(response).context("DeleteItem")?;
         Ok(())
+    }
+
+    /// Moves a folder, with everything in it, under another folder, or to the
+    /// top of the mailbox when `to_parent` is `None` (ADR-0058). The folder
+    /// keeps its name; its subfolders and items travel with it.
+    pub fn move_folder(&self, folder: &EwsId, to_parent: Option<&EwsId>) -> anyhow::Result<()> {
+        let response = self.call(::ews::move_folder::MoveFolder {
+            inner: ::ews::CopyMoveFolderData {
+                to_folder_id: match to_parent {
+                    Some(parent) => folder_id(parent),
+                    None => self.distinguished("msgfolderroot"),
+                },
+                folder_ids: vec![folder_id(folder)],
+            },
+        })?;
+        single_message(into_successes(response).context("MoveFolder")?).map(|_| ())
     }
 
     /// Executes one EWS operation and returns its typed response body.
@@ -947,20 +987,22 @@ impl EwsSession {
             .await??
         };
 
-        let mut folders = Vec::new();
-        self.folders.clear();
+        // Only generic mail folders: a mailbox's calendar, contacts, tasks
+        // and search folders are separate Exchange folder classes and are not
+        // mail the client can list, open or sync. Every generic folder is
+        // kept for the paths, though, so a mail folder under one that is not
+        // listed still has its place.
+        let mut generic = Vec::new();
         for change in round.changes.inner {
             let ::ews::sync_folder_hierarchy::Change::Create { folder } = change else {
                 // A from-scratch round reports every folder as a creation;
                 // updates and deletions only appear in delta rounds.
                 continue;
             };
-            // Only generic mail folders: a mailbox's calendar, contacts, tasks
-            // and search folders are separate Exchange folder classes and are
-            // not mail the client can list, open or sync.
             let ::ews::Folder::Folder {
-                folder_id,
-                display_name,
+                folder_id: Some(id),
+                display_name: Some(name),
+                parent_folder_id,
                 unread_count,
                 folder_class,
                 ..
@@ -968,35 +1010,46 @@ impl EwsSession {
             else {
                 continue;
             };
-            if !holds_mail(folder_class.as_ref()) {
-                continue;
-            }
-            let (Some(id), Some(name)) = (folder_id.as_ref(), display_name.as_ref()) else {
+            generic.push(ListedFolder {
+                parent: parent_folder_id.map(|parent| parent.id),
+                mail: holds_mail(folder_class.as_ref()),
+                unread: unread_count.unwrap_or_default(),
+                role: roles.get(&id.id).cloned(),
+                id,
+                name,
+            });
+        }
+        let paths = folder_paths(&generic);
+
+        let mut folders = Vec::new();
+        let mut legacy = Vec::new();
+        self.folders.clear();
+        for folder in generic.into_iter().filter(|folder| folder.mail) {
+            let Some((wire_name, display_path)) = paths.get(&folder.id.id).cloned() else {
                 continue;
             };
-            let special_use = roles.get(&id.id).cloned();
-            // The core addresses the inbox as "INBOX" throughout — IMAP
-            // mandates that name, and every default in the request path
-            // assumes it. Exchange has no such convention, so the wire name
-            // is normalised while the mailbox's own name stays on display.
-            let wire_name = if special_use.as_deref() == Some("inbox") {
+            // How this folder was named before folders had paths (ADR-0058),
+            // so a cache kept under that name can follow it.
+            let flat_name = if folder.role.as_deref() == Some("inbox") {
                 "INBOX".to_string()
             } else {
-                name.clone()
+                folder.name.clone()
             };
+            legacy.push((flat_name, wire_name.clone()));
             self.folders
-                .insert(wire_name.clone(), (id.id.clone(), id.change_key.clone()));
+                .insert(wire_name.clone(), (folder.id.id.clone(), folder.id.change_key.clone()));
             folders.push(crate::imap::Folder {
                 name: wire_name,
                 // Exchange folder names are already Unicode; there is no
                 // modified-UTF-7 layer to decode as there is on IMAP.
-                display_name: name.clone(),
-                delimiter: Some("/".to_string()),
-                unread: unread_count.unwrap_or_default(),
-                special_use,
+                display_name: display_path,
+                delimiter: Some(FOLDER_DELIMITER.to_string()),
+                unread: folder.unread,
+                special_use: folder.role,
                 role: String::new(),
             });
         }
+        self.with_store(|conn, account| adopt_flat_folder_names(conn, account, &legacy))?;
         ews_debug(&format!(
             "listed {} folders in {}ms",
             folders.len(),
@@ -1187,9 +1240,11 @@ impl EwsSession {
     ///
     /// Exchange sends it and files the Sent copy in one call, so unlike the
     /// SMTP path there is no separate append afterwards.
-    pub async fn send_mime(&mut self, raw: Vec<u8>) -> anyhow::Result<()> {
+    ///
+    /// `delivery_receipt` asks the server to report the delivery (ADR-0058).
+    pub async fn send_mime(&mut self, raw: Vec<u8>, delivery_receipt: bool) -> anyhow::Result<()> {
         let client = self.client.clone();
-        tokio::task::spawn_blocking(move || client.send_mime(&raw)).await?
+        tokio::task::spawn_blocking(move || client.send_mime(&raw, delivery_receipt)).await?
     }
 
     /// Records the folder a following flag update applies to.
@@ -1257,6 +1312,45 @@ impl EwsSession {
         let deleted = items.clone();
         tokio::task::spawn_blocking(move || client.delete_items(&deleted, false)).await??;
         self.forget_items(folder, &items)
+    }
+
+    /// Moves the folder at path `from` to path `to`, as `folder_move` planned
+    /// it on the cached list (ADR-0050, ADR-0058).
+    ///
+    /// The plan is checked again on a fresh listing first. A folder moved,
+    /// renamed or deleted in another client since the cache was taken, a
+    /// destination gone, or a name taken there meanwhile refuses the move:
+    /// acting on a picture of the mailbox that is no longer true could put a
+    /// folder somewhere nobody chose. Never repeated: if the answer is lost,
+    /// the next listing says where the folder is.
+    pub async fn move_folder(&mut self, from: &str, to: &str) -> anyhow::Result<()> {
+        let (parent, leaf) = match to.rsplit_once(FOLDER_DELIMITER) {
+            Some((parent, leaf)) => (Some(parent.to_string()), leaf),
+            None => (None, to),
+        };
+        if from.rsplit(FOLDER_DELIMITER).next() != Some(leaf) {
+            bail!("a move keeps the folder's name: {from} cannot become {to}");
+        }
+        self.listing = None;
+        self.list_folders().await?;
+        let source = self.folders.get(from).cloned().with_context(|| {
+            format!("{from} has changed on the server since the folder list was read; refresh it and try again")
+        })?;
+        if self.folders.contains_key(to) {
+            bail!("A folder named {to} already exists on the server");
+        }
+        let destination = match parent {
+            Some(parent) => Some(self.folders.get(&parent).cloned().with_context(|| {
+                format!("{parent} has changed on the server since the folder list was read; refresh it and try again")
+            })?),
+            None => None,
+        };
+        let client = self.client.clone();
+        let moved = tokio::task::spawn_blocking(move || client.move_folder(&source, destination.as_ref())).await?;
+        // Whatever the answer, the names this session holds are stale now.
+        self.listing = None;
+        self.folders.clear();
+        moved
     }
 
     /// Fetches raw MIME for a set of uids, pairing each result back to the uid
@@ -1682,6 +1776,107 @@ fn holds_mail(folder_class: Option<&String>) -> bool {
         None => true,
         Some(class) => class == MAIL_FOLDER_CLASS,
     }
+}
+
+// ---- Folder paths and moves (ADR-0058) ----------------------------------------
+
+/// The separator of a folder's path, as IMAP accounts have one.
+const FOLDER_DELIMITER: &str = "/";
+
+/// What stands for a `/` inside one Exchange folder name. Exchange allows
+/// the character in a name; the path uses it between names, so inside a name
+/// it is written as the division slash, which reads the same.
+const SLASH_IN_NAME: &str = "\u{2215}";
+
+/// One generic folder of a hierarchy round, as the paths need it.
+#[derive(Debug, Clone)]
+struct ListedFolder {
+    id: ::ews::FolderId,
+    parent: Option<String>,
+    name: String,
+    /// Whether it holds mail (see [`holds_mail`]).
+    mail: bool,
+    unread: u32,
+    /// The well-known role, from the distinguished ids.
+    role: Option<String>,
+}
+
+/// Each folder's path from the top of the mailbox: its wire name (the inbox
+/// is `INBOX`, as everywhere in the core) and the same path as shown (with
+/// the inbox's own name).
+///
+/// A folder whose parent is not in the round — the mailbox root, which a
+/// hierarchy round never lists, or a folder of another class — starts a path.
+/// A chain that loops (a server bug) is cut where it repeats rather than
+/// followed for ever.
+fn folder_paths(folders: &[ListedFolder]) -> std::collections::HashMap<String, (String, String)> {
+    let by_id: std::collections::HashMap<&str, &ListedFolder> =
+        folders.iter().map(|folder| (folder.id.id.as_str(), folder)).collect();
+    let mut paths = std::collections::HashMap::new();
+    for folder in folders {
+        let mut wire = Vec::new();
+        let mut shown = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut current = Some(folder);
+        while let Some(step) = current {
+            if !seen.insert(step.id.id.as_str()) {
+                break;
+            }
+            let name = step.name.replace(FOLDER_DELIMITER, SLASH_IN_NAME);
+            wire.push(if step.role.as_deref() == Some("inbox") { "INBOX".to_string() } else { name.clone() });
+            shown.push(name);
+            current = step.parent.as_deref().and_then(|parent| by_id.get(parent).copied());
+        }
+        wire.reverse();
+        shown.reverse();
+        paths.insert(
+            folder.id.id.clone(),
+            (wire.join(FOLDER_DELIMITER), shown.join(FOLDER_DELIMITER)),
+        );
+    }
+    paths
+}
+
+/// Moves the cache of folders named before they had paths to their paths.
+///
+/// Before ADR-0058 a folder's wire name was its own name alone, so
+/// `Inbox/Clients` was cached as `Clients`. `pairs` holds `(old name, path)`
+/// for every listed folder. A cache whose old name is no folder of the
+/// listing any more follows its folder, as a move does (ADR-0050); one whose
+/// old name two folders shared mixed both, so it is dropped and both are read
+/// again. Nothing happens once every cache is under its path.
+fn adopt_flat_folder_names(
+    conn: &rusqlite::Connection,
+    account: &str,
+    pairs: &[(String, String)],
+) -> anyhow::Result<()> {
+    let listed: std::collections::HashSet<&str> = pairs.iter().map(|(_, path)| path.as_str()).collect();
+    let mut by_old: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+    for (old, path) in pairs {
+        if old != path && !listed.contains(old.as_str()) {
+            by_old.entry(old.as_str()).or_default().push(path.as_str());
+        }
+    }
+    for (old, paths) in by_old {
+        if !crate::store::folder_exists(conn, account, old)? {
+            continue;
+        }
+        match paths.as_slice() {
+            [path] if !crate::store::folder_exists(conn, account, path)? => {
+                let plan = crate::folder_move::FolderMovePlan {
+                    source: old.to_string(),
+                    target: path.to_string(),
+                    delimiter: FOLDER_DELIMITER.to_string(),
+                    renames: vec![(old.to_string(), path.to_string())],
+                };
+                crate::folder_move::reconcile_folder_move(conn, account, &plan, None)?;
+            }
+            _ => {
+                crate::store::delete_folder(conn, account, old)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 // ---- Calendar ---------------------------------------------------------------
@@ -2513,8 +2708,13 @@ fn is_discarded(deleted_items: Option<&str>, parent: Option<&::ews::FolderId>) -
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    // ADR-0058, on recorded SOAP.
+    mod delivery_receipts;
+    mod folder_moves;
+    pub(crate) mod scripted;
 
     #[test]
     fn an_all_day_date_is_kept_whichever_zone_exchange_saved_it_in() {

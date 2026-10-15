@@ -54,7 +54,9 @@ describe('folder move rules (ADR-0050)', () => {
     const graph = { ...account, auth_type: 'graph_oauth' } as Account
     const ews = { ...account, provider: 'exchange', ews_url: 'https://ews.test/EWS/Exchange.asmx' } as Account
     expect(folderMovesSupported(graph)).toBe(false)
-    expect(folderMovesSupported(ews)).toBe(false)
+    // Exchange moves folders since ADR-0058.
+    expect(folderMovesSupported(ews)).toBe(true)
+    expect(folderMoveBlock(find('Work/2026'), find('Projects'), folders, ews)).toBeNull()
     expect(folderMovesSupported({ ...account, auth_type: 'local_archive' } as Account)).toBe(true)
     expect(folderMoveBlock(find('Work'), find('Projects/Work'), folders, graph)).toBe('unsupported')
   })

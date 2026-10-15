@@ -109,7 +109,7 @@
   MIME en base64), sin sobre donde poner la petición. Graph tiene
   `isDeliveryReceiptRequested` y EWS `IsDeliveryReceiptRequested`, pero
   solo en el envío como objeto JSON/XML, que este código no usa. Hoy se
-  responde «unsupported».
+  responde «unsupported». EWS lo pide ya en el elemento (ADR-0058).
 - **Mensajes en caché de antes de esta versión:** no tienen la petición
   guardada y no muestran la barra hasta que se vuelven a descargar. No se
   invalida la caché entera por esto.

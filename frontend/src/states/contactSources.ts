@@ -1,4 +1,5 @@
-// Where people are fetched from: for now, CardDAV address books.
+// Where people are fetched from: CardDAV address books, and the books of
+// Google and Exchange accounts.
 //
 // The core owns the sources and their passwords (in the keyring, never here).
 // This is the settings screen's view of them and the calls it makes.
@@ -8,7 +9,7 @@ import { invoke } from '../lib/bridge'
 
 export type ContactSource = {
   id: string
-  kind: 'carddav' | 'google'
+  kind: 'carddav' | 'google' | 'exchange'
   account: string
   url: string
   username: string
@@ -24,6 +25,17 @@ export type ContactSource = {
 /** The books a new contact can be saved to on a server (ADR-0012). */
 export function writableBooks(sources: ContactSource[]): ContactSource[] {
   return sources.filter((source) => source.kind === 'carddav' && source.enabled && source.writable !== false)
+}
+
+/**
+ * The books a new contact group can be kept in: writable CardDAV books, and
+ * an Exchange account's book, whose groups are its distribution lists
+ * (ADR-0058).
+ */
+export function groupBooks(sources: ContactSource[]): ContactSource[] {
+  return sources.filter(
+    (source) => source.enabled && (source.kind === 'exchange' || (source.kind === 'carddav' && source.writable !== false)),
+  )
 }
 
 export type DiscoveredBook = { url: string; name: string }
@@ -87,6 +99,20 @@ export async function removeSource(id: string) {
  */
 export async function syncGoogleContacts(accountId: string, name: string): Promise<string | null> {
   const res = await invoke<{ ok: boolean; error: string | null }>('google.contacts.sync', {
+    account: accountId,
+    name,
+  })
+  await loadContactSources()
+  return res.ok ? null : (res.error ?? 'sync failed')
+}
+
+/**
+ * Read an Exchange account's Contacts folder and its distribution lists
+ * (ADR-0058) with the account's own sign-in. One book per account, like
+ * Google's. Returns why it failed, or null.
+ */
+export async function syncExchangeContacts(accountId: string, name: string): Promise<string | null> {
+  const res = await invoke<{ ok: boolean; error: string | null }>('exchange.contacts.sync', {
     account: accountId,
     name,
   })

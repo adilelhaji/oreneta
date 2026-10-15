@@ -84,3 +84,25 @@ response.
 **Only mail is bridged.** This setup covers mail. DavMail can also expose
 calendar (CalDAV) and address book (LDAP/CardDAV), but Oreneta does not consume
 those.
+
+## Native Exchange accounts (EWS)
+
+Where the server's EWS endpoint is reachable, the **Exchange** account type
+talks to it directly instead, with no DavMail in between. Besides mail, the
+calendar, the directory and automatic replies, it covers (ADR-0058):
+
+- **Folders by path:** subfolders appear under their parents (`Inbox/Clients`)
+  and can be moved by drag or "Move folder to…" (`MoveFolder`). The move is
+  checked against a fresh folder listing first and never repeated.
+- **Delivery receipts:** asked of Exchange with each message
+  (`IsDeliveryReceiptRequested`) when the composer's switch is on.
+- **Contacts and distribution lists:** Settings → People → "Read Exchange
+  contacts" brings in the Contacts folder. Its people are read only; its
+  distribution lists are contact groups that can be created, renamed,
+  changed and deleted. A list changed elsewhere since it was read is never
+  overwritten.
+- **Tasks:** Tasks → "Exchange tasks of …" keeps the account's Tasks folder
+  as a list, synced like a CalDAV one, including the repeating rules EWS
+  shares with the editor.
+
+Through DavMail none of these are available: it bridges mail only.
