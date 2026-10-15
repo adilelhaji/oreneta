@@ -122,7 +122,7 @@ describe('ConnectivityBanner proxy refusals (#201)', () => {
 })
 
 describe('saving the proxy setting a refusal blamed (#201)', () => {
-  it('drops the app proxy from the message, which stays an unverified failure', () => {
+  it('drops the app proxy from the message once saved, which stays an unverified failure', async () => {
     setSyncError('work', appRefusal)
     setSyncError('home', accountRefusal)
     const view = render(<ConnectivityBanner />)
@@ -130,11 +130,36 @@ describe('saving the proxy setting a refusal blamed (#201)', () => {
     act(() => settings$.proxy.set({ mode: 'http', host: 'proxy.corp', port: 3128, username: '', password: '' }))
 
     const work = within(view.getByRole('listitem', { name: 'Work' }))
+    await waitFor(() => expect(work.getByText('Unresolved sync issue — recovery not verified')).toBeTruthy())
     expect(work.queryByText(appText('Work'))).toBeNull()
-    expect(work.getByText('Unresolved sync issue — recovery not verified')).toBeTruthy()
     expect(work.getByRole('button', { name: 'Account settings' })).toBeTruthy()
     // An account's own proxy is not the app's: still blamed.
     expect(within(view.getByRole('listitem', { name: 'Home' })).getByText(accountText('Home'))).toBeTruthy()
+  })
+
+  it('keeps blaming the app proxy when its setting could not be saved', async () => {
+    const saves: string[] = []
+    ;(window as any).go = {
+      main: {
+        App: {
+          Invoke: async (command: string) => {
+            if (command !== 'app.prefsSet') return {}
+            saves.push(command)
+            throw new Error('database is locked')
+          },
+        },
+      },
+    }
+    setSyncError('work', appRefusal)
+    const view = render(<ConnectivityBanner />)
+    fireEvent.click(view.getByRole('button', { name: 'Account sync' }))
+    act(() => settings$.proxy.set({ mode: 'http', host: 'proxy.corp', port: 3128, username: '', password: '' }))
+
+    await waitFor(() => expect(saves.length).toBeGreaterThan(0))
+    await act(async () => {})
+    const work = within(view.getByRole('listitem', { name: 'Work' }))
+    expect(work.getByText(appText('Work'))).toBeTruthy()
+    expect(work.getByRole('button', { name: 'Network settings' })).toBeTruthy()
   })
 
   it("drops the account's own proxy once that account's setting is saved, and only for it", async () => {

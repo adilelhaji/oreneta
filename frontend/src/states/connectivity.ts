@@ -1,7 +1,7 @@
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { accounts$ } from './accounts'
-import { settings$ } from './settings'
+import { onSettingSaved } from './settings'
 import { proxyProblemFromSyncError, proxyProblemScope, type ProxyProblem } from '../lib/proxyProblems'
 
 export type SyncObservation = {
@@ -84,7 +84,9 @@ export function forgetProxyProblems(account?: string) {
 }
 
 // Every change to the app-wide proxy is saved as it is made (settings.ts).
-settings$.proxy.onChange(() => forgetProxyProblems())
+// Only a change the store accepted can have fixed it: until then the core
+// keeps using the setting it refused.
+onSettingSaved('proxy', () => forgetProxyProblems())
 
 export function dismissSyncError(account: string | null) {
   const previous = account ? syncObservation(account) : connectivity$.unattributed.peek()
