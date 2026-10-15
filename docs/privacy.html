@@ -152,8 +152,10 @@
     be sent. Every message of the conversation and its attachments' details
     start selected; untick what you do not want to send.</td>
     <td>The service you configure: a program on your own computer, or a
-    provider you name (HTTPS only). If you set a proxy, the request goes
-    through it, even to a program on your own computer.</td>
+    provider you name (HTTPS only). A request to a program on your own
+    computer goes to it directly and never through a proxy; a request to
+    a provider goes through your proxy, if you set one. If the service
+    redirects the request elsewhere, it is not sent on.</td>
     <td>The text of the messages you selected, with their sender, subject,
     internal identifiers and the names, types and sizes of their
     attachments; the action you chose; and your API key, if you entered
@@ -187,7 +189,8 @@
   only when you tick it.</p>
   <p>If you set a proxy, connections for your accounts, feeds (and the
   pictures and icons saved from them during a sync), file links, chat files, translation downloads, the
-  tracker list, the changelog and the assistant go through it, and so do
+  tracker list, the changelog and the assistant (with a provider you
+  name, not a program on your own computer) go through it, and so do
   the sign-in exchange and token refreshes with Google or Microsoft,
   finding server settings, your account picture, and the update check and
   download.</p>
@@ -207,9 +210,12 @@
   When mail sync for an account is refused this way, Oreneta says the
   proxy setting is the cause and offers to open it.
   Connections already open when the proxy changes keep going until they
-  reconnect. If your account picture could not be
-  downloaded, Oreneta keeps its address and your web view loads it from
-  there each time, without the proxy.</p>
+  reconnect. Your account picture is only ever a copy kept on your
+  computer. If it could not be downloaded, Oreneta shows your initials (or,
+  if you turned on real pictures for addresses, the one for your address),
+  keeps the address out of sight, and tries again through the same route
+  when it starts and when a proxy setting changes; your web view never
+  loads that address.</p>
   <p>Finding server settings skips the DNS lookup while a proxy is set,
   because DNS cannot go through it. Pictures shown in mail, pictures and
   videos shown in a feed item that are not saved on your computer,

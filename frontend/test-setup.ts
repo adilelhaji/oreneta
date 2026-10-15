@@ -22,3 +22,9 @@ if (!(globalThis as any).document) {
   addEventListener: () => {},
   removeEventListener: () => {},
 })
+
+// `mock.module` is process-wide: a module replaced in one test file stays
+// replaced for every file that runs after it, and Bun never restores it. Many
+// files swap `../boot` for a no-op, so a test must not rely on the real module
+// another file may have replaced; it mocks that module itself (with a spy when
+// the call is what it asserts, as backup.test.ts does for `boot`).

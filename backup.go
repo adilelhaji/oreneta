@@ -135,6 +135,9 @@ func (a *App) importBackup(payload map[string]any) (any, error) {
 	a.logf("backup.import: restored %d accounts (%d skipped), %d feeds, %d settings, %d PGP keys, %d S/MIME identities from %s",
 		summary["accounts"], summary["skipped"], summary["feeds"], summary["settings"],
 		summary["pgp_keys"], summary["smime_identities"], src)
+	// A backup from before pictures were kept as local copies may hold a
+	// remote address as an account picture (#194).
+	a.requestAvatarSettle(0)
 	return summary, nil
 }
 

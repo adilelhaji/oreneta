@@ -67,8 +67,17 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 	}
 
 	id := accountID(req.Email)
+	// The picture is kept as a copy fetched through the account route. When it
+	// cannot be fetched now, the account is added without one and the address
+	// waits for a retry; it is never stored as the picture (#194).
+	avatarSource := ""
 	if req.AvatarURL != "" {
-		req.AvatarURL = a.downloadAndSaveAvatar(id, req.AvatarURL)
+		if local, err := a.saveAvatar(id, req.AvatarURL); err != nil {
+			a.logf("account.addGmailOAuth: account=%s picture not fetched yet: %v", id, err)
+			avatarSource, req.AvatarURL = req.AvatarURL, ""
+		} else {
+			req.AvatarURL = local
+		}
 	}
 	expiresAt := time.Now().Unix() + req.ExpiresIn
 	a.logf("account.addGmailOAuth: connecting account=%s email=%s token_present=%t refresh_present=%t", id, req.Email, req.AccessToken != "", req.RefreshToken != "")
@@ -97,6 +106,11 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 		"provider":         "gmail",
 	}); err != nil {
 		return nil, err
+	}
+	if avatarSource != "" {
+		if _, err := a.sidecar.Call("account.setAvatar", map[string]any{"account": id, "avatar_source": avatarSource}); err != nil {
+			a.logf("account.addGmailOAuth: account=%s picture address not kept: %v", id, err)
+		}
 	}
 	_, _ = a.sidecar.Call("watch.start", map[string]any{"account": id})
 

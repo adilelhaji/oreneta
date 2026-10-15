@@ -101,6 +101,8 @@ El núcleo nunca convierte un proxy elegido en una conexión directa:
 | IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar y contactos, calendarios CalDAV y suscripciones de calendario | núcleo, `ProxyChoice::agent()` o la ruta de la cuenta | proxy de la cuenta o global |
 | Libros CardDAV guardados sin cuenta (los que se añaden desde la interfaz) y listas de tareas CalDAV, feeds, idiomas de traducción, changelog | núcleo, `proxy::agent()` | global |
 | Búsqueda de ajustes en móvil | núcleo, `protocol/accounts.rs` | global; con proxy se salta la consulta SRV, y un proxy inutilizable es **error** |
+| Asistente con proveedor remoto | núcleo, `assistant::agent` | global |
+| Asistente local (un programa en este equipo) | núcleo, `assistant::agent` | siempre directo, sin proxy de la aplicación ni del entorno (#195) |
 | Enlaces a la nube (Nextcloud/ownCloud) | núcleo, `cloud/mod.rs` | global; si el proxy no se puede usar, **error** (antes caía en silencio a directo) |
 | Búsqueda de ajustes del servidor (autoconfig, ISPDB) | puente Go, `autodiscover.go` | global |
 | Intercambio OAuth y userinfo de Google | puente Go, `oauth.go` | global (la cuenta aún no existe) |
@@ -120,8 +122,7 @@ los plazos de antes (6 s autoconfig, 10 s imagen, 20 s manifiesto; la
 descarga sin plazo total pero con límites de TLS y cabeceras).
 
 **Falla cerrado:** si el núcleo no responde, el ajuste no se puede usar o el
-proxy no contesta, la petición falla; nunca se reintenta directa. La imagen
-de la cuenta, en ese caso, se queda con la URL remota sin descargarla.
+proxy no contesta, la petición falla; nunca se reintenta directa.
 
 Con proxy, la búsqueda de ajustes se salta la consulta DNS SRV (RFC 6186):
 DNS no pasa por un proxy HTTP/SOCKS y preguntar al resolvedor local
@@ -129,6 +130,14 @@ revelaría el dominio fuera del proxy. Se cae a la suposición
 `imap.<dominio>`/`smtp.<dominio>`.
 
 ## Lo que no usa el proxy
+
+El asistente local (#195): su dirección solo puede ser este equipo
+(`localhost`, `127.0.0.0/8` o `::1`, comprobado sobre el host ya analizado)
+y se llama con `ProxyChoice::Direct`, así que ni el proxy de la aplicación
+ni `HTTP_PROXY` ven el correo que la persona eligió no enviar fuera. Un
+proxy global inutilizable tampoco lo bloquea. El asistente, local o remoto,
+no sigue redirecciones: una llevaría el correo y la clave de este equipo a
+otro host, o de HTTPS a HTTP, sin pasar las comprobaciones de la dirección.
 
 Las imágenes y medios remotos que carga la vista web (imágenes en mensajes,
 fotos de Gravatar/DuckDuckGo) y la página de inicio de sesión que se abre en
@@ -144,6 +153,21 @@ solo se lanza con el botón «Find settings online» de
 asistente ya no la lanza al pulsar «Continue» ni en la configuración manual.
 Además, la dirección va codificada en el parámetro `emailaddress` y se
 rechaza un dominio con sintaxis de URL.
+
+## Imagen de la cuenta (#194)
+
+`avatar_url` es siempre una copia local (`/media/…`) o vacío; la interfaz
+dibuja las iniciales mientras no haya copia. Si la descarga por la ruta de la
+cuenta falla, la URL de origen se guarda aparte en `accounts.avatar_source`
+(esquema 63), nunca se muestra, y se reintenta al arrancar, al restaurar una
+copia de seguridad y al cambiar un ajuste de proxy (con 2 s de espera y una
+sola ejecución en marcha, porque el ajuste se guarda en cada pulsación).
+`account.setAvatar` aplica el resultado de un reintento solo si la cuenta
+sigue como se leyó (`expect_avatar_url`, `expect_avatar_source`), de modo que
+una descarga lenta no pisa lo que la persona eligió entretanto. Un guardado
+desde ajustes que no se puede descargar conserva la imagen anterior y
+responde `pending: true`. `account.list` vacía cualquier dirección que no sea
+una copia local. Móvil carga sus imágenes por su cuenta y no se toca.
 
 ## Pruebas
 
@@ -174,6 +198,13 @@ rechaza un dominio con sintaxis de URL.
   (graph/tests.rs), `a_proxy_server_the_http_client_cannot_use_is_a_proxy_failure_too`
   (graph/auth/tests.rs), `a_shared_mailbox_refused_by_its_proxy_names_whose_setting_it_is`
   (engine.rs).
+- Núcleo, asistente (#195, assistant.rs):
+  `a_local_provider_is_reached_directly_even_with_an_app_proxy_set`,
+  `a_remote_provider_still_goes_through_the_app_proxy`,
+  `an_unusable_app_proxy_refuses_a_remote_provider_but_never_holds_a_local_one`,
+  `a_redirect_from_the_provider_is_not_followed`,
+  `local_mode_accepts_every_form_of_this_computer_including_ipv6` y
+  `local_mode_refuses_hosts_that_are_not_this_computer`.
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
   llama a `account.autodiscover`; el botón sí, y la nota nombra el dominio y
   Mozilla; los servidores se pueden escribir sin búsqueda.
@@ -196,3 +227,9 @@ rechaza un dominio con sintaxis de URL.
   renovación de tokens va por el proxy propio, directa aunque haya
   global, por el global, y un proxy propio inutilizable la rechaza sin
   enviar nada.
+- Imagen de la cuenta (`avatar_download_test.go`, `oauth_avatar_test.go`,
+  `Avatar.test.tsx`, `accounts.test.ts`, y en el núcleo
+  `an_account_picture_and_its_source_are_set_apart`,
+  `a_late_avatar_update_does_not_overwrite_a_newer_choice`): una descarga
+  fallida nunca guarda ni entrega una dirección remota, el reintento usa la
+  ruta de la cuenta y guarda la copia, y las solicitudes se agrupan.

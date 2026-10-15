@@ -282,12 +282,37 @@ export async function writeAccountAvatarFile(accountId: string, file: { name: st
   return res.url
 }
 
+/// Takes the pictures from the core's list again, after it stored a copy that
+/// could not be fetched earlier (#194). Only pictures change; nothing else the
+/// person may be editing is touched.
+export async function refreshAccountPictures() {
+  try {
+    const res = await invoke<{ accounts: Account[] }>('account.list')
+    const pictures = new Map((res?.accounts ?? []).map((acc) => [acc.id, acc.avatar_url]))
+    accounts$.set(
+      accounts$.get().map((acc) => (pictures.has(acc.id) ? { ...acc, avatar_url: pictures.get(acc.id) } : acc)),
+    )
+  } catch {
+    // The pictures stay as they were; the next start reads them again.
+  }
+}
+
 export async function setAccountAvatar(accountId: string, avatarUrl: string) {
   const previous = accounts$.get()
   const nextUrl = avatarUrl.trim()
-  accounts$.set(previous.map((acc) => (acc.id === accountId ? { ...acc, avatar_url: nextUrl } : acc)))
+  // Only a copy kept on this computer is ever shown. A remote address is not:
+  // the core fetches it through the account's route, and until that works the
+  // account keeps the picture it had (#194).
+  if (nextUrl === '' || nextUrl.startsWith('/media/')) {
+    accounts$.set(previous.map((acc) => (acc.id === accountId ? { ...acc, avatar_url: nextUrl } : acc)))
+  }
   try {
-    await invoke('account.setAvatar', { id: accountId, avatar_url: nextUrl })
+    const res = await invoke<{ avatar_url?: string }>('account.setAvatar', { id: accountId, avatar_url: nextUrl })
+    // A remote picture that was fetched comes back as its local copy.
+    const stored = res?.avatar_url
+    if (typeof stored === 'string' && stored !== nextUrl && (stored === '' || stored.startsWith('/media/'))) {
+      accounts$.set(accounts$.get().map((acc) => (acc.id === accountId ? { ...acc, avatar_url: stored } : acc)))
+    }
     return true
   } catch (error) {
     accounts$.set(previous)

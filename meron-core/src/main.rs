@@ -2680,7 +2680,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         "assistant.execute" => {
             let request: assistant::ExecuteRequest = serde_json::from_value(p.clone())?;
-            assistant::execute_cancellable(proxy::agent()?, request).await
+            assistant::execute_cancellable(assistant::agent(&request.provider)?, request).await
         }
 
         "assistant.cancel" => assistant::cancel(&req_str(p, "execution_id")?),
@@ -8293,18 +8293,33 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             Ok(json!({ "ok": true }))
         }
 
-        // Set or clear the account's UI avatar URL/path.
+        // The picture is a copy on this computer; `avatar_source` is where a
+        // copy that could not be made yet is to be fetched from, through the
+        // account's route (#194). A key left out is left as it was.
         "account.setAvatar" => {
             let id = req_str(p, "account").or_else(|_| req_str(p, "id"))?;
-            let avatar_url = req_str(p, "avatar_url").unwrap_or_default();
-            {
-                let db = engine.db.lock().unwrap();
-                db.execute(
-                    "UPDATE accounts SET avatar_url = ?1, updated_at = strftime('%s', 'now') WHERE id = ?2",
-                    rusqlite::params![avatar_url.trim(), id],
-                )?;
-            }
-            Ok(json!({ "ok": true }))
+            let avatar_url = p.get("avatar_url").and_then(Value::as_str);
+            let avatar_source = p.get("avatar_source").and_then(Value::as_str);
+            // `expect_*` make a retry that read the account earlier apply only
+            // while it still holds what it read.
+            let expect_url = p.get("expect_avatar_url").and_then(Value::as_str);
+            let expect_source = p.get("expect_avatar_source").and_then(Value::as_str);
+            let applied = store::set_account_avatar_if(
+                &engine.db.lock().unwrap(),
+                &id,
+                avatar_url,
+                avatar_source,
+                expect_url,
+                expect_source,
+            )?;
+            Ok(json!({ "ok": true, "applied": applied }))
+        }
+
+        // Accounts whose picture is still to be fetched, or that hold a remote
+        // address as their picture (#194).
+        "account.pendingAvatars" => {
+            let pending = store::pending_avatars(&engine.db.lock().unwrap())?;
+            Ok(json!({ "accounts": pending }))
         }
 
         // Replace an account's send-as aliases (the whole list). Entries are
