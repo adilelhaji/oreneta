@@ -687,10 +687,9 @@ internal fun SettingsGeneralPage(
     focusProxy: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (focusProxy) 12 else 0)
-    LazyColumn(modifier.appScrollbar(listState), state = listState) {
-        item { SettingsSectionLabel(tr("settings.pages.appearance")) }
-        item {
+    val rows = settingsRows {
+        row { SettingsSectionLabel(tr("settings.pages.appearance")) }
+        row {
             val displayedAppearanceMode =
                 if (appearanceMode == AppAppearanceMode.System) AppAppearanceMode.Indigo else appearanceMode
             SettingsRow(
@@ -712,7 +711,7 @@ internal fun SettingsGeneralPage(
                 },
             )
         }
-        item {
+        row {
             SettingsRow(
                 icon = Icons.AutoMirrored.Filled.Chat,
                 title = tr("settings.appearance.conversationLayout"),
@@ -721,7 +720,7 @@ internal fun SettingsGeneralPage(
                 trailing = { Text(conversationLayout.label(), color = MaterialTheme.colorScheme.primary) },
             )
         }
-        item {
+        row {
             SettingsRow(
                 icon = Icons.Filled.Settings,
                 title = tr("settings.language.label"),
@@ -738,7 +737,7 @@ internal fun SettingsGeneralPage(
                 },
             )
         }
-        item {
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Visibility,
                 title = tr("settings.appearance.showSenderImages"),
@@ -747,7 +746,7 @@ internal fun SettingsGeneralPage(
                 onToggle = onToggleSenderImages,
             )
         }
-        item {
+        row {
             SettingsRow(
                 icon = Icons.Filled.FormatSize,
                 title = tr("settings.appearance.messageTextSize"),
@@ -760,7 +759,7 @@ internal fun SettingsGeneralPage(
                 },
             )
         }
-        item {
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Inbox,
                 title = tr("settings.appearance.showUnreadAccountBadge"),
@@ -770,8 +769,8 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.sideNav")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.sections.sideNav")) }
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Inbox,
                 title = tr("settings.sideNav.showUnifiedInbox"),
@@ -780,8 +779,8 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.kanban")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.sections.kanban")) }
+        row {
             SettingsRow(
                 icon = Icons.Filled.ViewKanban,
                 title = tr("settings.kanban.columnWidth"),
@@ -790,8 +789,8 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.composer")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.sections.composer")) }
+        row {
             SettingsRow(
                 icon = Icons.AutoMirrored.Filled.Send,
                 title = tr("settings.composer.sendMessageWith"),
@@ -800,16 +799,16 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.signature")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.sections.signature")) }
+        row {
             SettingsSignatureRow(
                 html = appSignatureHtml,
                 onSave = onSaveAppSignature,
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.network")) }
-        item {
+        row(SETTINGS_ROW_NETWORK) { SettingsSectionLabel(tr("settings.sections.network")) }
+        row {
             SettingsProxyRow(
                 spec = appProxy,
                 accountScoped = false,
@@ -817,8 +816,8 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.syncNotifications")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.syncNotifications")) }
+        row {
             SettingsToggleRow(
                 icon = Icons.Filled.Refresh,
                 title = tr("settings.backgroundSync"),
@@ -829,7 +828,7 @@ internal fun SettingsGeneralPage(
         }
         if (supportsBackgroundPush) {
             // Android: a real background channel keeps mail fresh while suspended.
-            item {
+            row {
                 SettingsToggleRow(
                     icon = Icons.Filled.MarkEmailUnread,
                     title = tr("settings.liveMailPush"),
@@ -838,7 +837,7 @@ internal fun SettingsGeneralPage(
                     onToggle = onToggleLiveMailPush,
                 )
             }
-            item {
+            row {
                 SettingsRow(
                     icon = Icons.Filled.Refresh,
                     title = tr("settings.refreshBackground"),
@@ -848,7 +847,7 @@ internal fun SettingsGeneralPage(
         } else {
             // iOS: no persistent background socket. Offer a foreground poll
             // interval instead; background checks fall back to best-effort.
-            item {
+            row {
                 SettingsRow(
                     icon = Icons.Filled.Refresh,
                     title = tr("settings.pollInterval"),
@@ -868,7 +867,7 @@ internal fun SettingsGeneralPage(
             }
         }
         if (notificationsNeedPermission) {
-            item {
+            row {
                 SettingsRow(
                     icon = Icons.Filled.MarkEmailUnread,
                     title = tr("mobile.accounts.enableNotifications"),
@@ -876,7 +875,7 @@ internal fun SettingsGeneralPage(
                 )
             }
         }
-        item {
+        row {
             SettingsRow(
                 icon = Icons.Filled.BugReport,
                 title = tr("settings.viewSyncLog"),
@@ -885,8 +884,8 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.backup")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.sections.backup")) }
+        row {
             SettingsRow(
                 icon = Icons.Filled.Save,
                 title = tr("settings.backup.exportTitle"),
@@ -894,7 +893,7 @@ internal fun SettingsGeneralPage(
                 onClick = { if (!backupBusy) onExportBackup() },
             )
         }
-        item {
+        row {
             SettingsRow(
                 icon = Icons.Filled.Restore,
                 title = tr("settings.backup.restoreTitle"),
@@ -903,8 +902,8 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { SettingsSectionLabel(tr("settings.sections.storage")) }
-        item {
+        row { SettingsSectionLabel(tr("settings.sections.storage")) }
+        row {
             SettingsRow(
                 icon = Icons.Filled.Info,
                 title = tr("settings.storage.usageTitle"),
@@ -919,7 +918,7 @@ internal fun SettingsGeneralPage(
                 onClick = onRefreshStorage,
             )
         }
-        item {
+        row {
             SettingsRow(
                 icon = Icons.Filled.Delete,
                 title = if (storageClearConfirming) tr("mobile.accounts.confirmClearCache") else tr("settings.storage.clearTitle"),
@@ -929,7 +928,16 @@ internal fun SettingsGeneralPage(
             )
         }
 
-        item { Spacer(Modifier.height(24.dp)) }
+        row { Spacer(Modifier.height(24.dp)) }
+    }
+    // Opened from a refused proxy: at the network section, wherever
+    // the rows above it put it (#201).
+    val listState =
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = rows.startIndex(SETTINGS_ROW_NETWORK.takeIf { focusProxy }),
+        )
+    LazyColumn(modifier.appScrollbar(listState), state = listState) {
+        items(rows.size) { index -> rows.content(index)() }
     }
 }
 

@@ -149,17 +149,24 @@ internal fun mobileUnusableProxyScopeFromSyncError(error: String): MobileProxySc
     }
 
 /**
- * Which proxy setting fixes a sync failure, or null when the failure was not
+ * Which proxy settings a sync failure opens, or null when the failure was not
  * the proxy's. A refusal names its setting; for a proxy that did not answer it
  * is the account's own when the account has one, otherwise the app-wide one it
- * follows.
+ * follows. Without a known account there are no account settings to open, so
+ * it is the general Network settings.
  */
 internal fun mobileProxySettingsScope(
     error: String,
     account: AccountSummary?,
 ): MobileProxyScope? {
-    mobileUnusableProxyScopeFromSyncError(error)?.let { return it }
-    if (mobileProxyEndpointFromSyncError(error) == null) return null
-    val mode = account?.proxy?.mode
-    return if (mode == "http" || mode == "socks5") MobileProxyScope.Account else MobileProxyScope.App
+    val scope =
+        mobileUnusableProxyScopeFromSyncError(error)
+            ?: if (mobileProxyEndpointFromSyncError(error) == null) {
+                return null
+            } else if (account?.proxy?.mode == "http" || account?.proxy?.mode == "socks5") {
+                MobileProxyScope.Account
+            } else {
+                MobileProxyScope.App
+            }
+    return if (scope == MobileProxyScope.Account && account == null) MobileProxyScope.App else scope
 }

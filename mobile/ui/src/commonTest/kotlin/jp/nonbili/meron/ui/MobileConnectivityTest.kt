@@ -94,6 +94,9 @@ class MobileConnectivityTest {
         assertEquals(MobileProxyScope.Account, mobileProxySettingsScope(unreachable, own))
         assertEquals(MobileProxyScope.App, mobileProxySettingsScope(unreachable, follows))
         assertEquals(MobileProxyScope.App, mobileProxySettingsScope(unreachable, null))
+        // An account's own proxy with no known account: no account settings to
+        // open, so the general Network settings rather than the Settings root.
+        assertEquals(MobileProxyScope.App, mobileProxySettingsScope(accountRefusal, null))
         // Anything else is not the proxy's.
         assertNull(mobileProxySettingsScope("sync INBOX: connect imap.example:993: timed out", own))
     }
