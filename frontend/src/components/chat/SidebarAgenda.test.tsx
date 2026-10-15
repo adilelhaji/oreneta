@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { SidebarAgenda, untilNextDay } from './SidebarAgenda'
 import { accounts$ } from '../../states/accounts'
 import { calendar$, type CalendarEvent } from '../../states/calendar'
@@ -214,5 +214,34 @@ describe('sidebar agenda widget (#212)', () => {
     expect(requests.filter((r) => r.command === 'calendar.events').at(-1)?.payload.refresh).toBe(false)
     screen.unmount()
     expect(listeners['calendar.synced']).toBeUndefined()
+  })
+
+  it('says the agenda may be out of date while a calendar refresh has failed, until a later sync of the week lands', async () => {
+    const listeners: Record<string, (detail?: unknown) => void> = {}
+    ;(window as any).runtime = {
+      EventsOn: (name: string, callback: (detail?: unknown) => void) => {
+        listeners[name] = callback
+        return () => delete listeners[name]
+      },
+    }
+    const screen = render(<SidebarAgenda now={() => NOW} />)
+    await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
+    expect(screen.queryByRole('status')).toBeNull()
+    // The cache answered; the server behind it did not.
+    act(() => listeners['calendar.syncError']({ account: 'home', message: 'calendar sync: connection refused' }))
+    expect(screen.getByRole('status').textContent).toContain('may be out of date')
+    // The cached events stay on screen, marked rather than hidden.
+    expect(screen.getByText('Dentist')).toBeTruthy()
+    const week = { from: sec(at(15)) - 86_400, to: sec(at(22)) + 86_400 }
+    // Another account's sync, or this account's for one hour, does not vouch for it.
+    act(() => listeners['calendar.synced']({ account: 'work', ...week }))
+    act(() => listeners['calendar.synced']({ account: 'home', from: sec(at(15, 11)), to: sec(at(15, 12)) }))
+    await waitFor(() => expect(requests.filter((r) => r.command === 'calendar.events').length).toBeGreaterThan(4))
+    expect(screen.getByRole('status').textContent).toContain('may be out of date')
+    // Its own week synced: current again.
+    act(() => listeners['calendar.synced']({ account: 'home', ...week }))
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
+    screen.unmount()
+    expect(listeners['calendar.syncError']).toBeUndefined()
   })
 })

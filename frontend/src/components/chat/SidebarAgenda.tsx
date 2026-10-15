@@ -87,6 +87,9 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
   const { t } = useTranslation()
   const [agenda, setAgenda] = useState<Agenda | null>(null)
   const [failed, setFailed] = useState(false)
+  // Accounts whose refresh from the server failed: what the cache holds for
+  // them may be out of date, and is said to be until a later sync lands.
+  const [stale, setStale] = useState<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     let current = true
@@ -107,7 +110,26 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
     // A calendar refresh behind the first read lands later; read the cache
     // again then, as the calendar view does.
     const eventsOn = (window as any).runtime?.EventsOn
-    const off = eventsOn?.('calendar.synced', () => void read(false))
+    const off = eventsOn?.('calendar.synced', (detail?: { account?: string; from?: number; to?: number }) => {
+      // Only a sync that covers the week shown makes it current again.
+      const { from, to } = agendaQueryWindow(now())
+      const covers = detail?.from === undefined || detail?.to === undefined || (detail.from <= from && detail.to >= to)
+      if (covers) {
+        setStale((accounts) => {
+          if (!detail?.account) return new Set()
+          if (!accounts.has(detail.account)) return accounts
+          const next = new Set(accounts)
+          next.delete(detail.account)
+          return next
+        })
+      }
+      void read(false)
+    })
+    // The cache answers at once and the server behind it; when the server
+    // refuses or cannot be reached, only this event says so.
+    const offError = eventsOn?.('calendar.syncError', (detail?: { account?: string }) => {
+      setStale((accounts) => new Set(accounts).add(detail?.account ?? ''))
+    })
     // A task edited or completed from here, or anywhere else, changes the list.
     const offEditor = ui$.taskEditor.onChange(({ value }) => {
       if (value === null) void read(false)
@@ -125,6 +147,7 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
     return () => {
       current = false
       if (typeof off === 'function') off()
+      if (typeof offError === 'function') offError()
       offEditor()
       offTasks()
       clearTimeout(timer)
@@ -172,6 +195,11 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
 
   return (
     <div className="pb-3">
+      {stale.size > 0 && (
+        <p role="status" className="mx-4 mt-3 rounded-control-sm bg-warning-soft px-3 py-2 text-caption text-primary">
+          {t('calendar.staleWarning')}
+        </p>
+      )}
       {agenda.incomplete && (
         <p role="status" className="mx-4 mt-3 rounded-control-sm bg-warning-soft px-3 py-2 text-caption text-primary">
           {t('sidebar.agendaIncomplete')}

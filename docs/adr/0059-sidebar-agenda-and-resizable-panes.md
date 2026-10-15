@@ -46,7 +46,10 @@
   «Hoy», «Mañana» y «Vencidas» no se queden atrás. Solo cuenta la lectura
   más reciente. Si un calendario o la lista de tareas no se puede leer, se
   dice («puede estar incompleta»), nunca se muestra una semana más corta
-  como completa.
+  como completa. Si el refresco del servidor de una cuenta falla
+  (`calendar.syncError`), lo guardado se sigue mostrando con el aviso de
+  que puede estar desactualizado, hasta que un `calendar.synced` de esa
+  cuenta cubra la semana mostrada.
 - **Teclado:** cada elemento es un botón nativo; los días son regiones con
   nombre (su encabezado).
 - **Redimensionar:** un separador vertical común (`PaneResizer`, rol

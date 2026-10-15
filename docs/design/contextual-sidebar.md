@@ -34,7 +34,9 @@ participantes) añade «Historial con …» para cada participante.
   activados y las tareas con fecha de los próximos 7 días; las tareas
   vencidas, primero. Los eventos de todo el día van por su fecha, no por
   la hora UTC en que se guardan. Cada elemento abre el evento (calendario
-  en su día) o la tarea (su editor). Si una fuente no se lee, lo dice. Se
+  en su día) o la tarea (su editor). Si una fuente no se lee, lo dice; si
+  el servidor de una cuenta no refresca, avisa de que puede estar
+  desactualizada hasta que una sincronización de la semana lo logre. Se
   relee al sincronizar, al cerrar el editor de tareas y a medianoche.
 - **Límite:** solo se llega a la agenda desde la barra lateral de una
   conversación abierta. No hay panel de widgets independiente (al arrancar
