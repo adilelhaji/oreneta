@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, FileText, ListChecks, Loader2, LockKeyhole, Sparkles, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import type { Message } from '../../types'
-import { contextFor } from './assistantContext'
+import { contextFor, newestMessageIndex } from './assistantContext'
 import {
   assistant$,
   cancelAssistantExecution,
@@ -39,16 +39,14 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
   const [executionId, setExecutionId] = useState('')
   const [selectedTasks, setSelectedTasks] = useState<Set<number>>(() => new Set())
   const cancelledExecutions = useRef(new Set<string>())
+  // Privacy by default (#196): only the conversation's most recent message
+  // starts selected. The other messages and every attachment's details are
+  // added by the person, never sent because nobody unticked them.
   useEffect(() => {
-    setSelectedKeys(new Set(availableContext.map((item) => `${item.account_id}:${item.message_id}`)))
-    setSelectedAttachmentKeys(
-      new Set(
-        availableContext.flatMap((item) =>
-          (item.attachments ?? []).map((_, index) => `${item.account_id}:${item.message_id}:attachment:${index}`),
-        ),
-      ),
-    )
-  }, [availableContext])
+    const newest = availableContext[newestMessageIndex(messages)]
+    setSelectedKeys(new Set(newest ? [`${newest.account_id}:${newest.message_id}`] : []))
+    setSelectedAttachmentKeys(new Set())
+  }, [messages, availableContext])
   const context = useMemo(
     () =>
       availableContext

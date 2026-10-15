@@ -31,6 +31,11 @@ Registro de la implementación de ADR-0032.
 - **Aplicación:**
   - apagado por omisión;
   - JSON en bloque de código, y las «acciones» de la respuesta se ignoran;
+  - el diálogo de revisión de una conversación empieza con solo el mensaje
+    más reciente marcado (la fecha mayor; con fechas iguales o
+    desconocidas, el último de la lista) y ningún detalle de adjunto; lo
+    demás lo añade la persona, y la vista previa cambia con cada casilla
+    (#196, `AssistantReviewDialog.test.tsx`);
   - el diálogo de reescritura enseña el destino y el cuerpo exacto, exige
     confirmar otra vez si cambia la petición, no cambia nada hasta «Usar» y
     al parar cancela y descarta la respuesta tardía.
