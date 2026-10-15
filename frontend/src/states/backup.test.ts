@@ -1,8 +1,16 @@
-import { beforeEach, describe, expect, it } from 'bun:test'
-import { backupErrorMessage, exportBackup, importBackup, isWrongPassphrase } from './backup'
-import { accounts$ } from './accounts'
-import { mail$ } from './mail'
-import { ui$ } from './ui'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+
+// `boot` is replaced by a spy owned by this file. Other test files swap the boot
+// module for a no-op, and `mock.module` is process-wide in Bun, so whether the
+// real `boot` runs here would depend on file order. The spy makes the
+// re-bootstrap assertions independent of both.
+const boot = mock(async () => {})
+mock.module('../boot', () => ({ boot }))
+
+const { backupErrorMessage, exportBackup, importBackup, isWrongPassphrase } = await import('./backup')
+const { accounts$ } = await import('./accounts')
+const { mail$ } = await import('./mail')
+const { ui$ } = await import('./ui')
 
 type Call = { command: string; payload: any }
 
@@ -22,12 +30,8 @@ function stubBridge(calls: Call[], responses: Record<string, unknown>) {
   }
 }
 
-/** The calls `importBackup` makes to re-bootstrap after a successful restore. */
-const bootResponses = {
-  'system.check': {},
-  'account.list': { accounts: [] },
-  'app.prefsGet': { prefs: {} },
-  'mailto.consumePending': [],
+/** The calls `importBackup` makes to refresh the open mail panes after a successful restore. */
+const refreshResponses = {
   'mail.threadList': { threads: [] },
   'mail.folderList': { folders: [] },
 }
@@ -67,6 +71,7 @@ describe('importBackup', () => {
 
   beforeEach(() => {
     calls.length = 0
+    boot.mockClear()
     accounts$.set([])
     mail$.threads.set([])
     ui$.selectedAccount.set('')
@@ -74,7 +79,7 @@ describe('importBackup', () => {
 
   it('opens a file dialog when called with no path', async () => {
     stubBridge(calls, {
-      ...bootResponses,
+      ...refreshResponses,
       'backup.import': {
         accounts: 2,
         skipped: 1,
@@ -96,26 +101,25 @@ describe('importBackup', () => {
   })
 
   it('re-bootstraps the app after a successful restore', async () => {
-    stubBridge(calls, { ...bootResponses, 'backup.import': { accounts: 1 } })
+    stubBridge(calls, { ...refreshResponses, 'backup.import': { accounts: 1 } })
 
     await importBackup()
 
     // Restored accounts and settings only reach the UI through a fresh boot.
-    const commands = calls.map((call) => call.command)
-    expect(commands).toContain('account.list')
-    expect(commands).toContain('app.prefsGet')
+    expect(boot).toHaveBeenCalledTimes(1)
   })
 
   it('reports a cancelled file dialog without re-bootstrapping', async () => {
-    stubBridge(calls, { ...bootResponses, 'backup.import': { cancelled: true } })
+    stubBridge(calls, { ...refreshResponses, 'backup.import': { cancelled: true } })
 
     await expect(importBackup()).resolves.toEqual({ status: 'cancelled' })
+    expect(boot).not.toHaveBeenCalled()
     expect(calls.map((call) => call.command)).toEqual(['backup.import'])
   })
 
   it('returns the chosen path when the file turns out to be encrypted', async () => {
     stubBridge(calls, {
-      ...bootResponses,
+      ...refreshResponses,
       'backup.import': { needsPassphrase: true, path: '/tmp/secret-backup.json' },
     })
 
@@ -123,19 +127,22 @@ describe('importBackup', () => {
 
     expect(outcome).toEqual({ status: 'needs-passphrase', path: '/tmp/secret-backup.json' })
     // No boot: nothing was restored.
+    expect(boot).not.toHaveBeenCalled()
     expect(calls.map((call) => call.command)).toEqual(['backup.import'])
   })
 
   it('reuses the path on the retry so the file dialog is not shown twice', async () => {
-    stubBridge(calls, { ...bootResponses, 'backup.import': { accounts: 1 } })
+    stubBridge(calls, { ...refreshResponses, 'backup.import': { accounts: 1 } })
 
     await importBackup('/tmp/secret-backup.json', 'correct horse')
 
     expect(calls[0].payload).toEqual({ path: '/tmp/secret-backup.json', passphrase: 'correct horse' })
+    // A restore that needed a passphrase re-bootstraps like any other.
+    expect(boot).toHaveBeenCalledTimes(1)
   })
 
   it('defaults every missing count to zero', async () => {
-    stubBridge(calls, { ...bootResponses, 'backup.import': {} })
+    stubBridge(calls, { ...refreshResponses, 'backup.import': {} })
 
     const outcome = await importBackup()
 
