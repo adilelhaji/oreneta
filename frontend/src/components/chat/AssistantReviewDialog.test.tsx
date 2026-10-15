@@ -30,11 +30,12 @@ describe('assistant context review', () => {
   })
 })
 
-function message(id: string, date: number, attachments: string[] = []): Message {
+function message(id: string, date: number, attachments: string[] = [], folder = 'INBOX'): Message {
   return {
     id,
     message_id: `${id}@example.test`,
     account_id: 'account-a',
+    folder_id: folder,
     thread_id: 'thread-1',
     from_addr: `${id}@example.test`,
     from_name: id,
@@ -45,7 +46,12 @@ function message(id: string, date: number, attachments: string[] = []): Message 
   } as Message
 }
 
+// With no folders loaded, the folder name alone says it is a draft.
+const draft = (id: string, date: number) => message(id, date, [], 'Drafts')
+
 describe('the most recent message', () => {
+  const isDraft = (m: Message) => m.folder_id === 'Drafts'
+
   it('is the one with the latest date, wherever it is in the list', () => {
     expect(newestMessageIndex([message('a', 100), message('c', 300), message('b', 200)])).toBe(1)
   })
@@ -53,6 +59,14 @@ describe('the most recent message', () => {
   it('is the later in the list when dates are equal or unknown', () => {
     expect(newestMessageIndex([message('a', 200), message('b', 200)])).toBe(1)
     expect(newestMessageIndex([message('a', 0), message('b', 0), message('c', 0)])).toBe(2)
+  })
+
+  it('is not a draft, even a newer one', () => {
+    expect(newestMessageIndex([message('a', 100), message('b', 200), draft('d', 300)], isDraft)).toBe(1)
+  })
+
+  it('is the newest draft when the conversation holds only drafts', () => {
+    expect(newestMessageIndex([draft('d1', 100), draft('d2', 200)], isDraft)).toBe(1)
   })
 
   it('does not exist in an empty conversation', () => {
@@ -70,6 +84,8 @@ describe('assistant review dialog', () => {
       main: {
         App: {
           Invoke: async (command: string, payload: any) => {
+            if (command === 'assistant.execute')
+              return { prepared: {}, response: '{"text":"The summary."}', persisted: false }
             if (command !== 'assistant.preview') return {}
             previews.push(payload.context)
             if (payload.context.length === 0) throw new Error('assistant context cannot be empty')
@@ -107,35 +123,42 @@ describe('assistant review dialog', () => {
 
   async function open(messages: Message[]) {
     const screen = render(<AssistantReviewDialog messages={messages} onClose={() => {}} />)
-    await waitFor(() => expect(screen.getByText('Subject m1')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(`Subject ${messages[0].id}`)).toBeTruthy())
     return screen
   }
 
-  // The checkbox in front of a message's subject.
-  function messageBox(screen: Awaited<ReturnType<typeof open>>, subject: string) {
-    const row = screen.getByText(subject).parentElement?.parentElement
-    return row?.firstElementChild as HTMLInputElement
-  }
+  type Screen = Awaited<ReturnType<typeof open>>
+  const messageBox = (screen: Screen, subject: string) =>
+    screen.getByRole('checkbox', { name: subject }) as HTMLInputElement
+  const ticked = (screen: Screen, subjects: string[]) => subjects.map((subject) => messageBox(screen, subject).checked)
 
   const lastPreview = () => previews[previews.length - 1]
   const shownRequest = () => document.querySelector('details pre')?.textContent
 
   it('starts with only the most recent message selected and no attachment details', async () => {
     const screen = await open(conversation)
-    expect(messageBox(screen, 'Subject m1').checked).toBe(false)
-    expect(messageBox(screen, 'Subject m2').checked).toBe(false)
-    expect(messageBox(screen, 'Subject m3').checked).toBe(true)
+    expect(ticked(screen, ['Subject m1', 'Subject m2', 'Subject m3'])).toEqual([false, false, true])
     for (const name of ['first.txt', 'second.txt', 'third.txt', 'fourth.txt'])
       expect((screen.getByLabelText(name) as HTMLInputElement).checked).toBe(false)
     expect(lastPreview()).toEqual([withoutAttachments(newest)])
     expect(shownRequest()).toBe(JSON.stringify([withoutAttachments(newest)]))
+    // The first render already had the default: no preview of nothing.
+    expect(previews.every((context) => context.length > 0)).toBe(true)
   })
 
   it('picks the most recent message by date, not by its place in the list', async () => {
     const screen = await open([message('m1', 100), message('m3', 300), message('m2', 200)])
-    expect(messageBox(screen, 'Subject m3').checked).toBe(true)
-    expect(messageBox(screen, 'Subject m1').checked).toBe(false)
-    expect(messageBox(screen, 'Subject m2').checked).toBe(false)
+    expect(ticked(screen, ['Subject m1', 'Subject m2', 'Subject m3'])).toEqual([false, false, true])
+  })
+
+  it('does not preselect a draft newer than the last message received', async () => {
+    const screen = await open([message('m1', 100), message('m2', 200), draft('d3', 300)])
+    expect(ticked(screen, ['Subject m1', 'Subject m2', 'Subject d3'])).toEqual([false, true, false])
+  })
+
+  it('preselects the newest draft when the conversation holds only drafts', async () => {
+    const screen = await open([draft('d1', 100), draft('d2', 200)])
+    expect(ticked(screen, ['Subject d1', 'Subject d2'])).toEqual([false, true])
   })
 
   it('previews exactly what is selected as messages and attachments are added', async () => {
@@ -161,6 +184,51 @@ describe('assistant review dialog', () => {
     await waitFor(() => expect(shownRequest()).toBe(JSON.stringify(lastPreview())))
     // Another message's attachments stay out until that message is chosen.
     expect(lastPreview().some((item) => item.message_id === 'm2@example.test')).toBe(false)
+  })
+
+  it('keeps what the person ticked, and the result, when the same messages arrive again', async () => {
+    const screen = await open(conversation)
+    await act(async () => {
+      fireEvent.click(messageBox(screen, 'Subject m1'))
+    })
+    await waitFor(() => expect(lastPreview()).toHaveLength(2))
+    await waitFor(() => expect(shownRequest()).toBe(JSON.stringify(lastPreview())))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: /I reviewed the listed context/ }))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Activate/ }))
+    })
+    await waitFor(() => expect(screen.getByText('The summary.')).toBeTruthy())
+    const previewsBefore = previews.length
+
+    // A sync or a flag change: a new array holding the same messages.
+    await act(async () => {
+      screen.rerender(<AssistantReviewDialog messages={conversation.map((m) => ({ ...m }))} onClose={() => {}} />)
+    })
+    expect(ticked(screen, ['Subject m1', 'Subject m2', 'Subject m3'])).toEqual([true, false, true])
+    expect(screen.getByText('The summary.')).toBeTruthy()
+    expect(previews.length).toBe(previewsBefore)
+  })
+
+  it('goes back to the default when a newer message arrives while it is open', async () => {
+    const screen = await open(conversation)
+    await act(async () => {
+      fireEvent.click(messageBox(screen, 'Subject m1'))
+    })
+    await waitFor(() => expect(lastPreview()).toHaveLength(2))
+
+    const newer = [...conversation, message('m4', 400)]
+    await act(async () => {
+      screen.rerender(<AssistantReviewDialog messages={newer} onClose={() => {}} />)
+    })
+    await waitFor(() => expect(lastPreview()).toEqual([withoutAttachments(contextFor(newer)[3])]))
+    expect(ticked(screen, ['Subject m1', 'Subject m2', 'Subject m3', 'Subject m4'])).toEqual([
+      false,
+      false,
+      false,
+      true,
+    ])
   })
 
   it('selects nothing in a conversation with no messages', async () => {

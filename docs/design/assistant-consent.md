@@ -36,6 +36,13 @@ Registro de la implementación de ADR-0032.
     desconocidas, el último de la lista) y ningún detalle de adjunto; lo
     demás lo añade la persona, y la vista previa cambia con cada casilla
     (#196, `AssistantReviewDialog.test.tsx`);
+  - un borrador no cuenta como el más reciente, salvo si la conversación
+    solo tiene borradores; un envío pendiente (enviando, enviado o fallido)
+    sí cuenta, porque es un mensaje de la persona y no un borrador;
+  - la selección vuelve a ese valor solo cuando llega un mensaje más
+    reciente: una sincronización, un cambio de marca o páginas antiguas
+    conservan lo marcado, y la misma petición no se vuelve a previsualizar
+    ni se borra el resultado mostrado;
   - el diálogo de reescritura enseña el destino y el cuerpo exacto, exige
     confirmar otra vez si cambia la petición, no cambia nada hasta «Usar» y
     al parar cancela y descarta la respuesta tardía.
