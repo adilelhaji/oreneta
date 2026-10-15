@@ -117,6 +117,8 @@ fn what_the_server_allows_is_read_from_its_capabilities() {
 
 #[test]
 fn a_file_is_uploaded_into_its_folder_under_a_name_not_taken() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let (url, seen) = server(|method, path, _| match (method, path) {
         ("MKCOL", p) if p.ends_with("/Oreneta") => (405, String::new()),
         ("MKCOL", _) => (201, String::new()),
@@ -138,6 +140,8 @@ fn a_file_is_uploaded_into_its_folder_under_a_name_not_taken() {
 
 #[test]
 fn a_revoked_password_and_a_full_storage_are_said_and_leave_nothing() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let (url, _) = server(|_, _, _| (401, String::new()));
     let err = upload(&account(&url), "old", &file("a.txt", 10), &AtomicBool::new(false), &mut |_| {}).unwrap_err();
     assert_eq!(err, CloudError::Revoked);
@@ -155,6 +159,8 @@ fn a_revoked_password_and_a_full_storage_are_said_and_leave_nothing() {
 
 #[test]
 fn a_cancelled_upload_stops_and_is_removed() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let (url, seen) = server(|method, _, _| match method {
         "MKCOL" => (405, String::new()),
         "HEAD" => (404, String::new()),
@@ -173,6 +179,8 @@ fn a_cancelled_upload_stops_and_is_removed() {
 
 #[test]
 fn a_link_is_view_only_with_what_was_asked_and_read_back() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let (url, seen) = server(|_, _, _| (200, SHARE_OK.into()));
     let want = LinkRequest { password: Some("horse-battery".into()), expires: Some("2026-10-20".into()) };
     let link = share(&account(&url), "p", "Oreneta/Shared/quote.pdf", &want, &caps()).unwrap();
@@ -194,6 +202,8 @@ fn a_link_is_view_only_with_what_was_asked_and_read_back() {
 
 #[test]
 fn a_link_more_open_than_asked_is_withdrawn() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     for reply in [
         // Editable.
         SHARE_OK.replace(r#""permissions":1"#, r#""permissions":15"#),
@@ -219,6 +229,8 @@ fn a_link_more_open_than_asked_is_withdrawn() {
 
 #[test]
 fn what_the_server_requires_is_asked_before_any_link_exists() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     let (url, seen) = server(|_, _, _| (200, SHARE_OK.into()));
     let strict = Capabilities { links: true, password_enforced: true, expiry_enforced: true, expiry_max_days: Some(7) };
     let err = share(&account(&url), "p", "f", &LinkRequest::default(), &strict).unwrap_err();

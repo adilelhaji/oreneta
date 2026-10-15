@@ -170,7 +170,19 @@ impl ProxyChoice {
                 ureq::Agent::config_builder().proxy(None).build(),
             ));
         }
-        agent_for(self.resolve()?.as_ref())
+        match self.resolve()? {
+            Some(cfg) => proxied_agent(&cfg, self.scope()),
+            None => agent_for(None),
+        }
+    }
+
+    /// Whose setting the proxy of this choice is: the app-wide one it
+    /// follows, or the account's own (#201).
+    pub fn scope(&self) -> ProxyScope {
+        match self {
+            ProxyChoice::Global => ProxyScope::App,
+            ProxyChoice::Direct | ProxyChoice::Custom(_) | ProxyChoice::Unusable(_) => ProxyScope::Account,
+        }
     }
 }
 
@@ -183,7 +195,7 @@ impl ProxyChoice {
 /// The desktop and mobile apps only see sync errors as text. This is how they
 /// tell such a refusal from a network failure and know which setting to open,
 /// so it is a contract: change it together with
-/// `frontend/src/components/banner/connectivityBannerHelpers.ts` and
+/// `frontend/src/lib/proxyProblems.ts` and
 /// `mobile/ui/.../MobileConnectivity.kt`.
 pub const UNUSABLE_PREFIX: &str = "proxy setting unusable";
 
@@ -240,12 +252,16 @@ impl fmt::Display for UnusableProxy {
 
 impl std::error::Error for UnusableProxy {}
 
-/// Why a stored proxy setting cannot be used.
-fn unusable(v: &Value, scope: ProxyScope) -> UnusableProxy {
-    let whose = match scope {
+fn whose(scope: ProxyScope) -> &'static str {
+    match scope {
         ProxyScope::App => "the app's proxy",
         ProxyScope::Account => "this account's proxy",
-    };
+    }
+}
+
+/// Why a stored proxy setting cannot be used.
+fn unusable(v: &Value, scope: ProxyScope) -> UnusableProxy {
+    let whose = whose(scope);
     UnusableProxy::new(
         scope,
         match v.get("mode").and_then(Value::as_str) {
@@ -254,6 +270,24 @@ fn unusable(v: &Value, scope: ProxyScope) -> UnusableProxy {
             None => format!("{whose} cannot be read as a proxy setting"),
         },
     )
+}
+
+/// [`ureq_proxy`] for a proxy chosen in `scope`'s setting. A server the HTTP
+/// client cannot be pointed at (a space in it, a port typed into the server
+/// field, letters outside ASCII) is that setting being unusable, not a
+/// network failure.
+pub fn scoped_ureq_proxy(cfg: &ProxyConfig, scope: ProxyScope) -> Result<ureq::Proxy> {
+    ureq_proxy(cfg).map_err(|err| {
+        UnusableProxy::new(scope, format!("{} cannot be used: {err:#}", whose(scope))).into()
+    })
+}
+
+/// An HTTP agent through `cfg`, a proxy chosen in `scope`'s setting; see
+/// [`scoped_ureq_proxy`].
+pub fn proxied_agent(cfg: &ProxyConfig, scope: ProxyScope) -> Result<ureq::Agent> {
+    Ok(ureq::Agent::new_with_config(
+        ureq::Agent::config_builder().proxy(Some(scoped_ureq_proxy(cfg, scope)?)).build(),
+    ))
 }
 
 // ---- The app-wide proxy -----------------------------------------------------
@@ -303,6 +337,16 @@ pub fn set_global(cfg: Option<ProxyConfig>) {
 /// assertions about the global flaky.
 #[cfg(test)]
 pub(crate) static TEST_GLOBAL_LOCK: RwLock<()> = RwLock::new(());
+
+/// For a test that connects through the app-wide route (directly, while it is
+/// off): waits out, and holds off, the tests that publish one that cannot be
+/// used meanwhile. Not for a test that opens an engine while holding it:
+/// [`load_global`] takes the same lock, and a second read on one thread can
+/// wait forever behind a waiting writer.
+#[cfg(test)]
+pub(crate) fn steady_global() -> std::sync::RwLockReadGuard<'static, ()> {
+    TEST_GLOBAL_LOCK.read().unwrap_or_else(|err| err.into_inner())
+}
 
 /// The app-wide proxy: `None` when it is off, an error when one was chosen
 /// but cannot be used.
@@ -638,7 +682,7 @@ fn socks5_error(code: u8) -> &'static str {
 /// Built per call rather than cached: the setting can change at runtime, and
 /// these requests are network-bound anyway.
 pub fn agent() -> Result<ureq::Agent> {
-    agent_for(global()?.as_ref())
+    ProxyChoice::Global.agent()
 }
 
 /// Build an HTTP agent for a resolved account route. `None` is deliberately
@@ -842,6 +886,49 @@ mod tests {
 
         // A proxy that does not answer is a network failure, not a refusal.
         assert_eq!(scope(&anyhow!("connect to proxy 127.0.0.1:1: Connection refused")), None);
+    }
+
+    fn http_proxy(host: &str) -> ProxyConfig {
+        ProxyConfig {
+            kind: ProxyKind::Http,
+            host: host.to_string(),
+            port: 3128,
+            username: String::new(),
+            password: String::new(),
+        }
+    }
+
+    #[test]
+    fn a_server_the_http_client_cannot_use_is_that_setting_being_unusable() {
+        let scope = |err: &anyhow::Error| UnusableProxy::find(err).map(|refusal| refusal.scope);
+        // What ureq refuses to be pointed at, as checked against it: a space,
+        // a port typed into the server field, letters outside ASCII, a line
+        // break. Each is the setting's fault, said as such for whoever chose it.
+        for host in ["proxy corp", "proxy.corp:3128", "prøxy.corp", "bad\nhost"] {
+            let cfg = http_proxy(host);
+            let own = ProxyChoice::Custom(cfg.clone()).agent().err().expect("refused");
+            assert_eq!(scope(&own), Some(ProxyScope::Account), "{host:?}");
+            assert!(
+                own.to_string().starts_with("proxy setting unusable (account): this account's proxy cannot be used: invalid proxy"),
+                "{own}"
+            );
+            let app = proxied_agent(&cfg, ProxyScope::App).err().expect("refused");
+            assert_eq!(scope(&app), Some(ProxyScope::App), "{host:?}");
+            assert!(app.to_string().starts_with("proxy setting unusable (app): the app's proxy cannot be used"), "{app}");
+            assert_eq!(scope(&scoped_ureq_proxy(&cfg, ProxyScope::App).unwrap_err()), Some(ProxyScope::App));
+        }
+        // A server written as a URL is not refused here: it builds, and fails
+        // later, when the connection to it is tried.
+        for host in ["proxy.corp", "10.0.0.1", "::1", "http://proxy.corp"] {
+            assert!(proxied_agent(&http_proxy(host), ProxyScope::Account).is_ok(), "{host:?}");
+        }
+
+        // The app-wide proxy as published, through every agent that follows it.
+        let _slot = GlobalSlot::take();
+        set_global(Some(http_proxy("proxy.corp:3128")));
+        for err in [agent().err().expect("refused"), ProxyChoice::Global.agent().err().expect("refused")] {
+            assert_eq!(scope(&err), Some(ProxyScope::App), "{err}");
+        }
     }
 
     #[test]

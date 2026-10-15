@@ -1279,7 +1279,7 @@ mod tests {
         let mut event = stored(None, None);
         event.id = String::new();
         event.add_meeting = Some("meet".into());
-        let created = create_event("token", &ProxyChoice::Global, &event, false).unwrap();
+        let created = create_event("token", &ProxyChoice::Direct, &event, false).unwrap();
         assert_eq!(
             created.meeting,
             Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/abc-defg-hij".into() })
@@ -1296,7 +1296,7 @@ mod tests {
         // Not asked: nothing about meetings is sent.
         drop(seen);
         let seen = serve(vec![(200, r#"{"id":"ev2"}"#.into())]);
-        let plain = create_event("token", &ProxyChoice::Global, &stored(None, None), false).unwrap();
+        let plain = create_event("token", &ProxyChoice::Direct, &stored(None, None), false).unwrap();
         assert_eq!(plain.meeting_status, None);
         let seen = seen.lock().unwrap();
         assert!(!seen[0].path.contains("conferenceDataVersion"));
@@ -1311,7 +1311,7 @@ mod tests {
         )]);
         let mut event = stored(None, None);
         event.add_meeting = Some("meet".into());
-        let created = create_event("token", &ProxyChoice::Global, &event, false).unwrap();
+        let created = create_event("token", &ProxyChoice::Direct, &event, false).unwrap();
         assert_eq!(created.meeting, None);
         assert_eq!(created.meeting_status.as_deref(), Some("failed"));
 
@@ -1319,7 +1319,7 @@ mod tests {
             200,
             r#"{"id":"ev1","conferenceData":{"createRequest":{"status":{"statusCode":"pending"}}}}"#.into(),
         )]);
-        assert_eq!(create_event("token", &ProxyChoice::Global, &event, false).unwrap().meeting_status.as_deref(), Some("pending"));
+        assert_eq!(create_event("token", &ProxyChoice::Direct, &event, false).unwrap().meeting_status.as_deref(), Some("pending"));
     }
 
     #[test]
@@ -1328,19 +1328,19 @@ mod tests {
         let seen = serve(vec![(200, r#"{"etag":"\"v2\""}"#.into())]);
         let mut event = stored(Some("\"v1\""), None);
         event.meeting = Some(super::super::meeting::Meeting { provider: "meet".into(), url: "https://meet.google.com/x".into() });
-        update_event("token", &ProxyChoice::Global, &event, false, false).unwrap();
+        update_event("token", &ProxyChoice::Direct, &event, false, false).unwrap();
         assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
 
         // Asking for a Meet on an event that has one makes no second one.
         let seen = serve(vec![(200, r#"{"etag":"\"v3\""}"#.into())]);
         event.add_meeting = Some("meet".into());
-        update_event("token", &ProxyChoice::Global, &event, false, false).unwrap();
+        update_event("token", &ProxyChoice::Direct, &event, false, false).unwrap();
         assert!(!seen.lock().unwrap()[0].body.contains("conferenceData"));
 
         // Removing it sends null, with the version that makes Google read it.
         let seen = serve(vec![(200, r#"{"etag":"\"v4\""}"#.into())]);
         event.add_meeting = Some("none".into());
-        update_event("token", &ProxyChoice::Global, &event, false, false).unwrap();
+        update_event("token", &ProxyChoice::Direct, &event, false, false).unwrap();
         let seen = seen.lock().unwrap();
         assert!(seen[0].path.contains("conferenceDataVersion=1"));
         let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
@@ -1348,7 +1348,7 @@ mod tests {
 
         // Another kind is refused before anything is sent.
         event.add_meeting = Some("zoom".into());
-        assert!(update_event("token", &ProxyChoice::Global, &event, false, false).is_err());
+        assert!(update_event("token", &ProxyChoice::Direct, &event, false, false).is_err());
     }
 
     #[test]
@@ -1365,7 +1365,7 @@ mod tests {
     #[test]
     fn an_edit_is_sent_with_the_version_it_was_read_at() {
         let seen = serve(vec![(200, r#"{"id":"occurrence-1","etag":"\"v2\""}"#.into())]);
-        let version = update_event("token", &ProxyChoice::Global, &stored(Some("\"v1\""), None), false, false).unwrap();
+        let version = update_event("token", &ProxyChoice::Direct, &stored(Some("\"v1\""), None), false, false).unwrap();
         let seen = seen.lock().unwrap();
         assert_eq!(seen[0].method, "PATCH");
         assert_eq!(seen[0].if_match.as_deref(), Some("\"v1\""));
@@ -1375,7 +1375,7 @@ mod tests {
     #[test]
     fn an_edit_made_elsewhere_in_between_is_not_overwritten() {
         let _seen = serve(vec![(412, r#"{"error":{"message":"Precondition Failed"}}"#.into())]);
-        let err = update_event("token", &ProxyChoice::Global, &stored(Some("\"v1\""), None), false, false).unwrap_err();
+        let err = update_event("token", &ProxyChoice::Direct, &stored(Some("\"v1\""), None), false, false).unwrap_err();
         assert!(format!("{err:#}").contains("changed elsewhere"), "{err:#}");
     }
 
@@ -1385,7 +1385,7 @@ mod tests {
             (200, r#"{"etag":"\"master\"","start":{"dateTime":"2026-10-05T09:00:00Z"}}"#.into()),
             (200, r#"{"id":"master"}"#.into()),
         ]);
-        update_event("token", &ProxyChoice::Global, &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
+        update_event("token", &ProxyChoice::Direct, &stored(Some("\"occurrence\""), Some("master")), true, false).unwrap();
         let seen = seen.lock().unwrap();
         assert!(seen[1].path.contains("/events/master"));
         assert_eq!(seen[1].if_match.as_deref(), Some("\"master\""), "the master's own version, never the occurrence's");
@@ -1413,7 +1413,7 @@ mod tests {
         occurrence.end = occurrence.start + 90 * 60;
         occurrence.recurrence = None; // the editor had not loaded the rule
 
-        let version = update_event("token", &ProxyChoice::Global, &occurrence, true, false).unwrap();
+        let version = update_event("token", &ProxyChoice::Direct, &occurrence, true, false).unwrap();
         assert_eq!(version, None, "the master's version is not the occurrence's");
 
         let seen = seen.lock().unwrap();
@@ -1439,7 +1439,7 @@ mod tests {
             until: None,
             count: None, month_week: None, month_day: None,
         });
-        update_event("token", &ProxyChoice::Global, &occurrence, false, false).unwrap();
+        update_event("token", &ProxyChoice::Direct, &occurrence, false, false).unwrap();
         let body: serde_json::Value = serde_json::from_str(&seen.lock().unwrap()[0].body).unwrap();
         assert!(body.get("recurrence").is_none());
     }
@@ -1454,7 +1454,7 @@ mod tests {
             (200, r#"{"etag":"\"v2\"","attendees":[{"email":"me@x","self":true},{"email":"new@x"}]}"#.into()),
             (200, r#"{}"#.into()),
         ]);
-        respond("token", &ProxyChoice::Global, "primary", "event-1", super::super::Response::Accept).unwrap();
+        respond("token", &ProxyChoice::Direct, "primary", "event-1", super::super::Response::Accept).unwrap();
         let seen = seen.lock().unwrap();
         let methods: Vec<&str> = seen.iter().map(|request| request.method.as_str()).collect();
         assert_eq!(methods, vec!["GET", "PATCH", "GET", "PATCH"]);

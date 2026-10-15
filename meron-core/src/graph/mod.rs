@@ -635,14 +635,11 @@ impl Client {
     }
     fn agent(&self) -> Result<ureq::Agent> {
         // Explicit per-account route, resolved per call so proxy changes apply.
-        // A proxy setting that cannot be used is said to be one (#201).
-        Ok(match self
-            .proxy
-            .resolve()
-            .map_err(|err| Error::new(ErrorKind::proxy_refusal(&err)))?
-        {
-            Some(proxy) => crate::proxy::agent_for(Some(&proxy))
-                .map_err(|_| Error::new(ErrorKind::Transport))?,
+        // A proxy setting that cannot be used, or a server in it the HTTP
+        // client cannot be pointed at, is said to be one (#201).
+        let refused = |err: anyhow::Error| Error::new(ErrorKind::proxy_refusal(&err));
+        Ok(match self.proxy.resolve().map_err(refused)? {
+            Some(proxy) => crate::proxy::proxied_agent(&proxy, self.proxy.scope()).map_err(refused)?,
             // ureq's defaults read HTTP_PROXY. An explicitly resolved direct
             // route must not silently inherit a process-environment proxy.
             None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),

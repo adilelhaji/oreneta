@@ -3106,7 +3106,7 @@ mod tests {
             username: "u".to_string(),
             password: "p".to_string(),
         target_mailbox: String::new(),
-        proxy: crate::proxy::ProxyChoice::Global,
+        proxy: crate::proxy::ProxyChoice::Direct,
         });
         let envelopes = client
             .fetch_envelopes(&[("AAMkENV=".to_string(), None)])
@@ -3290,7 +3290,7 @@ mod tests {
                 username: "u".to_string(),
                 password: "p".to_string(),
             target_mailbox: String::new(),
-            proxy: crate::proxy::ProxyChoice::Global,
+            proxy: crate::proxy::ProxyChoice::Direct,
             },
             "acct",
             db.clone(),
@@ -3597,7 +3597,7 @@ mod tests {
                 username: "u".to_string(),
                 password: "p".to_string(),
             target_mailbox: String::new(),
-            proxy: crate::proxy::ProxyChoice::Global,
+            proxy: crate::proxy::ProxyChoice::Direct,
             },
             "acct",
             db,
@@ -3734,7 +3734,7 @@ mod tests {
             username: "CORP\\user".to_string(),
             password: "pw".to_string(),
         target_mailbox: String::new(),
-        proxy: crate::proxy::ProxyChoice::Global,
+        proxy: crate::proxy::ProxyChoice::Direct,
         });
         let round = client
             .folder_hierarchy(None)
@@ -3762,7 +3762,7 @@ mod tests {
             username: "u".to_string(),
             password: "p".to_string(),
         target_mailbox: String::new(),
-        proxy: crate::proxy::ProxyChoice::Global,
+        proxy: crate::proxy::ProxyChoice::Direct,
         });
         let fetched = client
             .fetch_mime(&[("AAMkMIME=".to_string(), None)])

@@ -399,6 +399,8 @@ fn a_file_goes_as_a_link_and_comes_back_as_a_file_with_its_name() {
 
 #[test]
 fn files_come_and_go_over_https_only() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     use files::{FileError, https_only};
     assert!(https_only("https://up.chat.test/a/b.png").is_ok());
     for bad in ["http://up.chat.test/a", "ftp://up.chat.test/a", "file:///etc/passwd", "https://user:pw@up.chat.test/a", "nonsense", "javascript:alert(1)"] {

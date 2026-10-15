@@ -208,9 +208,13 @@ fn agent() -> std::result::Result<ureq::Agent, CloudError> {
 fn agent_with(
     cfg: Option<&crate::proxy::ProxyConfig>,
 ) -> std::result::Result<ureq::Agent, CloudError> {
-    crate::proxy::agent_for(cfg).map_err(|e| CloudError::Network {
-        detail: format!("the proxy setting cannot be used: {e:#}"),
-    })
+    // Only the app-wide proxy reaches here; one the HTTP client cannot be
+    // pointed at is said to be that setting (#201).
+    match cfg {
+        Some(cfg) => crate::proxy::proxied_agent(cfg, crate::proxy::ProxyScope::App),
+        None => crate::proxy::agent_for(None),
+    }
+    .map_err(|e| CloudError::Network { detail: format!("{e:#}") })
 }
 
 fn auth(account: &CloudAccount, password: &str) -> String {

@@ -871,3 +871,19 @@ fn a_proxy_setting_that_cannot_be_used_is_a_proxy_failure_not_unavailable() {
         Failure::AccountProxyUnusable
     );
 }
+
+#[test]
+fn a_proxy_server_the_http_client_cannot_use_is_a_proxy_failure_too() {
+    // #201: a server with a space in it is the account's setting at fault.
+    use crate::graph::tests::Fixture;
+    let f = Fixture::new(|_| vec![(200, String::new(), "{}".into())]);
+    let own = crate::proxy::ProxyChoice::Custom(crate::proxy::ProxyConfig {
+        kind: crate::proxy::ProxyKind::Socks5,
+        host: "proxy corp".into(),
+        port: 1080,
+        username: String::new(),
+        password: String::new(),
+    });
+    assert_eq!(Microsoft.http(&own, f.base.as_str(), None).err(), Some(Failure::AccountProxyUnusable));
+    assert!(f.requests().is_empty(), "nothing was sent");
+}

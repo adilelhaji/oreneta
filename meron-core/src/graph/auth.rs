@@ -667,12 +667,13 @@ impl Microsoft {
         url: &str,
         form: Option<&[(&str, &str)]>,
     ) -> Result<Vec<u8>> {
-        // A proxy setting that cannot be used is said to be one (#201).
+        // A proxy setting that cannot be used, or a server in it the HTTP
+        // client cannot be pointed at, is said to be one (#201).
         let refused = |err: anyhow::Error| {
             graph_failure(super::Error::new(super::ErrorKind::proxy_refusal(&err)))
         };
         let agent = match proxy.resolve().map_err(refused)? {
-            Some(p) => crate::proxy::agent_for(Some(&p)).map_err(|_| Failure::Unavailable)?,
+            Some(p) => crate::proxy::proxied_agent(&p, proxy.scope()).map_err(refused)?,
             None => ureq::Agent::new_with_config(ureq::Agent::config_builder().proxy(None).build()),
         };
         let mut response = if let Some(form) = form {

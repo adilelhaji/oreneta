@@ -374,7 +374,7 @@ pub async fn refresh_oauth_token(
     client_secret: &str,
     refresh_token: &str,
     scope: Option<&str>,
-    proxy: Option<crate::proxy::ProxyConfig>,
+    proxy: crate::proxy::ProxyChoice,
 ) -> Result<(String, i64)> {
     let token_url = token_url.to_string();
     let client_id = client_id.to_string();
@@ -397,7 +397,8 @@ pub async fn refresh_oauth_token(
 
         // Keep non-2xx as a response (not a transport error) so we can surface
         // the JSON error body the provider returns for an invalid/revoked token.
-        let mut resp = crate::proxy::agent_for(proxy.as_ref())?
+        // The account's own route (#193); a proxy it cannot use is said to be one (#201).
+        let mut resp = proxy.agent()?
             .post(&token_url)
             .config()
             .http_status_as_error(false)

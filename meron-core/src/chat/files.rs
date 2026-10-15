@@ -169,7 +169,7 @@ pub fn agent(extra_roots: &[Vec<u8>]) -> anyhow::Result<ureq::Agent> {
         // A link never sends us elsewhere, to plain HTTP least of all.
         .max_redirects(0);
     if let Some(proxy) = crate::proxy::global()? {
-        config = config.proxy(Some(crate::proxy::ureq_proxy(&proxy)?));
+        config = config.proxy(Some(crate::proxy::scoped_ureq_proxy(&proxy, crate::proxy::ProxyScope::App)?));
     }
     if !extra_roots.is_empty() {
         let mut certs = Vec::new();

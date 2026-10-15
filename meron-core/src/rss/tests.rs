@@ -921,6 +921,8 @@ const SAMPLE_RSS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 
 #[test]
 fn add_fetches_parses_and_syncs_over_http() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     // Keep prune_feed_media (called by sync_account) confined to a temp dir
     // instead of the real media cache.
     let media = std::env::temp_dir().join(format!("meron-rss-test-{}", std::process::id()));
@@ -1116,6 +1118,8 @@ fn a_feed_item_without_trackers_reports_none() {
 
 #[test]
 fn caching_feed_pictures_never_fetches_a_tracker() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     use_test_media_dir();
     let (port, asked) = serve_counting(String::new());
     let mut items = vec![ParsedItem {
@@ -1148,6 +1152,8 @@ fn caching_feed_pictures_never_fetches_a_tracker() {
 
 #[test]
 fn a_feed_icon_on_the_tracker_list_is_not_fetched() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     use_test_media_dir();
     let (port, asked) = serve_counting(String::new());
     let icon = format!("http://127.0.0.1:{port}/tracker-icon.png");
@@ -1184,6 +1190,8 @@ fn feed_with_picture_and_icon(port: u16) -> String {
 
 #[test]
 fn with_remote_pictures_off_a_sync_fetches_neither_pictures_nor_the_icon() {
+    // Through the app-wide route: not while a test publishes a broken one.
+    let _route = crate::proxy::steady_global();
     use_test_media_dir();
     let (port, asked) = serve_counting(String::new());
     // Pictures and the icon come from one server, the feed from another, so

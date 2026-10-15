@@ -860,3 +860,28 @@ fn a_proxy_setting_that_cannot_be_used_is_a_proxy_error_and_not_retried() {
         assert!(!crate::engine::is_transient_sync_error(&wrapped), "{wrapped:#}");
     }
 }
+
+#[test]
+fn a_proxy_server_the_http_client_cannot_use_is_a_proxy_error_too() {
+    // A port typed into the server field: ureq cannot be pointed at it, so
+    // nothing is sent and the setting is named, not "Transport" (#201).
+    let origin = Fixture::new(|_| vec![]);
+    let mut client = origin.client();
+    let pasted = crate::proxy::ProxyConfig {
+        kind: crate::proxy::ProxyKind::Http,
+        host: "proxy.corp:3128".into(),
+        port: 3128,
+        username: String::new(),
+        password: String::new(),
+    };
+    client.proxy = crate::proxy::ProxyChoice::Custom(pasted.clone());
+    assert_eq!(client.folders(None, None).unwrap_err().kind, ErrorKind::AccountProxyUnusable);
+    let app = {
+        let _slot = crate::proxy::route_fixture::GlobalSlot::take();
+        crate::proxy::set_global(Some(pasted));
+        client.proxy = crate::proxy::ProxyChoice::Global;
+        client.folders(None, None).unwrap_err()
+    };
+    assert_eq!(app.kind, ErrorKind::AppProxyUnusable);
+    assert!(origin.requests().is_empty(), "nothing was sent");
+}
