@@ -68,3 +68,31 @@ func TestChatNotificationNeedsAccountAndConversation(t *testing.T) {
 		t.Fatalf("no title: %+v", *got)
 	}
 }
+
+// What someone typed reaches the notification service as text: freedesktop
+// markup does not obey it, and the Windows toast XML cannot be broken out of.
+func TestChatNotificationTextStaysText(t *testing.T) {
+	got := captureNotifications(t, time.UnixMilli(0))
+	a := &App{}
+	a.handleSidecarEvent("chat.notify", map[string]any{
+		"account": "chat-1", "conversation": "team@rooms.chat.test/<b>", "title": "x", "body": "<b>hola</b> & adiós",
+	})
+	if len(*got) != 1 || !(*got)[0].plainBody {
+		t.Fatalf("a chat body is plain text: %+v", *got)
+	}
+	if m := markupText("<b>hola</b> & adiós"); m != "&lt;b&gt;hola&lt;/b&gt; &amp; adiós" {
+		t.Fatalf("markupText = %q", m)
+	}
+	if s := toastText("a ]]> <x/>"); s != "a ]]]]><![CDATA[> <x/>" {
+		t.Fatalf("toastText = %q", s)
+	}
+	if s := toastAttr(`chat-1|team@rooms.chat.test/"P&u'<>`); s != "chat-1|team@rooms.chat.test/&quot;P&amp;u&apos;&lt;&gt;" {
+		t.Fatalf("toastAttr = %q", s)
+	}
+	// Mail keeps its body as it was.
+	*got = nil
+	a.handleSidecarEvent("mail.newMessages", map[string]any{"account": "acc", "count": float64(1), "from": "Ana", "subject": "Hi"})
+	if len(*got) != 1 || (*got)[0].plainBody {
+		t.Fatalf("mail: %+v", *got)
+	}
+}

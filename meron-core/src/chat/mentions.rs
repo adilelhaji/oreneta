@@ -51,9 +51,31 @@ pub fn find_word(hay: &str, needle: &str) -> Option<(usize, usize)> {
     None
 }
 
-/// Whether a message's text says this nickname as a whole word.
+/// A nickname shorter than this mentions someone only after `@`: "Al" or
+/// "Jo" as plain words turn up in ordinary talk.
+pub const SHORT_NICK: usize = 3;
+
+/// Whether a message's text says this nickname as a whole word (after `@`
+/// for a short one).
 pub fn mentions_nick(body: &str, nick: &str) -> bool {
+    let nick = nick.trim();
+    if nick.chars().count() < SHORT_NICK {
+        return !nick.is_empty() && find_word(body, &format!("@{nick}")).is_some();
+    }
     find_word(body, nick).is_some()
+}
+
+/// The nicknames, among those given, written as `@nick` in the text: what a
+/// message sent again names, since the picks themselves are not kept.
+pub fn written_mentions(body: &str, nicks: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for nick in nicks {
+        let nick = nick.trim();
+        if !nick.is_empty() && !out.iter().any(|n| n == nick) && find_word(body, &format!("@{nick}")).is_some() {
+            out.push(nick.to_string());
+        }
+    }
+    out
 }
 
 fn percent_decode(s: &str) -> String {

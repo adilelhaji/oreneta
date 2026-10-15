@@ -537,7 +537,17 @@ fn a_contacts_status_follows_their_best_device_and_requests_wait_for_the_person(
         contacts.update("pau@chat.test", device, "offline", "", 0);
     }
     assert_eq!(contacts.seen("pau@chat.test"), presence::Seen { show: "offline".into(), status: String::new() });
-    assert!(contacts.all().is_empty(), "gone devices are not kept");
+    // Seen once, then gone: known as offline, so the app does not offer to ask again.
+    assert_eq!(contacts.all().get("pau@chat.test").map(|s| s.show.as_str()), Some("offline"));
+    // The server saying a contact the person may see is offline: known too.
+    contacts.update("eva@chat.test", "", "offline", "", 0);
+    assert_eq!(contacts.all().len(), 2);
+    // A presence from someone in a room is not a contact's.
+    let occupant: tokio_xmpp::parsers::presence::Presence = stanza(
+        "<presence xmlns='jabber:client' type='unavailable' from='team@rooms.chat.test/Pau'>\
+         <x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='none' role='none'/></x></presence>",
+    );
+    assert_eq!(contact_presence(&occupant, &own), None);
 
     // What a session knows starts again with a new session.
     let mut live = presence::Live::default();
@@ -594,7 +604,11 @@ fn who_is_in_a_room_follows_its_presence_and_the_room_may_rename_us() {
     save_room(&c, "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
     set_room_nick(&c, "a", "team@rooms.chat.test", "Ana2").unwrap();
     assert_eq!(room_nick(&c, "a", "team@rooms.chat.test").unwrap().as_deref(), Some("Ana2"));
-    assert!(set_room_nick(&c, "a", "team@rooms.chat.test", "  ").is_err());
+    // Whatever the room gives is kept, even a nickname we would not choose.
+    let long = "N".repeat(80);
+    set_room_nick(&c, "a", "team@rooms.chat.test", &long).unwrap();
+    assert_eq!(room_nick(&c, "a", "team@rooms.chat.test").unwrap(), Some(long));
+    assert!(set_room_nick(&c, "a", "team@rooms.chat.test", "").is_err());
 }
 
 #[test]
@@ -609,6 +623,17 @@ fn a_mention_is_the_nickname_as_a_whole_word_or_a_reference_to_us() {
     assert!(!mentions_nick("Mariana", "Ana"));
     assert!(!mentions_nick("ana_b llegó", "Ana"), "_ continues a word");
     assert!(!mentions_nick("hola", "  "), "an empty nickname mentions nobody");
+    // A short nickname only after @: "al" and "Jo" are ordinary words too.
+    assert!(!mentions_nick("vamos al cine", "Al"));
+    assert!(mentions_nick("@Al ¿vienes?", "Al"));
+    assert!(!mentions_nick("Jo, qué frío", "Jo"));
+    assert!(mentions_nick("gracias @jo", "Jo"));
+    assert!(mentions_nick("Ana, ¿vienes?", "Ana"), "three letters or more: the word is enough");
+    assert_eq!(
+        mentions::written_mentions("@Pau R y @Eva, y Joan", &["Pau R".into(), "Eva".into(), "Joan".into(), "Eva".into()]),
+        ["Pau R", "Eva"],
+        "only those written with @, once"
+    );
     assert_eq!(find_word("Hi 日本 and @Ana!", "ana"), Some((11, 14)), "counted in characters, not bytes");
 
     let own = BareJid::from_str("ana@chat.test").unwrap();
@@ -699,6 +724,9 @@ fn only_a_new_message_from_someone_else_just_sent_notifies() {
     // What the bridge is told: who, where, and the text cut short.
     let mut long = group_in(&"a".repeat(400), true);
     long.sender = "Pau".into();
+    let mut wordy = long.clone();
+    wordy.sender = "P".repeat(300);
+    assert_eq!(presence::notification(&wordy)["title"].as_str().unwrap().chars().count(), presence::MAX_TITLE);
     let event = presence::notification(&long);
     assert_eq!((event["title"].as_str(), event["room"].as_str(), event["mention"].as_bool()), (Some("Pau · team@rooms.chat.test"), Some("team@rooms.chat.test"), Some(true)));
     assert_eq!(event["body"].as_str().unwrap().chars().count(), 280);
@@ -829,7 +857,7 @@ fn a_private_message_in_a_room_is_its_own_conversation_kept_apart_from_the_room(
 }
 
 #[test]
-fn leaving_a_room_takes_its_private_conversations_and_no_other_rooms() {
+fn leaving_a_room_keeps_its_private_conversations_to_read() {
     let c = conn();
     for room in ["team_x@rooms.chat.test", "teamyx@rooms.chat.test"] {
         save_room(&c, "a", room, "Ana", false, 1).unwrap();
@@ -839,11 +867,71 @@ fn leaving_a_room_takes_its_private_conversations_and_no_other_rooms() {
         mark_read(&c, "a", &format!("{room}/Pau"), 5).unwrap();
     }
     record(&c, &incoming("d1", None, "directo", 6)).unwrap();
+    let mut said = ChatMessage::chat("a", "team_x@rooms.chat.test", "g1", "in", "Pau", "en el grupo", 7, "received");
+    said.kind = KIND_GROUP.into();
+    record(&c, &said).unwrap();
     leave_room(&c, "a", "team_x@rooms.chat.test").unwrap();
-    let left: Vec<String> = conversations(&c, "a").unwrap().into_iter().map(|c| c.conversation).collect();
-    assert_eq!(left, ["pau@chat.test", "teamyx@rooms.chat.test/Pau"], "`_` is not a wildcard here");
-    let reads: i64 = c.query_row("SELECT COUNT(*) FROM chat_reads WHERE conversation = 'team_x@rooms.chat.test/Pau'", [], |r| r.get(0)).unwrap();
-    assert_eq!(reads, 0);
+    // The room's own messages go; the private ones stay, with their reading.
+    assert!(history(&c, "a", "team_x@rooms.chat.test", 10).unwrap().is_empty());
+    let mut left: Vec<(String, i64)> = conversations(&c, "a").unwrap().into_iter().map(|c| (c.conversation, c.unread)).collect();
+    left.sort();
+    assert_eq!(
+        left,
+        [("pau@chat.test".to_string(), 1), ("team_x@rooms.chat.test/Pau".to_string(), 0), ("teamyx@rooms.chat.test/Pau".to_string(), 0)]
+    );
+    assert_eq!(history(&c, "a", "team_x@rooms.chat.test/Pau", 10).unwrap().len(), 1);
+    // Without the room, there is no nickname to write with.
+    assert_eq!(room_nick(&c, "a", "team_x@rooms.chat.test").unwrap(), None);
+}
+
+#[test]
+fn the_saved_status_is_reported_before_connecting_and_never_reset_by_a_session() {
+    let c = conn();
+    presence::save_own(&c, "a", "invisible", "Fuera").unwrap();
+    // No session yet: the saved status, nothing applied.
+    let alone = presence::snapshot(&c, "a", None).unwrap();
+    assert_eq!((alone["own"]["show"].as_str(), alone["own"]["status"].as_str(), alone["own"]["applied"].as_str()), (Some("invisible"), Some("Fuera"), Some("offline")));
+    // A session starts from it.
+    let live = presence::Live::shared(&c, "a");
+    assert_eq!(live.lock().unwrap().own, presence::OwnPresence { show: "invisible".into(), status: "Fuera".into() });
+    // Even a session that holds something else reports what is saved.
+    let stale: presence::Shared = Default::default();
+    live.lock().unwrap().contacts.update("pau@chat.test", "phone", "away", "", 0);
+    let reported = presence::snapshot(&c, "a", Some(&stale)).unwrap();
+    assert_eq!(reported["own"]["show"], "invisible");
+    assert_eq!(presence::snapshot(&c, "a", Some(&live)).unwrap()["contacts"]["pau@chat.test"]["show"], "away");
+    // Going from announced to held back leaves the rooms: they are joined again.
+    use presence::{Applied, rejoin_rooms};
+    assert!(rejoin_rooms(Applied::Announced, Applied::Withheld));
+    for (before, now) in [(Applied::Waiting, Applied::Withheld), (Applied::Withheld, Applied::Announced), (Applied::Announced, Applied::Invisible), (Applied::Offline, Applied::Withheld)] {
+        assert!(!rejoin_rooms(before, now), "{before:?} -> {now:?}");
+    }
+}
+
+#[test]
+fn requests_and_contacts_are_bounded_and_allowing_answers_only_who_asked() {
+    use tokio_xmpp::parsers::presence::Type;
+    let mut live = presence::Live::default();
+    assert!(live.request("eva@chat.test"));
+    assert!(!live.request("eva@chat.test"), "once");
+    assert_eq!(live.answer("pau@chat.test", true), None, "Pau did not ask");
+    assert_eq!(live.answer("pau@chat.test", false), Some(Type::Unsubscribed), "denying is always possible");
+    assert_eq!(live.answer("eva@chat.test", true), Some(Type::Subscribed));
+    assert!(live.requests.is_empty());
+    for n in 0..presence::MAX_REQUESTS + 10 {
+        live.request(&format!("p{n}@chat.test"));
+    }
+    assert_eq!(live.requests.len(), presence::MAX_REQUESTS);
+    for n in 0..presence::MAX_CONTACTS + 10 {
+        live.contacts.update(&format!("c{n}@chat.test"), "r", "available", "", 0);
+    }
+    assert_eq!(live.contacts.len(), presence::MAX_CONTACTS);
+    assert_eq!(live.contacts.seen("c1005@chat.test").show, "offline", "beyond the bound: dropped");
+    for n in 0..presence::MAX_DEVICES + 10 {
+        live.contacts.update("c0@chat.test", &format!("d{n}"), "away", "", 0);
+    }
+    live.contacts.update("c0@chat.test", "r", "offline", "", 0);
+    assert_eq!(live.contacts.seen("c0@chat.test").show, "away", "the devices kept still count");
 }
 
 /// Against a real Prosody (tests/prosody-xmpp.sh): ORENETA_PROSODY is its
@@ -1301,6 +1389,20 @@ async fn against_prosody_a_status_reaches_only_an_allowed_contact_and_busy_holds
     let wanted = loud.clone();
     wait_until("a popup", move || saw(&|n, d| n == "chat.notify" && d["body"] == wanted && d["kind"] == "chat" && d["title"] == "eva@chat.test")).await;
 
+    // Both in a room: going unannounced must not take Joan out of it.
+    let room = format!("presence-{tag}@rooms.chat.test");
+    for (w, db, account, nick) in [(&eva, &eva_db, "eva", "Eva"), (&joan, &joan_db, "joan", "Joan")] {
+        save_room(&db.lock().unwrap(), account, &room, nick, false, 1).unwrap();
+        w.tx.send(xmpp::Command::Join { room: room.clone(), nick: nick.into(), password: None }).unwrap();
+        let saw = w.saw();
+        wait_until("in the room", move || saw(&|n, d| n == "chat.room" && d["state"] == "joined")).await;
+    }
+    let in_room = |id: &str, body: &str| {
+        let mut m = ChatMessage::chat("eva", &room, id, "out", "Eva", body, crate::store::now_unix(), "sending");
+        m.kind = KIND_GROUP.into();
+        m
+    };
+
     // Invisible, which this server cannot do: nothing is announced, so Eva
     // sees Joan offline; what Eva writes meanwhile waits on the server.
     presence::save_own(&joan_db.lock().unwrap(), "joan", "invisible", "").unwrap();
@@ -1310,6 +1412,12 @@ async fn against_prosody_a_status_reaches_only_an_allowed_contact_and_busy_holds
         seen_show(&eva_live, "joan@chat.test") == "offline" && joan_live.lock().unwrap().applied == presence::Applied::Withheld
     })
     .await;
+    // The room still has Joan: what is said there arrives as it is said.
+    let (jl, r) = (joan.live.clone(), room.clone());
+    wait_until("Joan back in the room", move || jl.lock().unwrap().occupants.list(&r).iter().any(|o| o.nick == "Eva")).await;
+    say(&eva_db, &eva, in_room(&format!("r1-{tag}"), "Sigues en el grupo"), vec![]);
+    let (jdb, r, id) = (joan_db.clone(), room.clone(), format!("r1-{tag}"));
+    wait_until("Joan hears the room while hidden", move || history(&jdb.lock().unwrap(), "joan", &r, 50).unwrap().iter().any(|m| m.id == id)).await;
     let waiting = format!("¿Dónde estás? {tag}");
     say(&eva_db, &eva, dm(&format!("w-{tag}"), &waiting), vec![]);
     let (adb, id) = (eva_db.clone(), format!("w-{tag}"));
@@ -1325,6 +1433,10 @@ async fn against_prosody_a_status_reaches_only_an_allowed_contact_and_busy_holds
     let kept = history(&joan_db.lock().unwrap(), "joan", "eva@chat.test", 50).unwrap();
     assert_eq!(kept.iter().filter(|m| m.id == format!("w-{tag}")).count(), 1);
     assert!(!joan.notified(&waiting), "caught up, not live");
+    // And still in the room once seen again.
+    say(&eva_db, &eva, in_room(&format!("r2-{tag}"), "Bienvenido"), vec![]);
+    let (jdb, r, id) = (joan_db.clone(), room.clone(), format!("r2-{tag}"));
+    wait_until("Joan hears the room after", move || history(&jdb.lock().unwrap(), "joan", &r, 50).unwrap().iter().any(|m| m.id == id)).await;
 
     for w in [eva, joan] {
         w.tx.send(xmpp::Command::Stop).unwrap();
@@ -1415,10 +1527,11 @@ async fn against_prosody_mentions_notify_and_private_messages_stay_apart_from_th
     wait_until("accepted", move || outgoing(&adb.lock().unwrap(), "ana", &id).unwrap().state == "accepted").await;
     assert!(!history(&pau_db.lock().unwrap(), "pau", &room, 50).unwrap().iter().any(|m| m.body == answer));
 
-    // Leaving takes the room's private conversations here.
+    // Leaving keeps the private conversation to read; the room's talk goes.
     ana.tx.send(xmpp::Command::Leave { room: room.clone(), nick: "Ana".into() }).unwrap();
     leave_room(&ana_db.lock().unwrap(), "ana", &room).unwrap();
-    assert!(conversations(&ana_db.lock().unwrap(), "ana").unwrap().iter().all(|c| !c.conversation.starts_with(&room)));
+    assert!(conversations(&ana_db.lock().unwrap(), "ana").unwrap().iter().any(|c| c.conversation == format!("{room}/Pau")));
+    assert!(history(&ana_db.lock().unwrap(), "ana", &room, 50).unwrap().is_empty());
     for w in [ana, pau] {
         w.tx.send(xmpp::Command::Stop).unwrap();
         w.task.await.unwrap();

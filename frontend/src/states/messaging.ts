@@ -144,6 +144,8 @@ export async function loadPresence() {
     contacts?: Record<string, { show: ContactShow; status: string }>
     requests?: string[]
   }>('chat.presence', { account })
+  // Another account was picked meanwhile: this answer is not for the screen.
+  if (messaging$.account.peek() !== account) return
   chatPresence$.own.set({ ...DEFAULT_OWN_PRESENCE, ...(known?.own ?? {}) })
   chatPresence$.contacts.set(known?.contacts ?? {})
   const requests = known?.requests
@@ -174,7 +176,8 @@ export async function loadOccupants(room = messaging$.conversation.peek()) {
   const account = messaging$.account.peek()
   if (!account || !room) return
   const list = await invoke<ChatOccupant[]>('chat.occupants', { account, room })
-  if (messaging$.conversation.peek() === room) chatPresence$.occupants.set(Array.isArray(list) ? list : [])
+  if (messaging$.account.peek() === account && messaging$.conversation.peek() === room)
+    chatPresence$.occupants.set(Array.isArray(list) ? list : [])
 }
 
 /** A system notification was clicked: the Chat view, its account, that conversation. */
@@ -368,12 +371,11 @@ export function onChatEvent(name: string, detail: ChatEventDetail) {
     })
   }
   if (name === 'chat.presence' && current && detail.jid) {
-    if (detail.show === 'offline') chatPresence$.contacts[detail.jid].delete()
-    else
-      chatPresence$.contacts[detail.jid].set({
-        show: (detail.show ?? 'available') as ContactShow,
-        status: detail.status ?? '',
-      })
+    // Offline stays known: the contact allowed it, so nothing is asked again.
+    chatPresence$.contacts[detail.jid].set({
+      show: (detail.show ?? 'available') as ContactShow,
+      status: detail.status ?? '',
+    })
   }
   if (name === 'chat.subscription' && current && detail.jid) {
     const others = chatPresence$.requests.peek().filter((j) => j !== detail.jid)

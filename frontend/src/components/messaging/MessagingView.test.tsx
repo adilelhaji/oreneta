@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { MessagingView } from './MessagingView'
-import { chatPresence$, messaging$, onChatEvent, openChatFromNotification } from '../../states/messaging'
+import { chatPresence$, loadPresence, messaging$, onChatEvent, openChatFromNotification } from '../../states/messaging'
 import { settleConfirm, ui$ } from '../../states/ui'
 
 const calls: { command: string; payload: any }[] = []
@@ -441,7 +441,11 @@ it('the person sets their status and text; invisible only where the server can h
   const select = within(form).getByRole('combobox', { name: 'Your status' }) as HTMLSelectElement
   expect((within(select).getByRole('option', { name: 'Invisible' }) as HTMLOptionElement).disabled).toBe(true)
   expect((within(form).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
+  // Busy says what it does to notifications.
+  fireEvent.change(select, { target: { value: 'dnd' } })
+  expect(screen.getByText('While busy, chat messages raise no notifications.')).toBeTruthy()
   fireEvent.change(select, { target: { value: 'away' } })
+  expect(screen.queryByText('While busy, chat messages raise no notifications.')).toBeNull()
   fireEvent.change(within(form).getByLabelText('Status message'), { target: { value: 'Comiendo' } })
   await act(async () => {
     fireEvent.submit(form)
@@ -463,7 +467,8 @@ it('the person sets their status and text; invisible only where the server can h
   await act(async () =>
     onChatEvent('chat.own', { account: 'c1', applied: 'withheld', invisible_supported: false }),
   )
-  expect(screen.getByRole('alert').textContent).toContain('messages wait on the server')
+  expect(screen.getByRole('alert').textContent).toContain('your contacts see you offline')
+  expect(screen.getByRole('alert').textContent).toContain('Groups you are in still see you')
   // Another account's status changes nothing here.
   await act(async () => onChatEvent('chat.own', { account: 'other', applied: 'announced' }))
   expect(chatPresence$.own.peek().applied).toBe('withheld')
@@ -491,12 +496,15 @@ it('a contact’s status shows once they allow it; asking and answering happen o
   expect(screen.getByRole('button', { name: /pau@chat.test/ }).textContent).toContain('Away')
   await act(async () => onChatEvent('chat.presence', { account: 'c1', jid: 'pau@chat.test', show: 'offline' }))
   expect(screen.queryByText('— En el tren')).toBeNull()
+  // Gone offline, still known: no offer to ask again.
+  expect(within(screen.getByRole('region', { name: 'pau@chat.test' })).getByText('Offline')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Ask to see their status' })).toBeNull()
   // Not connected: no status is claimed.
   await act(async () =>
     onChatEvent('chat.presence', { account: 'c1', jid: 'pau@chat.test', show: 'dnd', status: '' }),
   )
   const open = screen.getByRole('region', { name: 'pau@chat.test' })
-  expect(within(open).getByText('Busy')).toBeTruthy()
+  await waitFor(() => expect(within(open).getByText('Busy')).toBeTruthy())
   await act(async () => onChatEvent('chat.status', { account: 'c1', state: 'offline' }))
   expect(within(open).queryByText('Busy')).toBeNull()
 
@@ -544,6 +552,8 @@ it('in a group, @ offers who is there, the picked names go with the message, and
   const open = screen.getByRole('region', { name: 'team@rooms.chat.test' })
   expect(within(open).getByText('Hola equipo').className).not.toContain('ring-2')
 
+  // Who is there has arrived before typing.
+  await waitFor(() => expect(screen.getByRole('button', { name: /People in the group/ }).textContent).toContain('(4)'))
   const box = screen.getByLabelText('Message') as HTMLTextAreaElement
   fireEvent.change(box, { target: { value: 'Hola @pa', selectionStart: 8 } })
   const list = screen.getByRole('listbox', { name: 'People to mention' })
@@ -652,4 +662,31 @@ it('clicking a chat notification opens its conversation in the Chat view', async
   expect(messaging$.conversation.peek()).toBe('pau@chat.test')
   expect(calls.find((c) => c.command === 'chat.markRead')?.payload).toEqual({ account: 'c1', conversation: 'pau@chat.test' })
   ui$.messagingOpen.set(false)
+})
+
+it('the saved status shows before connecting, and invisible says it needs the connection', async () => {
+  answers['chat.status'] = () => ({ c1: { account: 'c1', state: 'offline' } })
+  answers['chat.presence'] = () => ({
+    own: { show: 'dnd', status: 'En clase', applied: 'offline', invisible_supported: null },
+    contacts: {},
+    requests: [],
+  })
+  const screen = render(<MessagingView />)
+  const form = await waitFor(() => screen.getByRole('form', { name: 'Your status' }))
+  await waitFor(() => expect((within(form).getByLabelText('Status message') as HTMLInputElement).value).toBe('En clase'))
+  expect((within(form).getByRole('combobox', { name: 'Your status' }) as HTMLSelectElement).value).toBe('dnd')
+  expect(screen.getByText('Connect to check whether this server can hide you.')).toBeTruthy()
+  expect(screen.getByText('While busy, chat messages raise no notifications.')).toBeTruthy()
+})
+
+it('an answer about another account is not shown', async () => {
+  let release: (value: unknown) => void = () => {}
+  answers['chat.presence'] = () => new Promise((resolve) => (release = resolve))
+  messaging$.account.set('c1')
+  const pending = loadPresence()
+  messaging$.account.set('c2')
+  release({ own: { show: 'away', status: 'De c1', applied: 'announced', invisible_supported: true }, contacts: {}, requests: ['x@y.z'] })
+  await pending
+  expect(chatPresence$.own.peek().status).toBe('')
+  expect(chatPresence$.requests.peek()).toEqual([])
 })

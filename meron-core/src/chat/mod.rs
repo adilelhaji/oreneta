@@ -604,10 +604,12 @@ pub fn room_nick(conn: &Connection, account: &str, room: &str) -> Result<Option<
         .optional()?)
 }
 
-/// Keeps the nickname a room gave the person, so mentions and the room's
-/// echo of our messages follow it.
+/// Keeps the nickname a room gave the person (status 210), so mentions and
+/// the room's echo of our messages follow it. It is the room's to decide,
+/// so it is kept as given, even when it is not one we would have chosen;
+/// only an empty one is refused.
 pub fn set_room_nick(conn: &Connection, account: &str, room: &str, nick: &str) -> Result<()> {
-    let nick = check_nick(nick)?;
+    ensure!(!nick.is_empty(), "a nickname is needed");
     conn.execute("UPDATE chat_rooms SET nick = ?3 WHERE chat_account = ?1 AND room = ?2", params![account, room, nick])?;
     Ok(())
 }
@@ -630,21 +632,15 @@ pub fn normalize_conversation(conversation: &str) -> String {
 }
 
 /// Leaves a room here: it is not joined again, and what was kept of it on
-/// this computer goes. The room's own archive keeps what it keeps.
+/// this computer goes. The room's own archive keeps what it keeps. Private
+/// conversations had through it stay, to read: the room's archive does not
+/// keep them, so they would be lost (ADR-0055). Writing in them again needs
+/// the room.
 pub fn leave_room(conn: &Connection, account: &str, room: &str) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute("DELETE FROM chat_rooms WHERE chat_account = ?1 AND room = ?2", params![account, room])?;
-    // Its private conversations (`room/nick`) go with it. Compared by exact
-    // prefix: `LIKE` would let `_` in one room's name match another room.
-    for table in ["chat_messages", "chat_reads"] {
-        tx.execute(
-            &format!(
-                "DELETE FROM {table} WHERE chat_account = ?1
-                   AND (conversation = ?2 OR substr(conversation, 1, length(?2) + 1) = ?2 || '/')"
-            ),
-            params![account, room],
-        )?;
-    }
+    tx.execute("DELETE FROM chat_messages WHERE chat_account = ?1 AND conversation = ?2", params![account, room])?;
+    tx.execute("DELETE FROM chat_reads WHERE chat_account = ?1 AND conversation = ?2", params![account, room])?;
     tx.commit()?;
     Ok(())
 }

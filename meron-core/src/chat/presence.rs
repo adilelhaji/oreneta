@@ -30,6 +30,12 @@ pub const SHOWS: [&str; 4] = ["available", "away", "dnd", "invisible"];
 /// Invisibility (XEP-0186), when the server offers it.
 pub const NS_INVISIBLE: &str = "urn:xmpp:invisible:0";
 pub const MAX_STATUS: usize = 200;
+/// At most this many contacts, devices per contact and waiting requests are
+/// kept for a session: anyone can send presence, so nobody can grow them
+/// without end. What comes beyond is dropped.
+pub const MAX_CONTACTS: usize = 1000;
+pub const MAX_DEVICES: usize = 50;
+pub const MAX_REQUESTS: usize = 200;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct OwnPresence {
@@ -107,6 +113,14 @@ pub fn plan(show: &str, invisible_supported: Option<bool>) -> Applied {
     }
 }
 
+/// Whether a change of what is applied made the person leave the rooms
+/// they were in: going from announced to held back sends the server a
+/// broadcast "unavailable", which leaves every room (RFC 6121 §4.6), so they
+/// must be joined again.
+pub fn rejoin_rooms(before: Applied, now: Applied) -> bool {
+    before == Applied::Announced && now == Applied::Withheld
+}
+
 fn show_of(show: &str) -> Option<Show> {
     match show {
         "away" => Some(Show::Away),
@@ -182,6 +196,11 @@ pub fn contact_presence(presence: &Presence, own: &BareJid) -> Option<ContactPre
     if jid == *own {
         return None;
     }
+    // Someone in a room (or a room's late word after we left it) is not a
+    // contact, whatever address it comes from.
+    if presence.payloads.iter().any(|p| p.is("x", tokio_xmpp::parsers::ns::MUC_USER)) {
+        return None;
+    }
     let jid = jid.to_string();
     match presence.type_ {
         PresenceType::None | PresenceType::Unavailable => Some(ContactPresence::Status {
@@ -215,7 +234,10 @@ pub struct Seen {
 }
 
 /// Every contact's devices, and what to show for each contact: the device
-/// with the highest priority, then the most available.
+/// with the highest priority, then the most available. A contact whose
+/// status was seen and who went offline stays known as offline for the
+/// session (the server also says so for those the person may see), so the
+/// app does not offer to ask again.
 #[derive(Debug, Default)]
 pub struct Contacts {
     devices: HashMap<String, BTreeMap<String, (String, String, i8)>>,
@@ -224,17 +246,16 @@ pub struct Contacts {
 impl Contacts {
     /// Takes one device's status; returns the contact's status as shown.
     pub fn update(&mut self, jid: &str, resource: &str, show: &str, status: &str, priority: i8) -> Seen {
+        if !self.devices.contains_key(jid) && self.devices.len() >= MAX_CONTACTS {
+            return Seen { show: "offline".into(), status: String::new() };
+        }
         let devices = self.devices.entry(jid.to_string()).or_default();
         if show == "offline" {
             devices.remove(resource);
-        } else {
+        } else if devices.contains_key(resource) || devices.len() < MAX_DEVICES {
             devices.insert(resource.to_string(), (show.to_string(), status.to_string(), priority));
         }
-        let seen = self.seen(jid);
-        if self.devices.get(jid).is_some_and(|d| d.is_empty()) {
-            self.devices.remove(jid);
-        }
-        seen
+        self.seen(jid)
     }
 
     pub fn seen(&self, jid: &str) -> Seen {
@@ -245,8 +266,17 @@ impl Contacts {
             .unwrap_or(Seen { show: "offline".into(), status: String::new() })
     }
 
+    /// Every contact known this session, online or known to be offline.
     pub fn all(&self) -> BTreeMap<String, Seen> {
         self.devices.keys().map(|jid| (jid.clone(), self.seen(jid))).collect()
+    }
+
+    pub fn len(&self) -> usize {
+        self.devices.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.devices.is_empty()
     }
 
     pub fn clear(&mut self) {
@@ -335,7 +365,8 @@ impl Occupants {
 }
 
 /// The nickname a room gave us, when its presence about us carries one that
-/// differs from ours (status 210, or our own nickname change).
+/// differs from ours (status 210, or our own nickname change). The room's
+/// word is final: it is kept whatever it looks like.
 pub fn own_nick_in(presence: &Presence, nick: &str) -> Option<String> {
     if presence.type_ != PresenceType::None {
         return None;
@@ -386,6 +417,32 @@ impl Default for Live {
 pub type Shared = Arc<Mutex<Live>>;
 
 impl Live {
+    /// A session's view starting from the person's saved status, so it is
+    /// never reported as "available" before connecting.
+    pub fn shared(conn: &Connection, account: &str) -> Shared {
+        Arc::new(Mutex::new(Live { own: own(conn, account).unwrap_or_default(), ..Default::default() }))
+    }
+
+    /// Someone asks to see the person's status; returns whether it is new.
+    /// No more than `MAX_REQUESTS` wait at once.
+    pub fn request(&mut self, jid: &str) -> bool {
+        if self.requests.contains(jid) || self.requests.len() >= MAX_REQUESTS {
+            return false;
+        }
+        self.requests.insert(jid.to_string())
+    }
+
+    /// The person answers a request: the presence to send, or none when
+    /// allowing someone who did not ask (denying is always possible).
+    pub fn answer(&mut self, jid: &str, allow: bool) -> Option<PresenceType> {
+        let asked = self.requests.remove(jid);
+        match (allow, asked) {
+            (true, true) => Some(PresenceType::Subscribed),
+            (true, false) => None,
+            (false, _) => Some(PresenceType::Unsubscribed),
+        }
+    }
+
     /// The person's side, as the app shows it.
     pub fn own_detail(&self) -> Value {
         json!({
@@ -443,8 +500,25 @@ pub fn should_notify(message: &ChatMessage, arrival: Arrival, own_show: &str) ->
     true
 }
 
+/// What the app is told about presence for an account: the saved status
+/// always (connected or not), and what the session knows, if one runs.
+pub fn snapshot(conn: &Connection, account: &str, live: Option<&Shared>) -> Result<Value> {
+    let saved = own(conn, account)?;
+    let mut value = match live {
+        Some(live) => live.lock().unwrap().snapshot(),
+        None => Live { own: saved.clone(), ..Default::default() }.snapshot(),
+    };
+    value["own"]["show"] = json!(saved.show);
+    value["own"]["status"] = json!(saved.status);
+    Ok(value)
+}
+
+/// A notification's title is cut to this many characters.
+pub const MAX_TITLE: usize = 120;
+
 /// The `chat.notify` event: who, where, and the text (or the file's name),
-/// cut short. The title needs no translation: the sender, and the room.
+/// cut short, the title too. The title needs no translation: the sender,
+/// and the room.
 pub fn notification(message: &ChatMessage) -> Value {
     let text = message.file_name.clone().unwrap_or_else(|| message.body.clone());
     let text: String = text.chars().take(280).collect();
@@ -457,6 +531,7 @@ pub fn notification(message: &ChatMessage) -> Value {
         Some(room) => format!("{} · {}", message.sender, room),
         None => message.sender.clone(),
     };
+    let title: String = title.chars().take(MAX_TITLE).collect();
     json!({
         "account": message.account,
         "conversation": message.conversation,

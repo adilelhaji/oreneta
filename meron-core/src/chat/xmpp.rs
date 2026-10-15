@@ -563,6 +563,11 @@ pub async fn run(
         emit("chat.uploaded", detail);
     };
     let live = options.live.clone();
+    // The saved status from the start, so it is never reported as
+    // "available" before the first connection.
+    if let Ok(saved) = super::presence::own(&db.lock().unwrap(), &account.id) {
+        live.lock().unwrap().own = saved;
+    }
     let own_changed = || {
         let mut detail = live.lock().unwrap().own_detail();
         detail["account"] = json!(account.id);
@@ -657,7 +662,7 @@ pub async fn run(
                                     emit("chat.presence", json!({ "account": account.id, "jid": jid, "show": seen.show, "status": seen.status }));
                                 }
                                 Some(ContactPresence::Request { jid }) => {
-                                    if live.lock().unwrap().requests.insert(jid.clone()) {
+                                    if live.lock().unwrap().request(&jid) {
                                         emit("chat.subscription", json!({ "account": account.id, "jid": jid }));
                                     }
                                 }
@@ -837,6 +842,20 @@ pub async fn run(
                         // Offline, it is applied on connecting.
                         if before != Applied::Offline {
                             let now = announce(&mut client, &mut pending, &live, before).await;
+                            // Going unannounced takes the server's broadcast of
+                            // "unavailable", which also leaves every room
+                            // (RFC 6121 §4.6): join them again at once, so the
+                            // rooms keep the person in, as chosen.
+                            if presence::rejoin_rooms(before, now) {
+                                in_rooms.clear();
+                                live.lock().unwrap().occupants.clear();
+                                let rooms = super::rooms(&db.lock().unwrap(), &account.id).unwrap_or_default();
+                                let show = room_show(&live);
+                                for room in rooms {
+                                    let password = if room.has_password { (options.room_password)(&room.room) } else { None };
+                                    join(&mut client, &db, &account.id, &room.room, &room.nick, password.as_deref(), &show, &room_state).await;
+                                }
+                            }
                             // What came while held back waited in the archive.
                             if before == Applied::Withheld && now != Applied::Withheld {
                                 let after = super::last_archive_id(&db.lock().unwrap(), &account.id).ok().flatten();
@@ -860,11 +879,11 @@ pub async fn run(
                         }
                     }
                     Some(Command::AnswerSubscription { jid, allow }) => {
-                        if let Ok(bare) = BareJid::from_str(&jid) {
-                            let kind = if allow { PresenceType::Subscribed } else { PresenceType::Unsubscribed };
+                        // Allowing goes only to someone who asked; denying, to anyone.
+                        let answer = live.lock().unwrap().answer(&jid, allow);
+                        if let (Some(kind), Ok(bare)) = (answer, BareJid::from_str(&jid)) {
                             let _ = client.send_stanza(presence::subscription(&bare, kind).into()).await;
                         }
-                        live.lock().unwrap().requests.remove(&jid);
                         emit("chat.subscription", json!({ "account": account.id, "jid": jid, "answered": true }));
                     }
                     Some(Command::Join { room, nick, password }) => {
@@ -1095,7 +1114,7 @@ pub fn archive_query(after: Option<String>) -> mam::Query {
     }
 }
 
-//// What one incoming message stanza led to: a delivery receipt to send,
+/// What one incoming message stanza led to: a delivery receipt to send,
 /// when the sender asked for one, and a message to notify about.
 #[derive(Debug, Default)]
 pub struct Handled {
@@ -1238,7 +1257,7 @@ pub fn handle_message(
     handled
 }
 
-// The connection settings for an account.
+/// The connection settings for an account.
 pub fn connector(account: &ChatAccount, plain_loopback: bool) -> Result<Connector> {
     let host = if account.host.trim().is_empty() {
         account.jid.split_once('@').map(|(_, d)| d.to_string()).context("no server in the address")?

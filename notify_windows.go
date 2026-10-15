@@ -47,11 +47,13 @@ func (a *App) closeNotificationListener() {}
 func (a *App) deliverNotification(n notification) {
 	t := toast.Notification{
 		AppID:               "Oreneta",
-		Title:               n.title,
-		Body:                n.body,
+		// The toast template inserts these as they are: texts go inside
+		// CDATA and the arguments inside an attribute, so both are made safe.
+		Title:               toastText(n.title),
+		Body:                toastText(n.body),
 		Icon:                notifyIcon(),
 		ActivationType:      toast.Foreground, // required for the activation callback to fire
-		ActivationArguments: n.account + notifyArgSeparator + n.threadID,
+		ActivationArguments: toastAttr(n.account + notifyArgSeparator + n.threadID),
 	}
 	if err := t.Push(); err != nil {
 		a.logf("toast notify failed: %v, falling back to beeep", err)

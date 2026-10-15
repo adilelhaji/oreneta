@@ -106,26 +106,34 @@ ADR-0055 (presencia, menciones, avisos y privados en grupos, #208).
   - el estado propio por cuenta: texto limpio y de 200 caracteres como
     mucho, un campo dañado vuelve solo a su valor, se olvida al quitar la
     cuenta;
+  - el guardado se informa antes de conectar y la sesión empieza desde él;
   - invisible solo si el servidor lo anuncia; sin él, no se anuncia nada y
-    nunca se pasa solo a visible;
+    nunca se pasa solo a visible; pasar de anunciado a no anunciado vuelve a
+    entrar en los grupos;
   - a los contactos, disponibilidad y texto; a los grupos, sin texto;
-  - el estado de un contacto es el de su mejor dispositivo; las peticiones
-    esperan; una sesión nueva empieza de cero;
+  - el estado de un contacto es el de su mejor dispositivo y, desconectado,
+    sigue conocido; una presencia de grupo no es de un contacto; contactos,
+    dispositivos y peticiones tienen límite; «Permitir» solo a quien lo
+    pidió; una sesión nueva empieza de cero;
   - quién está en un grupo (llega, cambia de apodo, se va) y el apodo que
-    nos da el grupo;
+    nos da el grupo, guardado tal cual;
   - una mención: palabra entera, sin distinguir mayúsculas, en cualquier
-    alfabeto, no dentro de otra palabra, o por referencia; las referencias
-    que salen, una por apodo que sigue en el texto, contadas en caracteres;
+    alfabeto, no dentro de otra palabra (un apodo corto, solo tras `@`), o
+    por referencia; las referencias que salen, una por apodo que sigue en el
+    texto, contadas en caracteres; al enviar de nuevo, las de los `@apodo`
+    escritos;
   - al leer un grupo solo se marca lo que nombra a la persona;
   - avisa solo lo nuevo, de otro y en directo: no lo repetido, lo retrasado,
     lo del archivo, lo propio, un grupo sin mención ni nada con «Ocupado»;
   - un privado es su propia conversación (lista, no leídos, eco desde otro
     dispositivo, error devuelto, mayúsculas del apodo), no pide recibo y su
-    id de archivo cuenta para ponerse al día; salir de un grupo borra sus
-    privados y no los de otro grupo de nombre parecido.
+    id de archivo cuenta para ponerse al día; salir de un grupo borra lo del
+    grupo y deja sus privados para leerlos.
 - **Puente Go:** la notificación del chat lleva la conversación como
   destino y calla con «No molestar» u horas tranquilas aunque los
-  recordatorios pasen; un evento sin cuenta o sin conversación no avisa.
+  recordatorios pasen; un evento sin cuenta o sin conversación no avisa; el
+  cuerpo de un mensaje de chat es texto para el servicio que lee marcas, y
+  los textos y el destino van protegidos en la plantilla XML de Windows.
 - **Llavero:** las contraseñas de salas e invitaciones están en
   `secret_names` y el contador de escrituras de secretos sube a 13.
 - **Prosody real** (`tests/prosody-xmpp.sh`, también en CI):
@@ -142,14 +150,15 @@ ADR-0055 (presencia, menciones, avisos y privados en grupos, #208).
     se rechaza antes de subir; uno cancelado no sale;
   - (ADR-0055, usuarios `eva` y `joan` solo para esto) Eva pide ver el
     estado de Joan y nada llega hasta que Joan lo permite; luego ve
-    «Ausente — Comiendo» y «Ocupado»; Joan no ve el de Eva; ocupado, un
+    «Ausente — Comiendo» y «Ocupado»; Joan no ve el de Eva; los dos en un
+    grupo, Joan sigue en él mientras no se anuncia y después; ocupado, un
     mensaje se guarda sin aviso y, disponible, avisa; Prosody no ofrece
     invisible: Joan «invisible» queda sin anunciar (Eva lo ve desconectado),
     lo escrito mientras llega una vez al volver y sin aviso;
   - en un grupo, cada uno sabe quién está; la mención llega marcada y avisa,
     lo demás no; un privado a `grupo/Ana` llega a Ana como «Pau» aparte del
-    grupo y con aviso, la respuesta llega a Pau y queda aceptada; salir
-    borra el privado.
+    grupo y con aviso, la respuesta llega a Pau y queda aceptada; al salir
+    el privado se queda.
 - **Aplicación:**
   - lista con no leídos, estados visibles;
   - «Enviar de nuevo» solo al pulsar, con el mismo id;

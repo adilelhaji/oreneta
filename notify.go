@@ -127,6 +127,29 @@ type notification struct {
 	body     string
 	account  string
 	threadID string
+	// plainBody marks a body written by someone else (a chat message): a
+	// notification service that reads markup must show it as text.
+	plainBody bool
+}
+
+// markupText escapes a plain text for a notification service that reads a
+// small markup (freedesktop's body-markup), so `<b>` or `&` someone typed
+// is shown, not obeyed.
+func markupText(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+// toastText keeps a text inside the CDATA section the Windows toast template
+// puts it in: a "]]>" in it would end the section and let the rest be read
+// as XML. It is split across two sections and shows unchanged.
+func toastText(s string) string {
+	return strings.ReplaceAll(s, "]]>", "]]]]><![CDATA[>")
+}
+
+// toastAttr escapes a value for an XML attribute of the Windows toast
+// template, which inserts it as is; Windows hands it back unescaped.
+func toastAttr(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;").Replace(s)
 }
 
 // notifyIcon writes the embedded app icon to a stable temp path the first time
@@ -397,10 +420,11 @@ func (a *App) notifyChat(detail any) {
 		return
 	}
 	dispatchNotification(a, notification{
-		title:    firstNonEmpty(title, conversation),
-		body:     body,
-		account:  account,
-		threadID: chatNotificationPrefix + conversation,
+		title:     firstNonEmpty(title, conversation),
+		body:      body,
+		account:   account,
+		threadID:  chatNotificationPrefix + conversation,
+		plainBody: true,
 	})
 }
 

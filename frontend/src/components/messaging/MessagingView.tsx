@@ -93,6 +93,13 @@ export function MessagingView() {
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' })
   }, [history.length, conversation])
+  // Picks and suggestions belong to the conversation they were made in.
+  useEffect(() => {
+    setPicked([])
+    setCaret(0)
+    setActive(0)
+    setClosedAt(null)
+  }, [conversation, account])
 
   if (accounts.length === 0) return <ChatSetup />
 
@@ -194,7 +201,7 @@ export function MessagingView() {
               : t('messaging.offline', { defaultValue: 'Not connected' })}
           </span>
         </header>
-        <OwnStatus />
+        <OwnStatus key={account} />
         <StatusRequests />
         <form
           className="flex gap-1.5 border-b border-border px-3 py-2"
@@ -703,6 +710,18 @@ function OwnStatus() {
           {t('messaging.presence.invisibleUnsupported', { defaultValue: 'This chat server cannot hide you.' })}
         </p>
       )}
+      {own.invisible_supported === null && (
+        <p className="text-2xs text-secondary">
+          {t('messaging.presence.invisibleUnknown', {
+            defaultValue: 'Connect to check whether this server can hide you.',
+          })}
+        </p>
+      )}
+      {shown.show === 'dnd' && (
+        <p className="text-2xs text-secondary">
+          {t('messaging.presence.busyHint', { defaultValue: 'While busy, chat messages raise no notifications.' })}
+        </p>
+      )}
       {own.applied === 'invisible' && (
         <p className="text-2xs text-secondary">
           {t('messaging.presence.invisibleHint', {
@@ -714,7 +733,7 @@ function OwnStatus() {
         <p role="alert" className="text-2xs text-danger">
           {t('messaging.presence.withheld', {
             defaultValue:
-              'This chat server cannot hide you, so you are not shown at all: messages wait on the server until you choose another status.',
+              'This chat server cannot hide you, so your contacts see you offline. Groups you are in still see you. Direct messages and requests to see your status wait on the server until you choose another status.',
           })}
         </p>
       )}

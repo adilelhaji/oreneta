@@ -3120,7 +3120,20 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "only a message whose sending failed or is uncertain can be sent again"
             );
             meron_core::chat::set_state(&engine.db.lock().unwrap(), &account, &id, "sending")?;
-            chat_dispatch(&engine, &message, Vec::new());
+            // In a room, the people it names (`@nick`, among those there now)
+            // go again as references: the picks themselves are not kept.
+            let mentions = if message.kind == meron_core::chat::KIND_GROUP {
+                let nicks: Vec<String> = chat_live()
+                    .lock()
+                    .unwrap()
+                    .get(&account)
+                    .map(|live| live.lock().unwrap().occupants.list(&message.conversation).into_iter().map(|o| o.nick).collect())
+                    .unwrap_or_default();
+                meron_core::chat::mentions::written_mentions(&message.body, &nicks)
+            } else {
+                Vec::new()
+            };
+            chat_dispatch(&engine, &message, mentions);
             Ok(json!({ "ok": true }))
         }
         // Presence (ADR-0055): the person's own status, what the session
@@ -3128,16 +3141,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // the person's click.
         "chat.presence" => {
             let account = req_str(p, "account")?;
-            let own = meron_core::chat::presence::own(&engine.db.lock().unwrap(), &account)?;
             let live = chat_live().lock().unwrap().get(&account).cloned();
-            Ok(match live {
-                Some(live) => live.lock().unwrap().snapshot(),
-                None => json!({
-                    "own": { "show": own.show, "status": own.status, "applied": "offline", "invisible_supported": null },
-                    "contacts": {},
-                    "requests": [],
-                }),
-            })
+            meron_core::chat::presence::snapshot(&engine.db.lock().unwrap(), &account, live.as_ref())
         }
         "chat.setPresence" => {
             let account = req_str(p, "account")?;
@@ -3151,6 +3156,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     .unwrap()
                     .get(&account)
                     .and_then(|live| live.lock().unwrap().invisible_supported);
+                anyhow::ensure!(
+                    supported.is_some(),
+                    "connect to check whether this chat server can hide you; nothing was changed"
+                );
                 anyhow::ensure!(supported == Some(true), "this chat server cannot hide you; nothing was changed");
             }
             let own = meron_core::chat::presence::save_own(&engine.db.lock().unwrap(), &account, &show, &status)?;
@@ -3173,6 +3182,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 meron_core::chat::xmpp::Command::Subscribe { jid }
             } else {
                 let allow = p.get("allow").and_then(Value::as_bool).context("missing allow")?;
+                // Letting someone see the status only answers someone who asked.
+                if allow {
+                    let asked = chat_live()
+                        .lock()
+                        .unwrap()
+                        .get(&account)
+                        .is_some_and(|live| live.lock().unwrap().requests.contains(&jid));
+                    anyhow::ensure!(asked, "{jid} has not asked to see your status; nothing was sent");
+                }
                 meron_core::chat::xmpp::Command::AnswerSubscription { jid, allow }
             };
             let sent = chat_sessions().lock().unwrap().get(&account).is_some_and(|tx| tx.send(command).is_ok());
@@ -9264,7 +9282,10 @@ fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()>
         let _ = etx.send((name.to_string(), detail));
     });
     let account_id = id.to_string();
-    let live = chat_live().lock().unwrap().entry(id.to_string()).or_default().clone();
+    // Starts from the saved status, so nothing reports "available" before
+    // the connection says how it went.
+    let live = meron_core::chat::presence::Live::shared(&engine.db.lock().unwrap(), id);
+    chat_live().lock().unwrap().insert(id.to_string(), live.clone());
     let options = meron_core::chat::xmpp::Options {
         room_password: Arc::new(move |room: &str| {
             secrets::load(&meron_core::chat::room_secret_key(&account_id, room))
