@@ -268,6 +268,8 @@ fn is_loopback(host: &url::Host<&str>) -> bool {
     match host {
         url::Host::Ipv4(ip) => ip.is_loopback(),
         url::Host::Ipv6(ip) => ip.is_loopback(),
+        // Deliberately left to the system resolver, which maps it to this
+        // computer; an endpoint typed as 127.0.0.1 or [::1] does not ask it.
         url::Host::Domain(name) => name.eq_ignore_ascii_case("localhost"),
     }
 }
@@ -277,9 +279,18 @@ fn is_loopback(host: &url::Host<&str>) -> bool {
 /// mail anywhere, so neither the app's proxy nor one from the environment
 /// (`HTTP_PROXY`) may see it. A remote provider follows the app's proxy.
 pub fn agent(provider: &ProviderConfig) -> Result<ureq::Agent> {
+    agent_with(provider, crate::proxy::agent)
+}
+
+/// [`agent`] with the app's proxy agent passed in, so tests need not change
+/// the process-wide proxy that other tests read without a lock.
+fn agent_with(provider: &ProviderConfig, app_proxy: impl FnOnce() -> Result<ureq::Agent>) -> Result<ureq::Agent> {
     match provider.mode {
+        // The environment proxy is ignored by construction: the direct
+        // agent is built with `proxy(None)`. Not tested by setting
+        // `HTTP_PROXY`, which would race every other test in the process.
         ProviderMode::Local => crate::proxy::ProxyChoice::Direct.agent(),
-        ProviderMode::Remote => crate::proxy::agent(),
+        ProviderMode::Remote => app_proxy(),
     }
 }
 
@@ -492,6 +503,10 @@ pub fn execute(agent: &ureq::Agent, request: ExecuteRequest) -> Result<Value> {
         .header("Content-Type", "application/json")
         .config()
         .http_status_as_error(false)
+        // A redirect is not followed: it would carry the mail (and the key)
+        // from this computer to another host, or from HTTPS to plain HTTP,
+        // past the checks made on the endpoint the person set.
+        .max_redirects(0)
         .timeout_global(Some(std::time::Duration::from_secs(60)))
         .build();
     if let Some(token) = request
@@ -523,6 +538,9 @@ pub fn execute(agent: &ureq::Agent, request: ExecuteRequest) -> Result<Value> {
     );
     // The provider's error body can quote the mail it was sent; errors are
     // logged, so only the status is said.
+    if status.is_redirection() {
+        bail!("assistant provider returned {status}; redirects are not followed");
+    }
     if !status.is_success() {
         bail!("assistant provider returned {}", status);
     }
@@ -635,6 +653,9 @@ mod tests {
             "http://[fe80::1]:11434/v1",
             "http://localhost.example.test:11434/v1",
             "http://notlocalhost:11434/v1",
+            // IPv4-mapped IPv6 is not loopback to the standard library; refused
+            // rather than guessed at.
+            "http://[::ffff:127.0.0.1]:11434/v1",
         ] {
             let error = prepare(provider(ProviderMode::Local, endpoint), "summary", "", &[item("m1", "a1")])
                 .unwrap_err()
@@ -793,6 +814,16 @@ mod tests {
         answer: &'static str,
         delay: std::time::Duration,
     ) -> (String, std::sync::mpsc::Receiver<String>) {
+        fake_provider_with(status, String::new(), answer, delay)
+    }
+
+    /// [`fake_provider`] that also sends `headers` (each line ending `\r\n`).
+    fn fake_provider_with(
+        status: u16,
+        headers: String,
+        answer: &'static str,
+        delay: std::time::Duration,
+    ) -> (String, std::sync::mpsc::Receiver<String>) {
         use std::io::{BufRead, BufReader, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -820,7 +851,7 @@ mod tests {
             let mut stream = stream;
             let _ = write!(
                 stream,
-                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
+                "HTTP/1.1 {status} X\r\n{headers}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
                 answer.len()
             );
         });
@@ -990,18 +1021,34 @@ mod tests {
 
     #[test]
     fn an_unusable_app_proxy_refuses_a_remote_provider_but_never_holds_a_local_one() {
-        use crate::proxy::route_fixture::GlobalSlot;
         let local = provider(ProviderMode::Local, "http://[::1]:11434/v1/chat/completions");
         let remote = provider(ProviderMode::Remote, "https://ai.example.test/v1/chat/completions");
-        let _slot = GlobalSlot::take();
-        // Chosen but incomplete. Other tests follow the app-wide proxy without
-        // the lock, so it stays unusable only while the agents are built; an
-        // agent's route is fixed when it is built.
-        crate::proxy::publish_global(&json!({ "mode": "http", "host": "", "port": 0 }));
-        let (local_agent, remote_agent) = (agent(&local), agent(&remote));
-        crate::proxy::set_global(None);
-        assert!(remote_agent.is_err(), "never a silent direct connection");
-        assert!(local_agent.is_ok(), "a program on this computer never needed the proxy");
+        // What proxy::agent() answers while the app's proxy is chosen but
+        // cannot be used.
+        let unusable = || -> Result<ureq::Agent> { bail!("the app's proxy is incomplete (server or port missing)") };
+        let error = agent_with(&remote, unusable).unwrap_err().to_string();
+        assert!(error.contains("the app's proxy"), "never a silent direct connection: {error}");
+        assert!(agent_with(&local, unusable).is_ok(), "a program on this computer never needs the proxy");
+    }
+
+    #[test]
+    fn a_redirect_from_the_provider_is_not_followed() {
+        use crate::proxy::route_fixture::Recorder;
+        for status in [301, 302, 307, 308] {
+            // Where the redirect points: another server, which must hear nothing.
+            let elsewhere = Recorder::origin();
+            let (endpoint, _sent) = fake_provider_with(
+                status,
+                format!("Location: {}/v1/chat/completions\r\n", elsewhere.url()),
+                "",
+                std::time::Duration::ZERO,
+            );
+            let request = run(&endpoint, &format!("exec-redirect-{status}"), vec![item("m1", "a1")]);
+            let error = execute(&agent(&request.provider).unwrap(), request).unwrap_err().to_string();
+            assert!(error.contains(&status.to_string()), "{status}: {error}");
+            assert!(error.contains("redirects are not followed"), "{status}: {error}");
+            assert!(elsewhere.requests().is_empty(), "{status}: {:?}", elsewhere.requests());
+        }
     }
 
     #[tokio::test]

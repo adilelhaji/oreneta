@@ -82,7 +82,9 @@ El asistente local (#195): su dirección solo puede ser este equipo
 (`localhost`, `127.0.0.0/8` o `::1`, comprobado sobre el host ya analizado)
 y se llama con `ProxyChoice::Direct`, así que ni el proxy de la aplicación
 ni `HTTP_PROXY` ven el correo que la persona eligió no enviar fuera. Un
-proxy global inutilizable tampoco lo bloquea.
+proxy global inutilizable tampoco lo bloquea. El asistente, local o remoto,
+no sigue redirecciones: una llevaría el correo y la clave de este equipo a
+otro host, o de HTTPS a HTTP, sin pasar las comprobaciones de la dirección.
 
 Las imágenes y medios remotos que carga la vista web (imágenes en mensajes,
 fotos de Gravatar/DuckDuckGo) y la página de inicio de sesión que se abre en
@@ -121,6 +123,7 @@ rechaza un dominio con sintaxis de URL.
   `a_local_provider_is_reached_directly_even_with_an_app_proxy_set`,
   `a_remote_provider_still_goes_through_the_app_proxy`,
   `an_unusable_app_proxy_refuses_a_remote_provider_but_never_holds_a_local_one`,
+  `a_redirect_from_the_provider_is_not_followed`,
   `local_mode_accepts_every_form_of_this_computer_including_ipv6` y
   `local_mode_refuses_hosts_that_are_not_this_computer`.
 - Frontend (`AccountDialogCustom.test.tsx`): escribir y salir del campo no
