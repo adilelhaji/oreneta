@@ -338,9 +338,9 @@
       "issue": 35,
       "section": "General/Print",
       "outcome": "Native message/conversation printing configuration and completeness",
-      "status": "partial",
-      "present": "Message printing keeps blocked remote content blocked and states what is left out (#35); no print configuration (headers, conversation scope options) or native print evidence",
-      "code": "frontend/src/lib/print.ts",
+      "status": "implemented-unverified",
+      "present": "Message printing keeps blocked remote content blocked and states what is left out (#35); General → Print chooses the header fields, one message or the whole conversation, oldest or newest first, and the attachment list, remembered as one setting (#213, ADR-0060) and tested; native print evidence remains",
+      "code": "docs/design/printing.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -356,6 +356,38 @@
           {
             "sha": "92b13356c59d27f308d14d39ecaa8e8710d4fdc1",
             "result": "frontend/src/lib/printDocument.test.ts"
+          },
+          {
+            "sha": "b2a8c75aa8bbe5d718cc77d9cc482f8d382921da",
+            "result": "frontend/src/lib/printDocument.test.ts"
+          },
+          {
+            "sha": "b2a8c75aa8bbe5d718cc77d9cc482f8d382921da",
+            "result": "frontend/src/states/printing.test.ts"
+          },
+          {
+            "sha": "b2a8c75aa8bbe5d718cc77d9cc482f8d382921da",
+            "result": "frontend/src/components/dialog/PrintGroup.test.tsx"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/lib/printDocument.test.ts"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/lib/printOptions.test.ts"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/states/printing.test.ts"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/components/chat/MessageContextMenu.test.tsx"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/components/dialog/PrintGroup.test.tsx"
           }
         ],
         "native": [],

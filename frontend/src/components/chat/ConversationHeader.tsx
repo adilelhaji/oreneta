@@ -26,7 +26,7 @@ import { useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { showToast, ui$ } from '../../states/ui'
 import { archiveThread, deleteThread, mail$, markThreadRead, markThreadUnread, starThread } from '../../states/mail'
-import { printConversation } from '../../lib/print'
+import { printFromReader } from '../../states/printing'
 import { LabelPicker } from './LabelPicker'
 import { thread$, type ConversationMode } from '../../states/thread'
 import { closeKanbanPane, kanban$, openCorrespondentMail } from '../../states/kanban'
@@ -362,22 +362,10 @@ export function ConversationHeader({
                 <button
                   onClick={() => {
                     setActionsMenuOpen(false)
-                    void printConversation({
-                      subject: activeThread.subject,
-                      // Every message of the conversation, in the order they
-                      // were written: a printout of one message out of twelve
-                      // is a printout of a fragment.
-                      messages: mail$.messages.peek().filter((message) => message.thread_id === activeThread.thread_id),
-                      // The printout loads what the reader would, and says
-                      // when older messages were not loaded (#35).
-                      allowRemoteImages:
-                        accounts.find((account) => account.id === activeThread.account_id)?.load_remote_images ?? false,
-                      incompleteNotice: mail$.messagesCursor.peek() ? t('print.incomplete') : undefined,
-                      printedLabel: t('print.printedOn'),
-                      toLabel: t('print.to'),
-                      ccLabel: t('print.cc'),
-                      attachmentsLabel: t('print.attachments'),
-                    })
+                    // As General → Print says: the whole conversation by
+                    // default, since a printout of one message out of twelve
+                    // is a printout of a fragment (ADR-0060).
+                    void printFromReader(activeThread)
                   }}
                   className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer hover:bg-hover"
                 >

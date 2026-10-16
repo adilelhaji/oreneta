@@ -8,6 +8,7 @@ import {
   Link2,
   Mail,
   MailOpen,
+  Printer,
   Shrink,
   SquarePen,
   Star,
@@ -18,6 +19,7 @@ import { openMessageTab, editAsNewMessage, forwardMessage, openDraftCompose } fr
 import { deleteMessage, isDraftFolder, markMessageReadState, saveMessageAsEml, starMessage } from '../../states/mail'
 import { openExternal } from '../../lib/native'
 import { startMessageTranslation } from '../../states/translation'
+import { printFromReader } from '../../states/printing'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
 import { MenuItem } from '../menu/MenuItem'
 import type { Message } from '../../types'
@@ -199,6 +201,19 @@ export function MessageContextMenu({
                 const message = state.message
                 onClose()
                 toggleFitWidth(message.id)
+              }}
+            />
+          )}
+          {/* Just this message, with the remembered header and attachment
+              choices (ADR-0060); needs the body, so not from a header row. */}
+          {!headerOnly && (
+            <MenuItem
+              icon={<Printer size={14} className="text-accent" strokeWidth={1.75} />}
+              label={t('print.message')}
+              onClick={() => {
+                const message = state.message
+                onClose()
+                void printFromReader(message, message)
               }}
             />
           )}
