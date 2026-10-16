@@ -62,7 +62,7 @@ export function SavedSearchMenu({ query }: { query: string }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-raised">
+        <div className="absolute end-0 top-full z-50 mt-1 min-w-[15rem] rounded-control border border-border bg-panel p-1 shadow-raised">
           {trimmed && !alreadySaved && (
             <>
               <button
@@ -93,10 +93,10 @@ export function SavedSearchMenu({ query }: { query: string }) {
                 className={`${menuItemClass} min-w-0 flex-1`}
               >
                 <Bookmark size={14} className="text-secondary" strokeWidth={1.75} />
-                <span className="min-w-0 flex-1 truncate text-left">
+                <span className="min-w-0 flex-1 truncate text-start">
                   {search.name}
                   {search.folder && (
-                    <span className="ml-1.5 text-2xs text-secondary">
+                    <span className="ms-1.5 text-2xs text-secondary">
                       {search.account === 'unified'
                         ? t('search.scopeAll', { defaultValue: 'all accounts' })
                         : search.folder}

@@ -95,7 +95,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
           }}
           aria-label={t('labels.filterBy')}
           className={clsx(
-            'ml-1 max-w-[10rem] rounded-control-sm py-1 pl-2 text-caption font-semibold',
+            'ms-1 max-w-[10rem] rounded-control-sm py-1 ps-2 text-caption font-semibold',
             activeLabel && dropdownLabels.some((label) => label.id === activeLabel) && 'text-accent',
           )}
         >
@@ -115,7 +115,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
         aria-label={t('filters.keepAcrossFolders')}
         onClick={() => settings$.stickyFilters.set(!sticky)}
         className={clsx(
-          'ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm transition-colors cursor-pointer',
+          'ms-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-control-sm transition-colors cursor-pointer',
           sticky ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
         )}
       >

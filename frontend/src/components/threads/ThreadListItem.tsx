@@ -88,23 +88,25 @@ export function ThreadListItem({
   // Built once and placed by density: compact puts them on the sender's line,
   // the others on a line below. Two copies of this markup would be two things
   // to keep in step for no gain.
+  // The line takes the direction of the subject on it (ADR-0061): a Latin
+  // subject in the Arabic interface reads and truncates left to right.
   const subjectLine = (
-    <p className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}>
+    <p dir="auto" className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}>
       {/* Before the subject, where they read as what this conversation is
           rather than as an afterthought at the end of a line that truncates. */}
       {!!thread.labels?.length && (
-        <span className="mr-1 inline-flex align-middle">
+        <span className="me-1 inline-flex align-middle">
           <LabelChips ids={thread.labels} max={density.singleLine ? 1 : 2} />
         </span>
       )}
-      {hasDraft && <span className="mr-1 font-normal text-danger">{t('chat.draft')}</span>}
+      {hasDraft && <span className="me-1 font-normal text-danger">{t('chat.draft')}</span>}
       <span className={clsx(unread ? 'text-primary' : 'text-primary/85')}>{threadTitle}</span>
       {/* The preview trails the subject unless it has been given its own line,
           where repeating it here would show it twice. */}
       {!!thread.preview && !density.previewOnOwnLine && (
         <span className={clsx(unread ? 'text-secondary/90 font-medium' : 'text-secondary/75 font-normal')}>
           {' - '}
-          {thread.preview}
+          <bdi>{thread.preview}</bdi>
         </span>
       )}
     </p>
@@ -133,7 +135,7 @@ export function ThreadListItem({
     >
       <button
         className={clsx(
-          'relative w-full px-2 transition-all duration-120 flex items-center gap-2 cursor-pointer select-none text-left',
+          'relative w-full px-2 transition-all duration-120 flex items-center gap-2 cursor-pointer select-none text-start',
           density.rowPadding,
           bulkSelectable
             ? bulkSelected
@@ -150,7 +152,7 @@ export function ThreadListItem({
         title={threadTitle}
       >
         {!bulkSelectable && isActive && (
-          <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-accent" />
+          <span aria-hidden="true" className="absolute inset-y-0 start-0 w-[3px] bg-accent" />
         )}
         {bulkSelectable ? (
           <span
@@ -206,7 +208,7 @@ export function ThreadListItem({
               size={density.avatarSize}
             />
             {accountBadgeVisible && threadAccount && (
-              <div className="absolute -bottom-1 -left-1 rounded-full ring-2 ring-chats overflow-hidden">
+              <div className="absolute -bottom-1 -start-1 rounded-full ring-2 ring-chats overflow-hidden">
                 <Avatar name={badgeLabel} src={threadAccount.avatar_url} size={16} />
               </div>
             )}
@@ -216,10 +218,13 @@ export function ThreadListItem({
         <div className={clsx('flex-1 min-w-0 flex flex-col justify-center', density.rowGap)}>
           <div className="flex items-center gap-2 min-w-0">
             <div className={clsx('flex min-w-0 items-center gap-1', density.singleLine && 'max-w-[40%] shrink-0')}>
-              <span className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}>
+              <span
+                dir="auto"
+                className={clsx('text-ui font-semibold truncate', unread ? 'text-primary' : 'text-primary/85')}
+              >
                 {senderName || thread.from_addr.split('@')[0]}
                 {!!thread.recipient_overflow && (
-                  <span className="ml-1 font-normal text-secondary/80">+{thread.recipient_overflow}</span>
+                  <span className="ms-1 font-normal text-secondary/80">+{thread.recipient_overflow}</span>
                 )}
               </span>
               {/* Gmail-style thread size, muted and only once a thread has a
@@ -242,12 +247,12 @@ export function ThreadListItem({
                 nobody has asked about carries no clip rather than a doubtful
                 one. */}
             {thread.has_attachments && (
-              <Paperclip size={14} className="ml-auto shrink-0 text-secondary/70" strokeWidth={1.75} />
+              <Paperclip size={14} className="ms-auto shrink-0 text-secondary/70" strokeWidth={1.75} />
             )}
             <time
               className={clsx(
                 'shrink-0 text-caption font-normal',
-                thread.has_attachments ? 'ml-1' : 'ml-auto',
+                thread.has_attachments ? 'ms-1' : 'ms-auto',
                 unread ? 'text-accent' : 'text-secondary/65',
               )}
             >
@@ -269,7 +274,9 @@ export function ThreadListItem({
           {/* Relaxed gives the preview a line of its own — two of them — so a
               subject and the message under it stop competing for one line. */}
           {density.previewOnOwnLine && !!thread.preview && (
-            <p className="line-clamp-2 text-xs leading-snug text-secondary/75">{thread.preview}</p>
+            <p dir="auto" className="line-clamp-2 text-xs leading-snug text-secondary/75">
+              {thread.preview}
+            </p>
           )}
         </div>
       </button>
@@ -285,7 +292,7 @@ export function ThreadListItem({
           gesture belongs to the selection, and in compact rows, where there
           is no room that is not already the subject's. */}
       {!bulkSelectable && !density.singleLine && onQuickAction && (
-        <div className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-control-sm border border-border/60 bg-chats/95 p-0.5 shadow-sm group-hover:flex">
+        <div className="absolute end-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-control-sm border border-border/60 bg-chats/95 p-0.5 shadow-sm group-hover:flex">
           {quickActions.map(({ key, icon: Icon, label, danger }) => (
             <button
               key={key}
