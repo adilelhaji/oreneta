@@ -32,6 +32,8 @@ type SetupOptions = {
   manualRefresh?: boolean
   /** Translation models the synthetic core says are installed (#106). */
   installedModels?: string[]
+  /** One conversation with an Arabic subject and sender (#226, ADR-0061). */
+  arabicSubject?: boolean
 }
 
 // The registry the core ships, so the models the app is told about are real.
@@ -1182,6 +1184,10 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
       '<p>Wide synthetic invoice</p><table width="1800"><tr><td style="min-width:900px">Original first column</td><td style="min-width:900px">Original second column</td></tr></table>'
   }
   if (options.readReceipt) fixture.messages[0].receipt_requested = true
+  if (options.arabicSubject) {
+    fixture.threads[2].subject = RTL_SUBJECT
+    fixture.threads[2].from_name = RTL_SENDER
+  }
   if (options.readerQuote) {
     fixture.account.conversation_html = true
     fixture.messages[0].body_html =
@@ -1626,6 +1632,162 @@ test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CS
   } finally {
     await context.close()
   }
+})
+
+// Right-to-left layout for Arabic (#226, ADR-0061), on the production entry.
+// The shell mirrors (side rail on the right, the list to the right of the
+// reader, the way back on the right with its chevron turned), nothing spills
+// past either edge at 100% or 200%, axe finds nothing critical or serious,
+// and a Latin subject keeps reading left to right inside the Arabic list.
+const RTL_SUBJECT = 'مراجعة الميزانية: تخطيط الربع الرابع'
+const RTL_SENDER = 'ليلى حداد'
+
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [600, 1024, 1440]) {
+    test(`Arabic interface mirrors the shell without overflow and passes axe: ${theme}, ${width}px (#226)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'ar', theme })
+      await page.goto('/')
+      const html = page.locator('html')
+      await expect(html).toHaveAttribute('dir', 'rtl')
+      await expect(html).toHaveAttribute('lang', 'ar')
+      const list = page.locator('[data-thread-list]')
+      await expect(list).toBeVisible()
+      const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+      await expect(row).toBeVisible()
+
+      // A Latin subject in the Arabic list reads left to right, isolated from
+      // the interface around it.
+      const subject = row.locator('[dir="auto"]').first()
+      expect(await subject.evaluate((element) => getComputedStyle(element).direction)).toBe('ltr')
+      expect(await row.evaluate((element) => getComputedStyle(element).direction)).toBe('rtl')
+
+      const inView = async (where: string) => {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+        const outside = await page.evaluate(() =>
+          [...document.querySelectorAll('button, [role=button], input')]
+            .filter((element) => {
+              const box = element.getBoundingClientRect()
+              return box.width > 0 && (box.left < -1 || box.right > innerWidth + 1)
+            })
+            .map(
+              (element) =>
+                element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim(),
+            ),
+        )
+        expect(outside, where).toEqual([])
+      }
+
+      if (width >= 769) {
+        // The rail hugs the right edge and the list sits to the right of the reader.
+        const rail = page.locator('main > aside').first()
+        const railBox = (await rail.boundingBox())!
+        expect(Math.round(railBox.x + railBox.width)).toBeGreaterThanOrEqual(width - 1)
+        const listBox = (await list.boundingBox())!
+        const readerBox = (await page.locator('[data-message-pane]').boundingBox())!
+        expect(listBox.x).toBeGreaterThan(readerBox.x)
+      }
+      await inView('mailbox')
+
+      const blocking: string[] = []
+      const audit = async (screen: string) => {
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-rtl-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
+        writeFileSync(info.outputPath(`axe-rtl-${screen}.json`), body)
+        for (const violation of results.violations) {
+          if (violation.impact === 'critical' || violation.impact === 'serious') {
+            const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+            blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+          }
+        }
+      }
+      await audit('mailbox')
+
+      await row.click()
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      if (width < 769) {
+        // One pane at a time: the way back sits at the start (right) edge and
+        // its chevron is mirrored to point right, towards where the list was.
+        const back = page.getByTitle('الرجوع إلى الدردشات', { exact: true })
+        const backBox = (await back.boundingBox())!
+        expect(backBox.x + backBox.width / 2).toBeGreaterThan(width / 2)
+        expect(await back.locator('svg').evaluate((element) => getComputedStyle(element).transform)).toBe(
+          'matrix(-1, 0, 0, 1, 0, 0)',
+        )
+      }
+      await inView('reader')
+      await audit('conversation')
+      await info.attach('rtl-reader', {
+        body: await page.screenshot({ path: info.outputPath('rtl-reader.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+
+      // 200%: the app's own zoom (#181), the reader and then the composer.
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+      await inView('reader at 200%')
+      await page.keyboard.press(`${mod}+KeyN`)
+      await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+      await inView('composer at 200%')
+      await info.attach('rtl-composer-200', {
+        body: await page.screenshot({ path: info.outputPath('rtl-composer-200.png'), animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+      await page.keyboard.press(`${mod}+Digit0`)
+
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+test('switching from Arabic back to English restores left to right without a reload (#226)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.goto('/')
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('dir', 'rtl')
+  const rail = page.locator('main > aside').first()
+  expect(Math.round((await rail.boundingBox())!.x)).toBeGreaterThan(1300)
+  const navigations: string[] = []
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations.push(frame.url())
+  })
+  await page.getByRole('textbox').first().focus()
+  await page.keyboard.press('Control+Comma')
+  const language = page.locator('select').filter({ has: page.locator('option[value="ar"]') })
+  await expect(language).toHaveValue('ar')
+  await language.selectOption('en')
+  await expect(html).toHaveAttribute('dir', 'ltr')
+  await expect(html).toHaveAttribute('lang', 'en')
+  await page.keyboard.press('Escape')
+  expect(Math.round((await rail.boundingBox())!.x)).toBe(0)
+  expect(navigations).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The other way round: an Arabic subject and sender in the English interface
+// read right to left, and the row around them does not turn.
+test('an Arabic subject in the English interface reads right to left inside a left-to-right row (#226)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, arabicSubject: true })
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr')
+  const row = page.getByRole('table').getByRole('button', { name: RTL_SUBJECT })
+  await expect(row).toBeVisible()
+  expect(await row.locator('[dir="auto"]').first().evaluate((element) => getComputedStyle(element).direction)).toBe(
+    'rtl',
+  )
+  expect(await row.evaluate((element) => getComputedStyle(element).direction)).toBe('ltr')
+  const sender = page.getByRole('table').locator('[dir="auto"]', { hasText: RTL_SENDER })
+  expect(await sender.evaluate((element) => getComputedStyle(element).direction)).toBe('rtl')
+  expect(errors).toEqual([])
 })
 
 test('Graph setup is explicit and finishes only after initial mailbox readiness', async ({ page }) => {
