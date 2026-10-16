@@ -1,35 +1,35 @@
-# Plataformas de escritorio: Linux y macOS (#115)
+# Plataformes d'escriptori: Linux i macOS (#115)
 
-Lo que se comprueba en cada plataforma, y lo que no.
+El que es comprova a cada plataforma, i el que no.
 
-- **Comprobación:** `scripts/test-desktop-startup.sh` abre dos veces el
-  binario de producción en un perfil nuevo. En cada arranque espera dos
-  cosas en el registro:
-  - que el núcleo haya arrancado;
-  - que la aplicación React dentro del webview le haya hecho sus primeras
-    llamadas, con la CSP de producción.
+- **Comprovació:** `scripts/test-desktop-startup.sh` obre dues vegades el
+  binari de producció en un perfil nou. A cada arrencada espera dues coses al
+  registre:
+  - que el nucli s'hagi iniciat;
+  - que l'aplicació React dins del webview li hagi fet les primeres crides,
+    amb la CSP de producció.
 
-  Guarda una captura y el registro de cada arranque. Falla si el núcleo no
-  arranca o si la aplicación muestra su pantalla de error.
-- **Linux:** WebKitGTK 4.1 bajo Xvfb, en el trabajo `linux-native` de CI.
-  También pasa en local.
-- **macOS:** WKWebView en el runner alojado de GitHub, en el trabajo
-  `macos-native`. El repositorio es público, así que esos minutos no
-  cuestan nada.
+  Desa una captura i el registre de cada arrencada. Falla si el nucli no
+  s'inicia o si l'aplicació mostra la pantalla d'error.
+- **Linux:** WebKitGTK 4.1 sota Xvfb, a la tasca `linux-native` de la CI.
+  També passa en local.
+- **macOS:** WKWebView a l'executor allotjat de GitHub, a la tasca
+  `macos-native`. El repositori és públic, de manera que aquests minuts no
+  costen res.
 
-## Lo que no cubre
+## El que no cobreix
 
-Arrancar no es paridad. En macOS siguen sin evidencia:
+Arrencar no és paritat. A macOS continuen sense evidència:
 
-- el llavero del sistema (la comprobación usa `MERON_KEYRING=off`);
-- las notificaciones;
-- la impresión;
-- los métodos de entrada (IME);
-- la instalación firmada y la actualización;
-- un flujo de correo con una cuenta real.
+- el clauer del sistema (la comprovació fa servir `MERON_KEYRING=off`);
+- les notificacions;
+- la impressió;
+- els mètodes d'entrada (IME);
+- la instal·lació signada i l'actualització;
+- un flux de correu amb un compte real.
 
-Esa evidencia necesita un Mac con sesión de usuario, la firma y la
-notarización de Apple y cuentas de prueba. Todo eso depende del
-propietario, igual que la verificación nativa de Windows. Linux sigue siendo
-una plataforma con regresión comprobada; su resultado no prueba nada sobre
-la paridad en macOS o en Windows.
+Aquesta evidència necessita un Mac amb sessió d'usuari, la signatura i la
+notarització d'Apple i comptes de prova. Tot això depèn del propietari, igual
+que la verificació nativa de Windows. Linux continua sent una plataforma amb
+regressió comprovada; el seu resultat no demostra res sobre la paritat a macOS
+o a Windows.
