@@ -205,7 +205,7 @@ d'arquitectura (diari durable d'escombrades, cadena i revocació S/MIME, AEAD de
 LibrePGP), registrats a cada document.
 
 Estat de la iteració 2 (2026-10-10): #170 porta l'editor complet al
-magatzem local, amb adjunts, revisions, conflicte visible, tombstone en tancar
+magatzem local, amb adjunts, revisions, conflicte visible, làpida (tombstone) en tancar
 i migració des de localStorage
 ([contracte](design/editor-draft-recovery.md)). De #39 es lliuren els
 destinataris amb coma al nom en respostes i contactes, i l'avís
@@ -468,7 +468,7 @@ Estat de la iteració 13 (2026-10-12, per delegació):
   la font deixa de demanar-se a Google Fonts
   (ADR-0030, [registre](design/offline-grammar.md), [SOUP](soup.md)).
 - **#106:** traducció amb Bergamot en un worker; models de Mozilla d'un
-  registre fix amb hashos, baixats pel nucli només a petició i després de
+  registre fix amb resums (hash), baixats pel nucli només a petició i després de
   veure'n la mida i l'origen, comprovats i col·locats de manera atòmica; al
   lector, amb l'original a un clic; al composer, revisada abans de
   fer-la servir (ADR-0031, [registre](design/offline-translation.md)).
@@ -502,7 +502,7 @@ Estat de la iteració 14 (2026-10-12, per delegació):
 
 Estat de la iteració 15 (2026-10-12, per delegació):
 - **#97:** comptes POP3 que baixen a una Safata d'entrada local, sense
-  duplicats (UIDL més hash). Es conserven al servidor tret que es
+  duplicats (UIDL més resum). Es conserven al servidor tret que es
   triï esborrar, i l'esborrament només és efectiu amb `QUIT`. Provat amb un servidor
   fals i amb Dovecot real a la CI (ADR-0035, [registre](design/pop3.md)).
 - **#110/#111:** matriu de proveïdors i decisió: XMPP primer, per ser un

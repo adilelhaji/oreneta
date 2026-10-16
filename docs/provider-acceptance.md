@@ -69,7 +69,7 @@ registreu els noms dels àmbits, mai els valors dels testimonis. L'aprovisioname
 canvis de l'arrendatari (tenant) i l'enviament extern són accions separades, que la CI no
 implica.
 
-Registreu per operació: SHA del candidat i hash de l'executable; versions de
+Registreu per operació: SHA del candidat i resum (hash) de l'executable; versions de
 l'aplicació/el nucli i del sistema operatiu; tipus de proveïdor/arrendatari; mode
 d'autenticació i àmbits concedits; perfil aïllat; estat inicial de carpetes/memòria cau;
 ID sintètics d'execució/missatge i SHA256 dels adjunts; resultat esperat; resultat
@@ -84,10 +84,10 @@ real com a fixtures.
 
 | Operació | Procediment i observació esperada | Neteja / límit de fallada |
 | --- | --- | --- |
-| Lectura i paginació | Llegiu cada fixture i travesseu el límit de pàgina; compareu recomptes, ID, cos i hashes dels adjunts amb l'estat del servidor | Elimineu només les fixtures de l'execució; distingiu el que no és a la memòria cau del que és absent |
+| Lectura i paginació | Llegiu cada fixture i travesseu el límit de pàgina; compareu recomptes, ID, cos i resums dels adjunts amb l'estat del servidor | Elimineu només les fixtures de l'execució; distingiu el que no és a la memòria cau del que és absent |
 | Enviament | Envieu un missatge correlacionat de la prova A a la prova B permesa; registreu el resultat de l'enviament, la recepció independent a B i la còpia d'Enviats del servidor com a tres observacions separades | No reenvieu a cegues un resultat incert; conserveu-ne la correlació i inspeccioneu primer l'estat del servidor |
 | Marques/moviments | Canvieu una fixture i observeu-la des d'un client independent; verifiqueu que el correu amb el mateix assumpte a l'altre compte no s'ha tocat | Restaureu la carpeta/les marques originals només per als ID de missatge de l'execució |
-| Esborranys/fitxers | Deseu, reinicieu i torneu a obrir; compareu destinataris, cos i hashes dels fitxers; exerciu un desament interromput | Conserveu l'estat incert de l'esborrany fins que es concilii; no deduïu una còpia de seguretat del perfil complet de l'èxit d'un esborrany remot |
+| Esborranys/fitxers | Deseu, reinicieu i torneu a obrir; compareu destinataris, cos i resums dels fitxers; exerciu un desament interromput | Conserveu l'estat incert de l'esborrany fins que es concilii; no deduïu una còpia de seguretat del perfil complet de l'èxit d'un esborrany remot |
 | Fora de línia/reconnexió | Desconnecteu només l'entorn de prova; llegiu el correu de la memòria cau i observeu una fallada honesta per a les dades que no hi són; torneu a connectar i compareu els canvis | Restaureu la connectivitat; comproveu duplicats i missatges no enviats/incerts abans de fer més accions |
 | Revocació | Revoqueu només la concessió de prova dedicada, observeu l'error del compte i torneu a autoritzar el mateix principal | Requereix una autorització explícita de revocació de la concessió; preserveu els comptes no relacionats |
 | Límit de freqüència | Feu servir un mecanisme de prova aprovat pel proveïdor, si n'hi ha; registreu Retry-After i l'absència de tempestes de reintents | No satureu mai un servei real per provocar la limitació; altrament deixeu aquesta fila sense provar i feu referència a la cobertura amb fixtures |

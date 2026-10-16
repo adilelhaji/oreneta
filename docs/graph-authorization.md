@@ -4,7 +4,7 @@ Implementa l'ADR-0004 acceptat; cap canvi a l'OAuth existent d'Outlook/Gmail.
 
 - El Go d'escriptori només és responsable de l'escoltador de bucle local (loopback) efímer i de l'obertura del navegador.
   Rust és responsable de PKCE/state/nonce, l'intercanvi/renovació de testimonis, la verificació d'identitat i
-  l'emmagatzematge de credencials. Cap testimoni bearer/de refresc ni codi d'autorització no es retorna
+  l'emmagatzematge de credencials. Cap testimoni bearer/d'actualització ni codi d'autorització no es retorna
   a l'estat del frontend, als registres ni a les preferències.
 - Un flux dura deu minuts, està vinculat al compte local seleccionat (si n'hi ha),
   i consumeix una única crida de retorn vàlida. La cancel·lació/substitució invalida la
@@ -27,7 +27,7 @@ Implementa l'ADR-0004 acceptat; cap canvi a l'OAuth existent d'Outlook/Gmail.
   conservar el mateix parell tenant/objecte. No hi ha fusió automàtica d'àlies/tenants ni
   correspondència `/me` per a bústies compartides. La creació de comptes nous és responsabilitat de #128.
 - Desar un registre versionat només de Graph (principal, associació local, ID de client,
-  àmbits concedits, testimoni d'accés/de refresc, caducitat) sota un espai de noms del clauer
+  àmbits concedits, testimoni d'accés/d'actualització, caducitat) sota un espai de noms del clauer
   separat i amb resum (hash). La fragmentació i el xifratge existents del clauer es continuen fent servir. No se sobreescriu
   cap secret, configuració, etiqueta, esborrany ni memòria cau dels comptes de correu. Un emmagatzematge segur absent/desactivat
   falla explícitament; els registres mal formats mai no esdevenen concessions buides.
@@ -42,7 +42,7 @@ Implementa l'ADR-0004 acceptat; cap canvi a l'OAuth existent d'Outlook/Gmail.
   el manté fins que s'han suprimit el compte local i la memòria cau. Un inici en espera
   no pot recrear una associació a partir d'una comprovació obsoleta de l'existència del compte.
 - La renovació es serialitza amb la desconnexió/reconnexió d'aquesta concessió. Persistir un
-  testimoni de refresc rotat abans d'informar de l'èxit; si no hi ha rotació, es conserva el
+  testimoni d'actualització rotat abans d'informar de l'èxit; si no hi ha rotació, es conserva el
   testimoni actual. La reautenticació, el consentiment revocat i la fallada d'emmagatzematge conserven
   el registre anterior; cap reintent a cegues. La desconnexió local només suprimeix els secrets de Graph,
   no les altres sessions de Microsoft ni la concessió IMAP.
@@ -57,5 +57,5 @@ restabliment de Windows per petició no llegida emmascari la resposta d'error de
 
 Fonts comprovades el 2026-09-09:
 [flux de codi de Microsoft](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow),
-[reclamacions de l'ID](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference),
+[declaracions del testimoni d'ID](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference),
 [validació OIDC](https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation).

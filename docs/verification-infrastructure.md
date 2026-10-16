@@ -69,7 +69,7 @@ Perquè aquesta ruta fos comprovable, el mode `MERON_KEYRING=off` del motor
 desa ara els secrets en memòria durant la vida del procés, com prometia el seu propi
 comentari: una font de contactes que emmagatzema la contrasenya i la llegeix
 en sincronitzar funciona igual que amb clauer; només es perd la persistència
-entre reinicis. Els registres Graph continuen fallant tancats en aquest mode.
+entre reinicis. Els registres Graph continuen tancant-se en cas d'error (fail closed) en aquest mode.
 
 ## Simulador Graph i enregistraments EWS: abast decidit
 

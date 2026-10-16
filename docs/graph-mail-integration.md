@@ -48,10 +48,10 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
 
 - Els ID de carpeta/element de Graph continuen sent valors opacs, que distingeixen
   majúscules i minúscules i qualificats pel compte. Taules de Graph separades els fan
-  correspondre als localitzadors de memòria cau existents. No analitzeu ni feu el hash
-  mai d'un ID d'element per convertir-lo en un UID ni reutilitzeu la correspondència
+  correspondre als localitzadors de memòria cau existents. No analitzeu ni calculeu mai el
+  resum (hash) d'un ID d'element per convertir-lo en un UID ni reutilitzeu la correspondència
   d'EWS. Assigneu substituts locals `u32` duradors de manera monòtona per compte; no
-  reutilitzeu mai les correspondències marcades com a eliminades (tombstone).
+  reutilitzeu mai les correspondències amb làpida (tombstone).
 - Resoleu les carpetes d'ús especial mitjançant els àlies coneguts de Graph, no pels noms
   visibles traduïts. La safata d'entrada fa servir l'àlies de memòria cau `INBOX`
   existent; les altres carpetes fan servir un localitzador d'ID codificat estable. El nom
@@ -67,7 +67,7 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
   substitució complet.
 - La identitat del missatge es fa correspondre independentment de la seva pertinença a
   una carpeta. Els moviments entre carpetes conserven el substitut local i la clau de
-  conversa de Graph. Les marques d'eliminació (tombstones) d'abast de carpeta només
+  conversa de Graph. Les làpides d'abast de carpeta només
   eliminen aquella pertinença, no les còpies/etiquetes locals no relacionades. Les
   carpetes físiques validen els ID de pare retornats; les vistes de carpetes de cerca
   poden fer referència a la seva carpeta física subjacent.

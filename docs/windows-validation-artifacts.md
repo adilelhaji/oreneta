@@ -6,7 +6,7 @@ per a la validació: la seva via manual també publica una versió pública.
 
 `windows-validation.yml` és una compilació explícita només de CI amb permisos de
 repositori de només lectura. Fa el checkout del SHA del llançament, exigeix que la seva CI de main de set jobs
-s'hagi completat mitjançant la política de porta de publicació existent (sense requisit d'etiqueta) i després
+s'hagi completat mitjançant la política de porta de publicació existent (sense requisit d'etiqueta de git) i després
 compila les dependències bloquejades de Rust/Bun, el sidecar incrustat i l'instal·lador NSIS.
 No substituir mai el commit comprovat per un checkout més nou de la branca.
 
@@ -16,7 +16,7 @@ Pujar els diagnòstics fins i tot en cas de fallada; pujar els canònics `orenet
 `oreneta-amd64-installer.exe` només després que la validació nativa tingui èxit. Un manifest JSON
 vincula els dos resums SHA256 al SHA complet del codi font i a l'execució del flux de treball.
 
-Aquest procés crea artefactes de CI, mai etiquetes, versions publicades, manifests de l'actualitzador ni
+Aquest procés crea artefactes de CI, mai etiquetes de git, versions publicades, manifests de l'actualitzador ni
 enviaments a botigues. No certifica la interoperabilitat amb proveïdors de comptes,
 l'actualització/desinstal·lació de l'instal·lador, la signatura, altres arquitectures ni la paritat amb eM Client.
 Després de la baixada, verificar els dos resums i el SHA del codi font abans de substituir la sortida local.
