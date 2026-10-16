@@ -183,7 +183,7 @@ describe('names and labels from people', () => {
     // In Arabic the names are separated with the Arabic comma.
     await interfaceIn('ar')
     view = show()
-    expect(view.container.textContent).toContain(`${ARABIC_NAME}، Marc`)
+    expect(view.container.textContent).toContain(`${ARABIC_NAME}\u060C Marc`)
   })
 
   it('lets a chip (a recipient, a label) take the direction of its own text', () => {

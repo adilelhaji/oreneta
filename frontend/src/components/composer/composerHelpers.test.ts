@@ -18,6 +18,11 @@ describe('the direction of outgoing mail', () => {
     expect(inlineRichStyles(html)).toBe(expected)
   })
 
+  it('leaves paragraphs in left-to-right scripts outside Latin unmarked', () => {
+    const html = `<p>नमस्ते दोस्त</p><p>வணக்கம்</p><p>สวัสดี</p><p>${String.fromCodePoint(0xfeff)}Hello</p>`
+    expect(inlineRichStyles(html)).toBe(html)
+  })
+
   it('marks right-to-left paragraphs, headings and lists, and only those', () => {
     const body = parse(
       inlineRichStyles('<p>مرحبا يا آنا</p><p>Thanks, Ana</p><h2>الخطة</h2><ul><li><p>واحد</p></li><li><p>two</p></li></ul>'),

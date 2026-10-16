@@ -201,6 +201,27 @@ describe('the first strong character', () => {
     expect(firstStrongDirection('42 / 7')).toBeNull()
   })
 
+  it('counts only right-to-left letters as right to left: Indic and Thai scripts are left to right', () => {
+    for (const text of ['नमस्ते', 'নমস্কার', 'વંદન', 'வணக்கம்', 'สวัสดี', 'ສະບາຍດີ', 'ནམ']) {
+      expect(firstStrongDirection(text)).toBe('ltr')
+    }
+    for (const text of ['שלום', 'مرحبا', 'ܫܠܡܐ', 'ދިވެހި', 'ߒߞߏ', 'ﻣﺮﺣﺒﺎ']) {
+      expect(firstStrongDirection(text)).toBe('rtl')
+    }
+  })
+
+  it('skips weak and neutral characters: byte order mark, joiners, Arabic-Indic digits, marks', () => {
+    const mark = (code: number) => String.fromCodePoint(code)
+    expect(firstStrongDirection(`${mark(0xfeff)}Hello`)).toBe('ltr')
+    expect(firstStrongDirection(`${mark(0x200d)}${mark(0x200c)}Hello`)).toBe('ltr')
+    expect(firstStrongDirection('١٢٣ Hello')).toBe('ltr')
+    expect(firstStrongDirection(`${mark(0x0651)}Hello`)).toBe('ltr')
+    expect(firstStrongDirection(`${mark(0xfeff)}`)).toBeNull()
+    // The explicit marks are strong.
+    expect(firstStrongDirection(`${mark(0x200f)}Hello`)).toBe('rtl')
+    expect(firstStrongDirection(`${mark(0x200e)}مرحبا`)).toBe('ltr')
+  })
+
   it('skips nested text that sets its own direction, as dir="auto" does', () => {
     const doc = new DOMParser().parseFromString('<p><span dir="ltr">Hello</span> مرحبا <bdi>Hi</bdi></p>', 'text/html')
     expect(firstStrongDirection(directionalText(doc.querySelector('p')!))).toBe('rtl')
@@ -214,11 +235,11 @@ describe('names and arrows in the interface language', () => {
   })
 
   it('isolates each name and uses the Arabic comma in Arabic', () => {
-    expect(formatNameList(['Alice', 'ليلى'], 'ar')).toBe('⁨Alice⁩، ⁨ليلى⁩')
+    expect(formatNameList(['Alice', 'ليلى'], 'ar')).toBe('\u2068Alice\u2069\u060C \u2068ليلى\u2069')
   })
 
   it('isolates a right-to-left name even in a left-to-right interface', () => {
-    expect(formatNameList(['ليلى', 'Bob'], 'en')).toBe('⁨ليلى⁩, Bob')
+    expect(formatNameList(['ليلى', 'Bob'], 'en')).toBe('\u2068ليلى\u2069, Bob')
   })
 
   it('points arrows along the line', () => {

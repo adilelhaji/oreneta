@@ -123,6 +123,15 @@
     declara su dirección (un original citado) no se toca. Así una respuesta
     en árabe sobre una cita en inglés llega a Outlook, Apple Mail o Gmail con
     cada parte en su dirección.
+  - **qué es un carácter fuerte de derecha a izquierda** (`firstStrongDirection`,
+    para el correo que sale y la línea del asunto): una letra de una escritura
+    de derecha a izquierda (hebreo, árabe, siríaco, thaana, n'ko, samaritano,
+    mandeo y los bloques de derecha a izquierda de los planos suplementarios)
+    o las marcas RLM y ALM; cualquier otra letra, o LRM, es de izquierda a
+    derecha. Los dígitos, los signos combinantes, la puntuación, la marca de
+    orden de bytes y los unidores no cuentan, como en `dir="auto"`. Un rango
+    de puntos de código no basta: entre las escrituras árabes y hebreas hay
+    escrituras índicas y tailandesas que son de izquierda a derecha.
 - **Accesibilidad hallada por las pruebas en árabe**, defectos que ya estaban
   en todos los idiomas y que se corrigen, aunque cambian lo que se ve en
   todos ellos:

@@ -166,11 +166,20 @@ export function menuLeft(
   return Math.max(margin, Math.min(desired, viewportWidth - width - margin))
 }
 
-// Letters of the scripts written right to left: Hebrew, Arabic, Syriac,
-// Thaana, NKo, Samaritan, Mandaic and their presentation forms, plus the
-// historic right-to-left blocks of the supplementary planes.
-const RTL_LETTER = /[֐-ࣿיִ-﷿ﹰ-﻿\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u
+// Characters whose bidi class is strong right to left (R or AL): the letters
+// of the scripts written right to left (Hebrew, Arabic, Syriac, Thaana, NKo,
+// Samaritan, Mandaic, and the historic and modern right-to-left scripts of
+// the supplementary planes such as Adlam). Letters only: Arabic-Indic
+// digits (AN), combining marks (NSM), Arabic punctuation and the byte order
+// mark are weak or neutral and skipped, as dir="auto" skips them. Indic,
+// Thai and other scripts between them in the code charts are left to right.
+const RTL_SCRIPT =
+  /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u
 const LETTER = /\p{L}/u
+// The explicit marks: RIGHT-TO-LEFT MARK and ARABIC LETTER MARK are strong
+// right to left, LEFT-TO-RIGHT MARK strong left to right.
+const RTL_MARK = /[\u{200F}\u{061C}]/u
+const LTR_MARK = /\u{200E}/u
 
 /**
  * The direction of a text's first strong character, as `dir="auto"` decides
@@ -179,8 +188,10 @@ const LETTER = /\p{L}/u
  */
 export function firstStrongDirection(text: string): TextDirection | null {
   for (const char of text) {
-    if (RTL_LETTER.test(char)) return 'rtl'
-    if (LETTER.test(char)) return 'ltr'
+    if (RTL_MARK.test(char)) return 'rtl'
+    if (LTR_MARK.test(char)) return 'ltr'
+    if (!LETTER.test(char)) continue
+    return RTL_SCRIPT.test(char) ? 'rtl' : 'ltr'
   }
   return null
 }
@@ -273,7 +284,7 @@ export function backArrow(direction: TextDirection = documentDirection()): strin
 
 /** Separator between names in a list, in the interface language's punctuation. */
 export function nameSeparator(language?: string | null): string {
-  return languageDirection(language) === 'rtl' ? '، ' : ', '
+  return languageDirection(language) === 'rtl' ? '\u060C ' : ', '
 }
 
 /**
@@ -286,6 +297,6 @@ export function nameSeparator(language?: string | null): string {
 export function formatNameList(names: string[], language?: string | null): string {
   const rtlInterface = languageDirection(language) === 'rtl'
   return names
-    .map((name) => (rtlInterface || firstStrongDirection(name) === 'rtl' ? `⁨${name}⁩` : name))
+    .map((name) => (rtlInterface || firstStrongDirection(name) === 'rtl' ? `\u2068${name}\u2069` : name))
     .join(nameSeparator(language))
 }
