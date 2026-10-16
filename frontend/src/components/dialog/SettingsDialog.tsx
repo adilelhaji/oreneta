@@ -101,7 +101,13 @@ import type { Account } from '../../types'
 import { Avatar } from '../avatar/Avatar'
 import { IconButton } from '../button/IconButton'
 import { NumberRow, SegmentedRow, SettingRow, SettingsGroup, Switch, ToggleRow, SelectRow } from './AccountSettingsRows'
-import { supportedI18nLanguages, languageNativeNames, type SupportedI18nLanguage } from '../../lib/i18n'
+import {
+  DEFAULT_I18N_LANGUAGE,
+  SYSTEM_LANGUAGE_CHOICE,
+  languageNativeNames,
+  supportedI18nLanguages,
+  type LanguageChoice,
+} from '../../lib/i18n'
 import { ThemeSettingsSection } from './ThemeSettingsSection'
 import { FontSettingsSection } from './FontSettingsSection'
 import { RulesSettingsSection } from './RulesSettingsSection'
@@ -956,16 +962,17 @@ function GeneralSection() {
           icon={<Globe size={16} strokeWidth={1.75} />}
           title={t('settings.language.label')}
           hint={t('settings.language.hint')}
-          value={language || ''}
+          // Nobody has chosen yet: the default language is the one in use (ADR-0062).
+          value={language ?? DEFAULT_I18N_LANGUAGE}
           options={[
-            { value: '', label: t('settings.language.system') },
+            { value: SYSTEM_LANGUAGE_CHOICE, label: t('settings.language.system') },
             ...supportedI18nLanguages.map((lang) => ({
               value: lang,
               label: languageNativeNames[lang],
             })),
           ]}
           onChange={(value) => {
-            settings$.language.set(value === '' ? null : (value as SupportedI18nLanguage))
+            settings$.language.set(value as LanguageChoice)
           }}
         />
       </SettingsGroup>

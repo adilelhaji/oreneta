@@ -1,5 +1,5 @@
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { mail$ } from '../../states/mail'
 import { Chip } from '../chip/Chip'
 
@@ -10,7 +10,7 @@ function readable(part: string, t: (key: string, vars?: Record<string, unknown>)
   if (field === 'after' || field === 'before') {
     const at = Number(value)
     if (Number.isFinite(at)) {
-      return `${t(`search.part.${field}`)} ${new Date(at * 1000).toLocaleDateString()}`
+      return `${t(`search.part.${field}`)} ${new Date(at * 1000).toLocaleDateString(intlLocale())}`
     }
   }
   if (field === 'is' || field === 'has') return t(`search.part.${field}.${value}`, { defaultValue: part })

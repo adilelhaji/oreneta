@@ -12,6 +12,7 @@
 import type { Message } from '../types'
 import { stripTrackingPixels } from '../components/chat/readerHtml'
 import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './printOptions'
+import { intlLocale } from './i18n'
 
 /** Escapes text for placing in HTML. */
 export function escapeHtml(text: string): string {
@@ -98,7 +99,7 @@ function senderBlock(message: Message, labels: BlockLabels, options: PrintOption
     ? `<span class="who">${escapeHtml(name)}</span> &lt;${escapeHtml(address)}&gt;`
     : `<span class="who">${escapeHtml(address)}</span>`
   const { headers } = options
-  const stamp = headers.date && message.date ? ` · ${escapeHtml(new Date(message.date * 1000).toLocaleString())}` : ''
+  const stamp = headers.date && message.date ? ` · ${escapeHtml(new Date(message.date * 1000).toLocaleString(intlLocale()))}` : ''
   const files = options.attachments ? (message.attachments ?? []).map((file) => file.filename).filter(Boolean) : []
 
   return [
@@ -231,7 +232,7 @@ export function buildPrintDocument(args: {
 <style>${STYLE}</style>
 </head>
 <body>
-${heading}<div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString())}</div>
+${heading}<div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString(intlLocale()))}</div>
 ${notice}
 ${messages}
 </body>

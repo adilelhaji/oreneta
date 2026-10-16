@@ -14,7 +14,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
 import {
@@ -418,7 +418,7 @@ export function TasksView() {
                       {!done && task.reminder_at && (
                         <span className="flex items-center gap-1 text-2xs text-secondary">
                           <Bell size={12} strokeWidth={1.75} aria-hidden="true" />
-                          {new Date(task.reminder_at * 1000).toLocaleString(undefined, {
+                          {new Date(task.reminder_at * 1000).toLocaleString(intlLocale(), {
                             dateStyle: 'short',
                             timeStyle: 'short',
                           })}
@@ -516,7 +516,7 @@ function SyncStatus({ list, syncing, onSync }: { list: TaskList; syncing: boolea
         {t('tasks.keptOn', { host, defaultValue: 'Kept on {host}.' })}{' '}
         {list.synced_at
           ? t('tasks.lastSynced', {
-              time: new Date(list.synced_at * 1000).toLocaleString(undefined, {
+              time: new Date(list.synced_at * 1000).toLocaleString(intlLocale(), {
                 dateStyle: 'short',
                 timeStyle: 'short',
               }),

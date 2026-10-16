@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, setSystemTime, spyOn } from 'bun:test'
+import { intlLocale } from '../../lib/i18n'
 import {
   escapeRegExp,
   extractAddr,
@@ -203,10 +204,10 @@ describe('messageHelpers timestamp helpers', () => {
     it.each([0, 9, 23])(`formats same-day hour %i with local 24-hour time (showDate=${showDate})`, (hour) => {
       const date = new Date(2026, 5, 10, hour, 5)
       const options = { hour: '2-digit', minute: '2-digit', hour12: false } as const
-      const expected = date.toLocaleTimeString([], options)
+      const expected = date.toLocaleTimeString(intlLocale(), options)
       timeFormat.mockClear()
       expect(formatMessageStamp(sec(date), showDate)).toBe(expected)
-      expect(timeFormat.mock.calls).toEqual([[[], options]])
+      expect(timeFormat.mock.calls).toEqual([[intlLocale(), options]])
       expect(dateFormat).not.toHaveBeenCalled()
     })
 
@@ -217,13 +218,13 @@ describe('messageHelpers timestamp helpers', () => {
       ['later this year', new Date(2026, 11, 31, 9), false],
       ['prior year', new Date(2025, 11, 31, 9), true],
       ['next year', new Date(2027, 0, 1, 9), true],
-    ] as const)(`formats %s using host locale date fields (showDate=${showDate})`, (_name, date, includeYear) => {
+    ] as const)(`formats %s in the interface language's date fields (showDate=${showDate})`, (_name, date, includeYear) => {
       const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
       if (includeYear) options.year = 'numeric'
-      const expected = date.toLocaleDateString([], options)
+      const expected = date.toLocaleDateString(intlLocale(), options)
       dateFormat.mockClear()
       expect(formatMessageStamp(sec(date), showDate)).toBe(expected)
-      expect(dateFormat.mock.calls).toEqual([[[], options]])
+      expect(dateFormat.mock.calls).toEqual([[intlLocale(), options]])
       expect(timeFormat).not.toHaveBeenCalled()
     })
   }

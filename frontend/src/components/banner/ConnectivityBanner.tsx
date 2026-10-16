@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { ChevronDown, RefreshCw, X } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { useValue } from '@legendapp/state/react'
 import { accounts$ } from '../../states/accounts'
 import { connectivity$, dismissSyncError, requestAccountSync, type SyncObservation } from '../../states/connectivity'
@@ -108,7 +108,7 @@ export function ConnectivityBanner() {
                     {observation?.lastActivityAt && (
                       <p className="text-caption text-secondary">
                         {t('connectivity.health.activity', {
-                          time: new Date(observation.lastActivityAt).toLocaleTimeString(),
+                          time: new Date(observation.lastActivityAt).toLocaleTimeString(intlLocale()),
                         })}
                       </p>
                     )}

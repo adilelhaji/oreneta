@@ -1,6 +1,6 @@
 import { AlarmClock, BellOff, CalendarClock, Mail, Moon, Play, Volume2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import type { t as translate } from '../../lib/i18n'
 import { NOTIFICATION_SOUNDS, parseHm, type NotificationPrefs, type NotificationSoundId } from '../../lib/quietHours'
 import { settings$ } from '../../states/settings'
@@ -78,7 +78,7 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 function dayLabel(day: number): string {
   // 2024-01-07 was a Sunday; the locale names the day.
-  return new Date(2024, 0, 7 + day).toLocaleDateString(undefined, { weekday: 'short' })
+  return new Date(2024, 0, 7 + day).toLocaleDateString(intlLocale(), { weekday: 'short' })
 }
 
 /**

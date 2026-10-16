@@ -45,7 +45,14 @@ import {
 import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
 import { clampPaneSize, DETAILS_PANEL_WIDTH, KANBAN_PANE_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
-import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
+import {
+  DEFAULT_I18N_LANGUAGE,
+  languageChoiceFromStore,
+  normalizeI18nLanguage,
+  resolveInterfaceLanguage,
+  type LanguageChoice,
+  type SupportedI18nLanguage,
+} from '../lib/i18n'
 import { languageDirection } from '../lib/direction'
 
 // Persisted user settings. This module maps 1:1 to the `settings` DB table: each
@@ -267,7 +274,11 @@ export type Settings = {
   autoUpdateCheck: boolean
   /** Version whose update banner the user dismissed, so it doesn't nag. */
   dismissedUpdateVersion: string | null
-  language: SupportedI18nLanguage | null
+  /**
+   * The interface language chosen in Settings: a language, or "system" to
+   * follow the system's. Null until someone chooses, which is Catalan (ADR-0062).
+   */
+  language: LanguageChoice | null
   /** Rebound keyboard shortcuts, keyed by shortcut id (see lib/shortcuts.ts). */
   shortcutOverrides: ShortcutOverrides
   /**
@@ -538,8 +549,9 @@ applyFontSelection(fontBootstrap)
 // Like the theme, the active locale is reflected to <html lang>/dir so CJK glyph
 // selection (:lang() in index.css) and RTL paint correctly. The DB row loads
 // async, so a localStorage mirror lets us set it synchronously at first paint;
-// it falls back to the OS locale until the DB hydrates. DB rows stay
-// authoritative — this cache is only a paint-time hint.
+// a profile without one (a fresh profile) paints in the default language,
+// Catalan (ADR-0062), until the DB hydrates. DB rows stay authoritative — this
+// cache is only a paint-time hint.
 const LANG_CACHE_KEY = 'meron-language-cache'
 
 /** Reflect a locale to the document and refresh the paint-time cache. */
@@ -557,14 +569,33 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
   }
 }
 
-;(function bootstrapDocumentLanguage() {
+/**
+ * The language the interface shows before the profile's choice is read: the
+ * one the last run showed, or the default on a fresh profile (ADR-0062).
+ */
+export const bootstrapLanguage: SupportedI18nLanguage = (function bootstrapDocumentLanguage() {
+  let cached: SupportedI18nLanguage | null = null
   try {
-    const cached = normalizeI18nLanguage(localStorage.getItem(profileKey(LANG_CACHE_KEY)))
-    applyDocumentLanguage(cached ?? resolveI18nLanguageFromWebLocale(navigator.language) ?? 'en')
+    cached = normalizeI18nLanguage(localStorage.getItem(profileKey(LANG_CACHE_KEY)))
+  } catch {
+    // Storage unavailable: paint in the default language.
+  }
+  const language = cached ?? DEFAULT_I18N_LANGUAGE
+  try {
+    applyDocumentLanguage(language)
   } catch {
     // Best effort; useAppEffects re-applies once the DB-backed language resolves.
   }
+  return language
 })()
+
+/** Whether the profile's language choice has been read from the store yet. */
+export const languageLoaded$ = observable(false)
+
+/** The language the interface shows for a choice (the current one by default). */
+export function interfaceLanguage(choice: LanguageChoice | null = settings$.language.peek()): SupportedI18nLanguage {
+  return resolveInterfaceLanguage(choice, navigator.language)
+}
 
 export const settings$ = observable<Settings>({
   themeId: themeBootstrap.themeId,
@@ -1071,8 +1102,10 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
       settings$.dismissedUpdateVersion.set(dismissedUpdate)
     }
 
-    const language = normalizeI18nLanguage(prefs[DB_KEY.language] as string | null | undefined)
-    settings$.language.set(language)
+    // A row present means someone chose, "System" included; none means the
+    // profile has never chosen and gets the default language (ADR-0062).
+    settings$.language.set(languageChoiceFromStore(Object.hasOwn(prefs, DB_KEY.language), prefs[DB_KEY.language]))
+    languageLoaded$.set(true)
 
     const shortcutOverrides = sanitizeShortcutOverrides(prefs[DB_KEY.shortcutOverrides])
     if (shortcutOverrides) settings$.shortcutOverrides.set(shortcutOverrides)

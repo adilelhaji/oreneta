@@ -5,7 +5,7 @@
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
 import { showToast } from './ui'
-import { t } from '../lib/i18n'
+import { intlLocale, t } from '../lib/i18n'
 import type { Recurrence } from './calendar'
 
 export type Task = {
@@ -256,7 +256,7 @@ export async function setTaskCompleted(id: number, completed: boolean, options: 
     if (completed && res?.next_due) {
       showToast(
         t('tasks.nextOccurrence', {
-          date: new Date(res.next_due * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+          date: new Date(res.next_due * 1000).toLocaleDateString(intlLocale(), { dateStyle: 'medium' }),
           defaultValue: 'Done. Next due {date}.',
         }),
       )

@@ -34,6 +34,7 @@ export function ComposerHeaderFields({
         <div className="flex items-center gap-2 border-b border-border/60 py-1.5">
           <span className={labelClass}>{t('composer.fields.from')}</span>
           <select
+            aria-label={t('composer.fields.from')}
             value={`${draft.accountId}|${draft.fromEmail || fromAccount?.email || ''}`}
             onChange={(e) => {
               const sep = e.target.value.indexOf('|')

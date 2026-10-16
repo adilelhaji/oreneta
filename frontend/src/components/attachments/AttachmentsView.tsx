@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Download, Eye, Mail, Paperclip, Search } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
 import {
   attachmentList$,
@@ -198,7 +198,7 @@ export function AttachmentsView() {
                       {[
                         formatFileSize(item.size),
                         item.from_name || item.from_addr,
-                        new Date(item.date * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+                        new Date(item.date * 1000).toLocaleDateString(intlLocale(), { dateStyle: 'medium' }),
                         item.subject,
                       ]
                         .filter(Boolean)
