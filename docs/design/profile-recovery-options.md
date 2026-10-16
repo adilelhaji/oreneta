@@ -1,116 +1,121 @@
-# Recuperación del perfil: opción B aprobada (#146)
+# Recuperació del perfil: opció B aprovada (#146)
 
-Estado: **opción B aprobada** el 2026-10-05: «Sí, implementar copia completa local
-cifrada». Contrato: [ADR-0010](../adr/0010-full-profile-local-recovery.md), registrado
-antes de implementar. El inventario siguiente describe la base previa, no una
-capacidad ya entregada. Base de recuperación
-inspeccionada: `c40ea260f65b350bc1b5db7ddebb5f514fa0bcbb`; las columnas posteriores
-usan la tabla de ajustes existente y no cambian el formato de copia.
+Estat: **opció B aprovada** el 2026-10-05, amb el text literal «Sí, implementar
+copia completa local cifrada». Contracte: [ADR-0010](../adr/0010-full-profile-local-recovery.md),
+registrat abans d'implementar-lo. L'inventari següent descriu la base prèvia, no
+una capacitat ja lliurada. Base de recuperació
+inspeccionada: `c40ea260f65b350bc1b5db7ddebb5f514fa0bcbb`; les columnes posteriors
+fan servir la taula de configuració existent i no canvien el format de la còpia.
 
-ADR 0008 autoriza copias de configuración. #113 pide copia completa programada;
-no son la misma capacidad. La aprobación permite implementar el alcance B por
-entregas verificadas. Ninguna opción autoriza publicación ni servicios
-externos. La revisión se limita a código y datos sintéticos, sin abrir perfiles
-del usuario.
+L'ADR 0008 autoritza còpies de la configuració. #113 demana una còpia completa
+programada; no són la mateixa capacitat. L'aprovació permet implementar l'abast B
+per lliuraments verificats. Cap opció no autoritza publicacions ni serveis
+externs. La revisió es limita a codi i dades sintètiques, sense obrir perfils
+de l'usuari.
 
-## Inventario y pérdida que la copia actual no resuelve
+## Inventari i pèrdua que la còpia actual no resol
 
-| Dato | Situación actual | Recuperación desde proveedor |
+| Dada | Situació actual | Recuperació des del proveïdor |
 |---|---|---|
-| Cuentas, preferencias por cuenta, ajustes globales y suscripciones RSS | Incluidos en `BackupData`; ajustes nuevos como `mailbox_views` también | Configuración local no deducible por completo del proveedor |
-| Contraseñas y tokens del almacén de cuentas tradicional | Solo con opción de secretos y contraseña de cifrado; almacén seguro separado en escritorio. Secretos ausentes/ilegibles pueden omitirse aunque se soliciten | Reautenticación puede regenerar sesiones; no garantiza recuperar contraseñas antiguas |
-| Autorizaciones y perfiles Graph | El vault y las tablas de perfiles Graph no forman parte del payload actual, tampoco por marcar secretos | Reautorización y reconstrucción requieren verificación; no afirmar que la copia restablece Graph |
-| Identidades OpenPGP y S/MIME | Metadatos incluidos; claves privadas solo con secretos/cifrado y si están disponibles | No se pueden reconstruir las claves privadas desde correo remoto |
-| Confianza/certificados ajenos | Tablas `pgp_certs`/`smime_certs`, fuera de `BackupData` | No asumir reconstrucción de decisiones locales de confianza |
-| Correo y estado de sincronización | Tablas de mensajes/carpetas, excluidas | IMAP/EWS/Graph permiten volver a consultar lo que conserve el servidor y autorice la cuenta; no acredita recuperar correo eliminado, datos solo locales ni una instantánea histórica |
-| RSS descargado | La copia conserva suscripciones, no artículos | El feed puede dejar de publicar artículos antiguos |
-| Borradores del editor completo | Texto en `localStorage` (`meron-compose-tabs`), fuera de la copia; adjuntos se excluyen de esa persistencia | Solo una copia guardada efectivamente en Drafts podrá recuperarse del servidor |
-| Respuesta rápida | Estado del editor y guardado remoto explícito/automático por su flujo actual | Un guardado pendiente o fallido no es una copia remota confirmada |
-| Adjuntos y contenido insertado | Archivos bajo el directorio de medios/caché, más adjuntos del editor; fuera de `BackupData` | Recuperables solo si siguen en un mensaje remoto accesible; los archivos locales pendientes pueden no tener equivalente |
-| Tareas vinculadas | Tabla `tasks`, excluida | Locales: no hay reconstrucción garantizada por proveedor |
-| Etiquetas y asociaciones | `labels`, `thread_labels`, `label_links`, excluidas | Algunas asociaciones remotas pueden volver; etiquetas/anotaciones locales no se deducen de ellas |
-| Reglas, plantillas, aprendizaje spam y prioridad | Tablas propias, excluidas | Estado local no reconstruible por correo remoto |
-| Envíos programados y posposiciones | `scheduled_sends`/`snoozed_threads`, excluidos | Restaurar una programación no debe reenviar automáticamente; resultados inciertos requieren revisión |
-| Personas y fuentes de contactos | `people`, emails/teléfonos y `contact_sources`, excluidos | CardDAV solo puede devolver contactos remotos confirmados y aún accesibles; no cambios locales pendientes |
-| Calendarios y eventos | Tablas propias, excluidas | Depende del proveedor y de que los cambios estén confirmados; suscripciones no equivalen a datos locales recuperables |
+| Comptes, preferències per compte, configuració global i subscripcions RSS | Inclosos a `BackupData`; les opcions noves com `mailbox_views` també | Configuració local que no es pot deduir completament del proveïdor |
+| Contrasenyes i testimonis (tokens) del magatzem de comptes tradicional | Només amb l'opció de secrets i una contrasenya de xifratge; magatzem segur separat a l'escriptori. Els secrets absents o il·legibles es poden ometre encara que es demanin | La reautenticació pot regenerar sessions; no garanteix recuperar contrasenyes antigues |
+| Autoritzacions i perfils de Graph | El magatzem (vault) i les taules de perfils de Graph no formen part de la càrrega actual, tampoc marcant els secrets | La reautorització i la reconstrucció requereixen verificació; no s'ha d'afirmar que la còpia restableix Graph |
+| Identitats OpenPGP i S/MIME | Metadades incloses; claus privades només amb secrets i xifratge, i si estan disponibles | Les claus privades no es poden reconstruir a partir del correu remot |
+| Confiança i certificats d'altri | Taules `pgp_certs`/`smime_certs`, fora de `BackupData` | No s'ha de suposar la reconstrucció de les decisions locals de confiança |
+| Correu i estat de sincronització | Taules de missatges i carpetes, excloses | IMAP/EWS/Graph permeten tornar a consultar el que conservi el servidor i autoritzi el compte; no acredita la recuperació de correu eliminat, de dades només locals ni d'una instantània històrica |
+| RSS baixat | La còpia conserva les subscripcions, no els articles | El canal pot deixar de publicar articles antics |
+| Esborranys de l'editor complet | Text a `localStorage` (`meron-compose-tabs`), fora de la còpia; els adjunts s'exclouen d'aquesta persistència | Només una còpia desada efectivament a Drafts es podrà recuperar del servidor |
+| Resposta ràpida | Estat de l'editor i desament remot explícit o automàtic segons el seu flux actual | Un desament pendent o fallit no és una còpia remota confirmada |
+| Adjunts i contingut inserit | Fitxers sota el directori de mitjans i memòria cau, més els adjunts de l'editor; fora de `BackupData` | Recuperables només si continuen en un missatge remot accessible; els fitxers locals pendents poden no tenir equivalent |
+| Tasques vinculades | Taula `tasks`, exclosa | Locals: no hi ha cap reconstrucció garantida pel proveïdor |
+| Etiquetes i associacions | `labels`, `thread_labels`, `label_links`, excloses | Algunes associacions remotes poden tornar; les etiquetes i anotacions locals no se'n dedueixen |
+| Regles, plantilles, aprenentatge del correu brossa i prioritat | Taules pròpies, excloses | Estat local que no es pot reconstruir amb el correu remot |
+| Enviaments programats i posposats | `scheduled_sends`/`snoozed_threads`, exclosos | Restaurar una programació no ha de reenviar automàticament; els resultats incerts requereixen revisió |
+| Persones i fonts de contactes | `people`, adreces electròniques i telèfons i `contact_sources`, exclosos | CardDAV només pot retornar contactes remots confirmats i encara accessibles; no els canvis locals pendents |
+| Calendaris i esdeveniments | Taules pròpies, excloses | Depèn del proveïdor i que els canvis estiguin confirmats; les subscripcions no equivalen a dades locals recuperables |
 
-Fuentes: [payload y aplicación de copias](../../meron-core/src/backup.rs),
+Fonts: [càrrega i aplicació de les còpies](../../meron-core/src/backup.rs),
 [esquema local](../../meron-core/src/store/db.rs),
-[borradores del editor](../../frontend/src/states/compose.ts),
-[medios y caché](../../paths.go). No se ha certificado la reconstrucción real
-para ningún proveedor en esta tarea; esa evidencia corresponde a #145/#98.
-La afirmación general del comentario de `backup.rs` de que los mensajes son
-reproducibles no cubre los casos locales, eliminados o no confirmados anteriores.
+[esborranys de l'editor](../../frontend/src/states/compose.ts),
+[mitjans i memòria cau](../../paths.go). En aquesta tasca no s'ha certificat la
+reconstrucció real per a cap proveïdor; aquestes proves corresponen a #145/#98.
+L'afirmació general del comentari de `backup.rs` que els missatges són
+reproduïbles no cobreix els casos locals, eliminats o no confirmats anteriors.
 
-## Opciones presentadas y decisión
+## Opcions presentades i decisió
 
-**A. Mantener exclusivamente la copia de configuración.** Conservar ADR 0008 y
-mejorar los avisos sobre exclusiones. Menor coste de implementación y archivos
-pequeños; sigue siendo necesario volver a autenticar y sincronizar. Las pérdidas
-locales descritas no quedan resueltas y #113 permanece como brecha de paridad.
-No introducir programación de copias completas ni prometer recuperación integral.
+**A. Mantenir exclusivament la còpia de la configuració.** Conservar l'ADR 0008 i
+millorar els avisos sobre les exclusions. Cost d'implementació més baix i fitxers
+petits; continua sent necessari tornar a autenticar-se i sincronitzar. Les pèrdues
+locals descrites no queden resoltes i #113 continua com a mancança de paritat.
+No s'introdueix la programació de còpies completes ni es promet una recuperació
+integral.
 
-**B. Añadir copia completa local cifrada de un perfil (recomendada).** Mantener
-la exportación de configuración existente como opción independiente. Aprobar el
-siguiente límite arquitectónico antes de diseñar/implementar las entregas:
+**B. Afegir una còpia completa local xifrada d'un perfil (recomanada).** Mantenir
+l'exportació de la configuració existent com a opció independent. Aprovar el
+límit arquitectònic següent abans de dissenyar i implementar els lliuraments:
 
-- Captura consistente del perfil persistido, incluyendo base local, borradores
-  y archivos necesarios. Primero garantizar borradores/adjuntos durables (#39);
-  no llamar «completa» a una copia que omita datos locales pendientes. Coordinar
-  la captura con las escrituras; nunca copiar a ciegas una base y sus archivos
-  mientras cambian.
-- Archivo versionado, con manifiesto de contenido y límites de tamaño/rutas;
-  cifrado obligatorio por contener correo y datos personales. Reutilizar las
-  primitivas criptográficas existentes cuando sirvan; no inventar criptografía.
-  La contraseña de la copia no se guarda dentro. Secretos y claves privadas
-  siguen siendo una inclusión explícita; el manifiesto declara sus exclusiones
-  y la necesidad de volver a autenticar.
-- La base local cifrada no puede depender del antiguo llavero para abrir la
-  copia: recuperación con archivo y contraseña aun perdiendo el equipo original.
-  La clave de almacenamiento necesaria para recuperar datos se distingue de las
-  credenciales opcionales del proveedor. La técnica de exportación/recifrado se
-  diseña y revisa en su entrega; no se presupone que copiar SQLCipher baste.
-- Restaurar y verificar primero en una ubicación aislada; no sobrescribir el
-  perfil activo durante la lectura/validación. Fallos de formato, contraseña,
-  integridad, espacio o compatibilidad conservan el original. Activación local
-  explícita y reversible; la sincronización queda detenida hasta una reconexión
-  y reconciliación explícita con efectos visibles. Restaurar evidencia local no
-  propaga estado antiguo al servidor: no envía correo, invitaciones ni repite
-  escrituras u operaciones pendientes automáticamente. No requiere gestionar
-  varios perfiles simultáneos de #99.
-- Compatibilidad inicial Windows y una versión/esquema soportado explícitamente.
-  No afirmar portabilidad de una base de escritorio hacia móvil. Formatos
-  futuros se rechazan sin modificar el destino.
-- Primera entrega manual local, sin nube ni borrado automático. La programación
-  y retención se implementan en una entrega separada: no activadas por defecto,
-  límites visibles y última copia validada protegida. No se eliminan archivos
-  ajenos ni se amplía el gasto de infraestructura.
+- Captura coherent del perfil persistit, incloent-hi la base de dades local, els
+  esborranys i els fitxers necessaris. Primer cal garantir esborranys i adjunts
+  duradors (#39); no s'ha d'anomenar «completa» una còpia que ometi dades locals
+  pendents. Coordinar la captura amb les escriptures; no copiar mai a cegues una
+  base de dades i els seus fitxers mentre canvien.
+- Fitxer amb versió, amb un manifest del contingut i límits de mida i de camins;
+  xifratge obligatori perquè conté correu i dades personals. Reutilitzar les
+  primitives criptogràfiques existents quan serveixin; no inventar criptografia.
+  La contrasenya de la còpia no s'hi desa a dins. Els secrets i les claus privades
+  continuen sent una inclusió explícita; el manifest declara les seves exclusions
+  i la necessitat de tornar a autenticar-se.
+- La base de dades local xifrada no pot dependre de l'antic clauer per obrir la
+  còpia: recuperació amb el fitxer i la contrasenya encara que es perdi l'equip
+  original. La clau d'emmagatzematge necessària per recuperar les dades es
+  distingeix de les credencials opcionals del proveïdor. La tècnica d'exportació i
+  de nou xifratge es dissenya i es revisa en el seu lliurament; no es pressuposa
+  que n'hi hagi prou de copiar SQLCipher.
+- Restaurar i verificar primer en una ubicació aïllada; no sobreescriure el
+  perfil actiu durant la lectura i la validació. Les fallades de format,
+  contrasenya, integritat, espai o compatibilitat conserven l'original. Activació
+  local explícita i reversible; la sincronització queda aturada fins a una
+  reconnexió i una reconciliació explícites amb efectes visibles. Restaurar dades
+  locals no propaga l'estat antic al servidor: no envia correu ni invitacions ni
+  repeteix automàticament escriptures o operacions pendents. No requereix
+  gestionar diversos perfils simultanis de #99.
+- Compatibilitat inicial amb Windows i amb una versió i un esquema admesos
+  explícitament. No s'afirma la portabilitat d'una base de dades d'escriptori cap
+  al mòbil. Els formats futurs es rebutgen sense modificar la destinació.
+- Primer lliurament manual i local, sense núvol ni supressió automàtica. La
+  programació i la retenció s'implementen en un lliurament separat: no activades
+  per defecte, amb límits visibles i amb l'última còpia validada protegida. No
+  s'eliminen fitxers d'altri ni s'amplia la despesa d'infraestructura.
 
-Coste B: requiere almacenamiento adicional del perfil y espacio temporal para
-verificación/restauración, lectura de archivos grandes y coordinación entre
-editor, núcleo y almacén seguro. Es mayor que A; no hay estimación fiable hasta
-medir un perfil sintético representativo. Perder la contraseña impediría abrir
-una copia cifrada; eso debe explicarse al crearla. Una copia no puede recuperar
-datos que ya no existían ni convertir un envío incierto en un envío seguro.
+Cost de B: requereix emmagatzematge addicional del perfil i espai temporal per a
+la verificació i la restauració, lectura de fitxers grans i coordinació entre
+l'editor, el nucli i el magatzem segur. És més gran que A; no hi ha cap estimació
+fiable fins que no es mesuri un perfil sintètic representatiu. Perdre la
+contrasenya impediria obrir una còpia xifrada; això s'ha d'explicar en crear-la.
+Una còpia no pot recuperar dades que ja no existien ni convertir un enviament
+incert en un enviament segur.
 
-## Evidencia existente y entregas posteriores
+## Proves existents i lliuraments posteriors
 
-Las pruebas de `backup/tests.rs` cubren round-trip de configuración, ausencia
-de correo cacheado, secretos opt-in, contraseña incorrecta, manipulación del
-cifrado, formato futuro, límites KDF y fallo parcial con rollback de **SQLite**.
-Ese rollback no demuestra reversión atómica del llavero externo. También hay
-pruebas de errores y actualización de estado en `frontend/src/states/backup.test.ts`.
-Se reutilizan; no justifican afirmar recuperación completa o nativa.
+Les proves de `backup/tests.rs` cobreixen l'anada i tornada de la configuració,
+l'absència de correu en memòria cau, els secrets opcionals (opt-in), la
+contrasenya incorrecta, la manipulació del xifratge, el format futur, els límits
+de la KDF i la fallada parcial amb reversió (rollback) d'**SQLite**. Aquesta
+reversió no demostra una reversió atòmica del clauer extern. També hi ha proves
+d'errors i d'actualització de l'estat a `frontend/src/states/backup.test.ts`.
+Es reutilitzen; no justifiquen afirmar una recuperació completa o nativa.
 
-El 2026-10-05, la suite Rust de CI en `c06eff37` pasó (ejecución
-37302492336, job 111738284833), incluyendo los 31 casos `backup::tests`.
-El intento local focal de esos tests en Windows no llegó a ejecutarlos:
-compilación E0463 por dependencias no encontradas en el entorno Rust local.
-No se sustituye esa limitación por una afirmación de recuperación nativa.
+El 2026-10-05, la bateria Rust de la CI a `c06eff37` va passar (execució
+37302492336, job 111738284833), inclosos els 31 casos de `backup::tests`.
+L'intent local focalitzat d'aquests tests a Windows no va arribar a executar-los:
+compilació E0463 per dependències no trobades a l'entorn Rust local.
+No se substitueix aquesta limitació per una afirmació de recuperació nativa.
 
-Se eligió B y se registró ADR-0010, que extiende solo el punto de backups de
-ADR 0008. Separar: (1) durabilidad de borradores/archivos, (2) captura y verificación,
-(3) restauración aislada/recuperación de interrupciones, (4) programación/retención.
-Cada entrega necesita contrato concreto, tests sintéticos de éxito/errores/límites,
-revisión y CI. La aceptación nativa y los ensayos por proveedor son posteriores.
-#113 sigue pendiente de implementación y aceptación; aprobar B no la completa.
+Es va triar B i es va registrar l'ADR-0010, que només estén el punt de còpies de
+seguretat de l'ADR 0008. Cal separar: (1) durabilitat dels esborranys i fitxers,
+(2) captura i verificació, (3) restauració aïllada i recuperació d'interrupcions,
+(4) programació i retenció. Cada lliurament necessita un contracte concret, tests
+sintètics d'èxit, errors i límits, revisió i CI. L'acceptació nativa i els assaigs
+per proveïdor són posteriors. #113 continua pendent d'implementació i
+d'acceptació; aprovar B no la completa.

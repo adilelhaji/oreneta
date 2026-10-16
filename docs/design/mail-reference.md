@@ -11,7 +11,7 @@ No es copia cap element gràfic ni marca de producte de tercers.
 
 Això és un escenari de disseny navegable, no una implementació de correu
 publicada. Fa servir el mateix compte i els mateixos missatges sintètics que [la
-base](../baseline.md), els testimonis CSS de producció i les icones Lucide. Els
+base](../baseline.md), les variables CSS de disseny (tokens) de producció i les icones Lucide. Els
 controls del correu només simulen l'estat local: no hi ha Wails, transport de
 xarxa, credencials, inicialització de comptes ni preferències persistents.
 

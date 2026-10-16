@@ -1,6 +1,6 @@
 # Coherència de les pantalles de l'aplicació (#177)
 
-Estén la [direcció d'art](art-direction.md) aprovada fent servir testimonis i
+Estén la [direcció d'art](art-direction.md) aprovada fent servir variables de disseny (tokens) i
 components existents. Lliurament dins de #33/#38; no hi ha cap tema, dependència
 ni comportament de proveïdor nou.
 

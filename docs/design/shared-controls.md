@@ -2,7 +2,7 @@
 
 Lliurament: [#152](https://github.com/adilelhaji/oreneta/issues/152), una part
 acotada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
-[direcció d'art](art-direction.md), els testimonis de tema i el pont natiu existents.
+[direcció d'art](art-direction.md), les variables de disseny (tokens) del tema i el pont natiu existents.
 
 ## Comportament lliurat
 
@@ -42,6 +42,6 @@ restauració del focus en les finestres modals, el zoom natiu i les comprovacion
 amb tecnologies d'assistència encara necessiten les seves pròpies proves. Aquest
 canvi de codi font no substitueix cap executable ni cap instal·lador.
 
-[#177](screen-consistency.md) estén els testimonis, l'escala d'icones i els efectes
+[#177](screen-consistency.md) estén les variables de disseny, l'escala d'icones i els efectes
 continguts als punts d'ús de l'aplicació i millora les pantalles secundàries
 estretes. L'acceptació nativa i de fluxos de treball complets continua sent a part.
