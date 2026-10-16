@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Zarchiwizowano",
   "notification.markReadFailed": "Nie udało się oznaczyć jako przeczytane",
   "notification.undoFailed": "Nie udało się cofnąć",
+  "notify.missedReminders": "{count, plural, one {1 pominięte przypomnienie} other {{count} pominiętych przypomnień}}",
   "notify.newMessage": "Nowa wiadomość",
   "notify.newMessageCount": "{count, plural, one {1 nowa wiadomość} other {{count} nowych wiadomości}}",
   "notify.noSubject": "(bez tematu e-maila)",

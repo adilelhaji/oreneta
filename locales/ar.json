@@ -962,6 +962,7 @@
   "notification.archivedTitle": "تمت الأرشفة",
   "notification.markReadFailed": "تعذّر التعليم كمقروء",
   "notification.undoFailed": "تعذّر التراجع",
+  "notify.missedReminders": "{count, plural, one {تذكير واحد فائت} other {{count} تذكيرات فائتة}}",
   "notify.newMessage": "رسالة جديدة",
   "notify.newMessageCount": "{count, plural, one {1 رسالة جديدة} other {{count} رسائل جديدة}}",
   "notify.noSubject": "(بدون موضوع البريد الإلكتروني)",

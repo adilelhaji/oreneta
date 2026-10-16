@@ -752,6 +752,52 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         );
     }
 
+    /// A meeting that came and went while the machine slept: the watch's
+    /// look on waking gathers its reminder into the one missed-reminders
+    /// notice, not a reminder of its own, and gives it once (#225).
+    #[tokio::test]
+    async fn the_reminder_watch_gathers_missed_reminders_into_one_notice() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let account = meron_core::archive::ACCOUNT;
+        let now = now_seconds();
+        let start = now - 3 * 3_600;
+        {
+            let db = engine.db.lock().unwrap();
+            meron_core::archive::ensure_account(&db, now).unwrap();
+            calendar::upsert_calendars(&db, account, &[calendar::Calendar {
+                id: "local:home".into(),
+                name: "Home".into(),
+                enabled: true,
+                ..Default::default()
+            }])
+            .unwrap();
+            let meeting = calendar::Event {
+                id: "standup".into(),
+                calendar_id: "local:home".into(),
+                subject: "Standup".into(),
+                start,
+                end: start + 1_800,
+                reminder_minutes: Some(15),
+                ..Default::default()
+            };
+            calendar::replace_window(&db, account, "local:home", (now - 86_400, now + 86_400), &[meeting]).unwrap();
+            // Last looked at before the reminder rang; asleep since.
+            meron_core::calendar::reminders::record_look(&db, account, start - 3_600, &chrono::Local).unwrap();
+        }
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+
+        let woke = look_for_reminders(&engine, now).await;
+        assert!(woke.reminders.is_empty(), "over: not a reminder of its own");
+        let missed = woke.missed.expect("one notice");
+        assert_eq!(missed["count"], 1);
+        assert_eq!(missed["reminders"][0]["event"], "standup");
+        assert_eq!(missed["reminders"][0]["started"], true);
+        let next = look_for_reminders(&engine, now + 60).await;
+        assert_eq!((next.reminders.len(), next.missed), (0, None), "given once");
+    }
+
     #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
@@ -1808,6 +1854,10 @@ async fn give_calendar_reminders(engine: &Arc<Engine>, out: &Writer, now: i64) {
     let look = look_for_reminders(engine, now).await;
     for detail in look.reminders {
         emit(out, "calendar.reminder", detail).await;
+    }
+    // What came due while nobody looked and is over: one notice (#225).
+    if let Some(missed) = look.missed {
+        emit(out, "calendar.missedReminders", missed).await;
     }
     // A floating time is read in the zone the machine is in when its calendar
     // is read: after a change of zone, read those again so their times, and

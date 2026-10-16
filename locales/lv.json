@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Arhivēts",
   "notification.markReadFailed": "Neizdevās atzīmēt kā lasītu",
   "notification.undoFailed": "Neizdevās atsaukt",
+  "notify.missedReminders": "{count, plural, one {1 nokavēts atgādinājums} other {{count} nokavēti atgādinājumi}}",
   "notify.newMessage": "Jauna ziņa",
   "notify.newMessageCount": "{count, plural, one {1 jauna ziņa} other {{count} jauni ziņojumi}}",
   "notify.noSubject": "(nav e-pasta tēmas)",

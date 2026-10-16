@@ -962,6 +962,7 @@
   "notification.archivedTitle": "보관됨",
   "notification.markReadFailed": "읽음으로 표시하지 못했습니다",
   "notification.undoFailed": "실행 취소하지 못했습니다",
+  "notify.missedReminders": "{count, plural, one {놓친 알림 1개} other {놓친 알림 {count}개}}",
   "notify.newMessage": "새 메시지",
   "notify.newMessageCount": "{count, plural, one {새 메시지 1개} other {{count} 새 메시지}}",
   "notify.noSubject": "(이메일 제목 없음)",

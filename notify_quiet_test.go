@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -183,6 +185,98 @@ func TestReminderShowsTheCoresLocalTime(t *testing.T) {
 		"subject": "Review", "start": start, "local_time": "09:00", "started": true, "location": "Sala 1",
 	})
 	if len(*got) != 1 || (*got)[0].body != "Empezó a las 09:00 · Sala 1" {
+		t.Fatalf("translated: %+v", *got)
+	}
+}
+
+// Reminders missed while the machine slept come as one notification (#225):
+// how many in the title, when and what one a line, and a click that opens
+// the calendar on the first missed day.
+func TestMissedRemindersMakeOneNotificationThatOpensTheCalendar(t *testing.T) {
+	got := captureNotifications(t, time.UnixMilli(5_000))
+	a := &App{}
+	missed := func(count int) map[string]any {
+		var reminders []any
+		for i := 0; i < count; i++ {
+			reminders = append(reminders, map[string]any{
+				"account": "acc", "event": fmt.Sprint("e", i), "subject": fmt.Sprint("Meeting ", i),
+				"start": float64(1_800_000_000 + i*3_600), "local_time": fmt.Sprintf("%02d:00", 9+i),
+				"local_date": nil, "started": true,
+			})
+		}
+		return map[string]any{"count": float64(count), "day": "2026-10-19", "reminders": reminders}
+	}
+	two := missed(2)
+	reminders := two["reminders"].([]any)
+	reminders[0].(map[string]any)["local_date"] = "2026-10-19"
+	reminders = append(reminders, map[string]any{
+		"account": "other", "event": "h", "subject": "", "start": float64(1), "all_day": true,
+		"local_time": nil, "local_date": nil, "started": true,
+	})
+	two["reminders"], two["count"] = reminders, float64(3)
+
+	a.handleSidecarEvent("calendar.missedReminders", two)
+	if len(*got) != 1 {
+		t.Fatalf("%d notifications, want exactly one: %+v", len(*got), *got)
+	}
+	n := (*got)[0]
+	if n.title != "3 missed reminders" || n.body != "2026-10-19 09:00 Meeting 0\n10:00 Meeting 1\n(no subject)" {
+		t.Fatalf("missed notice: %+v", n)
+	}
+	if n.account != "acc" || n.threadID != "calendar:2026-10-19" {
+		t.Fatalf("click target: account=%q threadID=%q", n.account, n.threadID)
+	}
+
+	// Many: the first few, then an ellipsis; the title says how many in all.
+	*got = nil
+	a.handleSidecarEvent("calendar.missedReminders", missed(7))
+	if len(*got) != 1 || (*got)[0].title != "7 missed reminders" ||
+		strings.Count((*got)[0].body, "\n") != missedRemindersShown || !strings.HasSuffix((*got)[0].body, "\n…") {
+		t.Fatalf("seven missed: %+v", *got)
+	}
+	*got = nil
+	a.handleSidecarEvent("calendar.missedReminders", missed(1))
+	if len(*got) != 1 || (*got)[0].title != "1 missed reminder" || (*got)[0].body != "09:00 Meeting 0" {
+		t.Fatalf("one missed: %+v", *got)
+	}
+
+	// Nothing in it, or not an object: nothing raised.
+	*got = nil
+	a.handleSidecarEvent("calendar.missedReminders", missed(0))
+	a.handleSidecarEvent("calendar.missedReminders", "nope")
+	if len(*got) != 0 {
+		t.Fatalf("empty notices raised %+v", *got)
+	}
+
+	// Quiet, reminders held back: held back like any reminder.
+	_, _ = a.setNotifyQuiet(map[string]any{"indefinite": true, "remindersWhileQuiet": false, "quiet": true})
+	a.handleSidecarEvent("calendar.missedReminders", missed(2))
+	if len(*got) != 0 {
+		t.Fatalf("quiet: %+v", *got)
+	}
+	_, _ = a.setNotifyQuiet(map[string]any{"indefinite": true, "remindersWhileQuiet": true, "quiet": true})
+	a.handleSidecarEvent("calendar.missedReminders", missed(2))
+	if len(*got) != 1 {
+		t.Fatalf("quiet, reminders allowed: %+v", *got)
+	}
+
+	// In the reader's language, as the frontend sets it.
+	nativeLabelsMu.Lock()
+	prev := currentLabels
+	nativeLabelsMu.Unlock()
+	t.Cleanup(func() {
+		nativeLabelsMu.Lock()
+		currentLabels = prev
+		nativeLabelsMu.Unlock()
+	})
+	if _, err := a.setNativeLabels(map[string]any{
+		"missedReminders": "{count, plural, one {1 aviso perdido} other {{count} avisos perdidos}}",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	*got = nil
+	a.handleSidecarEvent("calendar.missedReminders", missed(2))
+	if len(*got) != 1 || (*got)[0].title != "2 avisos perdidos" {
 		t.Fatalf("translated: %+v", *got)
 	}
 }

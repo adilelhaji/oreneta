@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Archived",
   "notification.markReadFailed": "Couldn't mark as read",
   "notification.undoFailed": "Couldn't undo",
+  "notify.missedReminders": "{count, plural, one {1 missed reminder} other {{count} missed reminders}}",
   "notify.newMessage": "New message",
   "notify.newMessageCount": "{count, plural, one {1 new message} other {{count} new messages}}",
   "notify.noSubject": "(no subject)",

@@ -11,8 +11,10 @@
 //! Each look is recorded per account, with when it was and the zone's offset
 //! then (ADR-0056). The next look sees the gap however it came about: the
 //! machine asleep, the app closed, or a host whose timer stood still. What
-//! came due in that gap is given once, while its event is still on; what a
-//! change of zone moved is worked out in the zone the machine is in now.
+//! came due in that gap is given once: on its own while its event is still
+//! on, and in one grouped notice with the others when its event is over
+//! (#225); what a change of zone moved is worked out in the zone the machine
+//! is in now.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -44,11 +46,7 @@ where
 {
     let in_zone = |instant: i64| zone.timestamp_opt(instant, 0).earliest();
     let local_time = (!event.all_day).then(|| in_zone(event.start)).flatten().map(|start| start.format("%H:%M").to_string());
-    let date = if event.all_day {
-        chrono::DateTime::from_timestamp(event.start, 0).map(|day| day.date_naive())
-    } else {
-        in_zone(event.start).map(|start| start.date_naive())
-    };
+    let date = event_date(event, zone);
     let today = in_zone(now).map(|now| now.date_naive());
     let local_date = date.filter(|date| Some(*date) != today).map(|date| date.format("%Y-%m-%d").to_string());
     let start = when::timing(event, zone).map_or(event.start, |timing| timing.start);
@@ -64,6 +62,31 @@ where
         "started": start < now,
         "local_date": local_date,
     })
+}
+
+/// The date an event is on in `zone`: an all-day event's is the stored one.
+fn event_date<Tz: TimeZone>(event: &calendar::Event, zone: &Tz) -> Option<chrono::NaiveDate> {
+    if event.all_day {
+        chrono::DateTime::from_timestamp(event.start, 0).map(|day| day.date_naive())
+    } else {
+        zone.timestamp_opt(event.start, 0).earliest().map(|start| start.date_naive())
+    }
+}
+
+/// The `calendar.missedReminders` detail (#225): the reminders a look found
+/// missed, as `calendar.reminder` details in the order their events start,
+/// how many, and the day to open the calendar on, the first one's
+/// ("YYYY-MM-DD" in `zone`). `None` when nothing was missed.
+fn missed_notice<Tz: TimeZone>(mut missed: Vec<(i64, String, calendar::Event)>, zone: &Tz, now: i64) -> Option<Value>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    missed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)).then_with(|| a.2.id.cmp(&b.2.id)));
+    let (_, _, first) = missed.first()?;
+    let day = event_date(first, zone).map(|day| day.format("%Y-%m-%d").to_string());
+    let reminders: Vec<Value> =
+        missed.iter().map(|(_, account, event)| reminder_detail(account, event, zone, now)).collect();
+    Some(json!({ "count": reminders.len(), "day": day, "reminders": reminders }))
 }
 
 /// An account whose floating calendars are to be read again after a change
@@ -87,6 +110,10 @@ impl Reread {
 pub struct Look {
     /// The `calendar.reminder` details to give, each already recorded.
     pub reminders: Vec<Value>,
+    /// The reminders that came due while nobody looked and whose events
+    /// ended before this look, each already recorded: one
+    /// `calendar.missedReminders` notice for them all (#225).
+    pub missed: Option<Value>,
     /// Accounts whose zone changed and that have calendars a floating time
     /// can come from (CalDAV, subscribed): to be read again, since such a
     /// time is read in the zone of the read. Asked again until done.
@@ -95,6 +122,10 @@ pub struct Look {
 
 /// The reminders due at `now` on `accounts`, in `zone`, each already
 /// recorded as raised, and each account's look recorded.
+///
+/// What came due while nobody looked and whose event is over by now is
+/// missed: gathered across accounts into one notice (`Look::missed`), so a
+/// night asleep ends in one notification, not a burst (#225).
 ///
 /// A paused account is one the reader asked to stop hearing from, and a
 /// muted one is one whose notifications they silenced: neither is reminded,
@@ -110,7 +141,24 @@ pub fn look<Tz: TimeZone>(engine: &Arc<Engine>, accounts: &[String], now: i64, z
 where
     Tz::Offset: std::fmt::Display,
 {
+    look_for(engine, accounts, now, zone, Missed::Gather)
+}
+
+/// What a look does with missed reminders: the desktop gathers them into its
+/// notice; the phone has no such notice yet, so it leaves them unrecorded and
+/// its look moves past them, as before #225 (ADR-0056).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Missed {
+    Gather,
+    Leave,
+}
+
+fn look_for<Tz: TimeZone>(engine: &Arc<Engine>, accounts: &[String], now: i64, zone: &Tz, missed: Missed) -> Look
+where
+    Tz::Offset: std::fmt::Display,
+{
     let mut look = Look::default();
+    let mut gathered = Vec::new();
     for account in accounts {
         let paused = engine.is_paused(account);
         let quiet = paused || engine.is_muted(account);
@@ -132,12 +180,19 @@ where
         if !quiet {
             match when::due(&db, account, now, zone, previous) {
                 Ok(due) => {
-                    for Due { event, .. } in due {
+                    for Due { event, timing, missed: was_missed } in due {
+                        if was_missed && missed == Missed::Leave {
+                            continue;
+                        }
                         if calendar::mark_reminder_fired(&db, account, &event.id, event.start, now).is_err() {
                             complete = false;
                             continue;
                         }
-                        look.reminders.push(reminder_detail(account, &event, zone, now));
+                        if was_missed {
+                            gathered.push((timing.start, account.clone(), event));
+                        } else {
+                            look.reminders.push(reminder_detail(account, &event, zone, now));
+                        }
                     }
                 }
                 Err(_) => complete = false,
@@ -147,13 +202,15 @@ where
             let _ = when::record_look(&db, account, now, zone);
         }
     }
+    look.missed = missed_notice(gathered, zone, now);
     look
 }
 
-/// [`look`] in this machine's zone, as it is now: the reminders only. The
-/// phone reads its calendars again on its own quarter-hour refresh.
+/// A look in this machine's zone, as it is now, for the phone: the
+/// reminders only. The phone reads its calendars again on its own
+/// quarter-hour refresh, and has no notice of missed reminders yet.
 pub fn take_due(engine: &Arc<Engine>, accounts: &[String], now: i64) -> Vec<Value> {
-    look(engine, accounts, now, &chrono::Local).reminders
+    look_for(engine, accounts, now, &chrono::Local, Missed::Leave).reminders
 }
 
 /// Drops records of reminders long past, so the table does not grow forever.

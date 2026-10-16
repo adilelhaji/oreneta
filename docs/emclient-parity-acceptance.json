@@ -1410,7 +1410,7 @@
       "section": "General/Reminders",
       "outcome": "Event reminders survive restart, suspend and timezone changes",
       "status": "implemented-unverified",
-      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a reminder that came due during a suspend or while the app was closed fires once on the next look while its event is on, the watch looks at once on resume, all-day reminders follow the local midnight of the current zone, timed ones keep their instant and floating ones are re-read after a zone change (ADR-0056), all with automated tests including runs under other TZ values; native Windows suspend and zone-change evidence remains",
+      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a reminder that came due during a suspend or while the app was closed fires once on the next look while its event is on, and one whose event ended meanwhile is shown once in a single grouped desktop notification of missed reminders that opens the calendar on the first missed day (#225; the phone does not show them yet), the watch looks at once on resume, all-day reminders follow the local midnight of the current zone, timed ones keep their instant and floating ones are re-read after a zone change (ADR-0056), all with automated tests including runs under other TZ values; native Windows suspend and zone-change evidence remains",
       "code": "meron-core/src/calendar/reminders.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",

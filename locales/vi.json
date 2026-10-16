@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Đã lưu trữ",
   "notification.markReadFailed": "Không thể đánh dấu đã đọc",
   "notification.undoFailed": "Không thể hoàn tác",
+  "notify.missedReminders": "{count, plural, one {1 lời nhắc bị lỡ} other {{count} lời nhắc bị lỡ}}",
   "notify.newMessage": "Tin nhắn mới",
   "notify.newMessageCount": "{count, plural, one {1 tin nhắn mới} other {{count} tin nhắn mới}}",
   "notify.noSubject": "(không có tiêu đề email)",

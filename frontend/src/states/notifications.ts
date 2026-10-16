@@ -2,7 +2,8 @@
 // `settings$.notifications` do while the app runs.
 //
 // - Sounds play here, in the frontend, from the same `mail.newMessages`,
-//   `calendar.reminder` and `tasks.reminder` events the Go bridge turns into
+//   `calendar.reminder`, `calendar.missedReminders` (#225) and
+//   `tasks.reminder` events the Go bridge turns into
 //   OS notifications. The core resolves an account's mute onto each mail
 //   event, and a muted account stays silent too.
 // - Do not disturb and the quiet hours are decided by lib/quietHours. The Go
@@ -121,6 +122,7 @@ export function startNotifications(): () => void {
       soundForEvent('mail', !!detail?.muted)
     })
     on('calendar.reminder', () => soundForEvent('reminder'))
+    on('calendar.missedReminders', () => soundForEvent('reminder'))
     on('tasks.reminder', () => soundForEvent('reminder'))
     on('tray.doNotDisturb', () => toggleDoNotDisturb())
   }

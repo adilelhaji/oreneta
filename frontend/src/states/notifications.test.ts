@@ -74,8 +74,10 @@ it('plays the chosen sounds at the chosen volume, but not for a muted account', 
   emit('mail.newMessages', { account: 'b', count: 1, muted: true })
   emit('calendar.reminder', { subject: 'Stand-up' })
   emit('tasks.reminder', { title: 'Pay rent' })
+  emit('calendar.missedReminders', { count: 2, day: '2026-10-20', reminders: [] })
   expect(played).toEqual([
     ['marimba', 35],
+    ['bell', 35],
     ['bell', 35],
     ['bell', 35],
   ])

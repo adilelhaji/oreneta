@@ -10,7 +10,7 @@ import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
-import { calendar$, loadCalendars, loadWindow } from './states/calendar'
+import { calendar$, loadCalendars, loadWindow, openCalendarFromNotification } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
 import {
   mail$,
@@ -100,6 +100,7 @@ export function useAppEffects() {
       unknownSender: t('notify.unknownSender'),
       // Go puts the time (and the date, when not today) in place of {time}.
       reminderStarted: translationTemplate('notify.reminderStarted'),
+      missedReminders: translationTemplate('notify.missedReminders'),
     }).catch(() => {})
     // Reflect the resolved locale to <html lang>/dir, driving :lang() CJK glyph
     // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
@@ -311,6 +312,11 @@ export function useAppEffects() {
         // A chat message (ADR-0055): its conversation, in the Chat view.
         if (threadId?.startsWith('chat:')) {
           void openChatFromNotification(detail.account ?? '', threadId.slice('chat:'.length))
+          return
+        }
+        // Missed reminders (#225): the calendar, on the first missed day.
+        if (threadId?.startsWith('calendar:')) {
+          openCalendarFromNotification(threadId.slice('calendar:'.length))
           return
         }
         if (threadId) {

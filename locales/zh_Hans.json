@@ -962,6 +962,7 @@
   "notification.archivedTitle": "已归档",
   "notification.markReadFailed": "无法标记为已读",
   "notification.undoFailed": "无法撤销",
+  "notify.missedReminders": "{count, plural, one {错过了 1 个提醒} other {错过了 {count} 个提醒}}",
   "notify.newMessage": "新消息",
   "notify.newMessageCount": "{count, plural, one {1 条新消息} other {{count} 新消息}}",
   "notify.noSubject": "（没有电子邮件主题）",

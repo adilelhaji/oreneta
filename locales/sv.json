@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Arkiverat",
   "notification.markReadFailed": "Kunde inte markera som läst",
   "notification.undoFailed": "Kunde inte ångra",
+  "notify.missedReminders": "{count, plural, one {1 missad påminnelse} other {{count} missade påminnelser}}",
   "notify.newMessage": "Nytt meddelande",
   "notify.newMessageCount": "{count, plural, one {1 nytt meddelande} other {{count} nya meddelanden}}",
   "notify.noSubject": "(inget e-postämne)",

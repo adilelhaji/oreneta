@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Arhiveeritud",
   "notification.markReadFailed": "Loetuks märkimine ebaõnnestus",
   "notification.undoFailed": "Tagasivõtmine ebaõnnestus",
+  "notify.missedReminders": "{count, plural, one {1 vahelejäänud meeldetuletus} other {{count} vahelejäänud meeldetuletust}}",
   "notify.newMessage": "Uus sõnum",
   "notify.newMessageCount": "{count, plural, one {1 uus sõnum} other {{count} uut sõnumit}}",
   "notify.noSubject": "(e-posti teema puudub)",

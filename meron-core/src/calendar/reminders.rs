@@ -12,17 +12,18 @@
 //!   are read again (`pim::reminders`), and its reminder follows that read
 //!   like a moved event's.
 //!
-//! A look gives each reminder not yet recorded whose time has come, once,
-//! while it is still of use:
+//! A look gives each reminder not yet recorded whose time has come, once:
 //!
 //! - its event has not started (on time, or synced in after its time); or
-//! - it was not yet due at the previous look and its event has not ended: it
-//!   came due while nobody looked (the machine asleep, the app closed, the
-//!   clock moved on), or a change of zone brought it forward.
+//! - it was not yet due at the previous look: it came due while nobody looked
+//!   (the machine asleep, the app closed, the clock moved on), or a change of
+//!   zone brought it forward.
 //!
-//! A reminder whose event ended before anyone looked is not given. One set
-//! for the start is given by the first look from the start; an event with
-//! no length counts as on for its first minute.
+//! A reminder that came due while nobody looked and whose event ended before
+//! the look is missed: it is given too, once, but marked so that the hosts
+//! show a look's missed reminders as one notice, not a burst (#225). One set
+//! for the start is given by the first look from the start; an event with no
+//! length counts as on for its first minute.
 
 use anyhow::Result;
 use chrono::{FixedOffset, Offset as _, TimeZone};
@@ -205,6 +206,9 @@ pub fn reread_due(conn: &Connection, account: &str, now: i64) -> Result<Option<i
 pub struct Due {
     pub event: Event,
     pub timing: Timing,
+    /// It came due while nobody looked and its event ended before this look:
+    /// given with the look's other missed reminders in one notice (#225).
+    pub missed: bool,
 }
 
 /// The reminders of `account` to give at `now` in `zone`, not yet recorded
@@ -240,10 +244,12 @@ pub fn due<Tz: TimeZone>(
             // the zone changed since; then in that look's offset, which is all
             // that is known of the zone it was in.
             let then = if moved { timing(&event, &previous.zone()) } else { Some(now_timing) };
-            now_timing.end > now && then.is_some_and(|then| then.fire_at > previous.at)
+            then.is_some_and(|then| then.fire_at > previous.at)
         });
         if ahead || came_due_since {
-            due.push(Due { event, timing: now_timing });
+            // Over before anyone looked: missed, for the grouped notice.
+            let missed = !ahead && now_timing.end <= now;
+            due.push(Due { event, timing: now_timing, missed });
         }
     }
     due.sort_by(|a, b| a.timing.start.cmp(&b.timing.start).then_with(|| a.event.id.cmp(&b.event.id)));
@@ -520,8 +526,14 @@ mod tests {
         assert!(super::due(&conn, "acct", now + 60, &Madrid, None).unwrap().is_empty(), "given once");
     }
 
+    fn missed(due: &[Due]) -> Vec<bool> {
+        due.iter().map(|d| d.missed).collect()
+    }
+
+    /// What rang in a gap is given once: on its own while its event is on,
+    /// marked missed when its event ended inside the gap (#225).
     #[test]
-    fn a_reminder_that_came_due_in_a_gap_is_given_while_its_event_is_still_on() {
+    fn a_reminder_that_came_due_in_a_gap_is_given_once_and_marked_missed_if_its_event_is_over() {
         let conn = store();
         let before = at("2026-10-20T08:00:00Z");
         put(
@@ -531,27 +543,50 @@ mod tests {
                 timed("standup", at("2026-10-20T09:00:00Z"), 15),
                 // Rang at 06:45, before the previous look: not this gap's.
                 timed("early", at("2026-10-20T07:00:00Z"), 15).with_end(at("2026-10-20T12:00:00Z")),
-                // Rang and ended inside the gap: no use any more.
+                // Rang and ended inside the gap: missed.
                 timed("over", at("2026-10-20T08:20:00Z"), 15).with_end(at("2026-10-20T08:40:00Z")),
             ],
         );
         let previous = Some(Previous { at: before, offset: 2 * 3_600 });
         let after = at("2026-10-20T09:20:00Z");
         let due = due(&conn, "acct", after, &Madrid, previous).unwrap();
-        assert_eq!(ids(&due), ["standup"]);
+        assert_eq!(ids(&due), ["over", "standup"]);
+        assert_eq!(missed(&due), [true, false]);
         give(&conn, &due, after);
         let previous = Some(Previous { at: after, offset: 2 * 3_600 });
         assert!(super::due(&conn, "acct", after + 60, &Madrid, previous).unwrap().is_empty(), "once");
     }
 
     #[test]
-    fn the_end_of_an_event_is_the_last_moment_its_missed_reminder_is_given() {
+    fn the_end_of_an_event_is_when_its_reminder_turns_missed() {
         let conn = store();
         let event = timed("standup", at("2026-10-20T09:00:00Z"), 15);
         put(&conn, &[event.clone()]);
         let previous = Some(Previous { at: at("2026-10-20T08:00:00Z"), offset: 0 });
-        assert_eq!(ids(&due(&conn, "acct", event.end - 1, &Madrid, previous).unwrap()), ["standup"]);
-        assert!(due(&conn, "acct", event.end, &Madrid, previous).unwrap().is_empty(), "ended");
+        let on = due(&conn, "acct", event.end - 1, &Madrid, previous).unwrap();
+        assert_eq!((ids(&on), missed(&on)), (vec!["standup"], vec![false]));
+        let ended = due(&conn, "acct", event.end, &Madrid, previous).unwrap();
+        assert_eq!((ids(&ended), missed(&ended)), (vec!["standup"], vec![true]), "ended");
+    }
+
+    /// Missed needs a gap: with no previous look (first ever, or just
+    /// upgraded) nothing is known to have been slept through, and an event
+    /// over by then is not given at all, as before.
+    #[test]
+    fn a_first_look_gives_nothing_as_missed() {
+        let conn = store();
+        put(&conn, &[timed("over", at("2026-10-20T08:00:00Z"), 15)]);
+        assert!(due(&conn, "acct", at("2026-10-20T10:00:00Z"), &Madrid, None).unwrap().is_empty());
+    }
+
+    /// A reminder that came due before the previous look and was not given
+    /// then (its event had started before anyone looked) is not missed later.
+    #[test]
+    fn a_reminder_due_before_the_previous_look_is_not_missed_later() {
+        let conn = store();
+        put(&conn, &[timed("early", at("2026-10-20T08:00:00Z"), 15)]);
+        let previous = Some(Previous { at: at("2026-10-20T08:30:00Z"), offset: 0 });
+        assert!(due(&conn, "acct", at("2026-10-20T10:00:00Z"), &Madrid, previous).unwrap().is_empty());
     }
 
     #[test]

@@ -20,7 +20,7 @@ type nativeLabels struct {
 	trayShow, trayHide, trayHideTooltip, trayQuit         string
 	trayDoNotDisturb                                      string
 	newMessage, newMessageCount, noSubject, unknownSender string
-	reminderStarted                                       string
+	reminderStarted, missedReminders                      string
 }
 
 var (
@@ -33,6 +33,7 @@ var (
 		newMessageCount:  "{count, plural, one {1 new message} other {{count} new messages}}",
 		noSubject:        "(no subject)", unknownSender: "unknown sender",
 		reminderStarted: "Started at {time}",
+		missedReminders: "{count, plural, one {1 missed reminder} other {{count} missed reminders}}",
 	}
 )
 
@@ -59,6 +60,7 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	set(&currentLabels.noSubject, "noSubject")
 	set(&currentLabels.unknownSender, "unknownSender")
 	set(&currentLabels.reminderStarted, "reminderStarted")
+	set(&currentLabels.missedReminders, "missedReminders")
 	labels := currentLabels
 	// Released before trayMenuMu is taken: trayReady holds trayMenuMu while it
 	// reads the labels, so holding both here in the other order would deadlock.
@@ -190,6 +192,8 @@ func (a *App) handleSidecarEvent(name string, detail any) {
 		a.notifyNewMail(detail)
 	case "calendar.reminder":
 		a.notifyReminder(detail)
+	case "calendar.missedReminders":
+		a.notifyMissedReminders(detail)
 	case "tasks.reminder":
 		a.notifyTaskReminder(detail)
 	case "chat.notify":
@@ -357,11 +361,7 @@ func (a *App) notifyReminder(detail any) {
 	subject, _ := m["subject"].(string)
 	location, _ := m["location"].(string)
 	allDay, _ := m["all_day"].(bool)
-	start, _ := m["start"].(float64)
 	account, _ := m["account"].(string)
-
-	localTime, _ := m["local_time"].(string)
-	localDate, _ := m["local_date"].(string)
 	started, _ := m["started"].(bool)
 	labels := a.currentNativeLabels()
 
@@ -370,21 +370,10 @@ func (a *App) notifyReminder(detail any) {
 	}
 
 	// The body answers "when", which is the whole point of a reminder; the
-	// place follows, since that is what decides whether to set off now. The
-	// core says the start on the clock of the zone the machine is in now
-	// (local_time, ADR-0056): Go reads its zone once, at start, so after a
-	// change of zone its own reading would be the old clock's. It also says
-	// the date when it is not today's (local_date), and whether the event had
-	// already started, as one reminded late, after a sleep, can have.
-	var body string
-	switch {
-	case allDay:
-		body = localDate
-	case localTime != "":
-		body = strings.TrimSpace(localDate + " " + localTime)
-	case start > 0:
-		body = time.Unix(int64(start), 0).Format("15:04")
-	}
+	// place follows, since that is what decides whether to set off now. It
+	// also says whether the event had already started, as one reminded late,
+	// after a sleep, can have.
+	body := reminderWhen(m)
 	if started && !allDay && body != "" {
 		body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
 	}
@@ -399,6 +388,79 @@ func (a *App) notifyReminder(detail any) {
 		title:   subject,
 		body:    body,
 		account: account,
+	})
+}
+
+// reminderWhen is when a reminder's event starts, as a calendar.reminder
+// detail says it. The core says the start on the clock of the zone the
+// machine is in now (local_time, ADR-0056): Go reads its zone once, at
+// start, so after a change of zone its own reading would be the old clock's.
+// It also says the date when it is not today's (local_date).
+func reminderWhen(m map[string]any) string {
+	allDay, _ := m["all_day"].(bool)
+	start, _ := m["start"].(float64)
+	localTime, _ := m["local_time"].(string)
+	localDate, _ := m["local_date"].(string)
+	switch {
+	case allDay:
+		return localDate
+	case localTime != "":
+		return strings.TrimSpace(localDate + " " + localTime)
+	case start > 0:
+		return time.Unix(int64(start), 0).Format("15:04")
+	}
+	return ""
+}
+
+// missedRemindersShown is how many missed reminders the notice lists; the
+// title says how many there were in all.
+const missedRemindersShown = 5
+
+// calendarNotificationPrefix marks a notification target as a day of the
+// calendar ("calendar:YYYY-MM-DD"); the frontend opens the calendar on it.
+const calendarNotificationPrefix = "calendar:"
+
+// notifyMissedReminders raises one OS notification for the reminders that
+// came due while nobody looked and whose events are over (#225): how many in
+// the title, then when and what, one a line. Clicking it opens the calendar
+// on the first missed day. Quiet hours hold it back as any reminder.
+func (a *App) notifyMissedReminders(detail any) {
+	m, ok := detail.(map[string]any)
+	if !ok || notificationsSuppressed(quietReminder) {
+		return
+	}
+	reminders, _ := m["reminders"].([]any)
+	if len(reminders) == 0 {
+		return
+	}
+	labels := a.currentNativeLabels()
+	count := len(reminders)
+	if c, ok := m["count"].(float64); ok && int(c) > count {
+		count = int(c)
+	}
+	var lines []string
+	account := ""
+	for _, item := range reminders {
+		r, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if account == "" {
+			account, _ = r["account"].(string)
+		}
+		if len(lines) == missedRemindersShown {
+			lines = append(lines, "…")
+			break
+		}
+		subject, _ := r["subject"].(string)
+		lines = append(lines, strings.TrimSpace(reminderWhen(r)+" "+firstNonEmpty(subject, labels.noSubject)))
+	}
+	day, _ := m["day"].(string)
+	dispatchNotification(a, notification{
+		title:    formatNativePlural(labels.missedReminders, count),
+		body:     strings.Join(lines, "\n"),
+		account:  account,
+		threadID: calendarNotificationPrefix + day,
 	})
 }
 

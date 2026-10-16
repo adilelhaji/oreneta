@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Arşivlendi",
   "notification.markReadFailed": "Okundu olarak işaretlenemedi",
   "notification.undoFailed": "Geri alınamadı",
+  "notify.missedReminders": "{count, plural, one {1 kaçırılan anımsatıcı} other {{count} kaçırılan anımsatıcı}}",
   "notify.newMessage": "Yeni mesaj",
   "notify.newMessageCount": "{count, plural, one {1 yeni mesaj} other {{count} yeni mesaj}}",
   "notify.noSubject": "(e-posta konusu yok)",
