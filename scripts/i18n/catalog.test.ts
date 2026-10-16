@@ -84,7 +84,7 @@ describe('catalog validation helpers', () => {
 
   test('rejects an apostrophe that would quote ICU syntax', () => {
     // Catalan elides before a vowel: "d'{name}" would show "{name}" literally.
-    for (const value of ["Compte d'{name}", "Esborra l'{count, plural, one {x} other {y}}", "Fet'#{name}"]) {
+    for (const value of ["Compte d'{name}", "Esborra l'{count, plural, one {x} other {y}}", "Fet'#{name}", "Obre'<b>{name}</b>", "Tanca'>{name}"]) {
       expect(() => validateCatalogs({ en: { k: 'Account {name}' }, ca: { k: value } })).toThrow(/apostrophe/)
     }
     // An apostrophe between letters, a doubled one, or a typographic one is plain text.

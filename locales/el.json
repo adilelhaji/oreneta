@@ -967,6 +967,7 @@
   "notify.newMessageCount": "{count, plural, one {1 νέο μήνυμα} other {{count} νέα μηνύματα}}",
   "notify.noSubject": "(χωρίς θέμα email)",
   "notify.reminderStarted": "Ξεκίνησε στις {time}",
+  "notify.reminderStartedOn": "Ξεκίνησε στις {date}, ώρα {time}",
   "notify.unknownSender": "άγνωστος αποστολέας",
   "oof.audienceAll": "Όλοι",
   "oof.audienceKnown": "Γνωστές επαφές",

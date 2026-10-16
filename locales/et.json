@@ -967,6 +967,7 @@
   "notify.newMessageCount": "{count, plural, one {1 uus sõnum} other {{count} uut sõnumit}}",
   "notify.noSubject": "(e-posti teema puudub)",
   "notify.reminderStarted": "Algas kell {time}",
+  "notify.reminderStartedOn": "Algas {date} kell {time}",
   "notify.unknownSender": "tundmatu saatja",
   "oof.audienceAll": "Kõik",
   "oof.audienceKnown": "Tuntud kontaktid",

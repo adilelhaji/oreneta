@@ -967,6 +967,7 @@
   "notify.newMessageCount": "{count, plural, one {1 رسالة جديدة} other {{count} رسائل جديدة}}",
   "notify.noSubject": "(بدون موضوع البريد الإلكتروني)",
   "notify.reminderStarted": "بدأ في {time}",
+  "notify.reminderStartedOn": "بدأ في {date} الساعة {time}",
   "notify.unknownSender": "مرسل غير معروف",
   "oof.audienceAll": "الجميع",
   "oof.audienceKnown": "جهات الاتصال المعروفة",

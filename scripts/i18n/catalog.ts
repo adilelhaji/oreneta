@@ -399,13 +399,13 @@ function validateIcuSyntax(locale: string, key: string, value: string) {
 
 /// Rejects an ASCII apostrophe written right before ICU syntax.
 ///
-/// In ICU an apostrophe before `{`, `}`, `#`, `|` or `<` opens a quoted
+/// In ICU an apostrophe before `{`, `}`, `#`, `|`, `<` or `>` opens a quoted
 /// literal: `d'{name}` can parse and still show the text "{name}" instead
 /// of the name, which neither the syntax nor the placeholder check sees.
 /// Languages that elide before a vowel (Catalan, French, Italian) meet this
 /// as soon as a placeholder follows an article or preposition (#231).
 function validateNoQuotingApostrophe(locale: string, key: string, value: string) {
-  if (/(?<!')'[{}#|<]/.test(value)) {
+  if (/(?<!')'[{}#|<>]/.test(value)) {
     throw new Error(
       `${locale}.${key} has an apostrophe right before ICU syntax, which quotes it. Do not elide before a placeholder, or use ’.`,
     )

@@ -967,6 +967,7 @@
   "notify.newMessageCount": "{count, plural, one {1 tin nhắn mới} other {{count} tin nhắn mới}}",
   "notify.noSubject": "(không có tiêu đề email)",
   "notify.reminderStarted": "Đã bắt đầu lúc {time}",
+  "notify.reminderStartedOn": "Đã bắt đầu lúc {time} ngày {date}",
   "notify.unknownSender": "người gửi không xác định",
   "oof.audienceAll": "Tất cả mọi người",
   "oof.audienceKnown": "Liên hệ đã biết",
