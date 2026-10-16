@@ -1050,7 +1050,14 @@ mod tests {
         mark_reminder_fired(&conn, "acct", "uid@example.com", now - keep - 60, now - keep - 60).unwrap();
         mark_reminder_fired(&conn, "acct", "uid2@example.com", now + day, now - keep - 60).unwrap();
         // From before the start was in the key: by when it was given.
-        for (id, fired) in [("legacy-old", now - keep - 1), ("legacy-new", now - 60)] {
+        // A CalDAV UID with an '@' of its own and no start after it: by when
+        // it was given too, not mistaken for one with a start.
+        for (id, fired) in [
+            ("legacy-old", now - keep - 1),
+            ("legacy-new", now - 60),
+            ("uid3@example.com", now - keep - 1),
+            ("uid4@example.com", now - 60),
+        ] {
             conn.execute(
                 "INSERT INTO calendar_reminders_fired(account, event_id, fired_at) VALUES('acct', ?1, ?2)",
                 params![id, fired],
@@ -1070,6 +1077,7 @@ mod tests {
             format!("ahead@{}", now + 10 * day),
             format!("late@{}", now - 30 * day),
             "legacy-new".to_string(),
+            "uid4@example.com".to_string(),
             format!("recent@{}", now - keep + 60),
             format!("uid2@example.com@{}", now + day),
         ];

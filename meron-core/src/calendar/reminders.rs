@@ -63,7 +63,10 @@ pub struct Timing {
 
 /// An event's [`Timing`] in `zone`; `None` when it has no reminder.
 pub fn timing<Tz: TimeZone>(event: &Event, zone: &Tz) -> Option<Timing> {
-    let minutes = event.reminder_minutes?;
+    // Before the start, never after: the readers only keep alarms before it,
+    // and the record of reminders given (`GIVEN_KEPT`) relies on a reminder
+    // never ringing after its event's start. Anything else rings at the start.
+    let minutes = event.reminder_minutes?.max(0);
     let (start, end) = if event.all_day {
         let start = local_midnight(zone, event.start)?;
         // An all-day end is exclusive: the midnight after its last day.
@@ -271,7 +274,7 @@ fn candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Ve
            AND e.reminder_minutes IS NOT NULL
            AND e.is_cancelled = 0
            AND MAX(e.end_utc, e.start_utc) >= ?2
-           AND e.start_utc - (e.reminder_minutes * 60) <= ?3
+           AND e.start_utc - (MAX(e.reminder_minutes, 0) * 60) <= ?3
            AND NOT EXISTS (
                  SELECT 1 FROM calendar_reminders_fired f
                  WHERE f.account = e.account
@@ -435,6 +438,21 @@ mod tests {
         let start = at("2026-10-20T09:00:00Z");
         let event = Event { end: start, ..timed("deadline", start, 0) };
         assert_eq!(timing(&event, &Madrid), Some(Timing { fire_at: start, start, end: start + ZERO_LENGTH_ON }));
+    }
+
+    /// A reminder never rings after its event's start (#222): a negative
+    /// lead, which no reader keeps but a store could hold, rings at the
+    /// start, so the record of it is forgotten in time and cannot be given
+    /// twice.
+    #[test]
+    fn a_negative_reminder_rings_at_the_start() {
+        let start = at("2026-10-20T09:00:00Z");
+        let event = timed("after", start, -30);
+        assert_eq!(timing(&event, &Madrid).unwrap().fire_at, start);
+        let conn = store();
+        put(&conn, &[event]);
+        assert!(due(&conn, "acct", start - 60, &Madrid, None).unwrap().is_empty());
+        assert_eq!(ids(&due(&conn, "acct", start, &Madrid, None).unwrap()), ["after"], "found by the store too");
     }
 
     /// Madrid's clocks go back on 25 October. Looked at on the 24th at 23:30
