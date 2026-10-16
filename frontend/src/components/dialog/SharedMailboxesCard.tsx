@@ -55,8 +55,8 @@ export function SharedMailboxesCard({ account }: { account: Account }) {
               >
                 <Mailbox size={16} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
-                  <span className="block truncate text-ui font-semibold">{mailbox.display_name || mailbox.email}</span>
-                  <span className="block truncate text-2xs text-secondary">{mailbox.email}</span>
+                  <span dir="auto" className="block truncate text-ui font-semibold">{mailbox.display_name || mailbox.email}</span>
+                  <span dir="auto" className="block truncate text-2xs text-secondary">{mailbox.email}</span>
                 </div>
                 <button
                   type="button"

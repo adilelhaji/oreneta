@@ -4,6 +4,7 @@ import { useTranslation } from '../../lib/i18n'
 import { ui$ } from '../../states/ui'
 import { IconButton } from '../button/IconButton'
 import { QuickSettingsMenu } from './QuickSettingsMenu'
+import { startEdgeX } from '../../lib/direction'
 
 /** Keep the existing app menu reachable while the account rail is hidden. */
 export function CompactNavigation() {
@@ -30,7 +31,7 @@ export function CompactNavigation() {
         label={t('common.more')}
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect()
-          setAnchor({ x: rect.left, y: rect.bottom, placement: 'down' })
+          setAnchor({ x: startEdgeX(rect), y: rect.bottom, placement: 'down' })
         }}
       />
       {anchor && (

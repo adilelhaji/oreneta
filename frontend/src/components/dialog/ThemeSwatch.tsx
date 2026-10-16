@@ -60,7 +60,7 @@ export function ThemeSwatch({
       <div className={large ? 'flex h-20' : 'flex h-12'} style={{ background: t.bgApp }}>
         <div className={`shrink-0 ${large ? 'w-4' : 'w-2.5'}`} style={{ background: t.bgSideNav }} />
         <div
-          className={`shrink-0 border-r ${large ? 'w-12' : 'w-7'}`}
+          className={`shrink-0 border-e ${large ? 'w-12' : 'w-7'}`}
           style={{ background: t.bgChats, borderColor: t.border }}
         />
         <div className={`flex min-w-0 flex-1 flex-col justify-center ${large ? 'gap-1.5 px-2.5' : 'gap-1 px-1.5'}`}>
@@ -89,7 +89,7 @@ export function ThemeSwatch({
         {selected && <Check size={large ? 12 : 11} className="shrink-0 text-accent" strokeWidth={1.75} />}
       </div>
       {(onEdit || onDelete) && (
-        <div className="absolute right-1 top-1 hidden gap-0.5 group-hover:flex">
+        <div className="absolute end-1 top-1 hidden gap-0.5 group-hover:flex">
           {onEdit && <MiniAction icon={Pencil} label={translate('theme.edit')} onClick={onEdit} />}
           {onDelete && <MiniAction icon={Trash2} label={translate('theme.delete')} onClick={onDelete} />}
         </div>

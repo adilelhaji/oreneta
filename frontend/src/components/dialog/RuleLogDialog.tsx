@@ -51,7 +51,7 @@ export function RuleLogDialog() {
                 className="rounded-control border border-border bg-raised px-3 py-2"
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="min-w-0 truncate text-xs font-semibold">{entry.subject}</span>
+                  <span dir="auto" className="min-w-0 truncate text-xs font-semibold">{entry.subject}</span>
                   <time className="shrink-0 text-2xs text-secondary tabular-nums">
                     {new Date(entry.at * 1000).toLocaleString()}
                   </time>

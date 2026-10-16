@@ -24,6 +24,7 @@ import { formatShortcut, isMac, type ShortcutId } from '../../lib/shortcuts'
 import { MenuItem } from '../menu/MenuItem'
 import { pauseNotifications, resumeNotifications, type PauseChoice } from '../../states/notifications'
 import { useQuietState } from './QuietIndicator'
+import { menuLeft } from '../../lib/direction'
 
 /** The chord a menu row triggers, so the keystroke is learnable from the menu. */
 function Hint({ id }: { id: ShortcutId }) {
@@ -79,7 +80,8 @@ export function QuickSettingsMenu({
         style={{
           width: menuWidth,
           maxHeight: Math.max(0, viewportHeight - edge - 8),
-          left: Math.max(8, Math.min(anchor.x / zoom, viewportWidth - menuWidth - 8)),
+          // The anchor is the menu's inline-start edge (ADR-0061).
+          left: menuLeft(anchor.x / zoom, menuWidth, viewportWidth, 8),
           ...(anchor.placement === 'up' ? { bottom: edge } : { top: edge }),
         }}
         onContextMenu={(e) => {

@@ -83,7 +83,7 @@ export function TrackerNotice({ message }: { message: Message }) {
         )}
       </p>
       {open && (
-        <ul className="mt-1 flex flex-col gap-0.5 pl-5">
+        <ul className="mt-1 flex flex-col gap-0.5 ps-5">
           {blocked.map((entry, index) => (
             <li key={index} className="break-all">
               {hostOf(entry.url)} —{' '}

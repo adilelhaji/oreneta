@@ -89,7 +89,7 @@ export function CloudStorageGroup() {
               <span className="text-secondary">
                 {a.username} · {a.folder}
               </span>
-              <Button size="sm" variant="secondary" className="ml-auto" onClick={() => void removeCloudAccount(a.id)}>
+              <Button size="sm" variant="secondary" className="ms-auto" onClick={() => void removeCloudAccount(a.id)}>
                 {t('cloud.remove', { defaultValue: 'Remove' })}
               </Button>
             </li>

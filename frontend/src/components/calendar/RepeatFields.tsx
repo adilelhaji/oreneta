@@ -72,7 +72,7 @@ export function RepeatFields({
   return (
     <div className="flex flex-col gap-2.5">
       <label className="flex w-full flex-col gap-1.5">
-        <span className="pl-0.5 text-caption font-semibold text-secondary">
+        <span className="ps-0.5 text-caption font-semibold text-secondary">
           {t('calendar.repeat', { defaultValue: 'Repeats' })}
         </span>
         <select

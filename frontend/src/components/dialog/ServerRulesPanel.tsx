@@ -172,7 +172,7 @@ export function ServerRulesPanel() {
             <summary className="cursor-pointer text-secondary">
               {t('serverRules.script', { defaultValue: 'The script as it would be stored' })}
             </summary>
-            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-control-sm bg-hover p-2 font-mono text-2xs">
+            <pre dir="ltr" className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-control-sm bg-hover p-2 font-mono text-2xs">
               {answer.plan.script}
             </pre>
           </details>
@@ -184,7 +184,9 @@ export function ServerRulesPanel() {
                     'Not replaced: the copy on the server was changed elsewhere. This is what it holds now:',
                 })}
               </p>
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-2xs">{onServer}</pre>
+              <pre dir="ltr" className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-2xs">
+                {onServer}
+              </pre>
               <Button size="sm" variant="secondary" disabled={busy} onClick={() => void push(true)}>
                 {t('serverRules.overwrite', { defaultValue: 'Replace it with Oreneta’s rules' })}
               </Button>

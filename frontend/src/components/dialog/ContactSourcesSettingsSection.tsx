@@ -113,7 +113,7 @@ export function ContactSourcesSettingsSection() {
               >
                 <BookUser size={16} className="shrink-0 text-secondary" strokeWidth={1.75} />
                 <div className="min-w-0 flex-1">
-                  <span className="block truncate text-ui font-semibold">{source.name || source.url}</span>
+                  <span dir="auto" className="block truncate text-ui font-semibold">{source.name || source.url}</span>
                   {/* What went wrong, where it went wrong, rather than a red
                       dot somewhere else. */}
                   <span
@@ -184,7 +184,7 @@ export function ContactSourcesSettingsSection() {
             key={account.id}
             className="flex items-center justify-between gap-2 rounded-control border border-border bg-panel px-3 py-2"
           >
-            <span className="min-w-0 truncate text-ui text-primary">{account.email}</span>
+            <span dir="auto" className="min-w-0 truncate text-ui text-primary">{account.email}</span>
             <button
               type="button"
               disabled={busy}
@@ -247,9 +247,9 @@ export function ContactSourcesSettingsSection() {
                 type="button"
                 disabled={busy}
                 onClick={() => void keep(book)}
-                className="flex items-center justify-between gap-2 rounded-control-sm px-2 py-1.5 text-left text-ui transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
+                className="flex items-center justify-between gap-2 rounded-control-sm px-2 py-1.5 text-start text-ui transition-colors hover:bg-hover cursor-pointer disabled:opacity-50"
               >
-                <span className="truncate font-semibold text-primary">{book.name}</span>
+                <span dir="auto" className="truncate font-semibold text-primary">{book.name}</span>
                 <span className="truncate text-caption text-secondary">{book.url}</span>
               </button>
             ))}

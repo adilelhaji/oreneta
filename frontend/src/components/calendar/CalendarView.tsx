@@ -73,7 +73,7 @@ export function CalendarView() {
         <h1 className="min-w-0 wrap-anywhere text-heading-sm font-bold text-primary">{periodLabel(view, anchor, t)}</h1>
         {loading && <RefreshCw size={14} className="shrink-0 animate-spin text-secondary" strokeWidth={1.75} />}
 
-        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
+        <div className="ms-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
           {view !== 'agenda' && (
             <div className="flex items-center gap-0.5">
               <NavButton label={t('calendar.previousPeriod')} onClick={() => navigateCalendar(-1)}>

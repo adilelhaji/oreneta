@@ -154,9 +154,9 @@ export function RulesSettingsSection() {
                 <button
                   type="button"
                   onClick={() => setEditing(rule)}
-                  className="min-w-0 flex-1 text-left cursor-pointer"
+                  className="min-w-0 flex-1 text-start cursor-pointer"
                 >
-                  <span className="block truncate text-ui font-semibold">{rule.name}</span>
+                  <span dir="auto" className="block truncate text-ui font-semibold">{rule.name}</span>
                   <span className="block truncate text-caption text-secondary">{ruleSummary(rule, t)}</span>
                 </button>
                 <button
@@ -316,7 +316,7 @@ function PreviewResult({
       <ul className="mt-1 flex max-h-56 flex-col gap-1 overflow-y-auto">
         {preview.matches.map((hit) => (
           <li key={hit.uid} className="min-w-0">
-            <p className="truncate text-caption text-primary">{hit.subject}</p>
+            <p dir="auto" className="truncate text-caption text-primary">{hit.subject}</p>
             <p className="truncate text-2xs text-secondary">
               {hit.from} · {hit.actions.map((action) => `${action.ruleName}: ${action.action}`).join(' · ')}
             </p>
@@ -353,7 +353,7 @@ function RunReport({ report, onClose }: { report: RuleRunReport; onClose: () => 
         <ul className="mt-1 flex max-h-56 flex-col gap-1 overflow-y-auto">
           {failed.map((message) => (
             <li key={message.uid} className="min-w-0">
-              <p className="truncate text-caption text-primary">{message.subject}</p>
+              <p dir="auto" className="truncate text-caption text-primary">{message.subject}</p>
               {message.steps.map((step, index) => (
                 <p key={index} className={`text-2xs ${step.ok ? 'text-secondary' : 'text-danger'}`}>
                   {step.ok ? '✓' : '✕'} {step.action}

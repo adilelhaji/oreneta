@@ -34,6 +34,7 @@ import { BoardContextMenu } from './BoardContextMenu'
 import { BoardDialog, type BoardDialogState } from './BoardDialog'
 import type { Account } from '../../types'
 import { accountGroups$, showAccountGroup } from '../../states/accountGroups'
+import { besideEndX } from '../../lib/direction'
 
 export function SideNav() {
   const { t } = useTranslation()
@@ -157,7 +158,7 @@ export function SideNav() {
 
   return (
     <aside
-      className="flex w-15 shrink-0 flex-col items-center gap-4 border-r border-border bg-sidenav px-0 py-4 max-[769px]:hidden select-none"
+      className="flex w-15 shrink-0 flex-col items-center gap-4 border-e border-border bg-sidenav px-0 py-4 max-[769px]:hidden select-none"
       onContextMenu={(event) => {
         if (event.defaultPrevented) return
         event.preventDefault()
@@ -169,7 +170,7 @@ export function SideNav() {
         {showUnifiedInbox && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 isUnifiedActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -203,7 +204,7 @@ export function SideNav() {
         {hasAccounts && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 calendarOpen ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -233,7 +234,7 @@ export function SideNav() {
         {hasAccounts && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 peopleOpen ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -264,7 +265,7 @@ export function SideNav() {
         {hasAccounts && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 tasksOpen ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -293,7 +294,7 @@ export function SideNav() {
         {hasAccounts && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 notesOpen ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -322,7 +323,7 @@ export function SideNav() {
         {hasAccounts && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 messagingOpen ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -351,7 +352,7 @@ export function SideNav() {
         {hasAccounts && (
           <div className="relative w-full flex justify-center group">
             <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+              className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
                 attachmentsOpen ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
@@ -458,7 +459,7 @@ export function SideNav() {
           }`}
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect()
-            setMoreMenu({ x: rect.right + 8, y: rect.top })
+            setMoreMenu({ x: besideEndX(rect, 8), y: rect.top })
           }}
           title={t('common.more')}
         >

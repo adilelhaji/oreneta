@@ -11,6 +11,7 @@ import { UNIFIED_ACCOUNT, unifiedFolderLabel, unifiedFolders } from '../../lib/u
 import { FloatingContextMenu } from './FloatingContextMenu'
 import { menuItemBase, menuItemClass } from './menuStyles'
 import { buildFolderTree, type TreeNode } from '../../lib/folderTree'
+import { startEdgeX } from '../../lib/direction'
 
 const FILTER_THRESHOLD = 8
 
@@ -39,7 +40,7 @@ function FolderNodeRow({
 
   return (
     <div>
-      <div className="flex items-center" style={{ paddingLeft: depth * 14 }}>
+      <div className="flex items-center" style={{ paddingInlineStart: depth * 14 }}>
         <button
           type="button"
           className={clsx(
@@ -73,7 +74,7 @@ function FolderNodeRow({
           ) : (
             <Icon size={14} strokeWidth={1.75} className="shrink-0 text-secondary" />
           )}
-          <span className="min-w-0 truncate">{node.name}</span>
+          <span dir="auto" className="min-w-0 truncate">{node.name}</span>
         </button>
       </div>
       {hasChildren && expanded && (
@@ -161,7 +162,7 @@ export function FolderSwitcher({
       return
     }
     const rect = event.currentTarget.getBoundingClientRect()
-    setMenu({ x: rect.left, y: rect.bottom })
+    setMenu({ x: startEdgeX(rect), y: rect.bottom })
   }
 
   const needle = query.trim().toLowerCase()
@@ -188,7 +189,7 @@ export function FolderSwitcher({
         onPointerDown={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.stopPropagation()}
       >
-        <span className="min-w-0 truncate">{label}</span>
+        <span dir="auto" className="min-w-0 truncate">{label}</span>
         <ChevronDown size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
       </button>
       {menu && (
@@ -240,7 +241,7 @@ export function FolderSwitcher({
                     className={clsx(menuItemClass, 'w-full')}
                   >
                     <Bookmark size={14} className="shrink-0 text-secondary" strokeWidth={1.75} />
-                    <span className="min-w-0 flex-1 truncate text-left">{search.name}</span>
+                    <span dir="auto" className="min-w-0 flex-1 truncate">{search.name}</span>
                   </button>
                 ))}
                 <div className="my-1 border-t border-border" />

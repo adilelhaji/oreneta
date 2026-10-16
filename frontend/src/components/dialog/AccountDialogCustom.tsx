@@ -98,7 +98,7 @@ export function AccountDialogCustom({
         labelClassName={fieldLabelClass}
       />
       <label className="flex flex-col gap-1.5 w-full">
-        <span className={`pl-0.5 ${fieldLabelClass ?? 'text-caption font-semibold text-secondary'}`}>
+        <span className={`ps-0.5 ${fieldLabelClass ?? 'text-caption font-semibold text-secondary'}`}>
           {editing ? t('accounts.fields.passwordUnchanged') : t('accounts.fields.password')}
         </span>
         <span className="relative flex items-center">
@@ -112,13 +112,13 @@ export function AccountDialogCustom({
                 void save()
               }
             }}
-            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pr-11`}
+            className={`${inputClass ?? 'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary placeholder-secondary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'} pe-11`}
           />
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setShowPassword((value) => !value)}
-            className="absolute right-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
+            className="absolute end-2.5 flex h-7 w-7 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-hover hover:text-primary cursor-pointer"
             aria-label={
               showPassword
                 ? t('accounts.actions.hidePassword', { defaultValue: 'Hide password' })
@@ -282,7 +282,7 @@ function SecurityField({
 }) {
   return (
     <label className="flex flex-col gap-1.5 w-full">
-      <span className={`pl-0.5 ${labelClassName ?? 'text-caption font-semibold text-secondary'}`}>{label}</span>
+      <span className={`ps-0.5 ${labelClassName ?? 'text-caption font-semibold text-secondary'}`}>{label}</span>
       <span className="relative flex items-center">
         <select
           value={value}
@@ -290,7 +290,7 @@ function SecurityField({
           className={`${
             inputClassName ??
             'w-full text-xs py-2 px-3.5 rounded-control border border-border bg-raised text-primary focus:ring-1 focus:ring-accent focus:border-transparent focus:bg-chats transition-all outline-none'
-          } appearance-none pr-10 cursor-pointer`}
+          } appearance-none pe-10 cursor-pointer`}
         >
           <option value="tls">TLS</option>
           <option value="starttls">STARTTLS</option>
@@ -299,7 +299,7 @@ function SecurityField({
         <ChevronDown
           size={14}
           aria-hidden="true"
-          className="pointer-events-none absolute right-3 text-secondary"
+          className="pointer-events-none absolute end-3 text-secondary"
           strokeWidth={1.75}
         />
       </span>

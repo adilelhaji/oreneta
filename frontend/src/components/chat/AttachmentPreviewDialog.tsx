@@ -68,7 +68,11 @@ export function AttachmentPreviewDialog({ attachment, onClose }: { attachment: A
           text === null ? (
             <p className="p-6 text-center text-ui text-secondary">{t('attachments.previewLoading')}</p>
           ) : (
-            <pre className="max-h-[70vh] overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words select-text">
+            // A text file may be prose in any script: each line in its own direction.
+            <pre
+              dir="auto"
+              className="bidi-plaintext max-h-[70vh] overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words select-text"
+            >
               {text}
             </pre>
           )

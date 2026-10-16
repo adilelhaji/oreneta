@@ -83,7 +83,7 @@ export function TranslationModelsGroup() {
               <li key={key} className="flex flex-wrap items-center gap-2 py-1.5">
                 <span className="min-w-[12rem] text-primary">{label}</span>
                 <span className="text-secondary">{formatFileSize(pair.size)}</span>
-                <span className="ml-auto flex items-center gap-2">
+                <span className="ms-auto flex items-center gap-2">
                   {progress ? (
                     <>
                       <progress

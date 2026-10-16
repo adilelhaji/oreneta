@@ -22,7 +22,7 @@ export function Switch({ checked, label, onChange }: { checked: boolean; label: 
     >
       <span
         className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-          checked ? 'translate-x-4.5' : 'translate-x-0.2'
+          checked ? 'translate-x-4.5 rtl:-translate-x-4.5' : 'translate-x-0.2 rtl:-translate-x-0.2'
         } relative top-[1px]`}
       />
     </button>
@@ -274,8 +274,9 @@ export function SelectRow({
       control={
         <SelectInput
           value={value}
+          aria-label={title}
           onChange={(event) => onChange(event.target.value)}
-          className="w-44 rounded-control py-1.5 pl-3 font-semibold"
+          className="w-44 rounded-control py-1.5 ps-3 font-semibold"
         >
           {options.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-chats text-primary">

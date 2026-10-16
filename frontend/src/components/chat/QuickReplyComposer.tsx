@@ -56,7 +56,8 @@ export function QuickReplyComposer() {
             placeholder={t('composer.placeholders.quickMessage')}
             rows={1}
             spellCheck={spellCheck}
-            className="flex-1 py-[7px] px-1 max-h-[254px] min-h-8.5 bg-transparent text-title text-primary resize-none placeholder-secondary border-none outline-none leading-5"
+            dir={composer ? 'auto' : undefined}
+            className="bidi-plaintext flex-1 py-[7px] px-1 max-h-[254px] min-h-8.5 bg-transparent text-title text-primary resize-none placeholder-secondary border-none outline-none leading-5"
             onKeyDown={handleComposerKeyDown}
             onPaste={handleComposerPaste}
           />
@@ -80,7 +81,7 @@ export function QuickReplyComposer() {
             {sendingReply ? (
               <Loader2 size={14} className="animate-spin" strokeWidth={1.75} />
             ) : (
-              <Send size={14} className="relative left-[0.5px]" strokeWidth={1.75} />
+              <Send size={14} className="relative start-[0.5px]" strokeWidth={1.75} />
             )}
           </button>
         </div>

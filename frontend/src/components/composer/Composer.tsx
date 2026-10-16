@@ -302,7 +302,9 @@ export function Composer({ tabId }: { tabId: string }) {
             onPaste={handlePaste}
             placeholder={t('composer.placeholders.message')}
             spellCheck={spellCheck}
-            className="h-full min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-primary placeholder-secondary outline-none"
+            // Each paragraph in its own direction; empty, the interface's (ADR-0061).
+            dir={draft.text ? 'auto' : undefined}
+            className="bidi-plaintext h-full min-h-[240px] w-full resize-none bg-transparent text-sm leading-relaxed text-primary placeholder-secondary outline-none"
           />
         )}
       </div>
