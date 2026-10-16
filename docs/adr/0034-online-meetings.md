@@ -1,52 +1,52 @@
-# ADR-0034: Reuniones en línea en el calendario
+# ADR-0034: Reunions en línia al calendari
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
-  el 2026-10-12. Sin servicio nuevo de pago.
-- Fecha: 2026-10-12.
-- Alcance: #109.
+- Estat: acceptada; presa per delegació i revisada pel propietari
+  el 2026-10-12. Sense servei nou de pagament.
+- Data: 2026-10-12.
+- Abast: #109.
 
-## Decisión
+## Decisió
 
-- **La reunión va unida a su evento:**
-  - el evento guarda la reunión que da el servidor (Google:
-    `conferenceData` y `hangoutLink`), en la columna `meeting` (esquema 52);
-  - en cualquier calendario (Exchange, CalDAV, local o suscrito) se
-    reconoce una dirección de reunión en el lugar o las notas: Meet, Zoom,
-    Teams, Webex, Jitsi, GoTo y Whereby;
-  - el reconocimiento es por dominio y ruta exactos, así que
-    `meet.google.com.evil.test` no cuenta;
-  - el evento muestra «Unirse a …», que abre la dirección fuera de la app.
+- **La reunió va unida al seu esdeveniment:**
+  - l'esdeveniment desa la reunió que dona el servidor (Google:
+    `conferenceData` i `hangoutLink`), a la columna `meeting` (esquema 52);
+  - en qualsevol calendari (Exchange, CalDAV, local o subscrit) es
+    reconeix una adreça de reunió al lloc o a les notes: Meet, Zoom,
+    Teams, Webex, Jitsi, GoTo i Whereby;
+  - el reconeixement és per domini i ruta exactes, de manera que
+    `meet.google.com.evil.test` no compta;
+  - l'esdeveniment mostra «Unir-se a …», que obre l'adreça fora de l'aplicació.
 - **Crear:**
-  - solo Google Meet, solo en un calendario de una cuenta Google con OAuth,
-    y solo si se marca «Añadir un Google Meet al guardar»;
-  - se pide con `conferenceDataVersion=1` y un `requestId` fijo por evento,
-    así que repetir el guardado tras perder la respuesta no crea una
-    segunda reunión;
-  - pedir un Meet a un evento que ya tiene uno no envía nada;
-  - quitarlo envía `conferenceData: null`; una edición normal no toca la
-    reunión;
-  - si Google no la crea (cuenta sin Meet) o aún la prepara, se dice y el
-    evento queda guardado.
-- **Rechazado sin enviar nada:** crear una reunión en Exchange, CalDAV o un
-  calendario local, o de un tipo distinto de Meet.
-- **Bloqueado por el propietario:** Zoom, Teams, Webex y el resto necesitan
-  registros OAuth o de aplicación propios de Oreneta; mientras no existan,
-  se reconocen sus enlaces pero no se crean reuniones.
+  - només Google Meet, només en un calendari d'un compte Google amb OAuth,
+    i només si es marca «Afegir un Google Meet en desar»;
+  - es demana amb `conferenceDataVersion=1` i un `requestId` fix per esdeveniment,
+    de manera que repetir el desament després de perdre la resposta no crea una
+    segona reunió;
+  - demanar un Meet per a un esdeveniment que ja en té un no envia res;
+  - treure'l envia `conferenceData: null`; una edició normal no toca la
+    reunió;
+  - si Google no la crea (compte sense Meet) o encara la prepara, es diu i
+    l'esdeveniment queda desat.
+- **Rebutjat sense enviar res:** crear una reunió a Exchange, CalDAV o un
+  calendari local, o d'un tipus diferent de Meet.
+- **Bloquejat pel propietari:** Zoom, Teams, Webex i la resta necessiten
+  registres OAuth o d'aplicació propis d'Oreneta; mentre no existeixin,
+  se'n reconeixen els enllaços però no es creen reunions.
 
-## Matriz
+## Matriu
 
-| Servicio | Reconocer enlace | Crear |
+| Servei | Reconèixer l'enllaç | Crear |
 |---|---|---|
-| Google Meet | sí | sí, en calendarios Google |
-| Zoom | sí | bloqueado (registro) |
-| Microsoft Teams | sí | bloqueado (Graph `OnlineMeetings`) |
-| Webex | sí | bloqueado (registro) |
-| Jitsi Meet | sí | no aplica |
-| GoTo Meeting | sí | bloqueado (registro) |
-| Whereby | sí | bloqueado (registro) |
-| IceWarp, Meetn | no | bloqueado (sin documentación ni registro) |
+| Google Meet | sí | sí, en calendaris Google |
+| Zoom | sí | bloquejat (registre) |
+| Microsoft Teams | sí | bloquejat (Graph `OnlineMeetings`) |
+| Webex | sí | bloquejat (registre) |
+| Jitsi Meet | sí | no s'aplica |
+| GoTo Meeting | sí | bloquejat (registre) |
+| Whereby | sí | bloquejat (registre) |
+| IceWarp, Meetn | no | bloquejat (sense documentació ni registre) |
 
-## Pendiente
+## Pendent
 
-- N5: crear, editar y quitar un Meet en una cuenta Google de prueba.
-- Teams en Exchange Online mediante Graph cuando exista el registro.
+- N5: crear, editar i treure un Meet en un compte Google de prova.
+- Teams a Exchange Online mitjançant Graph quan existeixi el registre.

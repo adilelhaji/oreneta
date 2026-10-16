@@ -1,60 +1,60 @@
-# ADR-0024: Ciclo de vida del envío (inmediato, retenido, programado) y pospuestos
+# ADR-0024: Cicle de vida de l'enviament (immediat, retingut, programat) i ajornats
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
-  el 2026-10-12. Cubre la puerta de #89 sobre el
-  contrato duradero.
-- Fecha: 2026-10-12.
-- Alcance: #89.
+- Estat: acceptada; presa per delegació i revisada pel propietari
+  el 2026-10-12. Cobreix la porta de #89 sobre el
+  contracte durador.
+- Data: 2026-10-12.
+- Abast: #89.
 
-## Contexto
+## Context
 
-El envío programado ya era duradero (`scheduled_sends` más los intentos de
-#29). El periodo para deshacer, en cambio, solo vivía en un temporizador de
-la interfaz: cerrar la app o un fallo en esos segundos perdía la respuesta.
-Además:
-- un «Enviar ahora» simultáneo con el vigilante podía dar por enviado, y
-  borrar, un mensaje cuyo primer intento seguía en curso;
-- la interfaz no decía que la app tiene que estar abierta;
-- un hilo pospuesto que se movía desaparecía de todas partes.
+L'enviament programat ja era durador (`scheduled_sends` més els intents de
+#29). El període per a desfer, en canvi, només vivia en un temporitzador de
+la interfície: tancar l'aplicació o una fallada en aquells segons perdia la resposta.
+A més:
+- un «Enviar ara» simultani amb el vigilant podia donar per enviat, i
+  suprimir, un missatge el primer intent del qual encara era en curs;
+- la interfície no deia que l'aplicació ha d'estar oberta;
+- un fil ajornat que es movia desapareixia de tot arreu.
 
-## Decisión
+## Decisió
 
-- **Un solo camino duradero:**
-  - una respuesta en su periodo para deshacer se guarda también como envío
-    programado, con su Message-ID como id;
-  - vence al final del periodo más un margen de 120 s;
-  - dejarla ir o deshacerla borra antes esa copia;
-  - si la app se cierra o falla, la copia sale al volver a abrirse;
-  - la copia y la respuesta comparten id de intento, así que el núcleo nunca
-    envía las dos.
-- **Transiciones:**
-  - retenido → (deshacer: borrado) | (vence: copia borrada → enviando);
-  - programado → enviando → aceptado | archivado | rechazado (se reintenta
-    con espera creciente, hasta 5 veces) | incierto (nunca se reintenta solo);
-  - un intento «enviando» con la app en marcha está en curso: quien lo
-    empezó lo cierra, y nadie más borra su fila;
-  - al arrancar, lo que quedó «enviando» pasa a incierto antes de que empiece
-    el vigilante.
-- **Deshacer no es recuperar:**
-  - solo existe antes de que el mensaje salga;
-  - si la copia guardada no se puede borrar, se dice que aún puede salir.
-- **Hora y reloj:**
-  - las horas se guardan en segundos UTC; «mañana a las 8» se calcula en la
-    hora local, así que el cambio de horario no la mueve;
-  - un envío que sale más de 5 minutos tarde lo dice;
-  - el menú avisa de que hace falta la app abierta.
-- **Secretos:** la contraseña de una clave nunca se guarda con un mensaje
-  programado.
-- **Pospuestos:**
-  - se guardan por conversación;
-  - si la conversación se mueve, se encuentran en su carpeta actual;
-  - una clave hecha de un uid no se busca en otra carpeta, porque allí ese
-    uid es otro mensaje;
-  - al despertar no se promete «de vuelta en la bandeja de entrada»: nunca
-    se movió.
+- **Un sol camí durador:**
+  - una resposta en el seu període per a desfer es desa també com a enviament
+    programat, amb el seu Message-ID com a id;
+  - venç al final del període més un marge de 120 s;
+  - deixar-la anar o desfer-la en suprimeix abans aquesta còpia;
+  - si l'aplicació es tanca o falla, la còpia surt quan es torna a obrir;
+  - la còpia i la resposta comparteixen id d'intent, de manera que el nucli mai
+    no envia totes dues.
+- **Transicions:**
+  - retingut → (desfer: suprimit) | (venç: còpia suprimida → enviant);
+  - programat → enviant → acceptat | arxivat | rebutjat (es reintenta
+    amb espera creixent, fins a 5 vegades) | incert (mai no es reintenta sol);
+  - un intent «enviant» amb l'aplicació en marxa és en curs: qui el
+    va començar el tanca, i ningú més no en suprimeix la fila;
+  - en arrencar, el que ha quedat «enviant» passa a incert abans que comenci
+    el vigilant.
+- **Desfer no és recuperar:**
+  - només existeix abans que el missatge surti;
+  - si la còpia desada no es pot suprimir, es diu que encara pot sortir.
+- **Hora i rellotge:**
+  - les hores es desen en segons UTC; «demà a les 8» es calcula en
+    l'hora local, de manera que el canvi d'horari no la mou;
+  - un enviament que surt més de 5 minuts tard ho diu;
+  - el menú avisa que cal tenir l'aplicació oberta.
+- **Secrets:** la contrasenya d'una clau mai no es desa amb un missatge
+  programat.
+- **Ajornats:**
+  - es desen per conversa;
+  - si la conversa es mou, es troben a la seva carpeta actual;
+  - una clau feta d'un uid no es cerca en una altra carpeta, perquè allà aquell
+    uid és un altre missatge;
+  - en despertar no es promet «de tornada a la safata d'entrada»: mai no
+    s'ha mogut.
 
-## Pendiente
+## Pendent
 
-- Que una respuesta nueva despierte antes una conversación pospuesta.
-- Un periodo para deshacer también en el editor completo, que hoy envía al
-  momento.
+- Que una resposta nova desperti abans una conversa ajornada.
+- Un període per a desfer també a l'editor complet, que avui envia al
+  moment.

@@ -1,71 +1,71 @@
-# ADR-0032: Contexto, proveedor y consentimiento del asistente
+# ADR-0032: Context, proveïdor i consentiment de l'assistent
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
-  el 2026-10-12. Sin servicio nuevo de pago:
-  el proveedor lo elige y configura la persona.
-- Fecha: 2026-10-12.
-- Alcance: #51 y la parte estable de #52.
+- Estat: acceptada; presa per delegació i revisada pel propietari
+  el 2026-10-12. Sense servei nou de pagament:
+  el proveïdor el tria i el configura la persona.
+- Data: 2026-10-12.
+- Abast: #51 i la part estable de #52.
 
-## Decisión
+## Decisió
 
-- **Activación:**
-  - el asistente está apagado por omisión (`assistant_enabled`);
-  - apagado, no aparece en conversaciones ni en el composer;
-  - encendido, cada petición sigue necesitando revisión y confirmación, que
-    el núcleo exige: sin la casilla marcada y un token igual al de la vista
-    previa, no se envía nada.
-- **Proveedor:**
-  - formato de chat completions (OpenAI), el que entienden Ollama,
-    llama.cpp y LM Studio en local y los proveedores remotos;
-  - en modo local, solo una dirección de este equipo (loopback);
-  - en modo remoto, solo HTTPS;
-  - la clave se pide en cada petición y no se guarda.
-- **Contexto:**
-  - en una conversación, solo los mensajes y adjuntos que la persona marca:
-    id del mensaje, cuenta, remitente, asunto, texto y nombre, tipo y
-    tamaño de los adjuntos;
-  - no se envían destinatarios, fechas ni otras cuentas o conversaciones;
-  - al reescribir, solo el texto del borrador.
-  - Una prueba falla si aparece un campo nuevo en lo que se envía.
-- **Lo que se revisa es lo que sale:**
-  - la vista previa del núcleo devuelve el cuerpo exacto de la petición;
-  - el token es su hash junto con el proveedor, y al ejecutar se rehace y se
+- **Activació:**
+  - l'assistent està desactivat per defecte (`assistant_enabled`);
+  - desactivat, no apareix a les converses ni al composer;
+  - activat, cada petició continua necessitant revisió i confirmació, que
+    el nucli exigeix: sense la casella marcada i un token igual al de la
+    previsualització, no s'envia res.
+- **Proveïdor:**
+  - format de chat completions (OpenAI), el que entenen Ollama,
+    llama.cpp i LM Studio en local i els proveïdors remots;
+  - en mode local, només una adreça d'aquest equip (loopback);
+  - en mode remot, només HTTPS;
+  - la clau es demana a cada petició i no es desa.
+- **Context:**
+  - en una conversa, només els missatges i fitxers adjunts que la persona marca:
+    id del missatge, compte, remitent, assumpte, text i nom, tipus i
+    mida dels adjunts;
+  - no s'envien destinataris, dates ni altres comptes o converses;
+  - en reescriure, només el text de l'esborrany.
+  - Una prova falla si apareix un camp nou en el que s'envia.
+- **El que es revisa és el que surt:**
+  - la previsualització del nucli retorna el cos exacte de la petició;
+  - el token és el seu hash juntament amb el proveïdor, i en executar es refà i es
     compara;
-  - el diálogo muestra el destino y el cuerpo exacto.
-- **El correo es dato, no órdenes:**
-  - va dentro de `<mail>…</mail>` como JSON, así que no puede cerrar la
-    valla;
-  - las instrucciones del sistema dicen que no se obedece nada de dentro y
-    que no se puede actuar sobre el buzón;
-  - de la respuesta solo se lee `text`, `sources` y `tasks`, y fuentes y
-    tareas fuera del contexto revisado se descartan;
-  - nada de la respuesta envía, borra, mueve o cambia reglas: un borrador se
-    abre para editar, una tarea se crea al pulsar y una reescritura se usa
-    al pulsar, con deshacer.
-- **Cancelar:** responde en el momento, aunque la petición esté en curso, y
-  la respuesta tardía se descarta.
-- **Registro:**
-  - nada se guarda;
-  - un error del proveedor se informa solo con su estado, porque su cuerpo
-    puede citar el correo y los errores se registran.
-- **Escritura (#52):**
-  - además de resumen, respuesta y tareas sugeridas, se puede reescribir el
-    borrador: corregir, más formal, más amable, más corto o más largo;
-  - la instrucción es una de esas, nunca texto libre.
+  - el quadre de diàleg mostra la destinació i el cos exacte.
+- **El correu són dades, no ordres:**
+  - va dins de `<mail>…</mail>` com a JSON, de manera que no pot tancar la
+    tanca;
+  - les instruccions del sistema diuen que no s'obeeix res de dins i
+    que no es pot actuar sobre la bústia;
+  - de la resposta només es llegeixen `text`, `sources` i `tasks`, i les fonts i
+    tasques fora del context revisat es descarten;
+  - res de la resposta no envia, suprimeix, mou o canvia regles: un esborrany s'obre
+    per a editar-lo, una tasca es crea en prémer i una reescriptura es fa servir
+    en prémer, amb desfer.
+- **Cancel·lar:** respon a l'instant, encara que la petició estigui en curs, i
+  la resposta tardana es descarta.
+- **Registre:**
+  - no es desa res;
+  - un error del proveïdor s'informa només amb el seu estat, perquè el seu cos
+    pot citar el correu i els errors es registren.
+- **Escriptura (#52):**
+  - a més de resum, resposta i tasques suggerides, es pot reescriure
+    l'esborrany: corregir, més formal, més amable, més curt o més llarg;
+  - la instrucció és una d'aquestes, mai text lliure.
 
-## Alternativas
+## Alternatives
 
-- Formato propio (lo que había): no lo entendía ningún servidor real.
-- Activación por cuenta: más fina, pero la confirmación por petición ya es
-  explícita; se puede añadir si el propietario lo pide.
+- Format propi (el que hi havia): no l'entenia cap servidor real.
+- Activació per compte: més fina, però la confirmació per petició ja és
+  explícita; es pot afegir si el propietari ho demana.
 
-## Pendiente (para el propietario)
+## Pendent (per al propietari)
 
-- La política de privacidad pública (`docs/privacy.html`) debe decir que,
-  si se activa el asistente en modo remoto, el texto revisado se envía al
-  proveedor elegido, y que las descargas de modelos de traducción solo
-  ocurren a petición. Afecta a la sección de Google (Limited Use): un
-  envío a un tercero elegido por la persona necesita revisión antes de la
-  verificación de Google. Texto propuesto en el registro de diseño.
-- Separar en #117 la extracción de eventos y las funciones de agente de la
-  versión 11.
+- La política de privadesa pública (`docs/privacy.html`) ha de dir que,
+  si s'activa l'assistent en mode remot, el text revisat s'envia al
+  proveïdor triat, i que les baixades de models de traducció només
+  es fan a petició. Afecta la secció de Google (Limited Use): un
+  enviament a un tercer triat per la persona necessita revisió abans de la
+  verificació de Google. Text proposat al registre de disseny.
+- Separar a #117 l'extracció d'esdeveniments i les funcions d'agent de la
+  versió 11.

@@ -1,36 +1,36 @@
-# ADR-0022: Acciones rápidas
+# ADR-0022: Accions ràpides
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #92.
+- Data: 2026-10-11.
+- Abast: primer lliurament de #92.
 
-## Contexto
+## Context
 
-#92 pide encadenar acciones sobre las conversaciones seleccionadas con un
-solo gesto. Una cadena que envía, reenvía o borra puede hacer daño que no se
-deshace, y una que se ejecuta sobre una selección que cambia mientras corre
-puede tocar mensajes que nadie eligió.
+#92 demana encadenar accions sobre les converses seleccionades amb un
+sol gest. Una cadena que envia, reenvia o suprimeix pot fer un mal que no es
+desfà, i una que s'executa sobre una selecció que canvia mentre s'executa
+pot tocar missatges que ningú no ha triat.
 
-## Decisión
+## Decisió
 
-- **Pasos permitidos:** marcar leído o no leído, destacar o quitar el
-  destacado, archivar y mover a una carpeta. Nada de enviar, reenviar,
-  responder, borrar ni llamar a otra acción rápida.
-- **Archivar o mover va al final:** después de mover, la conversación ya no
-  está donde los pasos siguientes la buscarían. El editor rechaza una cadena
-  que lo incumple, y lo mismo hace la carga de los ajustes.
-- **Límites:** hasta 8 pasos por acción y 9 acciones (Alt+1 … Alt+9).
-- **Confirmación y conjunto fijo:** ejecutar pide confirmar y fija en ese
-  momento las conversaciones afectadas. Lo que entre o salga de la selección
-  después no cambia lo que se hace.
-- **Cadena por conversación:** cada conversación recorre los pasos en orden y
-  se detiene en el primero que falla; las demás siguen. Al terminar se
-  muestra un informe paso a paso por conversación, con los fallos arriba.
-- **Almacenamiento:** las acciones viven en los ajustes (`quick_actions`) y
-  se sanean al cargar: lo que no cumple las reglas se descarta.
+- **Passos permesos:** marcar com a llegit o no llegit, destacar o treure el
+  destacat, arxivar i moure a una carpeta. Res d'enviar, reenviar,
+  respondre, suprimir ni cridar una altra acció ràpida.
+- **Arxivar o moure va al final:** després de moure, la conversa ja no
+  és on els passos següents la buscarien. L'editor rebutja una cadena
+  que ho incompleix, i el mateix fa la càrrega dels paràmetres.
+- **Límits:** fins a 8 passos per acció i 9 accions (Alt+1 … Alt+9).
+- **Confirmació i conjunt fix:** executar demana confirmació i fixa en aquell
+  moment les converses afectades. El que entri a la selecció o en surti
+  després no canvia el que es fa.
+- **Cadena per conversa:** cada conversa recorre els passos en ordre i
+  s'atura en el primer que falla; les altres continuen. En acabar, es
+  mostra un informe pas a pas per conversa, amb les fallades a dalt.
+- **Emmagatzematge:** les accions viuen als paràmetres (`quick_actions`) i
+  se sanegen en carregar-se: el que no compleix les regles es descarta.
 
-## Pendiente
+## Pendent
 
-- Etiquetas y categorías como pasos, cuando #91 y #95 fijen su contrato.
-- Ejecutar sobre la conversación abierta sin selección explícita.
+- Etiquetes i categories com a passos, quan #91 i #95 en fixin el contracte.
+- Executar sobre la conversa oberta sense selecció explícita.

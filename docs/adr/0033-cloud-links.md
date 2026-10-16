@@ -1,45 +1,45 @@
-# ADR-0033: Compartir archivos por enlace desde almacenamiento en la nube
+# ADR-0033: Compartir fitxers per enllaç des d'emmagatzematge al núvol
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
-  el 2026-10-12. Sin servicio nuevo de pago.
-- Fecha: 2026-10-12.
-- Alcance: #108.
+- Estat: acceptada; presa per delegació i revisada pel propietari
+  el 2026-10-12. Sense servei nou de pagament.
+- Data: 2026-10-12.
+- Abast: #108.
 
-## Decisión
+## Decisió
 
-- **Proveedores ahora:**
-  - Nextcloud y ownCloud, con WebDAV para subir y la API OCS para el
-    enlace;
-  - una contraseña de aplicación, guardada en el llavero del sistema y
-    nunca en la base de datos;
-  - solo HTTPS, salvo loopback para pruebas, y nunca se sigue una
-    redirección con la contraseña;
-  - vBoxxCloud, al ser Nextcloud, se usa como Nextcloud.
-- **Proveedores bloqueados:**
-  - Dropbox, OneDrive y Google Drive necesitan registros OAuth propios de
-    Oreneta, que solo puede crear el propietario;
-  - se muestran como «no disponibles todavía», no a medio hacer;
-  - leitzcloud queda fuera hasta que haya documentación de su API.
-- **Flujo:**
-  - antes de subir, se ve el destino (servidor, carpeta y nombre; un nombre
-    ocupado lleva número y nunca se sobrescribe);
-  - también se ve lo que el enlace permitirá: solo ver, contraseña
-    (activada por omisión y generada al azar) y caducidad (por omisión 7
-    días, o el máximo del servidor);
-  - lo que el servidor exige (contraseña o caducidad obligatoria, días
-    máximos) se lee de sus capacidades y se aplica antes de crear nada;
-  - la subida muestra progreso y se puede cancelar; cancelada o fallida,
-    se borra lo subido;
-  - al crear el enlace se lee lo que el servidor concedió. Si permite
-    editar, no caduca cuando se pidió, cambia la fecha o pierde la
-    contraseña, se retira y se dice;
-  - el enlace se inserta en el mensaje solo al pulsar, con su caducidad; la
-    contraseña no se pone en el mensaje;
-  - un enlace hecho se puede retirar en lugar de insertarlo.
-- **Errores:** contraseña revocada (401/403), almacenamiento lleno (507),
-  cancelación y discrepancias de permisos tienen su propio mensaje.
+- **Proveïdors ara:**
+  - Nextcloud i ownCloud, amb WebDAV per a pujar i l'API OCS per a
+    l'enllaç;
+  - una contrasenya d'aplicació, desada al clauer del sistema i
+    mai a la base de dades;
+  - només HTTPS, excepte loopback per a proves, i mai no se segueix una
+    redirecció amb la contrasenya;
+  - vBoxxCloud, com que és Nextcloud, es fa servir com a Nextcloud.
+- **Proveïdors bloquejats:**
+  - Dropbox, OneDrive i Google Drive necessiten registres OAuth propis
+    d'Oreneta, que només pot crear el propietari;
+  - es mostren com a «encara no disponibles», no a mig fer;
+  - leitzcloud queda fora fins que hi hagi documentació de la seva API.
+- **Flux:**
+  - abans de pujar, es veu la destinació (servidor, carpeta i nom; un nom
+    ocupat porta número i mai no se sobreescriu);
+  - també es veu el que permetrà l'enllaç: només veure, contrasenya
+    (activada per defecte i generada a l'atzar) i caducitat (per defecte 7
+    dies, o el màxim del servidor);
+  - el que el servidor exigeix (contrasenya o caducitat obligatòria, dies
+    màxims) es llegeix de les seves capacitats i s'aplica abans de crear res;
+  - la pujada mostra el progrés i es pot cancel·lar; cancel·lada o fallida,
+    se suprimeix el que s'ha pujat;
+  - en crear l'enllaç es llegeix el que el servidor ha concedit. Si permet
+    editar, no caduca quan s'ha demanat, canvia la data o perd la
+    contrasenya, es retira i es diu;
+  - l'enllaç s'insereix al missatge només en prémer, amb la seva caducitat; la
+    contrasenya no es posa al missatge;
+  - un enllaç fet es pot retirar en lloc d'inserir-lo.
+- **Errors:** contrasenya revocada (401/403), emmagatzematge ple (507),
+  cancel·lació i discrepàncies de permisos tenen el seu propi missatge.
 
-## Pendiente
+## Pendent
 
-- Dropbox, OneDrive y Google Drive cuando existan los registros OAuth.
-- N5: probar contra un Nextcloud real en la verificación final.
+- Dropbox, OneDrive i Google Drive quan existeixin els registres OAuth.
+- N5: provar contra un Nextcloud real en la verificació final.

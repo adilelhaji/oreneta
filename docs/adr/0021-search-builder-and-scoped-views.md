@@ -1,37 +1,37 @@
-# ADR-0021: Constructor de búsquedas y búsquedas guardadas con ámbito
+# ADR-0021: Constructor de cerques i cerques desades amb àmbit
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #43.
+- Data: 2026-10-11.
+- Abast: primer lliurament de #43.
 
-## Contexto
+## Context
 
-La caja de búsqueda ya entiende operadores (`from:`, `to:`, `subject:`,
-`is:`, `has:attachment`, `label:`, `after:`, `before:`). El núcleo los lee
-una sola vez para el índice local, la búsqueda IMAP y la interfaz. Las
-búsquedas guardadas solo guardaban el texto y se aplicaban a la carpeta que
-estuviera abierta. #43 pide un constructor visual que conserve el
-significado de cada operador, y vistas guardadas con su origen.
+El quadre de cerca ja entén operadors (`from:`, `to:`, `subject:`,
+`is:`, `has:attachment`, `label:`, `after:`, `before:`). El nucli els llegeix
+una sola vegada per a l'índex local, la cerca IMAP i la interfície. Les
+cerques desades només desaven el text i s'aplicaven a la carpeta que
+estigués oberta. #43 demana un constructor visual que conservi el
+significat de cada operador, i vistes desades amb el seu origen.
 
-## Decisión
+## Decisió
 
-- **Constructor:** edita los campos de la consulta tal como los lee el
-  núcleo (`search.parse`) y la vuelve a escribir con el núcleo
-  (`search.compose`, el inverso de `parse`). Una prueba de ida y vuelta con
-  un corpus fija que `parse(compose(q)) == q`, de modo que un constructor y
-  la caja no pueden entender cosas distintas. Varios valores en un campo
-  significan «cualquiera de ellos», como en la caja.
-- **Ámbito de las búsquedas guardadas:**
-  - una búsqueda guardada recuerda la cuenta y la carpeta donde se guardó,
-    y abrirla vuelve allí;
-  - las guardadas antes siguen funcionando donde se abran.
-- **Vista viva:** una búsqueda guardada es una consulta, no una copia. La
-  lista se actualiza con la sincronización y nunca mueve mensajes.
+- **Constructor:** edita els camps de la consulta tal com els llegeix el
+  nucli (`search.parse`) i la torna a escriure amb el nucli
+  (`search.compose`, l'invers de `parse`). Una prova d'anada i tornada amb
+  un corpus fixa que `parse(compose(q)) == q`, de manera que un constructor i
+  el quadre no poden entendre coses diferents. Diversos valors en un camp
+  signifiquen «qualsevol d'ells», com al quadre.
+- **Àmbit de les cerques desades:**
+  - una cerca desada recorda el compte i la carpeta on es va desar,
+    i obrir-la hi torna;
+  - les desades abans continuen funcionant allà on s'obrin.
+- **Vista viva:** una cerca desada és una consulta, no una còpia. La
+  llista s'actualitza amb la sincronització i mai no mou missatges.
 
-## Pendiente
+## Pendent
 
-- Combinar etiquetas con «todas» y «cualquiera»: el gramática solo admite
-  una por búsqueda, y #13 fija el contrato del filtro rápido.
-- Decir cuánto del servidor se ha consultado frente a lo que hay en el
-  equipo.
+- Combinar etiquetes amb «totes» i «qualsevol»: la gramàtica només n'admet
+  una per cerca, i #13 fixa el contracte del filtre ràpid.
+- Dir quina part del servidor s'ha consultat davant del que hi ha a
+  l'equip.
