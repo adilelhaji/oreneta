@@ -1745,6 +1745,192 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
   }
 }
 
+// What a check of "nothing leaves the window" has to read in right to left:
+// `scrollWidth` only grows with overflow on the scrollable side (the left), so
+// controls and headings pushed past the right edge are looked for directly.
+async function rtlInView(page: Page, where: string) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+  const outside = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        'button, [role=button], [role=tab], [role=option], a[href], input, select, textarea, h1, h2, h3',
+      ),
+    ]
+      .filter((element) => {
+        const box = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        if (box.width === 0 || box.height === 0 || style.visibility === 'hidden') return false
+        return box.left < -1 || box.right > innerWidth + 1
+      })
+      .map(
+        (element) =>
+          element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40),
+      ),
+  )
+  expect(outside, where).toEqual([])
+}
+
+// The other screens in Arabic (#226): people, tasks, notes, calendar, chat and
+// settings, each without overflow on either side and with axe clean.
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [600, 1024]) {
+    test(`Arabic secondary screens stay inside the window and pass axe: ${theme}, ${width}px (#226)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'ar', theme })
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await page.evaluate(() => {
+        const replies = (window as any).startupProbe.replies
+        replies['people.list'] = {
+          people: [
+            {
+              id: 'local::layla', source: 'local', account: '', book: 'local', name: 'ليلى حداد',
+              organisation: 'قسم البحث', note: 'ملاحظة قصيرة\nSecond line in English', photo: '',
+              emails: [{ addr: 'layla@example.test', label: '' }], phones: [], version: '1', editable: true,
+            },
+            {
+              id: 'local::morgan', source: 'local', account: '', book: 'local', name: 'Morgan Rivera',
+              organisation: 'Example Org', note: '', photo: '',
+              emails: [{ addr: 'morgan@example.test', label: '' }], phones: [], version: '1', editable: true,
+            },
+          ],
+        }
+        replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 1 }] }
+        replies['tasks.list'] = {
+          tasks: [
+            {
+              id: 1, thread_id: '', account_id: '', folder_id: '', note: 'Review the figures', due_at: null,
+              completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+              list_id: 'mail', title: 'مراجعة الميزانية قبل الاجتماع', priority: 2, reminder_at: null, revision: 1,
+            },
+          ],
+        }
+        const note = {
+          id: 'note:ar', title: 'ملاحظة الاجتماع', html: '<p>نص الملاحظة</p><p>English line</p>',
+          text: 'نص الملاحظة\nEnglish line', tags: [], pinned: false, revision: 1, created_at: 0,
+          updated_at: 1760000000, deleted_at: null,
+        }
+        replies['notes.list'] = { notes: [{ ...note, preview: note.text }], tags: [] }
+        replies['notes.get'] = { note }
+        replies['calendar.list'] = {
+          calendars: [{ id: 'local-ar', name: 'تقويم الفريق', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+        }
+        replies['calendar.events'] = { events: [] }
+        replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+        replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+        replies['chat.conversations'] = [
+          { conversation: 'pau@chat.test', last_body: 'مرحبا', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+        ]
+        replies['chat.history'] = [
+          { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'مرحبا يا آنا', stamp: 1760000000, state: 'received' },
+          { account: 'c1', conversation: 'pau@chat.test', id: 's1', stanza_id: null, direction: 'out', sender: 'ana@chat.test', body: 'Hello Pau', stamp: 1760000060, state: 'delivered' },
+        ]
+      })
+
+      const blocking: string[] = []
+      const check = async (screen: string) => {
+        await rtlInView(page, screen)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-rtl-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
+        writeFileSync(info.outputPath(`axe-rtl-${screen}.json`), body)
+        for (const violation of results.violations) {
+          if (violation.impact === 'critical' || violation.impact === 'serious') {
+            const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+            blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+          }
+        }
+        await info.attach(`rtl-${screen}`, {
+          body: await page.screenshot({ path: info.outputPath(`rtl-${screen}.png`), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+      }
+      // The rail on a wide window; the "More" menu on a narrow one.
+      const openArea = async (name: string) => {
+        if (width < 769) {
+          await page.getByRole('button', { name: 'المزيد', exact: true }).first().click()
+          await page.getByRole('button', { name, exact: true }).last().click()
+        } else {
+          await page.getByTitle(name, { exact: true }).click()
+        }
+      }
+
+      await openArea('الأشخاص')
+      await page.getByRole('option', { name: /ليلى حداد/ }).click()
+      await expect(page.getByRole('heading', { name: 'ليلى حداد' })).toBeVisible()
+      await check('people')
+      if (width < 769) await page.getByRole('button', { name: 'رجوع', exact: true }).click()
+
+      await openArea('المهام')
+      await expect(page.getByText('مراجعة الميزانية قبل الاجتماع')).toBeVisible()
+      await check('tasks')
+
+      await openArea('الملاحظات')
+      await page.getByRole('button', { name: /ملاحظة الاجتماع/ }).click()
+      await expect(page.getByLabel('العنوان')).toHaveValue('ملاحظة الاجتماع')
+      await check('notes')
+
+      await openArea('التقويم')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await check('calendar')
+
+      await openArea('الدردشة')
+      await page.getByRole('button', { name: /pau@chat.test/ }).click()
+      await expect(page.getByText('مرحبا يا آنا')).toBeVisible()
+      await check('chat')
+
+      await page.keyboard.press('Control+Comma')
+      await expect(page.getByRole('dialog').first()).toBeVisible()
+      await check('settings')
+      await page.keyboard.press('Escape')
+
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}
+
+// A context menu opened near the right edge, where a right-to-left menu
+// normally opens: it extends leftwards, stays whole and its labels do not wrap.
+test('Arabic context menu near the right edge is fully visible with unwrapped labels (#226)', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
+  await page.goto('/')
+  await page.evaluate(() => {
+    ;(window as any).startupProbe.replies['mail.priorityReason'] = {
+      priority: false,
+      reasons: [],
+      sender: 'morgan@example.test',
+      override: null,
+    }
+  })
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await expect(row).toBeVisible()
+  const box = (await row.boundingBox())!
+  await page.mouse.click(600 - 20, box.y + box.height / 2, { button: 'right' })
+  const menu = page.locator('[data-thread-context-menu]')
+  await expect(menu).toBeVisible()
+  const menuBox = (await menu.boundingBox())!
+  expect(menuBox.x).toBeGreaterThanOrEqual(0)
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(600)
+  // Opened towards the end of the line: its right edge at the pointer.
+  expect(Math.abs(menuBox.x + menuBox.width - (600 - 20))).toBeLessThanOrEqual(1)
+  const wrapped = await menu.evaluate((element) =>
+    [...element.querySelectorAll('button span')]
+      .filter((span) => span.getBoundingClientRect().height > 0)
+      .filter((span) => {
+        const lineHeight = parseFloat(getComputedStyle(span).lineHeight) || 20
+        return span.getBoundingClientRect().height > lineHeight * 1.5
+      })
+      .map((span) => span.textContent),
+  )
+  expect(wrapped).toEqual([])
+  expect(errors).toEqual([])
+})
+
 test('switching from Arabic back to English restores left to right without a reload (#226)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const errors = await prepareStartup(page, true, { navigation: true, language: 'ar' })
