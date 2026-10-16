@@ -37,9 +37,14 @@
    takes its direction from its own first letters and aligns to it, so an
    Arabic reply above an English quote reads right in both. */
 .bidi-plaintext,
-.tiptap-body :is(p, h1, h2, h3, pre) {
+.tiptap-body :is(p, h1, h2, h3) {
   unicode-bidi: plaintext;
   text-align: start;
+}
+/* Code reads left to right in any interface. */
+.tiptap-body pre {
+  direction: ltr;
+  text-align: left;
 }
 
 /* Persistent mailbox navigation; narrow layouts retain the existing selectors. */
@@ -1167,9 +1172,20 @@ textarea,
     .lucide-send-horizontal,
     .lucide-text-quote,
     .lucide-log-out,
-    .lucide-log-in
-  ):not([class*='rotate-'], .no-mirror) {
+    .lucide-log-in,
+    .lucide-panel-left,
+    .lucide-panel-right,
+    .lucide-list,
+    .lucide-list-ordered,
+    .lucide-wrap-text
+  ):not([class*='rotate-'], .no-mirror, .lucide-chevron-right.transition-transform) {
   transform: scaleX(-1);
+}
+/* A disclosure chevron that turns when opened is turned rather than flipped
+   (the same drawing, as the chevron is symmetric), so opening it animates as
+   one quarter turn instead of a flip collapsing through zero width. */
+[dir='rtl'] .lucide-chevron-right.transition-transform:not([class*='rotate-'], .no-mirror) {
+  rotate: 180deg;
 }
 
 /* Someone who has asked their system for less motion gets less motion
