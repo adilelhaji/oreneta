@@ -70,24 +70,69 @@ function utilityFamily(token: string): string {
   return baseUtility(token).replace(/-(?:\d+(?:\.\d+)?|px|full|auto|\d+\/\d+|\[[^\]]*\]|\([^)]*\))$/, '')
 }
 
+const ALWAYS_SPLITS = new Set([' ', '\t', '\r', '"', "'", '`', '{', '}', ';'])
+
+/**
+ * The class-like tokens of one line. Whitespace, quotes, template braces and
+ * semicolons always end a token; commas and `$` only outside brackets, so an
+ * arbitrary value such as `pl-[clamp(1px,2px,3px)]` or `ml-(--gap)` stays
+ * one token. Unbalanced parentheses at either end (`cn(`, `x)`) are dropped.
+ */
+export function classTokens(text: string): string[] {
+  const tokens: string[] = []
+  let current = ''
+  let square = 0
+  let round = 0
+  const flush = () => {
+    let token = current
+    const count = (ch: string) => token.split(ch).length - 1
+    while (token.startsWith('(') && count('(') > count(')')) token = token.slice(1)
+    while (token.endsWith(')') && count(')') > count('(')) token = token.slice(0, -1)
+    if (token) tokens.push(token)
+    current = ''
+    square = 0
+    round = 0
+  }
+  for (const ch of text) {
+    if (ALWAYS_SPLITS.has(ch) || ((ch === ',' || ch === '$') && square === 0 && round === 0)) {
+      flush()
+      continue
+    }
+    if (ch === '[') square++
+    else if (ch === ']') square = Math.max(0, square - 1)
+    else if (ch === '(') round++
+    else if (ch === ')') round = Math.max(0, round - 1)
+    current += ch
+  }
+  flush()
+  return tokens
+}
+
 /**
  * Physical classes and inline-style sides in one source file. Tokens are read
- * from the raw text (split at whitespace, quotes and template braces), which
- * covers className strings, `cn(...)` arguments and style constants alike.
- * A physical class paired on the same line with an `rtl:` (or `ltr:`)
- * counterpart of the same utility states both directions and passes, as does
- * any class behind those variants.
+ * from the raw text (see classTokens), which covers className strings,
+ * `cn(...)` arguments and style constants alike; comments, JSX comments
+ * included, are skipped. A physical class paired on the same line with an
+ * `rtl:` (or `ltr:`) counterpart of the same utility states both directions
+ * and passes, as does any class behind those variants.
+ *
+ * Not scanned (ADR-0061): inline `left`/`right` coordinates and transforms in
+ * style objects (pointer and rect positions are physical by nature), and
+ * `src/lib` and `index.css`, which are reviewed by hand.
  */
 export function findPhysicalDirection(file: string, source: string): PhysicalFinding[] {
   const findings: PhysicalFinding[] = []
-  const lines = source.split('\n')
-  lines.forEach((text, index) => {
+  let inComment = false
+  source.split('\n').forEach((text, index) => {
     const trimmed = text.trim()
-    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return
-    const tokens = text
-      .split(/[\s"'`{}$,;]+/)
-      .map((raw) => raw.replace(/^[(]+/, '').replace(/[)]+$/, ''))
-      .filter(Boolean)
+    if (inComment) {
+      if (trimmed.includes('*/')) inComment = false
+      return
+    }
+    const opens = trimmed.lastIndexOf('/*')
+    if (opens >= 0 && trimmed.indexOf('*/', opens) < 0) inComment = true
+    if (/^(\/\/|\*|\/\*|\{\s*\/\*)/.test(trimmed)) return
+    const tokens = classTokens(text)
     const paired = new Set(tokens.filter(isDirectionVariant).map(utilityFamily))
     for (const token of tokens) {
       if (!isPhysicalUtility(token) || isDirectionVariant(token) || paired.has(utilityFamily(token))) continue

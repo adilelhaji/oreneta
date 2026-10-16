@@ -23,11 +23,11 @@ const ALLOWED: { file: string; token: string; reason: string }[] = [
     reason:
       'Image resize handles sit on physical corners: their names say "top left" and the drag arithmetic is in screen pixels.',
   })),
-  ...['border-left:', 'padding-left:'].map((token) => ({
+  ...['border-left:', 'padding-left:', 'border-right:', 'padding-right:'].map((token) => ({
     file: 'src/components/composer/composerHelpers.ts',
     token,
     reason:
-      'Inline style of the quote in outgoing mail: mail clients (Outlook among them) do not support logical properties.',
+      'Inline style of the quote in outgoing mail, one rule per direction: mail clients (Outlook among them) do not support logical properties.',
   })),
 ]
 
@@ -114,6 +114,19 @@ describe('physical left/right in component source (ADR-0061)', () => {
       '3 marginLeft:',
       '3 textAlign: "right"',
     ])
+  })
+
+  it('keeps arbitrary values whole, commas and parentheses included', () => {
+    expect(findPhysicalDirection('x.tsx', "'ml-(--gap) flex'").map((f) => f.token)).toEqual(['ml-(--gap)'])
+    expect(findPhysicalDirection('x.tsx', "'pl-[clamp(1px,2px,3px)] p-2'").map((f) => f.token)).toEqual([
+      'pl-[clamp(1px,2px,3px)]',
+    ])
+    expect(findPhysicalDirection('x.tsx', "cn('ml-2', on && 'ms-1')").map((f) => f.token)).toEqual(['ml-2'])
+  })
+
+  it('skips comments, JSX comments across lines included', () => {
+    const source = ['{/* a note about ml-2', '   and pl-4 */}', "<div className='ms-2' />", '/* left-0 */'].join('\n')
+    expect(findPhysicalDirection('x.tsx', source)).toEqual([])
   })
 
   it('accepts a physical class stated for both directions on its line', () => {
