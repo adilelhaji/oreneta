@@ -690,3 +690,25 @@ it('an answer about another account is not shown', async () => {
   expect(chatPresence$.own.peek().status).toBe('')
   expect(chatPresence$.requests.peek()).toEqual([])
 })
+
+it('a new chat session clears what the old one showed, and contacts shown stay bounded', async () => {
+  messaging$.account.set('c1')
+  messaging$.conversation.set('team@rooms.chat.test')
+  onChatEvent('chat.presence', { account: 'c1', jid: 'pau@chat.test', show: 'available', status: '' })
+  onChatEvent('chat.subscription', { account: 'c1', jid: 'eva@chat.test' })
+  chatPresence$.occupants.set([{ nick: 'Pau', show: 'available', role: 'participant' }])
+  // Another account's new session changes nothing here.
+  onChatEvent('chat.presence', { account: 'c2', reset: true })
+  expect(Object.keys(chatPresence$.contacts.peek())).toEqual(['pau@chat.test'])
+  onChatEvent('chat.presence', { account: 'c1', reset: true })
+  expect(chatPresence$.contacts.peek()).toEqual({})
+  expect(chatPresence$.requests.peek()).toEqual([])
+  expect(chatPresence$.occupants.peek()).toEqual([])
+  // However many arrive, no more than the core keeps are shown.
+  for (let n = 0; n < 1010; n++) onChatEvent('chat.presence', { account: 'c1', jid: `c${n}@chat.test`, show: 'away' })
+  expect(Object.keys(chatPresence$.contacts.peek())).toHaveLength(1000)
+  onChatEvent('chat.presence', { account: 'c1', jid: 'c0@chat.test', show: 'dnd' })
+  expect(chatPresence$.contacts.peek()['c0@chat.test'].show).toBe('dnd')
+  for (let n = 0; n < 210; n++) onChatEvent('chat.subscription', { account: 'c1', jid: `r${n}@chat.test` })
+  expect(chatPresence$.requests.peek()).toHaveLength(200)
+})

@@ -347,11 +347,17 @@ type ChatEventDetail = { account?: string; conversation?: string; room?: string 
     show?: string
     status?: string
     answered?: boolean
+    /** A new session started: what was shown of the old one goes. */
+    reset?: boolean
     applied?: OwnPresence['applied']
     invisible_supported?: boolean | null
   }
 
 let occupantsTimer: ReturnType<typeof setTimeout> | undefined
+
+/** The same bounds as the core's (ADR-0055), kept here too. */
+const MAX_SHOWN_CONTACTS = 1000
+const MAX_SHOWN_REQUESTS = 200
 
 /**
  * Called for the core's `chat.changed`, `chat.status`, `chat.room`,
@@ -370,16 +376,31 @@ export function onChatEvent(name: string, detail: ChatEventDetail) {
       ...(invisible_supported !== undefined ? { invisible_supported } : {}),
     })
   }
-  if (name === 'chat.presence' && current && detail.jid) {
-    // Offline stays known: the contact allowed it, so nothing is asked again.
-    chatPresence$.contacts[detail.jid].set({
-      show: (detail.show ?? 'available') as ContactShow,
-      status: detail.status ?? '',
-    })
+  // A new session (not a resumed one): nothing of the old one holds. The
+  // core says it all again (contacts, requests, rooms), so only clear.
+  if (name === 'chat.presence' && current && detail.reset) {
+    chatPresence$.contacts.set({})
+    chatPresence$.requests.set([])
+    chatPresence$.occupants.set([])
   }
-  if (name === 'chat.subscription' && current && detail.jid) {
+  if (name === 'chat.presence' && current && detail.jid) {
+    const known = chatPresence$.contacts.peek()
+    // The core already bounds them; this keeps the screen bounded regardless.
+    if (detail.jid in known || Object.keys(known).length < MAX_SHOWN_CONTACTS) {
+      // Offline stays known: the contact allowed it, so nothing is asked again.
+      chatPresence$.contacts[detail.jid].set({
+        show: (detail.show ?? 'available') as ContactShow,
+        status: detail.status ?? '',
+      })
+    }
+  }
+  if (name === 'chat.subscription' && current && detail.jid && !detail.answered) {
     const others = chatPresence$.requests.peek().filter((j) => j !== detail.jid)
-    chatPresence$.requests.set(detail.answered ? others : [...others, detail.jid])
+    if (others.length < MAX_SHOWN_REQUESTS) chatPresence$.requests.set([...others, detail.jid])
+  }
+  if (name === 'chat.subscription' && current && detail.jid && detail.answered) {
+    const others = chatPresence$.requests.peek().filter((j) => j !== detail.jid)
+    chatPresence$.requests.set(others)
   }
   if (name === 'chat.occupants' && current && detail.room === messaging$.conversation.peek()) {
     // A room says who is in it one person at a time: ask once they are done.

@@ -244,10 +244,12 @@ pub struct Contacts {
 }
 
 impl Contacts {
-    /// Takes one device's status; returns the contact's status as shown.
-    pub fn update(&mut self, jid: &str, resource: &str, show: &str, status: &str, priority: i8) -> Seen {
+    /// Takes one device's status; returns the contact's status as shown, or
+    /// nothing when the contact is not kept (beyond `MAX_CONTACTS`), so
+    /// nothing is said about them either.
+    pub fn update(&mut self, jid: &str, resource: &str, show: &str, status: &str, priority: i8) -> Option<Seen> {
         if !self.devices.contains_key(jid) && self.devices.len() >= MAX_CONTACTS {
-            return Seen { show: "offline".into(), status: String::new() };
+            return None;
         }
         let devices = self.devices.entry(jid.to_string()).or_default();
         if show == "offline" {
@@ -255,7 +257,7 @@ impl Contacts {
         } else if devices.contains_key(resource) || devices.len() < MAX_DEVICES {
             devices.insert(resource.to_string(), (show.to_string(), status.to_string(), priority));
         }
-        self.seen(jid)
+        Some(self.seen(jid))
     }
 
     pub fn seen(&self, jid: &str) -> Seen {

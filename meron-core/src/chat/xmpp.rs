@@ -593,6 +593,9 @@ pub async fn run(
                         if !resumed {
                             live.lock().unwrap().fresh_session();
                             in_rooms.clear();
+                            // The app drops what it showed of the old session;
+                            // contacts, requests and rooms say it all again.
+                            emit("chat.presence", json!({ "account": account.id, "reset": true }));
                         }
                         // The person's status: announced now, or, when invisible,
                         // once the server says whether it can hide them.
@@ -658,8 +661,11 @@ pub async fn run(
                             // Not a room: a contact's status, or someone asking to see ours.
                             match presence::contact_presence(&presence, &own) {
                                 Some(ContactPresence::Status { jid, resource, show, status, priority }) => {
+                                    // A contact beyond the bound is not kept, nor told to the app.
                                     let seen = live.lock().unwrap().contacts.update(&jid, &resource, show, &status, priority);
-                                    emit("chat.presence", json!({ "account": account.id, "jid": jid, "show": seen.show, "status": seen.status }));
+                                    if let Some(seen) = seen {
+                                        emit("chat.presence", json!({ "account": account.id, "jid": jid, "show": seen.show, "status": seen.status }));
+                                    }
                                 }
                                 Some(ContactPresence::Request { jid }) => {
                                     if live.lock().unwrap().request(&jid) {

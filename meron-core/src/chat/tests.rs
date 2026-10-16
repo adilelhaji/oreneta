@@ -525,9 +525,9 @@ fn a_contacts_status_follows_their_best_device_and_requests_wait_for_the_person(
     assert_eq!(contact_presence(&allowed, &own), None);
 
     let mut contacts = presence::Contacts::default();
-    assert_eq!(contacts.update("pau@chat.test", "phone", "away", "En el tren", 5).show, "away");
+    assert_eq!(contacts.update("pau@chat.test", "phone", "away", "En el tren", 5).unwrap().show, "away");
     // A device with a higher priority wins, whatever it says.
-    assert_eq!(contacts.update("pau@chat.test", "desk", "dnd", "Concentrado", 10).show, "dnd");
+    assert_eq!(contacts.update("pau@chat.test", "desk", "dnd", "Concentrado", 10).unwrap().show, "dnd");
     // At the same priority, the more available one.
     contacts.update("pau@chat.test", "desk", "dnd", "", 5);
     assert_eq!(contacts.seen("pau@chat.test").show, "away");
@@ -927,6 +927,9 @@ fn requests_and_contacts_are_bounded_and_allowing_answers_only_who_asked() {
     }
     assert_eq!(live.contacts.len(), presence::MAX_CONTACTS);
     assert_eq!(live.contacts.seen("c1005@chat.test").show, "offline", "beyond the bound: dropped");
+    // Nothing is said about a contact beyond the bound, so the app cannot grow either.
+    assert_eq!(live.contacts.update("late@chat.test", "r", "available", "", 0), None);
+    assert!(live.contacts.update("c1@chat.test", "r", "away", "", 0).is_some(), "those kept still change");
     for n in 0..presence::MAX_DEVICES + 10 {
         live.contacts.update("c0@chat.test", &format!("d{n}"), "away", "", 0);
     }
@@ -1333,6 +1336,9 @@ async fn against_prosody_a_status_reaches_only_an_allowed_contact_and_busy_holds
     let joan = watch_session("joan", "joan@chat.test", joan_db.clone());
     eva.online().await;
     joan.online().await;
+    // A new session tells the app to drop what it showed of an old one.
+    let saw = eva.saw();
+    wait_until("a fresh session", move || saw(&|n, d| n == "chat.presence" && d["reset"] == true)).await;
     // This server does not offer invisibility: known, and nothing hidden by mistake.
     let live = eva.live.clone();
     wait_until("the server's features", move || {
