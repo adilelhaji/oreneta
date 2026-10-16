@@ -1,4 +1,5 @@
 import { type MessageFrameFont } from '../../lib/fonts'
+import { applyContentDirection } from '../../lib/direction'
 
 const READER_STYLE_ID = 'oreneta-reader-style'
 const READER_FONT_STYLE_ID = 'oreneta-reader-font'
@@ -114,7 +115,7 @@ const READER_CSS = `
   .oreneta-copy-code {
     position: absolute;
     top: 8px;
-    right: 8px;
+    inset-inline-end: 8px;
     z-index: 2;
     display: inline-flex;
     align-items: center;
@@ -248,6 +249,8 @@ export function applyReaderFont(doc: Document, font: MessageFrameFont) {
 // treatment.
 export function applyReaderLayout(doc: Document, font: MessageFrameFont = DEFAULT_READER_FONT) {
   applyReaderFont(doc, font)
+  // The message keeps its own direction, whatever the interface's (ADR-0061).
+  applyContentDirection(doc)
 
   if (!doc.getElementById(READER_STYLE_ID)) {
     const style = doc.createElement('style')

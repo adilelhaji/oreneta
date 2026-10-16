@@ -121,7 +121,7 @@ export function QuickActionDialog() {
           defaultValue: 'Only the conversations selected now. Mail that arrives while it runs is not touched.',
         })}
       </p>
-      <ol className="list-decimal pl-5 text-ui text-primary">
+      <ol className="list-decimal ps-5 text-ui text-primary">
         {action.steps.map((step, index) => (
           <li key={index}>{label(step)}</li>
         ))}

@@ -181,7 +181,10 @@ export function TranslateDraftDialog({
                 defaultValue: 'Machine translation: read it before sending. Nothing in your message has changed yet.',
               })}
             </p>
-            <div className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-control-sm border border-border/60 bg-app px-3 py-2 text-sm text-primary">
+            <div
+              dir="auto"
+              className="bidi-plaintext max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-control-sm border border-border/60 bg-app px-3 py-2 text-sm text-primary"
+            >
               {result.text}
             </div>
           </section>

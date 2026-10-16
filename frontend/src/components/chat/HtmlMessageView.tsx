@@ -200,7 +200,7 @@ export function HtmlMessageView({ scrollKey, title, html, text, attachments, vie
           {attachmentImages.length > 0 && (
             <AttachmentImageGrid images={attachmentImages} onOpen={openAttachmentImage} />
           )}
-          <div className="whitespace-pre-wrap break-words font-message text-[calc(0.9375rem*var(--me-message-scale))] leading-relaxed text-primary select-text tracking-[0.01em]">
+          <div className="bidi-plaintext whitespace-pre-wrap break-words font-message text-[calc(0.9375rem*var(--me-message-scale))] leading-relaxed text-primary select-text tracking-[0.01em]">
             {text ? (
               <PlainFoldedText text={text} render={(content) => content} />
             ) : attachmentImages.length > 0 ? (

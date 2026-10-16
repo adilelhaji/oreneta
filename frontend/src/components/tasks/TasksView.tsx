@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import {
   Bell,
   CalendarClock,
@@ -46,6 +46,7 @@ import { LoadingState } from '../empty-state/StateViews'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { CalDavTaskListDialog } from './CalDavTaskListDialog'
 import { describeRecurrence } from '../calendar/RepeatFields'
+import { handleGroupArrowKeys } from '../../lib/direction'
 
 const DUE_TONE: Record<ReturnType<typeof dueStatus>, string> = {
   overdue: 'text-danger ',
@@ -223,7 +224,13 @@ export function TasksView() {
         </div>
       </header>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2">
-        <div role="tablist" aria-label={t('tasks.lists', { defaultValue: 'Lists' })} className="flex flex-wrap gap-1.5">
+        <div
+          role="tablist"
+          aria-label={t('tasks.lists', { defaultValue: 'Lists' })}
+          className="flex flex-wrap gap-1.5"
+          // Arrows move between the lists in reading order (ADR-0061).
+          onKeyDown={(event) => handleGroupArrowKeys(event, '[role="tab"]', 'horizontal')}
+        >
           {[
             { id: 'all', label: t('tasks.allLists', { defaultValue: 'All' }), open: -1 },
             ...lists.map((list) => ({ id: list.id, label: listName(list), open: list.open })),
@@ -240,7 +247,7 @@ export function TasksView() {
               )}
             >
               {entry.label}
-              {entry.open > 0 && <span className="ml-1 tabular-nums">{entry.open}</span>}
+              {entry.open > 0 && <span className="ms-1 tabular-nums">{entry.open}</span>}
             </button>
           ))}
         </div>
@@ -291,7 +298,7 @@ export function TasksView() {
           </button>
         ))}
         {current && current.id !== MAIL_LIST && (
-          <span className="ml-auto flex gap-1">
+          <span className="ms-auto flex gap-1">
             <button
               type="button"
               onClick={() => void renameList()}
@@ -359,7 +366,7 @@ export function TasksView() {
                   <button
                     type="button"
                     onClick={() => open(task)}
-                    className="min-w-0 flex-1 basis-40 rounded-control-sm text-left cursor-pointer"
+                    className="min-w-0 flex-1 basis-40 rounded-control-sm text-start cursor-pointer"
                   >
                     <span
                       className={clsx(
@@ -371,16 +378,22 @@ export function TasksView() {
                         <Flag
                           size={12}
                           strokeWidth={2}
-                          className="mr-1 inline text-danger"
+                          className="me-1 inline text-danger"
                           aria-label={t('tasks.priorityHigh', { defaultValue: 'High' })}
                         />
                       )}
-                      {taskTitle(task)}
+                      <bdi>{taskTitle(task)}</bdi>
                     </span>
                     <span className="block wrap-anywhere text-caption text-secondary">
-                      {task.linked === false
-                        ? task.note
-                        : [task.from_name || task.from_addr, task.note].filter(Boolean).join(' · ')}
+                      {/* Each piece isolated: a Latin name beside an Arabic note keeps its place. */}
+                      {(task.linked === false ? [task.note] : [task.from_name || task.from_addr, task.note])
+                        .filter(Boolean)
+                        .map((piece, index) => (
+                          <Fragment key={index}>
+                            {index > 0 && ' · '}
+                            <bdi>{piece}</bdi>
+                          </Fragment>
+                        ))}
                     </span>
                     <span className="flex flex-wrap items-center gap-3">
                       {!done && task.due_at && <DueChip dueAt={task.due_at} />}

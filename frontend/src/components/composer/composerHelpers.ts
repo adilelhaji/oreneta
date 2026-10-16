@@ -1,5 +1,6 @@
 import type { ComposerAttachment } from '../../types'
 import { invoke } from '../../lib/bridge'
+import { markRightToLeftBlocks } from '../../lib/direction'
 
 export function textToHtml(text: string): string {
   if (!text.trim()) return ''
@@ -21,21 +22,29 @@ export const createInlineId = () => `oreneta-image-${Date.now()}-${Math.random()
 // Oreneta's stylesheet. Receiving clients don't have that CSS, so we bake the
 // equivalent styles into inline `style` attributes before sending/saving. Uses
 // concrete colors since CSS custom properties don't resolve in email clients.
+// Physical sides on purpose: mail clients (Outlook among them) do not support
+// logical properties, so a right-to-left quote gets its own rule (ADR-0061).
 const RICH_INLINE_STYLES: Record<string, string> = {
   blockquote: 'border-left: 3px solid #d1d5db; padding-left: 0.9em; margin: 0.6em 0; color: #6b7280;',
   a: 'color: #2563eb; text-decoration: underline;',
   code: 'background: rgba(127, 127, 127, 0.16); border-radius: 4px; padding: 0.1em 0.3em; font-size: 0.9em;',
 }
+const RTL_BLOCKQUOTE_STYLE = 'border-right: 3px solid #d1d5db; padding-right: 0.9em; margin: 0.6em 0; color: #6b7280;'
 
 export function inlineRichStyles(html: string): string {
   if (!html) return html
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
+  // Right-to-left paragraphs say so; left-to-right mail is left untouched.
+  markRightToLeftBlocks(doc.body)
   for (const [selector, style] of Object.entries(RICH_INLINE_STYLES)) {
     for (const el of Array.from(doc.querySelectorAll(selector))) {
+      // A quote in right-to-left text has its bar on the right.
+      const own =
+        selector === 'blockquote' && el.closest('[dir]')?.getAttribute('dir') === 'rtl' ? RTL_BLOCKQUOTE_STYLE : style
       // Preserve any existing inline styles; only prepend our defaults.
       const existing = el.getAttribute('style')
-      el.setAttribute('style', existing ? `${style} ${existing}` : style)
+      el.setAttribute('style', existing ? `${own} ${existing}` : own)
     }
   }
   return doc.body.innerHTML

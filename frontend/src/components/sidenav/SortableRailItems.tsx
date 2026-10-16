@@ -29,7 +29,7 @@ function sortableStyle(
 
 const activeIndicator = (active: boolean) => (
   <div
-    className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 rounded-r bg-accent transition-all duration-200 ${
+    className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
       active ? 'h-7' : 'h-0 group-hover:h-3'
     }`}
   />
@@ -154,7 +154,7 @@ export function SortableAccount({
         </div>
         {(needsReconnect || isPaused || isMuted) && (
           <span
-            className={`absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full ring-2 ring-sidenav ${
+            className={`absolute -bottom-1 -end-1 flex h-[18px] w-[18px] items-center justify-center rounded-full ring-2 ring-sidenav ${
               needsReconnect ? 'bg-warning-soft text-warning' : 'bg-black/60 text-white/80'
             }`}
             title={needsReconnect ? 'Needs reconnect' : isPaused ? 'Paused' : 'Muted'}

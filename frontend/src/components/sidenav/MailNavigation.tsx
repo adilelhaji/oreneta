@@ -24,6 +24,7 @@ import { FOLDER_MOVE_BLOCK_TEXT, folderMoveBlock, folderMoveSourceBlock } from '
 import type { Account, Folder } from '../../types'
 import { FolderContextMenu } from './FolderContextMenu'
 import { FolderMoveDialog } from './FolderMoveDialog'
+import { documentDirection } from '../../lib/direction'
 
 /** Drag payload types, for other windows and drop targets that read them. */
 export const FOLDER_DRAG_TYPE = 'application/x-oreneta-folder'
@@ -47,7 +48,8 @@ function menuKey(event: KeyboardEvent<HTMLElement>): boolean {
 
 function keyboardMenuPoint(element: HTMLElement): { x: number; y: number } {
   const rect = element.getBoundingClientRect()
-  return { x: rect.left + 16, y: rect.bottom }
+  // A little in from the row's start edge, whichever side that is.
+  return { x: documentDirection() === 'rtl' ? rect.right - 16 : rect.left + 16, y: rect.bottom }
 }
 
 function ColorDot({ color }: { color: FolderColorId | undefined }) {

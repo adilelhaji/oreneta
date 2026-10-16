@@ -102,7 +102,7 @@ function SignatureEditor({
   return (
     <div>
       <ComposerToolbar editor={editor} onSetLink={setLink} />
-      <EditorContent editor={editor} aria-label={t('settings.signature.label')} />
+      <EditorContent editor={editor} role="group" aria-label={t('settings.signature.label')} />
     </div>
   )
 }

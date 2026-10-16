@@ -40,7 +40,7 @@ export function ConversationTabs() {
         >
           {tab.kind === 'thread' && <MessageSquare size={14} className="shrink-0" strokeWidth={1.75} />}
           {tab.kind === 'compose' && <SquarePen size={14} className="shrink-0" strokeWidth={1.75} />}
-          <span className="truncate">{tab.subject}</span>
+          <span dir="auto" className="truncate">{tab.subject}</span>
           <button
             onClick={(event) => {
               event.stopPropagation()

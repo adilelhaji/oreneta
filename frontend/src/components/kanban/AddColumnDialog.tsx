@@ -75,7 +75,7 @@ export function AddColumnDialog({
             >
               <Checkbox checked={selected.has(option.key)} onChange={(event) => toggle([option.key], event.target.checked)} />
               <Icon size={14} className="shrink-0 text-secondary" />
-              <span className="truncate text-xs font-semibold text-primary">{option.label}</span>
+              <span dir="auto" className="truncate text-xs font-semibold text-primary">{option.label}</span>
             </label>
           )
         })}

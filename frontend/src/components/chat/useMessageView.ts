@@ -3,7 +3,9 @@ import { accountIdentities, accounts$ } from '../../states/accounts'
 import { getActiveThread, isDraftFolder } from '../../states/mail'
 import { thread$ } from '../../states/thread'
 import type { Account, Message } from '../../types'
-import { extractAddr, formatRecipientSummary, getVisibleMedia, standaloneAttachmentImages } from './messageHelpers'
+import i18n from '../../lib/i18n'
+import { formatNameList } from '../../lib/direction'
+import { extractAddr, getVisibleMedia, recipientNames, standaloneAttachmentImages } from './messageHelpers'
 
 export type MessageView = ReturnType<typeof useMessageView>
 
@@ -69,10 +71,12 @@ export function useMessageView(message: Message) {
     // Outgoing messages have no sender name worth showing, and without
     // recipients a reply and a forward of the same text are indistinguishable —
     // so recipients take the sender slot, the way Gmail's "to …" line does.
-    recipientSummary: outgoing ? formatRecipientSummary(toRaw, ccRaw) : '',
+    // Each name isolated and separated in the interface's punctuation, so a
+    // Latin name in the Arabic interface keeps its place (ADR-0061).
+    recipientSummary: outgoing ? formatNameList(recipientNames(toRaw, ccRaw), i18n.language) : '',
     /** The same summary regardless of direction, for layouts that always show a
      *  "to …" line. */
-    allRecipientSummary: formatRecipientSummary(toRaw, ccRaw),
+    allRecipientSummary: formatNameList(recipientNames(toRaw, ccRaw), i18n.language),
     // An outgoing message is us: show the account's own avatar — the image the
     // side navigation shows — instead of resolving the From address.
     avatarSrc: outgoing ? account?.avatar_url : undefined,

@@ -51,7 +51,7 @@ export function FeedEditDialog() {
       closeDisabled={deleting}
       footer={
         <>
-          <Button variant="danger" leftIcon={Trash2} onClick={onDelete} disabled={deleting} className="mr-auto">
+          <Button variant="danger" leftIcon={Trash2} onClick={onDelete} disabled={deleting} className="me-auto">
             {confirming ? t('feeds.actions.confirmDelete') : t('feeds.actions.deleteFeed')}
           </Button>
           <Button variant="ghost" onClick={onClose} disabled={deleting}>

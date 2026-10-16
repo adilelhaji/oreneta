@@ -24,7 +24,7 @@ export function ContactsGeneralGroup() {
   const language = useValue(settings$.language) ?? i18n.language
   const defaults = localeNameDefaults(language || 'en')
   const icon = { size: 16, strokeWidth: 1.75 }
-  const selectClass = 'w-48 rounded-control py-1.5 pl-3 font-semibold'
+  const selectClass = 'w-48 rounded-control py-1.5 ps-3 font-semibold'
 
   const displayLabel = (choice: Exclude<NameDisplay, 'auto'>) => formatName(EXAMPLE, choice)
   const sortLabel = (choice: Exclude<NameSort, 'auto'>) =>

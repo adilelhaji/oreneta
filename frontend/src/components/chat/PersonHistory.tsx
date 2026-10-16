@@ -61,7 +61,7 @@ export function PersonHistory({
 
   const day = (seconds: number) => new Date(seconds * 1000).toLocaleDateString()
   const section = 'px-4 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-secondary'
-  const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-left text-caption hover:bg-hover cursor-pointer'
+  const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-start text-caption hover:bg-hover cursor-pointer'
   const partial = context.coverage.downloaded < context.coverage.messages
 
   return (
@@ -96,7 +96,7 @@ export function PersonHistory({
             <li key={`${e.calendar_id}:${e.event_id}`}>
               <button type="button" className={row} onClick={() => onOpenEvent(e.start)}>
                 <CalendarDays size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-primary">{e.subject}</span>
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">{e.subject}</span>
                 <span className="shrink-0 text-secondary">{day(e.start)}</span>
               </button>
             </li>
@@ -115,7 +115,7 @@ export function PersonHistory({
             <li key={`${f.thread_id}:${f.filename}:${index}`}>
               <button type="button" className={row} onClick={() => onOpenConversation(f.thread_id, f.folder)}>
                 <File size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-primary">{f.filename}</span>
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">{f.filename}</span>
                 <span className="shrink-0 text-secondary">{formatFileSize(f.size)}</span>
               </button>
             </li>

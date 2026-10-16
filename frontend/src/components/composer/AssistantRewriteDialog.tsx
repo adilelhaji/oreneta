@@ -173,7 +173,10 @@ export function AssistantRewriteDialog({
                   defaultValue: 'Exact request sent to {destination}',
                 })}
               </summary>
-              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-control-sm bg-app p-2 font-mono text-2xs text-primary">
+              <pre
+                dir="ltr"
+                className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-control-sm bg-app p-2 font-mono text-2xs text-primary"
+              >
                 {preview.request_body}
               </pre>
             </details>
@@ -214,7 +217,10 @@ export function AssistantRewriteDialog({
               {rich &&
                 ` ${t('assistant.rewrite.formatting', { defaultValue: 'Using it replaces the draft’s formatting with plain paragraphs.' })}`}
             </p>
-            <div className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-control-sm border border-border/60 bg-app px-3 py-2 text-sm text-primary">
+            <div
+              dir="auto"
+              className="bidi-plaintext max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-control-sm border border-border/60 bg-app px-3 py-2 text-sm text-primary"
+            >
               {result}
             </div>
           </section>

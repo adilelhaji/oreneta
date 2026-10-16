@@ -170,3 +170,25 @@ it('edits categories and refuses ones whose rules could not be predicted', async
     conditions: [{ field: 'subject', op: 'contains', value: 'invoice' }],
   })
 })
+
+// The colour picker is a radio group (#226, ADR-0061): in right to left the
+// left arrow goes to the next colour, in left to right the right one.
+it('moves through the colours with the arrows in the reading direction', () => {
+  bridge({})
+  for (const [dir, next] of [
+    ['ltr', 'ArrowRight'],
+    ['rtl', 'ArrowLeft'],
+  ] as const) {
+    document.documentElement.dir = dir
+    const view = render(<CategoriesGroup />)
+    fireEvent.click(view.getByRole('button', { name: 'New category' }))
+    const colours = view.getAllByRole('radio')
+    const checked = () => colours.findIndex((radio) => radio.getAttribute('aria-checked') === 'true')
+    const start = checked()
+    colours[start].focus()
+    fireEvent.keyDown(colours[start], { key: next })
+    expect(checked()).toBe((start + 1) % colours.length)
+    cleanup()
+  }
+  document.documentElement.dir = ''
+})

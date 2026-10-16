@@ -40,7 +40,7 @@ export function MenuItem({
       className={`${base}${className ? ` ${className}` : ''}`}
     >
       {icon}
-      <span className="min-w-0 flex-1 wrap-anywhere text-left">{label}</span>
+      <span className="min-w-0 flex-1 wrap-anywhere text-start">{label}</span>
       {trailing && <span className="shrink-0">{trailing}</span>}
     </button>
   )

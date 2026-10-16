@@ -183,3 +183,35 @@ describe('task lists (ADR-0013)', () => {
     expect(second).toMatchObject({ revision: 4, task: { title: 'Fix the bath tap' } })
   })
 })
+
+describe('task list tabs in the reading direction (#226, ADR-0061)', () => {
+  afterEach(() => {
+    document.documentElement.dir = ''
+  })
+
+  it('moves to the next list with the left arrow in right to left, and back with the right one', async () => {
+    document.documentElement.dir = 'rtl'
+    stubBridge({ 'tasks.list': () => ({ tasks: [task({}), standalone] }), 'tasks.lists': () => ({ lists }) })
+    const view = render(<TasksView />)
+    await waitFor(() => expect(view.container.textContent).toContain('Fix the tap'))
+    const tabs = view.getAllByRole('tab')
+    tabs[0].focus()
+    fireEvent.keyDown(tabs[0], { key: 'ArrowLeft' })
+    expect(tasks$.selectedList.get()).toBe(lists[0].id)
+    expect(document.activeElement).toBe(view.getAllByRole('tab')[1])
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
+    expect(tasks$.selectedList.get()).toBe('all')
+  })
+
+  it('moves with the right arrow in left to right', async () => {
+    stubBridge({ 'tasks.list': () => ({ tasks: [task({}), standalone] }), 'tasks.lists': () => ({ lists }) })
+    const view = render(<TasksView />)
+    await waitFor(() => expect(view.container.textContent).toContain('Fix the tap'))
+    const tabs = view.getAllByRole('tab')
+    tabs[0].focus()
+    fireEvent.keyDown(tabs[0], { key: 'ArrowRight' })
+    expect(tasks$.selectedList.get()).toBe(lists[0].id)
+    fireEvent.keyDown(document.activeElement!, { key: 'End' })
+    expect(tasks$.selectedList.get()).toBe(lists[1].id)
+  })
+})

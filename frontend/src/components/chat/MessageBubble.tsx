@@ -25,6 +25,7 @@ import { MessageActions } from './MessageActions'
 import { settings$ } from '../../states/settings'
 import { bubbleMaxWidth } from './readingWidth'
 import type { MessageContextMenuState } from './MessageContextMenu'
+import { besideEndX } from '../../lib/direction'
 
 interface MessageBubbleProps {
   message: Message
@@ -55,7 +56,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
 
   const openActionsMenu = (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
-    onOpenContextMenu({ x: rect.right, y: rect.bottom + 4, message, hideOpenInNewTab: true })
+    onOpenContextMenu({ x: besideEndX(rect, 0), y: rect.bottom + 4, message, hideOpenInNewTab: true })
   }
   const openMessageOrDraftTab = () => {
     if (isDraft) {
@@ -71,10 +72,10 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
         style={{ maxWidth: bubbleMaxWidth(readingWidth, '70%') }}
         className={`group/message-bubble relative ${useHtmlBody ? 'w-[70%]' : 'max-w-[70%]'} min-w-[100px] p-3.5 border transition-shadow duration-200 ${
           isDraft
-            ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-panel rounded-tr-sm shadow-none'
+            ? 'bg-bubble-out/55 text-bubble-out-text/80 border-dashed border-accent/45 rounded-panel rounded-se-sm shadow-none'
             : outgoing
-              ? 'bg-bubble-out text-bubble-out-text border-border/35 rounded-panel rounded-tr-sm shadow-bubble-out'
-              : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-panel rounded-tl-sm shadow-bubble-in'
+              ? 'bg-bubble-out text-bubble-out-text border-border/35 rounded-panel rounded-se-sm shadow-bubble-out'
+              : 'bg-bubble-in text-bubble-in-text border-border/40 rounded-panel rounded-ss-sm shadow-bubble-in'
         }`}
       >
         <MessageActions
@@ -89,7 +90,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
         <div className="relative flex items-center justify-between gap-2 mb-1.5">
           <div className="relative flex items-center gap-1 min-w-0">
             {!outgoing ? (
-              <span className="text-ui font-bold text-accent select-none truncate tracking-wide">
+              <span dir="auto" className="text-ui font-bold text-accent select-none truncate tracking-wide">
                 {message.from_name || message.from_addr}
               </span>
             ) : (
@@ -183,7 +184,7 @@ export function MessageBubble({ message, galleryOffset, onOpenContextMenu, onLin
               <div className="fixed inset-0 z-40" onClick={() => setMetaOpen(false)} />
               <div
                 className={`absolute top-full mt-1 z-50 w-[460px] max-w-[calc(100vw-48px)] max-h-[260px] overflow-y-auto space-y-2 rounded-control-sm border border-border bg-chats p-3 shadow-overlay text-secondary select-text ${
-                  outgoing ? (useHtmlBody ? 'right-0 max-w-full' : 'right-0') : 'left-0'
+                  outgoing ? (useHtmlBody ? 'end-0 max-w-full' : 'end-0') : 'start-0'
                 }`}
               >
                 <AddressRow label={t('composer.fields.from')} rawList={fromRaw} />

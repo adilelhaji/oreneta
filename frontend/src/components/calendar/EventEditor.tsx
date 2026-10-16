@@ -185,7 +185,7 @@ export function EventEditor() {
             aria-label={t('calendar.meeting', { defaultValue: 'Online meeting' })}
             className="flex w-full flex-col gap-1.5"
           >
-            <span className="pl-0.5 text-caption font-semibold text-secondary">
+            <span className="ps-0.5 text-caption font-semibold text-secondary">
               {t('calendar.meeting', { defaultValue: 'Online meeting' })}
             </span>
             {event.meeting && event.add_meeting !== 'none' ? (
@@ -412,7 +412,7 @@ export function reminderLabel(minutes: number, t: ReturnType<typeof useTranslati
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex w-full flex-col gap-1.5">
-      <span className="pl-0.5 text-caption font-semibold text-secondary">{label}</span>
+      <span className="ps-0.5 text-caption font-semibold text-secondary">{label}</span>
       {children}
     </label>
   )
@@ -578,7 +578,7 @@ function Attendees({
               key={person.addr}
               className="flex items-center gap-1 rounded-control-sm bg-raised px-2 py-1 text-caption text-primary"
             >
-              <span className="max-w-[12rem] truncate">{person.addr}</span>
+              <span dir="auto" className="max-w-[12rem] truncate">{person.addr}</span>
               <button
                 type="button"
                 onClick={() => onChange(people.filter((other) => other.addr !== person.addr))}
@@ -613,7 +613,7 @@ function Attendees({
               <button
                 type="button"
                 onClick={() => addPerson(person)}
-                className="flex w-full flex-col items-start px-3 py-1.5 text-left transition-colors hover:bg-hover cursor-pointer"
+                className="flex w-full flex-col items-start px-3 py-1.5 text-start transition-colors hover:bg-hover cursor-pointer"
               >
                 <span className="text-caption font-medium text-primary">{person.name || person.addr}</span>
                 {person.name && <span className="text-2xs text-secondary">{person.addr}</span>}

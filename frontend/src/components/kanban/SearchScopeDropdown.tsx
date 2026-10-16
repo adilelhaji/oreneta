@@ -48,11 +48,11 @@ export function SearchScopeDropdown({
   }, [value, visibleColumns, folders, accounts, t])
 
   return (
-    <div ref={containerRef} className="relative h-full shrink-0 border-l border-border/60">
+    <div ref={containerRef} className="relative h-full shrink-0 border-s border-border/60">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-full items-center gap-1.5 px-3.5 text-caption font-semibold text-secondary hover:text-primary transition-colors cursor-pointer select-none rounded-r-xl outline-none border-0"
+        className="flex h-full items-center gap-1.5 px-3.5 text-caption font-semibold text-secondary hover:text-primary transition-colors cursor-pointer select-none rounded-e-xl outline-none border-0"
         title={t('kanban.searchScope.label')}
       >
         <span className="truncate max-w-[130px]">{selectedLabel}</span>
@@ -63,7 +63,7 @@ export function SearchScopeDropdown({
         />
       </button>
       {isOpen && (
-        <div className="absolute right-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-overlay shadow-black/10 dark:shadow-black/35 animate-slide-up">
+        <div className="absolute end-0 mt-1.5 z-50 w-64 max-h-72 overflow-y-auto rounded-panel border border-border bg-chats p-1.5 shadow-overlay shadow-black/10 dark:shadow-black/35 animate-slide-up">
           <button
             type="button"
             onClick={() => {
@@ -109,7 +109,7 @@ export function SearchScopeDropdown({
                   size={18}
                   fallback={columnIsRss ? <Rss size={14} strokeWidth={1.75} /> : undefined}
                 />
-                <div className="min-w-0 flex-1 text-left">
+                <div className="min-w-0 flex-1 text-start">
                   <div className="truncate font-semibold">{folderLabel(column, folders, accounts, t)}</div>
                   <div className="truncate text-2xs text-secondary font-medium">
                     {column.accountId === 'unified' ? t('accounts.unified') : columnAccountLabel}
