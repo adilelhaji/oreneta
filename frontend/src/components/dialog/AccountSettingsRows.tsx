@@ -274,6 +274,7 @@ export function SelectRow({
       control={
         <SelectInput
           value={value}
+          aria-label={title}
           onChange={(event) => onChange(event.target.value)}
           className="w-44 rounded-control py-1.5 ps-3 font-semibold"
         >

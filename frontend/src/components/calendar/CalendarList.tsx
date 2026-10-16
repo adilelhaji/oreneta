@@ -43,7 +43,7 @@ export function CalendarList() {
     >
       {groups.map(({ account, calendars }) => (
         <div key={account.id}>
-          <p className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
+          <p className="mb-1.5 truncate px-1 text-2xs font-semibold uppercase tracking-wide text-secondary">
             {account.email}
           </p>
           <ul className="flex flex-col">

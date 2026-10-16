@@ -765,7 +765,7 @@ function CalendarGroup({ activeKey, onSelect }: { activeKey: string; onSelect: (
         // that decides how it syncs and whether it can be edited.
         groupsBySource(calendars, accounts, t).map((group) => (
           <div key={group.label}>
-            <p className="mt-2 mb-0.5 px-3 text-2xs font-semibold uppercase tracking-wide text-secondary/70">
+            <p className="mt-2 mb-0.5 px-3 text-2xs font-semibold uppercase tracking-wide text-secondary">
               {group.label}
             </p>
             {group.calendars.map((calendar) => {
@@ -1096,7 +1096,7 @@ function GeneralSection() {
         />
       </SettingsGroup>
 
-      <div data-settings-section="updates" tabIndex={-1} aria-label={t('settings.sections.updates')}>
+      <div data-settings-section="updates" tabIndex={-1} role="group" aria-label={t('settings.sections.updates')}>
         <UpdatesGroup />
       </div>
       <div data-settings-section="backup" tabIndex={-1} aria-label={t('settings.sections.backup')}>
@@ -1507,7 +1507,9 @@ function LogViewerDialog({ onClose }: { onClose: () => void }) {
           ) : log === '' ? (
             <p className="text-xs text-secondary">{t('settings.syncLogEmpty')}</p>
           ) : (
-            <pre className="whitespace-pre-wrap break-all font-mono text-caption leading-4 text-primary">{log}</pre>
+            <pre dir="ltr" className="whitespace-pre-wrap break-all font-mono text-caption leading-4 text-primary">
+              {log}
+            </pre>
           )}
         </div>
       </div>
