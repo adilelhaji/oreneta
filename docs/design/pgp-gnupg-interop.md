@@ -31,12 +31,12 @@ contrasenya:
 
 ## Proves i límits
 
-- Fixtures reals de GnuPG a `meron-core/src/crypto/testdata/gnupg/` amb el seu
+- Fixtures (fitxers de prova) reals de GnuPG a `meron-core/src/crypto/testdata/gnupg/` amb el seu
   procediment de generació. `a_gnupg_generated_unprotected_key_opens_a_gnupg_encrypted_message`
-  reprodueix el cas de la issue i passa; `a_librepgp_aead_message_is_reported_as_unsupported_not_as_a_passphrase_problem`
+  reprodueix el cas de l'issue i passa; `a_librepgp_aead_message_is_reported_as_unsupported_not_as_a_passphrase_problem`
   fixa la classificació del cas AEAD.
 - **Obrir missatges AEAD de LibrePGP continua sense ser compatible.** Per defecte,
-  GnuPG 2.4 el fa servir amb les seves pròpies claus; fins que Sequoia no
+  GnuPG 2.4 fa servir aquest format amb les seves pròpies claus; fins que Sequoia no
   l'implementi, el lector rep un motiu exacte en lloc d'una petició de contrasenya.
 - Continua vigent el límit ja documentat a `pgp_tests.rs`: les claus
   Ed25519/Curve25519 de GnuPG **protegides amb contrasenya** no es desbloquegen

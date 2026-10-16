@@ -3,13 +3,13 @@
 ## Abast i direcció
 
 La instrucció de l'usuari del 2026-09-09 prioritza un espai de treball de correu
-semblant al d'eM Client. La referència concreta la [direcció d'art](art-direction.md),
+semblant al d'eM Client. La referència materialitza la [direcció d'art](art-direction.md),
 i preserva el cobalt i el blau marí, les escales tipogràfiques i de radis
 existents i l'arquitectura nativa Wails/Go/Rust.
 Referència: [eM Client desktop](https://es.emclient.com/), revisada el 2026-09-09.
 No es copia cap element gràfic ni marca de producte de tercers.
 
-Això és un escenari de disseny navegable, no una implementació de correu
+Això és un escenari de prova (fixture) de disseny navegable, no una implementació de correu
 publicada. Fa servir el mateix compte i els mateixos missatges sintètics que [la
 base](../baseline.md), les variables CSS de disseny (tokens) de producció i les icones Lucide. Els
 controls del correu només simulen l'estat local: no hi ha Wails, transport de
@@ -57,7 +57,7 @@ La CI executa els casos Playwright de la referència amb `bun run baseline:verif
 al costat de la base històrica, que no canvia. Obriu
 `/reference.html?scene=reader&theme=light` al servidor de la base aïllat. Les
 captures de pantalla inclouen la procedència: l'SHA provat, l'indicador d'arbre
-amb canvis, la suma de verificació de l'escenari, el tema, la finestra gràfica i
+amb canvis, la suma de verificació de l'escenari, el tema, l'àrea de visualització i
 el transport sintètic.
 
 ## Registre de verificació

@@ -19,7 +19,7 @@
   «Editing it here does not notify them».
 - Si l'esdeveniment té assistents i no té organitzador, l'editor el desa
   amb la identitat que enviarà com a organitzador.
-- Google, Exchange i Graph no canvien: avisen els seus servidors (`notify` a
+- Google, Exchange i Graph no canvien: l'avís l'envien els seus servidors (`notify` a
   `calendar.update` / `calendar.delete`).
 
 ## Ordre i errors

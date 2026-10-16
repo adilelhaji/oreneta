@@ -36,11 +36,11 @@ operacions en bloc.
 `baseline/tableSelection.test.tsx` verifica la selecció, les arribades, els
 intervals, l'abast del menú contextual, l'obertura mentre
 se selecciona, la sortida de la pestanya de redacció, els esborranys i els canals
-destacats. Les proves de navegador sobre el punt d'entrada de producció exerciten
+destacats. Les proves de navegador sobre el punt d'entrada de producció posen a prova
 la selecció i l'obertura amb el teclat en cobalt clar i fosc a 1440px i
 720px (l'amplada CSS existent equivalent a un zoom d'escriptori del 200%), i desen
 captures de pantalla. La bateria de límits existent encara comprova la navegació
-del lector i de l'editor de missatges al voltant de 769px i 1024px. Els escenaris
+del lector i de l'editor de missatges al voltant de 769px i 1024px. Els escenaris de prova (fixtures)
 de navegador són sintètics, no són una certificació nativa ni amb proveïdors.
 
 #34 continua oberta per al poliment més ampli de la llista de targetes, les proves

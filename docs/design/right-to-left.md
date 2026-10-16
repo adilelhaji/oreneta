@@ -1,6 +1,6 @@
 # De dreta a esquerra (#226)
 
-Fila SET-27 del registre de paritat (General → Idioma). Decisions:
+Fila SET-27 del registre d'acceptació (General → Idioma). Decisions:
 [ADR-0061](../adr/0061-right-to-left-layout.md).
 
 Codi: `frontend/src/lib/direction.ts`, `lib/physicalDirection.ts` (el

@@ -41,7 +41,7 @@ ni comportament de proveïdor nou.
 
 Les proves de components cobreixen el focus, la tornada i la cerca de contactes,
 les accions independents de les tasques i la navegació compacta i Esc. Les
-comprovacions de navegador sobre el punt d'entrada de producció exerciten
+comprovacions de navegador sobre el punt d'entrada de producció posen a prova
 contingut llarg en castellà, l'obertura amb el teclat, clar i fosc, 1440/600px i
 un zoom CSS del 200%; les captures de pantalla cobreixen Persones, Tasques i
 Calendari. Les proves de producció existents cobreixen els controls compartits,

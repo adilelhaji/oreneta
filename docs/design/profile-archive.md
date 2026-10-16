@@ -23,7 +23,7 @@ Mentre el perfil anterior continua apartat, la mateixa secció ofereix **Torna**
 
 1. El nucli deixa preparada la restauració a `restore-staging/ready`:
    - la base de dades, tornada a xifrar amb la clau de l'equip;
-   - els comptes en pausa, els enviaments retinguts i cap secret;
+   - els comptes en pausa, els enviaments retinguts i sense cap secret;
    - les imatges;
    - `READY.json`.
 2. El pont atura el nucli i espera que el procés acabi i que se n'hagi llegit la

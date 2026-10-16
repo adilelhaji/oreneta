@@ -24,28 +24,28 @@ del correu actual mentre la barra està oculta; els seus canvis es detallen a
 El límit anterior de la llista a amplada completa (769px) no coincidia amb el de
 visibilitat (600px), i deixava el lector retallat entre 600 i 768px. Les proves
 de producció cobreixen 599/600/601, 768/769 i 1024/1025, tots dos temes, el
-context de lector, enrere, selecció, carpeta i editor de missatges, i els límits
+context de lector, Enrere, selecció, carpeta i editor de missatges, i els límits
 de l'estructura de l'aplicació. La base sintètica de components ara exigeix
 contingut visible a 600px en lloc d'acceptar el defecte conegut.
 
-Una finestra de 1440px amb un zoom del 200% s'exercita amb la disposició
+Una finestra de 1440px amb un zoom del 200% es prova amb la disposició
 equivalent de 720 píxels CSS amb un factor d'escala del dispositiu de 2.
-L'executor de validació de Windows exercita, a més, el camí real de Ctrl+roda del
+L'executor de validació de Windows prova, a més, el camí real de Ctrl+roda del
 ratolí de WebView2: verifica el focus en primer pla i l'entrada injectada,
 comença amb el factor configurat del 100%, aplica el zoom amb la roda per ampliar
-i reduir, i fa servir Windows UI Automation per verificar que la disposició de
-l'editor de l'adreça electrònica de la configuració inicial canvia i continua
+i reduir, i fa servir Windows UI Automation per verificar que la disposició del
+camp de l'adreça electrònica de la configuració inicial canvia i continua
 visible dins de la finestra nativa, mentre les opcions de proveïdor continuen
 presents a l'arbre d'accessibilitat. UI Automation no pot llegir el `ZoomFactor`
 privat de WebView2, de manera que això és una prova nativa de la disposició amb
 zoom, no una certificació del factor exacte del 200%. El tacte, l'IME, la
 interoperabilitat amb proveïdors i el comportament de l'instal·lador continuen
-sent mancances separades. No exercita el lector de la bústia, les accions dels
+sent mancances separades. No prova el lector de la bústia, les accions dels
 missatges ni l'editor de missatges; això continua sent feina d'acceptació nativa
 separada.
 
 L'execució nativa 37429870187 del 2026-10-06 va revelar una discrepància en la
-prova anterior: Wails desactiva les acceleracions de teclat del navegador,
+prova anterior: Wails desactiva les tecles de drecera del navegador,
 incloses Ctrl+més/menys/zero. Aquestes dreceres continuen sense ser compatibles
 ([#181](https://github.com/adilelhaji/oreneta/issues/181)); el zoom CSS no
 substitueix el zoom natiu.
@@ -54,11 +54,11 @@ l'accessibilitat amb el teclat mitjançant el desplaçament vertical, la reducci
 la restauració, i ho repeteix després de reiniciar. Avança el focus una vegada i
 torna al camp de l'adreça electrònica abans d'exigir-ne els límits complets dins
 de la finestra. Amb un zoom alt no cal que tot el formulari de configuració
-inicial càpiga a la part visible sense desplaçar-se; un editor retallat o
+inicial càpiga a la part visible sense desplaçar-se; un camp retallat o
 inaccessible continua fallant. La cobertura de navegador també comprova
 l'accessibilitat amb el teclat a 410x280 píxels CSS. Cada execució comença
 explícitament al 100%. La mancança de la drecera de teclat continua separada de
 l'acceptació de la instal·lació, igual que les comprovacions del lector, de
 l'editor de missatges i de les tecnologies d'assistència.
 Vegeu [zoom de WebView2](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2settings#get_iszoomcontrolenabled)
-i [comportament de les acceleracions del navegador](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2settings3#put_arebrowseracceleratorkeysenabled).
+i [comportament de les tecles de drecera del navegador](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2settings3#put_arebrowseracceleratorkeysenabled).

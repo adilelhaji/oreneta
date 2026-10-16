@@ -9,7 +9,7 @@ de proves natives.
 - **Verificació abans d'instal·lar.** L'SHA-256 i la mida es comprovaven
   només en acabar la baixada. Després el paquet esperava a la memòria cau
   d'actualitzacions, on qualsevol procés de l'usuari podia escriure, fins que la
-  persona premia instal·la. Ara es tornen a comprovar just abans de
+  persona premia Instal·la. Ara es tornen a comprovar just abans de
   substituir l'aplicació. Si el paquet ha canviat, s'ha ampliat o ha
   desaparegut:
   - es descarta;

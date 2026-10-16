@@ -14,7 +14,7 @@
   pàgina 1. En passar de la 2 a la 1, el llenç continuava mostrant la 2 sota el
   rètol «1 de N».
 - **PDF reobert a cada renderització.** El diàleg passava un `onFailed` nou a
-  cada renderització i era una dependència de l'obertura, de manera que
+  cada renderització, i aquesta funció era una dependència de l'obertura, de manera que
   qualsevol nova renderització tancava el document, el reobria i tornava el
   lector a la pàgina 1.
 

@@ -22,7 +22,7 @@ de l'usuari.
 | Autoritzacions i perfils de Graph | El magatzem (vault) i les taules de perfils de Graph no formen part de la càrrega actual, tampoc marcant els secrets | La reautorització i la reconstrucció requereixen verificació; no s'ha d'afirmar que la còpia restableix Graph |
 | Identitats OpenPGP i S/MIME | Metadades incloses; claus privades només amb secrets i xifratge, i si estan disponibles | Les claus privades no es poden reconstruir a partir del correu remot |
 | Confiança i certificats d'altri | Taules `pgp_certs`/`smime_certs`, fora de `BackupData` | No s'ha de suposar la reconstrucció de les decisions locals de confiança |
-| Correu i estat de sincronització | Taules de missatges i carpetes, excloses | IMAP/EWS/Graph permeten tornar a consultar el que conservi el servidor i autoritzi el compte; no acredita la recuperació de correu eliminat, de dades només locals ni d'una instantània històrica |
+| Correu i estat de sincronització | Taules de missatges i carpetes, excloses | IMAP/EWS/Graph permeten tornar a consultar el que conservi el servidor i autoritzi el compte; això no acredita la recuperació de correu eliminat, de dades només locals ni d'una instantània històrica |
 | RSS baixat | La còpia conserva les subscripcions, no els articles | El canal pot deixar de publicar articles antics |
 | Esborranys de l'editor complet | Text a `localStorage` (`meron-compose-tabs`), fora de la còpia; els adjunts s'exclouen d'aquesta persistència | Només una còpia desada efectivament a Drafts es podrà recuperar del servidor |
 | Resposta ràpida | Estat de l'editor i desament remot explícit o automàtic segons el seu flux actual | Un desament pendent o fallit no és una còpia remota confirmada |
@@ -31,7 +31,7 @@ de l'usuari.
 | Etiquetes i associacions | `labels`, `thread_labels`, `label_links`, excloses | Algunes associacions remotes poden tornar; les etiquetes i anotacions locals no se'n dedueixen |
 | Regles, plantilles, aprenentatge del correu brossa i prioritat | Taules pròpies, excloses | Estat local que no es pot reconstruir amb el correu remot |
 | Enviaments programats i posposats | `scheduled_sends`/`snoozed_threads`, exclosos | Restaurar una programació no ha de reenviar automàticament; els resultats incerts requereixen revisió |
-| Persones i fonts de contactes | `people`, adreces electròniques i telèfons i `contact_sources`, exclosos | CardDAV només pot retornar contactes remots confirmats i encara accessibles; no els canvis locals pendents |
+| Persones i fonts de contactes | `people`, adreces electròniques, telèfons i `contact_sources`, exclosos | CardDAV només pot retornar contactes remots confirmats i encara accessibles; no els canvis locals pendents |
 | Calendaris i esdeveniments | Taules pròpies, excloses | Depèn del proveïdor i que els canvis estiguin confirmats; les subscripcions no equivalen a dades locals recuperables |
 
 Fonts: [càrrega i aplicació de les còpies](../../meron-core/src/backup.rs),
@@ -69,8 +69,8 @@ límit arquitectònic següent abans de dissenyar i implementar els lliuraments:
 - La base de dades local xifrada no pot dependre de l'antic clauer per obrir la
   còpia: recuperació amb el fitxer i la contrasenya encara que es perdi l'equip
   original. La clau d'emmagatzematge necessària per recuperar les dades es
-  distingeix de les credencials opcionals del proveïdor. La tècnica d'exportació i
-  de nou xifratge es dissenya i es revisa en el seu lliurament; no es pressuposa
+  distingeix de les credencials opcionals del proveïdor. La tècnica per exportar i
+  tornar a xifrar les dades es dissenya i es revisa en el seu lliurament; no es pressuposa
   que n'hi hagi prou de copiar SQLCipher.
 - Restaurar i verificar primer en una ubicació aïllada; no sobreescriure el
   perfil actiu durant la lectura i la validació. Les fallades de format,
@@ -107,15 +107,15 @@ d'errors i d'actualització de l'estat a `frontend/src/states/backup.test.ts`.
 Es reutilitzen; no justifiquen afirmar una recuperació completa o nativa.
 
 El 2026-10-05, la bateria Rust de la CI a `c06eff37` va passar (execució
-37302492336, job 111738284833), inclosos els 31 casos de `backup::tests`.
-L'intent local focalitzat d'aquests tests a Windows no va arribar a executar-los:
+37302492336, job (tasca de la CI) 111738284833), inclosos els 31 casos de `backup::tests`.
+L'intent local focalitzat d'aquestes proves a Windows no va arribar a executar-les:
 compilació E0463 per dependències no trobades a l'entorn Rust local.
 No se substitueix aquesta limitació per una afirmació de recuperació nativa.
 
 Es va triar B i es va registrar l'ADR-0010, que només estén el punt de còpies de
 seguretat de l'ADR 0008. Cal separar: (1) durabilitat dels esborranys i fitxers,
 (2) captura i verificació, (3) restauració aïllada i recuperació d'interrupcions,
-(4) programació i retenció. Cada lliurament necessita un contracte concret, tests
-sintètics d'èxit, errors i límits, revisió i CI. L'acceptació nativa i els assaigs
+(4) programació i retenció. Cada lliurament necessita un contracte concret, proves
+sintètiques d'èxit, errors i límits, revisió i CI. L'acceptació nativa i els assaigs
 per proveïdor són posteriors. #113 continua pendent d'implementació i
 d'acceptació; aprovar B no la completa.

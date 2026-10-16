@@ -41,7 +41,7 @@ El nucli no converteix mai un servidor intermediari triat en una connexió direc
   `Result<Option<ProxyConfig>>`: `None` és directe i l'error es propaga a
   cada punt que el crida (IMAP, SMTP, POP3, ManageSieve, Graph, renovació de
   testimonis (tokens), sondeig de certificat, xat, enllaços al núvol i tot `proxy::agent()`).
-- **Límits coneguts.** Els llibres CardDAV desats sense compte i les llistes de tasques CalDAV no
+- **Límits coneguts.** Les llibretes CardDAV desades sense compte i les llistes de tasques CalDAV no
   depenen de cap compte de correu: fan servir el servidor intermediari global
   (#193). Els sòcols IMAP ja oberts i les escoltes IDLE conserven la seva
   connexió fins que es tornen a connectar.
@@ -68,8 +68,8 @@ El nucli no converteix mai un servidor intermediari triat en una connexió direc
   no respon (`connect to proxy host:port`) mostra la seva adreça i obre el
   servidor intermediari propi del compte si en té, i si no, el global. De l'error
   només es desa aquesta classificació. En desar el servidor intermediari global
-  (o el del compte) s'esborra la classificació de les fallades que en culpaven
-  aquella opció: continuen com a «Unresolved sync issue — recovery not verified».
+  (o el del compte) s'esborra la classificació de les fallades que s'atribuïen
+  a aquella opció: continuen com a «Unresolved sync issue — recovery not verified».
 - **Mòbil** (`MobileConnectivity.kt`): la mateixa distinció i la mateixa
   destinació a l'avís d'error de sincronització; sense un compte conegut,
   obre Configuració → Xarxa. La configuració s'obre a la secció de xarxa, la
@@ -102,7 +102,7 @@ El nucli no converteix mai un servidor intermediari triat en una connexió direc
 | Connexió | On | Ruta |
 |---|---|---|
 | IMAP, SMTP, POP3, ManageSieve, Graph, EWS, Google Calendar i contactes, calendaris CalDAV i subscripcions de calendari | nucli, `ProxyChoice::agent()` o la ruta del compte | servidor intermediari del compte o global |
-| Llibres CardDAV desats sense compte (els que s'afegeixen des de la interfície) i llistes de tasques CalDAV, canals, idiomes de traducció, registre de canvis | nucli, `proxy::agent()` | global |
+| Llibretes CardDAV desades sense compte (les que s'afegeixen des de la interfície) i llistes de tasques CalDAV, canals, idiomes de traducció, registre de canvis | nucli, `proxy::agent()` | global |
 | Cerca de la configuració al mòbil | nucli, `protocol/accounts.rs` | global; amb servidor intermediari se salta la consulta SRV, i un servidor intermediari inutilitzable és un **error** |
 | Assistent amb proveïdor remot | nucli, `assistant::agent` | global |
 | Assistent local (un programa en aquest equip) | nucli, `assistant::agent` | sempre directe, sense el servidor intermediari de l'aplicació ni el de l'entorn (#195) |
@@ -121,11 +121,11 @@ Al pont Go, `netproxy.go` demana la ruta al nucli i construeix un
 `http.Transport` amb `Proxy` de `net/http` (`http://` per a HTTP CONNECT,
 `socks5://` per a SOCKS5, que envia el nom d'amfitrió al servidor intermediari).
 Sense servidor intermediari es conserva el comportament anterior (variables
-`HTTP(S)_PROXY`). Es mantenen els terminis d'abans (6 s autoconfig, 10 s imatge,
-20 s manifest; la baixada sense termini total però amb límits de TLS i de
+`HTTP(S)_PROXY`). Es mantenen els temps d'espera d'abans (6 s autoconfig, 10 s imatge,
+20 s manifest; la baixada sense temps d'espera total però amb límits de TLS i de
 capçaleres).
 
-**Falla tancat:** si el nucli no respon, l'opció no es pot fer servir o el
+**Es tanca en cas d'error (fail closed):** si el nucli no respon, l'opció no es pot fer servir o el
 servidor intermediari no respon, la petició falla; no es torna a provar mai
 directament.
 

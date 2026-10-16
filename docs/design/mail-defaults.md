@@ -30,6 +30,6 @@ La verificació fa servir el punt d'entrada de producció amb respostes sintèti
 del pont, no la pàgina de referència: tots dos temes cobalt, safata d'entrada,
 missatge obert, esborrany de resposta, selecció i navegació, restauració de la
 configuració antiga, canvis explícits i recàrrega. No s'envia cap missatge extern.
-La certificació nativa i amb proveïdors continua al registre de paritat; la
+La certificació nativa i amb proveïdors continua al registre d'acceptació; la
 correcció del lector a 600px d'amplada i el poliment complet de les columnes i
 del lector continuen a #85/#34/#35.

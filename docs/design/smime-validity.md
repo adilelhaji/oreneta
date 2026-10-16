@@ -12,7 +12,7 @@
   reprodueix: sense la comprovació retorna `good`; amb la comprovació, `bad`.
 - **Període de validesa ignorat.** Un certificat caducat o encara no vàlid
   produïa `Good` o `ValidUntrusted`.
-- **Bomba de rellotgeria als tests.** El fixture `ana.der` caduca el 2027-09-05;
+- **Bomba de rellotgeria als tests.** El fixture (fitxer de prova) `ana.der` caduca el 2027-09-05;
   els tests que verificaven amb el rellotge real haurien començat a fallar aquell
   dia tan bon punt es comprovés la validesa. Ara s'avaluen en un instant fix.
 

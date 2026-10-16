@@ -16,7 +16,7 @@ i pot saltar a l'aparença, la tipografia, la lectura, la signatura global, la
 privadesa de l'assistent, la còpia de seguretat de la configuració, els controls
 d'actualització admesos i la configuració o les signatures exactes d'un compte.
 Els comptes de canals no anuncien cap signatura. Les actualitzacions només
-s'anuncien quan l'amfitrió n'informa la compatibilitat. Privadesa vol dir els
+s'anuncien quan l'amfitrió informa que les admet. Privadesa vol dir els
 controls de privadesa de l'assistent existents, no un centre de privadesa nou per
 a tot.
 
@@ -30,7 +30,7 @@ ni enviament automàtic de correu nous.
 
 - La cerca unifica majúscules i minúscules, accents i formes de compatibilitat
   d'Unicode, però conserva les lletres d'escriptures no llatines. Una entrada en
-  blanc ho llista tot; una consulta no buida que es redueix a cap caràcter
+  blanc ho llista tot; una consulta no buida que es queda sense cap caràcter
   cercable no esdevé mai un comodí. La coincidència existent per subcadena i
   subseqüència continua disponible per als caràcters reals. Les etiquetes i els
   àlies literals precedeixen les coincidències aproximades, amb un ordre estable
@@ -53,7 +53,7 @@ ni enviament automàtic de correu nous.
   lectura i continuen inertes; l'execució torna a comprovar la capacitat actual
   del compte. Les proteccions existents de l'estat i del backend es mantenen. La
   redacció d'un missatge nou continua disponible si algun compte pot enviar, i fa
-  servir la selecció de remitent existent; es desactiva quan no en pot enviar cap.
+  servir la selecció de remitent existent; es desactiva quan cap compte no pot enviar.
   La descoberta no concedeix mai cap permís.
 - En pantalles estretes, la configuració apila la navegació sobre el contingut en
   lloc de reservar una barra lateral fixa que deixa l'editor massa estret per fer-lo
@@ -68,7 +68,7 @@ comptes, la disponibilitat de les capacitats de canals i d'actualització, les
 ordres de només lectura, els resultats buits i el retorn del focus. Les proves
 dels diàlegs compartits conserven la cobertura de StrictMode, l'autofocus,
 l'eliminació de l'obridor i Esc mentre està ocupat després d'extreure'n el hook
-de cicle de vida per reutilitzar-lo. Les regressions de la revisió cobreixen
+de cicle de vida per reutilitzar-lo. Les proves de regressió de la revisió cobreixen
 l'activació amb Tab, la confirmació d'IME, la redacció amb Graph i IMAP barrejats i
 els canvis de capacitat abans de l'execució.
 

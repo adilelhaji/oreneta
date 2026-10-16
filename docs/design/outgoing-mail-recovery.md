@@ -24,7 +24,7 @@ fallat. Un missatge que no és UTF-8 vàlid torna a aquesta crida única i tota
 fallada posterior a la connexió es classifica com a incerta, per prudència.
 
 Per a EWS no hi ha fase de dades: un error d'E/S o de temps esgotat després
-d'enviar la petició és incert; una falta SOAP o un estat HTTP de rebuig, rebutjat.
+d'enviar la petició és incert; un error SOAP (fault) o un estat HTTP de rebuig, rebutjat.
 
 El marcador `smtp::UncertainSend` viatja com a context `anyhow`; `is_uncertain`
 el detecta mitjançant `downcast_ref`, que travessa contextos imbricats.
@@ -50,7 +50,7 @@ sending ─┬─> accepted ──> archived
 - `uncertain` només el tanca una persona (`mail.resolveOutgoing`). El motor no
   el torna a provar ni el descarta.
 - L'historial tancat (`rejected`, `archived`, `resolved`, `accepted` sense
-  error d'arxivament) es poda als 30 dies. El dubte no es poda mai.
+  error d'arxivament) es poda als 30 dies. Un intent incert no es poda mai.
 
 ## Proteccions contra el reenviament a cegues
 
@@ -83,7 +83,7 @@ sending ─┬─> accepted ──> archived
 
 ## Límits declarats
 
-- No hi ha deduplicació per `Message-ID` al servidor ni garantia de lliurament
+- No hi ha desduplicació per `Message-ID` al servidor ni garantia de lliurament
   únic; el document només evita que el client dupliqui pel seu compte.
 - Un missatge signat amb una clau protegida per contrasenya no es pot reenviar
   des de la llista (la contrasenya no es desa); cal redactar-lo de nou.

@@ -39,7 +39,7 @@ com un èxit total encara que el moviment fallés a mitges.
 
 ## Decisió pendent, no presa aquí
 
-La discussió de la issue deixava oberta l'elecció entre una revisió efímera en
+La discussió de l'issue deixava oberta l'elecció entre una revisió efímera en
 memòria i un diari durador d'operacions amb resultats per element que
 sobrevisquin a un reinici. Aquest tram implementa la **revisió efímera**: un
 reinici invalida la previsualització, que costa un clic repetir. El diari

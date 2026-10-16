@@ -1,7 +1,7 @@
 # Controls i retroacció compartits
 
 Lliurament: [#152](https://github.com/adilelhaji/oreneta/issues/152), una part
-acotada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
+fitada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
 [direcció d'art](art-direction.md), les variables de disseny (tokens) del tema i el pont natiu existents.
 
 ## Comportament lliurat

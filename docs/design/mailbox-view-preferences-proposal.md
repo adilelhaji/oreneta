@@ -14,7 +14,7 @@ text literal «Aprobar vista general y excepciones por carpeta». Vegeu l'ADR 00
    personalitzades.
 3. El primer lliurament admet remitent, assumpte, data i compte. Només les tres
    primeres ordenen: fan servir els ordres complets existents del nucli
-   (ADR 0003), sense ordenar únicament la pàgina carregada. Compte és informativa.
+   (ADR 0003), sense ordenar únicament la pàgina carregada. La columna Compte és informativa.
    Destinataris, mida i altres columnes esperen una semàntica fiable de
    conversa; no s'inventen valors ni capacitats.
 4. Es manté el tauler actual. Quan les amplades triades no hi caben, la taula
@@ -59,7 +59,7 @@ aquest primer lliurament no introdueix cap ordre per carpeta.
 
 ## Lliuraments i proves proposats
 
-1. Validació, persistència i herència amb tests de versions no vàlides, claus amb
+1. Validació, persistència i herència amb proves de versions no vàlides, claus amb
    caràcters especials, carpetes homònimes, reinici i absència d'escriptures
    durant la hidratació.
 2. Configuració accessible, taula real i restabliment; proves en clar i en fosc,

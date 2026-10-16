@@ -25,7 +25,7 @@ Registre de la implementació de l'ADR-0034.
   - la mateixa clau per al mateix esdeveniment;
   - creació amb la petició i la versió correctes;
   - sense petició, res sobre reunions;
-  - la fallada i la preparació s'informen;
+  - s'informa de la fallada i de la preparació;
   - editar no la toca, demanar-la dues vegades no la duplica, treure-la envia
     `null` i qualsevol altre tipus es rebutja;
   - un complement a Google s'anomena per la seva adreça;

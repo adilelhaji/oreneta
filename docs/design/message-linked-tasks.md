@@ -1,6 +1,6 @@
 # Tasques enllaçades a missatges: validació (#42)
 
-Validació de les tasques locals enllaçades a una conversa amb `main`.
+Validació, a `main`, de les tasques locals enllaçades a una conversa.
 El disseny aprovat no canvia: tasques locals, una tasca oberta per
 conversa i sense sincronització remota.
 
@@ -38,7 +38,7 @@ Cadascun es va reproduir amb una prova que fallava abans de corregir-lo.
   no existeix és un error, no un èxit silenciós.
 - **Compte eliminat.** Les seves tasques continuaven a la llista apuntant a un
   compte que ja no existeix. Ara s'eliminen amb el compte.
-- Una fila il·legible de la llista és un error que s'informa, no una tasca que
+- Una fila il·legible de la llista és un error del qual s'informa, no una tasca que
   desapareix sense avís.
 
 ## Dades que queden en eliminar un compte (decidit a l'ADR-0011)

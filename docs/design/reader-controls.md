@@ -48,6 +48,6 @@ Unes proves de components deterministes reprodueixen l'antiga fallada en el
 muntatge i en la substitució de srcDoc, i després verifiquen la recuperació, un
 sol gestor de clics i la neteja després de la càrrega. Els casos sense document o
 sense finestra continuen sense estar preparats. Les proves existents del lector
-de producció no canvien i exerciten tots dos temes i finestres estretes i
+de producció no canvien i proven tots dos temes i finestres estretes i
 d'escriptori. Això no altera l'entorn aïllat dels missatges ni neteja l'HTML rebut
 de manera diferent.

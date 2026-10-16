@@ -1,6 +1,6 @@
 # Impressió (#35, #213)
 
-Fila del registre SET-05 (General → Impressió). Decisions: [ADR-0060](../adr/0060-print-options.md).
+Fila del registre d'acceptació SET-05 (General → Impressió). Decisions: [ADR-0060](../adr/0060-print-options.md).
 
 Codi: `frontend/src/lib/print.ts`, `lib/printDocument.ts`, `lib/printOptions.ts`,
 `states/printing.ts`, `components/dialog/PrintGroup.tsx`.
@@ -55,4 +55,4 @@ continua activat fins que es desactiva; la seva indicació ho diu.
 Proves: `printDocument.test.ts` (cada opció i les garanties en totes les
 combinacions), `printOptions.test.ts`, `printing.test.ts`, `print.test.ts`,
 `PrintGroup.test.tsx`, `MessageContextMenu.test.tsx`. Les proves d'impressió
-nativa (Windows, N4) queden fora d'aquest abast i continuen al registre.
+nativa (Windows, N4) queden fora d'aquest abast i continuen al registre d'acceptació.

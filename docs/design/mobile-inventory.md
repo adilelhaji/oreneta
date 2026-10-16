@@ -12,8 +12,8 @@ mòbil.
 | Correu IMAP/SMTP, Google i Outlook amb OAuth | Sí: sincronitzar, llegir, enviar, esborranys, moure, arxivar, carpetes, adjunts | Paritat per comprovar al dispositiu |
 | Exchange (EWS/Graph) | Només l'intercanvi OAuth d'Outlook; sense bústia Exchange pròpia | Pendent |
 | POP3 | No | Pendent |
-| Calendari | Interfície llesta: calendaris (mostrar o ocultar), agenda per dies de dues setmanes, detall de l'esdeveniment i crear, editar i esborrar en calendaris amb escriptura. Sense avisar els convidats ni editar sèries. El nucli mòbil atén `calendar.*` amb el codi de l'escriptori (ADR-0045); actualització a petició i periòdica (`pim.refresh`), recordatoris com a notificacions locals i errors de sincronització en un avís | Recordatoris programats per avançat a iOS; proves al dispositiu |
-| Contactes | Interfície llesta: llibreta amb cerca, fitxa, escriure a una adreça, i crear, editar i esborrar a la llibreta local i a CardDAV amb escriptura. El nucli mòbil atén `people.*` amb el codi de l'escriptori (ADR-0045); llibretes de Google i CardDAV llegides cada hora i en actualitzar (`pim.refresh`), amb avís si fallen | Permís de contactes a l'OAuth de Google del mòbil; proves al dispositiu |
+| Calendari | Interfície llesta: calendaris (mostrar o ocultar), agenda per dies de dues setmanes, detall de l'esdeveniment i crear, editar i esborrar en calendaris amb permís d'escriptura. Sense avisar els convidats ni editar sèries. El nucli mòbil atén `calendar.*` amb el codi de l'escriptori (ADR-0045); actualització a petició i periòdica (`pim.refresh`), recordatoris com a notificacions locals i errors de sincronització en un avís | Recordatoris programats per avançat a iOS; proves al dispositiu |
+| Contactes | Interfície llesta: llibreta amb cerca, fitxa, escriure a una adreça, i crear, editar i esborrar a la llibreta local i a CardDAV amb permís d'escriptura. El nucli mòbil atén `people.*` amb el codi de l'escriptori (ADR-0045); llibretes de Google i CardDAV llegides cada hora i en actualitzar (`pim.refresh`), amb avís si fallen | Permís de contactes a l'OAuth de Google del mòbil; proves al dispositiu |
 | Tasques i notes | No | Pendent |
 | OpenPGP i S/MIME | No | Pendent |
 | Cerca | Parcial: llistes de converses, sense constructor ni cerques desades | Pendent |
@@ -53,7 +53,7 @@ arquitectura de plataforma nova.
   no s'edita ni s'esborra des del mòbil: s'explica que s'ha de fer des de
   l'escriptori, que sí que els pot avisar. Els calendaris de només lectura i les
   subscripcions no ofereixen canvis. A contactes, només la llibreta local i
-  els llibres CardDAV en què el servidor deixa escriure; Google i el directori
+  les llibretes CardDAV en què el servidor deixa escriure; Google i el directori
   són de només lectura. Un contacte nou va a la llibreta del dispositiu.
 - **Al nucli (ADR-0045).** Aquestes deu ordres ja no viuen només al
   `dispatch` del binari d'escriptori (`main.rs`): el seu codi és a la
@@ -110,7 +110,7 @@ arquitectura de plataforma nova.
   permisos a la pantalla de consentiment i al client OAuth del mòbil (navegador i
   `GoogleAccountManagerAuth`) i que es torni a connectar el compte; aquest
   canvi no toca els permisos. Els recordatoris es lliuren quan arriba la seva
-  hora, no es programen per avançat: amb l'aplicació suspesa a iOS, un pot
+  hora, no es programen per avançat: amb l'aplicació suspesa a iOS, un recordatori pot
   arribar tard, o perdre's si el sistema no executa la tasca en segon pla abans
   que comenci l'esdeveniment. A la pràctica, avui funcionen la llibreta local
   i els calendaris locals (amb els seus recordatoris): com que un telèfon acabat
