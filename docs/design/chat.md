@@ -72,7 +72,13 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
   - el enlace sale en el cuerpo y como OOB y vuelve como archivo con su
     nombre decodificado; un nombre no sale de su carpeta;
   - solo HTTPS al subir y al guardar (http, ftp, file, credenciales en el
-    enlace, rechazados), sin escribir nada.
+    enlace, rechazados), sin escribir nada;
+  - una pregunta sin respuesta termina en su plazo; una búsqueda sin
+    servicio termina las subidas que esperan con «sin servicio» o, si una
+    pregunta quedó sin respuesta, con `disconnected` (#220).
+- **tokio-xmpp parcheado (#220):** un receptor consultado mientras se
+  envía algo vuelve a despertarse (`third_party/tokio-xmpp`, en CI); sin el
+  parche, la prueba falla.
 - **Llavero:** las contraseñas de salas e invitaciones están en
   `secret_names` y el contador de escrituras de secretos sube a 13.
 - **Prosody real** (`tests/prosody-xmpp.sh`, también en CI):
@@ -105,4 +111,8 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
   `li` dentro de la lista de mensajes; corregido. Con ADR-0044, el núcleo
   aceptaba copias de carbons y resultados de archivo de cualquier
   remitente; ahora solo del propio servidor (o de una sala unida, para su
-  archivo).
+  archivo). Con #220, las pruebas contra Prosody fallaban de vez en cuando
+  (13 de 300 rondas): tokio-xmpp 6.0.0 perdía el aviso de su receptor si
+  se le consultaba mientras se enviaba algo, y la sesión dejaba de recibir
+  sin desconectarse. Se usa una copia parcheada (`third_party/tokio-xmpp`)
+  y las preguntas de una subida tienen plazo.

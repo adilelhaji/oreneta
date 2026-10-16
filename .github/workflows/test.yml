@@ -85,6 +85,9 @@ jobs:
           workspaces: meron-core
       - name: Test vendored IMAP parser compatibility
         run: cargo test --manifest-path third_party/imap-proto/Cargo.toml
+      # Locally patched: its receiver no longer loses a wake-up (#220).
+      - name: Test patched tokio-xmpp
+        run: cargo test --manifest-path third_party/tokio-xmpp/Cargo.toml --no-default-features
       # The engine's tests run under llvm-cov, which executes the same suite
       # with instrumented binaries; a failing test fails this step as before.
       - name: Test the engine with line coverage

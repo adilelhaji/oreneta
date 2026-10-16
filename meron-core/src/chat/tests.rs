@@ -420,6 +420,50 @@ fn files_come_and_go_over_https_only() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A question about a file that gets no answer ends at its deadline as a
+/// failure; one answered in time comes through as it was (#220).
+#[tokio::test]
+async fn an_unanswered_upload_question_ends_at_its_deadline() {
+    let late = xmpp::within(std::time::Duration::from_millis(50), std::future::pending()).await;
+    assert!(
+        matches!(late, Err(tokio_xmpp::IqFailure::SendError(ref e)) if e.kind() == std::io::ErrorKind::TimedOut),
+        "{late:?}"
+    );
+    let answered = xmpp::within(std::time::Duration::from_secs(5), async { Ok(tokio_xmpp::IqResponse::Result(None)) }).await;
+    assert!(matches!(answered, Ok(tokio_xmpp::IqResponse::Result(None))), "{answered:?}");
+}
+
+/// With the search over and no service, the waiting uploads end once each:
+/// "disconnected" when a question went unanswered, "no service" when all
+/// were answered. While questions are out, they keep waiting (#220).
+#[test]
+fn a_search_without_a_service_ends_the_waiting_uploads() {
+    use files::FileError;
+    let upload = |id: &str| xmpp::Upload {
+        id: id.into(),
+        conversation: "pau@chat.test".into(),
+        group: false,
+        path: "x.bin".into(),
+        name: "x.bin".into(),
+        size: 1,
+        cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    };
+    let ended = std::sync::Mutex::new(Vec::new());
+    let record = |u: &xmpp::Upload, result: Result<String, FileError>| ended.lock().unwrap().push((u.id.clone(), result.err()));
+    let mut uploads = xmpp::Uploads { searching: 1, unanswered: true, waiting: vec![upload("a")], ..Default::default() };
+    xmpp::end_search(&mut uploads, &record);
+    assert!(ended.lock().unwrap().is_empty() && uploads.waiting.len() == 1, "a question is still out");
+    uploads.searching = 0;
+    xmpp::end_search(&mut uploads, &record);
+    uploads.waiting.push(upload("b"));
+    xmpp::end_search(&mut uploads, &record);
+    assert_eq!(
+        *ended.lock().unwrap(),
+        vec![("a".to_string(), Some(FileError::Disconnected)), ("b".to_string(), Some(FileError::NoService))]
+    );
+    assert!(uploads.waiting.is_empty() && !uploads.unanswered);
+}
+
 /// Against a real Prosody (tests/prosody-xmpp.sh): ORENETA_PROSODY is its
 /// address. Skipped otherwise.
 #[tokio::test(flavor = "multi_thread")]
@@ -543,21 +587,24 @@ fn start_session(id: &str, jid: &str, db: Arc<std::sync::Mutex<Connection>>, opt
     Session { tx, events: Arc::new(std::sync::Mutex::new(erx)), task }
 }
 
-/// Waits (off the reactor) for an event that matches; panics after 20 s.
+/// Waits (off the reactor) for an event that matches; panics after 20 s,
+/// naming the events that came instead.
 async fn wait_event(session: &Session, what: &'static str, matches: impl Fn(&str, &serde_json::Value) -> bool + Send + 'static) -> serde_json::Value {
     let events = session.events.clone();
     tokio::task::spawn_blocking(move || {
         let events = events.lock().unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let mut seen = Vec::new();
         while std::time::Instant::now() < deadline {
             if let Ok((name, detail)) = events.recv_timeout(std::time::Duration::from_millis(200)) {
                 assert_ne!(detail["state"], "error", "{name}: {detail}");
                 if matches(&name, &detail) {
                     return detail;
                 }
+                seen.push(format!("{name} {detail}"));
             }
         }
-        panic!("never saw: {what}");
+        panic!("never saw: {what}; saw instead: {seen:?}");
     })
     .await
     .unwrap()

@@ -64,6 +64,9 @@
     seguir redirecciones; solo pasan las cabeceras que permite XEP-0363;
   - el progreso llega cada 256 KB (`chat.progress`) y el final una vez
     (`chat.uploaded`); cancelar corta el envío y no sale ningún mensaje;
+  - cada pregunta de la subida (el servicio, el sitio) espera como mucho
+    30 s; sin respuesta, la subida termina con `disconnected` y la
+    siguiente vuelve a buscar el servicio (#220);
   - subido, el enlace sale como mensaje normal, con el enlace en el cuerpo
     y como OOB (XEP-0066), y sigue las reglas de estado de siempre;
     «Enviar de nuevo» vuelve a mandar el mismo enlace con el mismo id.
