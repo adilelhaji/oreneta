@@ -18,7 +18,7 @@ la carpeta actual, no cap altre espai de noms de substitucions.
 
 Les preferències absents o no vàlides conserven la taula proporcional que ja
 existia. La configuració explícita fa servir el valor predefinit compacte aprovat
-(remitent de 120px, assumpte automàtic, data de 80px, compte ocult de 120px).
+(remitent de 120 px, assumpte automàtic, data de 80 px, compte ocult de 120 px).
 Aquesta distinció preserva els usuaris existents fins al seu primer desament
 explícit. Les disposicions no vàlides es rebutgen en bloc; les entrades de carpeta
 no vàlides s'ignoren i guanya el primer duplicat vàlid. Les versions futures
@@ -42,7 +42,7 @@ persistència; la cancel·lació de l'esborrany, els errors d'amplada i l'associ
 semàntica dels errors; l'estat de selecció i d'obert amb el remitent ocult; proves
 de navegador sobre el punt d'entrada de producció per al teclat, la recàrrega, la
 navegació entre carpetes, el restabliment de versions futures, clar i fosc,
-600/1440px i un zoom CSS del 200%. Els escenaris de prova (fixtures) de navegador fan servir correu
+600/1440 px i un zoom CSS del 200 %. Els escenaris de prova (fixtures) de navegador fan servir correu
 sintètic i el contracte del pont existent; no certifiquen el reinici natiu de la
 base de dades ni el comportament amb lectors de pantalla. El text nou és en
 castellà i en anglès, amb l'anglès com a alternativa en els altres catàlegs a

@@ -3,7 +3,7 @@
 Primera adopció de la [referència del correu](mail-reference.md), autoritzada per
 la instrucció de l'usuari del 2026-09-09 d'integrar comptes i carpetes amb etiqueta.
 
-- Un panell de navegació persistent de 220px acompanya la barra de comptes
+- Un panell de navegació persistent de 220 px acompanya la barra de comptes
   existent en les visualitzacions del correu de més de 1024 píxels CSS d'amplada.
   A amplades més petites, els selectors de carpeta i de compte existents continuen
   disponibles; no s'afegeix cap finestra modal ni cap estat de navegació nou.
@@ -28,8 +28,8 @@ la instrucció de l'usuari del 2026-09-09 d'integrar comptes i carpetes amb etiq
   existents a amplada completa.
 
 Aquest tram no tanca #34: la densitat de les files, la resposta visual de la
-selecció i el comportament natiu de la bústia amb un zoom del 200% encara
-requereixen les seves pròpies proves d'acceptació. El límit del lector a 600px es
+selecció i el comportament natiu de la bústia amb un zoom del 200 % encara
+requereixen les seves pròpies proves d'acceptació. El límit del lector a 600 px es
 va corregir a #85; vegeu [límits del correu](mail-boundaries.md).
 No s'inclou cap migració del tema ni dels valors per defecte del lector. Les
 proves cobreixen el punt d'entrada de producció real amb respostes sintètiques

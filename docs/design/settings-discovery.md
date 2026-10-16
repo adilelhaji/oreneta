@@ -73,7 +73,7 @@ l'activació amb Tab, la confirmació d'IME, la redacció amb Graph i IMAP barre
 els canvis de capacitat abans de l'execució.
 
 Les proves sobre el punt d'entrada de producció fan servir el pont sintètic
-existent: anglès i castellà, clar i fosc, 600/1440px, teclat, zoom CSS del 200%,
+existent: anglès i castellà, clar i fosc, 600/1440 px, teclat, zoom CSS del 200 %,
 preservació de la signatura a través de la cerca, la navegació i la recàrrega,
 context del compte i comportament de Graph sense escriptura. L'acceptació més
 àmplia, nativa i de localització completa, de #149/#37 continua oberta. Aquest

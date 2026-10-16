@@ -4,7 +4,7 @@ Part de #35; fa servir la preferència de mida del text, la renderització i els
 camins de l'editor de missatges existents.
 
 - Els lectors de conversa i independents mostren **Mida del text del missatge**, amb
-  valors predefinits del 80 al 400% i Restableix el valor per defecte (100%). Un
+  valors predefinits del 80 al 400 % i Restableix el valor per defecte (100 %). Un
   valor personalitzat vàlid de Configuració continua disponible. Canviar-lo fa
   servir `message_font_scale`; la mida del text de tota l'aplicació no canvia.
   La preferència s'aplica a tots els cossos dels missatges i es manté a través
@@ -24,7 +24,7 @@ Les proves cobreixen valors personalitzats, límit i de restabliment, l'escala d
 l'aplicació sense canvis, accions i replegament separats, el reenviament del
 contingut triat i les restriccions de només lectura.
 Els casos de navegador sobre el punt d'entrada de producció cobreixen tots dos
-temes cobalt a 1440px i 600px: escalat del cos HTML i de text pla, contenció de
+temes cobalt a 1440 px i 600 px: escalat del cos HTML i de text pla, contenció de
 l'HTML d'amplada fixa, commutadors de teclat, controls del lector independent i
 captures de pantalla. Totes les respostes de correu i del pont són
 sintètiques; l'acceptació nativa i amb proveïdors és a part.

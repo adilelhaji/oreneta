@@ -7,7 +7,7 @@ referència que demana la iteració.
 
 ## Corregits
 
-| Issue | Defecte | Correcció | Prova |
+| Incidència | Defecte | Correcció | Prova |
 |---|---|---|---|
 | #34 | Una fallada en arxivar, moure o esborrar en bloc desfeia també el que el servidor ja havia fet. Marcar com a llegit i destacar anaven en paral·lel sobre una llista que tots modificaven. | Totes les accions en bloc van d'una en una. Una fallada desfà només aquella conversa i s'informa «n de m fetes, després s'ha aturat: motiu». | `mail.test.ts` |
 | #35 | En imprimir es treia la política que bloqueja les imatges remotes, el marc compartia l'origen sense `sandbox` i faltaven els missatges antics sense avís. | CSP pròpia a la impressió, píxels de seguiment eliminats, marc amb `sandbox` sense scripts i avís quan falten missatges. | `print.test.ts`, `printDocument.test.ts`, `bubbleHtml.test.ts` |

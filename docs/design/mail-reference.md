@@ -27,8 +27,8 @@ xarxa, credencials, inicialització de comptes ni preferències persistents.
 - Un enviament incert no informa mai d'èxit ni ofereix cap reintent automàtic;
   l'esborrany continua visible i editable. Això il·lustra un estat, no la
   recuperació del lliurament.
-- A 1440px es mostren carpetes, llista i lector; a 1024px es redueixen les
-  amplades de carpetes i llista; a <=600px es mostra una sola subfinestra de
+- A 1440 px es mostren carpetes, llista i lector; a 1024 px es redueixen les
+  amplades de carpetes i llista; a <=600 px es mostra una sola subfinestra de
   correu amb navegació explícita enrere i accés a les carpetes.
 - Tots dos temes fan servir dades d'escenari idèntiques, inclosos noms i
   assumptes llargs. La cerca, les carpetes buides, la selecció, la validació de
@@ -38,7 +38,7 @@ xarxa, credencials, inicialització de comptes ni preferències persistents.
   només es migren les preferències absents, i mai no se sobreescriuen les
   seleccions desades de xat, targetes o tema (#33–#35).
 
-La referència de <=600px anterior descriu aquest escenari sintètic històric.
+La referència de <=600 px anterior descriu aquest escenari sintètic històric.
 Actualment, producció fa servir <769 píxels CSS per al correu d'una sola
 subfinestra; vegeu [límits del correu](mail-boundaries.md).
 Feu servir aquest contracte de producció per a l'acceptació nova, no el llindar
@@ -64,8 +64,8 @@ el transport sintètic.
 
 Windows: la comprovació de tipus i tots els 62 casos Playwright inicials de base
 i referència van passar. Es van inspeccionar les renderitzacions del lector i la
-taula en clar a 1440px, l'enviament incert en fosc a 1024px i el lector en clar a
-600px. Defectes de la revisió corregits: escriure a la cerca robava el focus; el
+taula en clar a 1440 px, l'enviament incert en fosc a 1024 px i el lector en clar a
+600 px. Defectes de la revisió corregits: escriure a la cerca robava el focus; el
 resum de la conversa anomenava incorrectament "earlier" una resposta posterior.
 Les proves de seguiment cobreixen l'ordenació i la selecció de la taula i la
 redacció amb el menú de carpetes estret obert. El commit final i les proves de la

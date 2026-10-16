@@ -9,9 +9,9 @@ fitada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
 - Els botons fan servir text `on-accent` llegible i colors semàntics de perill.
   En passar-hi per sobre canvia el color sense escalat ni resplendor; els
   controls desactivats continuen inerts.
-- Les icones compartides fan servir 14/16/20px amb un traç d'1,75. Les icones
+- Les icones compartides fan servir 14/16/20 px amb un traç d'1,75. Les icones
   decoratives s'oculten a les tecnologies d'assistència. L'escala tipogràfica
-  inclou els graons d'encapçalament de 18/22/28px.
+  inclou els graons d'encapçalament de 18/22/28 px.
 - Els camps no vàlids exposen `aria-invalid` i conserven l'anell de focus global
   del teclat.
 - Un xip que es pot seleccionar i treure té dos botons germans. Treure'l amb el
@@ -29,7 +29,7 @@ fitada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
 `design-primitives.test.tsx` cobreix les accions desactivades, les descripcions
 dels camps d'entrada, la semàntica dels xips, els rols de retroacció i les accions
 del catàleg. La bateria de navegador sobre el punt d'entrada de producció cobreix
-clar i fosc a 1440px i 600px, el focus del teclat, el moviment reduït, la selecció
+clar i fosc a 1440 px i 600 px, el focus del teclat, el moviment reduït, la selecció
 i la supressió, les etiquetes llargues i l'enllaç a la documentació. Desa captures
 de pantalla dels controls i de la retroacció a l'artefacte de proves d'arrencada
 de la CI.

@@ -5,13 +5,13 @@ visualitzacions desades.
 
 - Una capçalera fixa amb un ombrejat suau separa els controls de les columnes
   dels missatges.
-- Les files tenen una alçada mínima de 36px; el remitent, l'assumpte i la data
+- Les files tenen una alçada mínima de 36 px; el remitent, l'assumpte i la data
   conserven l'escala tipogràfica i les columnes existents. El contingut llarg
   encara es trunca, amb indicadors de funció que mostren el text complet.
 - Els assumptes no llegits tenen un punt del color d'èmfasi i el text en negreta.
   L'espai del punt es manté en els missatges llegits perquè els assumptes
   quedin alineats; l'etiqueta accessible de no llegit no canvia.
-- Una vora interior de 3px a l'inici de la fila oberta continua visible al costat
+- Una vora interior de 3 px a l'inici de la fila oberta continua visible al costat
   de la selecció múltiple. Segueix la fila, no una columna configurable concreta.
 - Les files no llegides tenen un tint subtil. Els fons de fila oberta i de
   selecció múltiple tenen prioritat; la casella de selecció, la vora, el punt i

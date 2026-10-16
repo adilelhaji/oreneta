@@ -24,9 +24,9 @@ operacions en bloc.
   selecció múltiple, i el contorn del focus identifica l'objectiu del teclat.
   Aquests estats poden coexistir. Les files conserven la semàntica de taula.
   El [refinament de la jerarquia visual](mailbox-visual-hierarchy.md) hi afegeix
-  un punt de no llegit amb espai reservat, un ritme de files de 36px i mou la vora
+  un punt de no llegit amb espai reservat, un ritme de files de 36 px i mou la vora
   de la fila oberta a l'inici de la fila, també quan es reordenen les columnes.
-- La taula compacta dona 80px a les dates i el 27% al remitent; el text de
+- La taula compacta dona 80 px a les dates i el 27 % al remitent; el text de
   l'assumpte ocupa la resta. El text de previsualització ja no competeix amb
   l'assumpte a la mateixa línia. Els indicadors de funció de l'assumpte i del
   remitent conserven el text complet, amb com a màxim una etiqueta visible i el
@@ -37,10 +37,10 @@ operacions en bloc.
 intervals, l'abast del menú contextual, l'obertura mentre
 se selecciona, la sortida de la pestanya de redacció, els esborranys i els canals
 destacats. Les proves de navegador sobre el punt d'entrada de producció posen a prova
-la selecció i l'obertura amb el teclat en cobalt clar i fosc a 1440px i
-720px (l'amplada CSS existent equivalent a un zoom d'escriptori del 200%), i desen
+la selecció i l'obertura amb el teclat en cobalt clar i fosc a 1440 px i
+720 px (l'amplada CSS existent equivalent a un zoom d'escriptori del 200 %), i desen
 captures de pantalla. La bateria de límits existent encara comprova la navegació
-del lector i de l'editor de missatges al voltant de 769px i 1024px. Els escenaris de prova (fixtures)
+del lector i de l'editor de missatges al voltant de 769 px i 1024 px. Els escenaris de prova (fixtures)
 de navegador són sintètics, no són una certificació nativa ni amb proveïdors.
 
 #34 continua oberta per al poliment més ampli de la llista de targetes, les proves
