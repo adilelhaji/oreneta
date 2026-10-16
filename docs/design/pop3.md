@@ -1,44 +1,45 @@
 # POP3 (#97)
 
-Registro de la implementación de ADR-0035.
+Registre de la implementació de l'ADR-0035.
 
-## Piezas
+## Peces
 
-- **Núcleo:**
-  - `meron-core/src/pop3/` contiene el cliente (`CAPA`, `STLS`,
-    `USER/PASS`, `UIDL`, `LIST`, `RETR` con dot-stuffing, `DELE` y `QUIT`),
-    la descarga, la política y el bloqueo por cuenta;
-  - `pop3_seen` y `pop3_policy` (esquema 53) se borran con la cuenta;
-  - `Creds::is_pop3` y `is_local_store` hacen que la cuenta se lea como el
-    archivo;
-  - `sync_messages` descarga al pedir la Bandeja de entrada;
-  - `account.connect` valida iniciando sesión y crea Bandeja y Papelera;
+- **Nucli:**
+  - `meron-core/src/pop3/` conté el client (`CAPA`, `STLS`,
+    `USER/PASS`, `UIDL`, `LIST`, `RETR` amb dot-stuffing, `DELE` i `QUIT`),
+    la baixada, la política i el bloqueig per compte;
+  - `pop3_seen` i `pop3_policy` (esquema 53) s'esborren amb el compte;
+  - `Creds::is_pop3` i `is_local_store` fan que el compte es llegeixi com
+    l'arxiu;
+  - `sync_messages` baixa el correu quan es demana la safata d'entrada;
+  - `account.connect` valida iniciant la sessió i crea la safata d'entrada i la
+    paperera;
   - RPC `pop3.retention`.
-- **Go:** `incoming: "pop3"` en el alta, con puerto 995 por omisión y sin
-  vigilante IMAP.
-- **Aplicación:** «Correo entrante: IMAP / POP3» en la configuración manual
-  y «Correo en el servidor POP3» en los ajustes de la cuenta, que pregunta
-  antes de borrar.
+- **Go:** `incoming: "pop3"` en l'alta, amb el port 995 per defecte i sense
+  vigilant IMAP.
+- **Aplicació:** «Correu entrant: IMAP / POP3» a la configuració manual
+  i «Correu al servidor POP3» a la configuració del compte, que pregunta
+  abans d'esborrar.
 
-## Pruebas
+## Proves
 
-- **Servidor falso:**
-  - una segunda comprobación no descarga nada;
-  - se deshace el dot-stuffing;
-  - un UIDL renumerado no duplica;
-  - una descarga cortada guarda lo anterior y sigue después;
-  - parar entre guardar y anotar no duplica;
-  - el borrado tras N días deja la copia aquí;
-  - la Papelera cuenta como borrado y mover no;
-  - un `QUIT` perdido no borra;
-  - lo que no es correo no se vuelve a pedir;
-  - una contraseña errónea se dice;
-  - sin TLS no se envía la contraseña;
-  - la política por omisión es conservar.
-- **Dovecot real** (`tests/dovecot-pop3.sh`, también en CI): nada se
-  descarga dos veces, el correo se queda en el servidor por omisión, y con
-  la política de días Dovecot lo borra al `QUIT` sin tocar la copia de aquí.
-- **Go:** el alta POP3 va como POP3, al 995 y sin vigilante.
-- **Aplicación:** la política solo cambia tras confirmar.
-- **Encontrado al probar:** parar entre guardar y anotar producía un
-  duplicado. Corregido con la comprobación por Message-ID y bytes.
+- **Servidor fals:**
+  - una segona comprovació no baixa res;
+  - es desfà el dot-stuffing;
+  - un UIDL renumerat no duplica;
+  - una baixada interrompuda desa el que s'ha baixat i continua després;
+  - aturar-se entre desar i anotar no duplica;
+  - l'esborrat al cap de N dies deixa la còpia d'aquí;
+  - la paperera compta com a esborrat i moure no;
+  - un `QUIT` perdut no esborra;
+  - el que no és correu no es torna a demanar;
+  - es comunica una contrasenya errònia;
+  - sense TLS no s'envia la contrasenya;
+  - la política per defecte és conservar.
+- **Dovecot real** (`tests/dovecot-pop3.sh`, també a la CI): no es baixa res
+  dues vegades, el correu es queda al servidor per defecte i, amb la política
+  de dies, Dovecot l'esborra en el `QUIT` sense tocar la còpia d'aquí.
+- **Go:** l'alta POP3 va com a POP3, al 995 i sense vigilant.
+- **Aplicació:** la política només canvia després de confirmar-ho.
+- **Trobat en provar-ho:** aturar-se entre desar i anotar produïa un
+  duplicat. Corregit amb la comprovació per Message-ID i bytes.

@@ -1,56 +1,74 @@
-# Mail workflow reference (#32)
+# Referència del flux de treball del correu (#32)
 
-## Scope and direction
+## Abast i direcció
 
-The 2026-09-09 user instruction prioritizes an eM Client-like mail workspace.
-The reference instantiates [art direction](art-direction.md), preserving cobalt /
-navy, the existing type/radius scales and native Wails/Go/Rust architecture.
-Reference: [eM Client desktop](https://es.emclient.com/), reviewed 2026-09-09.
-No third-party artwork or product branding is copied.
+La instrucció de l'usuari del 2026-09-09 prioritza un espai de treball de correu
+semblant al d'eM Client. La referència concreta la [direcció d'art](art-direction.md),
+i preserva el cobalt i el blau marí, les escales tipogràfiques i de radis
+existents i l'arquitectura nativa Wails/Go/Rust.
+Referència: [eM Client desktop](https://es.emclient.com/), revisada el 2026-09-09.
+No es copia cap element gràfic ni marca de producte de tercers.
 
-This is a navigable design fixture, not a shipped mail implementation. It uses
-the same synthetic account/messages as [the baseline](../baseline.md), production
-CSS tokens and Lucide icons. Mail controls simulate local state only: no Wails,
-network transport, credentials, account bootstrap or persistent preferences.
+Això és un escenari de disseny navegable, no una implementació de correu
+publicada. Fa servir el mateix compte i els mateixos missatges sintètics que [la
+base](../baseline.md), els testimonis CSS de producció i les icones Lucide. Els
+controls del correu només simulen l'estat local: no hi ha Wails, transport de
+xarxa, credencials, inicialització de comptes ni preferències persistents.
 
-## Composition and acceptance
+## Composició i acceptació
 
-- Persistent labelled folders; a compact list and traditional full-width reader.
-- Visible New message, Reply, Forward, Archive and Delete actions; selection
-  checkboxes are distinct from unread weight, opened-row tint and keyboard focus.
-- Table, multi-selection, composer and uncertain-send scenes are addressable.
-- Uncertain send never reports success or offers automatic retry; the draft
-  stays visible and editable. This illustrates a state, not delivery recovery.
-- At 1440px show folders/list/reader; at 1024px reduce folder/list widths;
-  at <=600px show one mail pane with explicit back navigation and folder access.
-- Both themes use identical fixture data, including long names and subjects.
-  Search, empty folders, selection, draft validation and recovery are interactive.
-- Existing user defaults/preferences are untouched. Proposed production defaults:
-  traditional reader and compact list; migrate only absent preferences, never
-  overwrite saved chat/card/theme selections (#33–#35).
+- Carpetes persistents amb etiqueta; una llista compacta i un lector tradicional a
+  amplada completa.
+- Accions visibles de Missatge nou, Respon, Reenvia, Arxiva i Suprimeix; les
+  caselles de selecció es distingeixen del pes de no llegit, del tint de la fila
+  oberta i del focus del teclat.
+- Les escenes de taula, selecció múltiple, editor de missatges i enviament incert
+  es poden adreçar.
+- Un enviament incert no informa mai d'èxit ni ofereix cap reintent automàtic;
+  l'esborrany continua visible i editable. Això il·lustra un estat, no la
+  recuperació del lliurament.
+- A 1440px es mostren carpetes, llista i lector; a 1024px es redueixen les
+  amplades de carpetes i llista; a <=600px es mostra una sola subfinestra de
+  correu amb navegació explícita enrere i accés a les carpetes.
+- Tots dos temes fan servir dades d'escenari idèntiques, inclosos noms i
+  assumptes llargs. La cerca, les carpetes buides, la selecció, la validació de
+  l'esborrany i la recuperació són interactives.
+- No es toquen els valors per defecte ni les preferències existents de l'usuari.
+  Valors per defecte de producció proposats: lector tradicional i llista compacta;
+  només es migren les preferències absents, i mai no se sobreescriuen les
+  seleccions desades de xat, targetes o tema (#33–#35).
 
-The <=600px reference above describes this historical synthetic fixture. Current
-production uses <769 CSS pixels for one-pane mail; see [mail boundaries](mail-boundaries.md).
-Use that production contract for new acceptance, not the old fixture cutoff.
+La referència de <=600px anterior descriu aquest escenari sintètic històric.
+Actualment, producció fa servir <769 píxels CSS per al correu d'una sola
+subfinestra; vegeu [límits del correu](mail-boundaries.md).
+Feu servir aquest contracte de producció per a l'acceptació nova, no el llindar
+de l'escenari antic.
 
-## Delivery boundaries
+## Límits del lliurament
 
-Reusable reference responsibilities: workspace navigation, message list/table,
-reader actions, draft form, and delivery notice. Production adoption belongs to
-#33–#36; calendar/contacts/tasks remain outside this mail reference (#38).
-No claim of functional parity, provider validation or accessibility certification.
+Responsabilitats de referència reutilitzables: navegació de l'espai de treball,
+llista o taula de missatges, accions del lector, formulari d'esborrany i avís de
+lliurament. L'adopció en producció correspon a #33–#36; calendari, contactes i
+tasques queden fora d'aquesta referència del correu (#38).
+No s'afirma cap paritat funcional, validació amb proveïdors ni certificació
+d'accessibilitat.
 
-CI runs the reference Playwright cases through `bun run baseline:verify` alongside
-the unchanged historical baseline. Open `/reference.html?scene=reader&theme=light`
-on the isolated baseline server. Screenshots include tested SHA, dirty-tree flag,
-fixture checksum, theme, viewport and synthetic transport provenance.
+La CI executa els casos Playwright de la referència amb `bun run baseline:verify`
+al costat de la base històrica, que no canvia. Obriu
+`/reference.html?scene=reader&theme=light` al servidor de la base aïllat. Les
+captures de pantalla inclouen la procedència: l'SHA provat, l'indicador d'arbre
+amb canvis, la suma de verificació de l'escenari, el tema, la finestra gràfica i
+el transport sintètic.
 
-## Verification record
+## Registre de verificació
 
-Windows: typecheck and all 62 initial Playwright baseline/reference cases passed.
-Rendered light 1440px reader/table, dark 1024px uncertain-send and light 600px
-reader were inspected. Review findings fixed: search typing stole focus; the
-conversation summary incorrectly called a later reply "earlier". Follow-up tests
-cover table sorting/selection and composing while the narrow folder menu is open.
-Final commit and CI evidence are recorded on the delivery PR. Local screenshots
-record a dirty tree; they must not be described as a clean commit CI run.
+Windows: la comprovació de tipus i tots els 62 casos Playwright inicials de base
+i referència van passar. Es van inspeccionar les renderitzacions del lector i la
+taula en clar a 1440px, l'enviament incert en fosc a 1024px i el lector en clar a
+600px. Defectes de la revisió corregits: escriure a la cerca robava el focus; el
+resum de la conversa anomenava incorrectament "earlier" una resposta posterior.
+Les proves de seguiment cobreixen l'ordenació i la selecció de la taula i la
+redacció amb el menú de carpetes estret obert. El commit final i les proves de la
+CI es registren a la PR del lliurament. Les captures de pantalla locals
+registren un arbre amb canvis; no s'han de descriure com una execució de la CI
+d'un commit net.

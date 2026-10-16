@@ -1,50 +1,50 @@
-# Instalación de actualizaciones: verificación y vuelta atrás (#147)
+# Instal·lació d'actualitzacions: verificació i reversió (#147)
 
-Parte de #147 que se puede comprobar fuera de Windows. La instalación,
-actualización y desinstalación reales en un Windows limpio siguen pendientes
-de evidencia nativa.
+Part de #147 que es pot comprovar fora de Windows. La instal·lació,
+l'actualització i la desinstal·lació reals en un Windows net continuen pendents
+de proves natives.
 
-## Qué se corrige
+## Què es corregeix
 
-- **Verificación antes de instalar.** El SHA-256 y el tamaño se comprobaban
-  solo al terminar la descarga. Después el paquete esperaba en la caché de
-  actualizaciones, escribible por cualquier proceso del usuario, hasta que la
-  persona pulsaba instalar. Ahora se vuelven a comprobar justo antes de
-  sustituir la aplicación. Si el paquete ha cambiado, se ha ampliado o ha
-  desaparecido:
-  - se descarta;
-  - la actualización vuelve a ofrecerse para descargar, con el motivo;
-  - la aplicación instalada no se toca.
-- **Ejecutable portable de Windows.** La sustitución está ahora en
-  `update_portable.go`, sin etiqueta de plataforma. Solo `applyUpdate` y el
-  relanzamiento siguen siendo de Windows. Antes de mover nada:
-  - un archivo que no es zip se rechaza;
-  - un zip sin `oreneta.exe` se rechaza;
-  - una entrada que no empieza por la cabecera `MZ` se rechaza;
-  - una entrada mayor que el límite de actualización (512 MiB) se rechaza,
-    tanto por el tamaño declarado como por lo realmente leído.
-- **Vuelta atrás.** Si el ejecutable nuevo no puede ocupar su sitio, se
-  restaura el anterior. Si tampoco se puede restaurar, el error dice dónde ha
-  quedado.
+- **Verificació abans d'instal·lar.** L'SHA-256 i la mida es comprovaven
+  només en acabar la baixada. Després el paquet esperava a la memòria cau
+  d'actualitzacions, on qualsevol procés de l'usuari podia escriure, fins que la
+  persona premia instal·la. Ara es tornen a comprovar just abans de
+  substituir l'aplicació. Si el paquet ha canviat, s'ha ampliat o ha
+  desaparegut:
+  - es descarta;
+  - l'actualització es torna a oferir per baixar-la, amb el motiu;
+  - l'aplicació instal·lada no es toca.
+- **Executable portable de Windows.** La substitució ara és a
+  `update_portable.go`, sense etiqueta de plataforma. Només `applyUpdate` i el
+  rellançament continuen sent de Windows. Abans de moure res:
+  - es rebutja un fitxer que no és zip;
+  - es rebutja un zip sense `oreneta.exe`;
+  - es rebutja una entrada que no comença per la capçalera `MZ`;
+  - es rebutja una entrada més gran que el límit d'actualització (512 MiB),
+    tant per la mida declarada com pel que realment s'ha llegit.
+- **Reversió.** Si l'executable nou no pot ocupar el seu lloc, es
+  restaura l'anterior. Si tampoc no es pot restaurar, l'error diu on ha
+  quedat.
 
-## Pruebas (cualquier plataforma)
+## Proves (qualsevol plataforma)
 
-- `TestUpdaterInstallRejectsAPayloadChangedAfterDownload` cubre un paquete
-  alterado con el mismo tamaño, uno ampliado y uno borrado. Falla sin la
-  corrección: el paquete alterado se instalaba.
-- `TestReplaceExecutableRefusesABadArchive` cubre un archivo que no es zip, un
-  zip sin ejecutable, un ejecutable que no es de Windows y una entrada vacía.
-  En los cuatro casos el instalado sigue igual y no queda nada al lado.
-- `TestReplaceExecutableSwapsInTheNewCopy` comprueba que la copia anterior
-  queda como `.old` para el barrido al arrancar.
-- `TestReplaceExecutableRestoresThePreviousCopyWhenTheSwapFails` simula un
-  fallo del segundo renombrado.
+- `TestUpdaterInstallRejectsAPayloadChangedAfterDownload` cobreix un paquet
+  alterat amb la mateixa mida, un d'ampliat i un d'esborrat. Falla sense la
+  correcció: el paquet alterat s'instal·lava.
+- `TestReplaceExecutableRefusesABadArchive` cobreix un fitxer que no és zip, un
+  zip sense executable, un executable que no és de Windows i una entrada buida.
+  En els quatre casos l'instal·lat continua igual i no queda res al costat.
+- `TestReplaceExecutableSwapsInTheNewCopy` comprova que la còpia anterior
+  queda com a `.old` per a l'escombrada en arrencar.
+- `TestReplaceExecutableRestoresThePreviousCopyWhenTheSwapFails` simula una
+  fallada del segon canvi de nom.
 
-## Pendiente (Windows nativo)
+## Pendent (Windows natiu)
 
-- Instalar, actualizar desde la versión anterior y desinstalar en un sistema
-  limpio.
-- Ejecutable bloqueado por otro proceso.
-- Relanzamiento tras la actualización.
-- Instalador NSIS en modo silencioso con UAC.
-- Qué conserva la desinstalación: perfil en `%APPDATA%` y datos de WebView2.
+- Instal·lar, actualitzar des de la versió anterior i desinstal·lar en un sistema
+  net.
+- Executable bloquejat per un altre procés.
+- Rellançament després de l'actualització.
+- Instal·lador NSIS en mode silenciós amb UAC.
+- Què conserva la desinstal·lació: el perfil a `%APPDATA%` i les dades de WebView2.
