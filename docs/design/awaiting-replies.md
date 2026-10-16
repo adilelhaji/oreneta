@@ -1,23 +1,23 @@
-# Esperando respuesta (#45, ADR-0025)
+# Pendent de resposta (#45, ADR-0025)
 
-## Uso
+## Ús
 
-En el menú de una conversación en la que se ha escrito:
-- **Esperar respuesta (recordatorio en 3 días)** marca el último mensaje
-  enviado;
-- **Esperando respuestas…** abre la lista.
+Al menú d'una conversa en què s'ha escrit:
+- **Espera resposta (recordatori d'aquí a 3 dies)** marca l'últim missatge
+  enviat;
+- **Pendents de resposta…** obre la llista.
 
-La lista dice, para cada mensaje:
-- si tiene respuesta y cómo se sabe;
-- qué respuestas son posibles y por qué hay duda, con «Es la respuesta» o
-  «No es una respuesta»;
-- si ya pasó su recordatorio.
+La llista indica, per a cada missatge:
+- si té resposta i com se sap;
+- quines respostes són possibles i per què hi ha dubte, amb «És la resposta» o
+  «No és una resposta»;
+- si ja ha passat el recordatori.
 
-«Hecho» y «Dejar de esperar» lo cierran.
+«Fet» i «Deixa d'esperar» el tanquen.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 `awaiting/tests.rs` | Respuesta directa de un destinatario en copia; respuesta en la conversación sin `In-Reply-To`; el asunto solo nunca responde; alias propios y correo anterior excluidos; respuestas automáticas y de desconocidos como posibles, con decisión de la persona; movimiento, nueva descarga y reinicio; recordatorio una sola vez y no tras una respuesta; errores y estados; borrado de cuenta |
-| N2 `Awaiting.test.tsx` | Lista con la evidencia y la duda; decisión sobre una posible respuesta; dejar de esperar; recordatorio a las 9:00 locales |
+| N1 `awaiting/tests.rs` | Resposta directa d'un destinatari en còpia; resposta a la conversa sense `In-Reply-To`; l'assumpte sol no respon mai; àlies propis i correu anterior exclosos; respostes automàtiques i de desconeguts com a possibles, amb decisió de la persona; moviment, nova baixada i reinici; recordatori una sola vegada i no després d'una resposta; errors i estats; supressió del compte |
+| N2 `Awaiting.test.tsx` | Llista amb l'evidència i el dubte; decisió sobre una possible resposta; deixar d'esperar; recordatori a les 9.00 locals |

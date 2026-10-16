@@ -1,44 +1,44 @@
-# Interoperabilidad OpenPGP y S/MIME (#49)
+# Interoperabilitat d'OpenPGP i S/MIME (#49)
 
-## Qué se comprobó con herramientas independientes
+## Què s'ha comprovat amb eines independents
 
-| Dirección | OpenPGP (GnuPG 2.4.4) | S/MIME (OpenSSL 3.0.13) |
+| Direcció | OpenPGP (GnuPG 2.4.4) | S/MIME (OpenSSL 3.0.13) |
 |---|---|---|
-| Ellos firman, aquí se verifica | Correcta; cambiada después es «mala»; sin clave, «sin clave» (no «mala»); firmada con una clave hoy caducada pero válida al firmar, correcta | Correcta con el certificado aceptado; sin aceptarlo, «válida pero no de confianza» |
-| Ellos cifran, aquí se abre | Cifrado y firmado: se abre con la firma interior verificada | AES-256-CBC con RSA PKCS#1 v1.5: se abre |
-| Aquí se firma, ellos verifican | `gpg --verify`: firma correcta | `openssl smime -verify`: correcta |
-| Aquí se cifra, ellos abren | `gpg --decrypt`: se abre y la firma interior es correcta | `openssl smime -decrypt`: se abre |
+| Ells signen, aquí es verifica | Correcta; canviada després, és «dolenta»; sense clau, «sense clau» (no «dolenta»); signada amb una clau avui caducada però vàlida en signar, correcta | Correcta amb el certificat acceptat; sense acceptar-lo, «vàlida però no de confiança» |
+| Ells xifren, aquí s'obre | Xifrat i signat: s'obre amb la signatura interior verificada | AES-256-CBC amb RSA PKCS#1 v1.5: s'obre |
+| Aquí se signa, ells verifiquen | `gpg --verify`: signatura correcta | `openssl smime -verify`: correcta |
+| Aquí es xifra, ells obren | `gpg --decrypt`: s'obre i la signatura interior és correcta | `openssl smime -decrypt`: s'obre |
 
-## Defectos encontrados y corregidos
+## Defectes trobats i corregits
 
-- Los mensajes firmados o cifrados salían con **dos `MIME-Version`**: el del
-  mensaje y el del envoltorio. Ahora solo el del envoltorio.
-- La firma separada de OpenPGP salía armada como `PGP MESSAGE`; ahora es
-  `PGP SIGNATURE`, como esperan los lectores de RFC 3156.
-- En S/MIME, RSAES-OAEP, AES-GCM (AuthEnvelopedData) o un cifrado
-  desconocido se informaban como mensaje dañado. Ahora son «no compatible»
-  y se nombra el algoritmo.
+- Els missatges signats o xifrats sortien amb **dos `MIME-Version`**: el del
+  missatge i el de l'embolcall. Ara només el de l'embolcall.
+- La signatura separada d'OpenPGP sortia armada com a `PGP MESSAGE`; ara és
+  `PGP SIGNATURE`, com esperen els lectors de l'RFC 3156.
+- A S/MIME, RSAES-OAEP, AES-GCM (AuthEnvelopedData) o un xifratge desconegut
+  es mostraven com a missatge malmès. Ara són «no compatible» i s'anomena
+  l'algorisme.
 
-## Estados que se distinguen
+## Estats que es distingeixen
 
 | OpenPGP | S/MIME |
 |---|---|
-| correcta, mala, sin clave, ilegible, firmante distinto del remitente | correcta, válida pero no de confianza, certificado caducado o aún no válido, mala, sin certificado, firmante distinto del remitente |
-| descifrado: sin clave, falta la contraseña, no compatible (AEAD de LibrePGP), dañado | descifrado: sin clave, no compatible (con el algoritmo), dañado |
+| correcta, dolenta, sense clau, il·legible, signant diferent del remitent | correcta, vàlida però no de confiança, certificat caducat o encara no vàlid, dolenta, sense certificat, signant diferent del remitent |
+| desxifratge: sense clau, falta la contrasenya, no compatible (AEAD de LibrePGP), malmès | desxifratge: sense clau, no compatible (amb l'algorisme), malmès |
 
-## Siempre
+## Sempre
 
-- **Nunca en claro:** si se pidió cifrar y falta un certificado, el envío se
-  detiene y nombra a quién falta.
-- **Sin claves en los informes:** la descripción de una clave o identidad
-  no lleva material de la clave, y una contraseña equivocada no repite nada
-  de lo leído.
-- **Fuera de alcance:** confianza implícita en CA corporativas y consultas
-  de revocación (CRL u OCSP); necesitan su propia decisión de red y de
-  privacidad.
+- **Mai en clar:** si s'ha demanat xifrar i falta un certificat, l'enviament
+  s'atura i anomena a qui falta.
+- **Sense claus als informes:** la descripció d'una clau o identitat no porta
+  material de la clau, i una contrasenya equivocada no repeteix res del que
+  s'ha llegit.
+- **Fora d'abast:** confiança implícita en CA corporatives i consultes de
+  revocació (CRL o OCSP); necessiten una decisió pròpia de xarxa i de
+  privadesa.
 
-## Pruebas
+## Proves
 
-`meron-core/src/crypto/interop_tests.rs`, con los datos y su procedencia en
-`testdata/interop/README.md`. La parte web está en `smimeDecrypt.test.ts`.
-La interoperabilidad con Outlook y Thunderbird en cuentas reales es N5.
+`meron-core/src/crypto/interop_tests.rs`, amb les dades i la seva procedència a
+`testdata/interop/README.md`. La part web és a `smimeDecrypt.test.ts`. La
+interoperabilitat amb Outlook i Thunderbird en comptes reals és N5.

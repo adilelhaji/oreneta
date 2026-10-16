@@ -1,72 +1,73 @@
-# Proponer otra hora y coincidencias (#102, ADR-0043)
+# Proposar una altra hora i coincidències (#102, ADR-0043)
 
-## Uso
+## Ús
 
-- **Invitación recibida:** debajo de las respuestas, **Proponer otra hora**
-  abre inicio, fin (o el día, si es de día entero) y una nota para el
-  organizador. **Enviar propuesta** manda la propuesta; el calendario propio
-  no cambia. Si el fin no es posterior al inicio, se dice y no se puede
-  enviar. Si el envío falla, se dice qué falló y se puede volver a pulsar.
-- **Propuesta recibida, como organizador:** la tarjeta dice quién propone qué
-  hora y su nota.
-  - **Abrir en el editor** abre el evento propio con la hora propuesta.
-  - **Rechazar la propuesta**, con una nota opcional, se lo dice a quien la
-    hizo.
-  - Al guardar en el editor, si el evento tiene asistentes, se pregunta si
-    avisarles, también en calendarios locales y CalDAV (véase
-    `organizer-notifications.md`); la tarjeta lo advierte.
-  - Si la reunión no se organiza en un calendario guardado aquí, la tarjeta
-    solo informa. Si la propuesta es de una versión anterior, aparece como
-    antigua y sin botones.
-- **Rechazo recibido:** «El organizador rechazó la hora que propusiste», con
-  su nota.
-- **Coincidencias:** el editor, la tarjeta de una invitación, el formulario
-  de propuesta y la tarjeta de una propuesta muestran «Coincide con: A, B, C
-  y N más» cuando la hora se solapa con eventos propios.
+- **Invitació rebuda:** sota les respostes, **Proposa una altra hora** obre
+  l'inici, la fi (o el dia, si és de dia sencer) i una nota per a
+  l'organitzador. **Envia la proposta** envia la proposta; el calendari propi
+  no canvia. Si la fi no és posterior a l'inici, s'indica i no es pot enviar.
+  Si l'enviament falla, s'indica què ha fallat i es pot tornar a prémer.
+- **Proposta rebuda, com a organitzador:** la targeta indica qui proposa quina
+  hora i la seva nota.
+  - **Obre a l'editor** obre l'esdeveniment propi amb l'hora proposada.
+  - **Rebutja la proposta**, amb una nota opcional, ho comunica a qui l'ha
+    feta.
+  - En desar a l'editor, si l'esdeveniment té assistents, es pregunta si cal
+    avisar-los, també en calendaris locals i CalDAV (vegeu
+    `organizer-notifications.md`); la targeta ho adverteix.
+  - Si la reunió no s'organitza en un calendari desat aquí, la targeta només
+    informa. Si la proposta és d'una versió anterior, apareix com a antiga i
+    sense botons.
+- **Rebuig rebut:** «L'organitzador ha rebutjat l'hora que vas proposar», amb
+  la seva nota.
+- **Coincidències:** l'editor, la targeta d'una invitació, el formulari de
+  proposta i la targeta d'una proposta mostren «Coincideix amb: A, B, C i N
+  més» quan l'hora s'encavalla amb esdeveniments propis.
 
-## Núcleo
+## Nucli
 
 - `meron-core/src/calendar/itip.rs`:
-  - `counter` y `decline_counter` construyen los objetos;
-  - `organized_event` encuentra el evento propio que organiza la cuenta;
-  - `parse` lee además COMMENT y STATUS:CANCELLED.
-- `meron-core/src/calendar/overlap.rs`: `overlapping(conn, cuenta o todas,
-  inicio, fin, día entero, desfase, excluidos)`.
+  - `counter` i `decline_counter` construeixen els objectes;
+  - `organized_event` troba l'esdeveniment propi que organitza el compte;
+  - `parse` llegeix, a més, COMMENT i STATUS:CANCELLED.
+- `meron-core/src/calendar/overlap.rs`: `overlapping(conn, compte o tots,
+  inici, fi, dia sencer, desfasament, exclosos)`.
 - `meron-core/src/calendar/mod.rs`: `events_with_uid`.
-- `subscription.rs` guarda `TRANSP:TRANSPARENT` como `free`.
-- Órdenes:
-  - `invite.counter` devuelve `{proposal: {to, subject, ics}}`;
-  - `invite.counterStatus` devuelve `{organizer, event, sequence,
-    outdated}` y lee la SEQUENCE del servidor si el evento está en CalDAV;
-  - `invite.declineCounter` devuelve `{reply: {to, subject, ics}}`;
-  - `calendar.conflicts` devuelve `{conflicts: [{account, calendar_id,
+- `subscription.rs` desa `TRANSP:TRANSPARENT` com a `free`.
+- Ordres:
+  - `invite.counter` retorna `{proposal: {to, subject, ics}}`;
+  - `invite.counterStatus` retorna `{organizer, event, sequence,
+    outdated}` i llegeix la SEQUENCE del servidor si l'esdeveniment és a
+    CalDAV;
+  - `invite.declineCounter` retorna `{reply: {to, subject, ics}}`;
+  - `calendar.conflicts` retorna `{conflicts: [{account, calendar_id,
     event_id, subject, start, end, all_day}]}`.
-- El envío lo hace el frontend con `mail.send`, como las respuestas:
-  adjunto `text/calendar; method=COUNTER` o `method=DECLINECOUNTER`.
+- L'enviament el fa el frontend amb `mail.send`, com les respostes: adjunt
+  `text/calendar; method=COUNTER` o `method=DECLINECOUNTER`.
 
 ## Frontend
 
 - `states/invitations.ts`: `proposeTime`, `counterStatus`,
-  `declineProposal` y `editWithProposal`.
-- `states/conflicts.ts` y `components/calendar/ConflictNote.tsx`.
-- `InvitationCard.tsx` y `EventEditor.tsx`. El editor ya no pregunta si
-  avisar en calendarios locales y CalDAV, porque guardar ahí no avisa.
+  `declineProposal` i `editWithProposal`.
+- `states/conflicts.ts` i `components/calendar/ConflictNote.tsx`.
+- `InvitationCard.tsx` i `EventEditor.tsx`. L'editor ja no pregunta si cal
+  avisar en calendaris locals i CalDAV, perquè desar-hi no avisa.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 `calendar/itip/tests.rs` | COUNTER leído de nuevo: método, UID, SEQUENCE sin cambiar, solo el ATTENDEE propio, horas propuestas, COMMENT escapado, sin COMMENT si está vacío; día entero como `VALUE=DATE`; ocurrencia con RECURRENCE-ID; rechazos (fin no posterior, organizador, CANCEL, STATUS:CANCELLED, serie entera, versión antigua); DECLINECOUNTER leído de nuevo, sin hora, solo del organizador y solo para una propuesta; organizador encontrado por UID, la ocurrencia nombrada o la primera, y no para otro organizador, una suscripción, lo cancelado u otra cuenta |
-| N1 `calendar/overlap/tests.rs` | Sin cancelados, libres, rechazados ni suscripciones; extremos que se tocan no coinciden; orden; varias cuentas o una; el propio evento excluido por UID, id importado, id CalDAV o serie; día entero según la zona de la persona, en ambos sentidos |
-| N1 `subscription.rs` | `TRANSP:TRANSPARENT` se guarda como libre; lo demás, sin suponer |
-| N1 despachador (`main.rs`) | Coincidencias con y sin el propio evento; propuesta al organizador y rechazada para una versión antigua o una reunión cancelada; como organizador, solo información sin el evento aquí y rechazo enviado a quien propuso cuando lo está |
-| N2 `InvitationCard.test.tsx` | Proponer: campos, validación, carga exacta de `invite.counter`, adjunto `method=COUNTER` al organizador, coincidencias, fallo explicado y reintento, motivo del núcleo; organizador: rechazar con nota y adjunto `method=DECLINECOUNTER`, abrir el editor con la hora propuesta y coincidencias en el editor, guardar sin preguntar si avisar en un calendario local; propuesta antigua o ajena sin botones; rechazo recibido solo informa |
-| N3 | Se mantienen las de Radicale de ADR-0018; no hay prueba N3 nueva |
-| N5 pendiente | Outlook, Gmail y Apple Calendar recibiendo y enviando COUNTER y DECLINECOUNTER |
+| N1 `calendar/itip/tests.rs` | COUNTER tornat a llegir: mètode, UID, SEQUENCE sense canviar, només l'ATTENDEE propi, hores proposades, COMMENT escapat, sense COMMENT si és buit; dia sencer com a `VALUE=DATE`; ocurrència amb RECURRENCE-ID; rebutjos (fi no posterior, organitzador, CANCEL, STATUS:CANCELLED, sèrie sencera, versió antiga); DECLINECOUNTER tornat a llegir, sense hora, només de l'organitzador i només per a una proposta; organitzador trobat per UID, l'ocurrència anomenada o la primera, i no per a un altre organitzador, una subscripció, el que és cancel·lat o un altre compte |
+| N1 `calendar/overlap/tests.rs` | Sense cancel·lats, lliures, rebutjats ni subscripcions; extrems que es toquen no coincideixen; ordre; diversos comptes o un; l'esdeveniment propi exclòs per UID, id importat, id CalDAV o sèrie; dia sencer segons la zona de la persona, en tots dos sentits |
+| N1 `subscription.rs` | `TRANSP:TRANSPARENT` es desa com a lliure; la resta, sense suposar res |
+| N1 distribuïdor (`main.rs`) | Coincidències amb l'esdeveniment propi i sense; proposta a l'organitzador i rebutjada per a una versió antiga o una reunió cancel·lada; com a organitzador, només informació sense l'esdeveniment aquí i rebuig enviat a qui ha proposat quan hi és |
+| N2 `InvitationCard.test.tsx` | Proposar: camps, validació, càrrega exacta d'`invite.counter`, adjunt `method=COUNTER` a l'organitzador, coincidències, error explicat i reintent, motiu del nucli; organitzador: rebutjar amb nota i adjunt `method=DECLINECOUNTER`, obrir l'editor amb l'hora proposada i coincidències a l'editor, desar sense preguntar si cal avisar en un calendari local; proposta antiga o d'altri sense botons; un rebuig rebut només informa |
+| N3 | Es mantenen les de Radicale de l'ADR-0018; no hi ha cap prova N3 nova |
+| N5 pendent | Outlook, Gmail i Apple Calendar rebent i enviant COUNTER i DECLINECOUNTER |
 
-## Bloqueado
+## Bloquejat
 
-La disponibilidad de otras personas desde sus servidores queda fuera:
-- Google necesita los registros OAuth propios;
-- Radicale no tiene la bandeja de salida de CalDAV scheduling;
-- `GetUserAvailability` de EWS necesita un servidor real.
+La disponibilitat d'altres persones des dels seus servidors queda fora d'abast:
+- Google necessita els registres OAuth propis;
+- Radicale no té la safata de sortida de CalDAV scheduling;
+- `GetUserAvailability` d'EWS necessita un servidor real.

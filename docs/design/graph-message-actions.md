@@ -1,173 +1,177 @@
-# Acciones sobre mensajes en Microsoft Graph (#141)
+# Accions sobre missatges a Microsoft Graph (#141)
 
-Implementación bajo [ADR-0004](../adr/0004-microsoft-graph.md). El ADR ya
-aprueba pedir `Mail.ReadWrite` de forma incremental; este documento fija el
-contrato de cada operación, la concurrencia y la reconciliación de la caché.
-No introduce identidad nueva ni estado durable nuevo: el único dato añadido es
-el nivel concedido, dentro del marcador de concesión que ya existía.
+Implementació sota l'[ADR-0004](../adr/0004-microsoft-graph.md). L'ADR ja
+aprova demanar `Mail.ReadWrite` de manera incremental; aquest document fixa el
+contracte de cada operació, la concurrència i la reconciliació de la memòria
+cau. No introdueix cap identitat nova ni cap estat persistent nou: l'única dada
+afegida és el nivell concedit, dins del marcador de concessió que ja existia.
 
-## Permiso
+## Permís
 
-- **Por defecto, solo lectura.** La activación sigue pidiendo `Mail.Read`. Las
-  escrituras se piden aparte, en una autorización explícita para esa cuenta
-  («Permitir cambios»), que solicita `Mail.ReadWrite`. Nada pide `Mail.Send`.
-- **Lo concedido manda.** El nivel es el que devuelve Microsoft, no el pedido.
-  Si el inquilino recorta el permiso, la cuenta sigue en solo lectura y la
-  interfaz lo dice.
-- **Rechazar o cancelar** la autorización de cambios no toca la concesión
-  existente: la lectura sigue igual.
-- **Renovación.** Se pide el mismo nivel que se tenía. Si Microsoft rechaza la
-  renovación con escritura (consentimiento retirado o denegado), se intenta una
-  vez con lectura. Si funciona, la cuenta queda en solo lectura y se dice; si
-  no, es una reautenticación como hasta ahora. La caché sin conexión se
-  conserva en ambos casos.
-- **Marcador.** El ajuste no secreto `graph.grant.<clave>` guarda ahora
-  `{"writes": bool}`. Los marcadores antiguos (`true`) cuentan como solo
-  lectura. Es una comprobación previa para no tocar la caché local: la
-  autorización real es la concesión en el llavero, que se vuelve a comprobar
-  en cada petición.
+- **Per defecte, només lectura.** L'activació continua demanant `Mail.Read`.
+  Les escriptures es demanen a part, en una autorització explícita per a aquell
+  compte («Permet els canvis»), que sol·licita `Mail.ReadWrite`. Res no demana
+  `Mail.Send`.
+- **Mana el que s'ha concedit.** El nivell és el que retorna Microsoft, no el
+  que s'ha demanat. Si l'inquilí (tenant) retalla el permís, el compte continua en
+  només lectura i la interfície ho indica.
+- **Rebutjar o cancel·lar** l'autorització de canvis no toca la concessió
+  existent: la lectura continua igual.
+- **Renovació.** Es demana el mateix nivell que es tenia. Si Microsoft rebutja
+  la renovació amb escriptura (consentiment retirat o denegat), s'intenta una
+  vegada amb lectura. Si funciona, el compte queda en només lectura i
+  s'indica; si no, és una reautenticació com fins ara. La memòria cau sense
+  connexió es conserva en tots dos casos.
+- **Marcador.** El paràmetre no secret `graph.grant.<clau>` ara desa
+  `{"writes": bool}`. Els marcadors antics (`true`) compten com a només
+  lectura. És una comprovació prèvia per no tocar la memòria cau local:
+  l'autorització real és la concessió al clauer, que es torna a comprovar a
+  cada sol·licitud.
 
-## Operaciones
+## Operacions
 
-Cada operación lleva `Prefer: IdType="ImmutableId"`, sin redirecciones, con el
-mismo límite de tiempo y la misma clasificación de errores que la lectura, y
-sin leer nunca el cuerpo de un error.
+Cada operació porta `Prefer: IdType="ImmutableId"`, sense redireccions, amb el
+mateix límit de temps i la mateixa classificació d'errors que la lectura, i
+sense llegir mai el cos d'un error.
 
-| Acción | Petición | Éxito |
+| Acció | Sol·licitud | Èxit |
 |---|---|---|
-| Leído / no leído | `PATCH /me/messages/{id}` con `{"isRead": b}` | 200 |
-| Marca / sin marca | `PATCH /me/messages/{id}` con `{"flag": {"flagStatus": "flagged" \| "notFlagged"}}` | 200 |
-| Mover | `POST /me/messages/{id}/move` con `{"destinationId": carpeta}` | 201 |
-| Copiar (misma cuenta) | `POST /me/messages/{id}/copy` con `{"destinationId": carpeta}` | 201 |
-| Borrar | mover a la carpeta con rol `deleteditems` | 201 |
-| Borrar definitivamente | `DELETE /me/messages/{id}`, solo desde Elementos eliminados o Borradores | 204 |
-| Mover carpeta (#210) | `POST /me/mailFolders/{id}/move` con `{"destinationId": carpeta o raíz}` | 200/201 con el padre pedido |
+| Llegit / no llegit | `PATCH /me/messages/{id}` amb `{"isRead": b}` | 200 |
+| Marca / sense marca | `PATCH /me/messages/{id}` amb `{"flag": {"flagStatus": "flagged" \| "notFlagged"}}` | 200 |
+| Moure | `POST /me/messages/{id}/move` amb `{"destinationId": carpeta}` | 201 |
+| Copiar (el mateix compte) | `POST /me/messages/{id}/copy` amb `{"destinationId": carpeta}` | 201 |
+| Suprimir | moure a la carpeta amb el rol `deleteditems` | 201 |
+| Suprimir definitivament | `DELETE /me/messages/{id}`, només des d'Elements suprimits o Esborranys | 204 |
+| Moure una carpeta (#210) | `POST /me/mailFolders/{id}/move` amb `{"destinationId": carpeta o arrel}` | 200/201 amb el pare demanat |
 
-- **Borrar** es recuperable: va a Elementos eliminados, igual que en IMAP va a
-  la papelera. **Borrar definitivamente** solo ocurre desde Elementos
-  eliminados o Borradores, como en IMAP. Graph lo deja en «Elementos
-  recuperables», fuera de la vista del cliente.
-- **Copiar a otra cuenta** desde o hacia Graph, vaciar carpeta, marcar todo
-  como leído, crear o borrar carpetas, guardar como `.eml`, etiquetas remotas
-  y borradores remotos siguen sin soporte. Se rechazan antes de cualquier
-  efecto local. El envío es [graph-sending.md](graph-sending.md).
-- **Mover una carpeta** ([ADR-0057](../adr/0057-graph-folder-moves-and-receipt-reports.md)):
-  - las reglas de ADR-0050 se comprueban sobre el árbol guardado
-    (`graph_folders`), por id y padre: ni carpetas especiales ni las que las
-    contienen, ni carpetas de búsqueda, ni dentro de sí misma, ni adonde ya
-    está, ni al lado de otra con el mismo nombre (sin distinguir mayúsculas);
-  - una petición, nunca repetida. Después se vuelve a leer el árbol, haya
-    ido bien, mal o en duda. Sin respuesta, con 5xx o con un éxito que no
-    dice el padre pedido, el resultado es incierto, nunca «no se movió»; la
-    interfaz vuelve a leer la lista y pedirlo otra vez encuentra la carpeta
-    en su sitio («ya está ahí», como información), sin segunda petición;
-  - con ids inmutables la carpeta conserva su nombre local; si Graph
-    devuelve otro id, se informa como renombrado.
-- **Deshacer** es la acción inversa, que pasa por el mismo camino que la
-  original:
-  - leído y marca se fijan al valor anterior;
-  - mover y borrar a la papelera se deshacen moviendo de vuelta. Con
-    identificadores inmutables el mensaje conserva su identificador y su UID
-    local tras moverse (probado en la reconciliación);
-  - si ya no está donde se dejó, el deshacer falla como cualquier movimiento,
-    sin tocar nada;
-  - borrar definitivamente no tiene deshacer.
+- **Suprimir** és recuperable: va a Elements suprimits, igual que a IMAP va a la
+  paperera. **Suprimir definitivament** només passa des d'Elements suprimits o
+  Esborranys, com a IMAP. Graph el deixa a «Elements recuperables», fora de la
+  vista del client.
+- **Copiar a un altre compte** des de Graph o cap a Graph, buidar una carpeta,
+  marcar-ho tot com a llegit, crear o suprimir carpetes, desar com a `.eml`,
+  etiquetes remotes i esborranys remots continuen sense suport. Es rebutgen
+  abans de qualsevol efecte local. L'enviament és a
+  [graph-sending.md](graph-sending.md).
+- **Moure una carpeta** ([ADR-0057](../adr/0057-graph-folder-moves-and-receipt-reports.md)):
+  - les regles de l'ADR-0050 es comproven sobre l'arbre desat
+    (`graph_folders`), per id i pare: ni carpetes especials ni les que les
+    contenen, ni carpetes de cerca, ni dins de si mateixa, ni allà on ja és, ni
+    al costat d'una altra amb el mateix nom (sense distingir majúscules);
+  - una sol·licitud, que no es repeteix mai. Després es torna a llegir l'arbre,
+    tant si ha anat bé com si ha anat malament o hi ha dubte. Sense resposta,
+    amb 5xx o amb un èxit que no indica el pare demanat, el resultat és incert,
+    mai «no s'ha mogut»; la interfície torna a llegir la llista i, si es torna
+    a demanar, troba la carpeta al seu lloc («ja hi és», com a informació),
+    sense segona sol·licitud;
+  - amb identificadors immutables la carpeta conserva el nom local; si Graph
+    retorna un altre id, s'informa com a reanomenament.
+- **Desfer** és l'acció inversa, que passa pel mateix camí que l'original:
+  - llegit i marca es fixen al valor anterior;
+  - moure i suprimir a la paperera es desfan movent-ho de tornada. Amb
+    identificadors immutables el missatge conserva el seu identificador i el
+    seu UID local després de moure's (provat a la reconciliació);
+  - si ja no és on s'havia deixat, el desfer falla com qualsevol moviment,
+    sense tocar res;
+  - suprimir definitivament no es pot desfer.
 
-## Conjunto revisado y concurrencia
+## Conjunt revisat i concurrència
 
-- Los mensajes se resuelven a sus identificadores de Graph en una sola lectura
-  de la base, antes de la primera petición. La resolución se hace por cuenta,
-  carpeta y UID local. Un mensaje llegado después o de otra cuenta no puede
-  entrar en el lote. Si un UID ya no está en esa carpeta, el lote no empieza.
-- **Uno a uno.** Las peticiones van una tras otra. El primer fallo detiene el
-  lote: no se sigue golpeando a un servidor que limita (429) ni a una concesión
-  revocada (401/403).
-- **Resultado del lote.** Un lote parcial devuelve cuántos se aplicaron de
-  cuántos y el motivo del corte, con `Retry-After` si lo hubo. Nunca se
-  presenta como éxito total.
-- **Errores.** 403 es «sin permiso», 404 «ya no existe», 409/412 «conflicto» y
-  429 «limitado», con la espera indicada.
-- **Resultado incierto.** Si la conexión falla después de enviar la petición,
-  el resultado es «incierto». No se repite sola:
-  - mover, copiar y borrar no son idempotentes;
-  - leído y marca sí lo son, y el usuario puede repetirlas a propósito.
+- Els missatges es resolen als seus identificadors de Graph en una sola lectura
+  de la base de dades, abans de la primera sol·licitud. La resolució es fa per
+  compte, carpeta i UID local. Un missatge arribat després o d'un altre compte
+  no pot entrar al lot. Si un UID ja no és en aquella carpeta, el lot no
+  comença.
+- **Un a un.** Les sol·licituds van una darrere l'altra. El primer error atura
+  el lot: no es continua colpejant un servidor que limita (429) ni una
+  concessió revocada (401/403).
+- **Resultat del lot.** Un lot parcial retorna quantes se n'han aplicat de
+  quantes i el motiu de l'aturada, amb `Retry-After` si n'hi ha hagut. No es
+  presenta mai com un èxit total.
+- **Errors.** 403 és «sense permís», 404 «ja no existeix», 409/412 «conflicte»
+  i 429 «limitat», amb l'espera indicada.
+- **Resultat incert.** Si la connexió falla després d'enviar la sol·licitud, el
+  resultat és «incert». No es repeteix sola:
+  - moure, copiar i suprimir no són idempotents;
+  - llegit i marca sí que ho són, i l'usuari les pot repetir expressament.
 
-## Reconciliación de la caché
+## Reconciliació de la memòria cau
 
-- **Leído y marca.** La caché local se actualiza para cada mensaje confirmado,
-  también en un lote parcial. El siguiente delta trae el mismo valor.
-- **Mover, copiar y borrar.** Tras el lote, sea completo, parcial o incierto,
-  se sincroniza por delta la carpeta de origen y la de destino. Así la caché
-  refleja lo que hay en el servidor y no lo que se intentó. Con
-  identificadores inmutables, un mensaje movido conserva su identificador y su
-  UID local.
-- **Fallo de reconciliación.** Si la reconciliación falla, por ejemplo por
-  límite, la acción no se convierte en error. La siguiente sincronización
-  normal la completa.
-- **Datos locales.** Etiquetas locales y borradores locales no se tocan. IMAP
-  y EWS no cambian. Graph nunca recurre a IMAP, SMTP ni EWS.
+- **Llegit i marca.** La memòria cau local s'actualitza per a cada missatge
+  confirmat, també en un lot parcial. El delta següent porta el mateix valor.
+- **Moure, copiar i suprimir.** Després del lot, sigui complet, parcial o
+  incert, se sincronitzen per delta la carpeta d'origen i la de destinació.
+  Així la memòria cau reflecteix el que hi ha al servidor i no el que s'ha
+  intentat. Amb identificadors immutables, un missatge mogut conserva el seu
+  identificador i el seu UID local.
+- **Error de reconciliació.** Si la reconciliació falla, per exemple per un
+  límit, l'acció no es converteix en error. La sincronització normal següent
+  la completa.
+- **Dades locals.** Les etiquetes locals i els esborranys locals no es toquen.
+  IMAP i EWS no canvien. Graph no recorre mai a IMAP, SMTP ni EWS.
 
-## Informes de entrega y de lectura (#210)
+## Informes de lliurament i de lectura (#210)
 
-- Un mensaje sin adjuntos se lee de su JSON, que en un informe solo trae el
-  texto para personas. Por eso `GET /me/messages/{id}` pide también la clase
-  del elemento (`$expand=singleValueExtendedProperties($filter=id eq
-  'String 0x001A')`). Si es `REPORT.*` (`IPM.Note.NDR`, `DR`, `IPNRN`,
-  `IPNNRN`), se lee su MIME y lo interpreta el núcleo como cualquier otro
-  informe (ADR-0057). Si el MIME es demasiado grande, se muestra el texto.
-- Al sincronizar una carpeta, una consulta por clase de elemento
-  (`$filter` sobre `singleValueExtendedProperties`, `$select=id`) se sigue
-  página a página por `@odata.nextLink` (validado como cualquier enlace de
-  página; hasta 10 páginas), saltando los informes ya leídos, y se lee el
-  MIME de hasta 20 nuevos, también los guardados antes; cada uno, una sola
-  vez. Uno que falla por sí mismo (demasiado grande, ya no está, ilegible)
-  se marca con el motivo y no frena a los demás; un fallo del servidor o de
-  la cuenta para el recorrido hasta la siguiente sincronización. Es de
-  mejor esfuerzo: si la consulta falla, los informes se leen al abrirlos.
+- Un missatge sense adjunts es llegeix del seu JSON, que en un informe només
+  porta el text per a persones. Per això `GET /me/messages/{id}` demana també
+  la classe de l'element (`$expand=singleValueExtendedProperties($filter=id eq
+  'String 0x001A')`). Si és `REPORT.*` (`IPM.Note.NDR`, `DR`, `IPNRN`,
+  `IPNNRN`), se'n llegeix el MIME i el nucli l'interpreta com qualsevol altre
+  informe (ADR-0057). Si el MIME és massa gran, es mostra el text.
+- En sincronitzar una carpeta, una consulta per classe d'element (`$filter`
+  sobre `singleValueExtendedProperties`, `$select=id`) se segueix pàgina a
+  pàgina per `@odata.nextLink` (validat com qualsevol enllaç de pàgina; fins a
+  10 pàgines), saltant els informes ja llegits, i es llegeix el MIME de fins a
+  20 de nous, també els desats abans; cadascun, una sola vegada. Un que falla
+  per si mateix (massa gran, ja no hi és, il·legible) es marca amb el motiu i
+  no frena els altres; un error del servidor o del compte atura el recorregut
+  fins a la sincronització següent. Es fa tant com es pot, sense garantia: si la consulta falla,
+  els informes es llegeixen en obrir-los.
 
-## Interfaz
+## Interfície
 
-- Una cuenta Graph sin permiso de cambios se comporta como hasta ahora: las
-  acciones de escritura están deshabilitadas, también por teclado y en lote.
-- Con permiso, se habilitan leído, marca, mover, borrar y copiar dentro de la
-  cuenta, y mover carpetas. Sin él, mover una carpeta dice «Permite los
-  cambios de esta cuenta en sus ajustes para mover sus carpetas». Lo que
-  sigue sin soporte (vaciar carpeta, crear o borrar carpetas, `.eml`) sigue
-  deshabilitado.
-- Ajustes de la cuenta muestra el nivel concedido y ofrece «Permitir cambios»
-  o, si se perdió, el motivo.
+- Un compte de Graph sense permís de canvis es comporta com fins ara: les
+  accions d'escriptura estan inhabilitades, també amb el teclat i en lot.
+- Amb permís, s'habiliten llegit, marca, moure, suprimir i copiar dins del
+  compte, i moure carpetes. Sense permís, moure una carpeta indica «Permet els
+  canvis d'aquest compte a la seva configuració per moure'n les carpetes». El
+  que continua sense suport (buidar una carpeta, crear o suprimir carpetes,
+  `.eml`) continua inhabilitat.
+- La configuració del compte mostra el nivell concedit i ofereix «Permet els
+  canvis» o, si s'ha perdut, el motiu.
 
-## Pruebas
+## Proves
 
-- **Transporte** (servidor de bucle local):
-  - método, ruta, cabeceras y cuerpo de cada petición;
-  - 200/201/204 como éxito;
-  - 401/403/404/409/412/429 con `Retry-After` y 5xx clasificados;
-  - corte de conexión como incierto;
-  - id de respuesta ajeno como respuesta inválida;
-  - una concesión sin `Mail.ReadWrite` no envía nada;
-  - mover carpeta: ruta, destino, padre confirmado, errores y respuesta
-    perdida como incierta, enviada una vez (#210);
-  - la lectura de un mensaje pide solo su clase; `REPORT.*` es un informe.
-- **Sesión** (`Source` simulado):
-  - resolución previa del conjunto, sin UIDs de otra carpeta;
-  - parada en el primer fallo, con recuento;
-  - actualización local de leído y marca en un lote parcial;
-  - reconciliación por delta tras mover y borrar;
-  - el resultado incierto no se repite;
-  - mover carpeta: reglas antes de enviar, árbol releído tras éxito, rechazo
-    o duda, y un reintento tras la duda no manda una segunda petición;
-  - un informe sin adjuntos se lee de su MIME.
-- **Autorización:**
-  - flujo de cambios con el alcance pedido;
-  - nivel guardado según lo concedido;
-  - renovación que conserva el nivel o cae a lectura;
+- **Transport** (servidor de bucle local):
+  - mètode, camí, capçaleres i cos de cada sol·licitud;
+  - 200/201/204 com a èxit;
+  - 401/403/404/409/412/429 amb `Retry-After` i 5xx classificats;
+  - tall de connexió com a incert;
+  - id de resposta aliè com a resposta no vàlida;
+  - una concessió sense `Mail.ReadWrite` no envia res;
+  - moure una carpeta: camí, destinació, pare confirmat, errors i resposta
+    perduda com a incerta, enviada una vegada (#210);
+  - la lectura d'un missatge només en demana la classe; `REPORT.*` és un
+    informe.
+- **Sessió** (`Source` simulat):
+  - resolució prèvia del conjunt, sense UID d'una altra carpeta;
+  - aturada al primer error, amb recompte;
+  - actualització local de llegit i marca en un lot parcial;
+  - reconciliació per delta després de moure i suprimir;
+  - el resultat incert no es repeteix;
+  - moure una carpeta: regles abans d'enviar, arbre rellegit després d'un
+    èxit, d'un rebuig o d'un dubte, i un reintent després del dubte no envia
+    una segona sol·licitud;
+  - un informe sense adjunts es llegeix del seu MIME.
+- **Autorització:**
+  - flux de canvis amb l'abast demanat;
+  - nivell desat segons el que s'ha concedit;
+  - renovació que conserva el nivell o passa a lectura;
   - marcador `writes`.
-- **Despacho:**
-  - el guardián deja pasar solo las acciones soportadas en cuentas con
-    permiso;
-  - una cuenta sin permiso sigue rechazando antes de efectos locales;
-  - copiar entre cuentas sigue rechazado.
-- **Puente e interfaz:** `oauth.graphBegin` con `writes` y habilitación de
-  acciones según el nivel.
-- **Proveedor real:** la certificación con un inquilino real queda en #98.
+- **Distribució:**
+  - el guardià només deixa passar les accions admeses en comptes amb permís;
+  - un compte sense permís continua rebutjant abans dels efectes locals;
+  - copiar entre comptes continua rebutjat.
+- **Pont i interfície:** `oauth.graphBegin` amb `writes` i habilitació de les
+  accions segons el nivell.
+- **Proveïdor real:** la certificació amb un inquilí real queda a #98.

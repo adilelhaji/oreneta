@@ -1,57 +1,56 @@
-# Asistente: contexto y consentimiento (#51, #52)
+# Assistent: context i consentiment (#51, #52)
 
-Registro de la implementación de ADR-0032.
+Registre de la implementació de l'ADR-0032.
 
-## Defectos encontrados y corregidos
+## Defectes trobats i corregits
 
-- **Formato incompatible:** la petición usaba un formato propio contra
-  `/v1/chat/completions`, así que no funcionaba con Ollama ni con ningún
-  proveedor real. Ahora usa chat completions y lee
+- **Format incompatible:** la sol·licitud feia servir un format propi amb
+  `/v1/chat/completions`, de manera que no funcionava amb Ollama ni amb cap
+  proveïdor real. Ara fa servir chat completions i llegeix
   `choices[0].message.content`.
-- **Errores en el registro:** el cuerpo de un error del proveedor, que
-  puede citar el correo, acababa en el registro de la app.
-- **Cancelar:** solo se comprobaba antes y después de la petición; con un
-  proveedor lento había que esperar hasta 60 s.
-- **Revisión incompleta:** lo que se enseñaba no incluía la petición real
-  (adjuntos, instrucciones). Ahora se enseña el cuerpo exacto, atado al
-  token.
-- **Sin activación:** el botón aparecía siempre. Ahora está apagado por
-  omisión.
+- **Errors al registre:** el cos d'un error del proveïdor, que pot citar el
+  correu, acabava al registre de l'aplicació.
+- **Cancel·lar:** només es comprovava abans i després de la sol·licitud; amb un
+  proveïdor lent calia esperar fins a 60 s.
+- **Revisió incompleta:** el que es mostrava no incloïa la sol·licitud real
+  (adjunts, instruccions). Ara es mostra el cos exacte, lligat al testimoni
+  (token).
+- **Sense activació:** el botó apareixia sempre. Ara està desactivat per
+  defecte.
 
-## Pruebas
+## Proves
 
-- **Núcleo:**
-  - solo salen los campos revisados (lista exacta de claves);
-  - una inyección no cierra la valla;
-  - instrucciones de reescritura permitidas;
-  - un proveedor falso en este equipo recibe exactamente el cuerpo revisado
-    y la clave;
-  - un error 500 se informa sin su cuerpo;
-  - cancelar responde en menos de 2 s con el proveedor tardando 5 s.
-- **Aplicación:**
-  - apagado por omisión;
-  - JSON en bloque de código, y las «acciones» de la respuesta se ignoran;
-  - el diálogo de revisión de una conversación empieza con solo el mensaje
-    más reciente marcado (la fecha mayor; con fechas iguales o
-    desconocidas, el último de la lista) y ningún detalle de adjunto; lo
-    demás lo añade la persona, y la vista previa cambia con cada casilla
-    (#196, `AssistantReviewDialog.test.tsx`);
-  - un borrador no cuenta como el más reciente, salvo si la conversación
-    solo tiene borradores: entonces empieza marcado el borrador más
-    reciente, porque el diálogo solo enseña la lista de mensajes cuando hay
-    una vista previa y con nada marcado no se podría añadir ninguno; el aviso
-    de privacidad lo dice; un envío pendiente (enviando, enviado o fallido)
-    sí cuenta, porque es un mensaje de la persona y no un borrador;
-  - la selección vuelve a ese valor solo cuando llega un mensaje más
-    reciente: una sincronización, un cambio de marca o páginas antiguas
-    conservan lo marcado, y la misma petición no se vuelve a previsualizar
-    ni se borra el resultado mostrado;
-  - el diálogo de reescritura enseña el destino y el cuerpo exacto, exige
-    confirmar otra vez si cambia la petición, no cambia nada hasta «Usar» y
-    al parar cancela y descarta la respuesta tardía.
-- **e2e:** sin activar no se ofrece; activado aparece en el composer.
+- **Nucli:**
+  - només surten els camps revisats (llista exacta de claus);
+  - una injecció no tanca el bloc delimitat;
+  - es permeten instruccions de reescriptura;
+  - un proveïdor fals en aquest equip rep exactament el cos revisat i la clau;
+  - un error 500 es notifica sense el seu cos;
+  - cancel·lar respon en menys de 2 s amb el proveïdor tardant 5 s.
+- **Aplicació:**
+  - desactivat per defecte;
+  - JSON en un bloc de codi, i les «accions» de la resposta s'ignoren;
+  - el diàleg de revisió d'una conversa comença amb només el missatge més
+    recent marcat (la data més alta; amb dates iguals o desconegudes, l'últim
+    de la llista) i sense cap detall d'adjunt; la resta l'afegeix la persona, i la
+    previsualització canvia amb cada casella (#196,
+    `AssistantReviewDialog.test.tsx`);
+  - un esborrany no compta com el més recent, tret que la conversa només
+    tingui esborranys: aleshores comença marcat l'esborrany més recent, perquè
+    el diàleg només mostra la llista de missatges quan hi ha una
+    previsualització i, sense res marcat, no se'n podria afegir cap; l'avís de
+    privadesa ho diu; un enviament pendent (enviant, enviat o fallit) sí que
+    compta, perquè és un missatge de la persona i no un esborrany;
+  - la selecció torna a aquest valor només quan arriba un missatge més recent:
+    una sincronització, un canvi de marca o pàgines antigues conserven el que
+    hi ha marcat, i la mateixa sol·licitud no es torna a previsualitzar ni
+    s'esborra el resultat mostrat;
+  - el diàleg de reescriptura mostra la destinació i el cos exacte, exigeix
+    tornar a confirmar si la sol·licitud canvia, no canvia res fins a «Fes-lo
+    servir» i, en aturar-lo, cancel·la i descarta la resposta tardana.
+- **e2e:** sense activar, no s'ofereix; activat, apareix al redactor.
 
-## Texto propuesto para `docs/privacy.html` (decide el propietario)
+## Text proposat per a `docs/privacy.html` (decideix el propietari)
 
 > **Optional assistant.** Off unless you turn it on. When you ask it to
 > summarise, draft or rewrite, Oreneta shows the exact text it would send

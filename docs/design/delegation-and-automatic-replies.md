@@ -1,78 +1,77 @@
-# Buzones delegados y respuestas automáticas (#48)
+# Bústies delegades i respostes automàtiques (#48)
 
-Verificación del comportamiento actual. Separa lo que se comprueba en código y
-pruebas de lo que necesita cuentas delegadas reales.
+Verificació del comportament actual. Separa el que es comprova en el codi i les
+proves del que necessita comptes delegats reals.
 
-## Buzones compartidos
+## Bústies compartides
 
-- **Credenciales.** Un buzón compartido se guarda como una cuenta normal con
-  `delegate_account_id` y `target_mailbox`, y contraseña vacía
-  (`account.addSharedMailbox`). Al usarse toma en memoria las credenciales de
-  la cuenta delegada (`resolve_delegate`). La contraseña del delegado nunca se
-  copia al buzón compartido ni a su entrada del llavero.
-- **Sin credenciales del delegado.** Si el delegado no tiene secreto propio o
-  no es Exchange, el buzón no se resuelve y se informa que hay que reconectar
-  la cuenta delegada. Lo cubren las pruebas `resolve_delegate` de
-  `engine.rs`.
-- **Graph.** Los buzones compartidos siguen sin soporte. La autorización Graph
-  los rechaza al empezar (`graph.authBegin`), y el remitente solo puede ser la
-  cuenta o un alias guardado.
-- **Necesita cuentas reales.** Faltan por verificar:
-  - acceso completo frente a «Enviar como» y «Enviar en nombre de»;
-  - dónde queda la copia enviada (el buzón compartido o el del delegado);
-  - qué ve el usuario cuando el administrador retira el permiso.
-  Se hará con cuentas delegadas de prueba autorizadas (#98, filas de
+- **Credencials.** Una bústia compartida es desa com un compte normal amb
+  `delegate_account_id` i `target_mailbox`, i una contrasenya buida
+  (`account.addSharedMailbox`). Quan es fa servir, pren en memòria les
+  credencials del compte delegat (`resolve_delegate`). La contrasenya del
+  delegat no es copia mai a la bústia compartida ni a la seva entrada del
+  clauer.
+- **Sense credencials del delegat.** Si el delegat no té un secret propi o no és
+  d'Exchange, la bústia no es resol i s'informa que cal tornar a connectar el
+  compte delegat. Ho cobreixen les proves `resolve_delegate` d'`engine.rs`.
+- **Graph.** Les bústies compartides continuen sense suport. L'autorització de
+  Graph les rebutja en començar (`graph.authBegin`), i el remitent només pot ser
+  el compte o un àlies desat.
+- **Necessita comptes reals.** Falta verificar:
+  - accés complet davant d'«Envia com a» i «Envia en nom de»;
+  - on queda la còpia enviada (la bústia compartida o la del delegat);
+  - què veu l'usuari quan l'administrador retira el permís.
+  Es farà amb comptes delegats de prova autoritzats (#98, files de
   `provider-acceptance-matrix.json`).
 
-## Respuestas automáticas
+## Respostes automàtiques
 
-- **Exchange.** Usa las respuestas automáticas del servidor
-  (`GetUserOofSettings`/`SetUserOofSettings`), que funcionan con Oreneta
-  cerrado.
-- **IMAP/SMTP.** No hay mecanismo de servidor. La respuesta local solo
-  funciona con Oreneta abierto, y Ajustes lo dice («solo mientras Oreneta está
-  en marcha»).
-- **Qué no recibe respuesta.** La respuesta local no contesta:
-  - a sí misma;
-  - a direcciones `noreply` y `donotreply`;
-  - a otras respuestas automáticas (`Auto-Submitted` distinto de `no`);
-  - a correo masivo o de lista (`Precedence` bulk/list/junk, `List-Id`,
+- **Exchange.** Fa servir les respostes automàtiques del servidor
+  (`GetUserOofSettings`/`SetUserOofSettings`), que funcionen amb l'Oreneta
+  tancat.
+- **IMAP/SMTP.** No hi ha cap mecanisme de servidor. La resposta local només
+  funciona amb l'Oreneta obert, i la Configuració ho indica («només mentre
+  l'Oreneta s'executa»).
+- **Què no rep resposta.** La resposta local no respon:
+  - a si mateixa;
+  - a adreces `noreply` i `donotreply`;
+  - a altres respostes automàtiques (`Auto-Submitted` diferent de `no`);
+  - a correu massiu o de llista (`Precedence` bulk/list/junk, `List-Id`,
     `List-Unsubscribe`).
-  Contesta una vez por remitente y marca su respuesta con
+  Respon una vegada per remitent i marca la seva resposta amb
   `Auto-Submitted: auto-replied`.
 
-### Corregido en esta entrega
+### Corregit en aquest lliurament
 
-- **Rebotes.** Un rebote (`Return-Path: <>`, remitente `MAILER-DAEMON` o
-  `postmaster`, `multipart/report`) recibía respuesta. Con el rebote de esa
-  respuesta empezaba un bucle con el servidor. Ahora no se contesta (RFC 3834
-  §2).
-- **`X-Auto-Response-Suppress`.** La cabecera con `OOF` o `All`, que usan
-  Outlook y Exchange, ahora se respeta. Si solo suprime acuses de lectura, sí
-  se contesta.
-- **`List-Post`.** Una lista que solo se identifica por esa cabecera ya no
-  recibe respuesta.
-- **Fechas.** Afectaba a IMAP y a Exchange:
-  - la fecha elegida se mostraba en UTC, así que al este de UTC aparecía el
-    día anterior;
-  - la fecha final se guardaba como el inicio de ese día, así que «hasta el
-    12» terminaba al empezar el 12.
-  Ahora el día se lee en hora local y el final incluye el día entero, también
-  en el cambio de hora (25 horas).
+- **Rebots.** Un rebot (`Return-Path: <>`, remitent `MAILER-DAEMON` o
+  `postmaster`, `multipart/report`) rebia resposta. Amb el rebot d'aquesta
+  resposta començava un bucle amb el servidor. Ara no es respon (RFC 3834 §2).
+- **`X-Auto-Response-Suppress`.** La capçalera amb `OOF` o `All`, que fan
+  servir Outlook i Exchange, ara es respecta. Si només suprimeix confirmacions
+  de lectura, sí que es respon.
+- **`List-Post`.** Una llista que només s'identifica per aquesta capçalera ja no
+  rep resposta.
+- **Dates.** Afectava IMAP i Exchange:
+  - la data triada es mostrava en UTC, de manera que a l'est d'UTC apareixia el
+    dia anterior;
+  - la data final es desava com l'inici d'aquell dia, de manera que «fins al
+    12» acabava en començar el 12.
+  Ara el dia es llegeix en hora local i el final inclou el dia sencer, també en
+  el canvi d'hora (25 hores).
 
-## Pruebas
+## Proves
 
-- `oof.rs`: rebotes por ruta nula, por remitente y por `multipart/report`;
-  supresión por `OOF` y `All`, y no por acuses de lectura; lista por
-  `List-Post`; más los casos que ya existían.
-- `OofSettingsCard.test.tsx`: el día elegido se muestra igual en Madrid, Los
-  Ángeles, Tokio y UTC; la fecha final incluye todo el día local; un día de
-  cambio de hora dura 25 horas; una fecha vacía no limita.
+- `oof.rs`: rebots per camí nul, per remitent i per `multipart/report`;
+  supressió per `OOF` i `All`, i no per confirmacions de lectura; llista per
+  `List-Post`; a més dels casos que ja existien.
+- `OofSettingsCard.test.tsx`: el dia triat es mostra igual a Madrid, Los
+  Angeles, Tòquio i UTC; la data final inclou tot el dia local; un dia de canvi
+  d'hora dura 25 hores; una data buida no limita.
 
-## Pendiente
+## Pendent
 
-- **Cuentas reales.** Toda la verificación con cuentas delegadas reales:
-  «Enviar como», «en nombre de», copia enviada y retirada del permiso.
-- **Graph.** Las variantes Graph de buzones compartidos y respuestas
-  automáticas necesitan sus propios permisos (`Mail.Read.Shared`,
-  `MailboxSettings.ReadWrite`), que son una ampliación del ADR-0004.
+- **Comptes reals.** Tota la verificació amb comptes delegats reals: «Envia com
+  a», «en nom de», còpia enviada i retirada del permís.
+- **Graph.** Les variants de Graph de bústies compartides i respostes
+  automàtiques necessiten permisos propis (`Mail.Read.Shared`,
+  `MailboxSettings.ReadWrite`), que són una ampliació de l'ADR-0004.

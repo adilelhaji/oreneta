@@ -1,55 +1,62 @@
-# Art direction
+# Direcció artística
 
-The [mail workflow reference](mail-reference.md) (#32) instantiates this direction
-with synthetic, navigable inbox/reader/composer/table/selection/error scenes.
-It is a comparison target, not a claim that production already uses the redesign.
-Production adopts the existing conventional list/reader modes through
-[mail defaults](mail-defaults.md) (#84); detailed layout polish remains separate.
-The [shared controls delivery](shared-controls.md) (#152) applies this direction
-to common controls and feedback; #33 remains open for the remaining screens.
+La [referència del flux de correu](mail-reference.md) (#32) concreta aquesta
+direcció amb escenes sintètiques i navegables de safata d'entrada, lector,
+redactor, taula, selecció i error. És un objectiu de comparació, no una
+afirmació que la producció ja fa servir el redisseny. La producció adopta els
+modes convencionals existents de llista i lector mitjançant els
+[valors per defecte del correu](mail-defaults.md) (#84); el poliment detallat
+de la disposició continua a part. El
+[lliurament dels controls compartits](shared-controls.md) (#152) aplica aquesta
+direcció als controls i a les respostes comunes; #33 continua obert per a la
+resta de pantalles.
 
-A written, checkable reference for what the interface should look like —
-the direction every design issue after this one builds against, instead of
-each screen re-deriving its own answer.
+Una referència escrita i comprovable de com ha de ser la interfície: la direcció
+sobre la qual es construeix cada incidència de disseny posterior a aquesta, en
+lloc que cada pantalla torni a deduir la seva pròpia resposta.
 
-It exists because a grep of the current tree found what happens without
-one: 385 uses of a Tailwind palette class (`rose`, `amber`, `emerald`,
-`red`, `white`, `black`) outside the theme's own tokens, 17 accent-tinted
-glow shadows, 14 hover/active scale transforms, 20 blur/backdrop-blur uses,
-12 distinct icon sizes, 6 stroke widths, and 10 different responsive
-breakpoints — none of it wrong in any one place, all of it drift nobody
-could see happening one component at a time. The type scale, radii,
-elevation and motion durations already tokenised in
-[`frontend/src/index.css`](../../frontend/src/index.css) went through the
-same problem and the same fix (see the `design:` commits from September
-2026) — this page names the steps that haven't been tokenised yet, and the
-identity decisions that were never written down anywhere.
+Existeix perquè una cerca amb grep a l'arbre actual va trobar què passa quan no
+n'hi ha: 385 usos d'una classe de paleta de Tailwind (`rose`, `amber`,
+`emerald`, `red`, `white`, `black`) fora dels tokens de disseny del tema,
+17 ombres lluminoses tenyides amb el color d'accent, 14 transformacions
+d'escala en passar-hi el punter o en activar, 20 usos de desenfocament
+(blur/backdrop-blur), 12 mides d'icona diferents, 6 gruixos de traç i 10 punts
+de ruptura responsius diferents. Res no és incorrecte en cap lloc concret, però
+tot plegat és una deriva que ningú no podia veure, component a component. L'escala
+tipogràfica, els radis, l'elevació i les durades del moviment que ja són
+tokens a [`frontend/src/index.css`](../../frontend/src/index.css) van
+passar pel mateix problema i la mateixa solució (vegeu els commits `design:`
+de setembre del 2026); aquesta pàgina anomena els graons que encara no s'han
+convertit en tokens i les decisions d'identitat que mai no s'havien escrit
+enlloc.
 
-## Palette
+## Paleta
 
-Application adoption: [#177 screen consistency](screen-consistency.md) applies
-the existing tokens, icon scale, elevation and motion to screen call sites.
-The counts above describe the historical audit, not the remaining backlog.
+Adopció a l'aplicació: [#177 coherència de pantalles](screen-consistency.md)
+aplica els tokens existents, l'escala d'icones, l'elevació i el moviment als
+punts d'ús de les pantalles. Els recomptes anteriors descriuen l'auditoria
+històrica, no la feina pendent.
 
-The app icon (`assets/oreneta.svg`) is a cobalt swallow on navy — `#2E63F0`
-and `#15316E` — and the marketing page uses the same blue. The
-[cobalt defaults](cobalt-themes.md) implement this palette for new profiles.
-Existing Indigo and legacy green selections remain available without palette
-rewrites. The target colors are:
+La icona de l'aplicació (`assets/oreneta.svg`) és una oreneta de color cobalt
+sobre blau marí (`#2E63F0` i `#15316E`), i la pàgina de presentació fa servir
+el mateix blau. Els [valors per defecte de cobalt](cobalt-themes.md)
+implementen aquesta paleta per als perfils nous. Les seleccions existents
+d'Indigo i del verd antic continuen disponibles sense reescriure la paleta.
+Els colors objectiu són:
 
-| Token | Light | Dark | Use |
+| Token | Clar | Fosc | Ús |
 |---|---|---|---|
-| `accent` | `#2056dd` | `#7ea6ff` | Interactive, selection, the one saturated colour on a screen |
-| `bg-sidenav` | `#15316e`-adjacent navy | near-black navy | The account rail |
-| Neutrals | Off-white with a faint cool cast, not pure `#fff` | Near-black navy, not pure `#000` | Everything else |
+| `accent` | `#2056dd` | `#7ea6ff` | Interactiu, selecció, l'únic color saturat d'una pantalla |
+| `bg-sidenav` | Blau marí proper a `#15316e` | Blau marí gairebé negre | La barra de comptes |
+| Neutres | Blanc trencat amb un to fred lleu, no `#fff` pur | Blau marí gairebé negre, no `#000` pur | Tota la resta |
 
-### Semantic tokens
+### Tokens semàntics
 
-The 385 hardcoded uses above are almost all one of four ideas — success,
-warning, danger, informational — expressed as a Tailwind colour name
-instead of a token. Add four tokens, one pair of light/dark values each,
-to every theme and to the custom-theme editor's derived
-output in [`lib/themes.ts`](../../frontend/src/lib/themes.ts):
+Gairebé tots els 385 usos fixos anteriors són una de quatre idees (èxit, avís,
+perill, informació) expressades amb un nom de color de Tailwind en lloc d'un
+token. Cal afegir quatre tokens, cadascun amb un parell de valors clar
+i fosc, a cada tema i a la sortida derivada de l'editor de temes personalitzats
+a [`lib/themes.ts`](../../frontend/src/lib/themes.ts):
 
 ```
 --me-success / --me-success-soft
@@ -58,105 +65,112 @@ output in [`lib/themes.ts`](../../frontend/src/lib/themes.ts):
 --me-info    / --me-info-soft
 ```
 
-The `-soft` variant is the tint used for a background or a chip; the bare
-token is the icon/text/border colour. This mirrors how `accent` /
-`accent-hover` already work. Migrating the 385 call sites onto these is a
-separate, mechanical issue — the same shape as the 311-call-site migration
-the original type-scale tokens went through.
+La variant `-soft` és el to que es fa servir per a un fons o una etiqueta; el
+token sense sufix és el color de la icona, del text o de la vora. Això
+reprodueix com ja funcionen `accent` / `accent-hover`. Migrar els 385 punts
+d'ús a aquests tokens és una incidència separada i mecànica, amb la
+mateixa forma que la migració de 311 punts d'ús per la qual van passar els
+tokens originals de l'escala tipogràfica.
 
-#83 adds these slots to all 16 built-ins and custom palettes, plus
-`--me-accent-text` for readable filled controls. Existing hardcoded status-color
-call sites still require the separate #33 migration; token availability is not
-evidence that every screen has adopted them.
+#83 afegeix aquestes posicions als 16 temes integrats i a les paletes
+personalitzades, a més de `--me-accent-text` per a controls emplenats llegibles.
+Els punts d'ús existents amb colors d'estat fixos encara requereixen la
+migració separada de #33; que els tokens estiguin disponibles no demostra
+que cada pantalla els hagi adoptat.
 
-## Type
+## Tipografia
 
-The six-step scale in `index.css` (`text-2xs` through `text-title`, 10 to
-16px) stays as it is — it is right, and nothing here changes it. It stops
-at 15px, though, and three places already need more and are improvising:
-the calendar's month/period label, the welcome screen's headline, and any
-future empty-state title bigger than the current 14px default. Add three
-heading steps above the existing scale:
+L'escala de sis graons d'`index.css` (de `text-2xs` a `text-title`, de 10 a
+16 px) es queda com està: és correcta i res d'aquí no la canvia. Tanmateix,
+s'atura als 15 px, i tres llocs ja necessiten més i estan improvisant:
+l'etiqueta del mes o del període del calendari, el titular de la pantalla de
+benvinguda i qualsevol títol futur d'estat buit més gran que l'actual de 14 px
+per defecte. Cal afegir tres graons de capçalera per sobre de l'escala
+existent:
 
-| Token | Size | Use |
+| Token | Mida | Ús |
 |---|---|---|
-| `text-heading-sm` | 18px | Section headers inside a Panel (settings groups, calendar sidebar) |
-| `text-heading` | 22px | Dialog and screen titles that need more presence than `text-title` (15px) gives — the welcome screen, a full-page empty state |
-| `text-heading-lg` | 28px | The one or two places a number or a headline is the point of the screen |
+| `text-heading-sm` | 18 px | Capçaleres de secció dins d'un Panel (grups de configuració, barra lateral del calendari) |
+| `text-heading` | 22 px | Títols de diàleg i de pantalla que necessiten més presència que la que dona `text-title` (15 px): la pantalla de benvinguda, un estat buit a pàgina completa |
+| `text-heading-lg` | 28 px | L'únic lloc o els dos llocs on un nombre o un titular és el centre de la pantalla |
 
-Same rule as the existing scale: nothing on screen is a size that isn't one
-of these nine steps now.
+La mateixa regla que l'escala existent: ara cap element de la pantalla no té una
+mida que no sigui un d'aquests nou graons.
 
-## Icons
+## Icones
 
-[Lucide](https://lucide.dev) icons currently ship at 12 different sizes
-(7 to 26px) and 6 stroke widths. Reduce to three sizes and one weight:
+Les icones de [Lucide](https://lucide.dev) es fan servir actualment amb 12 mides
+diferents (de 7 a 26 px) i 6 gruixos de traç. Cal reduir-les a tres mides i un
+sol gruix:
 
-| Token | Size | Stroke | Use |
+| Token | Mida | Traç | Ús |
 |---|---|---|---|
-| `icon-sm` | 14 | 1.75 | Inline with `text-caption`/`text-ui`, menu items, row actions |
-| `icon-md` | 16 | 1.75 | Buttons, most standalone icons |
-| `icon-lg` | 20 | 1.75 | Dialog headers, empty-state marks |
+| `icon-sm` | 14 | 1,75 | En línia amb `text-caption`/`text-ui`, elements de menú, accions de fila |
+| `icon-md` | 16 | 1,75 | Botons, la majoria d'icones autònomes |
+| `icon-lg` | 20 | 1,75 | Capçaleres de diàleg, marques d'estat buit |
 
-Two exceptions stay outside the scale on purpose, and should stay
-undocumented as tokens: the 7px icons inside theme/wallpaper thumbnails,
-which are a *drawing* of a 14px icon at thumbnail scale, not a text size;
-and any icon whose size is driven by the reader's message-text-size
-setting, which follows that setting by definition.
+Dues excepcions queden fora de l'escala expressament i no s'han de documentar
+com a tokens: les icones de 7 px dins de les miniatures de temes i fons
+d'escriptori, que són un *dibuix* d'una icona de 14 px a escala de miniatura,
+no una mida de text; i qualsevol icona la mida de la qual depèn de la
+configuració de la mida del text del missatge del lector, que segueix aquesta
+configuració per definició.
 
-## Elevation
+## Elevació
 
-The two existing levels — `shadow-raised` (something lifted off its
-surface) and `shadow-overlay` (something floating over the whole page) —
-are right in light mode and read poorly in dark mode, where a black shadow
-on a near-black background is nearly invisible. Dark mode should express
-the same two levels through **surface**, not shadow:
+Els dos nivells existents, `shadow-raised` (un element elevat sobre la seva
+superfície) i `shadow-overlay` (un element que sura sobre tota la pàgina), són
+correctes en mode clar i es llegeixen malament en mode fosc, on una ombra negra
+sobre un fons gairebé negre és pràcticament invisible. El mode fosc ha
+d'expressar els mateixos dos nivells mitjançant la **superfície**, no l'ombra:
 
-- `shadow-raised` in dark mode: a surface one step lighter than its
-  background (already how `--me-bg-raised` works in the default dark
-  theme) plus a 1px hairline border at low alpha — not a stronger shadow.
-- `shadow-overlay` in dark mode: keep the shadow (a floating layer over
-  content genuinely needs the visual separation a shadow gives, even a
-  faint one) but pair it with the same hairline border.
+- `shadow-raised` en mode fosc: una superfície un graó més clara que el seu
+  fons (que ja és com funciona `--me-bg-raised` al tema fosc per defecte) més
+  una vora fina d'1 px amb alfa baixa, no una ombra més forta.
+- `shadow-overlay` en mode fosc: es manté l'ombra (una capa flotant sobre el
+  contingut necessita de debò la separació visual que dona una ombra, encara
+  que sigui tènue), però acompanyada de la mateixa vora fina.
 
-This is descriptive, not a new mechanism — it is already how the default
-dark theme's `--me-bg-raised` and `--me-border` behave; this page just
-names it as the rule so a new theme or a new component follows it on
-purpose.
+Això és descriptiu, no un mecanisme nou: ja és com es comporten
+`--me-bg-raised` i `--me-border` al tema fosc per defecte; aquesta pàgina
+simplement ho formula com a regla perquè un tema o un component nou ho segueixi
+expressament.
 
-## Motion
+## Moviment
 
-Two durations exist — `--duration-fast` (120ms, state changes under the
-pointer) and `--duration-base` (200ms, things that appear) — and
-`prefers-reduced-motion` already collapses both to zero everywhere. That
-stays exactly as it is. What doesn't stay: three effects in current use
-that aren't part of this system at all.
+Hi ha dues durades, `--duration-fast` (120 ms, canvis d'estat sota el punter) i
+`--duration-base` (200 ms, elements que apareixen), i
+`prefers-reduced-motion` ja les redueix totes dues a zero arreu. Això es queda
+exactament com està. El que no es queda: tres efectes que es fan servir ara i
+que no formen part d'aquest sistema.
 
-### What this app does not do
+### El que aquesta aplicació no fa
 
-Named explicitly so it's checkable in review, not just implied:
+S'anomenen explícitament perquè es puguin comprovar en la revisió, no només
+donar per suposats:
 
-- **No glow.** `shadow-accent/*` — a coloured shadow used as a highlight —
-  does not exist in the two elevation levels above and should not be
-  reintroduced. An active/selected state is a tint and a border, not a
-  glow.
-- **No hover or active scale**, except on genuinely draggable elements
-  (a kanban card, a sortable rail item), where scale communicates
-  "this is being picked up." A button changes colour on hover; it does not
-  grow or shrink.
-- **No blur or backdrop-blur** as a decorative halo behind an icon or a
-  card. Blur is reserved for an actual overlay backdrop (a dialog behind
-  its scrim), which is already a documented `Dialog` behaviour, not a
-  per-component effect.
-- **No more than three responsive breakpoints.** Ten distinct
-  `max-[Npx]` / `min-[Npx]` values exist today; a follow-up issue names
-  three (a mobile cutoff, a two-pane cutoff, a three-pane cutoff) as
-  `@theme` tokens and migrates every arbitrary value onto them.
+- **Sense resplendor.** `shadow-accent/*` (una ombra de color feta servir com
+  a ressaltat) no existeix en els dos nivells d'elevació anteriors i no s'ha de
+  reintroduir. Un estat actiu o seleccionat és un to i una vora, no una
+  resplendor.
+- **Sense escala en passar-hi el punter o en activar**, excepte en elements
+  que es poden arrossegar de debò (una targeta del kanban, un element
+  ordenable de la barra), on l'escala comunica que «s'està agafant». Un botó
+  canvia de color en passar-hi el punter; no creix ni s'encongeix.
+- **Sense desenfocament ni desenfocament del fons** com a halo decoratiu darrere
+  d'una icona o d'una targeta. El desenfocament es reserva per a un fons real de
+  superposició (un diàleg darrere del seu vel), que ja és un comportament
+  documentat de `Dialog`, no un efecte per component.
+- **No més de tres punts de ruptura responsius.** Avui hi ha deu valors
+  `max-[Npx]` / `min-[Npx]` diferents; una incidència posterior n'anomena tres
+  (un límit per a mòbil, un per a dues subfinestres i un per a tres
+  subfinestres) com a tokens de `@theme` i hi migra tots els valors
+  arbitraris.
 
-## Where this lives
+## On es troba
 
-Linked from the command-palette design catalogue
+Enllaçat des del catàleg de disseny de la paleta d'ordres
 ([`DesignCatalogue.tsx`](../../frontend/src/components/dialog/DesignCatalogue.tsx)),
-next to the component states it documents — the catalogue shows *what*
-exists today; this page says *why* it should look that way and what hasn't
-caught up yet.
+al costat dels estats de components que documenta: el catàleg mostra *què*
+existeix avui; aquesta pàgina explica *per què* ha de tenir aquest aspecte i què
+encara no s'hi ha posat al dia.

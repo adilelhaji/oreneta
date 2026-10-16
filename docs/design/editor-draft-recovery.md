@@ -1,97 +1,99 @@
-# Recuperación de borradores del editor (#170)
+# Recuperació d'esborranys de l'editor (#170)
 
-Conecta el editor completo al almacén local de #169
-([contrato del almacén](local-draft-storage.md)). Código:
-`frontend/src/states/localDraftSync.ts`, enganchado en `states/compose.ts`, con
-el estado visible en `components/composer/LocalDraftStatus.tsx`.
+Connecta l'editor complet al magatzem local de #169
+([contracte del magatzem](local-draft-storage.md)). Codi:
+`frontend/src/states/localDraftSync.ts`, enganxat a `states/compose.ts`, amb
+l'estat visible a `components/composer/LocalDraftStatus.tsx`.
 
 ## Problema
 
-Las pestañas del editor se copiaban a localStorage solo como texto: los
-adjuntos se quitaban porque sus bytes no caben en la cuota. Tras un reinicio, el
-borrador volvía sin ningún fichero adjunto y sin aviso de que faltaban.
+Les pestanyes de l'editor es copiaven a localStorage només com a text: els
+adjunts es treien perquè els seus bytes no caben a la quota. Després d'un
+reinici, l'esborrany tornava sense cap fitxer adjunt i sense avís que en
+faltaven.
 
-## Contrato
+## Contracte
 
-- **Qué se guarda.** Cada pestaña de redacción se guarda entera en el almacén
-  local: cuenta, remitente, destinatarios, asunto, ambos cuerpos, opciones de
-  protección y cada adjunto con sus bytes y su tamaño exacto. El identificador
-  local es el de la pestaña. La copia de texto en localStorage sigue igual,
-  como respaldo cuando el almacén no se puede leer.
-- **Cuándo.** Tras una pausa de 600 ms sin cambios, y en seguida al cerrar la
-  aplicación (`beforeunload` y `pagehide`). Las escrituras de un mismo borrador
-  van en fila, nunca a la vez. Un cambio que no altera el documento no se
-  escribe.
-- **Revisión.** Cada escritura indica la revisión que el almacén confirmó la
-  última vez. Si el almacén tiene otra más reciente, o el borrador se descartó
-  en otro sitio, no se sobrescribe nada. El autoguardado se detiene y el
-  compositor lo dice. Ante una copia más reciente, «Conservar esta versión»
-  escribe lo que se ve, partiendo de la revisión vigente. Ante un descarte, el
-  texto sigue en pantalla para enviarlo o copiarlo. El tombstone nunca se
-  sobrescribe.
-- **Cerrar la pestaña.** Enviar, descartar o cerrar conservando el borrador del
-  servidor borran la copia local. El borrado espera a la escritura en curso y
-  deja un tombstone. Así una escritura tardía no puede resucitar un borrador ya
-  enviado o descartado. Si nada de la pestaña llegó a guardarse, no se borra
-  nada. Reabrir un envío deshecho crea una pestaña con otro identificador.
-- **Arranque.** Hasta que se leen los borradores guardados no se escribe
-  ninguno, porque aún no se conoce la revisión de partida. La lectura se
-  reintenta con espera creciente mientras el núcleo arranca. Luego:
-  - un borrador guardado sustituye a la copia de texto de la misma pestaña y
-    vuelve con sus adjuntos;
-  - uno que solo está en el almacén se abre como pestaña;
-  - una pestaña que solo tenía localStorage se escribe en el almacén, y esa es
-    su migración;
-  - una pestaña cerrada antes de terminar la lectura se borra entonces, sin
-    reaparecer;
-  - un borrador ilegible se informa como error y nunca se convierte en uno
-    vacío.
-  Las pestañas abiertas se leen después de la última espera, así que una
-  pestaña abierta mientras tanto no se pierde.
-- **Imágenes insertadas.** El cuerpo enriquecido apunta a ficheros
-  `/media/<clave>` y sus bytes están también entre los adjuntos guardados. La
-  limpieza de ficheros huérfanos al arrancar se hace ahora después de leer el
-  almacén. Antes se hacía con solo las pestañas de localStorage, y habría
-  borrado las imágenes de un borrador que solo estuviera en el almacén. Si el
-  almacén no se puede leer, no se limpia nada.
-- **Errores visibles.** «Guardando una copia en este equipo…» y «Copia guardada
-  en este equipo» se muestran discretos. Un fallo de escritura, por ejemplo un
-  límite superado o el disco lleno, se muestra con el motivo del núcleo, y el
-  siguiente cambio vuelve a intentarlo.
+- **Què es desa.** Cada pestanya de redacció es desa sencera al magatzem local:
+  compte, remitent, destinataris, assumpte, tots dos cossos, opcions de
+  protecció i cada adjunt amb els seus bytes i la seva mida exacta.
+  L'identificador local és el de la pestanya. La còpia de text a localStorage
+  continua igual, com a reserva quan el magatzem no es pot llegir.
+- **Quan.** Després d'una pausa de 600 ms sense canvis, i immediatament en
+  tancar l'aplicació (`beforeunload` i `pagehide`). Les escriptures d'un mateix
+  esborrany van en cua, mai alhora. Un canvi que no altera el document no
+  s'escriu.
+- **Revisió.** Cada escriptura indica la revisió que el magatzem va confirmar
+  l'última vegada. Si el magatzem en té una altra de més recent, o l'esborrany
+  s'ha descartat en un altre lloc, no se sobreescriu res. El desament automàtic
+  s'atura i el redactor ho indica. Davant d'una còpia més recent, «Conserva
+  aquesta versió» escriu el que es veu, partint de la revisió vigent. Davant
+  d'un descart, el text continua a la pantalla per enviar-lo o copiar-lo. La
+  làpida (tombstone) no se sobreescriu mai.
+- **Tancar la pestanya.** Enviar, descartar o tancar conservant l'esborrany del
+  servidor esborren la còpia local. L'esborrament espera l'escriptura en curs i
+  deixa una làpida. Així una escriptura tardana no pot ressuscitar un esborrany
+  ja enviat o descartat. Si no s'havia arribat a desar res de la pestanya, no
+  s'esborra res. Reobrir un enviament desfet crea una pestanya amb un altre
+  identificador.
+- **Arrencada.** Fins que no es llegeixen els esborranys desats no se n'escriu
+  cap, perquè encara no se'n coneix la revisió de partida. La lectura es
+  reintenta amb una espera creixent mentre el nucli s'inicia. Després:
+  - un esborrany desat substitueix la còpia de text de la mateixa pestanya i
+    torna amb els seus adjunts;
+  - un que només és al magatzem s'obre com a pestanya;
+  - una pestanya que només tenia localStorage s'escriu al magatzem, i aquesta
+    n'és la migració;
+  - una pestanya tancada abans d'acabar la lectura s'esborra aleshores, sense
+    reaparèixer;
+  - un esborrany il·legible es notifica com a error i no es converteix mai en un
+    de buit.
+  Les pestanyes obertes es llegeixen després de l'última espera, de manera que
+  una pestanya oberta mentrestant no es perd.
+- **Imatges inserides.** El cos amb format apunta a fitxers `/media/<clau>` i
+  els seus bytes també són entre els adjunts desats. La neteja de fitxers
+  orfes en arrencar es fa ara després de llegir el magatzem. Abans es feia
+  només amb les pestanyes de localStorage, i hauria esborrat les imatges d'un
+  esborrany que només fos al magatzem. Si el magatzem no es pot llegir, no es
+  neteja res.
+- **Errors visibles.** «S'està desant una còpia en aquest equip…» i «Còpia
+  desada en aquest equip» es mostren de manera discreta. Un error d'escriptura,
+  per exemple un límit superat o el disc ple, es mostra amb el motiu del nucli,
+  i el canvi següent ho torna a intentar.
 
-## Pruebas
+## Proves
 
-- `localDraftSync.test.ts` usa un almacén falso con las reglas de revisión y
-  tombstone del núcleo. Cubre bytes exactos de base64, ninguna escritura antes
-  de la lectura, documento completo con adjuntos y revisiones encadenadas,
-  escritura omitida si nada cambia y pausa de escritura. También cubre el
-  volcado al cerrar, el conflicto con «conservar esta versión», el descarte en
-  otro sitio y el error con reintento. Prueba el borrado tras una escritura en
-  curso sin resurrección, la escritura pendiente anulada al cerrar, la
-  recuperación con adjuntos y la revisión de partida, y la migración desde
-  localStorage. Comprueba la pestaña cerrada antes de la lectura, el borrador
-  ilegible, el fallo de listado y la pestaña abierta durante la lectura.
-- `LocalDraftStatus.test.tsx` usa el estado real de `compose$`. Comprueba que
-  abrir, escribir y cerrar guarda y borra, que la limpieza de imágenes espera a
-  la lectura del almacén y que el arranque sin núcleo se rinde sin escribir.
-  También prueba el texto de cada estado y el botón «Conservar esta versión».
-- El arranque de producción (Playwright) responde a `localDrafts.*` y sigue sin
-  órdenes inesperadas.
-- El almacén mismo, con concurrencia, límites, corrupción y rollback, está
-  probado en Rust por #169.
+- `localDraftSync.test.ts` fa servir un magatzem fals amb les regles de revisió
+  i de làpida del nucli. Cobreix els bytes exactes de base64, l'absència d'escriptures abans de la lectura, el document complet amb adjunts i revisions
+  encadenades, l'escriptura omesa si no canvia res i la pausa d'escriptura.
+  També cobreix el bolcatge en tancar, el conflicte amb «Conserva aquesta
+  versió», el descart en un altre lloc i l'error amb reintent. Prova l'esborrament
+  després d'una escriptura en curs sense resurrecció, l'escriptura pendent
+  anul·lada en tancar, la recuperació amb adjunts i la revisió de partida, i la
+  migració des de localStorage. Comprova la pestanya tancada abans de la
+  lectura, l'esborrany il·legible, l'error de llistat i la pestanya oberta
+  durant la lectura.
+- `LocalDraftStatus.test.tsx` fa servir l'estat real de `compose$`. Comprova que
+  obrir, escriure i tancar desa i esborra, que la neteja d'imatges espera la
+  lectura del magatzem i que l'arrencada sense nucli es rendeix sense escriure.
+  També prova el text de cada estat i el botó «Conserva aquesta versió».
+- L'arrencada de producció (Playwright) respon a `localDrafts.*` i continua
+  sense ordres inesperades.
+- El magatzem mateix, amb concurrència, límits, corrupció i reversió
+  (rollback), està provat en Rust per #169.
 
-## Límites que siguen abiertos
+## Límits que continuen oberts
 
-- **Respuesta rápida.** La caja de respuesta del hilo no usa todavía este
-  almacén. Su texto sobrevive como antes, sin adjuntos tras reiniciar.
-- **Medios perdidos.** Si el fichero `/media/<clave>` de una imagen insertada
-  desaparece, por ejemplo al restaurar el perfil en otro equipo, el editor la
-  muestra rota. Sus bytes siguen en los adjuntos guardados, pero el cuerpo no
-  dice a cuál corresponde. Resolverlo exige guardar esa correspondencia al
-  insertar la imagen.
-- **Ventana de pérdida.** Un cierre brusco, como un fallo eléctrico o la muerte
-  del proceso, puede perder hasta 600 ms de escritura en el almacén. La copia
-  de texto de localStorage los cubre, pero sin los adjuntos añadidos en ese
-  intervalo.
-- **Flujo nativo.** «Escribir, cerrar la app y reabrir» en el binario Windows
-  (N4) sigue sin ejecutarse aquí. El reinicio se simula en las pruebas.
+- **Resposta ràpida.** El quadre de resposta del fil encara no fa servir aquest
+  magatzem. El seu text sobreviu com abans, sense adjunts després de reiniciar.
+- **Fitxers multimèdia perduts.** Si el fitxer `/media/<clau>` d'una imatge
+  inserida desapareix, per exemple en restaurar el perfil en un altre equip,
+  l'editor la mostra trencada. Els seus bytes continuen als adjunts desats, però
+  el cos no indica a quin correspon. Resoldre-ho requereix desar aquesta
+  correspondència en inserir la imatge.
+- **Finestra de pèrdua.** Un tancament brusc, com una fallada elèctrica o la mort
+  del procés, pot perdre fins a 600 ms d'escriptura al magatzem. La còpia de
+  text de localStorage els cobreix, però sense els adjunts afegits en aquest
+  interval.
+- **Flux natiu.** «Escriure, tancar l'aplicació i tornar-la a obrir» al binari de
+  Windows (N4) encara no s'ha executat aquí. El reinici se simula a les proves.

@@ -1,62 +1,62 @@
-# Tareas completas: decisión pendiente (#103)
+# Tasques completes: decisió pendent (#103)
 
-Estado: **propuesta**. #103 pide presentar esta decisión y aprobarla en un ADR
-antes de escribir código. El contrato actual (tareas locales enlazadas a una
-conversación, una abierta por conversación) no cambia sin esa aprobación.
-Su validación está en [message-linked-tasks.md](message-linked-tasks.md).
+Estat: **proposta**. #103 demana presentar aquesta decisió i aprovar-la en un
+ADR abans d'escriure codi. El contracte actual (tasques locals enllaçades a una
+conversa, una d'oberta per conversa) no canvia sense aquesta aprovació. La seva
+validació és a [message-linked-tasks.md](message-linked-tasks.md).
 
-## Qué ofrecen los proveedores
+## Què ofereixen els proveïdors
 
-| Capacidad | Google Tasks | CalDAV (VTODO) | Exchange (EWS) | Graph (To Do) |
+| Capacitat | Google Tasks | CalDAV (VTODO) | Exchange (EWS) | Graph (To Do) |
 |---|---|---|---|---|
-| Listas | Sí | Una por colección | Carpetas de tareas | Sí |
-| Tarea suelta | Sí | Sí | Sí | Sí |
-| Fecha límite | Solo fecha | Fecha y hora | Fecha y hora | Fecha y hora |
-| Recordatorio | No | `VALARM` | Sí | Sí |
-| Prioridad | No | 1–9 | Baja/normal/alta | Baja/normal/alta |
-| Repetición | No por API | `RRULE` | Patrones EWS | Patrones Graph |
-| Subtareas | Un nivel | `RELATED-TO` | No | Pasos (checklist) |
-| Delegación | No | No estándar | Sí (asignar) | No |
-| Versión para conflictos | `etag` | ETag | `ChangeKey` | `@odata.etag` |
+| Llistes | Sí | Una per col·lecció | Carpetes de tasques | Sí |
+| Tasca solta | Sí | Sí | Sí | Sí |
+| Data límit | Només data | Data i hora | Data i hora | Data i hora |
+| Recordatori | No | `VALARM` | Sí | Sí |
+| Prioritat | No | 1–9 | Baixa/normal/alta | Baixa/normal/alta |
+| Repetició | No per API | `RRULE` | Patrons d'EWS | Patrons de Graph |
+| Subtasques | Un nivell | `RELATED-TO` | No | Passos (llista de comprovació) |
+| Delegació | No | No estàndard | Sí (assignar) | No |
+| Versió per a conflictes | `etag` | ETag | `ChangeKey` | `@odata.etag` |
 
-Las diferencias son grandes. Un modelo común tiene que decir qué campo se
-pierde en cada proveedor, en vez de prometer lo que el proveedor no guarda.
+Les diferències són grans. Un model comú ha d'indicar quin camp es perd a cada
+proveïdor, en lloc de prometre el que el proveïdor no desa.
 
-## Decisiones
+## Decisions
 
-1. **Modelo.** Propuesta: una tabla de tareas con lista, título, nota, fecha
-   límite (fecha u hora), recordatorio, prioridad (baja/normal/alta), estado y
-   enlace opcional a una conversación. Las tareas enlazadas actuales migran a
-   una lista local «Seguimiento de correo» sin perder nada. La regla de una
-   tarea abierta por conversación se mantiene para las enlazadas.
-2. **Primera entrega solo local.** Listas y tareas sueltas, sin repetición ni
-   delegación. Incluye búsqueda y aparición en la agenda.
-3. **Sincronización, por proveedor y en este orden:**
-   1. CalDAV VTODO, que se puede probar contra Radicale en CI;
-   2. Google Tasks, con un permiso nuevo (`tasks`) que depende de los
-      registros OAuth de #144;
-   3. Graph To Do, con `Tasks.ReadWrite`;
-   4. EWS, con evidencia de un servidor real.
+1. **Model.** Proposta: una taula de tasques amb llista, títol, nota, data límit
+   (data o hora), recordatori, prioritat (baixa/normal/alta), estat i un
+   enllaç opcional a una conversa. Les tasques enllaçades actuals migren a una
+   llista local «Seguiment del correu» sense perdre res. La regla d'una tasca
+   oberta per conversa es manté per a les enllaçades.
+2. **Primer lliurament només local.** Llistes i tasques soltes, sense repetició
+   ni delegació. Inclou la cerca i l'aparició a l'agenda.
+3. **Sincronització, per proveïdor i en aquest ordre:**
+   1. CalDAV VTODO, que es pot provar contra Radicale a la CI;
+   2. Google Tasks, amb un permís nou (`tasks`) que depèn dels registres OAuth
+      de #144;
+   3. Graph To Do, amb `Tasks.ReadWrite`;
+   4. EWS, amb evidència d'un servidor real.
 
-   Cada campo que un proveedor no guarda se indica en la interfaz al elegir la
-   lista.
-4. **Conflictos.** Propuesta: los mismos que en el calendario y los contactos.
-   Escribir con la versión leída; si el servidor responde 412, no se guarda
-   nada y se pregunta. Sin fusión silenciosa.
-5. **Sin conexión.** Propuesta: los cambios se guardan en local y se marcan
-   como pendientes. Se envían al reconectar, de uno en uno y con versión, y un
-   conflicto detiene la cola de esa lista, no las demás. Esto necesita la
-   misma decisión que la cola sin conexión del calendario (#101), y conviene
-   tomarlas juntas.
-6. **Repetición y delegación.** Propuesta: fuera de las primeras entregas.
-   Repetición solo cuando haya un proveedor que la sincronice; delegación
-   solo en Exchange.
+   Cada camp que un proveïdor no desa s'indica a la interfície en triar la
+   llista.
+4. **Conflictes.** Proposta: els mateixos que al calendari i als contactes.
+   Escriure amb la versió llegida; si el servidor respon 412, no es desa res i
+   es pregunta. Sense fusió silenciosa.
+5. **Sense connexió.** Proposta: els canvis es desen en local i es marquen com a
+   pendents. S'envien en tornar a connectar, d'un en un i amb versió, i un
+   conflicte atura la cua d'aquella llista, no les altres. Això necessita la
+   mateixa decisió que la cua sense connexió del calendari (#101), i convé
+   prendre-les juntes.
+6. **Repetició i delegació.** Proposta: fora dels primers lliuraments.
+   Repetició només quan hi hagi un proveïdor que la sincronitzi; delegació
+   només a Exchange.
 
-## Pruebas exigidas por #103
+## Proves exigides per #103
 
-- N1: alta, edición, completar y reabrir.
-- N1: migración desde las tareas enlazadas, en ida y vuelta, sin pérdida.
-- N1: aislamiento entre cuentas.
-- N3: conflicto e interrupción contra Radicale.
-- N2: flujos de la vista.
-- N5: con cada proveedor real antes de anunciarlo.
+- N1: alta, edició, completar i reobrir.
+- N1: migració des de les tasques enllaçades, d'anada i tornada, sense pèrdua.
+- N1: aïllament entre comptes.
+- N3: conflicte i interrupció contra Radicale.
+- N2: fluxos de la vista.
+- N5: amb cada proveïdor real abans d'anunciar-lo.
