@@ -268,6 +268,7 @@ impl StanzaStream {
         let stream = Arc::new(Mutex::new(self));
 
         let tx = StanzaSender(stream.clone());
+        // Patched for Oreneta (#220): no lock being waited for yet.
         let rx = StanzaReceiver(stream, None);
 
         (tx, rx)
@@ -287,7 +288,8 @@ impl StanzaStream {
 
         drop(tx);
 
-        // A lock the receiver was still waiting for holds the Arc too.
+        // Patched for Oreneta (#220): a lock the receiver was still waiting
+        // for holds the Arc too.
         let StanzaReceiver(stream, waiting) = rx;
         drop(waiting);
         let inner = Arc::try_unwrap(stream).expect("Failed to unwrap Receiver Arc");
@@ -316,8 +318,9 @@ impl StanzaSender {
     }
 }
 
-/// The receiver waiting for the lock a sender holds.
-type Locking = Pin<Box<dyn Future<Output = OwnedMutexGuard<StanzaStream>> + Send>>;
+/// Patched for Oreneta (#220): the receiver waiting for the lock a sender
+/// holds.
+type Locking = Pin<Box<dyn Future<Output = OwnedMutexGuard<StanzaStream>> + Send + Sync>>;
 
 /// Receive half of the [`StanzaStream`]
 pub struct StanzaReceiver(pub(super) Arc<Mutex<StanzaStream>>, Option<Locking>);

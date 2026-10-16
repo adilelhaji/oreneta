@@ -345,3 +345,28 @@ async fn receiver_polled_during_a_send_is_woken_again() {
         other => panic!("unexpected recv result on client side: {other:?}"),
     }
 }
+
+/// Patched for Oreneta (adilelhaji/oreneta#220): a receiver waiting for the
+/// lock does not keep it from the senders when dropped, and does not keep
+/// the stream from being reunited.
+#[tokio::test]
+async fn a_receiver_waiting_for_the_lock_can_be_dropped_or_reunited() {
+    let (client, _server) = plain_pair().await.expect("stream setup failed");
+    let (tx, mut rx) = client.split();
+    let waker = futures::task::noop_waker();
+    let mut cx = Context::from_waker(&waker);
+
+    let sending = tx.0.lock().await;
+    assert!(Pin::new(&mut rx).poll_next(&mut cx).is_pending());
+    drop(sending);
+    let stream = StanzaStream::reunite(tx, rx);
+
+    let (tx, mut rx) = stream.split();
+    let sending = tx.0.lock().await;
+    assert!(Pin::new(&mut rx).poll_next(&mut cx).is_pending());
+    drop(rx);
+    drop(sending);
+    let _sending = tokio::time::timeout(Duration::from_secs(5), tx.0.lock())
+        .await
+        .expect("a sender still gets the lock");
+}

@@ -32,7 +32,8 @@ pub enum FileError {
     Failed { status: u16 },
     Network { detail: String },
     File { detail: String },
-    /// The connection to the chat server went while asking.
+    /// The connection to the chat server went while asking, or a question
+    /// got no answer in time (#220).
     Disconnected,
 }
 

@@ -433,6 +433,48 @@ async fn an_unanswered_upload_question_ends_at_its_deadline() {
     assert!(matches!(answered, Ok(tokio_xmpp::IqResponse::Result(None))), "{answered:?}");
 }
 
+/// A discovery question with no answer (a failure, as at its deadline) is
+/// noted; a server's "no" is not. The first upload service answering is
+/// the one used, and a slot never answered is a failed connection (#220).
+#[test]
+fn upload_answers_are_read_and_a_missing_one_is_noted() {
+    use files::FileError;
+    use tokio_xmpp::parsers::stanza_error::{DefinedCondition, ErrorType, StanzaError};
+    use tokio_xmpp::{IqFailure, IqResponse};
+    let none = || Err(IqFailure::SendError(std::io::Error::new(std::io::ErrorKind::TimedOut, "no answer in time")));
+    let refused = || Ok(IqResponse::Error(StanzaError::new(ErrorType::Cancel, DefinedCondition::ServiceUnavailable, "en", "")));
+    let service = || {
+        Ok(IqResponse::Result(Some(element(
+            "<query xmlns='http://jabber.org/protocol/disco#info'>\
+               <feature var='urn:xmpp:http:upload:0'/>\
+               <x type='result' xmlns='jabber:x:data'>\
+                 <field var='FORM_TYPE' type='hidden'><value>urn:xmpp:http:upload:0</value></field>\
+                 <field var='max-file-size'><value>1048576</value></field>\
+               </x></query>",
+        ))))
+    };
+    let jid = |j: &str| tokio_xmpp::parsers::jid::Jid::from_str(j).unwrap();
+
+    let mut uploads = xmpp::Uploads { searching: 3, ..Default::default() };
+    xmpp::info_answered(&mut uploads, jid("chat.test"), refused());
+    assert_eq!((uploads.searching, uploads.unanswered, uploads.service.is_none()), (2, false, true));
+    xmpp::info_answered(&mut uploads, jid("rooms.chat.test"), none());
+    assert_eq!((uploads.searching, uploads.unanswered, uploads.service.is_none()), (1, true, true));
+    xmpp::info_answered(&mut uploads, jid("upload.chat.test"), service());
+    assert_eq!(uploads.searching, 0);
+    assert_eq!(uploads.service, Some((jid("upload.chat.test"), Some(1_048_576))));
+    xmpp::info_answered(&mut uploads, jid("other.chat.test"), service());
+    assert_eq!(uploads.service.as_ref().map(|(j, _)| j.to_string()).as_deref(), Some("upload.chat.test"), "the first one stays");
+
+    let mut items = xmpp::Uploads { searching: 1, ..Default::default() };
+    xmpp::discovery_answered(&mut items, &none());
+    assert_eq!((items.searching, items.unanswered), (0, true));
+
+    assert_eq!(xmpp::slot_from(none()).err(), Some(FileError::Disconnected));
+    assert!(matches!(xmpp::slot_from(refused()), Err(FileError::Refused { .. })));
+    assert!(matches!(xmpp::slot_from(Ok(IqResponse::Result(None))), Err(FileError::Refused { .. })));
+}
+
 /// With the search over and no service, the waiting uploads end once each:
 /// "disconnected" when a question went unanswered, "no service" when all
 /// were answered. While questions are out, they keep waiting (#220).

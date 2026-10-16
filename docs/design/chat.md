@@ -73,9 +73,11 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
     nombre decodificado; un nombre no sale de su carpeta;
   - solo HTTPS al subir y al guardar (http, ftp, file, credenciales en el
     enlace, rechazados), sin escribir nada;
-  - una pregunta sin respuesta termina en su plazo; una búsqueda sin
-    servicio termina las subidas que esperan con «sin servicio» o, si una
-    pregunta quedó sin respuesta, con `disconnected` (#220).
+  - una pregunta sin respuesta termina en su plazo y cuenta como fallo,
+    no como un «no» del servidor; una búsqueda sin servicio termina las
+    subidas que esperan con `noService` o, si una pregunta quedó sin
+    respuesta, con `disconnected`; un sitio sin respuesta, con
+    `disconnected` (#220).
 - **tokio-xmpp parcheado (#220):** un receptor consultado mientras se
   envía algo vuelve a despertarse (`third_party/tokio-xmpp`, en CI); sin el
   parche, la prueba falla.

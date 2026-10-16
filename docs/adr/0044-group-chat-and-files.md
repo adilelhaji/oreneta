@@ -2,6 +2,10 @@
 
 - Estado: aceptada; tomada por delegación y revisada por el propietario
   el 2026-10-12.
+- Enmienda: el 2026-10-16, #220 da a cada pregunta de una subida un plazo
+  de 30 s; sin respuesta, la subida termina con `disconnected`. También
+  precisa que el servicio se busca hasta encontrarlo. El resto de la
+  decisión no cambia.
 - Fecha: 2026-10-12.
 - Alcance: lo que ADR-0036 dejó pendiente de #111: grupos (MUC, XEP-0045) y
   archivos (HTTP File Upload, XEP-0363) con progreso y cancelación.
@@ -54,7 +58,8 @@
     una sala en la que ya se está, no se guarda.
 - **Enviar un archivo:**
   - el servicio de subida se busca en el servidor de la cuenta (disco#info
-    del dominio y de sus elementos), una vez por sesión;
+    del dominio y de sus elementos) hasta encontrarlo; encontrado, sirve
+    para el resto de la sesión;
   - el límite de tamaño es el del formulario del servicio (`max-file-size`):
     un archivo mayor se rechaza aquí, antes de pedir sitio y sin enviar
     nada;
@@ -65,8 +70,10 @@
   - el progreso llega cada 256 KB (`chat.progress`) y el final una vez
     (`chat.uploaded`); cancelar corta el envío y no sale ningún mensaje;
   - cada pregunta de la subida (el servicio, el sitio) espera como mucho
-    30 s; sin respuesta, la subida termina con `disconnected` y la
-    siguiente vuelve a buscar el servicio (#220);
+    30 s (#220): un sitio sin respuesta termina la subida con
+    `disconnected`; una búsqueda que acaba sin servicio la termina con
+    `noService`, o con `disconnected` si alguna pregunta quedó sin
+    respuesta, y la siguiente subida vuelve a buscar;
   - subido, el enlace sale como mensaje normal, con el enlace en el cuerpo
     y como OOB (XEP-0066), y sigue las reglas de estado de siempre;
     «Enviar de nuevo» vuelve a mandar el mismo enlace con el mismo id.
