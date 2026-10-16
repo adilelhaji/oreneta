@@ -166,6 +166,10 @@ fn a_utc_until_is_the_date_it_falls_on_where_the_reader_is() {
     for (name, last) in [
         ("Pacific/Auckland", d(2027, 1, 1)),
         ("Pacific/Kiritimati", d(2027, 1, 1)),
+        // UTC+12 exactly: noon UTC is midnight, the first moment of 1 January.
+        ("Etc/GMT-12", d(2027, 1, 1)),
+        // UTC-12: noon UTC is midnight starting 31 December.
+        ("Etc/GMT+12", d(2026, 12, 31)),
         ("Asia/Tokyo", d(2026, 12, 31)),
         ("Europe/Madrid", d(2026, 12, 31)),
         ("America/Los_Angeles", d(2026, 12, 31)),
@@ -182,6 +186,12 @@ fn a_utc_until_is_the_date_it_falls_on_where_the_reader_is() {
     let auckland: chrono_tz::Tz = "Pacific/Auckland".parse().unwrap();
     let half_past = auckland.with_ymd_and_hms(2027, 1, 1, 0, 30, 0).unwrap();
     assert!(half_past.timestamp() <= noon.timestamp());
+    // The known limit (ADR-0053): the rule keeps a date. An end of day in
+    // UTC, read in Madrid, is 00:59 on 1 January, so 1 January is the last
+    // date, and a task due at 09:00 that day is kept, which the RFC would not.
+    let madrid: chrono_tz::Tz = "Europe/Madrid".parse().unwrap();
+    let until = read_until_in("20261231T235959Z", &madrid).unwrap();
+    assert_eq!(madrid.timestamp_opt(until, 0).unwrap().date_naive(), d(2027, 1, 1));
     // A date, or a floating time, is that date wherever the reader is.
     for text in ["20261231", "20261231T120000"] {
         let until = read_until_in(text, &auckland).unwrap();
