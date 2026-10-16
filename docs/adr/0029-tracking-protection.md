@@ -40,7 +40,7 @@
 - **Excepció per missatge:**
   - «Carregar-los en aquest missatge» pregunta abans i es desa per compte i
     Message-ID;
-  - no canvia la política d'imatges remotes del compte, que el CSP continua
+  - no canvia la política d'imatges remotes del compte, que la CSP continua
     imposant;
   - un missatge sense Message-ID no pot tenir excepció.
 - **Confirmacions de lectura:** l'aplicació no n'envia cap.

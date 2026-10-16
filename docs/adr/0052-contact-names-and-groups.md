@@ -76,7 +76,7 @@
     3.0 (ho calcula cada sincronització: `contact_sources.group_style`);
   - un grup en un servidor només pot contenir persones d'aquest mateix llibre;
     demanar una altra cosa és un error que no envia res;
-  - **Google:** les etiquetes es llegeixen, sense poder-les canviar: el permís
+  - **Google:** les etiquetes es llegeixen, sense poder-les canviar: amb el permís
     `contacts.readonly` que ja demana el compte n'hi ha prou per a
     `contactGroups.list` i per a `memberships` de cada persona. Només les de
     l'usuari (`USER_CONTACT_GROUP`); «Els meus contactes», «Destacats» i la

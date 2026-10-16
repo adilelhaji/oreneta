@@ -9,7 +9,7 @@
 ## Decisió
 
 - **Un missatge per destinatari,** adreçat només a aquesta persona: sense Per a
-  compartit, sense Cco, sense dades de ningú en el missatge d'un altre.
+  compartit, sense còpia oculta, sense dades de ningú en el missatge d'un altre.
 - **El que s'ha revisat és el que s'envia:**
   - el nucli genera cada missatge (`merge::preview`); la previsualització
     mostra aquests missatges;

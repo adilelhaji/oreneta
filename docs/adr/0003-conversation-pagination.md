@@ -44,10 +44,10 @@ migració.
 Aquest és un contracte de conjunt de claus en viu, no una captura de la
 bústia. Els candidats sense canvis es recorren exactament una vegada. Les
 insercions posteriors al cursor poden aparèixer en pàgines posteriors; les
-anteriors requereixen refrescar la primera pàgina. Moure una targeta
-existent d'un costat a l'altre del cursor la pot ometre o repetir fins al
-refresc. Els clients eliminen els identificadors duplicats i substitueixen el
-recorregut carregat en refrescar; no han d'empeltar files noves en cursors
+anteriors requereixen actualitzar la primera pàgina. Moure una targeta
+existent d'un costat a l'altre del cursor la pot ometre o repetir fins a
+l'actualització. Els clients eliminen els identificadors duplicats i substitueixen el
+recorregut carregat en actualitzar; no han d'empeltar files noves en cursors
 antics. Els resultats del proveïdor que encara no són a la memòria cau queden
 fora de les garanties de completesa basades en la memòria cau.
 
@@ -55,7 +55,7 @@ fora de les garanties de completesa basades en la memòria cau.
 
 1. #67: primitiva compartida d'ordenació/cursor amb proves; sense canvis a les rutes actives.
 2. Seguiment: obtenció de candidats basada en la memòria cau, adaptadors
-   d'escriptori/mòbil, paginació global unificada i gestió de refresc/errors
+   d'escriptori/mòbil, paginació global unificada i gestió d'actualitzacions/errors
    al client amb proves d'integració.
 3. Conciliar per separat les captures de cerca, la desduplicació
    entre carpetes dels destacats, l'ordenació de despertada dels posposats i

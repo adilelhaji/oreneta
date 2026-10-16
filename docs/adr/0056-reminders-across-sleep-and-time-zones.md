@@ -61,7 +61,7 @@ movia i sobrevivia a un reinici. Però:
   El que venç mentrestant no es dona després com a perdut; un avís vençut
   durant la pausa l'esdeveniment del qual encara no ha començat sí que es
   dona en reprendre, per la regla de sempre.
-- **En despertar**: `system.resumed` fa mirar a l'acte, sense esperar el
+- **En despertar-se**: `system.resumed` fa mirar a l'acte, sense esperar el
   minut següent. L'hora és sempre la del rellotge de paret; el temporitzador
   ja no acumula ticks perduts (`MissedTickBehavior::Delay`).
 - **Zones, segons el model del calendari**:
@@ -93,8 +93,7 @@ movia i sobrevivia a un reinici. Però:
   (`notify.reminderStarted`, traduït). Sense aquests camps fa servir el seu
   propi rellotge com abans.
 - **Mòbil**: `take_due` deixa fora la llista de relectures; el mòbil rellegeix
-  els seus calendaris en el refresc de cada 15 minuts (ADR-0045), que és també
-  el que esborra la relectura pendent. A Android, `chrono::Local` podria
+  els seus calendaris en l'actualització de cada 15 minuts (ADR-0045), que és també la que esborra la relectura pendent. A Android, `chrono::Local` podria
   donar UTC si el sistema no li diu la zona; queda per a la prova nativa.
 
 ## Ampliació del 2026-10-16: registre d'avisos donats (#222)
@@ -130,8 +129,7 @@ Decisió per delegació del propietari (l'opció més prudent).
 
 ## Conseqüències
 
-- Després de dormir durant l'avís d'una reunió encara en curs, l'avís arriba en
-  despertar, una vegada, dient que ja ha començat.
+- Després de dormir durant l'avís d'una reunió encara en curs, l'avís arriba en despertar-se, una vegada, dient que ja ha començat.
 - Els avisos de dia sencer canvien d'hora respecte d'abans: sonen abans
   a l'est d'UTC (Europa, Àsia) i després a l'oest (Amèrica), ara a l'hora
   local que es va demanar.
@@ -210,7 +208,7 @@ la va decidir la delegació, amb l'opció més prudent.
     (al final de l'interval, o amb el pla que treu una pausa indefinida).
   Sona quan es mostra (`calendar.missedRemindersShown`), no en arribar.
 - **Ni si l'aplicació es tanca abans de mostrar-lo** (revisió de #225):
-  la memòria de Go no n'hi ha prou. El nucli guarda cada perdut (`meta`,
+  amb la memòria de Go no n'hi ha prou. El nucli guarda cada perdut (`meta`,
   `reminders.missed`, amb el seu esdeveniment) en la mateixa transacció en què
   l'anota com a donat: tots dos o cap. Els torna a dir en arrencar el vigilant
   fins que Go, després de mostrar l'avís, en confirma les `keys`
@@ -230,7 +228,7 @@ la va decidir la delegació, amb l'opció més prudent.
 - **El que continua en curs** no canvia: es dona sol, dient «Va començar a les…».
 - **Comptes en pausa o silenciats**: no mostren res, tampoc després (la seva
   mirada avança igual).
-- **El que hi ha al magatzem en mirar**: en despertar es mira abans de
+- **El que hi ha al magatzem en mirar**: en despertar-se es mira abans de
   rellegir els calendaris, així que una reunió cancel·lada o moguda mentre
   l'equip dormia pot sortir com a perduda. I un esdeveniment amb data passada
   que arriba en el buit (una sincronització, un calendari que es torna a
@@ -240,4 +238,4 @@ la va decidir la delegació, amb l'opció més prudent.
   de la seva decisió): no té avís agrupat. `take_due` (`pim.refresh`) deixa
   els perduts sense anotar i sense donar, com abans de #225, així que la
   resposta i `PimRefresh.kt` no canvien. Donar-los al mòbil necessita un avís
-  agrupat a Android i iOS. Issue de seguiment: #230.
+  agrupat a Android i iOS. Incidència de seguiment: #230.

@@ -146,7 +146,7 @@
 - **Suprimir els privats en sortir del grup:** es perdrien sense remei, sense
   que la persona ho hagi demanat.
 - **Llegir la llista de contactes del servidor (roster) per a saber qui es
-  pot veure:** necessita contestar als seus avisos de canvis; recordar el que
+  pot veure:** necessita contestar als seus avisos de canvis; amb recordar el que
   s'ha vist a la sessió, i el que el servidor diu dels contactes desconnectats,
   n'hi ha prou per a no oferir demanar-ho una altra vegada. Gestionar qui veu
   l'estat queda pendent.

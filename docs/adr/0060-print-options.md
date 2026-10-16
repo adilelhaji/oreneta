@@ -21,7 +21,7 @@
 - **Les opcions i els seus valors per defecte** (els d'abans, perquè ningú no
   vegi canviar la seva impressió perquè ha aparegut un paràmetre):
   - camps de capçalera: assumpte com a títol de la pàgina, data, Per a i CC
-    activats; CCO desactivat;
+    activats; còpia oculta desactivada;
   - abast: la conversa sencera (per defecte) o un missatge;
   - ordre, només per a la conversa: del més antic al més recent (per
     defecte) o a l'inrevés;
@@ -29,10 +29,10 @@
 - **El remitent s'imprimeix sempre:** en paper no hi ha cap altra manera de
   saber qui va escriure cada missatge. A Paràmetres es mostra com a
   «S'imprimeix sempre», no com un interruptor.
-- **CCO desactivat per defecte:** només existeix a les còpies enviades i
+- **Còpia oculta desactivada per defecte:** només existeix a les còpies enviades i
   anomena persones de les quals els altres destinataris no sabien res; va
   al paper només si es demana.
-- **CCO activat es recorda, i s'avisa:** com les altres opcions, queda
+- **La còpia oculta activada es recorda, i s'avisa:** com les altres opcions, queda
   activat fins que es desactiva. Risc acceptat: qui el deixa activat i
   després imprimeix una conversa per a una altra persona li revela els
   destinataris ocults. L'ajuda del paràmetre ho diu («continua activat fins
@@ -97,7 +97,7 @@
   pròpia imprimiria un missatge anterior al que es veu desplegat; s'exclouen
   només els esborranys i les còpies sense enviar, que no són correu que ha
   sortit.
-- **Desactivar CCO després de cada impressió:** més prudent davant de la
+- **Desactivar la còpia oculta després de cada impressió:** més prudent davant de la
   revelació, però contradiu que les eleccions es recordin i canvia un
   paràmetre sense que la persona el toqui; s'accepta el risc amb l'avís a
   l'ajuda.

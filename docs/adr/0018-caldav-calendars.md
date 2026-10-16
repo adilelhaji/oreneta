@@ -52,7 +52,7 @@ recurrències.
   - En tots els casos es conserva línia a línia el que aquesta aplicació no
     edita: assistents, organitzador, propietats X- i zones.
 - **Conflicte:** si la versió ha canviat (412 o un ETag diferent), no
-  s'escriu res, es diu i es refresca el calendari (política de l'ADR-0012).
+  s'escriu res, es diu i s'actualitza el calendari (política de l'ADR-0012).
 - **Zones:**
   - un esdeveniment únic s'escriu en UTC;
   - una sèrie, en la seva zona IANA (la que ja tenia, o la de l'equip), perquè

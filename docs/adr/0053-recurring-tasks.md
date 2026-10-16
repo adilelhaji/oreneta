@@ -103,7 +103,7 @@
     `BYSETPOS` o `BYHOUR`, una anual en un mes diferent del del venciment, o
     una regla sense `DUE`. Es veu i se suprimeix, però no es canvia: canviar-la
     malament seria pitjor.
-- **Avisos:** la llista mostra una icona de repetició i la regla en breu
+- **Avisos:** la llista mostra una icona de repetició i la regla abreujada
   («Cada setmana», «Cada 3 dies»). En completar una ocurrència es diu quan
   venç la següent.
 - **Esquema 61:** columna `tasks.rrule` (valor `RRULE`, buit si no es

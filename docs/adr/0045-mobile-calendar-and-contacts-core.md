@@ -29,7 +29,7 @@
   crida a aquestes funcions. Respostes, errors i esdeveniments són els mateixos
   byte a byte; les proves del distribuïdor continuen igual.
 - **Esdeveniments de fons amb una abstracció mínima.** El que acaba després
-  de respondre (el refrescament d'una finestra) avisa per `pim::Emit`, una
+  de respondre (l'actualització d'una finestra) avisa per `pim::Emit`, una
   funció `(nombre, detalle)` asíncrona:
   - a l'escriptori escriu `{"event", "detail"}` a stdout, com la resta
     d'esdeveniments (`emitter` a `main.rs`);
@@ -48,11 +48,11 @@
   (`account`, `calendar`, `event`, `change_key`, `series`, `scope`,
   `notify`, `query`, `limit`, `id`, `version`, `book`, `person`); el
   codi Kotlin ja els enviava així i no canvia.
-- **Sincronització al mòbil: refrescament a petició.** `calendar.events` amb
-  `refresh` (i una escriptura en un calendari de compte) llança el
-  refrescament de la finestra al runtime de l'`Engine`, que continua després
+- **Sincronització al mòbil: actualització a petició.** `calendar.events` amb
+  `refresh` (i una escriptura en un calendari de compte) llança
+  l'actualització de la finestra al runtime de l'`Engine`, que continua després
   de respondre i avisa amb `calendar.synced` o `calendar.syncError`.
-- **Ampliació del 2026-10-13: refrescament periòdic, llibretes i
+- **Ampliació del 2026-10-13: actualització periòdica, llibretes i
   recordatoris.** Una ordre mòbil més, `pim.refresh`
   (`meron-core/src/pim/refresh.rs`), i tres que ja tenia l'escriptori
   (`google.contacts.sync`, `carddav.sync`, `carddav.list`), amb la seva lògica
@@ -71,15 +71,15 @@
   - **Refrescament periòdic.** `pim.refresh` lliura els recordatoris i, si
     se li permet (`sync`), llegeix la finestra fixa d'ahir a cinc setmanes
     vista de cada compte amb calendaris remots la darrera lectura bona dels
-    quals tingui més de 15 minuts (`pim::calendar::sync_now`, el mateix
-    refrescament que `spawn_sync`, esperat), i cada llibreta Google o CardDAV
+    quals tingui més de 15 minuts (`pim::calendar::sync_now`, la mateixa
+    actualització que `spawn_sync`, esperat), i cada llibreta Google o CardDAV
     amb més d'una hora; crea la llibreta de cada compte Google. El que ha
     vençut es llegeix del magatzem (`synced_at`, `last_sync_at`), de manera
     que el procés d'una tasca de fons decideix igual que el de primer pla;
     una fallada no es reintenta abans del seu interval en el mateix procés.
     `only` limita la lectura a calendaris o llibretes i `force` llegeix
     encara que no hagi vençut. L'escriptori no tenia temporitzador per a
-    això (refresca en obrir una visualització o en prémer sincronitzar) i
+    això (actualitza en obrir una visualització o en prémer sincronitzar) i
     continua sense.
   - **On s'executa.** En primer pla, la interfície el crida cada minut
     (només recordatoris, sense xarxa) i cada 15 minuts amb lectura, i publica
@@ -123,8 +123,8 @@
   - `mobile_people_commands_run_the_shared_core`: crea, llista, edita,
     detecta una edició desfasada, rebutja una edició sense versió i suprimeix
     a la llibreta local.
-  - `calendar_refresh_reports_over_the_event_channel` (`ffi.rs`): el
-    refrescament que llança `calendar.events` continua després de respondre
+  - `calendar_refresh_reports_over_the_event_channel` (`ffi.rs`):
+    l'actualització que llança `calendar.events` continua després de respondre
     i arriba com a `calendar.synced` al canal d'esdeveniments.
 - `mobile_pim_refresh_raises_reminders_and_routes_book_sync`: per l'entrada
   mòbil, `pim.refresh` dona un recordatori una vegada amb la forma de

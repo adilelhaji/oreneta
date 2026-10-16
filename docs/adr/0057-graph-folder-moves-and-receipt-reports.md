@@ -57,9 +57,9 @@
     demana només si la persona la vol i la via la pot portar (SMTP amb
     DSN; Graph amb canvis a més d'enviament). Sense demanar-la, res no canvia;
   - **prudència fins a tenir evidència de Microsoft 365:** encara no se sap
-    si un esborrany fet des de MIME conserva els destinataris Cco ni la
-    signatura o el xifratge byte a byte. Perdre un Cco seria silenciós. Així
-    que l'esborrany només es fa servir per a un missatge sense Cco i sense
+    si un esborrany fet des de MIME conserva els destinataris en còpia oculta ni la
+    signatura o el xifratge byte a byte. Perdre una còpia oculta seria silenciós. Així
+    que l'esborrany només es fa servir per a un missatge sense còpia oculta i sense
     signatura ni xifratge. En els altres casos (o sense canvis permesos) el
     missatge surt com sempre per `sendMail`, sense la petició, i l'enviament
     respon `delivery_receipt: "unsupported"` amb `delivery_receipt_reason`
@@ -179,6 +179,6 @@
   si una altra branca es fusiona abans, aquesta en renumera la migració.
 - Un informe que espera més de 90 dies el seu missatge, o que queda fora dels
   1000 que esperen per compte, es perd; l'informe continua a la bústia.
-- Confirmació de lliurament a Graph per a missatges amb Cco o signats o
+- Confirmació de lliurament a Graph per a missatges amb còpia oculta o signats o
   xifrats, quan l'evidència N5 mostri que l'esborrany els conserva
   (comprovant també els destinataris de l'esborrany abans d'enviar-lo).

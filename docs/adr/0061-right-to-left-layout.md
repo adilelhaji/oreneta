@@ -17,7 +17,7 @@
   des de la memòria cau de l'última sessió, i cada vegada que canvia l'idioma;
   tornar a un idioma d'esquerra a dreta restaura `dir="ltr"` sense recarregar.
   La llista d'idiomes de dreta a esquerra és fixa a `lib/direction.ts`, no
-  una consulta a `Intl.Locale`: WebKitGTK i Bun no exposen tots aquesta
+  una consulta a `Intl.Locale`: WebKitGTK i Bun no exposen tots dos aquesta
   informació i la mateixa resposta a tot arreu val més.
 - **Propietats lògiques, no costats:** marges, farciments, posicions, vores,
   cantonades i alineació fan servir les utilitats lògiques de Tailwind 4.3

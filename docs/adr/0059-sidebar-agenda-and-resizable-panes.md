@@ -67,11 +67,10 @@
   - límits: barra lateral 280–560 px, llista 280–560 px, subfinestra del
     tauler 25–60 %; un valor desat fora de límits (o que no és un nombre)
     s'ajusta en llegir-lo;
-  - el separador anuncia la mida dibuixada, no la desada: una llista
-    estrenyida per la finestra diu la seva amplada real, i el seu màxim és
+  - el separador anuncia la mida dibuixada, no la desada: una llista estreta per la finestra diu la seva amplada real, i el seu màxim és
     aquesta amplada (créixer més no es veuria). Al tauler, la subfinestra no
     baixa mai de 320 px, de manera que el percentatge mínim puja amb una
-    finestra estreta; si no queda marge (o a 600 px o menys, on ocupa tot),
+    finestra estreta; si no queda marge (o a 600 px o menys, on ho ocupa tot),
     no hi ha separador;
   - la barra lateral va al costat del lector només si la finestra fa
     almenys 1100 px **i** la seva fila deixa al lector 360 px amb la barra a

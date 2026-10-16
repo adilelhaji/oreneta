@@ -67,7 +67,7 @@
 - **Esdeveniment nou:** dura el que s'ha triat (60 minuts per defecte) i porta
   el recordatori triat (cap per defecte, com fins ara, perquè ningú no
   comenci a rebre avisos per una opció nova). Fer doble clic en un dia
-  del mes el comença a l'inici de la jornada en lloc de a les 9:00 fixes.
+  del mes el comença a l'inici de la jornada en lloc de fer-ho a les 9:00 fixes.
 - **Mòbil:** l'agenda llegeix `calendar_week_start` en obrir-se. Amb un dia
   fixat, la finestra de 14 dies comença el primer dia de la setmana actual
   (pàgines de setmanes senceres, com a l'escriptori); amb «regional» continua

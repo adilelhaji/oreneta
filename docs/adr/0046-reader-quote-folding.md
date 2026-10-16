@@ -37,8 +37,7 @@
   - una citació que no és al final (resposta intercalada): si després hi ha
     alguna cosa per llegir, a més d'una signatura, es deixa oberta, perquè
     ocultar-la amagaria a què es respon;
-  - el que només sembla una citació (un `blockquote` amb una taula, una cita
-    literària) sense marca de client ni atribució;
+  - el que només sembla una citació (un `blockquote` amb una taula, una citació literària) sense marca de client ni atribució;
   - un missatge que es quedaria buit: si plegar no deixés res visible
     (una resposta que és només la citació, el primer missatge d'un fil que
     només porta la citació), no es plega res; si l'única cosa visible fos la
@@ -102,7 +101,7 @@
   signatura), reenviament de Gmail, Outlook al web (resposta i reenviament),
   Outlook d'escriptori, Apple Mail (resposta i reenviament), Thunderbird (amb
   citacions imbricades i signatura), resposta intercalada de Thunderbird,
-  contingut que només sembla citació (taula en `blockquote`, cita literària),
+  contingut que només sembla citació (taula en `blockquote`, citació literària),
   missatge que és només citació o només signatura; text pla amb «>», atribució
   partida, citacions imbricades, signatura «-- », capçalera d'Outlook,
   «Original Message», reenviaments, una línia «>» solta i un «--» llarg que

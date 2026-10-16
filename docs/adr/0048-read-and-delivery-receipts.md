@@ -107,7 +107,7 @@
 - **Confirmació de lliurament a EWS i Graph:** fet. A EWS es demana en el
   mateix element, al costat del MIME (`IsDeliveryReceiptRequested`, ADR-0058);
   falta l'evidència amb un servidor real. A Graph es demana des d'ADR-0057
-  sobre un esborrany, només en comptes amb canvis i, de moment, sense Cco ni
+  sobre un esborrany, només en comptes amb canvis i, de moment, sense còpia oculta ni
   signatura o xifratge; si no, respon «unsupported» amb el motiu.
 - **Missatges a la memòria cau d'abans d'aquesta versió:** no tenen la petició
   desada i no mostren la barra fins que es tornen a baixar. No

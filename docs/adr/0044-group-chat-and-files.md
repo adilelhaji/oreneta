@@ -35,7 +35,7 @@
   «acceptat». Es reconeix pel sobrenom o, si el sobrenom ha canviat, perquè
   aquest id va sortir d'aquí.
 - **Qui va dir què:** cada missatge d'un grup desa el sobrenom de qui
-  parla; la sala parlant sense sobrenom i els canvis de tema no són missatges.
+  parla; la sala quan parla sense sobrenom i els canvis de tema no són missatges.
 - **Estats en un grup:** enviant → enviat → acceptat (ack XEP-0198 o
   eco de la sala). No es demana confirmació de lliurament en un grup. Un error
   retornat per a un id nostre el deixa en «no enviat». Després d'una
