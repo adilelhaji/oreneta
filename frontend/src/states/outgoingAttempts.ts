@@ -47,6 +47,9 @@ export type SendResult = {
   /** What became of a delivery receipt request (ADR-0048): "requested",
    * "unsupported" (the server does not offer it) or "none". */
   delivery_receipt?: string
+  /** Why it was not requested on Microsoft 365 (ADR-0057): "needsChanges",
+   * "bcc" or "protected". Absent otherwise. */
+  delivery_receipt_reason?: string
 } | null
 
 export const outgoing$ = observable({

@@ -458,6 +458,7 @@ fn message_read_retains_content_etag_and_immutable_identity_without_marking_read
         "toRecipients":[{"emailAddress":{"address":"recipient@example.test"}}]}))]
     });
     let item = fixture.client().message(&message("M/+")).unwrap();
+    assert!(!item.fields.is_report());
     assert_eq!(item.id, message("M/+"));
     assert_eq!(item.fields.etag.as_deref(), Some("W/\"version\""));
     assert_eq!(item.fields.is_read, Some(false));
@@ -467,7 +468,37 @@ fn message_read_retains_content_etag_and_immutable_identity_without_marking_read
     );
     assert_eq!(item.fields.to_recipients.unwrap().len(), 1);
     assert_eq!(fixture.requests().len(), 1);
-    assert!(fixture.requests()[0].starts_with("GET /v1.0/me/messages/M%2F+ "));
+    // Only the item class is expanded, to tell a report from a message (#210).
+    assert!(
+        fixture.requests()[0].starts_with(
+            "GET /v1.0/me/messages/M%2F+?$expand=singleValueExtendedProperties($filter=id%20eq%20%27String%200x001A%27) "
+        ),
+        "{}",
+        fixture.requests()[0]
+    );
+}
+
+/// #210: Exchange files delivery and read reports under `REPORT.*` item
+/// classes; anything else, or no class at all, is an ordinary message.
+#[test]
+fn a_report_is_recognised_by_its_item_class() {
+    let fields = |class: &str| -> MessageFields {
+        serde_json::from_value(json!({"singleValueExtendedProperties":[{"id":"String 0x1a","value":class}]})).unwrap()
+    };
+    for class in ["REPORT.IPM.Note.NDR", "REPORT.IPM.Note.DR", "Report.IPM.Note.IPNRN", "REPORT.IPM.Note.IPNNRN"] {
+        assert!(fields(class).is_report(), "{class}");
+    }
+    for class in ["IPM.Note", "IPM.Schedule.Meeting.Request", "IPM.Note.REPORT", ""] {
+        assert!(!fields(class).is_report(), "{class}");
+    }
+    let unknown: MessageFields = serde_json::from_value(json!({})).unwrap();
+    assert!(!unknown.is_report());
+    let other: MessageFields =
+        serde_json::from_value(json!({"singleValueExtendedProperties":[{"id":"String 0x0037","value":"REPORT.x"}]})).unwrap();
+    assert!(!other.is_report());
+    let spelled: MessageFields =
+        serde_json::from_value(json!({"singleValueExtendedProperties":[{"id":"String 0x001A","value":"REPORT.IPM.Note.NDR"}]})).unwrap();
+    assert!(spelled.is_report());
 }
 
 #[test]
@@ -825,6 +856,177 @@ fn send_refusals_keep_their_category_and_a_lost_answer_is_uncertain() {
     // No reply at all: sent once, outcome unknown.
     let silent = Fixture::new(|_| vec![]);
     assert_eq!(writer(&silent, "Mail.Send").send_mime(b"x").unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(silent.requests().len(), 1);
+}
+
+// ---- #210: folder moves and delivery receipts ----
+
+#[test]
+fn a_folder_move_posts_the_destination_and_returns_the_reported_id() {
+    let fixture = Fixture::new(|_| vec![(201, String::new(), json!({"id":"F/1","parentFolderId":"P2","displayName":"Work"}).to_string())]);
+    let moved = writer(&fixture, "Mail.ReadWrite").move_folder(&folder("F/1"), &folder("P2")).unwrap();
+    assert_eq!(moved, folder("F/1"));
+    let request = &fixture.requests()[0];
+    assert!(request.starts_with("POST /v1.0/me/mailFolders/F%2F1/move "), "{request}");
+    assert!(request.to_ascii_lowercase().contains("prefer: idtype=\"immutableid\""));
+    assert_eq!(body_of(request), json!({"destinationId": "P2"}));
+}
+
+/// A success that does not say the folder is where it was sent is no
+/// confirmation, and no refusal either: it may have moved (#210).
+#[test]
+fn a_folder_move_answered_with_an_unexpected_success_is_uncertain_not_refused() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            (201, String::new(), json!({"id":"F1","parentFolderId":"ELSEWHERE"}).to_string()),
+            (201, String::new(), json!({"id":"F1"}).to_string()),
+            (204, String::new(), String::new()),
+            (202, String::new(), String::new()),
+            (201, String::new(), "not json".to_string()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite");
+    for _ in 0..5 {
+        assert_eq!(client.move_folder(&folder("F1"), &folder("P2")).unwrap_err().kind, ErrorKind::Uncertain);
+    }
+    // A refusal stays a refusal.
+    let refused = Fixture::new(|_| vec![(400, String::new(), String::new())]);
+    let error = writer(&refused, "Mail.ReadWrite").move_folder(&folder("F1"), &folder("P2")).unwrap_err();
+    assert_eq!((error.kind, error.status), (ErrorKind::InvalidResponse, Some(400)));
+}
+
+#[test]
+fn a_folder_move_is_refused_without_changes_and_across_accounts_before_sending() {
+    let fixture = Fixture::new(|_| vec![]);
+    let error = writer(&fixture, "Mail.Read Mail.Send").move_folder(&folder("F1"), &folder("P2")).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::ConsentRequired);
+    let other = ResourceId::new("account-b", ResourceKind::Folder, "P2").unwrap();
+    let error = writer(&fixture, "Mail.ReadWrite").move_folder(&folder("F1"), &other).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::InvalidInput);
+    // A message id is not a folder id.
+    let error = writer(&fixture, "Mail.ReadWrite").move_folder(&message("F1"), &folder("P2")).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::InvalidInput);
+    assert!(fixture.requests().is_empty());
+}
+
+#[test]
+fn a_folder_move_keeps_its_error_category_and_a_lost_answer_is_uncertain_and_sent_once() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            (403, String::new(), String::new()),
+            (409, String::new(), String::new()),
+            (429, "Retry-After: 12\r\n".to_string(), String::new()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite");
+    assert_eq!(client.move_folder(&folder("F1"), &folder("P2")).unwrap_err().kind, ErrorKind::AccessDenied);
+    assert_eq!(client.move_folder(&folder("F1"), &folder("P2")).unwrap_err().kind, ErrorKind::Conflict);
+    let throttled = client.move_folder(&folder("F1"), &folder("P2")).unwrap_err();
+    assert_eq!((throttled.kind, throttled.retry_after_seconds), (ErrorKind::Throttled, Some(12)));
+    let silent = Fixture::new(|_| vec![]);
+    let error = writer(&silent, "Mail.ReadWrite").move_folder(&folder("F1"), &folder("P2")).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Uncertain);
+    assert_eq!(silent.requests().len(), 1, "a folder move whose outcome is unknown is sent once");
+}
+
+#[test]
+fn a_delivery_receipt_is_a_draft_from_the_mime_marked_then_sent() {
+    use base64::Engine as _;
+    let raw = b"From: a@example.com\r\nTo: b@example.com\r\nSubject: Hi\r\nMessage-ID: <m1@example.com>\r\n\r\nHello";
+    let fixture = Fixture::new(|_| {
+        vec![
+            (201, String::new(), json!({"id":"D/1","isDraft":true}).to_string()),
+            ok(json!({"id":"D/1","isDeliveryReceiptRequested":true})),
+            (202, String::new(), String::new()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite Mail.Send");
+    let draft = client.create_mime_draft(raw).unwrap();
+    assert_eq!(draft, message("D/1"));
+    client.request_delivery_receipt(&draft).unwrap();
+    client.send_draft(&draft).unwrap();
+    let requests = fixture.requests();
+    assert!(requests[0].starts_with("POST /v1.0/me/messages "), "{}", requests[0]);
+    assert!(requests[0].to_ascii_lowercase().contains("content-type: text/plain"));
+    assert!(requests[0].to_ascii_lowercase().contains("prefer: idtype=\"immutableid\""));
+    let body = requests[0].split("\r\n\r\n").nth(1).unwrap();
+    assert_eq!(base64::engine::general_purpose::STANDARD.decode(body).unwrap(), raw);
+    assert!(requests[1].starts_with("PATCH /v1.0/me/messages/D%2F1 "), "{}", requests[1]);
+    assert_eq!(body_of(&requests[1]), json!({"isDeliveryReceiptRequested": true}));
+    assert!(requests[2].starts_with("POST /v1.0/me/messages/D%2F1/send "), "{}", requests[2]);
+    assert_eq!(requests[2].split("\r\n\r\n").nth(1), Some(""), "the send carries no body");
+}
+
+#[test]
+fn a_delivery_receipt_draft_needs_changes_and_respects_the_request_bound() {
+    let fixture = Fixture::new(|_| vec![]);
+    // Sending alone cannot make the draft the request lives on.
+    assert_eq!(writer(&fixture, "Mail.Read Mail.Send").create_mime_draft(b"x").unwrap_err().kind, ErrorKind::ConsentRequired);
+    // Changes alone cannot send it.
+    assert_eq!(writer(&fixture, "Mail.ReadWrite").send_draft(&message("D1")).unwrap_err().kind, ErrorKind::ConsentRequired);
+    let big = vec![b'a'; MAX_SEND_REQUEST];
+    assert_eq!(writer(&fixture, "Mail.ReadWrite Mail.Send").create_mime_draft(&big).unwrap_err().kind, ErrorKind::TooLarge);
+    assert!(fixture.requests().is_empty());
+}
+
+/// #29: once a send reached Microsoft, only a refusal says it did not go.
+/// Any other success than 202, or one that cannot be read, may have gone.
+#[test]
+fn a_send_answered_with_an_unexpected_success_is_uncertain_not_refused() {
+    let fixture = Fixture::new(|_| {
+        vec![
+            (200, String::new(), String::new()),
+            (201, String::new(), "{}".to_string()),
+            (200, String::new(), String::new()),
+            (400, String::new(), String::new()),
+        ]
+    });
+    let client = writer(&fixture, "Mail.ReadWrite Mail.Send");
+    assert_eq!(client.send_draft(&message("D1")).unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(client.send_draft(&message("D1")).unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(client.send_mime(b"x").unwrap_err().kind, ErrorKind::Uncertain);
+    assert_eq!(client.send_mime(b"x").unwrap_err().kind, ErrorKind::InvalidResponse);
+    assert_eq!(fixture.requests().len(), 4, "nothing is sent twice");
+}
+
+#[test]
+fn reports_in_a_folder_are_found_by_their_item_class_page_by_page() {
+    let fixture = Fixture::new(|base| {
+        vec![
+            ok(json!({"value":[{"id":"R1"},{"id":"R2"}],
+                "@odata.nextLink": format!("{base}me/mailFolders/F1/messages?$skip=100&$select=id")})),
+            ok(json!({"value":[{"id":"R3"}]})),
+        ]
+    });
+    let client = writer(&fixture, "Mail.Read");
+    let first = client.report_ids(&folder("F1"), None).unwrap();
+    assert_eq!(first.items, vec![message("R1"), message("R2")]);
+    let next = first.checkpoint.expect("a next page");
+    assert_eq!(next.kind(), CheckpointKind::NextPage);
+    let second = client.report_ids(&folder("F1"), Some(&next)).unwrap();
+    assert_eq!(second.items, vec![message("R3")]);
+    assert!(second.checkpoint.is_none());
+    let requests = fixture.requests();
+    assert!(requests[0].starts_with("GET /v1.0/me/mailFolders/F1/messages?$select=id&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20%27String%200x001A%27%20and%20(ep/value%20eq%20%27REPORT.IPM.Note.NDR%27"), "{}", requests[0]);
+    assert!(requests[0].contains("REPORT.IPM.Note.IPNRN"), "{}", requests[0]);
+    assert!(requests[1].starts_with("GET /v1.0/me/mailFolders/F1/messages?$skip=100"), "{}", requests[1]);
+    // A next page for another folder is not followed.
+    let other = Fixture::new(|base| vec![ok(json!({"value":[], "@odata.nextLink": format!("{base}me/mailFolders/OTHER/messages?$skip=1")}))]);
+    assert_eq!(writer(&other, "Mail.Read").report_ids(&folder("F1"), None).unwrap_err().kind, ErrorKind::InvalidResponse);
+    // A read-basic grant does not read messages.
+    let none = Fixture::new(|_| vec![]);
+    assert_eq!(writer(&none, "Mail.ReadBasic").report_ids(&folder("F1"), None).unwrap_err().kind, ErrorKind::ConsentRequired);
+    assert!(none.requests().is_empty());
+}
+
+#[test]
+fn a_draft_send_keeps_its_category_and_a_lost_answer_is_uncertain_and_sent_once() {
+    let fixture = Fixture::new(|_| vec![(403, String::new(), String::new()), (503, String::new(), String::new())]);
+    let client = writer(&fixture, "Mail.ReadWrite Mail.Send");
+    assert_eq!(client.send_draft(&message("D1")).unwrap_err().kind, ErrorKind::AccessDenied);
+    assert_eq!(client.send_draft(&message("D1")).unwrap_err().kind, ErrorKind::Unavailable);
+    let silent = Fixture::new(|_| vec![]);
+    assert_eq!(writer(&silent, "Mail.ReadWrite Mail.Send").send_draft(&message("D1")).unwrap_err().kind, ErrorKind::Uncertain);
     assert_eq!(silent.requests().len(), 1);
 }
 

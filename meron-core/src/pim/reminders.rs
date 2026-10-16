@@ -1,28 +1,57 @@
 //! Calendar reminders as they come due, for both hosts.
 //!
-//! What is due is a question the store answers (`calendar::due_reminders`),
+//! What is due is a question the store answers (`calendar::reminders::due`),
 //! so nothing has to be kept in sync with the events: an event created,
 //! moved or deleted is accounted for at the next look. Each reminder is
 //! recorded as raised before it is handed back, so it is given once however
 //! often its window is resynced and whichever host asks — the desktop's
 //! minute watch (`calendar.reminder` on stdout), or the phone's foreground
 //! tick and background refresh (local notifications).
+//!
+//! Each look is recorded per account, with when it was and the zone's offset
+//! then (ADR-0056). The next look sees the gap however it came about: the
+//! machine asleep, the app closed, or a host whose timer stood still. What
+//! came due in that gap is given once, while its event is still on; what a
+//! change of zone moved is worked out in the zone the machine is in now.
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::TimeZone;
 use serde_json::{json, Value};
 
 use crate::calendar;
+use crate::calendar::reminders::{self as when, Due};
 use crate::engine::Engine;
 
 /// How often reminders are looked for. A minute is finer than any reminder
 /// is set to, and coarse enough to cost nothing.
 pub const TICK: Duration = Duration::from_secs(60);
 
-/// The `calendar.reminder` detail for one event, as the desktop has always
-/// sent it and as the phone posts it.
-pub fn reminder_detail(account: &str, event: &calendar::Event) -> Value {
+/// The `calendar.reminder` detail for one event at `now`, as the desktop has
+/// always sent it and as the phone posts it, with what the core knows better
+/// than a host that read its zone once at start (ADR-0056):
+///
+/// - `local_time`: a timed event's start on the clock of `zone` (`null` for
+///   an all-day one);
+/// - `started`: whether the event had already started, as a reminder given
+///   late (after a sleep) can be;
+/// - `local_date`: the event's date in `zone` ("YYYY-MM-DD") when it is not
+///   today's, `null` when it is.
+pub fn reminder_detail<Tz: TimeZone>(account: &str, event: &calendar::Event, zone: &Tz, now: i64) -> Value
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let in_zone = |instant: i64| zone.timestamp_opt(instant, 0).earliest();
+    let local_time = (!event.all_day).then(|| in_zone(event.start)).flatten().map(|start| start.format("%H:%M").to_string());
+    let date = if event.all_day {
+        chrono::DateTime::from_timestamp(event.start, 0).map(|day| day.date_naive())
+    } else {
+        in_zone(event.start).map(|start| start.date_naive())
+    };
+    let today = in_zone(now).map(|now| now.date_naive());
+    let local_date = date.filter(|date| Some(*date) != today).map(|date| date.format("%Y-%m-%d").to_string());
+    let start = when::timing(event, zone).map_or(event.start, |timing| timing.start);
     json!({
         "account": account,
         "event": event.id,
@@ -31,36 +60,100 @@ pub fn reminder_detail(account: &str, event: &calendar::Event) -> Value {
         "start": event.start,
         "all_day": event.all_day,
         "minutes": event.reminder_minutes,
+        "local_time": local_time,
+        "started": start < now,
+        "local_date": local_date,
     })
 }
 
-/// The reminders due at `now` on `accounts`, each already recorded as raised.
+/// An account whose floating calendars are to be read again after a change
+/// of zone, and the window to read: around the change, so asking again
+/// while a read runs is the same window, which `pim::calendar` runs once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reread {
+    pub account: String,
+    pub from: i64,
+    pub to: i64,
+}
+
+impl Reread {
+    fn since(account: &str, since: i64) -> Reread {
+        Reread { account: account.to_string(), from: since - 86_400 * 31, to: since + 86_400 * 366 }
+    }
+}
+
+/// What one look found.
+#[derive(Debug, Default, PartialEq)]
+pub struct Look {
+    /// The `calendar.reminder` details to give, each already recorded.
+    pub reminders: Vec<Value>,
+    /// Accounts whose zone changed and that have calendars a floating time
+    /// can come from (CalDAV, subscribed): to be read again, since such a
+    /// time is read in the zone of the read. Asked again until done.
+    pub reread: Vec<Reread>,
+}
+
+/// The reminders due at `now` on `accounts`, in `zone`, each already
+/// recorded as raised, and each account's look recorded.
 ///
-/// Paused and muted accounts are skipped: a paused account is one the reader
-/// asked to stop hearing from, and a muted one is one whose notifications they
-/// silenced. Recorded before it is returned: a reminder given twice is worse
-/// than one lost to a crash in between.
-pub fn take_due(engine: &Arc<Engine>, accounts: &[String], now: i64) -> Vec<Value> {
-    let mut raised = Vec::new();
+/// A paused account is one the reader asked to stop hearing from, and a
+/// muted one is one whose notifications they silenced: neither is reminded,
+/// and its look moves on all the same, so a reminder that came due meanwhile
+/// is not given later as missed (one whose event has not started still is,
+/// on time). A change of zone is noted first all the same: a muted account's
+/// calendars are read again, a paused one's once it is resumed.
+///
+/// Recorded before it is returned: a reminder given twice is worse than one
+/// lost to a crash in between. A look that could not finish (the store
+/// failed) is not recorded, so the next one looks at the same gap again.
+pub fn look<Tz: TimeZone>(engine: &Arc<Engine>, accounts: &[String], now: i64, zone: &Tz) -> Look
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let mut look = Look::default();
     for account in accounts {
-        if engine.is_paused(account) || engine.is_muted(account) {
-            continue;
-        }
-        let due = {
-            let db = engine.db.lock().unwrap();
-            calendar::due_reminders(&db, account, now).unwrap_or_default()
-        };
-        for event in due {
-            {
-                let db = engine.db.lock().unwrap();
-                if calendar::mark_reminder_fired(&db, account, &event.id, event.start, now).is_err() {
-                    continue;
-                }
+        let paused = engine.is_paused(account);
+        let quiet = paused || engine.is_muted(account);
+        let db = engine.db.lock().unwrap();
+        let Ok(previous) = when::previous_look(&db, account) else { continue };
+        let mut complete = true;
+        if previous.is_some_and(|previous| previous.zone_changed(zone)) {
+            match when::floating_calendars(&db, account) {
+                Ok(calendars) if calendars.is_empty() => {}
+                Ok(_) => complete &= when::mark_reread(&db, account, now).is_ok(),
+                Err(_) => complete = false,
             }
-            raised.push(reminder_detail(account, &event));
+        }
+        if !paused {
+            if let Ok(Some(since)) = when::reread_due(&db, account, now) {
+                look.reread.push(Reread::since(account, since));
+            }
+        }
+        if !quiet {
+            match when::due(&db, account, now, zone, previous) {
+                Ok(due) => {
+                    for Due { event, .. } in due {
+                        if calendar::mark_reminder_fired(&db, account, &event.id, event.start, now).is_err() {
+                            complete = false;
+                            continue;
+                        }
+                        look.reminders.push(reminder_detail(account, &event, zone, now));
+                    }
+                }
+                Err(_) => complete = false,
+            }
+        }
+        if complete {
+            let _ = when::record_look(&db, account, now, zone);
         }
     }
-    raised
+    look
+}
+
+/// [`look`] in this machine's zone, as it is now: the reminders only. The
+/// phone reads its calendars again on its own quarter-hour refresh.
+pub fn take_due(engine: &Arc<Engine>, accounts: &[String], now: i64) -> Vec<Value> {
+    look(engine, accounts, now, &chrono::Local).reminders
 }
 
 /// Drops records of reminders long past, so the table does not grow forever.
@@ -70,129 +163,4 @@ pub fn forget_old(engine: &Arc<Engine>, now: i64) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct MemoryHost;
-    impl crate::engine::EngineHost for MemoryHost {
-        fn open_db(&self) -> anyhow::Result<rusqlite::Connection> {
-            crate::store::open_at(":memory:")
-        }
-        fn apply_secret(&self, _: &rusqlite::Connection, _: &str, _: &mut crate::imap::Creds) {}
-        fn store_secret(&self, _: &rusqlite::Connection, _: &str, _: &crate::secrets::Secrets) -> anyhow::Result<()> {
-            Ok(())
-        }
-    }
-
-    const NOW: i64 = 1_800_000_000;
-
-    fn engine_with(events: &[calendar::Event]) -> Arc<Engine> {
-        let engine = Arc::new(Engine::new(Box::new(MemoryHost)).unwrap());
-        {
-            let db = engine.db.lock().unwrap();
-            calendar::upsert_calendars(
-                &db,
-                "a",
-                &[calendar::Calendar {
-                    id: "local:home".into(),
-                    name: "Home".into(),
-                    kind: calendar::CalendarKind::Local,
-                    enabled: true,
-                    ..Default::default()
-                }],
-            )
-            .unwrap();
-            calendar::replace_window(&db, "a", "local:home", (NOW - 86_400, NOW + 86_400 * 30), events).unwrap();
-        }
-        engine
-    }
-
-    fn event(id: &str, start: i64, minutes: Option<i64>) -> calendar::Event {
-        calendar::Event {
-            id: id.into(),
-            calendar_id: "local:home".into(),
-            subject: format!("Subject {id}"),
-            start,
-            end: start + 3_600,
-            location: Some("Room 1".into()),
-            reminder_minutes: minutes,
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn a_reminder_is_given_once_when_its_time_comes() {
-        let engine = engine_with(&[
-            event("soon", NOW + 600, Some(15)),
-            event("later", NOW + 7_200, Some(15)),
-            event("silent", NOW + 300, None),
-            event("started", NOW - 60, Some(15)),
-        ]);
-        let accounts = vec!["a".to_string()];
-        let due = take_due(&engine, &accounts, NOW);
-        assert_eq!(
-            due,
-            vec![json!({
-                "account": "a", "event": "soon", "subject": "Subject soon", "location": "Room 1",
-                "start": NOW + 600, "all_day": false, "minutes": 15,
-            })],
-            "only the one whose reminder time has come and that has not started",
-        );
-        assert!(take_due(&engine, &accounts, NOW + 60).is_empty(), "given once");
-        let later = take_due(&engine, &accounts, NOW + 7_200 - 900);
-        assert_eq!(later.len(), 1);
-        assert_eq!(later[0]["event"], "later");
-    }
-
-    #[test]
-    fn a_moved_event_is_reminded_again_at_its_new_time() {
-        let engine = engine_with(&[event("meeting", NOW + 600, Some(15))]);
-        let accounts = vec!["a".to_string()];
-        assert_eq!(take_due(&engine, &accounts, NOW).len(), 1);
-        {
-            let db = engine.db.lock().unwrap();
-            calendar::replace_window(
-                &db,
-                "a",
-                "local:home",
-                (NOW - 86_400, NOW + 86_400 * 30),
-                &[event("meeting", NOW + 3_600, Some(15))],
-            )
-            .unwrap();
-        }
-        assert!(take_due(&engine, &accounts, NOW + 60).is_empty());
-        assert_eq!(take_due(&engine, &accounts, NOW + 3_600 - 600).len(), 1, "the new start is a new moment");
-    }
-
-    #[test]
-    fn hidden_calendars_and_unlisted_accounts_raise_nothing() {
-        let engine = engine_with(&[event("soon", NOW + 600, Some(15))]);
-        assert!(take_due(&engine, &[], NOW).is_empty(), "only the accounts asked about");
-        assert!(take_due(&engine, &["b".to_string()], NOW).is_empty());
-        {
-            let db = engine.db.lock().unwrap();
-            calendar::set_calendar_enabled(&db, "a", "local:home", false).unwrap();
-        }
-        assert!(take_due(&engine, &["a".to_string()], NOW).is_empty(), "a hidden calendar is not reminded of");
-        {
-            let db = engine.db.lock().unwrap();
-            calendar::set_calendar_enabled(&db, "a", "local:home", true).unwrap();
-        }
-        // Still due: nothing was recorded while it was hidden.
-        assert_eq!(take_due(&engine, &["a".to_string()], NOW).len(), 1);
-    }
-
-    #[test]
-    fn old_records_are_forgotten() {
-        let engine = engine_with(&[event("soon", NOW + 600, Some(15))]);
-        assert_eq!(take_due(&engine, &["a".to_string()], NOW).len(), 1);
-        forget_old(&engine, NOW + 15 * 86_400);
-        let left: i64 = engine
-            .db
-            .lock()
-            .unwrap()
-            .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(left, 0);
-    }
-}
+mod tests;

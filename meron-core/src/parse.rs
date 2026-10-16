@@ -132,6 +132,10 @@ pub struct Message {
     /// Described only: nothing is sent unless the person says so.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt: Option<crate::receipts::ReceiptRequest>,
+    /// The delivery or read report this message is (RFC 3464 / RFC 8098,
+    /// ADR-0057), as read from its machine-readable part.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report: Option<crate::receipts::report::Report>,
     /// What tracking protection kept this message from fetching (#107), set
     /// when it is prepared for reading, never stored.
     #[serde(default, skip)]
@@ -280,6 +284,7 @@ pub fn parse_message(raw: &[u8], media: Option<&MediaCtx>) -> Message {
         },
         invitation,
         receipt: crate::receipts::request_of(&mail),
+        report: crate::receipts::report::report_of(&mail),
         trackers_blocked: Vec::new(),
         trackers_protected: false,
     }

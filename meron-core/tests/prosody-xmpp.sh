@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Starts a throwaway Prosody XMPP server on 127.0.0.1 for the chat tests
-# (#111): domain `chat.test`, users `ana` and `pau` (password `secret`),
+# (#111): domain `chat.test`, users `ana` and `pau` (password `secret`;
+# `eva` and `joan` only for the presence test, ADR-0055, so other tests'
+# sessions do not mix into the statuses it reads),
 # message archive (MAM), carbons, group chat at `rooms.chat.test` with its
 # own archive (ADR-0044), and HTTP File Upload at `upload.chat.test`.
 # Plain XMPP on loopback only, so the tests can see what the server does
@@ -63,7 +65,7 @@ Component "upload.chat.test" "http_file_share"
   http_file_share_access = { "chat.test" }
 CONF
 chmod -R 0777 "$DIR"
-for user in ana pau; do
+for user in ana pau eva joan; do
   runuser -u prosody -- prosodyctl --config "$DIR/prosody.cfg.lua" register "$user" chat.test secret
 done
 # Prosody refuses to run as root; it runs as its package's own user.

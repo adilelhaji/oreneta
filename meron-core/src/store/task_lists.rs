@@ -69,6 +69,9 @@ pub struct TaskList {
     pub synced_at: Option<i64>,
     pub last_error: String,
     pub conflicts: i64,
+    /// ADR-0058: the Exchange account whose Tasks folder the list is, empty
+    /// for any other list.
+    pub ews_account: String,
 }
 
 pub fn lists(conn: &Connection) -> Result<Vec<TaskList>> {
@@ -77,7 +80,8 @@ pub fn lists(conn: &Connection) -> Result<Vec<TaskList>> {
                 (SELECT COUNT(*) FROM tasks t
                   WHERE t.list_id = l.id AND t.completed_at IS NULL AND t.pending <> 'delete'),
                 l.remote_url, l.remote_user, l.synced_at, l.last_error,
-                (SELECT COUNT(*) FROM tasks t WHERE t.list_id = l.id AND t.conflict <> '')
+                (SELECT COUNT(*) FROM tasks t WHERE t.list_id = l.id AND t.conflict <> ''),
+                l.ews_account
            FROM task_lists l ORDER BY l.position, l.created_at, l.name",
     )?;
     let rows = stmt.query_map([], |row| {
@@ -91,6 +95,7 @@ pub fn lists(conn: &Connection) -> Result<Vec<TaskList>> {
             synced_at: row.get(6)?,
             last_error: row.get(7)?,
             conflicts: row.get(8)?,
+            ews_account: row.get(9)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -196,10 +201,16 @@ fn list_exists(conn: &Connection, id: &str) -> Result<bool> {
     Ok(conn.prepare("SELECT 1 FROM task_lists WHERE id = ?1")?.exists(params![id])?)
 }
 
-/// The CalDAV collection a list is kept in, or empty for a local list.
+/// Where a list is kept: its CalDAV collection, `ews:` and the account for
+/// an Exchange account's Tasks folder (ADR-0058), or empty for a local list.
 pub fn remote_of_list(conn: &Connection, id: &str) -> Result<String> {
     Ok(conn
-        .query_row("SELECT remote_url FROM task_lists WHERE id = ?1", params![id], |row| row.get(0))
+        .query_row(
+            "SELECT CASE WHEN ews_account <> '' THEN 'ews:' || ews_account ELSE remote_url END
+               FROM task_lists WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
         .optional()?
         .unwrap_or_default())
 }
@@ -209,7 +220,7 @@ pub fn remote_of_list(conn: &Connection, id: &str) -> Result<String> {
 fn sync_state(conn: &Connection, id: i64) -> Result<Option<(String, bool, bool)>> {
     Ok(conn
         .query_row(
-            "SELECT t.list_id, COALESCE(l.remote_url, '') <> '', t.recurring
+            "SELECT t.list_id, COALESCE(l.remote_url, '') <> '' OR COALESCE(l.ews_account, '') <> '', t.recurring
                FROM tasks t LEFT JOIN task_lists l ON l.id = t.list_id
               WHERE t.id = ?1 AND t.pending <> 'delete'",
             params![id],
@@ -233,7 +244,7 @@ pub fn touched(conn: &Connection, id: i64) -> Result<()> {
     conn.execute(
         "UPDATE tasks SET pending = 'put', sync_seq = sync_seq + 1
           WHERE id = ?1 AND pending <> 'delete'
-            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '')",
+            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '' OR ews_account <> '')",
         params![id],
     )?;
     Ok(())

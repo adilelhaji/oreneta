@@ -434,6 +434,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.carddavCall("directory.search", payload, "account")
 	case "google.contacts.sync":
 		return a.carddavCall("google.contacts.sync", payload, "account")
+	case "exchange.contacts.sync":
+		return a.carddavCall("exchange.contacts.sync", payload, "account")
 	case "carddav.list":
 		return a.carddavList(payload)
 	case "people.list":
@@ -587,7 +589,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.tasksPassthrough(command, payload)
 	// Task lists kept on a CalDAV server (ADR-0039): the core finds, binds,
 	// syncs and settles conflicts; the password goes to the keychain there.
-	case "tasks.caldavDiscover", "tasks.caldavAdd", "tasks.sync", "tasks.resolveConflict":
+	// The same for a list kept in an Exchange account's Tasks folder (ADR-0058).
+	case "tasks.caldavDiscover", "tasks.caldavAdd", "tasks.exchangeAdd", "tasks.sync", "tasks.resolveConflict":
 		return a.tasksPassthrough(command, payload)
 	// Meeting invitations by mail (#102): the core reads, answers and files
 	// them; each call is the person's own action.
@@ -619,7 +622,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"chat.markRead", "chat.send", "chat.retry", "context.person",
 		// Group chats and files in chat (ADR-0044).
 		"chat.rooms", "chat.join", "chat.leave", "chat.invitations", "chat.dismissInvitation",
-		"chat.sendFile", "chat.cancelUpload":
+		"chat.sendFile", "chat.cancelUpload",
+		// Presence, mentions and private messages in rooms (ADR-0055).
+		"chat.presence", "chat.setPresence", "chat.subscribe", "chat.answerSubscription", "chat.occupants":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

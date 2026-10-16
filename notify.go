@@ -20,6 +20,7 @@ type nativeLabels struct {
 	trayShow, trayHide, trayHideTooltip, trayQuit         string
 	trayDoNotDisturb                                      string
 	newMessage, newMessageCount, noSubject, unknownSender string
+	reminderStarted                                       string
 }
 
 var (
@@ -31,6 +32,7 @@ var (
 		newMessage:       "New message",
 		newMessageCount:  "{count, plural, one {1 new message} other {{count} new messages}}",
 		noSubject:        "(no subject)", unknownSender: "unknown sender",
+		reminderStarted: "Started at {time}",
 	}
 )
 
@@ -56,6 +58,7 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	set(&currentLabels.newMessageCount, "newMessageCount")
 	set(&currentLabels.noSubject, "noSubject")
 	set(&currentLabels.unknownSender, "unknownSender")
+	set(&currentLabels.reminderStarted, "reminderStarted")
 	labels := currentLabels
 	// Released before trayMenuMu is taken: trayReady holds trayMenuMu while it
 	// reads the labels, so holding both here in the other order would deadlock.
@@ -127,6 +130,29 @@ type notification struct {
 	body     string
 	account  string
 	threadID string
+	// plainBody marks a body written by someone else (a chat message): a
+	// notification service that reads markup must show it as text.
+	plainBody bool
+}
+
+// markupText escapes a plain text for a notification service that reads a
+// small markup (freedesktop's body-markup), so `<b>` or `&` someone typed
+// is shown, not obeyed.
+func markupText(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
+}
+
+// toastText keeps a text inside the CDATA section the Windows toast template
+// puts it in: a "]]>" in it would end the section and let the rest be read
+// as XML. It is split across two sections and shows unchanged.
+func toastText(s string) string {
+	return strings.ReplaceAll(s, "]]>", "]]]]><![CDATA[>")
+}
+
+// toastAttr escapes a value for an XML attribute of the Windows toast
+// template, which inserts it as is; Windows hands it back unescaped.
+func toastAttr(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;").Replace(s)
 }
 
 // notifyIcon writes the embedded app icon to a stable temp path the first time
@@ -166,6 +192,8 @@ func (a *App) handleSidecarEvent(name string, detail any) {
 		a.notifyReminder(detail)
 	case "tasks.reminder":
 		a.notifyTaskReminder(detail)
+	case "chat.notify":
+		a.notifyChat(detail)
 	}
 }
 
@@ -332,15 +360,33 @@ func (a *App) notifyReminder(detail any) {
 	start, _ := m["start"].(float64)
 	account, _ := m["account"].(string)
 
+	localTime, _ := m["local_time"].(string)
+	localDate, _ := m["local_date"].(string)
+	started, _ := m["started"].(bool)
+	labels := a.currentNativeLabels()
+
 	if subject == "" {
-		subject = a.currentNativeLabels().noSubject
+		subject = labels.noSubject
 	}
 
 	// The body answers "when", which is the whole point of a reminder; the
-	// place follows, since that is what decides whether to set off now.
+	// place follows, since that is what decides whether to set off now. The
+	// core says the start on the clock of the zone the machine is in now
+	// (local_time, ADR-0056): Go reads its zone once, at start, so after a
+	// change of zone its own reading would be the old clock's. It also says
+	// the date when it is not today's (local_date), and whether the event had
+	// already started, as one reminded late, after a sleep, can have.
 	var body string
-	if !allDay && start > 0 {
+	switch {
+	case allDay:
+		body = localDate
+	case localTime != "":
+		body = strings.TrimSpace(localDate + " " + localTime)
+	case start > 0:
 		body = time.Unix(int64(start), 0).Format("15:04")
+	}
+	if started && !allDay && body != "" {
+		body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
 	}
 	if location != "" {
 		if body != "" {
@@ -372,6 +418,35 @@ func (a *App) notifyTaskReminder(detail any) {
 		body = time.Unix(int64(due), 0).Format("2006-01-02")
 	}
 	dispatchNotification(a, notification{title: title, body: body})
+}
+
+// chatNotificationPrefix marks a notification target as a chat conversation
+// rather than a mail thread; the frontend opens it in the Chat view.
+const chatNotificationPrefix = "chat:"
+
+// notifyChat raises the OS notification for a chat message the core says is
+// worth one (ADR-0055): it already left out what was caught up on, rooms
+// without a mention and a busy status. Do not disturb and quiet hours apply
+// as for mail: a chat message is a message, not a reminder (ADR-0049).
+func (a *App) notifyChat(detail any) {
+	m, ok := detail.(map[string]any)
+	if !ok || notificationsSuppressed(quietMail) {
+		return
+	}
+	account, _ := m["account"].(string)
+	conversation, _ := m["conversation"].(string)
+	title, _ := m["title"].(string)
+	body, _ := m["body"].(string)
+	if account == "" || conversation == "" {
+		return
+	}
+	dispatchNotification(a, notification{
+		title:     firstNonEmpty(title, conversation),
+		body:      body,
+		account:   account,
+		threadID:  chatNotificationPrefix + conversation,
+		plainBody: true,
+	})
 }
 
 func notificationThreadID(account, folder, threadKey string) string {

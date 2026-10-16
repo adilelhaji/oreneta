@@ -101,7 +101,7 @@
 - «Regenerar la tarea N días después de completarla» (Outlook): no hay
   forma estándar de guardarlo en un VTODO; queda para otra entrega.
 - Tareas de Google Tasks, Microsoft To Do (Graph) y Exchange (EWS): siguen
-  sin proveedor; la fila SET-20 lo dice.
+  sin proveedor; la fila SET-20 lo dice. Exchange ya lo tiene (ADR-0058).
 - «Saltar esta ocurrencia» sin completarla.
 - El enésimo día de la semana en eventos (falta escribirlo en Exchange y
   Google).

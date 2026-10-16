@@ -19,6 +19,7 @@ import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
 import {
   MAIL_LIST,
+  addExchangeTaskList,
   createTaskList,
   deleteTask,
   deleteTaskList,
@@ -37,6 +38,7 @@ import {
   type TaskList,
 } from '../../states/tasks'
 import { openMailAccount } from '../../states/kanban'
+import { accounts$ } from '../../states/accounts'
 import { confirmAction, showToast, ui$ } from '../../states/ui'
 import { Button } from '../button/Button'
 import { EmptyState } from '../empty-state/EmptyState'
@@ -95,6 +97,21 @@ export function TasksView() {
   const [choosing, setChoosing] = useState<number | null>(null)
   const syncing = useValue(tasks$.syncing)
   const listsById = new Map(lists.map((list) => [list.id, list]))
+  // Exchange accounts whose Tasks folder is not a list yet (ADR-0058).
+  const accounts = useValue(accounts$)
+  const exchangeWithout = accounts.filter(
+    (account) => !!account.ews_url && !lists.some((list) => list.ews_account === account.id),
+  )
+  // One at a time: the first read of a folder can take a while.
+  const [addingExchange, setAddingExchange] = useState('')
+  const addExchange = (account: string, email: string) => {
+    setAddingExchange(account)
+    addExchangeTaskList(account, email)
+      .catch((error) =>
+        showToast(error instanceof Error ? error.message : t('tasks.syncFailed', { defaultValue: 'Sync failed' }), 'error'),
+      )
+      .finally(() => setAddingExchange(''))
+  }
 
   useEffect(() => {
     if (!loaded) void loadTasks()
@@ -261,6 +278,18 @@ export function TasksView() {
         >
           + {t('tasks.addCalDavList', { defaultValue: 'CalDAV task list…' })}
         </button>
+        {exchangeWithout.map((account) => (
+          <button
+            key={account.id}
+            type="button"
+            onClick={() => addExchange(account.id, account.email)}
+            disabled={!!addingExchange}
+            aria-busy={addingExchange === account.id}
+            className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer disabled:cursor-wait disabled:opacity-50"
+          >
+            + {t('tasks.addExchangeList', { email: account.email, defaultValue: 'Exchange tasks of {email}' })}
+          </button>
+        ))}
         {current && current.id !== MAIL_LIST && (
           <span className="ml-auto flex gap-1">
             <button
@@ -457,11 +486,16 @@ function CompleteChoice({ onChoose, onCancel }: { onChoose: (stopRepeating: bool
  * sync failed if it did (ADR-0039). */
 function SyncStatus({ list, syncing, onSync }: { list: TaskList; syncing: boolean; onSync: () => void }) {
   const { t } = useTranslation()
-  let host = list.remote_url ?? ''
-  try {
-    host = new URL(host).host
-  } catch {
-    // Shown as stored.
+  const accounts = useValue(accounts$)
+  // An Exchange account's Tasks folder is named by the account (ADR-0058).
+  const exchange = list.ews_account && (accounts.find((account) => account.id === list.ews_account)?.email || list.ews_account)
+  let host = exchange || list.remote_url || ''
+  if (!list.ews_account) {
+    try {
+      host = new URL(host).host
+    } catch {
+      // Shown as stored.
+    }
   }
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-header px-4 py-2 text-caption text-secondary">
@@ -508,6 +542,21 @@ function ConflictBar({ task }: { task: Task }) {
     setBusy(true)
     await resolveTaskConflict(task.id, keep)
     setBusy(false)
+  }
+  // A change Exchange can never take (ADR-0058): nothing to choose between,
+  // the task waits to be changed, and the list's other changes went on.
+  if (task.conflict?.startsWith('rejected: ')) {
+    return (
+      <div className="flex basis-full items-center gap-1.5 rounded-control bg-warning-soft px-2.5 py-1.5 text-caption text-primary">
+        <AlertTriangle size={14} strokeWidth={1.75} className="shrink-0 text-warning" aria-hidden="true" />
+        <span>
+          {t('tasks.conflictRejected', {
+            reason: task.conflict.slice('rejected: '.length),
+            defaultValue: 'The server cannot take this change: {reason}. Change the task to send it.',
+          })}
+        </span>
+      </div>
+    )
   }
   const reason =
     task.conflict === 'deleted'

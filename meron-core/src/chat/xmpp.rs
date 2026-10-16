@@ -9,9 +9,15 @@
 //! Group chats (XEP-0045) and files (XEP-0363) ride the same session
 //! (ADR-0044): rooms are joined again on each new connection, and a file's
 //! upload is asked for, put over HTTPS and then sent as a link.
+//!
+//! Presence, mentions, notifications and private messages in rooms follow
+//! ADR-0055: the person's status is announced (so only contacts allowed to
+//! see it get it), contacts' and occupants' statuses are kept for the
+//! session, and a message new to the person may raise a system notification.
 
 use super::files::{self, FileError};
-use super::{ChatAccount, ChatMessage, Invitation, KIND_CHAT, KIND_GROUP};
+use super::presence::{self, Applied, Arrival, ContactPresence};
+use super::{ChatAccount, ChatMessage, Invitation, KIND_CHAT, KIND_GROUP, KIND_PRIVATE, mentions};
 use anyhow::{Context, Result};
 use futures::stream::FuturesUnordered;
 use futures::{SinkExt, StreamExt};
@@ -181,6 +187,7 @@ pub fn interpret(message: &Message, own: &BareJid, archive_id: Option<String>, s
         file_name: link.as_deref().map(files::file_name_of),
         file_url: link,
         file_size: None,
+        mention: false,
     })
 }
 
@@ -225,6 +232,55 @@ pub fn interpret_group(
         file_name: link.as_deref().map(files::file_name_of),
         file_url: link,
         file_size: None,
+        mention: false,
+    })
+}
+
+/// A private message with someone in a room (XEP-0045 §7.5): a chat
+/// message to or from `room/nick`. It is its own conversation, tied to the
+/// room; who speaks is a nickname. Our own (a copy from another device, or
+/// from our archive) is addressed to the occupant.
+pub fn interpret_private(
+    message: &Message,
+    own: &BareJid,
+    room: &BareJid,
+    nick: &str,
+    archive_id: Option<String>,
+    stamp: i64,
+    account: &str,
+) -> Option<ChatMessage> {
+    if !matches!(message.type_, MessageType::Chat | MessageType::Normal) {
+        return None;
+    }
+    let from = message.from.as_ref();
+    let outgoing = from.is_none_or(|f| f.to_bare() == *own);
+    let other = if outgoing { message.to.as_ref()? } else { from? };
+    if other.to_bare() != *room {
+        return None;
+    }
+    let occupant = other.resource()?.as_str().to_string();
+    let link = files::link_of(message);
+    let body = body_of(message, &link)?;
+    // Only our own server's archive id counts, as for any direct message.
+    let (origin, archived, when) = ids(message, own, archive_id, stamp);
+    let id = origin
+        .or_else(|| message.id.as_ref().map(|i| i.0.clone()))
+        .or_else(|| archived.clone())?;
+    Some(ChatMessage {
+        account: account.into(),
+        conversation: super::normalize_conversation(&format!("{room}/{occupant}")),
+        id,
+        stanza_id: archived,
+        direction: if outgoing { "out" } else { "in" }.into(),
+        sender: if outgoing { nick.to_string() } else { occupant },
+        body,
+        stamp: when,
+        state: if outgoing { "accepted" } else { "received" }.into(),
+        kind: KIND_PRIVATE.into(),
+        file_name: link.as_deref().map(files::file_name_of),
+        file_url: link,
+        file_size: None,
+        mention: false,
     })
 }
 
@@ -296,10 +352,41 @@ pub fn outgoing(to: &BareJid, id: &str, body: &str) -> Message {
     outgoing_message(to, id, body, false, None)
 }
 
+/// A private message to someone in a room, addressed to their place in it
+/// (`room/nick`) and marked as going through the room (XEP-0045 §7.5), so
+/// it is not mistaken for a direct one. No receipt is asked: the room
+/// relays it, and the other person need not tell us when they read it.
+pub fn outgoing_private(room: &BareJid, nick: &str, id: &str, body: &str, file: Option<&str>) -> Result<Message> {
+    let to = room.with_resource_str(nick).context("this nickname cannot be written to")?;
+    let mut message = Message::new(Some(Jid::from(to)));
+    message.type_ = MessageType::Chat;
+    message.id = Some(tokio_xmpp::parsers::message::Id(id.into()));
+    message.bodies.insert(tokio_xmpp::parsers::message::Lang::default(), body.into());
+    message.payloads.push(OriginId { id: id.into() }.into());
+    message.payloads.push(Element::builder("x", tokio_xmpp::parsers::ns::MUC_USER).build());
+    Ok(match file {
+        Some(url) => files::with_link(message, url),
+        None => message,
+    })
+}
+
+/// A message to a room with XEP-0372 references for the nicknames the
+/// person picked from the suggestions and kept in the text (ADR-0055).
+pub fn outgoing_group(room: &BareJid, id: &str, body: &str, file: Option<&str>, mentioned: &[String]) -> Message {
+    let mut message = outgoing_message(room, id, body, true, file);
+    message.payloads.extend(mentions::references(room, body, mentioned));
+    message
+}
+
 /// Joining a room (or joining it again): with its password if it has one,
 /// and asking only for what was said since the newest message kept here, or
 /// the last 50 when nothing is.
 pub fn join_presence(room: &BareJid, nick: &str, password: Option<&str>, since: Option<i64>) -> Result<Presence> {
+    join_presence_as(room, nick, password, since, "available")
+}
+
+/// Joining while away or busy says so (availability only, never the text).
+pub fn join_presence_as(room: &BareJid, nick: &str, password: Option<&str>, since: Option<i64>, show: &str) -> Result<Presence> {
     let to = room.with_resource_str(nick).context("this nickname cannot be used in a room")?;
     let history = match since.and_then(|s| chrono::DateTime::from_timestamp(s, 0)) {
         Some(at) => History::new().with_since(tokio_xmpp::parsers::date::DateTime(at.fixed_offset())),
@@ -309,7 +396,7 @@ pub fn join_presence(room: &BareJid, nick: &str, password: Option<&str>, since: 
     if let Some(password) = password.filter(|p| !p.is_empty()) {
         muc = muc.with_password(password.to_string());
     }
-    Ok(Presence::available().with_to(to).with_payload(muc))
+    Ok(presence::room_stanza(Jid::from(to), show).with_payload(muc))
 }
 
 pub fn leave_presence(room: &BareJid, nick: &str) -> Result<Presence> {
@@ -372,7 +459,15 @@ pub struct Upload {
 }
 
 pub enum Command {
-    Send { conversation: String, id: String, body: String, group: bool, file: Option<String> },
+    /// A conversation with `/` is a private one in a room (`room/nick`).
+    /// `mentions`: nicknames picked from the suggestions, for references.
+    Send { conversation: String, id: String, body: String, group: bool, file: Option<String>, mentions: Vec<String> },
+    /// The person changed their status: read again from the store.
+    Presence,
+    /// Ask to see someone's status.
+    Subscribe { jid: String },
+    /// Answer someone's request to see the person's status.
+    AnswerSubscription { jid: String, allow: bool },
     Join { room: String, nick: String, password: Option<String> },
     Leave { room: String, nick: String },
     Upload(Upload),
@@ -390,17 +485,21 @@ pub struct Options {
     /// Certificate authorities (PEM) trusted for files instead of the usual
     /// ones: only for tests against a local server.
     pub file_roots: Vec<Vec<u8>>,
+    /// What the session knows about presence, shared with the app.
+    pub live: presence::Shared,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { room_password: Arc::new(|_| None), file_roots: Vec::new() }
+        Options { room_password: Arc::new(|_| None), file_roots: Vec::new(), live: Default::default() }
     }
 }
 
 /// What an answer to one of our questions (iq) is about.
 enum Asked {
     Mam(Option<String>),
+    /// What the account's own server offers (invisibility).
+    Features,
     Items,
     Info(Jid),
     Slot(String),
@@ -487,6 +586,20 @@ pub async fn run(
         };
         emit("chat.uploaded", detail);
     };
+    let live = options.live.clone();
+    // The saved status from the start, so it is never reported as
+    // "available" before the first connection.
+    if let Ok(saved) = super::presence::own(&db.lock().unwrap(), &account.id) {
+        live.lock().unwrap().own = saved;
+    }
+    let own_changed = || {
+        let mut detail = live.lock().unwrap().own_detail();
+        detail["account"] = json!(account.id);
+        emit("chat.own", detail);
+    };
+    let occupants_changed = |room: &str| emit("chat.occupants", json!({ "account": account.id, "room": room }));
+    // Rooms the room itself said we are in, on this stream.
+    let mut in_rooms: std::collections::HashSet<String> = Default::default();
     loop {
         tokio::select! {
             event = client.next() => {
@@ -499,7 +612,24 @@ pub async fn run(
                             if n > 0 { changed(""); }
                         }
                         emit("chat.status", json!({ "account": account.id, "state": "online" }));
-                        let _ = client.send_stanza(Presence::available().into()).await;
+                        // A new session starts from nothing; a resumed one keeps
+                        // what it had (XEP-0198), rooms and contacts included.
+                        if !resumed {
+                            live.lock().unwrap().fresh_session();
+                            in_rooms.clear();
+                            // The app drops what it showed of the old session;
+                            // contacts, requests and rooms say it all again.
+                            emit("chat.presence", json!({ "account": account.id, "reset": true }));
+                        }
+                        // The person's status: announced now, or, when invisible,
+                        // once the server says whether it can hide them.
+                        let own_presence = super::presence::own(&db.lock().unwrap(), &account.id).unwrap_or_default();
+                        live.lock().unwrap().own = own_presence;
+                        let domain = Jid::from(BareJid::from_parts(None, own.domain()));
+                        let token = client.send_iq(Some(domain), tokio_xmpp::IqRequest::Get(DiscoInfoQuery { node: None }.into())).await;
+                        ask(&pending, Asked::Features, token);
+                        announce(&mut client, &mut pending, &live, Applied::Offline).await;
+                        own_changed();
                         let _ = client.send_iq(None, tokio_xmpp::IqRequest::Set(carbons::Enable.into())).await;
                         let after = super::last_archive_id(&db.lock().unwrap(), &account.id).ok().flatten();
                         let token = client.send_iq(None, tokio_xmpp::IqRequest::Set(archive_query(after).into())).await;
@@ -507,9 +637,10 @@ pub async fn run(
                         // A resumed stream is still in its rooms; a new one joins them again.
                         if !resumed {
                             let rooms = super::rooms(&db.lock().unwrap(), &account.id).unwrap_or_default();
+                            let show = room_show(&live);
                             for room in rooms {
                                 let password = if room.has_password { (options.room_password)(&room.room) } else { None };
-                                join(&mut client, &db, &account.id, &room.room, &room.nick, password.as_deref(), &room_state).await;
+                                join(&mut client, &db, &account.id, &room.room, &room.nick, password.as_deref(), &show, &room_state).await;
                             }
                         }
                     }
@@ -519,6 +650,10 @@ pub async fn run(
                         // Kept should a version send it: uploads still waiting were
                         // not sent, and say so.
                         let _ = super::after_disconnect(&db.lock().unwrap(), &account.id);
+                        // What contacts and rooms said stays until the stream is
+                        // resumed or replaced; the app shows it only while online.
+                        live.lock().unwrap().applied = Applied::Offline;
+                        own_changed();
                         emit("chat.status", json!({ "account": account.id, "state": "offline", "message": error.to_string() }));
                         pending = FuturesUnordered::new();
                         uploads.searching = 0;
@@ -537,17 +672,46 @@ pub async fn run(
                                 "password": password,
                             }));
                         };
-                        let reply = handle_message(&db, &account.id, &own, &message, &changed, &invited);
-                        if let Some(receipt) = reply {
+                        let own_show = live.lock().unwrap().own.show.clone();
+                        let handled = handle_message(&db, &account.id, &own, &message, &own_show, &changed, &invited);
+                        if let Some(receipt) = handled.receipt {
                             let _ = client.send_stanza(receipt.into()).await;
+                        }
+                        if let Some(new) = handled.notify {
+                            emit("chat.notify", presence::notification(&new));
                         }
                     }
                     Event::Stanza(Stanza::Presence(presence)) => {
                         let Some(from) = presence.from.as_ref().map(|j| j.to_bare()) else { continue };
                         let room = from.to_string();
-                        if super::room(&db.lock().unwrap(), &account.id, &room).ok().flatten().is_none() { continue }
+                        let Some(nick) = super::room_nick(&db.lock().unwrap(), &account.id, &room).ok().flatten() else {
+                            // Not a room: a contact's status, or someone asking to see ours.
+                            match presence::contact_presence(&presence, &own) {
+                                Some(ContactPresence::Status { jid, resource, show, status, priority }) => {
+                                    // A contact beyond the bound is not kept, nor told to the app.
+                                    let seen = live.lock().unwrap().contacts.update(&jid, &resource, show, &status, priority);
+                                    if let Some(seen) = seen {
+                                        emit("chat.presence", json!({ "account": account.id, "jid": jid, "show": seen.show, "status": seen.status }));
+                                    }
+                                }
+                                Some(ContactPresence::Request { jid }) => {
+                                    if live.lock().unwrap().request(&jid) {
+                                        emit("chat.subscription", json!({ "account": account.id, "jid": jid }));
+                                    }
+                                }
+                                None => {}
+                            }
+                            continue;
+                        };
+                        // The room may give us another nickname than the one asked (210).
+                        if let Some(given) = presence::own_nick_in(&presence, &nick) {
+                            let _ = super::set_room_nick(&db.lock().unwrap(), &account.id, &room, &given);
+                        }
                         match room_presence(&presence) {
+                            // Our own presence again (after a status change): already in.
+                            Some(RoomPresence::Joined { .. }) if in_rooms.contains(&room) => {}
                             Some(RoomPresence::Joined { created }) => {
+                                in_rooms.insert(room.clone());
                                 room_state(&room, "joined", Value::Null);
                                 if created {
                                     let token = client.send_iq(Some(Jid::from(from.clone())), tokio_xmpp::IqRequest::Set(instant_room())).await;
@@ -560,11 +724,23 @@ pub async fn run(
                                     ask(&pending, Asked::Mam(Some(room.clone())), token);
                                 }
                             }
-                            Some(RoomPresence::Out) => room_state(&room, "out", Value::Null),
+                            Some(RoomPresence::Out) => {
+                                in_rooms.remove(&room);
+                                live.lock().unwrap().occupants.forget(&room);
+                                occupants_changed(&room);
+                                room_state(&room, "out", Value::Null)
+                            }
                             Some(RoomPresence::Error { condition, message }) => {
                                 room_state(&room, "error", json!({ "condition": condition, "message": message }))
                             }
-                            None => {}
+                            None => {
+                                // Someone else in the room came, changed or went.
+                                if let Some(change) = presence::occupant_change(&presence) {
+                                    if live.lock().unwrap().occupants.apply(&room, change) {
+                                        occupants_changed(&room);
+                                    }
+                                }
+                            }
                         }
                     }
                     Event::Stanza(_) => {}
@@ -585,6 +761,24 @@ pub async fn run(
                                 }
                             }
                         }
+                    }
+                    Asked::Features => {
+                        let supported = match answer {
+                            Ok(tokio_xmpp::IqResponse::Result(Some(element))) => {
+                                DiscoInfoResult::try_from(element).is_ok_and(|info| presence::supports_invisible(&info))
+                            }
+                            // No answer, or an error: the server does not say it can.
+                            _ => false,
+                        };
+                        let before = {
+                            let mut l = live.lock().unwrap();
+                            l.invisible_supported = Some(supported);
+                            l.applied
+                        };
+                        if before == Applied::Waiting {
+                            announce(&mut client, &mut pending, &live, before).await;
+                        }
+                        own_changed();
                     }
                     Asked::Items => {
                         discovery_answered(&mut uploads, &answer);
@@ -620,13 +814,20 @@ pub async fn run(
                     Ok(()) => {
                         // The file is up: its link goes as a message like any other.
                         let id = uuid::Uuid::new_v4().to_string();
-                        let sender = if upload.group {
-                            super::room(&db.lock().unwrap(), &account.id, &upload.conversation).ok().flatten().map(|r| r.nick).unwrap_or_default()
-                        } else {
-                            own.to_string()
+                        let private = super::split_private(&upload.conversation).map(|(room, _)| room.to_string());
+                        // In a room, and privately through one, we speak with our nickname.
+                        let sender = match (upload.group, &private) {
+                            (true, _) => super::room_nick(&db.lock().unwrap(), &account.id, &upload.conversation).ok().flatten().unwrap_or_default(),
+                            (false, Some(room)) => super::room_nick(&db.lock().unwrap(), &account.id, room).ok().flatten().unwrap_or_default(),
+                            (false, None) => own.to_string(),
                         };
                         let mut message = ChatMessage::chat(&account.id, &upload.conversation, &id, "out", &sender, &link, crate::store::now_unix(), "sending");
-                        message.kind = if upload.group { KIND_GROUP } else { KIND_CHAT }.into();
+                        message.kind = match (upload.group, &private) {
+                            (true, _) => KIND_GROUP,
+                            (false, Some(_)) => KIND_PRIVATE,
+                            (false, None) => KIND_CHAT,
+                        }
+                        .into();
                         message.file_url = Some(link.clone());
                         message.file_name = Some(upload.name.clone());
                         message.file_size = Some(upload.size as i64);
@@ -634,7 +835,7 @@ pub async fn run(
                         match queued {
                             Err(error) => uploaded(&upload, Err(FileError::File { detail: error.to_string() })),
                             Ok(()) => {
-                                deliver(&mut client, &db, &account.id, &emit, &upload.conversation, &id, &link, upload.group, Some(&link)).await;
+                                deliver(&mut client, &db, &account.id, &emit, &upload.conversation, &id, &link, upload.group, Some(&link), &[]).await;
                                 uploaded(&upload, Ok(id));
                             }
                         }
@@ -644,13 +845,70 @@ pub async fn run(
             command = commands.recv() => {
                 match command {
                     None | Some(Command::Stop) => break,
-                    Some(Command::Send { conversation, id, body, group, file }) => {
-                        deliver(&mut client, &db, &account.id, &emit, &conversation, &id, &body, group, file.as_deref()).await;
+                    Some(Command::Send { conversation, id, body, group, file, mentions }) => {
+                        deliver(&mut client, &db, &account.id, &emit, &conversation, &id, &body, group, file.as_deref(), &mentions).await;
+                    }
+                    Some(Command::Presence) => {
+                        let own_presence = super::presence::own(&db.lock().unwrap(), &account.id).unwrap_or_default();
+                        let before = {
+                            let mut l = live.lock().unwrap();
+                            l.own = own_presence;
+                            l.applied
+                        };
+                        // Offline, it is applied on connecting.
+                        if before != Applied::Offline {
+                            let now = announce(&mut client, &mut pending, &live, before).await;
+                            // Going unannounced takes the server's broadcast of
+                            // "unavailable", which also leaves every room
+                            // (RFC 6121 §4.6): join them again at once, so the
+                            // rooms keep the person in, as chosen.
+                            if presence::rejoin_rooms(before, now) {
+                                in_rooms.clear();
+                                live.lock().unwrap().occupants.clear();
+                                let rooms = super::rooms(&db.lock().unwrap(), &account.id).unwrap_or_default();
+                                let show = room_show(&live);
+                                for room in rooms {
+                                    let password = if room.has_password { (options.room_password)(&room.room) } else { None };
+                                    join(&mut client, &db, &account.id, &room.room, &room.nick, password.as_deref(), &show, &room_state).await;
+                                }
+                            }
+                            // What came while held back waited in the archive.
+                            if before == Applied::Withheld && now != Applied::Withheld {
+                                let after = super::last_archive_id(&db.lock().unwrap(), &account.id).ok().flatten();
+                                let token = client.send_iq(None, tokio_xmpp::IqRequest::Set(archive_query(after).into())).await;
+                                ask(&pending, Asked::Mam(None), token);
+                            }
+                            // Rooms hear the availability only, never the text.
+                            let show = room_show(&live);
+                            for room in &in_rooms {
+                                let Some(nick) = super::room_nick(&db.lock().unwrap(), &account.id, room).ok().flatten() else { continue };
+                                if let Some(to) = BareJid::from_str(room).ok().and_then(|r| r.with_resource_str(&nick).ok()) {
+                                    let _ = client.send_stanza(presence::room_stanza(Jid::from(to), &show).into()).await;
+                                }
+                            }
+                        }
+                        own_changed();
+                    }
+                    Some(Command::Subscribe { jid }) => {
+                        if let Ok(jid) = BareJid::from_str(&jid) {
+                            let _ = client.send_stanza(presence::subscription(&jid, PresenceType::Subscribe).into()).await;
+                        }
+                    }
+                    Some(Command::AnswerSubscription { jid, allow }) => {
+                        // Allowing goes only to someone who asked; denying, to anyone.
+                        let answer = live.lock().unwrap().answer(&jid, allow);
+                        if let (Some(kind), Ok(bare)) = (answer, BareJid::from_str(&jid)) {
+                            let _ = client.send_stanza(presence::subscription(&bare, kind).into()).await;
+                        }
+                        emit("chat.subscription", json!({ "account": account.id, "jid": jid, "answered": true }));
                     }
                     Some(Command::Join { room, nick, password }) => {
-                        join(&mut client, &db, &account.id, &room, &nick, password.as_deref(), &room_state).await;
+                        let show = room_show(&live);
+                        join(&mut client, &db, &account.id, &room, &nick, password.as_deref(), &show, &room_state).await;
                     }
                     Some(Command::Leave { room, nick }) => {
+                        in_rooms.remove(&room);
+                        live.lock().unwrap().occupants.forget(&room);
                         if let Ok(room) = BareJid::from_str(&room) {
                             if let Ok(presence) = leave_presence(&room, &nick) {
                                 let _ = client.send_stanza(presence.into()).await;
@@ -680,10 +938,55 @@ pub async fn run(
         }
     }
     let _ = client.send_end().await;
+    {
+        let mut l = live.lock().unwrap();
+        l.fresh_session();
+        l.applied = Applied::Offline;
+    }
     emit("chat.status", json!({ "account": account.id, "state": "stopped" }));
 }
 
+/// What joined rooms hear of the person's status: away or busy, or plainly
+/// there (also while hidden from contacts).
+fn room_show(live: &presence::Shared) -> String {
+    let show = live.lock().unwrap().own.show.clone();
+    if show == "invisible" { "available".into() } else { show }
+}
+
+/// Puts the person's chosen status on the stream, from where it stood
+/// (`before`): announced, hidden by the server (XEP-0186), or held back when
+/// invisible was chosen and the server cannot hide them. Never visible
+/// unless chosen.
+async fn announce(client: &mut Client, pending: &mut Pending, live: &presence::Shared, before: Applied) -> Applied {
+    let (own, supported) = {
+        let l = live.lock().unwrap();
+        (l.own.clone(), l.invisible_supported)
+    };
+    let now = presence::plan(&own.show, supported);
+    match now {
+        Applied::Announced => {
+            if before == Applied::Invisible {
+                let token = client.send_iq(None, tokio_xmpp::IqRequest::Set(presence::invisible_command(false))).await;
+                ask(pending, Asked::Ignored, token);
+            }
+            let _ = client.send_stanza(presence::own_stanza(&own.show, &own.status).into()).await;
+        }
+        Applied::Invisible if before != Applied::Invisible => {
+            let token = client.send_iq(None, tokio_xmpp::IqRequest::Set(presence::invisible_command(true))).await;
+            ask(pending, Asked::Ignored, token);
+        }
+        // Already announced on this stream: offline to contacts is what was chosen.
+        Applied::Withheld if before == Applied::Announced => {
+            let _ = client.send_stanza(Presence::unavailable().into()).await;
+        }
+        _ => {}
+    }
+    live.lock().unwrap().applied = now;
+    now
+}
+
 /// Joins a room, asking for what was said since the newest message kept.
+#[allow(clippy::too_many_arguments)]
 async fn join(
     client: &mut Client,
     db: &Arc<Mutex<Connection>>,
@@ -691,11 +994,12 @@ async fn join(
     room: &str,
     nick: &str,
     password: Option<&str>,
+    show: &str,
     room_state: &(dyn Fn(&str, &str, Value) + Sync),
 ) {
     let Ok(jid) = BareJid::from_str(room) else { return };
     let since = super::last_room_stamp(&db.lock().unwrap(), account, room).ok().flatten();
-    match join_presence(&jid, nick, password, since) {
+    match join_presence_as(&jid, nick, password, since, show) {
         Ok(presence) => {
             room_state(room, "joining", Value::Null);
             let _ = client.send_stanza(presence.into()).await;
@@ -717,14 +1021,22 @@ async fn deliver(
     body: &str,
     group: bool,
     file: Option<&str>,
+    mentions: &[String],
 ) {
     let changed = |c: &str| emit("chat.changed", json!({ "account": account, "conversation": c }));
-    let Ok(to) = BareJid::from_str(conversation) else {
+    // A private one goes to someone's place in a room; others to an address.
+    let stanza = match super::split_private(conversation) {
+        Some((room, nick)) => BareJid::from_str(room).ok().and_then(|room| outgoing_private(&room, nick, id, body, file).ok()),
+        None => BareJid::from_str(conversation).ok().map(|to| {
+            if group { outgoing_group(&to, id, body, file, mentions) } else { outgoing_message(&to, id, body, false, file) }
+        }),
+    };
+    let Some(stanza) = stanza else {
         let _ = super::set_state(&db.lock().unwrap(), account, id, "failed");
         changed(conversation);
         return;
     };
-    match client.send_stanza(outgoing_message(&to, id, body, group, file).into()).await {
+    match client.send_stanza(stanza.into()).await {
         Ok(mut token) => {
             let _ = super::set_state(&db.lock().unwrap(), account, id, "sent");
             changed(conversation);
@@ -863,30 +1175,50 @@ pub fn archive_query(after: Option<String>) -> mam::Query {
     }
 }
 
-/// Records one incoming message stanza; returns a delivery receipt to send,
-/// when the sender asked for one.
-fn handle_message(
+/// What one incoming message stanza led to: a delivery receipt to send,
+/// when the sender asked for one, and a message to notify about.
+#[derive(Debug, Default)]
+pub struct Handled {
+    pub receipt: Option<Message>,
+    pub notify: Option<ChatMessage>,
+}
+
+/// Whether a message carries a delay stamp: history a room replays on
+/// joining, or what the server kept while we were away.
+fn delayed(message: &Message) -> bool {
+    message.payloads.iter().any(|p| Delay::try_from(p.clone()).is_ok())
+}
+
+/// Records one incoming message stanza. `own_show` is the person's status
+/// now: busy holds notifications back.
+pub fn handle_message(
     db: &Arc<Mutex<Connection>>,
     account: &str,
     own: &BareJid,
     message: &Message,
+    own_show: &str,
     changed: &dyn Fn(&str),
     invited: &dyn Fn(&Invitation, Option<String>),
-) -> Option<Message> {
+) -> Handled {
+    let mut handled = Handled::default();
     let now = crate::store::now_unix();
     let conn = db.lock().unwrap();
-    let joined = |jid: &BareJid| super::room(&conn, account, &jid.to_string()).ok().flatten();
+    let nick_in = |jid: &BareJid| super::room_nick(&conn, account, &jid.to_string()).ok().flatten();
     let from = message.from.as_ref().map(|j| j.to_bare());
 
-    // A message that bounced: one of ours did not get there.
+    // A message that bounced: one of ours did not get there. A private one
+    // bounces from `room/nick`; a direct or room one from the bare address.
     if message.type_ == MessageType::Error {
-        if let (Some(id), Some(from)) = (&message.id, &from) {
-            if super::is_ours(&conn, account, &from.to_string(), &id.0).unwrap_or(false) {
-                let _ = super::set_state(&conn, account, &id.0, "failed");
-                changed(&from.to_string());
+        if let (Some(id), Some(from_full)) = (&message.id, &message.from) {
+            for conversation in [super::normalize_conversation(&from_full.to_string()), from_full.to_bare().to_string()] {
+                if super::is_ours(&conn, account, &conversation, &id.0).unwrap_or(false) {
+                    let _ = super::set_state(&conn, account, &id.0, "failed");
+                    changed(&conversation);
+                    break;
+                }
             }
         }
-        return None;
+        return handled;
     }
 
     // An invitation is kept for the person to answer, nothing more.
@@ -894,26 +1226,26 @@ fn handle_message(
         if super::save_invitation(&conn, &invitation).unwrap_or(false) {
             invited(&invitation, password);
         }
-        return None;
+        return handled;
     }
 
-    let mut wrapped: Option<(Message, Option<String>, i64)> = None;
+    let mut wrapped: Option<(Message, Option<String>, i64, Arrival)> = None;
     for payload in &message.payloads {
         // From an archive: the account's, or a room's (then from the room).
         if let Ok(result) = mam::Result_::try_from(payload.clone()) {
-            let archive_ok = from.as_ref().is_none_or(|f| f == own || joined(f).is_some());
+            let archive_ok = from.as_ref().is_none_or(|f| f == own || nick_in(f).is_some());
             if archive_ok {
                 let stamp = result.forwarded.delay.as_ref().map(|d| d.stamp.0.timestamp()).unwrap_or(now);
-                wrapped = Some((result.forwarded.message.clone(), Some(result.id.clone()), stamp));
+                wrapped = Some((result.forwarded.message.clone(), Some(result.id.clone()), stamp, Arrival::Backfill));
             }
         }
         // A copy from another of the person's devices; only our server sends those.
         if from.as_ref().is_none_or(|f| f == own) {
             if let Ok(carbon) = carbons::Received::try_from(payload.clone()) {
-                wrapped = Some((carbon.forwarded.message.clone(), None, now));
+                wrapped = Some((carbon.forwarded.message.clone(), None, now, Arrival::Carbon));
             }
             if let Ok(carbon) = carbons::Sent::try_from(payload.clone()) {
-                wrapped = Some((carbon.forwarded.message.clone(), None, now));
+                wrapped = Some((carbon.forwarded.message.clone(), None, now, Arrival::Carbon));
             }
         }
         // Someone's client says our message arrived.
@@ -925,40 +1257,65 @@ fn handle_message(
         }
     }
     let live = wrapped.is_none();
-    let (inner, archive_id, stamp) = wrapped.unwrap_or((message.clone(), None, now));
+    let (inner, archive_id, stamp, arrival) = wrapped.unwrap_or_else(|| {
+        // Live, unless it says it was kept for us (a room's history, offline storage).
+        let arrival = if delayed(message) { Arrival::Backfill } else { Arrival::Live };
+        (message.clone(), None, now, arrival)
+    });
+    let notify = |recorded: &ChatMessage| presence::should_notify(recorded, arrival, own_show).then(|| recorded.clone());
 
     // A room's message, live or from its history or archive.
     if inner.type_ == MessageType::Groupchat {
-        let room_jid = inner.from.as_ref().map(|j| j.to_bare())?;
-        let room = joined(&room_jid)?;
-        let mut recorded = interpret_group(&inner, &room_jid, &room.nick, archive_id, stamp, account)?;
+        let Some(room_jid) = inner.from.as_ref().map(|j| j.to_bare()) else { return handled };
+        let Some(nick) = nick_in(&room_jid) else { return handled };
+        let Some(mut recorded) = interpret_group(&inner, &room_jid, &nick, archive_id, stamp, account) else { return handled };
         // Ours, reflected by the room, even if our nickname changed since.
         if recorded.direction == "in" && super::is_ours(&conn, account, &recorded.conversation, &recorded.id).unwrap_or(false) {
             recorded.direction = "out".into();
             recorded.state = "accepted".into();
         }
+        if recorded.direction == "in" {
+            recorded.mention = mentions::is_mention(&inner, &recorded.body, own, &room_jid, &nick);
+        }
         if super::record(&conn, &recorded).unwrap_or(false) {
             changed(&recorded.conversation);
+            handled.notify = notify(&recorded);
         }
-        return None;
+        return handled;
     }
 
-    let recorded = interpret(&inner, own, archive_id, stamp, account)?;
-    // Private messages through a room are not taken in yet.
-    if BareJid::from_str(&recorded.conversation).ok().is_some_and(|c| joined(&c).is_some()) {
-        return None;
+    // A private message through a room we are in: to or from `room/nick`.
+    let outgoing = inner.from.as_ref().is_none_or(|f| f.to_bare() == *own);
+    let counterpart = if outgoing { inner.to.as_ref() } else { inner.from.as_ref() };
+    if let Some(counterpart) = counterpart {
+        let room_jid = counterpart.to_bare();
+        if let Some(nick) = nick_in(&room_jid) {
+            // The room itself writing to us directly is not a conversation here.
+            if counterpart.resource().is_none() {
+                return handled;
+            }
+            let Some(recorded) = interpret_private(&inner, own, &room_jid, &nick, archive_id, stamp, account) else { return handled };
+            if super::record(&conn, &recorded).unwrap_or(false) {
+                changed(&recorded.conversation);
+                handled.notify = notify(&recorded);
+            }
+            return handled;
+        }
     }
+
+    let Some(recorded) = interpret(&inner, own, archive_id, stamp, account) else { return handled };
     if super::record(&conn, &recorded).unwrap_or(false) {
         changed(&recorded.conversation);
+        handled.notify = notify(&recorded);
     }
     // A receipt only for a live message to us that asks for one.
     let asked = inner.payloads.iter().any(|p| receipts::Request::try_from(p.clone()).is_ok());
     if live && asked && recorded.direction == "in" {
         let mut receipt = Message::new(inner.from.clone());
         receipt.payloads.push(receipts::Received { id: recorded.id.clone() }.into());
-        return Some(receipt);
+        handled.receipt = Some(receipt);
     }
-    None
+    handled
 }
 
 /// The connection settings for an account.

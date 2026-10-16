@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { accounts$ } from './accounts'
-import { deleteFolder, mail$, moveFolder } from './mail'
+import { deleteFolder, loadFolders, mail$, moveFolder } from './mail'
 import { folderPrefs$ } from './folderPrefs'
 import { settings$ } from './settings'
 import { settleConfirm, ui$ } from './ui'
@@ -145,6 +145,34 @@ describe('moving a folder (ADR-0050)', () => {
     expect(folderPrefs$.colors.get()[0].folderId).toBe('Work')
   })
 
+  // ADR-0057: whatever the core answered, the tree is read again, so after a
+  // move of unknown outcome it shows where the folder is.
+  it('reads the folder list again after a refusal or an unknown outcome', async () => {
+    const moved = [folder('INBOX', 'inbox'), folder('Projects'), folder('Projects/Work')]
+    ;(window as any).go.main.App.Invoke = async (command: string, payload: unknown) => {
+      calls.push({ command, payload })
+      if (command === 'mail.folderMove') throw new Error('Microsoft Graph: no clear answer came back, so whether the folder moved is unknown')
+      if (command === 'mail.folderList') return { folders: moved }
+      return {}
+    }
+    const pending = moveFolder('acc', 'Work', 'Projects')
+    settleConfirm(true)
+    expect(await pending).toBe(false)
+    expect(ui$.toast.get()).toContain('unknown')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(calls.some((call) => call.command === 'mail.folderList')).toBe(true)
+    expect(mail$.foldersByAccount.get().acc.map((item) => item.id)).toContain('Projects/Work')
+  })
+
+  it('says a folder already in place is already there, as news rather than a failure', async () => {
+    expect(await moveFolder('acc', 'Work/2026', 'Work')).toBe(false)
+    expect(ui$.toastTone.get()).toBe('info')
+    expect(ui$.toast.get()).toBe('The folder is already there')
+    expect(calls).toEqual([])
+    expect(await moveFolder('acc', 'Sent', 'Projects')).toBe(false)
+    expect(ui$.toastTone.get()).toBe('error')
+  })
+
   it('deleting a folder drops its favorites and colors with it', async () => {
     responses['mail.folderDelete'] = {
       ok: true,
@@ -156,5 +184,41 @@ describe('moving a folder (ADR-0050)', () => {
     expect(await pending).toBe(true)
     expect(folderPrefs$.favorites.get()).toEqual([{ accountId: 'acc', folderId: 'Projects' }])
     expect(folderPrefs$.colors.get()).toEqual([])
+  })
+})
+
+describe('folders renamed by a listing (ADR-0058)', () => {
+  it('carries favorites, colors, columns, saved searches and the open folder to the new names', async () => {
+    const searches = settings$.savedSearches.peek()
+    settings$.savedSearches.set([
+      { id: 's1', name: 'Invoices', query: 'invoice', account: 'acc', folder: 'Work/2026' },
+      { id: 's2', name: 'Elsewhere', query: 'x', account: 'other', folder: 'Work/2026' },
+    ] as never)
+    responses['mail.folderList'] = {
+      renames: [
+        { from: 'Work', to: 'INBOX/Work' },
+        { from: 'Work/2026', to: 'INBOX/Work/2026' },
+      ],
+      folders: [folder('INBOX', 'inbox'), folder('Projects'), folder('INBOX/Work'), folder('INBOX/Work/2026')],
+    }
+    await loadFolders('acc', false)
+    expect(mail$.foldersByAccount.get().acc.map((item) => item.id)).toContain('INBOX/Work/2026')
+    expect(folderPrefs$.favorites.get()).toEqual([
+      { accountId: 'acc', folderId: 'INBOX/Work/2026' },
+      { accountId: 'acc', folderId: 'Projects' },
+    ])
+    expect(folderPrefs$.colors.get()).toEqual([{ accountId: 'acc', folderId: 'INBOX/Work', color: 'red' }])
+    expect(folderPrefs$.dropped.get()).toBe(0)
+    expect(settings$.kanbanBoards.get()[0].columns).toEqual([{ accountId: 'acc', folderId: 'INBOX/Work/2026' }])
+    expect(settings$.savedSearches.get().map((search) => search.folder)).toEqual(['INBOX/Work/2026', 'Work/2026'])
+    expect(ui$.selectedFolder.get()).toBe('INBOX/Work/2026')
+    settings$.savedSearches.set(searches)
+  })
+
+  it('changes nothing when the listing renamed nothing', async () => {
+    responses['mail.folderList'] = { folders: [folder('INBOX', 'inbox'), folder('Work'), folder('Work/2026')] }
+    await loadFolders('acc', false)
+    expect(folderPrefs$.favorites.get()[0]).toEqual({ accountId: 'acc', folderId: 'Work/2026' })
+    expect(ui$.selectedFolder.get()).toBe('Work/2026')
   })
 })

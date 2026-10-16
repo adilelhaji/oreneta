@@ -126,7 +126,7 @@
 ## Pendiente (#41 sigue abierta)
 
 - Editar etiquetas de Google y grupos de Exchange (listas de distribución
-  personales).
+  personales). Las listas de Exchange ya se leen y escriben (ADR-0058).
 - Grupos en el móvil y en la importación y exportación de vCard.
 - Más campos del contacto (direcciones postales, cumpleaños) en el editor.
 - Evidencia con proveedores reales (iCloud, Nextcloud, Google); la prueba de

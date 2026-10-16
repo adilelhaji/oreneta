@@ -271,7 +271,7 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     expect(moves).toEqual([[account.id, 'Work', 'Projects']])
   })
 
-  it('disables moving special folders and folders of accounts that cannot move them, saying why', () => {
+  it('disables moving special folders and folders of accounts that cannot move them, saying why, and allows Exchange', () => {
     const screen = view()
     menuFor(screen, 'Sent')
     const move = screen.getByRole('button', { name: /Move folder to…/ })
@@ -283,8 +283,17 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     menuFor(again, 'Work 4')
     const disabled = again.getByRole('button', { name: /Move folder to…/ })
     expect(disabled.hasAttribute('disabled')).toBe(true)
-    expect(disabled.getAttribute('title')).toBe('Moving folders is not available for this account yet')
+    // A Graph account without changes is told what would allow it (#210).
+    expect(disabled.getAttribute('title')).toBe('Allow changes for this account in its settings to move its folders')
     expect(again.getByRole('button', { name: 'Work 4' }).getAttribute('draggable')).toBe('false')
+    cleanup()
+    // Exchange moves folders like IMAP (ADR-0058).
+    const ews = { ...account, provider: 'exchange', ews_url: 'https://ews.example.test/EWS/Exchange.asmx' }
+    const exchange = view({ accounts: [ews], allAccounts: [ews] })
+    menuFor(exchange, 'Work 4')
+    const allowed = exchange.getByRole('button', { name: /Move folder to…/ })
+    expect(allowed.hasAttribute('disabled')).toBe(false)
+    expect(exchange.getByRole('button', { name: 'Work 4' }).getAttribute('draggable')).toBe('true')
   })
 
   it('says when stale favorites were dropped, and lets the note go', () => {

@@ -136,6 +136,10 @@ export function TaskDialog() {
   const lockedRepeat = editing && tasks$.items.peek().some((task) => task.id === state.id && task.recurring)
   const canRepeat = (standalone || (editing && !linked)) && !lockedRepeat
   const dueSeconds = fromDateInput(dueAt)
+  // Exchange repeats a task at most once a year (ADR-0058).
+  const exchangeList = !!byId(listId)?.ews_account
+  const writableRule = (rule: Recurrence | null) =>
+    rule && exchangeList && rule.freq === 'yearly' && rule.interval > 1 ? { ...rule, interval: 1 } : rule
 
   // A rule on "the second Tuesday" follows the due date to its own weekday.
   const changeDue = (value: string) => {
@@ -155,7 +159,7 @@ export function TaskDialog() {
   // with none makes it due today.
   const changeRecurrence = (rule: Recurrence | null) => {
     if (rule && !dueAt) setDueAt(toDateInput(Math.floor(Date.now() / 1000)))
-    setRecurrence(rule)
+    setRecurrence(writableRule(rule))
   }
 
   const close = () => ui$.taskEditor.set(null)
@@ -166,7 +170,7 @@ export function TaskDialog() {
     due_at: fromDateInput(dueAt),
     reminder_at: fromDateTimeInput(reminderAt),
     priority,
-    recurrence: canRepeat ? recurrence : null,
+    recurrence: canRepeat ? writableRule(recurrence) : null,
   })
   const finish = (result: Awaited<ReturnType<typeof updateTask>>) => {
     if (result.kind === 'saved') close()
@@ -367,6 +371,7 @@ export function TaskDialog() {
             start={dueSeconds ?? Math.floor(Date.now() / 1000)}
             onChange={changeRecurrence}
             monthlyByWeekday
+            yearlyOnlyEveryYear={exchangeList}
             inputClass={selectClass}
             idPrefix="task-repeat"
           />

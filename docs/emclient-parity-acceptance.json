@@ -338,9 +338,9 @@
       "issue": 35,
       "section": "General/Print",
       "outcome": "Native message/conversation printing configuration and completeness",
-      "status": "partial",
-      "present": "Message printing keeps blocked remote content blocked and states what is left out (#35); no print configuration (headers, conversation scope options) or native print evidence",
-      "code": "frontend/src/lib/print.ts",
+      "status": "implemented-unverified",
+      "present": "Message printing keeps blocked remote content blocked and states what is left out (#35); General → Print chooses the header fields, one message or the whole conversation, oldest or newest first, and the attachment list, remembered as one setting (#213, ADR-0060) and tested; native print evidence remains",
+      "code": "docs/design/printing.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -356,6 +356,38 @@
           {
             "sha": "92b13356c59d27f308d14d39ecaa8e8710d4fdc1",
             "result": "frontend/src/lib/printDocument.test.ts"
+          },
+          {
+            "sha": "b2a8c75aa8bbe5d718cc77d9cc482f8d382921da",
+            "result": "frontend/src/lib/printDocument.test.ts"
+          },
+          {
+            "sha": "b2a8c75aa8bbe5d718cc77d9cc482f8d382921da",
+            "result": "frontend/src/states/printing.test.ts"
+          },
+          {
+            "sha": "b2a8c75aa8bbe5d718cc77d9cc482f8d382921da",
+            "result": "frontend/src/components/dialog/PrintGroup.test.tsx"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/lib/printDocument.test.ts"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/lib/printOptions.test.ts"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/states/printing.test.ts"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/components/chat/MessageContextMenu.test.tsx"
+          },
+          {
+            "sha": "e477e76ce5629f6bb581d93a90b997905df955bd",
+            "result": "frontend/src/components/dialog/PrintGroup.test.tsx"
           }
         ],
         "native": [],
@@ -401,7 +433,7 @@
       "section": "General/Folders",
       "outcome": "Folder rules, favorites, colors and account-scoped operations",
       "status": "partial",
-      "present": "Folder navigation and creation, favorites from any account with ordering, named contrast-checked folder colors, and moving folders by drag or menu with one IMAP RENAME (ADR-0050) are tested, including a real maddy server; moving folders on Exchange/Graph is absent",
+      "present": "Folder navigation and creation, favorites from any account with ordering, named contrast-checked folder colors, and moving folders by drag or menu with one IMAP RENAME (ADR-0050) are tested, including a real maddy server; moving folders on Microsoft Graph by folder id with recoverable uncertain outcomes (ADR-0057) is tested on the Graph fixtures; Exchange (EWS) folders named by path, with everything kept under the old names (cache, rules, tasks, snoozes, archiving, favorites, colors, board columns, saved searches) following them, and moved with MoveFolder after a fresh listing, never repeated, a lost answer settled by folder id on the next listing (ADR-0058), tested on recorded SOAP; no Microsoft 365 or Exchange provider evidence exists",
       "code": "frontend/src/components/sidenav/MailNavigation.tsx",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -430,6 +462,34 @@
           {
             "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
             "result": "meron-core/src/folder_move.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "meron-core/src/graph/mail/tests.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "meron-core/src/graph/tests.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "frontend/src/lib/folderMoves.test.ts"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "frontend/src/states/folderMove.test.ts"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/tests/folder_moves.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/folder_move.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "frontend/src/states/folderMove.test.ts"
           }
         ],
         "native": [],
@@ -545,7 +605,7 @@
       "section": "Mail/Privacy; Receipts",
       "outcome": "Tracking protection, remote content and explicit receipt policy",
       "status": "partial",
-      "present": "Remote content blocking and EasyPrivacy tracking protection (ADR-0029); read receipts requested and answered by an ask/always/never policy that never answers list mail, mismatched return paths or Junk automatically, and delivery receipts over SMTP DSN when offered (ADR-0048), tested including a real maddy server; delivery receipts on Exchange/Graph and interpreting incoming reports are absent",
+      "present": "Remote content blocking and EasyPrivacy tracking protection (ADR-0029); read receipts requested and answered by an ask/always/never policy that never answers list mail, mismatched return paths or Junk automatically, and delivery receipts over SMTP DSN when offered (ADR-0048), tested including a real maddy server; delivery receipts on Microsoft Graph through isDeliveryReceiptRequested on a draft (for accounts that allow changes, and not yet for messages with Bcc or signing/encryption), and incoming DSN/MDN reports read for every account type and shown, as claims, on the sent message they name (ADR-0057), tested on fixtures and on samples modelled on Postfix, Gmail, Exchange Online and Thunderbird reports; reports link only once read (at sync on Graph, on body download or opening on IMAP/EWS) and reports cached before this version are not re-read on IMAP/EWS; delivery receipts asked in the Exchange (EWS) request with the submitted item (ADR-0058), tested on recorded SOAP but not yet on a real server; no Microsoft 365 or Exchange provider evidence exists",
       "code": "meron-core/src/privacy",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -574,6 +634,30 @@
           {
             "sha": "4c85ff052b18895141de3594ee17d23699232d87",
             "result": "frontend/src/components/composer/ReceiptComposeControls.test.tsx"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "meron-core/src/receipts/report/tests.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "meron-core/src/graph/mail/tests.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "meron-core/src/graph/tests.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "meron-core/src/thread_read.rs"
+          },
+          {
+            "sha": "6cd9f80e2dffc9785d734a15459730d17be1907d",
+            "result": "frontend/src/components/chat/ReportNotice.test.tsx"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/tests/delivery_receipts.rs"
           }
         ],
         "native": [],
@@ -866,7 +950,7 @@
       "section": "Contacts/General",
       "outcome": "Names, fields, groups, duplicates and provenance in contact preferences",
       "status": "partial",
-      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange contact groups absent",
+      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange (EWS) Contacts folder read only with its distribution lists read and edited as groups, never overwriting a remote change (ChangeKey, NeverOverwrite) and keeping members who are no contact (ADR-0058), tested on recorded SOAP; Graph contact groups, Exchange contact subfolders and editing Exchange people absent",
       "code": "meron-core/src/store/local_people.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -899,6 +983,18 @@
           {
             "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
             "result": "frontend/src/lib/contactNames.test.ts"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/pim/exchange_book/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/book/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "frontend/src/components/people/ExchangeGroups.test.tsx"
           }
         ],
         "native": [],
@@ -973,7 +1069,7 @@
       "section": "Tasks/General",
       "outcome": "Task lists, reminders, recurrence and provider capability differences",
       "status": "partial",
-      "present": "Local and CalDAV task lists (ADR-0013, ADR-0039); recurring tasks with daily/weekly/monthly (day or nth weekday)/yearly rules, completion moving the task and reminder to the next occurrence, CalDAV masters advanced with unknown properties kept (ADR-0053), tested including Radicale; Google Tasks, Graph To Do and EWS tasks absent",
+      "present": "Local and CalDAV task lists (ADR-0013, ADR-0039); recurring tasks with daily/weekly/monthly (day or nth weekday)/yearly rules, completion moving the task and reminder to the next occurrence, CalDAV masters advanced with unknown properties kept (ADR-0053), tested including Radicale; Exchange (EWS) task lists synced like CalDAV ones with ChangeKey conflicts, no duplicate on a lost creation and the recurrence rules the editor writes (others read only; yearly every N>1 refused) (ADR-0058), tested on recorded SOAP; Google Tasks and Graph To Do absent",
       "code": "meron-core/src/task_sync/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1006,6 +1102,18 @@
           {
             "sha": "6192c945d5df27ec6c37757eaf75116eb32765f2",
             "result": "integration_caldav_recurring_tasks_test.go"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/task_sync/exchange/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "meron-core/src/exchange/tasks/tests.rs"
+          },
+          {
+            "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
+            "result": "frontend/src/components/tasks/ExchangeTaskLists.test.tsx"
           }
         ],
         "native": [],
@@ -1018,7 +1126,7 @@
       "section": "Chat/General",
       "outcome": "Chat presence/history/file preferences and account isolation",
       "status": "partial",
-      "present": "XMPP direct chat with archive, carbons, receipts and stream management (ADR-0036), plus group chats (MUC) and file sharing tested against a real Prosody (ADR-0044); presence settings, mentions, system notifications, in-room private messages and other providers are absent",
+      "present": "XMPP direct chat with archive, carbons, receipts and stream management (ADR-0036), plus group chats (MUC) and file sharing tested against a real Prosody (ADR-0044); own presence and status text (available, away, busy, invisible only where the server offers XEP-0186), contacts' presence by permission, @mentions with completion and highlighting, native notifications for direct messages and mentions that respect do not disturb and quiet hours, and private messages to room occupants (ADR-0055, #208), with Windows native delivery and the XEP-0186 invisible path not yet verified; managing who may see your status, auto-away on idle, per-conversation mute, an unread-mentions counter and other providers are absent",
       "code": "meron-core/src/chat/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1043,6 +1151,26 @@
           {
             "sha": "02732d66614b8b1141e588911d7fe09824a86b33",
             "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "meron-core/src/chat/tests.rs"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "meron-core/tests/prosody-xmpp.sh"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "frontend/src/components/messaging/MessagingView.test.tsx"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "frontend/src/lib/chatMentions.test.ts"
+          },
+          {
+            "sha": "e92fe913ccd702d21f851bb0fa79781cfd029ef0",
+            "result": "notify_chat_test.go"
           }
         ],
         "native": [],
@@ -1084,7 +1212,7 @@
       "section": "Widgets/General",
       "outcome": "Sidebar widgets, agenda and contextual history with reliable scope",
       "status": "partial",
-      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); a standalone agenda widget, panel resizing and remembering the last section are absent",
+      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); in the same conversation details sidebar, an agenda section with the next 7 days of enabled calendars and dated open tasks, overdue first, each opening its item; the sidebar, thread list and board pane resizable by pointer and keyboard within limits and kept across restarts; the last section restored for the main window (#212, ADR-0059). Absent: a widget pane independent of the selected message, as the agenda is reachable only from an open conversation (not at startup without one, nor in the Calendar, Tasks, Contacts or Notes views)",
       "code": "docs/design/contextual-sidebar.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1101,6 +1229,30 @@
           {
             "sha": "5a776161ebcc5923c0e0ff4d7fc541cf43af07be",
             "result": "frontend/src/components/chat/PersonHistory.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/components/chat/SidebarAgenda.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/components/chat/ConversationDetailsPanel.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/components/resizer/PaneResizer.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/lib/agenda.test.ts"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
         "native": [],
@@ -1257,9 +1409,9 @@
       "issue": 100,
       "section": "General/Reminders",
       "outcome": "Event reminders survive restart, suspend and timezone changes",
-      "status": "partial",
-      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a resume listener exists, but suspend and time-zone changes have no automated test and no native evidence",
-      "code": "meron-core/src/calendar/mod.rs",
+      "status": "implemented-unverified",
+      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a reminder that came due during a suspend or while the app was closed fires once on the next look while its event is on, the watch looks at once on resume, all-day reminders follow the local midnight of the current zone, timed ones keep their instant and floating ones are re-read after a zone change (ADR-0056), all with automated tests including runs under other TZ values; native Windows suspend and zone-change evidence remains",
+      "code": "meron-core/src/calendar/reminders.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -1271,6 +1423,18 @@
           {
             "sha": "ed1b52f2dbaaf23e8f26600c3f2fcdfbdc751005",
             "result": "meron-core/src/calendar/mod.rs"
+          },
+          {
+            "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
+            "result": "meron-core/src/pim/reminders/tests.rs"
+          },
+          {
+            "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
+            "result": "meron-core/src/calendar/reminders.rs"
+          },
+          {
+            "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
+            "result": "notify_quiet_test.go"
           }
         ],
         "native": [],

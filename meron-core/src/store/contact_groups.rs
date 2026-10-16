@@ -60,6 +60,48 @@ pub fn migrate(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Schema 64 (ADR-0058): a member who is no card of the book can carry the
+/// name and address the book's server gave for them — an Exchange
+/// distribution list's addresses typed in and directory entries. Without
+/// them such a list would show and expand to nobody.
+pub fn migrate_member_addresses(conn: &Connection) -> Result<()> {
+    for column in ["name", "addr"] {
+        let has = conn
+            .prepare(&format!("SELECT 1 FROM pragma_table_info('contact_group_members') WHERE name = '{column}'"))?
+            .exists([])?;
+        if !has {
+            conn.execute_batch(&format!(
+                "ALTER TABLE contact_group_members ADD COLUMN {column} TEXT NOT NULL DEFAULT '';"
+            ))?;
+        }
+    }
+    Ok(())
+}
+
+/// Gives members who are no card of the book the name and address their
+/// server gave, as `(person id, name, address)`. A member a card stands for
+/// is shown from the card and needs none.
+pub fn label_members(conn: &Connection, group_id: &str, labels: &[(String, String, String)]) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    label_in(&tx, group_id, labels)?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn label_in(conn: &Connection, group_id: &str, labels: &[(String, String, String)]) -> Result<()> {
+    for (person, name, addr) in labels {
+        conn.execute(
+            "UPDATE contact_group_members SET name = ?3, addr = ?4 WHERE group_id = ?1 AND person_id = ?2",
+            params![group_id, person, name, addr],
+        )?;
+    }
+    Ok(())
+}
+
+/// The labels of each group's members who are no card of the book, by the
+/// group's UID: see [`label_members`].
+pub type GroupLabels = [(String, Vec<(String, String, String)>)];
+
 /// The id a group is kept under: apart from people's, so the two can never
 /// be confused.
 pub fn group_id(origin: &BookOrigin, uid: &str) -> String {
@@ -173,6 +215,18 @@ fn insert(
 /// Replaces every group of one book with what a sync just read, like
 /// [`super::replace_book_rows`] does for its people.
 pub fn replace_book_groups(conn: &Connection, origin: &BookOrigin, rows: &[GroupRow], now: i64) -> Result<usize> {
+    replace_book_groups_labelled(conn, origin, rows, &[], now)
+}
+
+/// [`replace_book_groups`], with the labels of members who are no card of
+/// the book written in the same transaction (ADR-0058).
+pub fn replace_book_groups_labelled(
+    conn: &Connection,
+    origin: &BookOrigin,
+    rows: &[GroupRow],
+    labels: &GroupLabels,
+    now: i64,
+) -> Result<usize> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "DELETE FROM contact_group_members WHERE group_id IN
@@ -192,15 +246,31 @@ pub fn replace_book_groups(conn: &Connection, origin: &BookOrigin, rows: &[Group
         insert(&tx, origin, row, &members, now)?;
         written += 1;
     }
+    for (uid, members) in labels {
+        label_in(&tx, &group_id(origin, uid.trim()), members)?;
+    }
     tx.commit()?;
     Ok(written)
 }
 
 /// Records one synced group as the server now holds it, after a write there.
 pub fn put_synced_group(conn: &Connection, origin: &BookOrigin, row: &GroupRow, now: i64) -> Result<String> {
+    put_synced_group_labelled(conn, origin, row, &[], now)
+}
+
+/// [`put_synced_group`], with the labels of members who are no card of the
+/// book written in the same transaction (ADR-0058).
+pub fn put_synced_group_labelled(
+    conn: &Connection,
+    origin: &BookOrigin,
+    row: &GroupRow,
+    labels: &[(String, String, String)],
+    now: i64,
+) -> Result<String> {
     let tx = conn.unchecked_transaction()?;
     let members: Vec<String> = row.members.iter().map(|uid| origin.person_id(uid.trim())).collect();
     let id = insert(&tx, origin, row, &members, now)?;
+    label_in(&tx, &id, labels)?;
     tx.commit()?;
     Ok(id)
 }
@@ -244,14 +314,20 @@ pub struct MemberDetail {
     pub addr: String,
 }
 
-/// Every group's members who are still in the address book, in order.
+/// Every group's members who are still in the address book, in order, and
+/// those who are no card of it but have an address their server gave
+/// (ADR-0058).
 pub fn member_details(conn: &Connection) -> Result<Vec<MemberDetail>> {
     let mut stmt = conn.prepare(
-        "SELECT m.group_id, p.id, p.name, p.given, p.family,
-                COALESCE((SELECT e.addr FROM person_emails e WHERE e.person_id = p.id
-                           ORDER BY e.position LIMIT 1), '')
-           FROM contact_group_members m JOIN people p ON p.id = m.person_id
-          ORDER BY m.group_id, m.position, p.name COLLATE NOCASE",
+        "SELECT m.group_id, m.person_id,
+                CASE WHEN p.id IS NULL THEN CASE WHEN m.name <> '' THEN m.name ELSE m.addr END ELSE p.name END,
+                COALESCE(p.given, ''), COALESCE(p.family, ''),
+                CASE WHEN p.id IS NULL THEN m.addr
+                     ELSE COALESCE((SELECT e.addr FROM person_emails e WHERE e.person_id = p.id
+                                     ORDER BY e.position LIMIT 1), '') END
+           FROM contact_group_members m LEFT JOIN people p ON p.id = m.person_id
+          WHERE p.id IS NOT NULL OR m.addr <> ''
+          ORDER BY m.group_id, m.position, COALESCE(p.name, m.name) COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([], |row| {
         Ok(MemberDetail {

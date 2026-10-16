@@ -2554,7 +2554,7 @@ pub fn delete_task(conn: &Connection, id: i64) -> Result<()> {
     let tombstoned = conn.execute(
         "UPDATE tasks SET pending = 'delete', sync_seq = sync_seq + 1
           WHERE id = ?1 AND remote_etag <> ''
-            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '')",
+            AND list_id IN (SELECT id FROM task_lists WHERE remote_url <> '' OR ews_account <> '')",
         params![id],
     )?;
     if tombstoned == 0 {
@@ -5488,6 +5488,9 @@ pub fn get_cached_message(
         // A read receipt request (ADR-0048). Cached before this existed reads
         // as none: nothing is ever sent on a guess.
         receipt: extra.get("receipt").cloned().and_then(|value| serde_json::from_value(value).ok()),
+        // A delivery or read report (ADR-0057); cached before this existed
+        // reads as an ordinary message.
+        report: extra.get("report").cloned().and_then(|value| serde_json::from_value(value).ok()),
         trackers_blocked: Vec::new(),
         trackers_protected: false,
     }))
@@ -5515,6 +5518,7 @@ pub fn save_cached_message(
         "protection": message.protection,
         "invitation": message.invitation,
         "receipt": message.receipt,
+        "report": message.report,
         "attachments": attachments_json,
     })
     .to_string();
@@ -5541,6 +5545,17 @@ pub fn save_cached_message(
             extra_json
         ],
     )?;
+    // What a delivery or read report says is kept for the sent message it is
+    // about (ADR-0057), whichever protocol brought it, when this account has
+    // that message, or waits, bounded, until it does. One in Sent or Drafts
+    // is one this account sent (a read receipt it answered), not one it got.
+    if let Some(report) = &message.report {
+        if !matches!(folder_role(conn, account, folder)?.as_str(), "sent" | "drafts") {
+            let now = now_unix();
+            let reported_at = crate::receipts::report::reported_at(message.date, now);
+            crate::receipts::report::record(conn, account, report, reported_at, now)?;
+        }
+    }
 
     Ok(())
 }

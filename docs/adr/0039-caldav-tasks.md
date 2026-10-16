@@ -122,4 +122,4 @@ Radicale. Faltaba decidir:
 - Pruebas N1 con un servidor falso y N3 contra Radicale; el detalle está en
   el [registro](../design/caldav-tasks.md).
 - Google Tasks, Graph To Do y EWS siguen pendientes, en ese orden
-  (ADR-0013).
+  (ADR-0013). EWS llegó antes, con ADR-0058.

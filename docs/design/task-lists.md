@@ -50,5 +50,6 @@
 
 Repetición, delegación, subtareas y aparición en la agenda del calendario.
 La sincronización con CalDAV (VTODO) llegó después, en ADR-0039
-([registro](caldav-tasks.md)); Google Tasks, Graph To Do y EWS siguen
+([registro](caldav-tasks.md)), y la carpeta Tareas de una cuenta de Exchange
+(EWS) en ADR-0058; Google Tasks y Graph To Do siguen
 pendientes.

@@ -23,6 +23,7 @@ export function RepeatFields({
   start,
   onChange,
   monthlyByWeekday = false,
+  yearlyOnlyEveryYear = false,
   inputClass = defaultInputClass,
   idPrefix = 'repeat',
 }: {
@@ -30,6 +31,8 @@ export function RepeatFields({
   start: number
   onChange: (rule: Recurrence | null) => void
   monthlyByWeekday?: boolean
+  /** A yearly rule can only repeat every year (Exchange tasks, ADR-0058). */
+  yearlyOnlyEveryYear?: boolean
   inputClass?: string
   idPrefix?: string
 }) {
@@ -159,9 +162,15 @@ export function RepeatFields({
             <input
               type="number"
               min={1}
-              max={99}
+              max={yearlyOnlyEveryYear && rule.freq === 'yearly' ? 1 : 99}
+              disabled={yearlyOnlyEveryYear && rule.freq === 'yearly'}
+              title={
+                yearlyOnlyEveryYear && rule.freq === 'yearly'
+                  ? t('tasks.exchangeYearly', { defaultValue: 'Exchange repeats a task at most once a year' })
+                  : undefined
+              }
               aria-label={t('calendar.repeatInterval', { defaultValue: 'Repeat interval' })}
-              value={rule.interval}
+              value={yearlyOnlyEveryYear && rule.freq === 'yearly' ? 1 : rule.interval}
               onChange={(e) => onChange({ ...rule, interval: Math.max(1, Number(e.target.value)) })}
               className={`${inputClass} w-16`}
             />

@@ -3792,12 +3792,20 @@ fn mobile_pim_refresh_raises_reminders_and_routes_book_sync() {
 
     // Nothing remote to read: a plain IMAP account with a local calendar.
     let first = ok("pim.refresh", json!({"now": now}));
+    let (local_time, local_date) = {
+        use chrono::TimeZone as _;
+        let at = |instant: i64| chrono::Local.timestamp_opt(instant, 0).earliest().unwrap();
+        let date = at(start).date_naive();
+        let other_day = (date != at(now).date_naive()).then(|| date.format("%Y-%m-%d").to_string());
+        (at(start).format("%H:%M").to_string(), other_day)
+    };
     assert_eq!(
         first,
         json!({
             "reminders": [{
                 "account": account, "event": event, "subject": "Dentist", "location": "Clinic",
-                "start": start, "all_day": false, "minutes": 15,
+                "start": start, "all_day": false, "minutes": 15, "local_time": local_time,
+                "started": false, "local_date": local_date,
             }],
             "calendars": [], "books": [],
         }),
@@ -3807,7 +3815,7 @@ fn mobile_pim_refresh_raises_reminders_and_routes_book_sync() {
         {
             let conn = store::open_at(data_dir.join("meron.db")).unwrap();
             let events = crate::calendar::events_in_window(&conn, account, (now, now + 86_400)).unwrap();
-            crate::pim::reminders::reminder_detail(account, &events[0])
+            crate::pim::reminders::reminder_detail(account, &events[0], &chrono::Local, now)
         },
         "the desktop's calendar.reminder detail",
     );

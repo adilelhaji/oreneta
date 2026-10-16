@@ -41,15 +41,28 @@ sin leer nunca el cuerpo de un error.
 | Copiar (misma cuenta) | `POST /me/messages/{id}/copy` con `{"destinationId": carpeta}` | 201 |
 | Borrar | mover a la carpeta con rol `deleteditems` | 201 |
 | Borrar definitivamente | `DELETE /me/messages/{id}`, solo desde Elementos eliminados o Borradores | 204 |
+| Mover carpeta (#210) | `POST /me/mailFolders/{id}/move` con `{"destinationId": carpeta o raíz}` | 200/201 con el padre pedido |
 
 - **Borrar** es recuperable: va a Elementos eliminados, igual que en IMAP va a
   la papelera. **Borrar definitivamente** solo ocurre desde Elementos
   eliminados o Borradores, como en IMAP. Graph lo deja en «Elementos
   recuperables», fuera de la vista del cliente.
 - **Copiar a otra cuenta** desde o hacia Graph, vaciar carpeta, marcar todo
-  como leído, crear o borrar carpetas, guardar como `.eml`, etiquetas remotas,
-  borradores remotos y envío siguen sin soporte. Se rechazan antes de cualquier
-  efecto local.
+  como leído, crear o borrar carpetas, guardar como `.eml`, etiquetas remotas
+  y borradores remotos siguen sin soporte. Se rechazan antes de cualquier
+  efecto local. El envío es [graph-sending.md](graph-sending.md).
+- **Mover una carpeta** ([ADR-0057](../adr/0057-graph-folder-moves-and-receipt-reports.md)):
+  - las reglas de ADR-0050 se comprueban sobre el árbol guardado
+    (`graph_folders`), por id y padre: ni carpetas especiales ni las que las
+    contienen, ni carpetas de búsqueda, ni dentro de sí misma, ni adonde ya
+    está, ni al lado de otra con el mismo nombre (sin distinguir mayúsculas);
+  - una petición, nunca repetida. Después se vuelve a leer el árbol, haya
+    ido bien, mal o en duda. Sin respuesta, con 5xx o con un éxito que no
+    dice el padre pedido, el resultado es incierto, nunca «no se movió»; la
+    interfaz vuelve a leer la lista y pedirlo otra vez encuentra la carpeta
+    en su sitio («ya está ahí», como información), sin segunda petición;
+  - con ids inmutables la carpeta conserva su nombre local; si Graph
+    devuelve otro id, se informa como renombrado.
 - **Deshacer** es la acción inversa, que pasa por el mismo camino que la
   original:
   - leído y marca se fijan al valor anterior;
@@ -94,13 +107,33 @@ sin leer nunca el cuerpo de un error.
 - **Datos locales.** Etiquetas locales y borradores locales no se tocan. IMAP
   y EWS no cambian. Graph nunca recurre a IMAP, SMTP ni EWS.
 
+## Informes de entrega y de lectura (#210)
+
+- Un mensaje sin adjuntos se lee de su JSON, que en un informe solo trae el
+  texto para personas. Por eso `GET /me/messages/{id}` pide también la clase
+  del elemento (`$expand=singleValueExtendedProperties($filter=id eq
+  'String 0x001A')`). Si es `REPORT.*` (`IPM.Note.NDR`, `DR`, `IPNRN`,
+  `IPNNRN`), se lee su MIME y lo interpreta el núcleo como cualquier otro
+  informe (ADR-0057). Si el MIME es demasiado grande, se muestra el texto.
+- Al sincronizar una carpeta, una consulta por clase de elemento
+  (`$filter` sobre `singleValueExtendedProperties`, `$select=id`) se sigue
+  página a página por `@odata.nextLink` (validado como cualquier enlace de
+  página; hasta 10 páginas), saltando los informes ya leídos, y se lee el
+  MIME de hasta 20 nuevos, también los guardados antes; cada uno, una sola
+  vez. Uno que falla por sí mismo (demasiado grande, ya no está, ilegible)
+  se marca con el motivo y no frena a los demás; un fallo del servidor o de
+  la cuenta para el recorrido hasta la siguiente sincronización. Es de
+  mejor esfuerzo: si la consulta falla, los informes se leen al abrirlos.
+
 ## Interfaz
 
 - Una cuenta Graph sin permiso de cambios se comporta como hasta ahora: las
   acciones de escritura están deshabilitadas, también por teclado y en lote.
 - Con permiso, se habilitan leído, marca, mover, borrar y copiar dentro de la
-  cuenta. Lo que sigue sin soporte (vaciar carpeta, carpetas, `.eml`, envío)
-  sigue deshabilitado.
+  cuenta, y mover carpetas. Sin él, mover una carpeta dice «Permite los
+  cambios de esta cuenta en sus ajustes para mover sus carpetas». Lo que
+  sigue sin soporte (vaciar carpeta, crear o borrar carpetas, `.eml`) sigue
+  deshabilitado.
 - Ajustes de la cuenta muestra el nivel concedido y ofrece «Permitir cambios»
   o, si se perdió, el motivo.
 
@@ -112,13 +145,19 @@ sin leer nunca el cuerpo de un error.
   - 401/403/404/409/412/429 con `Retry-After` y 5xx clasificados;
   - corte de conexión como incierto;
   - id de respuesta ajeno como respuesta inválida;
-  - una concesión sin `Mail.ReadWrite` no envía nada.
+  - una concesión sin `Mail.ReadWrite` no envía nada;
+  - mover carpeta: ruta, destino, padre confirmado, errores y respuesta
+    perdida como incierta, enviada una vez (#210);
+  - la lectura de un mensaje pide solo su clase; `REPORT.*` es un informe.
 - **Sesión** (`Source` simulado):
   - resolución previa del conjunto, sin UIDs de otra carpeta;
   - parada en el primer fallo, con recuento;
   - actualización local de leído y marca en un lote parcial;
   - reconciliación por delta tras mover y borrar;
-  - el resultado incierto no se repite.
+  - el resultado incierto no se repite;
+  - mover carpeta: reglas antes de enviar, árbol releído tras éxito, rechazo
+    o duda, y un reintento tras la duda no manda una segunda petición;
+  - un informe sin adjuntos se lee de su MIME.
 - **Autorización:**
   - flujo de cambios con el alcance pedido;
   - nivel guardado según lo concedido;
