@@ -183,4 +183,4 @@ lo decidió la delegación, con la opción más prudente.
   de su decisión): no tiene aviso agrupado. `take_due` (`pim.refresh`) deja
   los perdidos sin anotar y sin dar, como antes de #225, así que la respuesta
   y `PimRefresh.kt` no cambian. Darlos en el móvil necesita un aviso agrupado
-  en Android e iOS. Issue de seguimiento: pendiente de enlazar.
+  en Android e iOS. Issue de seguimiento: #230.
