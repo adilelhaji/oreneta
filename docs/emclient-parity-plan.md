@@ -4,7 +4,7 @@
 i l'[auditoria de 65 incidències](competitive-backlog-audit.md) substitueixen la instantània inicial
 de planificació/estat que hi ha a continuació. Conserven tot aquest abast de capacitats i totes les portes d'arquitectura.
 Els temes, els valors per defecte i la disposició estreta estan integrats, Graph continua sent de només lectura i deu
-incidències filles acotades cobreixen ara les mancances de lliurament. La planificació no és evidència de paritat.
+incidències filles delimitades cobreixen ara les mancances de lliurament. La planificació no és evidència de paritat.
 
 Data: 2026-09-09. Creades: 13 fites, 35 incidències noves; 34 incidències existents
 reutilitzades, inclòs el programa; 2 tancades sense esborrar l'historial.
@@ -20,8 +20,8 @@ requisits de seguretat no resolts. La planificació no aprova arquitectura nova.
 La primera referència congelada és **eM Client 10.4.5674.0 per a Windows**, publicada
 el 2026-08-14. La més recent, **11.0.282.0 (2026-09-03), és beta** i se'n fa el seguiment per separat.
 Font: [historial oficial de versions per a Windows](https://www.emclient.com/release-history?os=win).
-En cada límit de sprint, comparar els canvis amb la referència; versionar la matriu
-i registrar les diferències en incidències, en lloc de moure en silenci la meta del sprint en curs.
+En cada límit d'esprint, comparar els canvis amb la referència; versionar la matriu
+i registrar les diferències en incidències, en lloc de moure en silenci la meta de l'esprint en curs.
 
 Lliurar **resultats per a l'usuari i qualitat d'interacció** comparables, no codi
 font propietari, marca, recursos gràfics, infraestructura ni el mateix motor de renderització.
@@ -46,9 +46,9 @@ La [línia de base històrica](baseline.md) recull evidència més antiga i no s
 el registre actual de finalització.
 
 - El PR #81 va lliurar una referència sintètica navegable, no un client de correu real.
-- El PR #82 va integrar la navegació real per comptes/carpetes per sobre de 1024px, no el redisseny complet.
+- El PR #82 va integrar la navegació real per comptes/carpetes per sobre de 1024 px, no el redisseny complet.
 - Els valors per defecte de producció encara fan servir Indigo, targetes i converses d'estil xat.
-- El defecte del lector fora de pantalla a 600px continua caracteritzat, no corregit.
+- El defecte del lector fora de pantalla a 600 px continua caracteritzat, no corregit.
 - IMAP/SMTP/MIME, EWS, contactes, tasques locals enllaçades i criptografia tenen implementació;
   la garantia independent per proveïdor/plataforma nativa continua incompleta.
 - Els commits locals d'adjunts/plantilles `7427383`, `142a007`, `f4d19e9` continuen a
@@ -75,7 +75,7 @@ els requisits descoberts de nou han de tenir una incidència abans que s'accepti
 | C01: Identitat i disseny compartit | Temes cobalt, tokens semàntics, tipografia, icones, menús, formularis, contrast, sense deriva decorativa | [#8](https://github.com/adilelhaji/oreneta/issues/8) → [#33](https://github.com/adilelhaji/oreneta/issues/33); [#83](https://github.com/adilelhaji/oreneta/issues/83) | partial |
 | C02: Espai de treball de correu | Llista/lector inicials convencionals, panells persistents, densitat, teclat, comportament en amplada estreta/zoom | [#32](https://github.com/adilelhaji/oreneta/issues/32), [#33](https://github.com/adilelhaji/oreneta/issues/33), [#34](https://github.com/adilelhaji/oreneta/issues/34), [#35](https://github.com/adilelhaji/oreneta/issues/35), [#36](https://github.com/adilelhaji/oreneta/issues/36); [#84](https://github.com/adilelhaji/oreneta/issues/84); [#85](https://github.com/adilelhaji/oreneta/issues/85) | partial |
 | C03: Operacions amb carpetes | Jerarquia real, preferits, colors, gestió, moviments i seleccions segurs | [#27](https://github.com/adilelhaji/oreneta/issues/27), [#34](https://github.com/adilelhaji/oreneta/issues/34); [#87](https://github.com/adilelhaji/oreneta/issues/87) | partial |
-| C04: Lector | HTML/text pla, citacions, imatges, accions per missatge, zoom del cos i impressió acotada | [#35](https://github.com/adilelhaji/oreneta/issues/35) | partial |
+| C04: Lector | HTML/text pla, citacions, imatges, accions per missatge, zoom del cos i impressió delimitada | [#35](https://github.com/adilelhaji/oreneta/issues/35) | partial |
 | C05: Context | Agenda, invitacions, historial de comunicacions/fitxers del contacte amb origen i cobertura | [#86](https://github.com/adilelhaji/oreneta/issues/86) | unassessed |
 | C06: Llistes | Ordenació global, paginació estable, columnes configurables, disposició desada i semàntica de selecció | [#30](https://github.com/adilelhaji/oreneta/issues/30), [#36](https://github.com/adilelhaji/oreneta/issues/36) | partial |
 | C07: Redacció | Compte/àlies, destinataris, text enriquit/taules/imatges, correcció ortogràfica, esborranys, adjunts i recuperació | [#39](https://github.com/adilelhaji/oreneta/issues/39), [#40](https://github.com/adilelhaji/oreneta/issues/40); [#88](https://github.com/adilelhaji/oreneta/issues/88) | partial |
@@ -84,7 +84,7 @@ els requisits descoberts de nou han de tenir una incidència abans que s'accepti
 | C10: Cerca | Operadors, filtres visuals, àmbits de compte/carpeta, vistes dinàmiques desades i cobertura parcial | [#31](https://github.com/adilelhaji/oreneta/issues/31), [#43](https://github.com/adilelhaji/oreneta/issues/43) | partial |
 | C11: Classificació | Categories, etiquetes locals/remotes, marques, anotacions de missatges, accions reversibles | [#91](https://github.com/adilelhaji/oreneta/issues/91); [#95](https://github.com/adilelhaji/oreneta/issues/95) | unassessed |
 | C12: Automatització | Regles locals/de servidor, correcció de correu brossa, macros, respostes d'absència/reenviament on s'admetin | [#48](https://github.com/adilelhaji/oreneta/issues/48), [#50](https://github.com/adilelhaji/oreneta/issues/50); [#92](https://github.com/adilelhaji/oreneta/issues/92); [#94](https://github.com/adilelhaji/oreneta/issues/94) | partial |
-| C13: Fitxers | Cerca de tots els adjunts, previsualitzacions, enllaços per desar/a l'origen, indexació acotada | [#40](https://github.com/adilelhaji/oreneta/issues/40); [#93](https://github.com/adilelhaji/oreneta/issues/93) | partial |
+| C13: Fitxers | Cerca de tots els adjunts, previsualitzacions, enllaços per desar/a l'origen, indexació limitada | [#40](https://github.com/adilelhaji/oreneta/issues/40); [#93](https://github.com/adilelhaji/oreneta/issues/93) | partial |
 | C14: Comptes | Descobriment a partir de l'adreça de correu, recuperació OAuth/manual, visualització de les capacitats del servei, grups/perfils | [#96](https://github.com/adilelhaji/oreneta/issues/96); [#99](https://github.com/adilelhaji/oreneta/issues/99) | partial |
 | C15: Protocols/proveïdors | IMAP/SMTP, POP3, Gmail/Workspace, Outlook/M365, EWS local (on-prem), iCloud i variants de servei llistades | [#46](https://github.com/adilelhaji/oreneta/issues/46), [#47](https://github.com/adilelhaji/oreneta/issues/47), [#48](https://github.com/adilelhaji/oreneta/issues/48); [#97](https://github.com/adilelhaji/oreneta/issues/97); [#98](https://github.com/adilelhaji/oreneta/issues/98) | partial |
 | C16: Calendari | Vistes/edició, recurrència, zones horàries, sincronització, subscripcions, recordatoris i cerca | [#100](https://github.com/adilelhaji/oreneta/issues/100); [#101](https://github.com/adilelhaji/oreneta/issues/101) | partial |
@@ -118,16 +118,16 @@ Les opcions de configuració específiques de proveïdor o menys destacades (tem
 variants d'arxivament/importació, descobriment de claus, capacitats de tasques) continuen com a files
 d'auditoria explícites a #22; no poden desaparèixer darrere d'una casella genèrica de finalització «altres».
 
-## Full de ruta per sprints i ordre de dependències
+## Full de ruta per esprints i ordre de dependències
 
 Les fites de GitHub són contenidors funcionals de línies de treball. La revisió del 2026-10-05
 fa servir les portes de lliurament R0–R4; les slices d'implementació de S01 ja s'han integrat, però l'acceptació completa
-continua oberta. S02–S12 són backlogs ordenats, **no promeses d'un sprint cadascun**.
+continua oberta. S02–S12 són backlogs ordenats, **no promeses d'un esprint cadascun**.
 S13 és una cua de descobriment separada. Fer servir períodes d'execució de dues setmanes quan es conegui
-la capacitat; dividir una fita gran en iteracions acotades en lloc de precipitar
+la capacitat; dividir una fita gran en iteracions delimitades en lloc de precipitar
 una èpica multiproveïdor en un sol PR. Sense responsables, velocitat ni dates límit inventats.
 
-| Sprint | Resultat | Entrada / sortida |
+| Esprint | Resultat | Entrada / sortida |
 |---|---|---|
 | [S01](https://github.com/adilelhaji/oreneta/milestone/1) | Primer canvi visual real | #22 + theme, mail-default, narrow; aplicació real en clar/fosc, preferències antigues intactes |
 | [S02](https://github.com/adilelhaji/oreneta/milestone/2) | Contractes d'integritat i recuperació | Reproduir #27–#29; aprovar només les decisions necessàries de #24/#25; els casos de fallada passen |
@@ -139,7 +139,7 @@ una èpica multiproveïdor en un sol PR. Sense responsables, velocitat ni dates 
 | [S08](https://github.com/adilelhaji/oreneta/milestone/8) | Informació personal | #28/#38/#41/#42, tasques i notes completes; aprovar primer els canvis de model |
 | [S09](https://github.com/adilelhaji/oreneta/milestone/9) | Seguretat/idiomes | #9/#12/#49 més les eines d'ADR-0001; proves independents de criptografia i privadesa |
 | [S10](https://github.com/adilelhaji/oreneta/milestone/10) | Integracions/assistent/xat | #51/#52, núvol/reunions/xat; consentiment, aïllament i acceptació específica per proveïdor |
-| [S11](https://github.com/adilelhaji/oreneta/milestone/11) | Acceptació completa a Windows | #25/#53/#54, migració/còpia de seguretat/artefactes nadius de Windows; totes les files estables de Windows verificades |
+| [S11](https://github.com/adilelhaji/oreneta/milestone/11) | Acceptació completa a Windows | #25/#53/#54, migració/còpia de seguretat/artefactes natius de Windows; totes les files estables de Windows verificades |
 | [S12](https://github.com/adilelhaji/oreneta/milestone/12) | Escriptori multiplataforma | #37/#55 i macOS; evidència nativa i acceptació controlada; cap desplegament públic automàtic |
 | [S13](https://github.com/adilelhaji/oreneta/milestone/13) | Descobriment de beta/mòbil | Registrar diferències i decisions independentment de la porta estable d'escriptori |
 
@@ -152,7 +152,7 @@ El manifest separa les `relatedIssues` no bloquejants de les dependències estri
 L'aprovació d'arquitectura és una porta separada; un disseny aprovat no
 requereix que es tanqui tota la seva incidència paraigua. Les regles de servidor dels proveïdors que falten
 es planifiquen a S06, després de validar les capacitats delegades/de servidor, no a S05.
-Cada element té URL d'incidència, sprint, estat inicial i declaració d'evidència;
+Cada element té URL d'incidència, esprint, estat inicial i declaració d'evidència;
 `unassessed` intencionadament no és una afirmació d'absència ni d'implementació.
 
 ### Slices d'execució històriques de S01 (implementació lliurada; acceptació completa oberta)
@@ -160,13 +160,13 @@ Cada element té URL d'incidència, sprint, estat inicial i declaració d'evidè
 1. **[#22](https://github.com/adilelhaji/oreneta/issues/22), registre d'acceptació** (S): auditar els valors per defecte actuals i la referència, identificar el SHA exacte
    de la línia de base, les captures de pantalla i les mancances pendents; no exigir el reclutament d'un pilot.
 2. **[#83: theme](https://github.com/adilelhaji/oreneta/issues/83)** (M): implementar el valor per defecte documentat per a perfils nous, preservar les eleccions
-   persistides i els temes personalitzats, provar clar/fosc/sistema i actualització/reinici.
+   desades i els temes personalitzats, provar clar/fosc/sistema i actualització/reinici.
 3. **[#84: mail-default](https://github.com/adilelhaji/oreneta/issues/84)** (M): reutilitzar els modes convencionals admesos, preservar les seleccions
    antigues explícites, oferir un canvi deliberat; provar lectura/resposta i selecció massiva.
-4. **[#85: narrow](https://github.com/adilelhaji/oreneta/issues/85)** (S/M): reproduir el tall a 600px, corregir la condició de disposició compartida i
+4. **[#85: narrow](https://github.com/adilelhaji/oreneta/issues/85)** (S/M): reproduir el tall a 600 px, corregir la condició de disposició compartida i
    provar amplades adjacents/zoom sense emmascarar altres fallades del lector.
 
-Les mides només són relatives: S = un sol aspecte acotat, M = diverses interaccions entre components
+Les mides només són relatives: S = un sol aspecte delimitat, M = diverses interaccions entre components
 existents, L = dividir abans d'implementar; les èpiques d'arquitectura/proveïdor queden
 sense estimar fins al descobriment. Per al primer període, comprometre només les slices preparades que
 càpiguen en la capacitat mesurada; les que es traslladin continuen obertes. No s'afirma cap finalització en 26 setmanes.
@@ -188,7 +188,7 @@ S01 no tanca tota l'èpica de disseny ni afirma paritat funcional.
 | notes | Emmagatzematge, identitat i semàntica de proveïdors amb notes per a notes independents |
 | chat-design → chat | Límit de l'adaptador natiu, historial/presència/fitxers, àmbits i manteniment |
 | #51, #52, cloud, meetings | Destinacions externes, consentiment, credencials, retenció/cost i API admeses; el límit de proveïdor/context de #51 i el contracte de revisió de resultats de #52 es van acceptar a [ADR-0006](adr/0006-assistant-provider-context-privacy.md) i [ADR-0007](adr/0007-assistant-results-review-and-cancellation.md) el 2026-09-10 |
-| migration / backup | Recuperació completa local xifrada del perfil aprovada el 2026-10-05 a [ADR-0010](adr/0010-full-profile-local-recovery.md), que amplia només el límit d'ADR-0008 de còpia exclusiva de la configuració. L'emmagatzematge d'esborranys #169 està lliurat; queden pendents la integració de l'editor #170, la captura #171, la restauració aïllada #172 i la programació #173. #113 continua oberta; l'aprovació no és acceptació de la còpia completa ni de la recuperació nativa. |
+| migration / backup | Recuperació completa local xifrada del perfil aprovada el 2026-10-05 a [ADR-0010](adr/0010-full-profile-local-recovery.md), que amplia només el límit d'ADR-0008 de còpia exclusiva de la configuració. El magatzem d'esborranys #169 està lliurat; queden pendents la integració de l'editor #170, la captura #171, la restauració aïllada #172 i la programació #173. #113 continua oberta; l'aprovació no és acceptació de la còpia completa ni de la recuperació nativa. |
 | beta-delta / mobile-scope | Servei de sincronització nou, MCP/Matrix o arquitectura de plataforma nova |
 
 El descobriment pot produir opcions i proves, no triar una arquitectura en silenci.
@@ -202,7 +202,7 @@ ni publicació pública.
 ## Flux de treball de les incidències i definició d'acabat
 
 - Actualitzar main; reconciliar la incidència, el codi actual, la documentació i el treball local abans de programar.
-- Acotar una slice revisable; les èpiques mare només es tanquen quan passen tots els requisits fills.
+- Delimitar una slice revisable; les èpiques mare només es tanquen quan passen tots els requisits fills.
 - Actualitzar la documentació concisa amb el codi; la documentació d'arquitectura va primer.
 - Les proves cobreixen èxit, límits, errors, interrupció/recuperació, aïllament i
   regressions. Afegir proves d'integració amb proveïdors i E2E natives quan escaigui.

@@ -109,11 +109,11 @@ natius/de proveïdor aplicables.
 
 ## Rúbrica visual de S01
 
-- 1440px: la navegació de carpetes etiquetada, la llista de correu i el lector, visibles
+- 1440 px: la navegació de carpetes etiquetada, la llista de correu i el lector, visibles
   alhora.
-- 1024px: l'accés essencial a carpetes/comptes continua accessible en controls compactes.
-- 599/600/601px: el lector seleccionat és visible amb una navegació de tornada/llista
-  utilitzable; la redacció i les accions no desborden el contenidor. Comproveu 1024/1025px
+- 1024 px: l'accés essencial a carpetes/comptes continua accessible en controls compactes.
+- 599/600/601 px: el lector seleccionat és visible amb una navegació de tornada/llista
+  utilitzable; la redacció i les accions no desborden el contenidor. Comproveu 1024/1025 px
   per separat.
 - Els tokens de disseny cobalt dels perfils nous segueixen art-direction.md; els
   temes/modes desats no es reescriuen. Totes dues aparences conserven la llegibilitat del
@@ -121,7 +121,7 @@ natius/de proveïdor aplicables.
 - Registreu per separat els estats de focus, fila oberta, no llegit i selecció múltiple;
   l'ús amb teclat no ha de seleccionar ni actuar sobre missatges d'un altre compte.
 - Les etiquetes/assumptes localitzats llargs, els estats buit/de càrrega/d'error, l'HTML
-  ample i el zoom del 200% han de conservar les accions essencials. Es manté el moviment
+  ample i el zoom del 200 % han de conservar les accions essencials. Es manté el moviment
   reduït.
 - La revisió de pantalla comprova la geometria, la tipografia, la jerarquia i la compleció
   de tasques, no un percentatge de semblança endevinat ni gràfics propietaris copiats.

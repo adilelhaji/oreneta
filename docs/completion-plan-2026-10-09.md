@@ -288,7 +288,7 @@ responsable:
 
 Estat de la iteració 7 (2026-10-11): el que existeix és la còpia de la
 configuració d'ADR-0008, no la del perfil complet. Es va corregir que una còpia
-fallida esborrés l'anterior: ara s'escriu a part i es reanomena en acabar.
+fallida esborrés l'anterior: ara s'escriu a part i se li canvia el nom en acabar.
 La captura i la restauració del perfil complet esperen decisions del
 responsable ([decisions](design/full-profile-archive-decisions.md)): xifratge
 per blocs per a perfils grans, límits de l'inventari, secrets opcionals,

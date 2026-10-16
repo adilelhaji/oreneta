@@ -75,7 +75,7 @@ parcials. #149/#150 conserven pendent l'acceptació completa i nativa.
 
 | Porta | Resultat per a l'usuari | Treball principal | Condició de sortida |
 |---|---|---|---|
-| **R0 — Confiança i evidència** | Conservar les dades i entendre les fallades abans d'ampliar-ne l'ús | #9/#12, #27–#29, contractes acotats #24/#25; mesurar #53, preparar #98/#114 i resoldre l'abast de la recuperació | Reproduccions de riscos resoltes o capacitat deshabilitada per a l'abast; enviament incert sense reintent cec; inventari de dades i decisió de recuperació; proves automatitzades en verd i límits explícits |
+| **R0 — Confiança i evidència** | Conservar les dades i entendre les fallades abans d'ampliar-ne l'ús | #9/#12, #27–#29, contractes delimitats #24/#25; mesurar #53, preparar #98/#114 i resoldre l'abast de la recuperació | Reproduccions de riscos resoltes o capacitat desactivada per a l'abast; enviament incert sense reintent cec; inventari de dades i decisió de recuperació; proves automatitzades en verd i límits explícits |
 | **R1 — Correu de Windows competitiu** | Configurar comptes, llegir, cercar, respondre amb fitxers i organitzar sense fricció | #30–#40, #43/#45, #46–#48, #86–#89, #92/#93/#95/#96; noves slices de Graph, OAuth, salut i configuració | Flux complet a l'aplicació nativa, proveïdor per proveïdor; esborranys recuperables; UX comparada; instal·lació/actualització comprovades; cap afirmació de compatibilitat basada només en simulacions |
 | **R2 — Agenda i organització personal** | Coordinar reunions i mantenir contactes, tasques i notes | #28/#38/#41/#42, #99–#104; importació/recuperació #112/#113 segons els ADR | Sincronització, conflictes, recurrència, invitacions, permisos i recuperació demostrats; arquitectura nova aprovada abans del codi |
 | **R3 — Paritat estable completa a Windows** | Cobrir l'automatització, la privadesa, l'idioma i les integracions de l'inventari | #49–#52, #90/#91/#94/#97, #105–#111; completar #22/#98/#112–#114 | Totes les files obligatòries de Windows/proveïdor verificades, inclosos els formats i serveis menys comuns; qualsevol exclusió manté la declaració de paritat parcial |
@@ -102,7 +102,7 @@ abans del seu pilot, encara que la cobertura completa de formats pertanyi a R2/R
    #39/#40 amb recuperació i adjunts, no només amb l'aparença.
 4. **Experiència diària:** #33/#34/#35/#36, [#150](https://github.com/adilelhaji/oreneta/issues/150), [#149](https://github.com/adilelhaji/oreneta/issues/149)
    i #43. Verificar un flux sencer per increment, amb #37 des del començament.
-5. **Candidat acotat:** [#144](https://github.com/adilelhaji/oreneta/issues/144), files reals de [#145](https://github.com/adilelhaji/oreneta/issues/145) i
+5. **Candidat delimitat:** [#144](https://github.com/adilelhaji/oreneta/issues/144), files reals de [#145](https://github.com/adilelhaji/oreneta/issues/145) i
    [#147](https://github.com/adilelhaji/oreneta/issues/147); comparar els fluxos aplicables a l'abast del candidat i decidir l'entrada
    de participants mitjançant #55. La publicació continua sent una acció separada.
 
@@ -121,7 +121,7 @@ en producció abans de considerar-les lliurades.
 
 | Millora | Responsable | Evidència exigida |
 |---|---|---|
-| Identitat cobalt/navy coherent, tipografia, icones i estats semàntics | #33 | Catàleg i pantalles reals en clar/fosc; normal, focus, hover, deshabilitat, error; sense halos decoratius ni biblioteca paral·lela |
+| Identitat cobalt/navy coherent, tipografia, icones i estats semàntics | #33 | Catàleg i pantalles reals en clar/fosc; normal, focus, hover, desactivat, error; sense halos decoratius ni biblioteca paral·lela |
 | Bústia llegible amb selecció inequívoca | #34/#36 | Distingir obert/no llegit/focus/selecció alhora; columnes configurables i persistents; els correus nous no amplien el lot revisat |
 | Lectura i redacció centrades en el contingut | #35/#39/#40 | Accions per missatge, HTML ample contingut, adjunts i remitent visibles, esborrany conservat després d'una fallada o un reinici |
 | Context útil sense saturar la pantalla | #86 | Agenda, persona i historial de fitxers amb origen/cobertura; plegat, redimensionament i retorn del focus; no barrejar comptes |
@@ -134,11 +134,11 @@ Mantenir els contractes de [direcció artística](design/art-direction.md) i
 [límits dels panells](design/mail-boundaries.md). La producció fa servir un sol panell per sota de
 769 CSS px i navegació completa per sobre de 1024; el fixture històric de
 #32 no redefineix aquests límits. Verificar 599/600/601, 768/769, 1024/1025 i 1440,
-zoom al 200%, textos llargs i moviment reduït; conservar les preferències existents.
+zoom al 200 %, textos llargs i moviment reduït; conservar les preferències existents.
 
 ## Com demostrar que millora l'experiència
 
-#32/#55 comparen vuit tasques amb contingut sintètic equivalent a Oreneta i a la
+#32/#55 comparen vuit tasques amb contingut sintètic equivalent, tant a Oreneta com a la
 referència estable: (1) configurar un compte i entendre'n les capacitats; (2) localitzar
 un correu/adjunt; (3) llegir/respondre; (4) redactar amb un fitxer i recuperar l'esborrany;
 (5) arxivar un lot revisat; (6) recuperar-se d'una desconnexió/de permisos;
@@ -170,7 +170,7 @@ segons el contracte vigent i evidència nativa per a les afirmacions de compatib
   una còpia completa ni una recuperació nativa.
 - **Graph:** direcció aprovada a l'ADR-0004; les accions conserven el consentiment
   incremental i la identitat aïllada. La revocació pot invalidar la lectura i l'escriptura.
-  #46 verifica l'exposició real a la retirada d'EWS Online; on-premises és diferent.
+  #46 verifica l'exposició real a la retirada d'EWS Online; EWS local (on-premises) és diferent.
   [Guia oficial de Microsoft](https://learn.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/deprecation-of-ews-exchange-online).
 - **OAuth distribuïble:** [#144](https://github.com/adilelhaji/oreneta/issues/144) separa la configuració de desenvolupament i
   la de distribució. Cal revisar els requisits i les excepcions vigents, no suposar un cost
@@ -188,7 +188,7 @@ segons el contracte vigent i evidència nativa per a les afirmacions de compatib
 Cada slice: requisits reconciliats → documentació/ADR aplicable → codi i
 proves → revisió lleugera tècnica i de producte → PR → CI requerida del SHA exacte
 → merge commit → comprovació de main → evidència nativa/de proveïdor aplicable.
-Les incidències mare continuen obertes fins que se'n satisfan tots els criteris. Una tasca
+Les incidències mare continuen obertes fins que se'n satisfacin tots els criteris. Una tasca
 de preparació es pot tancar en lliurar el procediment; mai no s'ha de certificar
 per això un proveïdor o una plataforma que no s'hagi provat.
 
@@ -200,4 +200,4 @@ subdivisions de l'abast existent, recollides al manifest; no substitueixen les
 
 Aquest encàrrec lliura planificació i tasques. No n'inicia per si mateix la implementació,
 no publica versions, no modifica comptes/tenants ni contracta serveis. Tota
-limitació d'accés, decisió o plataforma continua visible fins que es resol.
+limitació d'accés, decisió o plataforma continua visible fins que es resolgui.

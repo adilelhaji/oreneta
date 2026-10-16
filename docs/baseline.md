@@ -61,8 +61,8 @@ dels PR poden ser el commit de fusió sintètic de GitHub; la procedència regis
 valors en lloc d'etiquetar erròniament les proves del cap de branca com a evidència posterior a la fusió.
 
 Defecte històric (#34, corregit per #85): les regles de visibilitat estrictes `<600px`
-deixaven el lector fora de la finestra de visualització de 600 a 768px mentre la llista encara
-ocupava tota l'amplada. Ara totes dues captures del lector a 600px exigeixen visibilitat positiva
+deixaven el lector fora de la finestra de visualització de 600 a 768 px mentre la llista encara
+ocupava tota l'amplada. Ara totes dues captures del lector a 600 px exigeixen visibilitat positiva
 a la finestra de visualització. Vegeu [límits del correu](design/mail-boundaries.md) per a les comprovacions de límits
 de producció i equivalents de zoom; l'evidència del zoom natiu s'adjunta per separat
 a l'execució de validació de Windows.

@@ -70,7 +70,7 @@ contrasenya a Exchange i només Oreneta l'emmagatzema.
 `sync <folder>: timed out after 30s` al registre.** DavMail baixa el missatge complet
 d'Exchange per servir cada capçalera, de manera que sincronitzar una carpeta gran
 mitjançant EWS és molt més lent que l'IMAP directe i pot superar el límit de temps
-per defecte de 30s per carpeta de la sincronització d'Oreneta. Augmenteu-lo amb la
+per defecte de 30 s per carpeta de la sincronització d'Oreneta. Augmenteu-lo amb la
 variable d'entorn `MERON_SYNC_TIMEOUT` (en segons), p. ex. `MERON_SYNC_TIMEOUT=300`. Per a
 una instal·lació amb Flatpak:
 
