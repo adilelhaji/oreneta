@@ -1,31 +1,30 @@
-# Grupos de cuentas (#99, ADR-0040)
+# Grups de comptes (#99, ADR-0040)
 
-## Uso
+## Ús
 
-- **Ajustes → Cuentas → Grupos de cuentas:** crear, renombrar y borrar
-  grupos, y elegir sus cuentas. Un nombre vacío o repetido se rechaza.
-- **Navegación:** cada grupo aparece debajo de «Bandeja unificada». Al
-  elegirlo se ven juntas sus cuentas, con las mismas carpetas unificadas,
-  búsqueda, filtros y acciones. «Bandeja unificada» vuelve a todas las
-  cuentas incluidas.
-- **Barra lateral estrecha:** el menú contextual del botón unificado
-  ofrece los grupos.
+- **Configuració → Comptes → Grups de comptes:** crear, reanomenar i suprimir
+  grups, i triar-ne els comptes. Es rebutja un nom buit o repetit.
+- **Navegació:** cada grup apareix sota «Safata unificada». Quan es tria, se'n
+  veuen els comptes junts, amb les mateixes carpetes unificades, cerca, filtres
+  i accions. «Safata unificada» torna a tots els comptes inclosos.
+- **Barra lateral estreta:** el menú contextual del botó unificat ofereix els
+  grups.
 
-## Aplicación
+## Implementació
 
 `frontend/src/states/accountGroups.ts`:
-- `inUnifiedScope` decide qué cuentas entran en la vista unificada, y
-  `unifiedAccounts()` la usa;
-- se usa también en «marcar todo como leído», en sincronizar y en los
-  recuentos;
-- `threadListViewKey` incluye el grupo, de modo que cada grupo es su propia
-  vista.
+- `inUnifiedScope` decideix quins comptes entren a la vista unificada, i
+  `unifiedAccounts()` la fa servir;
+- també es fa servir a «marca-ho tot com a llegit», a la sincronització i als
+  recomptes;
+- `threadListViewKey` inclou el grup, de manera que cada grup és una vista
+  pròpia.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N2 estado (`accountGroups.test.ts`) | Sin grupo, las incluidas; con grupo, exactamente sus cuentas (también una excluida); cada grupo es una vista distinta y no afecta a las vistas de una cuenta; salir de la unificada sale del grupo; nombres obligatorios y únicos; guardado y lectura; datos dañados como «sin grupos»; quitar una cuenta la saca de los grupos; borrar el grupo mostrado vuelve a todas |
-| N2 navegación (`MailNavigation.test.tsx`) | Los grupos aparecen bajo la unificada y solo el mostrado está marcado |
-| N2 ajustes (`AccountGroupsGroup.test.tsx`) | Crear con las cuentas elegidas; nombre repetido rechazado; borrar pregunta y deja las cuentas |
-| N4 pendiente | En Windows, con varias cuentas reales |
+| N2 estat (`accountGroups.test.ts`) | Sense grup, els inclosos; amb grup, exactament els seus comptes (també un d'exclòs); cada grup és una vista diferent i no afecta les vistes d'un compte; sortir de la vista unificada fa sortir del grup; noms obligatoris i únics; desament i lectura; dades malmeses com a «sense grups»; treure un compte el treu dels grups; suprimir el grup mostrat torna a tots |
+| N2 navegació (`MailNavigation.test.tsx`) | Els grups apareixen sota la vista unificada i només el mostrat és marcat |
+| N2 configuració (`AccountGroupsGroup.test.tsx`) | Crear amb els comptes triats; nom repetit rebutjat; suprimir demana confirmació i conserva els comptes |
+| N4 pendent | A Windows, amb diversos comptes reals |

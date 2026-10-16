@@ -1,61 +1,64 @@
-# Sincronización CardDAV completa o nada (#28)
+# Sincronització CardDAV completa o res (#28)
 
-## Problema reproducido
+## Problema reproduït
 
-`fetch_book` devolvía lo que pudiera leer: una tarjeta con `GET` fallido se
-saltaba, una respuesta `REPORT` sin `address-data` se ignoraba y un XML cortado
-a mitad se analizaba hasta donde llegara. El llamador sustituía el libro local
-por ese resultado (`replace_book`), así que un fallo parcial borraba contactos
-en silencio mientras la sincronización figuraba como correcta (H02). Había un
-test que fijaba ese comportamiento como deseado.
+`fetch_book` retornava el que podia llegir: una targeta amb un `GET` fallit
+s'ometia, una resposta `REPORT` sense `address-data` s'ignorava i un XML tallat
+a mitges s'analitzava fins on arribés. El codi que el cridava substituïa la
+llibreta local per aquest resultat (`replace_book`), de manera que un error
+parcial esborrava contactes en silenci mentre la sincronització constava com a
+correcta (H02). Hi havia una prova que fixava aquest comportament com a
+desitjat.
 
-## Contrato
+## Contracte
 
-- **Todo o nada.** Leer un libro devuelve el libro entero o un error que nombra
-  cuántas tarjetas faltaron y la primera. Con error, el llamador no toca la
-  copia local y guarda el motivo en `lastError`, que Ajustes > Contactos ya
-  muestra en rojo.
-- **Qué cuenta como incompleto:** respuesta de tarjeta sin `address-data` o con
-  estado de error (incluido un `propstat` fallido seguido de otro correcto),
-  `address-data` que no es un vCard, `GET` de tarjeta con estado ≥ 300,
-  listado `PROPFIND` con estado ≥ 300, y cualquier `multistatus` mal formado o
-  sin su cierre (`parse_multistatus_complete`).
-- **Libro vacío válido:** un `multistatus` completo sin tarjetas es un éxito
-  vacío, sin segunda petición.
-- **Borrados reales:** un contacto eliminado en el servidor desaparece en la
-  siguiente sincronización completa; la política no congela el libro.
+- **Tot o res.** Llegir una llibreta retorna la llibreta sencera o un error que
+  indica quantes targetes hi han faltat i quina és la primera. Amb error, el
+  codi que el crida no toca la còpia local i desa el motiu a `lastError`, que
+  Configuració > Contactes ja mostra en vermell.
+- **Què compta com a incomplet:** resposta de targeta sense `address-data` o
+  amb un estat d'error (inclòs un `propstat` fallit seguit d'un altre de
+  correcte), `address-data` que no és una vCard, `GET` de targeta amb estat
+  ≥ 300, llistat `PROPFIND` amb estat ≥ 300, i qualsevol `multistatus` mal
+  format o sense tancament (`parse_multistatus_complete`).
+- **Llibreta buida vàlida:** un `multistatus` complet sense targetes és un èxit
+  buit, sense segona sol·licitud.
+- **Supressions reals:** un contacte suprimit al servidor desapareix a la
+  sincronització completa següent; la política no congela la llibreta.
 
-## Credenciales
+## Credencials
 
-Cada petición lleva la contraseña, así que seguir un `href` del servidor es
-entregarla donde apunte.
+Cada sol·licitud porta la contrasenya, de manera que seguir un `href` del
+servidor equival a lliurar-la allà on apunti.
 
-- `credentials_may_follow`: nunca de HTTPS a HTTP; a otro host solo por HTTPS
-  (proveedores que reparten DAV entre hosts, como las particiones de iCloud);
-  un servidor HTTP local solo conserva su propio origen.
-- En el descubrimiento, un `href` de principal o de home-set que no pasa esa
-  regla cuenta como paso sin resultado y su motivo se informa; un libro en un
-  origen no permitido no se ofrece.
-- Al leer un libro, las tarjetas solo se piden al mismo origen del libro. Un
-  `href` a otro servidor detiene la lectura sin enviar nada allí.
-- `UreqTransport` fija `RedirectAuthHeaders::Never`: la contraseña nunca se
-  reenvía en una redirección (era el valor por defecto de ureq; ahora explícito).
+- `credentials_may_follow`: mai d'HTTPS a HTTP; a un altre amfitrió només per
+  HTTPS (proveïdors que reparteixen DAV entre amfitrions, com les particions
+  d'iCloud); un servidor HTTP local només conserva el seu propi origen.
+- En el descobriment, un `href` de principal o de home-set que no compleix
+  aquesta regla compta com a pas sense resultat i se n'informa el motiu; no
+  s'ofereix una llibreta en un origen no permès.
+- En llegir una llibreta, les targetes només es demanen al mateix origen de la
+  llibreta. Un `href` a un altre servidor atura la lectura sense enviar-hi res.
+- `UreqTransport` fixa `RedirectAuthHeaders::Never`: la contrasenya no es
+  reenvia mai en una redirecció (era el valor per defecte d'ureq; ara és
+  explícit).
 
-## Coste aceptado
+## Cost acceptat
 
-Una tarjeta rota de forma permanente en el servidor impide actualizar ese libro
-hasta que se corrija. El error dice cuál es. Es preferible a perder contactos
-sin aviso; una fusión por elemento con tarjetas fallidas preservadas sería una
-mejora posterior, no necesaria para los criterios de #28.
+Una targeta trencada de manera permanent al servidor impedeix actualitzar
+aquella llibreta fins que es corregeixi. L'error indica quina és. És preferible
+a perdre contactes sense avís; una fusió per element amb les targetes fallides
+preservades seria una millora posterior, no necessària per als criteris de #28.
 
-## Verificación
+## Verificació
 
-- Rust (`carddav::client_tests`): tarjeta que no llega, tarjeta con estado 500,
-  `propstat` 403 seguido de 200, XML cortado, vCard inválido, libro vacío sin
-  segunda petición, el libro listándose a sí mismo, tarjeta en otro host sin
-  petición enviada, reglas de origen y descubrimiento sin bajar a HTTP.
-- Integración con Radicale (`TestIntegrationContacts`): descubrimiento, lectura,
-  cambio, borrado real recogido, contraseña rechazada y servidor caído con
-  contactos conservados.
-- No cubierto: redirecciones reales entre orígenes contra un servidor (la regla
-  de ureq se fija en código, no se prueba con red) y proveedores reales.
+- Rust (`carddav::client_tests`): targeta que no arriba, targeta amb estat 500,
+  `propstat` 403 seguit de 200, XML tallat, vCard no vàlida, llibreta buida
+  sense segona sol·licitud, la llibreta que es llista a si mateixa, targeta en
+  un altre amfitrió sense cap sol·licitud enviada, regles d'origen i
+  descobriment sense baixar a HTTP.
+- Integració amb Radicale (`TestIntegrationContacts`): descobriment, lectura,
+  canvi, supressió real recollida, contrasenya rebutjada i servidor caigut amb
+  els contactes conservats.
+- No cobert: redireccions reals entre orígens contra un servidor (la regla
+  d'ureq es fixa en el codi, no es prova amb xarxa) i proveïdors reals.

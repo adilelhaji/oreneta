@@ -1,59 +1,58 @@
-# Tareas en un servidor CalDAV (#103, ADR-0039)
+# Tasques en un servidor CalDAV (#103, ADR-0039)
 
-## Uso
+## Ús
 
-En **Tareas**:
-- «Lista de tareas CalDAV…» pide el servidor, el usuario y la contraseña,
-  y luego busca las colecciones. Se elige una y el nombre que tendrá aquí.
-  La lista se lee una vez antes de añadirla; si falla, el diálogo sigue
-  abierto con el motivo.
-- Al abrir Tareas se sincronizan todas las listas enlazadas. Una lista
-  enlazada muestra:
-  - dónde se guarda;
-  - la última sincronización;
-  - las tareas en conflicto;
-  - el último error, con «no se ha perdido nada»;
-  - el botón **Sincronizar**.
-- Una tarea en conflicto lleva la marca «Conflicto», el motivo
-  («cambiada aquí y en el servidor», «borrada en el servidor», «borrada
-  aquí y cambiada en el servidor») y dos botones: «Conservar la mía» y
-  «Usar la del servidor».
-- Una tarea que se repite se marca como tal y no se edita aquí.
-- El editor no deja mover una tarea entre una lista del servidor y otra, y
-  dice por qué.
-- Borrar una lista enlazada avisa de que no se borra nada en el servidor.
+A **Tasques**:
+- «Llista de tasques CalDAV…» demana el servidor, l'usuari i la contrasenya,
+  i després cerca les col·leccions. Se'n tria una i el nom que tindrà aquí.
+  La llista es llegeix una vegada abans d'afegir-la; si falla, el diàleg
+  continua obert amb el motiu.
+- En obrir Tasques se sincronitzen totes les llistes enllaçades. Una llista
+  enllaçada mostra:
+  - on es desa;
+  - l'última sincronització;
+  - les tasques en conflicte;
+  - l'últim error, amb «no s'ha perdut res»;
+  - el botó **Sincronitza**.
+- Una tasca en conflicte porta la marca «Conflicte», el motiu («canviada aquí
+  i al servidor», «suprimida al servidor», «suprimida aquí i canviada al
+  servidor») i dos botons: «Conserva la meva» i «Fes servir la del servidor».
+- Una tasca que es repeteix es marca com a tal i no s'edita aquí.
+- L'editor no permet moure una tasca entre una llista del servidor i una
+  altra, i explica per què.
+- Suprimir una llista enllaçada avisa que no se suprimeix res al servidor.
 
-## Núcleo
+## Nucli
 
-- Código: `meron-core/src/task_sync/`, con `vtodo.rs` para la lectura y
-  escritura de VTODO. `calendar::caldav::fetch_todos` comparte con
-  `fetch_window` la lectura «todo o nada».
+- Codi: `meron-core/src/task_sync/`, amb `vtodo.rs` per a la lectura i
+  l'escriptura de VTODO. `calendar::caldav::fetch_todos` comparteix amb
+  `fetch_window` la lectura «tot o res».
 - RPC:
   - `tasks.caldavDiscover {server, username, password}`;
   - `tasks.caldavAdd {url, name, server, username, password}`;
-  - `tasks.sync {list_id?}`: sin `list_id` sincroniza todas. Responde
-    `{lists: [{id, ok, error?, report?}]}` y nunca falla por un servidor;
-  - `tasks.resolveConflict {id, keep: "mine"|"server"}`, que sincroniza
-    después.
-- Órdenes ampliadas:
-  - `tasks.list` devuelve `pending`, `conflict` y `recurring`;
-  - `tasks.lists` devuelve `remote_url`, `remote_user`, `synced_at`,
-    `last_error` y `conflicts`;
-  - `tasks.deleteList` borra también la contraseña.
+  - `tasks.sync {list_id?}`: sense `list_id` les sincronitza totes. Respon
+    `{lists: [{id, ok, error?, report?}]}` i no falla mai per un servidor;
+  - `tasks.resolveConflict {id, keep: "mine"|"server"}`, que sincronitza
+    després.
+- Ordres ampliades:
+  - `tasks.list` retorna `pending`, `conflict` i `recurring`;
+  - `tasks.lists` retorna `remote_url`, `remote_user`, `synced_at`,
+    `last_error` i `conflicts`;
+  - `tasks.deleteList` també suprimeix la contrasenya.
 - Esquema 56.
-- Llavero: `caldav-tasks:{lista}`, incluido en
+- Clauer: `caldav-tasks:{llista}`, inclòs a
   `profile_purge::secret_names`.
-- Puente: las cuatro órdenes pasan sin cambios. `tasks.sync` tiene 5
-  minutos y las otras tres, 60 segundos.
+- Pont: les quatre ordres passen sense canvis. `tasks.sync` té 5 minuts i les
+  altres tres, 60 segons.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 Rust VTODO (`task_sync/vtodo/tests.rs`) | Lectura de otro cliente (zona, prioridad, alarma relativa a `DUE`); una edición cambia solo lo cambiado y conserva X-, `CATEGORIES`, `RELATED-TO`, `VTIMEZONE`, `PERCENT-COMPLETE`, alarmas; `SEQUENCE`, `DTSTAMP`, `LAST-MODIFIED`; prioridad en los dos sentidos (5 se conserva si sigue siendo normal); fecha sola como medianoche local y escrita como fecha; completar y reabrir; alarmas sustituidas solo si cambia el recordatorio; tarea nueva completa con escapes; tarea que se repite leída y no editada; objeto sin tarea rechazado; plegado de líneas largas. Pasan con `TZ` de Nueva York, Calcuta y Chatham |
-| N1 Rust sincronización (`task_sync/tests.rs`, servidor falso) | Primera lectura importa; edición local con `If-Match` que conserva lo ajeno; completar y borrar (lápida oculta, luego `DELETE` con `If-Match`); tarea nueva con `If-None-Match` y UID `@oreneta`, sin duplicar al releer; cambio remoto tomado y revisión subida; cambio en los dos lados en conflicto sin sobrescribir ninguno; un 412 detiene la cola de esa lista y no la de otra, y sigue detenida mientras dure el conflicto; borrado remoto quita la tarea sin cambios y deja en conflicto la cambiada; un objeto que no vuelve o no se lee no cambia nada y deja el error; la contraseña nunca sale del servidor (respuesta con otro origen, dirección local manipulada, enlace a HTTP desde HTTPS, colección ya enlazada); resolver con la del servidor y con la mía (sobre la versión actual y creándola de nuevo si se borró); borrar la lista no envía nada; mover y editar una tarea que se repite se rechaza; un recordatorio pasado al importar no suena |
-| N1 despachador (`main.rs`) | Servidor inalcanzable: `tasks.caldavAdd` no añade nada; `tasks.sync` responde el error, la lista lo guarda y la tarea sigue pendiente; `tasks.resolveConflict` sin conflicto falla; borrar la lista |
-| N1 guardas | `profile_purge` nombra el secreto nuevo y cuenta 12 escrituras; esquema 56 en las pruebas de migración |
-| N2 (`CalDavTaskLists.test.tsx`) | Añadir una lista: buscar, elegir colección, nombre y alta; un fallo al añadir deja el diálogo abierto con el motivo; sincroniza al abrir solo si hay listas enlazadas; error de sincronización visible y botón Sincronizar; «Conservar la mía» y «Usar la del servidor»; mover entre listas rechazado sin guardar |
-| N3 Radicale (`integration_caldav_tasks_test.go`) | Descubrir y añadir, edición que conserva lo ajeno, conflicto con nada escrito y «Conservar la mía», tarea nueva creada y borrar la lista sin tocar el servidor. Probado contra Radicale 3.5.4 local; en CI corre con la imagen Docker del arnés |
-| N5 pendiente | Nextcloud, Fastmail e iCloud antes de anunciarlos |
+| N1 Rust VTODO (`task_sync/vtodo/tests.rs`) | Lectura d'un altre client (zona, prioritat, alarma relativa a `DUE`); una edició només canvia el que s'ha canviat i conserva X-, `CATEGORIES`, `RELATED-TO`, `VTIMEZONE`, `PERCENT-COMPLETE`, alarmes; `SEQUENCE`, `DTSTAMP`, `LAST-MODIFIED`; prioritat en els dos sentits (el 5 es conserva si continua sent normal); data sola com a mitjanit local i escrita com a data; completar i reobrir; alarmes substituïdes només si canvia el recordatori; tasca nova completa amb seqüències d'escapament; tasca que es repeteix llegida i no editada; objecte sense tasca rebutjat; plegament de línies llargues. Passen amb el `TZ` de Nova York, Calcuta i Chatham |
+| N1 Rust sincronització (`task_sync/tests.rs`, servidor fals) | La primera lectura importa; edició local amb `If-Match` que conserva el que és d'altri; completar i suprimir (làpida oculta, després `DELETE` amb `If-Match`); tasca nova amb `If-None-Match` i UID `@oreneta`, sense duplicar en tornar a llegir; canvi remot incorporat i revisió pujada; canvi als dos costats en conflicte sense sobreescriure'n cap; un 412 atura la cua d'aquella llista i no la d'una altra, i continua aturada mentre duri el conflicte; una supressió remota treu la tasca sense canvis i deixa en conflicte la canviada; un objecte que no torna o que no es llegeix no canvia res i deixa l'error; la contrasenya no surt mai del servidor (resposta amb un altre origen, adreça local manipulada, enllaç a HTTP des d'HTTPS, col·lecció ja enllaçada); resoldre amb la del servidor i amb la meva (sobre la versió actual i creant-la de nou si s'havia suprimit); suprimir la llista no envia res; moure i editar una tasca que es repeteix es rebutja; un recordatori passat en importar no sona |
+| N1 distribuïdor (`main.rs`) | Servidor inabastable: `tasks.caldavAdd` no afegeix res; `tasks.sync` respon l'error, la llista el desa i la tasca continua pendent; `tasks.resolveConflict` sense conflicte falla; suprimir la llista |
+| N1 proteccions | `profile_purge` anomena el secret nou i compta 12 escriptures; esquema 56 a les proves de migració |
+| N2 (`CalDavTaskLists.test.tsx`) | Afegir una llista: cercar, triar la col·lecció, el nom i l'alta; un error en afegir deixa el diàleg obert amb el motiu; sincronitza en obrir només si hi ha llistes enllaçades; error de sincronització visible i botó Sincronitza; «Conserva la meva» i «Fes servir la del servidor»; moure entre llistes rebutjat sense desar |
+| N3 Radicale (`integration_caldav_tasks_test.go`) | Descobrir i afegir, edició que conserva el que és d'altri, conflicte amb res escrit i «Conserva la meva», tasca nova creada i suprimir la llista sense tocar el servidor. Provat contra Radicale 3.5.4 local; a la CI s'executa amb la imatge Docker de l'arnès |
+| N5 pendent | Nextcloud, Fastmail i iCloud abans d'anunciar-los |
