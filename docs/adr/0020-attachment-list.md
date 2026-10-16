@@ -1,49 +1,48 @@
-# ADR-0020: Lista de adjuntos sin índice de contenido
+# ADR-0020: Llista d'adjunts sense índex de contingut
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #93.
+- Data: 2026-10-11.
+- Abast: primer lliurament de #93.
 
-## Contexto
+## Context
 
-#93 pide un espacio con todos los adjuntos, filtros y enlace a su mensaje.
-Para buscar dentro de los archivos exige antes un diseño aislado y con
-límites de recursos.
+#93 demana un espai amb tots els adjunts, filtres i enllaç al seu missatge.
+Per a cercar dins dels fitxers, exigeix abans un disseny aïllat i amb
+límits de recursos.
 
-## Alternativas
+## Alternatives
 
-1. **Lista leída de los metadatos que ya guarda cada mensaje descargado
-   (elegida).** No hay un segundo índice que pueda desincronizarse, y la
-   cobertura se dice siempre.
-2. **Tabla propia de adjuntos mantenida en cada sincronización.** Es más
-   rápida en buzones enormes, pero añade un estado que puede divergir. Se
-   podrá añadir si las medidas lo piden.
-3. **Indexar el contenido** (PDF, Office) en un proceso aparte. Necesita
-   dependencias de análisis de documentos con historial de fallos de
-   seguridad, y un proceso aislado con límites. Queda fuera hasta que se
-   apruebe.
+1. **Llista llegida de les metadades que ja desa cada missatge baixat
+   (escollida).** No hi ha un segon índex que es pugui desincronitzar, i la
+   cobertura es diu sempre.
+2. **Taula pròpia d'adjunts mantinguda a cada sincronització.** És més
+   ràpida en bústies enormes, però afegeix un estat que pot divergir. Es
+   podrà afegir si les mesures ho demanen.
+3. **Indexar el contingut** (PDF, Office) en un procés a part. Necessita
+   dependències d'anàlisi de documents amb historial de fallades de
+   seguretat, i un procés aïllat amb límits. Queda fora fins que s'aprovi.
 
-## Decisión
+## Decisió
 
-- **Origen:** la lista sale de `messages.json.attachments` de cada mensaje
-  de correo descargado. Las imágenes sin nombre (logotipos y firmas dentro
-  del texto) no se cuentan como archivos.
-- **Filtros:** cuenta, palabras del nombre, remitente, tipo (deducido del
-  tipo MIME o de la extensión), fecha y tamaño. Páginas de 200, con un
-  máximo de 500.
-- **Cobertura:** cada respuesta dice cuántos mensajes hay y cuántos están
-  descargados; los demás tienen adjuntos que aquí no se conocen.
-- **Archivos no disponibles:**
-  - uno que ya no está en disco (la caché se poda) se lista sin clave, y se
-    ofrece abrir su mensaje;
-  - un enlace a la nube se dice tal cual.
-- **Identidad:** cada archivo se identifica por cuenta, carpeta, UID e
-  índice; la clave en disco incluye los mismos datos, de modo que una
-  consulta antigua no puede abrir otro archivo.
-- **Contenido:** no se busca dentro de los archivos, y la interfaz lo dice.
+- **Origen:** la llista surt de `messages.json.attachments` de cada missatge
+  de correu baixat. Les imatges sense nom (logotips i signatures dins
+  del text) no es compten com a fitxers.
+- **Filtres:** compte, paraules del nom, remitent, tipus (deduït del
+  tipus MIME o de l'extensió), data i mida. Pàgines de 200, amb un
+  màxim de 500.
+- **Cobertura:** cada resposta diu quants missatges hi ha i quants estan
+  baixats; els altres tenen adjunts que aquí no es coneixen.
+- **Fitxers no disponibles:**
+  - un que ja no és al disc (la memòria cau es poda) es llista sense clau, i s'hi
+    ofereix obrir-ne el missatge;
+  - un enllaç al núvol es diu tal qual.
+- **Identitat:** cada fitxer s'identifica per compte, carpeta, UID i
+  índex; la clau al disc inclou les mateixes dades, de manera que una
+  consulta antiga no pot obrir un altre fitxer.
+- **Contingut:** no es cerca dins dels fitxers, i la interfície ho diu.
 
-## Consecuencias
+## Conseqüències
 
-- Coste de la consulta: se recorren los mensajes descargados con adjuntos.
-  Si un buzón grande lo hace lento, la alternativa 2 es el siguiente paso.
+- Cost de la consulta: es recorren els missatges baixats amb adjunts.
+  Si una bústia gran la fa lenta, l'alternativa 2 és el pas següent.

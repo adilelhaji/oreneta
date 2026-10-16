@@ -1,170 +1,186 @@
-# ADR-0001: Keep the native web engine; adopt extension functions as first-party features
+# ADR-0001: Mantenir el motor web natiu; adoptar les funcions de les extensions com a funcionalitats pròpies
 
-- **Status:** Accepted
-- **Date:** 2026-09-07
-- **Deciders:** Adil El Haji (maintainer)
-- **Related:** [ADR-0002](0002-remote-label-linking.md)
+- **Estat:** Acceptada
+- **Data:** 2026-09-07
+- **Decisors:** Adil El Haji (mantenidor)
+- **Relacionat:** [ADR-0002](0002-remote-label-linking.md)
 
 ## Context
 
-Oreneta is built with [Wails](https://wails.io), which renders the frontend
-in each platform's native webview rather than an embedded browser:
+Oreneta està construït amb [Wails](https://wails.io), que renderitza la
+interfície en la vista web nativa de cada plataforma en lloc d'un navegador
+incrustat:
 
-| Platform | Engine |
+| Plataforma | Motor |
 |---|---|
 | Linux | WebKitGTK 4.1 |
 | macOS | WKWebView |
-| Windows | WebView2 (Chromium-based, via `go-webview2`) |
+| Windows | WebView2 (basat en Chromium, mitjançant `go-webview2`) |
 
-The question was raised: could Oreneta support Google Chrome extensions —
-spelling and grammar correction, tracker/ad blocking, translation — the way a
-full browser does?
+Es va plantejar la pregunta: podria Oreneta admetre extensions de Google
+Chrome —correcció ortogràfica i gramatical, bloqueig de rastrejadors i
+anuncis, traducció— com ho fa un navegador complet?
 
-### The coupling to Wails, measured
+### L'acoblament a Wails, mesurat
 
-Before comparing alternatives, the actual dependency on Wails was measured
-rather than assumed:
+Abans de comparar alternatives, es va mesurar la dependència real de Wails
+en lloc de suposar-la:
 
-- The frontend talks to the backend through a single generic bridge,
-  `window.go.main.App.Invoke(command, payload)` (see
-  [`frontend/src/lib/bridge.ts`](../../frontend/src/lib/bridge.ts)), not
-  through 200-odd generated bindings. Every one of the 201 `App` methods is
-  dispatched through this one call.
-- The Go process already treats the Rust engine (`meron-core`) as a sidecar
-  over stdio/JSON-RPC (see [`sidecar.go`](../../sidecar.go)), not as a
-  library. It is not coupled to Wails at all.
-- Wails-runtime calls in the Go layer are limited to file dialogs, the system
-  tray, window control, and `BrowserOpenURL` — about a dozen call sites, all
-  platform-shell glue rather than architecture.
-- Three emitted events (`mailto.open`, `notification-clicked`,
-  `update.status`) cross the bridge from Go to the frontend.
+- La interfície es comunica amb el rerefons per mitjà d'un únic pont genèric,
+  `window.go.main.App.Invoke(command, payload)` (vegeu
+  [`frontend/src/lib/bridge.ts`](../../frontend/src/lib/bridge.ts)), i no
+  per mitjà d'unes 200 vinculacions generades. Cadascun dels 201 mètodes
+  d'`App` es despatxa per mitjà d'aquesta única crida.
+- El procés de Go ja tracta el motor de Rust (`meron-core`) com un procés
+  auxiliar (sidecar) per stdio/JSON-RPC (vegeu [`sidecar.go`](../../sidecar.go)),
+  no com una biblioteca. No està gens acoblat a Wails.
+- Les crides al runtime de Wails en la capa de Go es limiten als quadres de
+  diàleg de fitxers, la safata del sistema, el control de finestres i
+  `BrowserOpenURL`: aproximadament una dotzena de punts de crida, tots ells
+  codi d'unió amb l'entorn de la plataforma més que no pas arquitectura.
+- Tres esdeveniments emesos (`mailto.open`, `notification-clicked`,
+  `update.status`) travessen el pont de Go a la interfície.
 
-In other words: porting the *frontend* and the *Rust engine* to a different
-shell would be nearly free. The cost of any engine change is concentrated in
-Go's ~4,000 lines of platform glue (tray, notifications, power events, native
-dialogs, spell-check activation, the updater) and in re-doing packaging for
-four channels (Linux AppImage/deb/snap/flatpak, Windows, macOS DMG, Mac App
-Store) plus the Android build, which does not go through Wails at all and is
-unaffected either way.
+És a dir: portar la *interfície* i el *motor de Rust* a un altre entorn
+d'execució seria gairebé gratuït. El cost de qualsevol canvi de motor es
+concentra en les ~4.000 línies de codi d'unió amb la plataforma en Go
+(safata, notificacions, esdeveniments d'energia, quadres de diàleg natius,
+activació del corrector ortogràfic, l'actualitzador) i en refer
+l'empaquetament per a quatre canals (Linux AppImage/deb/snap/flatpak,
+Windows, macOS DMG, Mac App Store), a més de la compilació d'Android, que no
+passa per Wails en absolut i no es veu afectada en cap cas.
 
-### What Chromium-based extension support actually requires
+### Què requereix realment admetre extensions basades en Chromium
 
-No native webview (WebKitGTK, WKWebView, or WebView2 as wired through
-`go-webview2`) exposes an extension-loading API. The only way to run Chrome
-extensions from a Wails app would be Windows-only, by patching
-`go-webview2` to reach WebView2's own (still evolving) extensions API — no
-equivalent exists on Linux or macOS.
+Cap vista web nativa (WebKitGTK, WKWebView, ni WebView2 tal com està
+connectat mitjançant `go-webview2`) exposa una API per a carregar extensions.
+L'única manera d'executar extensions de Chrome des d'una aplicació Wails
+seria només a Windows, modificant `go-webview2` per a accedir a l'API
+d'extensions pròpia de WebView2 (encara en evolució); no hi ha cap
+equivalent a Linux ni a macOS.
 
-The only way to load extensions on **all three platforms** is to embed
-Chromium directly — Electron or CEF — and even then, "full" extension support
-does not mean what it means in a browser:
+L'única manera de carregar extensions a **les tres plataformes** és
+incrustar Chromium directament —Electron o CEF— i, fins i tot així, el suport
+«complet» d'extensions no vol dir el mateix que en un navegador:
 
-- Electron's own `session.loadExtension()` is aimed at DevTools extensions,
-  not general ones: no browser-action popups, no options pages, no Web Store
-  install flow.
-- The third-party library that fills that gap,
-  `electron-chrome-extensions`, implements roughly 70 `chrome.*` API methods
-  (`action`, `tabs`, `windows`, `runtime`, `storage`, `contextMenus`,
-  `webNavigation`, partial `cookies`/`notifications`/`commands`) but keeps
-  background scripts persistently alive rather than truly dormant service
-  workers, does not support extensions in non-persistent/incognito sessions,
-  and is licensed **GPL-3.0**, with a separate paid patron license required
-  for proprietary use (irrelevant to Oreneta, which is AGPL-3.0, but worth
-  recording).
-- A companion package, `electron-chrome-web-store` (MIT), adds Chrome Web
-  Store installation and auto-update, but its README is explicit that its
-  preload script must ship unbundled — a packaging constraint of its own.
-- CEF's Go bindings are a smaller, less maintained ecosystem, and extension
-  support there is partial and being phased out upstream, not expanded.
+- El `session.loadExtension()` del mateix Electron està pensat per a
+  extensions de DevTools, no per a extensions generals: sense finestres
+  emergents d'acció del navegador, sense pàgines d'opcions, sense flux
+  d'instal·lació des de la Web Store.
+- La biblioteca de tercers que cobreix aquest buit,
+  `electron-chrome-extensions`, implementa aproximadament 70 mètodes de l'API
+  `chrome.*` (`action`, `tabs`, `windows`, `runtime`, `storage`, `contextMenus`,
+  `webNavigation`, `cookies`/`notifications`/`commands` parcials), però manté
+  els scripts de fons sempre actius en lloc de ser service workers realment
+  latents, no admet extensions en sessions no persistents o d'incògnit, i
+  té llicència **GPL-3.0**, amb una llicència de mecenatge de pagament
+  separada que es requereix per a l'ús propietari (irrellevant per a Oreneta,
+  que és AGPL-3.0, però val la pena deixar-ne constància).
+- Un paquet complementari, `electron-chrome-web-store` (MIT), hi afegeix la
+  instal·lació i l'actualització automàtica des de la Chrome Web Store, però
+  el seu README és explícit que el seu script de precàrrega s'ha de
+  distribuir sense empaquetar, una restricció d'empaquetament pròpia.
+- Les vinculacions de Go per a CEF són un ecosistema més petit i menys
+  mantingut, i el suport d'extensions en aquest cas és parcial i s'està
+  retirant a l'origen, no ampliant.
 
-So "full Chrome extension support" is available at best on Electron, and even
-there it is full CEF/Electron extension support, which is itself a subset of
-what a real browser offers.
+Per tant, el «suport complet d'extensions de Chrome» només és disponible, en
+el millor dels casos, a Electron, i fins i tot allà és el suport complet
+d'extensions de CEF/Electron, que ja és un subconjunt del que ofereix un
+navegador real.
 
-### What embedding Chromium would cost, measured against what Oreneta is today
+### Què costaria incrustar Chromium, mesurat respecte del que és Oreneta avui
 
-| | Today (Wails) | With Electron |
+| | Avui (Wails) | Amb Electron |
 |---|---|---|
-| Installed size | ~72 MB (28 MB app + 44 MB core) | +~150 MB Chromium runtime |
-| Idle RAM | Whatever the OS webview already uses | +150–300 MB |
-| Security patch cadence | Follows the OS's WebKit/Edge updates | Oreneta must ship a new build for every Chromium CVE, roughly monthly |
-| Mac App Store | Ships today | MAS's sandbox does not permit loading arbitrary extensions; would need a separate, extension-less MAS build or dropping MAS |
-| Upstream merges from Meron | Frontend and the Go core logic still merge cleanly | The ~4,000 lines of Go platform glue would fully diverge, since Electron replaces it with its own APIs; Rust and frontend still merge |
-| Content-Security-Policy / privacy | `connect-src 'self'`; all data flows through the app's own backend | Each installed extension talks to its own servers; the CSP and the "everything stays on your computer" claim in `README.md` would no longer hold without qualification |
-| Packaging | 4 existing scripts (`build.sh`, `build-windows.sh`, `build-mas.sh`, `gen-latest-json.sh`) | Full rewrite on `electron-builder`, re-signing and re-notarizing on every platform |
+| Mida instal·lada | ~72 MB (28 MB aplicació + 44 MB nucli) | +~150 MB de runtime de Chromium |
+| RAM en repòs | La que ja utilitzi la vista web del sistema operatiu | +150–300 MB |
+| Ritme de pedaços de seguretat | Segueix les actualitzacions de WebKit/Edge del sistema operatiu | Oreneta ha de publicar una compilació nova per cada CVE de Chromium, aproximadament cada mes |
+| Mac App Store | Es distribueix avui | El sandbox de la MAS no permet carregar extensions arbitràries; caldria una compilació MAS separada i sense extensions o abandonar la MAS |
+| Fusions des de Meron | La interfície i la lògica del nucli en Go encara es fusionen netament | Les ~4.000 línies de codi d'unió amb la plataforma en Go divergirien completament, perquè Electron les substitueix per les seves pròpies API; Rust i la interfície encara es fusionen |
+| Content-Security-Policy / privadesa | `connect-src 'self'`; totes les dades passen pel rerefons de la mateixa aplicació | Cada extensió instal·lada es comunica amb els seus propis servidors; la CSP i l'afirmació "everything stays on your computer" del `README.md` deixarien de ser certes sense matisos |
+| Empaquetament | 4 scripts existents (`build.sh`, `build-windows.sh`, `build-mas.sh`, `gen-latest-json.sh`) | Reescriptura completa sobre `electron-builder`, amb nova signatura i nova notarització a cada plataforma |
 
-None of this is disqualifying on its own, but together it changes what kind
-of application Oreneta is — the README's tagline is "fast", and the whole
-point of forking Meron for native EWS support was to avoid exactly this
-category of resource-heavy, IMAP-bridge-style client.
+Res d'això no és desqualificador per si sol, però tot plegat canvia el tipus
+d'aplicació que és Oreneta: l'eslògan del README és "fast", i tot el sentit
+de fer un fork de Meron per a tenir suport natiu d'EWS era evitar
+precisament aquesta categoria de client pesant en recursos, a l'estil d'un
+pont IMAP.
 
-## Decision
+## Decisió
 
-**Oreneta keeps its native webview on every platform. It does not embed
-Chromium, and it does not host Chrome extensions.**
+**Oreneta manté la seva vista web nativa a totes les plataformes. No
+incrusta Chromium i no allotja extensions de Chrome.**
 
-Instead, the specific *functions* a user would reach for a Chrome extension
-to get are adopted as first-party features, built into Oreneta directly,
-running locally wherever the function allows it:
+En lloc d'això, les *funcions* concretes per a les quals un usuari
+recorreria a una extensió de Chrome s'adopten com a funcionalitats pròpies,
+integrades directament a Oreneta, i s'executen localment sempre que la
+funció ho permeti:
 
-| Function | Extension people reach for | Adopted instead | License | Network |
+| Funció | Extensió a què recorre la gent | Adoptat en lloc seu | Llicència | Xarxa |
 |---|---|---|---|---|
-| Grammar and style | Grammarly-style checkers | [Harper](https://github.com/Automattic/harper) (Rust grammar engine), run as WASM inside the TipTap composer | Apache-2.0 | None |
-| Tracker/pixel blocking | uBlock Origin and similar | The [EasyPrivacy](https://easylist.to) filter list, applied in Oreneta's existing HTML message sanitizer | GPL-3.0-or-later (dual-licensed with CC-BY-SA-3.0-or-later; GPL-3.0-or-later chosen as the software-compatible option) | None once the list ships with the app; periodic list updates only |
-| Translation | Google Translate / DeepL extensions | [Firefox Translations](https://github.com/mozilla/firefox-translations) (the Bergamot engine), run as WASM, per-language-pair models downloaded on demand | MPL-2.0 | Only to fetch a model the first time; translation itself runs offline afterward |
+| Gramàtica i estil | Correctors a l'estil de Grammarly | [Harper](https://github.com/Automattic/harper) (motor gramatical en Rust), executat com a WASM dins del redactor TipTap | Apache-2.0 | Cap |
+| Bloqueig de rastrejadors i píxels | uBlock Origin i similars | La llista de filtres [EasyPrivacy](https://easylist.to), aplicada en el sanejador HTML de missatges que ja té Oreneta | GPL-3.0-or-later (doble llicència amb CC-BY-SA-3.0-or-later; s'ha triat GPL-3.0-or-later com l'opció compatible amb programari) | Cap un cop la llista es distribueix amb l'aplicació; només actualitzacions periòdiques de la llista |
+| Traducció | Extensions de Google Translate / DeepL | [Firefox Translations](https://github.com/mozilla/firefox-translations) (el motor Bergamot), executat com a WASM, amb models per parell d'idiomes baixats a demanda | MPL-2.0 | Només per a obtenir un model la primera vegada; després, la traducció s'executa sense connexió |
 
-All three licenses were checked against their upstream `LICENSE` file
-directly (not asserted from memory) and are compatible with Oreneta's
-AGPL-3.0: Apache-2.0 and MPL-2.0 are both explicitly combinable with
-AGPL-3.0-covered work by their own terms, and GPL-3.0-or-later is
-FSF-recognized as compatible with AGPL-3.0 for a combined work. This is not a
-substitute for the maintainer's own legal judgment before shipping, but it is
-a checked starting point rather than a guess.
+Les tres llicències s'han comprovat directament amb el fitxer `LICENSE` de
+l'origen (no afirmades de memòria) i són compatibles amb l'AGPL-3.0
+d'Oreneta: Apache-2.0 i MPL-2.0 es poden combinar explícitament, segons els
+seus propis termes, amb obres cobertes per l'AGPL-3.0, i la FSF reconeix
+GPL-3.0-or-later com a compatible amb l'AGPL-3.0 per a una obra combinada.
+Això no substitueix el criteri jurídic del mateix mantenidor abans de
+publicar, però és un punt de partida comprovat i no una suposició.
 
-A fourth function, server-backed grammar checking via **LanguageTool**
-(LGPL-2.1, to be re-verified when it is actually scoped), is deliberately
-left optional and out of this phase: it requires sending message text to a
-server, which must be an explicit, per-account opt-in rather than a default,
-and is not needed to answer the original request.
+Una quarta funció, la correcció gramatical basada en servidor mitjançant
+**LanguageTool** (LGPL-2.1, que s'ha de tornar a verificar quan se'n
+defineixi realment l'abast), es deixa deliberadament com a opcional i fora
+d'aquesta fase: requereix enviar el text dels missatges a un servidor, cosa
+que ha de ser una activació explícita per compte i no un comportament per
+defecte, i no és necessària per a respondre la petició original.
 
-Each of these three dependencies gets its own SOUP (Software of Unknown
-Provenance) register entry in `docs/soup.md` **when it is actually
-integrated**, not in this ADR — the version pinned, the integration point,
-and the verification approach belong next to the code that uses them, not in
-a decision record written before any of the three exists in the tree.
+Cadascuna d'aquestes tres dependències té la seva pròpia entrada al registre
+SOUP (Software of Unknown Provenance) a `docs/soup.md` **quan s'integri
+realment**, no en aquest ADR: la versió fixada, el punt d'integració i
+l'enfocament de verificació van al costat del codi que les utilitza, no en
+un registre de decisió escrit abans que cap de les tres existeixi a l'arbre.
 
-## Consequences
+## Conseqüències
 
-- No Chrome extension — of any kind, from any store — will ever run inside
-  Oreneta. This decision would need to be revisited, not silently reversed,
-  if that changes.
-- Every future network call these three features make must go through the
-  Go/Rust backend, never directly from the frontend, per the existing
-  `connect-src 'self'` policy. Translation's one-time model download and any
-  future LanguageTool call are the only network paths this ADR anticipates,
-  and both must be visible to the user before they happen.
-- The Mac App Store build, and the clean merge path from `nonbili/meron`,
-  are both preserved.
-- Oreneta's installed size, idle memory use, and update cadence stay where
-  they are today; none of the Electron costs above are paid.
-- If a future requirement genuinely needs a real Chrome extension (not a
-  function an extension happens to provide), that requirement conflicts with
-  this ADR and must be escalated, not implemented around it.
+- Cap extensió de Chrome —de cap mena, de cap botiga— no s'executarà mai
+  dins d'Oreneta. Si això canvia, caldria revisar aquesta decisió, no
+  revertir-la en silenci.
+- Totes les crides de xarxa futures que facin aquestes tres funcionalitats
+  han de passar pel rerefons de Go/Rust, mai directament des de la
+  interfície, d'acord amb la política `connect-src 'self'` existent. La
+  baixada única del model de traducció i qualsevol crida futura a
+  LanguageTool són els únics camins de xarxa que preveu aquest ADR, i tots
+  dos han de ser visibles per a l'usuari abans que tinguin lloc.
+- Es preserven tant la compilació per a la Mac App Store com el camí de
+  fusió net des de `nonbili/meron`.
+- La mida instal·lada d'Oreneta, l'ús de memòria en repòs i el ritme
+  d'actualitzacions es mantenen com avui; no es paga cap dels costos
+  d'Electron esmentats.
+- Si un requisit futur necessita realment una extensió de Chrome real (no
+  una funció que casualment ofereixi una extensió), aquest requisit entra en
+  conflicte amb aquest ADR i s'ha d'escalar, no implementar esquivant-lo.
 
-## Alternatives considered
+## Alternatives considerades
 
-- **Electron, full extension support** (`electron-chrome-extensions` +
-  `electron-chrome-web-store`). Rejected: cost table above, plus Mac App
-  Store conflict and GPL-3 dependency requiring a patron license for any
-  future closed use.
-- **Electron, curated extension allowlist only** (no Web Store, ship a fixed
-  set of vetted extensions). Reduces the privacy surface but still pays the
-  full size/RAM/patch-cadence/MAS cost for a narrower benefit than adopting
-  the functions directly; rejected for the same reasons.
-- **Patch `go-webview2` for WebView2's native extensions API, Windows only.**
-  Cheap (days, not months) and would give real extensions, but only on one
-  of three platforms, and still opens the CSP and privacy questions above.
-  Not pursued unless a Windows-specific need is identified later.
-- **Do nothing.** Rejected: spelling correction is already native per-OS, but
-  grammar, tracker blocking, and translation were genuine gaps worth closing
-  — just not through extension hosting.
+- **Electron, suport complet d'extensions** (`electron-chrome-extensions` +
+  `electron-chrome-web-store`). Rebutjada: taula de costos anterior, a més
+  del conflicte amb la Mac App Store i la dependència GPL-3, que requereix
+  una llicència de mecenatge per a qualsevol ús tancat futur.
+- **Electron, només amb una llista curada d'extensions permeses** (sense Web
+  Store, distribuint un conjunt fix d'extensions verificades). Redueix la
+  superfície de privadesa, però continua pagant tot el cost de
+  mida/RAM/ritme de pedaços/MAS per un benefici més limitat que adoptar
+  directament les funcions; rebutjada pels mateixos motius.
+- **Modificar `go-webview2` per a l'API nativa d'extensions de WebView2,
+  només a Windows.** Barat (dies, no mesos) i donaria extensions reals, però
+  només en una de les tres plataformes, i continua obrint les qüestions de
+  CSP i privadesa anteriors. No s'hi avança tret que més endavant
+  s'identifiqui una necessitat específica de Windows.
+- **No fer res.** Rebutjada: la correcció ortogràfica ja és nativa de cada
+  sistema operatiu, però la gramàtica, el bloqueig de rastrejadors i la
+  traducció eren mancances reals que valia la pena cobrir, encara que no
+  allotjant extensions.

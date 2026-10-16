@@ -1,25 +1,25 @@
-# ADR 0009: Mailbox view preferences
+# ADR 0009: Preferències de visualització de la bústia
 
-Status: Accepted — 2026-10-05. The user approved "Aprobar vista general y
-excepciones por carpeta" in the #36 implementation conversation, after reviewing
-the [concrete contract](../design/mailbox-view-preferences-proposal.md).
+Estat: Acceptada — 2026-10-05. L'usuari va aprovar "Aprobar vista general y
+excepciones por carpeta" a la conversa d'implementació de #36, després de revisar
+el [contracte concret](../design/mailbox-view-preferences-proposal.md).
 
-Use one versioned `mailbox_views` preference through the existing settings path.
-A global column layout is inherited unless an exact account/folder pair has an
-explicit independent override. Resetting a folder removes its override; changing
-the global layout does not overwrite customized folders. No new database, remote
-service or sync mechanism.
+Es fa servir una única preferència versionada `mailbox_views` pel camí de configuració existent.
+Una disposició global de columnes s'hereta tret que un parell exacte de compte i carpeta tingui una
+substitució explícita i independent. Restablir una carpeta n'elimina la substitució; canviar
+la disposició global no sobreescriu les carpetes personalitzades. Sense cap base de dades, servei
+remot ni mecanisme de sincronització nous.
 
-Initially expose sender, subject, date and account. Subject remains visible;
-selection controls stay outside the layout. Only sender/subject/date sort, using
-ADR 0003's whole-result ordering. Account is display-only. Unsupported metadata
-and new sort capabilities remain outside this decision.
+Inicialment s'exposen remitent, assumpte, data i compte. L'assumpte continua visible;
+els controls de selecció queden fora de la disposició. Només s'ordena per remitent/assumpte/data, amb
+l'ordenació de tot el resultat de l'ADR 0003. El compte només es mostra. Les metadades no compatibles
+i les noves capacitats d'ordenació queden fora d'aquesta decisió.
 
-Validate version, identifiers, duplicate columns and widths before use. Preserve
-unknown future versions without silent writes. Existing users without this
-preference retain the current compact layout. Keyboard configuration, scoped
-horizontal scrolling, explicit reset and restart/account-isolation tests are
-required. The contract document defines detailed defaults and boundaries.
+Abans d'utilitzar-los, es validen la versió, els identificadors, les columnes duplicades i les amplades. Es preserven
+les versions futures desconegudes sense escriptures silencioses. Els usuaris existents sense aquesta
+preferència conserven la disposició compacta actual. Calen la configuració per teclat, el desplaçament
+horitzontal acotat, el restabliment explícit i les proves de reinici i d'aïllament entre comptes.
+El document del contracte defineix els valors per defecte i els límits detallats.
 
-Implementation proceeds in bounded reviewed issues with green CI. Approval does
-not authorize releases, provider changes or full-parity claims.
+La implementació avança en incidències acotades i revisades, amb la CI en verd. L'aprovació no
+autoritza publicacions, canvis de proveïdor ni afirmacions de paritat completa.
