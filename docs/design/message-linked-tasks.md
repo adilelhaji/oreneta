@@ -1,68 +1,68 @@
-# Tareas enlazadas a mensajes: validación (#42)
+# Tasques enllaçades a missatges: validació (#42)
 
-Validación de las tareas locales enlazadas a una conversación contra `main`.
-El diseño aprobado no cambia: tareas locales, una tarea abierta por
-conversación y sin sincronización remota.
+Validació, a `main`, de les tasques locals enllaçades a una conversa.
+El disseny aprovat no canvia: tasques locals, una tasca oberta per
+conversa i sense sincronització remota.
 
-## Estado frente a los criterios de #42
+## Estat respecte als criteris de #42
 
-| Criterio | Estado | Evidencia |
+| Criteri | Estat | Prova |
 |---|---|---|
-| La implementación está en `main` | Sí | `store::save_task` y siguientes, `tasks.*` en el núcleo, `TasksView` y `TaskDialog` |
-| Sobrevive al reinicio; crear dos veces no duplica | Sí | La tarea está en SQLite con índice único parcial; `saving_a_task_twice_on_the_same_thread_edits_it_rather_than_duplicating_it` |
-| Un fallo al leer la nota no la sobrescribe en blanco | **Corregido** | Prueba `when the task cannot be read` en `TaskDialog.test.tsx` |
-| El enlace abre la conversación correcta o dice que no la encuentra | **Corregido** | `a_task_follows_its_conversation_to_the_folder_it_moved_to` y la prueba de `TasksView` |
-| Aislamiento entre cuentas y conflictos al reabrir | Sí, ampliado | `open_tasks_for_threads_is_scoped_to_the_account_and_excludes_completed`, `reopening_a_task_says_why_it_cannot_and_a_missing_task_is_an_error`, `removing_an_account_removes_its_tasks_and_no_others` |
+| La implementació és a `main` | Sí | `store::save_task` i les següents, `tasks.*` al nucli, `TasksView` i `TaskDialog` |
+| Sobreviu al reinici; crear-la dues vegades no la duplica | Sí | La tasca és a SQLite amb un índex únic parcial; `saving_a_task_twice_on_the_same_thread_edits_it_rather_than_duplicating_it` |
+| Una fallada en llegir la nota no la sobreescriu en blanc | **Corregit** | Prova `when the task cannot be read` a `TaskDialog.test.tsx` |
+| L'enllaç obre la conversa correcta o diu que no la troba | **Corregit** | `a_task_follows_its_conversation_to_the_folder_it_moved_to` i la prova de `TasksView` |
+| Aïllament entre comptes i conflictes en reobrir | Sí, ampliat | `open_tasks_for_threads_is_scoped_to_the_account_and_excludes_completed`, `reopening_a_task_says_why_it_cannot_and_a_missing_task_is_an_error`, `removing_an_account_removes_its_tasks_and_no_others` |
 
-## Defectos encontrados y corregidos
+## Defectes trobats i corregits
 
-Cada uno se reprodujo con una prueba que fallaba antes de corregirlo.
+Cadascun es va reproduir amb una prova que fallava abans de corregir-lo.
 
-- **Tarea duplicada con fechas iguales.** La lista unía la tarea con «el
-  mensaje de fecha más reciente». Si dos mensajes del hilo compartían esa
-  fecha, la tarea salía dos veces. Ahora un solo mensaje representa la
-  conversación, y los empates se deciden por uid.
-- **Conversación movida.** Una tarea guardaba la carpeta donde se creó. Si el
-  hilo se archivaba o se movía, la tarea salía sin asunto y al abrirla se iba
-  a la carpeta vacía. Ahora se busca el hilo primero en su carpeta y después
-  en cualquier otra. Al guardarla de nuevo, se registra la carpeta nueva.
-- **Hilo que no está en la copia local.** La vista lo dice y no navega. Las
-  claves `uid:N` identifican un mensaje de una sola carpeta, así que no se
-  buscan en otra: se informa de que no se encuentra en vez de adivinar.
-- **Nota ilegible.** Desde el menú contextual el editor se abre con la nota
-  vacía y pide la real. Si esa lectura fallaba, el diálogo se desbloqueaba y
-  guardar borraba la nota. Ahora los campos y el botón Guardar siguen
-  bloqueados (también con Intro), y un aviso explica por qué.
-- **Reabrir con otra tarea abierta en el mismo hilo.** Antes se mostraba el
-  error crudo de SQLite. Ahora se explica qué hacer. Marcar una tarea que ya
-  no existe es un error, no un éxito silencioso.
-- **Cuenta eliminada.** Sus tareas seguían en la lista apuntando a una cuenta
-  que ya no existe. Ahora se eliminan con ella.
-- Una fila ilegible de la lista es un error que se informa, no una tarea que
-  desaparece sin aviso.
+- **Tasca duplicada amb dates iguals.** La llista unia la tasca amb «el
+  missatge de data més recent». Si dos missatges del fil compartien aquesta
+  data, la tasca sortia dues vegades. Ara un sol missatge representa la
+  conversa, i els empats es decideixen per uid.
+- **Conversa moguda.** Una tasca desava la carpeta on es va crear. Si el
+  fil s'arxivava o es movia, la tasca sortia sense assumpte i, en obrir-la,
+  anava a la carpeta buida. Ara el fil es busca primer a la seva carpeta i
+  després a qualsevol altra. En tornar-la a desar, es registra la carpeta nova.
+- **Fil que no és a la còpia local.** La visualització ho diu i no hi navega. Les
+  claus `uid:N` identifiquen un missatge d'una sola carpeta, de manera que no es
+  busquen en cap altra: s'informa que no es troba en lloc d'endevinar.
+- **Nota il·legible.** Des del menú contextual, l'editor s'obre amb la nota
+  buida i demana la real. Si aquesta lectura fallava, el diàleg es desbloquejava i
+  desar esborrava la nota. Ara els camps i el botó Desa continuen
+  bloquejats (també amb Retorn), i un avís explica per què.
+- **Reobrir amb una altra tasca oberta al mateix fil.** Abans es mostrava
+  l'error en brut de SQLite. Ara s'explica què cal fer. Marcar una tasca que ja
+  no existeix és un error, no un èxit silenciós.
+- **Compte eliminat.** Les seves tasques continuaven a la llista apuntant a un
+  compte que ja no existeix. Ara s'eliminen amb el compte.
+- Una fila il·legible de la llista és un error del qual s'informa, no una tasca que
+  desapareix sense avís.
 
-## Datos que quedan al eliminar una cuenta (decidido en ADR-0011)
+## Dades que queden en eliminar un compte (decidit a l'ADR-0011)
 
-La validación encontró 17 tablas con datos de la cuenta que no se borraban al
-eliminarla. Se decidió y se aplicó lo siguiente:
-- **Se borra** todo el estado y los datos personales: etiquetas, pospuestos,
-  prioridad, spam, reglas, contactos sincronizados con sus direcciones y
-  teléfonos, libretas (también sus contraseñas en el llavero) y registros.
-- **Se conservan** los borradores, los envíos programados y los intentos de
-  envío.
-- Un envío programado conservado queda abandonado: como el id de una cuenta
-  es su dirección, volver a añadirla lo habría enviado solo.
-- El diálogo de confirmación y el aviso posterior dicen qué se ha quedado en
-  el equipo.
-- Una prueba falla si una tabla nueva con columna de cuenta no está en
-  ninguna de las dos listas (`REMOVED_WITH_ACCOUNT`,
+La validació va trobar 17 taules amb dades del compte que no s'esborraven en
+eliminar-lo. Es va decidir i aplicar el següent:
+- **S'esborren** tot l'estat i les dades personals: etiquetes, posposats,
+  prioritat, correu brossa, regles, contactes sincronitzats amb les seves adreces
+  i telèfons, llibretes (també les seves contrasenyes al clauer) i registres.
+- **Es conserven** els esborranys, els enviaments programats i els intents
+  d'enviament.
+- Un enviament programat conservat queda abandonat: com que l'id d'un compte
+  és la seva adreça, tornar-lo a afegir l'hauria enviat automàticament.
+- El diàleg de confirmació i l'avís posterior diuen què s'ha quedat a
+  l'equip.
+- Una prova falla si una taula nova amb una columna de compte no és a
+  cap de les dues llistes (`REMOVED_WITH_ACCOUNT`,
   `KEPT_ON_ACCOUNT_REMOVAL`).
 
-Pendiente: una vista para exportar o borrar ese contenido conservado. Hoy los
-envíos programados siguen en su lista, pero los borradores de una cuenta
-eliminada no tienen dónde verse.
+Pendent: una visualització per exportar o esborrar aquest contingut conservat.
+Avui els enviaments programats continuen a la seva llista, però els esborranys
+d'un compte eliminat no tenen on veure's.
 
-## Fuera de alcance
+## Fora de l'abast
 
-Tareas independientes, sincronización CalDAV/Exchange de tareas y el
-seguimiento de «esperando respuesta» (#103) necesitan su propio ADR.
+Les tasques independents, la sincronització de tasques amb CalDAV/Exchange i el
+seguiment d'«esperant resposta» (#103) necessiten el seu propi ADR.

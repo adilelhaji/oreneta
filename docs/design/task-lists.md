@@ -1,55 +1,55 @@
-# Listas de tareas locales (#103, ADR-0013)
+# Llistes de tasques locals (#103, ADR-0013)
 
-## Qué hace
+## Què fa
 
-- **Tareas** muestra pestañas por lista: «Todas», «Seguimiento de correo» y
-  las listas creadas. Se puede crear, renombrar y borrar una lista; al borrar
-  una lista se borran sus tareas, tras confirmarlo. «Seguimiento de correo»
-  no se puede borrar.
-- «Nueva tarea» crea una tarea suelta en la lista que se está viendo. Lleva
-  título (obligatorio), lista, fecha límite, recordatorio (fecha y hora),
-  prioridad (baja, normal o alta) y nota.
-- Una búsqueda filtra por título, asunto, nota y remitente.
-- Abrir una tarea suelta la edita; abrir una enlazada sigue llevando a su
-  conversación.
-- La prioridad alta se marca con una bandera, y el recordatorio pendiente se
-  ve en la fila.
-- **Recordatorios.** Llegan como notificación del sistema
-  (`tasks.reminder`), una sola vez. Vuelven a sonar solo si se cambia la hora,
-  y una tarea terminada no suena.
-- **Conflictos.** Editar exige la revisión leída. Si otra ventana cambió la
-  tarea, no se guarda nada y se muestran las dos copias, con la misma
-  política que los contactos (ADR-0012).
+- **Tasques** mostra pestanyes per llista: «Totes», «Seguiment del correu» i
+  les llistes creades. Es pot crear, reanomenar i suprimir una llista; en suprimir
+  una llista se suprimeixen les seves tasques, després de confirmar-ho.
+  «Seguiment del correu» no es pot suprimir.
+- «Tasca nova» crea una tasca solta a la llista que s'està veient. Porta
+  títol (obligatori), llista, data límit, recordatori (data i hora),
+  prioritat (baixa, normal o alta) i nota.
+- Una cerca filtra pel títol, l'assumpte, la nota i el remitent.
+- Obrir una tasca solta l'edita; obrir-ne una d'enllaçada continua portant a la
+  seva conversa.
+- La prioritat alta es marca amb una bandera, i el recordatori pendent es
+  veu a la fila.
+- **Recordatoris.** Arriben com a notificació del sistema
+  (`tasks.reminder`), una sola vegada. Només tornen a sonar si es canvia l'hora,
+  i una tasca acabada no sona.
+- **Conflictes.** Editar exigeix la revisió llegida. Si una altra finestra ha
+  canviat la tasca, no es desa res i es mostren les dues còpies, amb la mateixa
+  política que els contactes (ADR-0012).
 
-## Modelo
+## Model
 
-- **Migración 39.**
-  - Crea la tabla `task_lists` con la lista fija `mail`.
-  - Añade a `tasks` las columnas `list_id`, `title`, `priority`,
-    `reminder_at`, `reminded_at` y `revision`.
-  - Las tareas que ya existían pasan a `mail` sin perder campos (probado con
-    una actualización simulada).
-- **Una tarea abierta por conversación.** Se mantiene: el índice único parcial
-  se aplica ahora solo a las tareas con conversación (`thread_key <> ''`).
-  Las sueltas no tienen conversación y no cuentan para esa regla.
-- **Órdenes del puente:**
-  - nuevas: `tasks.lists`, `tasks.createList`, `tasks.renameList`,
-    `tasks.deleteList`, `tasks.create` y `tasks.update`;
-  - ampliadas: `tasks.list` y `tasks.get` devuelven los campos nuevos.
+- **Migració 39.**
+  - Crea la taula `task_lists` amb la llista fixa `mail`.
+  - Afegeix a `tasks` les columnes `list_id`, `title`, `priority`,
+    `reminder_at`, `reminded_at` i `revision`.
+  - Les tasques que ja existien passen a `mail` sense perdre camps (provat amb
+    una actualització simulada).
+- **Una tasca oberta per conversa.** Es manté: ara l'índex únic parcial
+  només s'aplica a les tasques amb conversa (`thread_key <> ''`).
+  Les soltes no tenen conversa i no compten per a aquesta regla.
+- **Ordres del pont:**
+  - noves: `tasks.lists`, `tasks.createList`, `tasks.renameList`,
+    `tasks.deleteList`, `tasks.create` i `tasks.update`;
+  - ampliades: `tasks.list` i `tasks.get` retornen els camps nous.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 almacén (`store/task_lists/tests.rs`) | Las enlazadas van a `mail` y conservan la regla; las sueltas no la tienen; listas (crear, renombrar, borrar con sus tareas, `mail` protegida, una lista borrada no admite tareas); conflicto de revisión; el recordatorio suena una vez y otra solo al moverlo, no si la tarea está terminada; la actualización conserva las tareas |
-| N1 despachador (`main.rs`) | Recorrido completo por el puente |
-| N2 vista (`TaskLists.test.tsx`) | Pestañas y búsqueda; abrir una suelta la edita; alta en la lista que se ve, con título obligatorio; conflicto y «Conservar la mía» |
-| N6 accesibilidad | Auditoría axe de Tareas y de su editor, en tema claro y oscuro |
+| N1 magatzem (`store/task_lists/tests.rs`) | Les enllaçades van a `mail` i conserven la regla; les soltes no la tenen; llistes (crear, reanomenar, suprimir amb les seves tasques, `mail` protegida, una llista suprimida no admet tasques); conflicte de revisió; el recordatori sona una vegada i una altra només en moure'l, no si la tasca està acabada; l'actualització conserva les tasques |
+| N1 distribuïdor (`main.rs`) | Recorregut complet a través del pont |
+| N2 visualització (`TaskLists.test.tsx`) | Pestanyes i cerca; obrir una tasca solta l'edita; alta a la llista que es veu, amb títol obligatori; conflicte i «Conserva la meva» |
+| N6 accessibilitat | Auditoria axe de Tasques i del seu editor, en tema clar i fosc |
 
-## Fuera de esta entrega (ADR-0013)
+## Fora d'aquest lliurament (ADR-0013)
 
-Repetición, delegación, subtareas y aparición en la agenda del calendario.
-La sincronización con CalDAV (VTODO) llegó después, en ADR-0039
-([registro](caldav-tasks.md)), y la carpeta Tareas de una cuenta de Exchange
-(EWS) en ADR-0058; Google Tasks y Graph To Do siguen
-pendientes.
+Repetició, delegació, subtasques i aparició a l'agenda del calendari.
+La sincronització amb CalDAV (VTODO) va arribar després, a l'ADR-0039
+([registre](caldav-tasks.md)), i la carpeta Tasques d'un compte d'Exchange
+(EWS) a l'ADR-0058; Google Tasks i Graph To Do continuen
+pendents.

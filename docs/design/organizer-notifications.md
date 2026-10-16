@@ -1,100 +1,101 @@
-# Avisar a los asistentes desde calendarios locales y CalDAV (decisión del 2026-10-12)
+# Avisar els assistents des de calendaris locals i CalDAV (decisió del 2026-10-12)
 
-## Comportamiento
+## Comportament
 
-- Al **guardar** o **eliminar** un evento con asistentes en un calendario
-  **local** o **CalDAV**, el editor muestra el mismo diálogo que con Google y
-  Exchange (`NotifyAsk`): nombra a cada destinatario y la dirección desde la
-  que sale el correo («Sent by mail from …»).
-  - **Send it / Send a cancellation:** se envía un correo normal con la parte
-    `text/calendar; method=REQUEST` (al guardar) o `method=CANCEL` (al
-    eliminar), un único mensaje para todos los asistentes.
-  - **Save without telling anyone:** no se envía nada.
-- La pregunta solo aparece cuando el envío es posible: hace falta una cuenta
-  de correo que pueda enviar como organizador. Si el evento ya nombra un
-  organizador, debe ser una identidad (dirección o alias) de una cuenta que
-  envía; si no nombra ninguno, se usa la cuenta del calendario o, si esta no
-  envía, la primera que sí. Sin ninguna (por ejemplo, sin cuentas de correo,
-  o si organiza otra persona), no se pregunta y se mantiene la nota «Editing
-  it here does not notify them».
-- Si el evento tiene asistentes y no tiene organizador, el editor lo guarda
-  con la identidad que enviará como organizador.
-- Google, Exchange y Graph no cambian: avisan sus servidores (`notify` en
+- En **desar** o **eliminar** un esdeveniment amb assistents en un calendari
+  **local** o **CalDAV**, l'editor mostra el mateix diàleg que amb Google i
+  Exchange (`NotifyAsk`): anomena cada destinatari i l'adreça des de la
+  qual surt el correu («Sent by mail from …»).
+  - **Send it / Send a cancellation:** s'envia un correu normal amb la part
+    `text/calendar; method=REQUEST` (en desar) o `method=CANCEL` (en
+    eliminar), un únic missatge per a tots els assistents.
+  - **Save without telling anyone:** no s'envia res.
+- La pregunta només apareix quan l'enviament és possible: cal un compte
+  de correu que pugui enviar com a organitzador. Si l'esdeveniment ja indica un
+  organitzador, ha de ser una identitat (adreça o àlies) d'un compte que
+  envia; si no n'indica cap, es fa servir el compte del calendari o, si aquest no
+  envia, el primer que sí que ho fa. Sense cap (per exemple, sense comptes de
+  correu, o si l'organitza una altra persona), no es pregunta i es manté la nota
+  «Editing it here does not notify them».
+- Si l'esdeveniment té assistents i no té organitzador, l'editor el desa
+  amb la identitat que enviarà com a organitzador.
+- Google, Exchange i Graph no canvien: l'avís l'envien els seus servidors (`notify` a
   `calendar.update` / `calendar.delete`).
 
-## Orden y errores
+## Ordre i errors
 
-- **Guardar:** guardar → construir (`invite.notify`, a partir del evento ya
-  guardado) → enviar. Si falla la construcción o el envío, el evento queda
-  guardado y un aviso dice que no se avisó a nadie y por qué.
-- **Eliminar:** construir la cancelación → eliminar → enviar. Se construye
-  antes porque sale del evento guardado, que la eliminación borra; se envía
-  después para que una eliminación rechazada (conflicto CalDAV, sin
-  conexión) no anuncie la cancelación de una reunión que sigue en pie. Si no
-  se puede construir, no se elimina nada y el editor dice por qué; si falla
-  el envío, se dice que el evento se eliminó pero la cancelación no salió.
+- **Desar:** desar → construir (`invite.notify`, a partir de l'esdeveniment ja
+  desat) → enviar. Si falla la construcció o l'enviament, l'esdeveniment queda
+  desat i un avís diu que no s'ha avisat ningú i per què.
+- **Eliminar:** construir la cancel·lació → eliminar → enviar. Es construeix
+  abans perquè surt de l'esdeveniment desat, que l'eliminació esborra; s'envia
+  després perquè una eliminació rebutjada (conflicte CalDAV, sense
+  connexió) no anunciï la cancel·lació d'una reunió que es manté. Si no
+  es pot construir, no s'elimina res i l'editor diu per què; si falla
+  l'enviament, es diu que l'esdeveniment s'ha eliminat però que la cancel·lació
+  no ha sortit.
 
-## Núcleo
+## Nucli
 
-- `invite.notify` recibe `{account, calendar, event, scope
-  (occurrence|series), method (request|cancel), me_addr, me_name, people}` y
-  devuelve `{notice: {method, to, subject, sequence, ics}}`.
-  - `to`: asistentes con dirección, sin el organizador. Si el evento nombra a
-    alguien que no está en `people` (lo que se mostró), se rechaza y no se
-    construye nada.
-  - Se rechaza si organiza otra persona, si no queda nadie a quien avisar o
-    si el calendario no es local ni CalDAV.
+- `invite.notify` rep `{account, calendar, event, scope
+  (occurrence|series), method (request|cancel), me_addr, me_name, people}` i
+  retorna `{notice: {method, to, subject, sequence, ics}}`.
+  - `to`: assistents amb adreça, sense l'organitzador. Si l'esdeveniment anomena
+    algú que no és a `people` (el que s'ha mostrat), es rebutja i no es
+    construeix res.
+  - Es rebutja si l'organitza una altra persona, si no queda ningú a qui avisar o
+    si el calendari no és local ni CalDAV.
 - `calendar/itip.rs`:
-  - `organizer_notice(objeto, Notice, ocurrencia, yo, ahora)`: REQUEST con
-    la serie entera (RRULE, EXDATE, excepciones y VTIMEZONE) o solo una
-    ocurrencia con su RECURRENCE-ID (su excepción, o la ocurrencia tal como
-    la da la serie); CANCEL con STATUS:CANCELLED. Sin VALARM. ORGANIZER = yo
-    si no hay; ATTENDEE sin respuesta con PARTSTAT=NEEDS-ACTION;RSVP=TRUE.
-    DTSTAMP del envío; plegado y escapado RFC 5545.
-  - `local_object` y `local_uid`: el objeto de un evento local; UID = su id
-    (`local:…`, que `events_with_uid` vuelve a encontrar cuando llega una
-    respuesta o una propuesta) o el UID importado.
+  - `organizer_notice(objecte, Notice, ocurrència, jo, ara)`: REQUEST amb
+    la sèrie sencera (RRULE, EXDATE, excepcions i VTIMEZONE) o només una
+    ocurrència amb el seu RECURRENCE-ID (la seva excepció, o l'ocurrència tal com
+    la dona la sèrie); CANCEL amb STATUS:CANCELLED. Sense VALARM. ORGANIZER = jo
+    si no n'hi ha; ATTENDEE sense resposta amb PARTSTAT=NEEDS-ACTION;RSVP=TRUE.
+    DTSTAMP de l'enviament; plegat i escapament segons l'RFC 5545.
+  - `local_object` i `local_uid`: l'objecte d'un esdeveniment local; UID = el
+    seu id (`local:…`, que `events_with_uid` torna a trobar quan arriba una
+    resposta o una proposta) o l'UID importat.
 - **SEQUENCE:**
-  - CalDAV: en el objeto del servidor; cada guardado la sube (la serie en
-    `patch_event`; una ocurrencia pasa a ser una más que la de su excepción
-    anterior o la de la serie en `put_override`). REQUEST lleva la guardada;
-    CANCEL, una más.
-  - Local: en la columna `change_key` del evento (sin migración): 0 al
-    crear, +1 en cada `calendar.update` contando desde lo guardado y no desde
-    lo que tenía abierto el editor. `invite.counterStatus` la usa para
-    marcar como antigua una propuesta de una versión anterior.
-- **Asistentes en CalDAV:** se leen (ATTENDEE con PARTSTAT, y ORGANIZER
-  también cuando aparece una sola vez) y se escriben: un evento nuevo los
-  incluye; al editar se añaden los nuevos y el organizador si falta, y solo
-  se quitan los que el editor quitó (`removed_attendees` en
-  `calendar.update`). Quien el editor no mostró se conserva.
-- Go: `invite.notify` en la lista de paso de `app.go`, 30 s en
-  `sidecar.go`; `calendar.go` pasa `removed_attendees`.
+  - CalDAV: a l'objecte del servidor; cada desament l'incrementa (la sèrie a
+    `patch_event`; una ocurrència passa a tenir-ne una més que la de la seva
+    excepció anterior o la de la sèrie a `put_override`). REQUEST porta la desada;
+    CANCEL, una més.
+  - Local: a la columna `change_key` de l'esdeveniment (sense migració): 0 en
+    crear-lo, +1 a cada `calendar.update`, comptant a partir del que s'ha desat i
+    no del que tenia obert l'editor. `invite.counterStatus` la fa servir per
+    marcar com a antiga una proposta d'una versió anterior.
+- **Assistents a CalDAV:** es llegeixen (ATTENDEE amb PARTSTAT, i ORGANIZER
+  també quan apareix una sola vegada) i s'escriuen: un esdeveniment nou els
+  inclou; en editar s'hi afegeixen els nous i l'organitzador si hi falta, i només
+  es treuen els que l'editor ha tret (`removed_attendees` a
+  `calendar.update`). Qui l'editor no ha mostrat es conserva.
+- Go: `invite.notify` a la llista de pas d'`app.go`, 30 s a
+  `sidecar.go`; `calendar.go` passa `removed_attendees`.
 
 ## Frontend
 
 - `states/organizerNotices.ts`: `mailsNotices`, `noticeSender`,
   `organizerFor`, `noticeRecipients`, `buildNotice`, `sendNotice`.
-- `states/calendar.ts`: `saveEvent` y `deleteEvent` envían por correo en
-  calendarios locales y CalDAV y pasan `notify: false` al núcleo.
-- `EventEditor.tsx` pregunta también en local y CalDAV si hay remitente;
-  `NotifyAsk` muestra la dirección de envío.
+- `states/calendar.ts`: `saveEvent` i `deleteEvent` envien per correu en
+  calendaris locals i CalDAV i passen `notify: false` al nucli.
+- `EventEditor.tsx` també pregunta en local i CalDAV si hi ha remitent;
+  `NotifyAsk` mostra l'adreça d'enviament.
 
-## Pruebas
+## Proves
 
-- Rust (`cargo test --lib calendar::`): `itip/tests.rs` (serie con zona,
-  excepciones y personas; una ocurrencia con y sin excepción; CANCEL con
-  SEQUENCE+1; solo el organizador; nadie a quien avisar; organizador
-  añadido; evento local con UID, SEQUENCE, escapado y plegado; ocurrencia
-  importada) y `ics/tests.rs` (personas al crear, añadir y quitar solo lo
-  quitado, SEQUENCE de una excepción).
-- Despachador (`cargo test --bin meron-core the_organizer_of_a_local`):
-  invitación y actualizaciones con SEQUENCE creciente, rechazo de quien no
-  se mostró y de quien no organiza, cancelación antes de eliminar,
-  calendario de cuenta rechazado.
+- Rust (`cargo test --lib calendar::`): `itip/tests.rs` (sèrie amb zona,
+  excepcions i persones; una ocurrència amb excepció i sense; CANCEL amb
+  SEQUENCE+1; només l'organitzador; ningú a qui avisar; organitzador
+  afegit; esdeveniment local amb UID, SEQUENCE, escapament i plegat; ocurrència
+  importada) i `ics/tests.rs` (persones en crear, afegir i treure només el que
+  s'ha tret, SEQUENCE d'una excepció).
+- Distribuïdor (`cargo test --bin meron-core the_organizer_of_a_local`):
+  invitació i actualitzacions amb SEQUENCE creixent, rebuig de qui no
+  s'ha mostrat i de qui no organitza, cancel·lació abans d'eliminar,
+  calendari de compte rebutjat.
 - Bun (`OrganizerNotices.test.tsx`, `InvitationCard.test.tsx`): CalDAV
-  pregunta con nombres y envía un correo con `method=REQUEST`; «Save
-  without telling anyone» no envía nada; eliminar construye, elimina y
-  envía `method=CANCEL`; fallo al construir no elimina; fallo al enviar se
-  dice; sin cuenta que envíe o con otro organizador no se pregunta; Google
-  sigue con `notify: true` y sin correo.
+  pregunta amb noms i envia un correu amb `method=REQUEST`; «Save
+  without telling anyone» no envia res; eliminar construeix, elimina i
+  envia `method=CANCEL`; una fallada en construir no elimina; es comunica una
+  fallada en enviar; sense cap compte que enviï o amb un altre organitzador no es
+  pregunta; Google continua amb `notify: true` i sense correu.

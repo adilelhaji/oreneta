@@ -1,52 +1,52 @@
-# Verificación S/MIME: validez del certificado y `contentType` (#9)
+# Verificació S/MIME: validesa del certificat i `contentType` (#9)
 
-## Fallos reproducidos
+## Fallades reproduïdes
 
-- **`contentType` no comprobado.** Con atributos firmados presentes, el
-  verificador comprobaba `messageDigest` y la firma, pero no que el atributo
-  `contentType` existiera ni que coincidiera con el tipo del contenido
-  transportado (`eContentType`). Cambiando solo el tipo declarado del contenido
-  de un mensaje real de OpenSSL, sin tocar contenido, resumen ni firma, el
-  resultado era **firma buena**. El test
-  `a_content_type_that_differs_from_the_signed_one_does_not_check_out` lo
-  reproduce: sin la comprobación devuelve `good`; con ella, `bad`.
-- **Periodo de validez ignorado.** Un certificado caducado o aún no válido
-  producía `Good` o `ValidUntrusted`.
-- **Bomba de tiempo en los tests.** El fixture `ana.der` caduca el 2027-09-05;
-  los tests que verificaban con el reloj real habrían empezado a fallar ese día
-  en cuanto se comprobara la validez. Ahora se evalúan en un instante fijo.
+- **`contentType` no comprovat.** Amb atributs signats presents, el
+  verificador comprovava `messageDigest` i la signatura, però no que l'atribut
+  `contentType` existís ni que coincidís amb el tipus del contingut
+  transportat (`eContentType`). Si es canviava només el tipus declarat del
+  contingut d'un missatge real d'OpenSSL, sense tocar el contingut, el resum ni la
+  signatura, el resultat era **signatura bona**. El test
+  `a_content_type_that_differs_from_the_signed_one_does_not_check_out` ho
+  reprodueix: sense la comprovació retorna `good`; amb la comprovació, `bad`.
+- **Període de validesa ignorat.** Un certificat caducat o encara no vàlid
+  produïa `Good` o `ValidUntrusted`.
+- **Bomba de rellotgeria als tests.** El fixture (fitxer de prova) `ana.der` caduca el 2027-09-05;
+  els tests que verificaven amb el rellotge real haurien començat a fallar aquell
+  dia tan bon punt es comprovés la validesa. Ara s'avaluen en un instant fix.
 
-## Contrato
+## Contracte
 
-- Con atributos firmados, falta `contentType` → `Malformed`; `contentType`
-  distinto de `eContentType` → `Bad`. Sin atributos firmados (RFC 5652 lo
-  permite para `id-data`) no se exige.
-- Nuevo veredicto `CertificateNotValid { reason: expired | notYetValid,
-  notBefore, notAfter, trusted }`: la firma es íntegra y el certificado no era
-  válido en el momento de la comprobación. Nunca se presenta como firma válida.
-  `trusted` sigue informando aparte si el lector tiene ese certificado.
-- Integridad, validez temporal y confianza manual son tres hechos distintos y la
-  interfaz los muestra por separado: `CertificateNotValid` se ve como aviso con
-  la fecha de caducidad o de inicio, nunca con el escudo de firma correcta.
-- La validez se juzga en el instante de la comprobación, no en el `signingTime`
-  que declara el mensaje: lo escribe el firmante y no prueba nada. Los extremos
-  del intervalo son válidos (RFC 5280 §4.1.2.5). Un intervalo ilegible cuenta
-  como no válido.
-- `verify_signed_data_at` y `verify_message_at` reciben el instante; las
-  funciones públicas existentes usan el reloj del sistema.
+- Amb atributs signats, falta `contentType` → `Malformed`; `contentType`
+  diferent d'`eContentType` → `Bad`. Sense atributs signats (l'RFC 5652 ho
+  permet per a `id-data`) no s'exigeix.
+- Nou veredicte `CertificateNotValid { reason: expired | notYetValid,
+  notBefore, notAfter, trusted }`: la signatura és íntegra i el certificat no era
+  vàlid en el moment de la comprovació. No es presenta mai com a signatura vàlida.
+  `trusted` continua informant a part de si el lector té aquest certificat.
+- La integritat, la validesa temporal i la confiança manual són tres fets diferents
+  i la interfície els mostra per separat: `CertificateNotValid` es veu com un avís
+  amb la data de caducitat o d'inici, mai amb l'escut de signatura correcta.
+- La validesa es jutja en l'instant de la comprovació, no en el `signingTime`
+  que declara el missatge: l'escriu el signant i no prova res. Els extrems
+  de l'interval són vàlids (RFC 5280 §4.1.2.5). Un interval il·legible compta
+  com a no vàlid.
+- `verify_signed_data_at` i `verify_message_at` reben l'instant; les
+  funcions públiques existents fan servir el rellotge del sistema.
 
 ## Fixtures
 
-`meron-core/src/crypto/testdata/validity/`: tres certificados autofirmados
-generados con OpenSSL 3.0.13 (`openssl ca -selfsign` con fechas explícitas) y
-un mensaje opaco firmado con cada uno por `openssl smime -sign`, verificado con
-`openssl smime -verify -noverify`. Los casos de `contentType` se construyen en el
-test modificando la estructura CMS de uno de esos mensajes reales.
+`meron-core/src/crypto/testdata/validity/`: tres certificats autosignats
+generats amb OpenSSL 3.0.13 (`openssl ca -selfsign` amb dates explícites) i
+un missatge opac signat amb cadascun per `openssl smime -sign`, verificat amb
+`openssl smime -verify -noverify`. Els casos de `contentType` es construeixen al
+test modificant l'estructura CMS d'un d'aquests missatges reals.
 
-## Límites que siguen abiertos
+## Límits que continuen oberts
 
-- No hay construcción de cadena hasta una CA, ni comprobación de revocación
-  (CRL/OCSP). La confianza sigue siendo «el lector tiene este certificado».
-  Añadir cualquiera de las dos es una decisión de arquitectura (#49).
-- No se comprueba `keyUsage`/`extendedKeyUsage` del certificado firmante.
-- Firmas ECDSA y Ed25519 siguen siendo `NoKey` (algoritmo no soportado).
+- No hi ha construcció de la cadena fins a una CA, ni comprovació de revocació
+  (CRL/OCSP). La confiança continua sent «el lector té aquest certificat».
+  Afegir qualsevol de les dues és una decisió d'arquitectura (#49).
+- No es comprova el `keyUsage`/`extendedKeyUsage` del certificat signant.
+- Les signatures ECDSA i Ed25519 continuen sent `NoKey` (algorisme no compatible).

@@ -1,24 +1,23 @@
-# Archivos en las notas (#104, ADR-0042)
+# Fitxers a les notes (#104, ADR-0042)
 
-## Uso
+## Ús
 
-Debajo del texto de una nota, **Adjuntar un archivo…** guarda una copia del
-archivo elegido. Cada archivo muestra su nombre y tamaño, con **Guardar** y
-**Quitar**; quitar pregunta antes. En la papelera, los archivos se pueden
-guardar pero no cambiar.
+A sota del text d'una nota, **Adjunta un fitxer…** desa una còpia del fitxer
+triat. Cada fitxer mostra el nom i la mida, amb **Desa** i **Treu**; treure'l
+pregunta abans. A la paperera, els fitxers es poden desar però no canviar.
 
-## Núcleo
+## Nucli
 
 - `meron-core/src/store/note_attachments.rs`.
-- Órdenes: `notes.attachments`, `notes.attach`, `notes.removeAttachment` y
+- Ordres: `notes.attachments`, `notes.attach`, `notes.removeAttachment` i
   `notes.saveAttachment`.
-- El puente añade `notes.pickAttachment` y `notes.saveAttachmentAs`, que
-  abren los diálogos del sistema.
+- El pont hi afegeix `notes.pickAttachment` i `notes.saveAttachmentAs`, que
+  obren els diàlegs del sistema.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 (`note_attachments.rs`) | Archivo guardado entero con su nombre y devuelto igual; cambiar el original no cambia la copia; sin `.part` al terminar; demasiado grande, inexistente, una carpeta o una nota inexistente se rechazan sin guardar nada; se conservan en la papelera, no se añaden a una nota en la papelera y se van al borrarla para siempre; un guardado fallido no deja archivo parcial; quitar solo una vez |
-| N2 (`NoteAttachments.test.tsx`) | Lista, adjuntar el elegido, guardar por su nombre, quitar pregunta antes, en la papelera solo guardar |
-| N4 pendiente | Diálogos del sistema en Windows |
+| N1 (`note_attachments.rs`) | Fitxer desat sencer amb el seu nom i retornat igual; canviar l'original no canvia la còpia; cap `.part` en acabar; massa gran, inexistent, una carpeta o una nota inexistent es rebutgen sense desar res; es conserven a la paperera, no s'afegeixen a una nota que és a la paperera i desapareixen en suprimir-la definitivament; un desament fallit no deixa cap fitxer parcial; treure només una vegada |
+| N2 (`NoteAttachments.test.tsx`) | Llista, adjuntar el triat, desar pel seu nom, treure pregunta abans, a la paperera només desar |
+| N4 pendent | Diàlegs del sistema a Windows |

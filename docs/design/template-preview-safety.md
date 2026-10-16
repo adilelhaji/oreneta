@@ -1,56 +1,57 @@
-# Plantillas y vistas previas fiables (#40)
+# Plantilles i previsualitzacions fiables (#40)
 
-## Fallos reproducidos
+## Fallades reproduïdes
 
-- **Plantilla de texto como HTML.** Una plantilla guardada solo como texto se
-  insertaba en el editor enriquecido tal cual, como marcado. `a < b` rompía el
-  cuerpo, `<b>` ponía negrita y los saltos de línea se perdían. Pasaba tanto en
-  la plantilla de mensaje como en el fragmento insertado en el cursor. Un test
-  existente fijaba ese comportamiento.
-- **Plantilla HTML en el editor de texto.** Se quitaban las etiquetas con una
-  expresión regular, así que `&amp;` llegaba literal y los párrafos se
-  juntaban.
-- **PDF de vuelta a la página 1.** El efecto de cambio de página ignoraba la
-  página 1. Al pasar de la 2 a la 1, el lienzo seguía mostrando la 2 bajo el
-  rótulo «1 de N».
-- **PDF reabierto en cada render.** El diálogo pasaba un `onFailed` nuevo en
-  cada render y era dependencia de la apertura, así que cualquier re-render
-  cerraba el documento, lo reabría y devolvía al lector a la página 1.
+- **Plantilla de text com a HTML.** Una plantilla desada només com a text
+  s'inseria a l'editor de text enriquit tal qual, com a marcatge. `a < b` trencava
+  el cos, `<b>` posava negreta i els salts de línia es perdien. Passava tant a la
+  plantilla de missatge com al fragment inserit al cursor. Un test
+  existent fixava aquest comportament.
+- **Plantilla HTML a l'editor de text.** Les etiquetes es treien amb una
+  expressió regular, de manera que `&amp;` arribava literalment i els paràgrafs
+  s'ajuntaven.
+- **PDF de tornada a la pàgina 1.** L'efecte de canvi de pàgina ignorava la
+  pàgina 1. En passar de la 2 a la 1, el llenç continuava mostrant la 2 sota el
+  rètol «1 de N».
+- **PDF reobert a cada renderització.** El diàleg passava un `onFailed` nou a
+  cada renderització, i aquesta funció era una dependència de l'obertura, de manera que
+  qualsevol nova renderització tancava el document, el reobria i tornava el
+  lector a la pàgina 1.
 
-## Contrato
+## Contracte
 
-- **Texto plano en el editor enriquecido.** Se escapa (`&`, `<`, `>`, `"`).
-  Las líneas en blanco separan párrafos y un salto simple es `<br>`
-  (`plainTextToHtml`). Una plantilla con HTML se inserta como HTML.
-- **HTML en el editor de texto.** Se lee con el mismo `htmlToText` del resto de
-  la app, con entidades decodificadas y párrafos separados.
-- **Vista previa de PDF.**
-  - **Al cambiar de fichero.** El documento se abre una vez por fichero y
-    vuelve a la página 1. Una carga que resuelve tarde no pinta sobre el
-    fichero nuevo; esa guarda ya existía y sigue probada.
-  - **Al pasar página.** Cada página, la 1 incluida, se dibuja en el documento
-    ya abierto.
-  - **Al cerrar.** Cerrar el diálogo destruye la tarea de carga y su worker.
-- **Error y descarga.** El diálogo dice «Este tipo de archivo no se puede
-  mostrar aquí» o «No se pudo leer este adjunto», y «Guardar» está siempre en
-  el pie. El diálogo se monta de nuevo para cada adjunto, así que un error no
-  pasa de un fichero al siguiente.
+- **Text pla a l'editor de text enriquit.** S'escapa (`&`, `<`, `>`, `"`).
+  Les línies en blanc separen paràgrafs i un salt simple és `<br>`
+  (`plainTextToHtml`). Una plantilla amb HTML s'insereix com a HTML.
+- **HTML a l'editor de text.** Es llegeix amb el mateix `htmlToText` de la resta de
+  l'aplicació, amb les entitats descodificades i els paràgrafs separats.
+- **Previsualització de PDF.**
+  - **En canviar de fitxer.** El document s'obre una vegada per fitxer i
+    torna a la pàgina 1. Una càrrega que es resol tard no pinta sobre el
+    fitxer nou; aquesta protecció ja existia i continua provada.
+  - **En passar pàgina.** Cada pàgina, inclosa la 1, es dibuixa al document
+    ja obert.
+  - **En tancar.** Tancar el diàleg destrueix la tasca de càrrega i el seu worker.
+- **Error i baixada.** El diàleg diu «Aquest tipus de fitxer no es pot
+  mostrar aquí» o «No s'ha pogut llegir aquest adjunt», i «Desa» és sempre al
+  peu. El diàleg es torna a muntar per a cada adjunt, de manera que un error no
+  passa d'un fitxer al següent.
 
-## Pruebas
+## Proves
 
-- `applyTemplate.test.ts`: escape y párrafos de una plantilla de texto en modo
-  enriquecido, fragmento escapado, plantilla HTML intacta y HTML a texto con
-  entidades. El test que fijaba el fallo se corrigió.
-- `PdfPreview.test.tsx`: volver a la página 1 la redibuja; un re-render con
-  callback nuevo no reabre ni cambia de página; cinco ciclos de abrir y cerrar
-  destruyen cinco documentos; un documento que no abre se informa. Los dos
-  primeros fallaban antes del cambio.
+- `applyTemplate.test.ts`: escapament i paràgrafs d'una plantilla de text en mode
+  enriquit, fragment escapat, plantilla HTML intacta i HTML a text amb
+  entitats. Es va corregir el test que fixava la fallada.
+- `PdfPreview.test.tsx`: tornar a la pàgina 1 la redibuixa; una nova
+  renderització amb una funció de retorn nova no reobre ni canvia de pàgina; cinc
+  cicles d'obrir i tancar destrueixen cinc documents; s'informa d'un document que
+  no s'obre. Els dos primers fallaven abans del canvi.
 
-## Límites
+## Límits
 
-- La medición de memoria retenida en ciclos repetidos (criterio 4 de #40)
-  necesita el método acordado en el dispositivo de referencia (N6). Aquí solo
-  se prueba que cada ciclo libera su documento y su worker.
-- No se probó con PDFs malformados reales. La ruta de error se prueba con un
-  `getDocument` que falla: se informa y se libera la tarea.
-- Filtrar adjuntos por nombre, tipo o tamaño queda para después.
+- La mesura de la memòria retinguda en cicles repetits (criteri 4 de #40)
+  necessita el mètode acordat al dispositiu de referència (N6). Aquí només
+  es prova que cada cicle allibera el seu document i el seu worker.
+- No s'ha provat amb PDF mal formats reals. El camí d'error es prova amb un
+  `getDocument` que falla: s'informa i s'allibera la tasca.
+- Filtrar els adjunts per nom, tipus o mida queda per a més endavant.

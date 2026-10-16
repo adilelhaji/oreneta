@@ -1,25 +1,25 @@
-# Gramática sin conexión (#105)
+# Gramàtica sense connexió (#105)
 
-Registro de la implementación de ADR-0030.
+Registre de la implementació de l'ADR-0030.
 
-## Piezas
+## Peces
 
-- `frontend/src/lib/grammar.ts`: `GrammarChecker` (una revisión a la vez,
-  `stale` para la que queda adelantada, límite de tamaño, idioma, ignorados)
-  y el adaptador sobre Harper (`engineFrom`, `harperEngine`).
-- `frontend/src/components/composer/grammarExtension.ts`: el documento como
-  texto con su mapa de posiciones, colocación de problemas, decoraciones que
-  siguen al texto y aplicación de una sugerencia como una sola transacción.
-- `GrammarPopover.tsx`: sugerencias, «Ignorar» y el estado (sin revisar por
-  idioma, demasiado largo, no se pudo cargar).
-- Ajuste `grammarCheck` (`grammar_check`), apagado por omisión.
+- `frontend/src/lib/grammar.ts`: `GrammarChecker` (una revisió alhora,
+  `stale` per a la que queda avançada, límit de mida, idioma, ignorats)
+  i l'adaptador sobre Harper (`engineFrom`, `harperEngine`).
+- `frontend/src/components/composer/grammarExtension.ts`: el document com a
+  text amb el seu mapa de posicions, col·locació dels problemes, decoracions que
+  segueixen el text i aplicació d'un suggeriment com una sola transacció.
+- `GrammarPopover.tsx`: suggeriments, «Ignora» i l'estat (no revisat per
+  l'idioma, massa llarg, no s'ha pogut carregar).
+- Opció de configuració `grammarCheck` (`grammar_check`), desactivada per defecte.
 
-## Pruebas
+## Proves
 
-- N1 con el Harper real (el mismo WebAssembly): encuentra «I has», en la
-  posición correcta aunque haya emoji, y no revisa un texto en español.
-- N1 del editor: mapa de posiciones, edición única que se deshace y
-  conserva el formato, subrayados que se mueven o se descartan.
-- N3 e2e: activar en Ajustes, escribir, elegir la sugerencia y comprobar que
-  no hubo ninguna petición fuera de la aplicación. Esa comprobación encontró
-  que la fuente se pedía a Google Fonts; ahora va empaquetada.
+- N1 amb el Harper real (el mateix WebAssembly): troba «I has», a la
+  posició correcta encara que hi hagi emojis, i no revisa un text en castellà.
+- N1 de l'editor: mapa de posicions, edició única que es desfà i
+  conserva el format, subratllats que es mouen o es descarten.
+- N3 e2e: activar-ho a Configuració, escriure, triar el suggeriment i comprovar
+  que no hi ha hagut cap petició fora de l'aplicació. Aquesta comprovació va
+  trobar que la font es demanava a Google Fonts; ara va empaquetada.

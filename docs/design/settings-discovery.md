@@ -1,73 +1,91 @@
-# Settings and command discovery (#163 / #149)
+# Descoberta de la configuració i de les ordres (#163 / #149)
 
-## Inventory and scope
+## Inventari i abast
 
-Before this change, the palette already supplied compose/sync/search/filter,
-conversation, account/folder, board, theme and settings commands. Their labels
-and synonyms were English literals. Its ASCII-only compaction treated a query
-such as `日本語` as empty and returned every command. Settings had a general page,
-account/board/calendar navigation, and existing controls with their own state;
-it had no settings search or direct focus targets.
+Abans d'aquest canvi, la paleta ja oferia ordres de redacció, sincronització,
+cerca i filtre, conversa, compte i carpeta, tauler, tema i configuració. Les
+seves etiquetes i sinònims eren literals en anglès. La seva compactació, només
+ASCII, tractava una consulta com `日本語` com a buida i retornava totes les
+ordres. La configuració tenia una pàgina general, navegació per comptes, taulers
+i calendaris, i controls existents amb el seu propi estat; no tenia cerca a la
+configuració ni destinacions de focus directes.
 
-This delivery uses those actions and editors. The palette now has English and
-Spanish labels/synonyms, distinguishes **Setting** from **Action**, and can jump
-to appearance, typography, reading, global signature, assistant privacy,
-configuration backup, supported update controls and exact account settings or
-account signatures. Feed accounts do not advertise a signature. Updates are
-only advertised when the host reports support. Privacy means the existing
-assistant privacy controls, not a new all-purpose privacy center.
+Aquest lliurament fa servir aquestes accions i editors. Ara la paleta té etiquetes
+i sinònims en anglès i en castellà, distingeix **Opció de configuració** d'**Acció**,
+i pot saltar a l'aparença, la tipografia, la lectura, la signatura global, la
+privadesa de l'assistent, la còpia de seguretat de la configuració, els controls
+d'actualització admesos i la configuració o les signatures exactes d'un compte.
+Els comptes de canals no anuncien cap signatura. Les actualitzacions només
+s'anuncien quan l'amfitrió informa que les admet. Privadesa vol dir els
+controls de privadesa de l'assistent existents, no un centre de privadesa nou per
+a tot.
 
-Other languages retain English fallback for the new catalog entries. User-given
-account/folder/board/theme names remain intact. English aliases remain searchable
-in Spanish. No new command engine, persistence model, provider capability or
-automatic mail sending is introduced.
+Els altres idiomes conserven l'anglès com a alternativa per a les entrades noves
+del catàleg. Els noms de compte, carpeta, tauler i tema que dona l'usuari
+es mantenen intactes. Els àlies en anglès continuen sent cercables en castellà.
+No s'introdueix cap motor d'ordres, model de persistència, capacitat de proveïdor
+ni enviament automàtic de correu nous.
 
-## Behavior
+## Comportament
 
-- Search folds case, accents and Unicode compatibility forms but retains letters
-  from non-Latin scripts. Blank input lists everything; a nonblank query that
-  reduces to no searchable characters never becomes a wildcard. Existing
-  substring/subsequence matching remains available for real characters. Literal
-  labels and aliases precede approximate matches, with stable ordering for ties.
-- Both searches expose a named combobox and active option, arrow navigation,
-  Enter activation, visible selection and empty results. Selected options scroll
-  into view; long labels and hints wrap. Tab focus follows the actual option;
-  confirming IME composition does not activate a result prematurely.
-- Settings search navigates to existing mounted sections. Typing a query does
-  not unmount editors or duplicate their state. Existing signature debounce and
-  unmount flushing remain authoritative. Choosing an account changes the settings
-  context without changing the mailbox being read; removed accounts are ignored.
-- Palette close restores its connected, available opener before a command opens
-  another surface. Settings reuses the shared dialog focus lifecycle. Returning
-  focus does not imply a complete focus trap or native screen-reader certification.
-- Graph write commands show their existing read-only restriction and remain
-  inert; execution rechecks the current account capability. Existing state/backend
-  guards remain in place. New-message composition remains available if any account
-  can send, using the existing sender selection; it is disabled when none can.
-  Discovery never grants a permission.
-- Narrow settings stack navigation over the content instead of reserving a fixed
-  side rail that leaves the editor unusably narrow. Preference values stay in the
-  existing stores and only their existing controls change them.
+- La cerca unifica majúscules i minúscules, accents i formes de compatibilitat
+  d'Unicode, però conserva les lletres d'escriptures no llatines. Una entrada en
+  blanc ho llista tot; una consulta no buida que es queda sense cap caràcter
+  cercable no esdevé mai un comodí. La coincidència existent per subcadena i
+  subseqüència continua disponible per als caràcters reals. Les etiquetes i els
+  àlies literals precedeixen les coincidències aproximades, amb un ordre estable
+  en cas d'empat.
+- Totes dues cerques exposen un quadre combinat amb nom i una opció activa,
+  navegació amb fletxes, activació amb Retorn, selecció visible i resultats
+  buits. Les opcions seleccionades es desplacen fins a fer-se visibles; les
+  etiquetes i les indicacions llargues s'ajusten. El focus de Tab segueix l'opció
+  real; confirmar una composició d'IME no activa un resultat abans d'hora.
+- La cerca de la configuració navega a seccions existents ja muntades. Escriure
+  una consulta no desmunta els editors ni en duplica l'estat. El retard
+  (debounce) existent de les signatures i el buidatge en desmuntar continuen sent
+  la referència. Triar un compte canvia el context de la configuració sense canviar
+  la bústia que s'està llegint; els comptes eliminats s'ignoren.
+- En tancar-se, la paleta restableix el seu obridor connectat i disponible abans
+  que una ordre obri una altra superfície. La configuració reutilitza el cicle de
+  vida compartit del focus dels diàlegs. Retornar el focus no implica un
+  confinament complet del focus ni una certificació nativa amb lectors de pantalla.
+- Les ordres d'escriptura de Graph mostren la seva restricció existent de només
+  lectura i continuen inertes; l'execució torna a comprovar la capacitat actual
+  del compte. Les proteccions existents de l'estat i del backend es mantenen. La
+  redacció d'un missatge nou continua disponible si algun compte pot enviar, i fa
+  servir la selecció de remitent existent; es desactiva quan cap compte no pot enviar.
+  La descoberta no concedeix mai cap permís.
+- En pantalles estretes, la configuració apila la navegació sobre el contingut en
+  lloc de reservar una barra lateral fixa que deixa l'editor massa estret per fer-lo
+  servir. Els valors de les preferències es queden als magatzems existents i
+  només els canvien els seus controls existents.
 
-## Evidence boundary
+## Límit de les proves
 
-Unit tests cover accent/Unicode boundaries, live language changes and fallback,
-exact account targeting/removal, feed/update capability availability, read-only
-commands, empty results and focus return. Shared dialog tests retain StrictMode,
-autofocus, opener removal and busy Escape coverage after extracting its lifecycle
-hook for reuse. Review regressions cover Tab activation, IME confirmation, mixed
-Graph/IMAP composition and capability changes before execution.
+Les proves unitàries cobreixen els límits d'accents i d'Unicode, els canvis
+d'idioma en directe i l'alternativa, la destinació exacta i l'eliminació de
+comptes, la disponibilitat de les capacitats de canals i d'actualització, les
+ordres de només lectura, els resultats buits i el retorn del focus. Les proves
+dels diàlegs compartits conserven la cobertura de StrictMode, l'autofocus,
+l'eliminació de l'obridor i Esc mentre està ocupat després d'extreure'n el hook
+de cicle de vida per reutilitzar-lo. Les proves de regressió de la revisió cobreixen
+l'activació amb Tab, la confirmació d'IME, la redacció amb Graph i IMAP barrejats i
+els canvis de capacitat abans de l'execució.
 
-Production-entry tests use the existing synthetic bridge: English/Spanish,
-light/dark, 600/1440px, keyboard, 200% CSS zoom, signature preservation across
-search/navigation/reload, account context and Graph no-write behavior. Broader
-#149/#37 native and full-localization acceptance remains open. No executable,
-installer, release, account enrollment or live mail experiment is part of this
-delivery.
+Les proves sobre el punt d'entrada de producció fan servir el pont sintètic
+existent: anglès i castellà, clar i fosc, 600/1440 px, teclat, zoom CSS del 200 %,
+preservació de la signatura a través de la cerca, la navegació i la recàrrega,
+context del compte i comportament de Graph sense escriptura. L'acceptació més
+àmplia, nativa i de localització completa, de #149/#37 continua oberta. Aquest
+lliurament no inclou cap executable, instal·lador, versió publicada, alta de
+compte ni experiment amb correu real.
 
-Local checks: typecheck, catalog validation and build passed; 930 unit/component
-tests and two bundler checks passed. The complete initial browser run passed
-71 production-entry and 63 baseline cases; all seven discovery cases passed again
-after review fixes (the production suite now contains 72). Exact-commit CI remains
-the integration gate. Existing chunk-size build warnings remain. Internal assistant
-controls are not fully translated by this slice.
+Comprovacions locals: la comprovació de tipus, la validació del catàleg i la
+compilació van passar; van passar 930 proves unitàries i de components i dues
+comprovacions de l'empaquetador. L'execució inicial completa de navegador va
+passar 71 casos del punt d'entrada de producció i 63 de la base; els set casos de
+descoberta van tornar a passar després de les correccions de la revisió (la
+bateria de producció ara en conté 72). La CI del commit exacte continua sent la
+porta d'integració. Es mantenen els avisos de compilació existents sobre la mida
+dels fragments. Aquest tram no tradueix completament els controls interns de
+l'assistent.

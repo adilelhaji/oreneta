@@ -1,76 +1,77 @@
-# Derecha a izquierda (#226)
+# De dreta a esquerra (#226)
 
-Fila SET-27 del libro de paridad (General → Idioma). Decisiones:
+Fila SET-27 del registre d'acceptació (General → Idioma). Decisions:
 [ADR-0061](../adr/0061-right-to-left-layout.md).
 
-Código: `frontend/src/lib/direction.ts`, `lib/physicalDirection.ts` (el
-guardián), `states/settings.ts` (`applyDocumentLanguage`),
-`components/composer/composerHelpers.ts` (`inlineRichStyles`, el correo que
-sale), `index.css`.
+Codi: `frontend/src/lib/direction.ts`, `lib/physicalDirection.ts` (el
+guardià), `states/settings.ts` (`applyDocumentLanguage`),
+`components/composer/composerHelpers.ts` (`inlineRichStyles`, el correu que
+surt), `index.css`.
 
-## Cómo se escribe un componente
+## Com s'escriu un component
 
-- **Lados lógicos siempre:** `ms-*`/`me-*`, `ps-*`/`pe-*`, `start-*`/`end-*`,
-  `border-s`/`border-e`, `rounded-s`/`rounded-e` (y `rounded-ss/se/es/ee`),
+- **Costats lògics sempre:** `ms-*`/`me-*`, `ps-*`/`pe-*`, `start-*`/`end-*`,
+  `border-s`/`border-e`, `rounded-s`/`rounded-e` (i `rounded-ss/se/es/ee`),
   `text-start`/`text-end`; en CSS, `margin-inline-start`,
-  `inset-inline-end`, etc. `bun test` falla con un `ml-2`, un `left-0` o un
-  `paddingLeft` nuevo en `src/components` o `App.tsx`. No mira las
-  coordenadas en objetos `style`, ni `src/lib`, ni `index.css`.
-- **Cuando no hay forma lógica** (`translate-x`, una sombra interior), se
-  escribe la otra dirección al lado: `translate-x-4 rtl:-translate-x-4`, o
-  una regla `[dir='rtl']` en `index.css`.
-- **Una excepción es una decisión:** va a `ALLOWED` en
-  `lib/physicalDirection.test.ts` con su motivo, y la prueba avisa si deja de
-  usarse.
-- **Texto de las personas:** `dir="auto"` en el elemento que lo contiene
-  solo (y que lo corta con `truncate`), `<bdi>` si va dentro de una línea con
-  texto de la interfaz. Se alinea con la interfaz por sí solo. Varios nombres
-  en una frase: `formatNameList` (o `nameSeparator` con un `<bdi>` por nombre).
-- **Texto largo que alguien escribió:** `dir="auto"` y la clase
-  `bidi-plaintext` (o `.tiptap-body`) dan a cada párrafo su propia dirección.
-  En un campo, `dir={valor ? 'auto' : undefined}`: vacío, sigue a la interfaz.
-- **Código, registros, peticiones exactas:** `dir="ltr"`.
-- **Flechas como texto:** `forwardArrow()` / `backArrow()`, no «→» / «←».
+  `inset-inline-end`, etc. `bun test` falla amb un `ml-2`, un `left-0` o un
+  `paddingLeft` nou a `src/components` o `App.tsx`. No mira les
+  coordenades en objectes `style`, ni `src/lib`, ni `index.css`.
+- **Quan no hi ha forma lògica** (`translate-x`, una ombra interior),
+  s'escriu l'altra direcció al costat: `translate-x-4 rtl:-translate-x-4`, o
+  una regla `[dir='rtl']` a `index.css`.
+- **Una excepció és una decisió:** va a `ALLOWED` a
+  `lib/physicalDirection.test.ts` amb el seu motiu, i la prova avisa si es deixa
+  de fer servir.
+- **Text de les persones:** `dir="auto"` a l'element que el conté
+  només a ell (i que el talla amb `truncate`), `<bdi>` si va dins d'una línia amb
+  text de la interfície. S'alinea amb la interfície per si sol. Diversos noms
+  en una frase: `formatNameList` (o `nameSeparator` amb un `<bdi>` per nom).
+- **Text llarg que algú ha escrit:** `dir="auto"` i la classe
+  `bidi-plaintext` (o `.tiptap-body`) donen a cada paràgraf la seva pròpia
+  direcció. En un camp, `dir={valor ? 'auto' : undefined}`: buit, segueix la
+  interfície.
+- **Codi, registres, peticions exactes:** `dir="ltr"`.
+- **Fletxes com a text:** `forwardArrow()` / `backArrow()`, no «→» / «←».
 
-## Lo que mira la dirección en tiempo de ejecución
+## El que mira la direcció en temps d'execució
 
-| Qué | Cómo |
+| Què | Com |
 |---|---|
-| Flechas laterales en pestañas y grupos de opción | `handleGroupArrowKeys` (lee la dirección del elemento) |
-| Flechas del visor de imágenes | `inlineArrowStep` con `documentDirection()` |
-| Separadores de paneles | `PaneResizer` (ADR-0059) |
-| Menús contextuales y desplegables | `FloatingContextMenu` + `startEdgeX`, `endAlignedX`, `besideEndX`, `flyoutX` |
-| Menú rápido, ventana de gramática | `menuLeft` |
-| Mensajes HTML en su marco | `applyContentDirection` (`dir="auto"` en cada bloque de texto si el mensaje no declara nada) |
-| Correo que sale | `markRightToLeftBlocks` desde `inlineRichStyles` (`dir="rtl"` y cita con la barra a la derecha) |
+| Fletxes laterals a les pestanyes i als grups d'opcions | `handleGroupArrowKeys` (llegeix la direcció de l'element) |
+| Fletxes del visualitzador d'imatges | `inlineArrowStep` amb `documentDirection()` |
+| Separadors de subfinestres | `PaneResizer` (ADR-0059) |
+| Menús contextuals i desplegables | `FloatingContextMenu` + `startEdgeX`, `endAlignedX`, `besideEndX`, `flyoutX` |
+| Menú ràpid, finestra de gramàtica | `menuLeft` |
+| Missatges HTML al seu marc | `applyContentDirection` (`dir="auto"` a cada bloc de text si el missatge no en declara cap) |
+| Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"` i citació amb la barra a la dreta) |
 
-## Iconos
+## Icones
 
-Se reflejan en derecha a izquierda, por su clase de Lucide (`index.css`):
-flechas izquierda/derecha, chevrones, `corner-down-*`, responder, reenviar,
-deshacer/rehacer, enviar, cita de texto, entrar/salir, paneles laterales,
-listas y ajuste de línea. Un icono con una clase `rotate-*` o `no-mirror` no
-se refleja; un chevrón de desplegar con `transition-transform` se gira 180°.
+Es reflecteixen en mode de dreta a esquerra, per la seva classe de Lucide
+(`index.css`): fletxes esquerra/dreta, xebrons, `corner-down-*`, respon, reenvia,
+desfés/refés, envia, citació de text, entrar/sortir, subfinestres laterals,
+llistes i ajust de línia. Una icona amb una classe `rotate-*` o `no-mirror` no
+es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
 
-## Pruebas
+## Proves
 
-- `lib/direction.test.ts`, `lib/physicalDirection.test.ts`: la lógica, la
-  dirección de los mensajes (un boletín con preencabezado árabe sigue de
-  izquierda a derecha) y el guardián.
-- `components/composer/composerHelpers.test.ts`: el correo que sale; el de
-  izquierda a derecha, byte a byte igual.
-- `components/readingDirection.test.tsx`, y las pruebas de pestañas y grupos
-  en `TaskLists`, `CalDavCalendars` y `Categories`: teclado y colocación de
-  un menú.
-- `components/mixedDirection.test.tsx`: asunto latino en la interfaz árabe y
-  asunto árabe en la inglesa, con la dirección resultante; cambio de idioma
-  sin recargar.
-- `e2e/startup.e2e.ts` («#226»), en la entrada de producción en árabe:
-  - correo, lector y redactor a 600, 1024 y 1440 px, en tema claro y oscuro,
-    al 100 % y al 200 % (zoom propio, #181), con axe;
-  - personas, tareas, notas, calendario, chat y ajustes a 600 y 1024 px, en
-    los dos temas, sin desbordar por ningún lado y con axe;
-  - un menú contextual abierto junto al borde derecho: entero y sin
-    etiquetas partidas;
-  - la vuelta al inglés sin recargar, y un asunto árabe en la interfaz
-    inglesa.
+- `lib/direction.test.ts`, `lib/physicalDirection.test.ts`: la lògica, la
+  direcció dels missatges (un butlletí amb un preencapçalament en àrab continua
+  d'esquerra a dreta) i el guardià.
+- `components/composer/composerHelpers.test.ts`: el correu que surt; el
+  d'esquerra a dreta, idèntic byte a byte.
+- `components/readingDirection.test.tsx`, i les proves de pestanyes i grups
+  a `TaskLists`, `CalDavCalendars` i `Categories`: teclat i col·locació d'un
+  menú.
+- `components/mixedDirection.test.tsx`: assumpte en alfabet llatí a la interfície
+  àrab i assumpte en àrab a l'anglesa, amb la direcció resultant; canvi d'idioma
+  sense recarregar.
+- `e2e/startup.e2e.ts` («#226»), al punt d'entrada de producció en àrab:
+  - correu, lector i editor de missatges a 600, 1024 i 1440 px, en tema clar i
+    fosc, al 100 % i al 200 % (zoom propi, #181), amb axe;
+  - persones, tasques, notes, calendari, xat i configuració a 600 i 1024 px, en
+    els dos temes, sense desbordar per cap costat i amb axe;
+  - un menú contextual obert al costat de la vora dreta: sencer i sense
+    etiquetes partides;
+  - la tornada a l'anglès sense recarregar, i un assumpte en àrab a la interfície
+    anglesa.
