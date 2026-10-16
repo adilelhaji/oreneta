@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import { Fragment, type MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
 import { formatThreadDate } from '../../lib/date'
 import { clsx } from '../../lib/utils'
@@ -43,7 +43,14 @@ export function ReadingHeaderSummary({
 
   const shown = summary.participants.slice(0, NAMES)
   const hidden = summary.participants.length - shown.length
-  const names = shown.map((person) => (person.self ? t('reading.you') : person.name)).join(', ')
+  // Each name isolated: a Latin name among Arabic ones (or the reverse) keeps
+  // its own order and does not drag the commas around (ADR-0061).
+  const names = shown.map((person, index) => (
+    <Fragment key={person.address}>
+      {index > 0 && ', '}
+      <bdi>{person.self ? t('reading.you') : person.name}</bdi>
+    </Fragment>
+  ))
 
   const facts: string[] = []
   if (summary.messageCount !== null && summary.messageCount > 1) {
@@ -61,7 +68,7 @@ export function ReadingHeaderSummary({
       onContextMenu={onSenderMenu}
       aria-expanded={detailsOpen}
       aria-label={t('chat.conversationDetails')}
-      className="mt-0.5 flex min-w-0 max-w-full items-center gap-2 rounded-sm text-left outline-none transition-colors cursor-pointer hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="mt-0.5 flex min-w-0 max-w-full items-center gap-2 rounded-sm text-start outline-none transition-colors cursor-pointer hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       {/* Overlapping faces, oldest of the shown behind. Small enough to read
           as one object rather than as a row of controls. */}
@@ -81,15 +88,15 @@ export function ReadingHeaderSummary({
         title={summary.participants.map((person) => person.address).join(', ')}
       >
         {names}
-        {hidden > 0 && <span className="opacity-70"> {t('reading.andMore', { count: hidden })}</span>}
+        {hidden > 0 && <span className="font-normal"> {t('reading.andMore', { count: hidden })}</span>}
         {/* Said, not implied. A cast that might be short must look short. */}
         {summary.partial && (
-          <span className="opacity-70" title={t('reading.partialHint')}>
+          <span className="font-normal" title={t('reading.partialHint')}>
             {' '}
             {t('reading.partial')}
           </span>
         )}
-        {facts.length > 0 && <span className="opacity-70"> · {facts.join(' · ')}</span>}
+        {facts.length > 0 && <span className="font-normal"> · {facts.join(' · ')}</span>}
       </span>
     </button>
   )

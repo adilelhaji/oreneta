@@ -181,7 +181,7 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
   const time = (seconds: number) =>
     new Date(seconds * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   const section = 'px-4 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-secondary'
-  const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-left text-caption hover:bg-hover cursor-pointer'
+  const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-start text-caption hover:bg-hover cursor-pointer'
 
   const label = (item: AgendaItem) =>
     item.kind === 'task'

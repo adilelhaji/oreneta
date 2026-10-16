@@ -1,6 +1,7 @@
 import { BUBBLE_CODE_BASE_PX, BUBBLE_HTML_BASE_PX, type MessageFrameFont } from '../../lib/fonts'
 import { stripTrackingPixels } from './readerHtml'
 import { applyHtmlFolds, DEFAULT_FOLD_LABELS, type FoldLabels, type FoldOptions } from './quoteFolding'
+import { applyContentDirection } from '../../lib/direction'
 
 /** Reader-side transforms (ADR-0046): what to fold, and the toggle labels. */
 export interface BubbleReaderOptions {
@@ -130,7 +131,7 @@ export function prepareBubbleHtml(
       .oreneta-copy-code {
         position: absolute;
         top: 6px;
-        right: 6px;
+        inset-inline-end: 6px;
         z-index: 2;
         display: inline-flex;
         align-items: center;
@@ -232,6 +233,8 @@ export function prepareBubbleHtml(
       el.style.setProperty('height', 'auto', 'important')
       el.style.setProperty('min-height', '0', 'important')
     }
+    // The message keeps its own direction, whatever the interface's.
+    applyContentDirection(doc)
     return doc.documentElement.outerHTML
   } catch {
     return html

@@ -77,7 +77,7 @@ export function VideoAttachment({
           type="button"
           onClick={() => openExternal(externalUrl)}
           title={externalLabel}
-          className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white/90 opacity-0 group-hover:opacity-100 hover:bg-black/70 transition-opacity cursor-pointer"
+          className="absolute top-1.5 end-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-white/90 opacity-0 group-hover:opacity-100 hover:bg-black/70 transition-opacity cursor-pointer"
         >
           <ExternalLink size={14} strokeWidth={1.75} />
         </button>
