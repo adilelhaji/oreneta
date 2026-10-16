@@ -1,15 +1,15 @@
-# Listas de remitentes y ejecución revisada de reglas (#50, ADR-0028)
+# Llistes de remitents i execució revisada de regles (#50, ADR-0028)
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 `spam/tests.rs` | Bloqueado o permitido decide y lo dice, por encima de lo aprendido |
-| N1 `store/tests.rs` | Patrones de dirección y dominio; la dirección antes que el dominio; por cuenta; los veredictos guardados cambian al momento; quitar de la lista |
-| N1 `rules/tests.rs` | El plan es lo que se puede hacer: marcas primero y un solo movimiento (falla con el código anterior) |
-| N1 `rules/run.rs` | La revisión es de un solo uso y solo si no cambiaron la cuenta, la carpeta, las reglas ni el tiempo |
-| N2 `SpamAndRuns.test.tsx` | Bloquear, permitir y quitar por cuenta, con el error dicho; ejecutar las reglas guardadas tal como se previsualizaron e informar de cada paso fallido |
+| N1 `spam/tests.rs` | Bloquejat o permès decideix i ho diu, per sobre del que s'ha après |
+| N1 `store/tests.rs` | Patrons d'adreça i de domini; l'adreça abans que el domini; per compte; els veredictes desats canvien a l'instant; treure de la llista |
+| N1 `rules/tests.rs` | El pla és el que es pot fer: primer les marques i un sol moviment (falla amb el codi anterior) |
+| N1 `rules/run.rs` | La revisió és d'un sol ús i només si no han canviat el compte, la carpeta, les regles ni el temps |
+| N2 `SpamAndRuns.test.tsx` | Bloquejar, permetre i treure per compte, indicant l'error; executar les regles desades tal com es van previsualitzar i informar de cada pas fallit |
 
-Al escribir la prueba de la interfaz apareció un defecto real: el estado de
-la vista previa descartaba la revisión que devolvía el núcleo. Está
-corregido.
+En escriure la prova de la interfície va aparèixer un defecte real: l'estat de
+la previsualització descartava la revisió que retornava el nucli. Està
+corregit.

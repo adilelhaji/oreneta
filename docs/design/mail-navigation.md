@@ -1,30 +1,40 @@
-# Production mail navigation (#34)
+# Navegació del correu en producció (#34)
 
-First adoption of the [mail reference](mail-reference.md), authorized by the
-2026-09-09 user instruction to integrate labelled accounts and folders.
+Primera adopció de la [referència del correu](mail-reference.md), autoritzada per
+la instrucció de l'usuari del 2026-09-09 d'integrar comptes i carpetes amb etiqueta.
 
-- A persistent 220px navigation panel accompanies the existing account rail in
-  mail views wider than 1024 CSS pixels. At smaller widths, existing folder and
-  account selectors remain available; no modal or new navigation state is added.
-- Account destinations use `openMailAccount`; real folder IDs use the existing
-  selected-folder state. Query, pinned filters, sorting and draft preferences
-  follow existing behavior. Navigation explicitly clears bulk selection and the
-  opened message so actions cannot silently target the previous mailbox.
-- Folder hierarchy reuses `buildFolderTree`, including server delimiters and
-  non-selectable structural parents. Labels and unread counts come from the
-  selected account's cache; stale folders from another account are never shown.
-- Unified folders use existing role IDs and aggregate inbox counts only for
-  included accounts. RSS retains its feed inbox rather than fictitious folders.
-- Account visibility respects rail preferences, but the currently selected
-  account remains reachable even if hidden. Folder updates are observed from the
-  existing cache; the panel adds no provider calls or alternative loading logic.
-- Calendar, contacts, tasks and Kanban retain their existing full-width views.
+- Un panell de navegació persistent de 220px acompanya la barra de comptes
+  existent en les visualitzacions del correu de més de 1024 píxels CSS d'amplada.
+  A amplades més petites, els selectors de carpeta i de compte existents continuen
+  disponibles; no s'afegeix cap finestra modal ni cap estat de navegació nou.
+- Les destinacions de compte fan servir `openMailAccount`; els ID de carpeta reals
+  fan servir l'estat existent de carpeta seleccionada. La consulta, els filtres
+  fixats, l'ordenació i les preferències d'esborrany segueixen el comportament
+  existent. La navegació buida explícitament la selecció múltiple i el missatge
+  obert perquè les accions no puguin apuntar en silenci a la bústia anterior.
+- La jerarquia de carpetes reutilitza `buildFolderTree`, inclosos els delimitadors
+  del servidor i els pares estructurals no seleccionables. Les etiquetes i els
+  recomptes de no llegits provenen de la memòria cau del compte seleccionat; no es
+  mostren mai carpetes obsoletes d'un altre compte.
+- Les carpetes unificades fan servir els ID de rol existents i sumen els recomptes
+  de la safata d'entrada només dels comptes inclosos. L'RSS conserva la seva safata
+  d'entrada de canals en lloc de carpetes fictícies.
+- La visibilitat dels comptes respecta les preferències de la barra, però el compte
+  seleccionat en aquell moment continua sent accessible encara que estigui ocult.
+  Les actualitzacions de carpetes s'observen a partir de la memòria cau existent;
+  el panell no afegeix cap crida als proveïdors ni cap lògica de càrrega
+  alternativa.
+- Calendari, contactes, tasques i Kanban conserven les seves visualitzacions
+  existents a amplada completa.
 
-This slice does not close #34: row density/selection feedback and native mailbox
-behavior at 200% zoom still require their own acceptance evidence. The 600px reader
-boundary was corrected by #85; see [mail boundaries](mail-boundaries.md).
-No theme or reader-default migration is included. Tests cover the real production
-entry with synthetic bridge replies; they do not certify provider connectivity.
+Aquest tram no tanca #34: la densitat de les files, la resposta visual de la
+selecció i el comportament natiu de la bústia amb un zoom del 200% encara
+requereixen les seves pròpies proves d'acceptació. El límit del lector a 600px es
+va corregir a #85; vegeu [límits del correu](mail-boundaries.md).
+No s'inclou cap migració del tema ni dels valors per defecte del lector. Les
+proves cobreixen el punt d'entrada de producció real amb respostes sintètiques
+del pont; no certifiquen la connectivitat amb els proveïdors.
 
-English/Spanish labels are provided; the other catalogs use explicit English
-fallback strings pending translation, following the existing catalog contract.
+Es proporcionen etiquetes en anglès i en castellà; els altres catàlegs fan servir
+cadenes alternatives explícites en anglès a l'espera de traducció, d'acord amb el
+contracte de catàlegs existent.

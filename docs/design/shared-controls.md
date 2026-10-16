@@ -1,38 +1,47 @@
-# Shared controls and feedback
+# Controls i retroacció compartits
 
-Delivery: [#152](https://github.com/adilelhaji/oreneta/issues/152), a bounded part of
-[#33](https://github.com/adilelhaji/oreneta/issues/33). Uses the existing
-[art direction](art-direction.md), theme tokens and native bridge.
+Lliurament: [#152](https://github.com/adilelhaji/oreneta/issues/152), una part
+acotada de [#33](https://github.com/adilelhaji/oreneta/issues/33). Fa servir la
+[direcció d'art](art-direction.md), els testimonis de tema i el pont natiu existents.
 
-## Delivered behavior
+## Comportament lliurat
 
-- Buttons use readable `on-accent` text and semantic danger colors. Hover changes
-  color without scaling or glow; disabled controls remain inert.
-- Shared icons use 14/16/20px at stroke 1.75. Decorative icons are hidden from
-  assistive technology. The type scale includes 18/22/28px heading steps.
-- Invalid fields expose `aria-invalid` and retain the global keyboard focus ring.
-- A chip that can be selected and removed has two sibling buttons. Keyboard and
-  pointer removal cannot also select it; callers must provide a removal label.
-- Menu labels, buttons and notices wrap long text. Empty, loading and error states
-  share a quiet layout while retaining distinct roles and explicit retry actions.
-- The command palette's **Open design catalogue** shows these states, including
-  disabled controls, long Spanish text and an operable link to the art direction.
+- Els botons fan servir text `on-accent` llegible i colors semàntics de perill.
+  En passar-hi per sobre canvia el color sense escalat ni resplendor; els
+  controls desactivats continuen inerts.
+- Les icones compartides fan servir 14/16/20px amb un traç d'1,75. Les icones
+  decoratives s'oculten a les tecnologies d'assistència. L'escala tipogràfica
+  inclou els graons d'encapçalament de 18/22/28px.
+- Els camps no vàlids exposen `aria-invalid` i conserven l'anell de focus global
+  del teclat.
+- Un xip que es pot seleccionar i treure té dos botons germans. Treure'l amb el
+  teclat o amb el punter no el pot seleccionar alhora; qui el crida ha de
+  proporcionar una etiqueta per a l'acció de treure.
+- Les etiquetes dels menús, els botons i els avisos ajusten el text llarg. Els
+  estats buit, de càrrega i d'error comparteixen una disposició discreta i
+  conserven rols diferenciats i accions explícites per tornar-ho a provar.
+- **Obre el catàleg de disseny**, a la paleta d'ordres, mostra aquests estats, inclosos
+  els controls desactivats, text llarg en castellà i un enllaç operatiu a la
+  direcció d'art.
 
-## Evidence and limits
+## Proves i límits
 
-`design-primitives.test.tsx` covers disabled actions, input descriptions, chip
-semantics, feedback roles and catalogue actions. The production-entry browser
-suite covers light/dark at 1440px and 600px, keyboard focus, reduced motion,
-selection/removal, long labels and the documentation link. It saves controls and
-feedback screenshots in the CI startup evidence artifact.
+`design-primitives.test.tsx` cobreix les accions desactivades, les descripcions
+dels camps d'entrada, la semàntica dels xips, els rols de retroacció i les accions
+del catàleg. La bateria de navegador sobre el punt d'entrada de producció cobreix
+clar i fosc a 1440px i 600px, el focus del teclat, el moviment reduït, la selecció
+i la supressió, les etiquetes llargues i l'enllaç a la documentació. Desa captures
+de pantalla dels controls i de la retroacció a l'artefacte de proves d'arrencada
+de la CI.
 
-These browser tests use a strict synthetic native bridge. They do not certify
-real providers, native WebView behavior, every theme, or full accessibility.
-The broader #33/#37 acceptance stays open: remaining screen-specific colors and
-icons, modal focus containment/restoration, native zoom and assistive-technology
-checks still need their own evidence. No executable or installer is replaced by
-this source change.
+Aquestes proves de navegador fan servir un pont natiu sintètic estricte. No
+certifiquen proveïdors reals, el comportament natiu de WebView, tots els temes ni
+l'accessibilitat completa. L'acceptació més àmplia de #33/#37 continua oberta: els
+colors i les icones específics de pantalla que queden, el confinament i la
+restauració del focus en les finestres modals, el zoom natiu i les comprovacions
+amb tecnologies d'assistència encara necessiten les seves pròpies proves. Aquest
+canvi de codi font no substitueix cap executable ni cap instal·lador.
 
-[#177](screen-consistency.md) extends the tokens, icon scale and restrained effects
-to application call sites and improves the narrow secondary screens. Native and
-complete workflow acceptance remains separate.
+[#177](screen-consistency.md) estén els testimonis, l'escala d'icones i els efectes
+continguts als punts d'ús de l'aplicació i millora les pantalles secundàries
+estretes. L'acceptació nativa i de fluxos de treball complets continua sent a part.

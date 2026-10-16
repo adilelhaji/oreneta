@@ -1,38 +1,50 @@
-# Opening and selecting in the default mailbox table
+# Obertura i selecció a la taula de la bústia per defecte
 
-Delivery [#154](https://github.com/adilelhaji/oreneta/issues/154), part of #34.
-Preserves the approved shell, sortable columns, saved table/card preferences and
-existing bulk operation contracts.
+Lliurament [#154](https://github.com/adilelhaji/oreneta/issues/154), part de #34.
+Conserva l'estructura aprovada de l'aplicació, les columnes ordenables, les
+preferències de taula o targetes desades i els contractes existents de les
+operacions en bloc.
 
-- Each desktop table row has a native checkbox. Click or Space selects it without
-  opening or reading the conversation. The subject is a separate keyboard button.
-- Opening a subject clears bulk selection and opens it using the same draft,
-  starred-feed and active-tab behavior as cards. Ctrl/Command-click toggles a row;
-  Shift-click explicitly selects the currently displayed range from the anchor.
-- Existing bulk state retains exact selected identities. Arrivals do not join it
-  automatically. The existing toolbar's Select all acts on currently loaded rows;
-  it does not select unseen search results or create a continuing selection rule.
-  While a set is selected, individual context menus are suppressed, matching the
-  existing cards, so the toolbar's count cannot be confused with a single-row action.
-- A left accent line identifies the open conversation, bold text identifies unread
-  mail, checkboxes and tint identify bulk selection, and the focus outline identifies
-  the keyboard target. These states can coexist. Rows retain table semantics.
-  The [visual hierarchy refinement](mailbox-visual-hierarchy.md) adds a reserved
-  unread dot, 36px row rhythm and moves the opened edge to the start of the row,
-  including when columns are reordered.
-- The compact table gives dates 80px and sender 27%; subject text takes the rest.
-  Preview text no longer competes with the subject in the same line. Subject and
-  sender tooltips preserve their full text, with at most one visible label and the
-  remaining label count. Icons use theme colors and the shared scale.
+- Cada fila de la taula d'escriptori té una casella de selecció nativa. Un clic o
+  la tecla d'espai la selecciona sense obrir ni llegir la conversa. L'assumpte és
+  un botó de teclat separat.
+- Obrir un assumpte buida la selecció múltiple i l'obre amb el mateix
+  comportament d'esborrany, de canal destacat i de pestanya activa que les
+  targetes. Ctrl/Ordre-clic commuta una fila; Maj-clic selecciona explícitament
+  l'interval mostrat en aquell moment a partir de l'àncora.
+- L'estat de selecció existent conserva les identitats exactes seleccionades. Els
+  missatges que arriben no s'hi afegeixen automàticament. L'opció Selecciona-ho tot
+  de la barra d'eines existent actua sobre les files carregades en aquell moment;
+  no selecciona resultats de cerca que no s'han vist ni crea cap regla de selecció
+  contínua. Mentre hi ha un conjunt seleccionat, els menús contextuals individuals
+  se suprimeixen, igual que a les targetes existents, perquè el recompte de la
+  barra d'eines no es pugui confondre amb una acció d'una sola fila.
+- Una línia d'èmfasi a l'esquerra identifica la conversa oberta, el text en
+  negreta identifica el correu no llegit, les caselles i el tint identifiquen la
+  selecció múltiple, i el contorn del focus identifica l'objectiu del teclat.
+  Aquests estats poden coexistir. Les files conserven la semàntica de taula.
+  El [refinament de la jerarquia visual](mailbox-visual-hierarchy.md) hi afegeix
+  un punt de no llegit amb espai reservat, un ritme de files de 36px i mou la vora
+  de la fila oberta a l'inici de la fila, també quan es reordenen les columnes.
+- La taula compacta dona 80px a les dates i el 27% al remitent; el text de
+  l'assumpte ocupa la resta. El text de previsualització ja no competeix amb
+  l'assumpte a la mateixa línia. Els indicadors de funció de l'assumpte i del
+  remitent conserven el text complet, amb com a màxim una etiqueta visible i el
+  recompte de les etiquetes restants. Les icones fan servir els colors del tema i
+  l'escala compartida.
 
-`baseline/tableSelection.test.tsx` verifies selection, arrivals, ranges, context
-menu scope, opening while
-selecting, compose-tab exit, drafts and starred feeds. Production-entry browser
-tests exercise keyboard selection and opening in cobalt light/dark at 1440px and
-720px (the existing 200% desktop zoom-equivalent CSS width), saving screenshots.
-The existing boundary suite still checks reader/composer navigation around 769px
-and 1024px. Browser fixtures are synthetic, not native/provider certification.
+`baseline/tableSelection.test.tsx` verifica la selecció, les arribades, els
+intervals, l'abast del menú contextual, l'obertura mentre
+se selecciona, la sortida de la pestanya de redacció, els esborranys i els canals
+destacats. Les proves de navegador sobre el punt d'entrada de producció exerciten
+la selecció i l'obertura amb el teclat en cobalt clar i fosc a 1440px i
+720px (l'amplada CSS existent equivalent a un zoom d'escriptori del 200%), i desen
+captures de pantalla. La bateria de límits existent encara comprova la navegació
+del lector i de l'editor de missatges al voltant de 769px i 1024px. Els escenaris
+de navegador són sintètics, no són una certificació nativa ni amb proveïdors.
 
-#34 remains open for broader card-list polish, native zoom/accessibility evidence,
-bulk progress/partial-outcome presentation and verified undo. Column configuration
-remains #36. This change does not replace an executable or publish a release.
+#34 continua oberta per al poliment més ampli de la llista de targetes, les proves
+de zoom natiu i d'accessibilitat, la presentació del progrés i dels resultats
+parcials de les operacions en bloc i el desfer verificat. La configuració de les
+columnes continua a #36. Aquest canvi no substitueix cap executable ni publica cap
+versió.

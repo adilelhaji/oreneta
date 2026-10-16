@@ -1,10 +1,10 @@
-# Protección contra rastreadores (#107, ADR-0029)
+# Protecció contra rastrejadors (#107, ADR-0029)
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 `privacy/tests.rs` | La copia incluida se lee y dice qué es; rastreadores de correo reales bloqueados e imágenes normales no; sintaxis (`\|\|`, `\|`, `^`, `*`, tipos, `domain=`, `third-party`, opciones que reescriben, cosméticas, expresiones regulares, excepciones, `important`, direcciones sin esquema, `data:` y `cid:`); un mensaje adverso (entidades, escapes CSS, `<style>`, `@import`, `background`, `srcset`) no pide nada a un rastreador y conserva imágenes normales y enlaces; actualización comprobada que, si falla, conserva la lista anterior; excepciones por mensaje y por cuenta |
-| N2 `TrackerNotice.test.tsx` | Cuántos y cuáles con su regla; cargar en un mensaje solo tras confirmar, y deshacerlo; nada que mostrar; la lista en uso y la actualización solo bajo petición |
+| N1 `privacy/tests.rs` | La còpia inclosa es llegeix i diu què és; es bloquegen els rastrejadors de correu reals i no les imatges normals; sintaxi (`\|\|`, `\|`, `^`, `*`, tipus, `domain=`, `third-party`, opcions que reescriuen, cosmètiques, expressions regulars, excepcions, `important`, adreces sense esquema, `data:` i `cid:`); un missatge advers (entitats, seqüències d'escapament CSS, `<style>`, `@import`, `background`, `srcset`) no demana res a cap rastrejador i conserva les imatges normals i els enllaços; actualització comprovada que, si falla, conserva la llista anterior; excepcions per missatge i per compte |
+| N2 `TrackerNotice.test.tsx` | Quants i quins, amb la seva regla; carregar-los en un missatge només després de confirmar-ho, i desfer-ho; res a mostrar; la llista en ús i l'actualització només a petició |
 
-Mensajes de prueba sintéticos; ninguna prueba hace peticiones a la red.
+Missatges de prova sintètics; cap prova no fa peticions a la xarxa.

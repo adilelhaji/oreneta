@@ -1,23 +1,23 @@
-# Notas (#104, ADR-0015)
+# Notes (#104, ADR-0015)
 
-## Uso
+## Ús
 
-El icono de nota de la barra lateral abre **Notas**: la lista a la izquierda
-(fijadas primero, luego las más recientes) y la nota abierta a la derecha. Se
-busca por título, texto y etiquetas (todas las palabras deben aparecer); las
-etiquetas filtran con un clic. Una nota nueva se guarda en cuanto tiene algo
-escrito, y cada cambio se guarda solo tras un instante. Al abrir otra nota no
-se pierde lo pendiente.
+La icona de nota de la barra lateral obre **Notes**: la llista a l'esquerra
+(primer les fixades, després les més recents) i la nota oberta a la dreta. Es
+cerca pel títol, el text i les etiquetes (hi han d'aparèixer totes les paraules);
+les etiquetes filtren amb un clic. Una nota nova es desa tan bon punt té alguna
+cosa escrita, i cada canvi es desa al cap d'un instant. En obrir una altra nota
+no es perd el que estava pendent.
 
-Si la nota cambió en otra ventana, aparece un aviso con la versión guardada y
-dos botones: **Mantener la mía** y **Usar la guardada**. Nada se sobrescribe
-sin elegir.
+Si la nota ha canviat en una altra finestra, apareix un avís amb la versió desada
+i dos botons: **Mantén la meva** i **Fes servir la desada**. No se sobreescriu
+res sense triar.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 (`store/notes/tests.rs`) | Limpieza del HTML (scripts, manejadores, `javascript:`, imágenes remotas, `data:` fuera de `<img>`) y texto plano; revisión y conflicto; nota vacía, enorme o con demasiadas etiquetas; búsqueda por palabras con `%` literal; etiquetas sin distinguir mayúsculas; papelera, restauración, borrado definitivo sin etiquetas huérfanas y caducidad a 30 días |
-| N1 despachador (`main.rs`) | Crear, listar con etiquetas, editar, conflicto, papelera, restaurar y borrar del todo |
-| N2 (`NotesView.test.tsx`) | Crear al escribir y editar desde la revisión; conflicto con «Mantener la mía» y «Usar la guardada» sin escribir; papelera y restauración |
-| N6 (`startup.e2e.ts`) | Auditoría axe de la vista con una nota abierta, en claro y oscuro |
+| N1 (`store/notes/tests.rs`) | Neteja de l'HTML (scripts, gestors d'esdeveniments, `javascript:`, imatges remotes, `data:` fora d'`<img>`) i text pla; revisió i conflicte; nota buida, enorme o amb massa etiquetes; cerca per paraules amb `%` literal; etiquetes sense distingir majúscules; paperera, restauració, supressió definitiva sense etiquetes òrfenes i caducitat als 30 dies |
+| N1 distribuïdor (`main.rs`) | Crear, llistar amb etiquetes, editar, conflicte, paperera, restaurar i suprimir del tot |
+| N2 (`NotesView.test.tsx`) | Crear en escriure i editar a partir de la revisió; conflicte amb «Mantén la meva» i «Fes servir la desada» sense escriure; paperera i restauració |
+| N6 (`startup.e2e.ts`) | Auditoria axe de la visualització amb una nota oberta, en clar i en fosc |
