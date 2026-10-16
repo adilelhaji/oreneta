@@ -1,5 +1,6 @@
 import { TrackerNotice } from './TrackerNotice'
 import { ReceiptNotice } from './ReceiptNotice'
+import { ReportNotice } from './ReportNotice'
 import { TranslationNotice, useShownMessage } from './TranslationNotice'
 import { useState } from 'react'
 import { Download, Eye, Image } from 'lucide-react'
@@ -127,6 +128,7 @@ export function MessageContent({
       {message.invitation && <InvitationCard message={message} />}
       <TrackerNotice message={message} />
       {message.receipt_requested && !view.outgoing && !view.isDraft && <ReceiptNotice message={message} />}
+      {!view.isDraft && <ReportNotice message={message} outgoing={!!view.outgoing} />}
       <TranslationNotice message={message} />
 
       <MessageBubbleBody

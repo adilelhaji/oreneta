@@ -31,6 +31,29 @@ estados y la misma recuperación que SMTP y EWS.
 - **Petición.** `POST /me/sendMail` con el MIME en base64
   (`Content-Type: text/plain`). Microsoft guarda la copia en Elementos
   enviados; la siguiente sincronización la trae.
+- **Confirmación de entrega** ([ADR-0057](../adr/0057-graph-folder-moves-and-receipt-reports.md)):
+  - `sendMail` con MIME no puede llevarla: es la propiedad
+    `isDeliveryReceiptRequested` del mensaje. Cuando se pide y la cuenta
+    tiene cambios (`Mail.ReadWrite`) además de envío, el mismo MIME se
+    convierte en borrador (`POST /me/messages`), se marca (`PATCH`) y se
+    envía (`POST /me/messages/{id}/send`, 202);
+  - solo para un mensaje **sin Cco y sin firma ni cifrado**: hasta que un
+    inquilino real muestre que el borrador hecho desde MIME conserva los Cco
+    y la protección, perderlos sería silencioso;
+  - sin pedirla, se envía como siempre por `sendMail` (`"none"`). Pedida
+    pero sin cambios, con Cco o protegido, también por `sendMail`, con
+    `delivery_receipt: "unsupported"` y `delivery_receipt_reason`
+    (`needsChanges`, `bcc`, `protected`), que el redactor explica;
+  - un fallo al crear o marcar el borrador es «no enviado»: se borra el
+    borrador y el intento queda rechazado, nunca incierto; si pudo quedar
+    una copia en Borradores (sin respuesta, 5xx o respuesta ilegible al
+    crearlo, o no se pudo borrar), se dice;
+  - el envío del borrador sigue la tabla de abajo. Un incierto dice además
+    que puede quedar una copia en Borradores; un rechazo borra el borrador;
+  - mientras dura el envío, el borrador puede verse en Borradores desde
+    otros clientes. Si la aplicación se cierra entre crearlo y enviarlo,
+    se queda allí y el intento sigue abierto en `outgoing_attempts` (#29),
+    para que la persona lo resuelva.
 - **Límite.** El cuerpo de la petición admite hasta 4 MB. Un mensaje más
   grande se rechaza antes de enviar, con «demasiado grande para enviarlo por
   Microsoft Graph». Es un rechazo definitivo y no se ha enviado nada. Subir
@@ -54,6 +77,7 @@ Cada estado se distingue como en #29:
 | 400, 401, 403, 404, 413, 429 | `rejected` con el motivo (la petición no se aceptó) | Solo a propósito |
 | Demasiado grande antes de enviar | `rejected` | Solo a propósito, tras reducirlo |
 | Conexión perdida tras enviar, tiempo agotado, 5xx | `uncertain` | Nunca automático |
+| Otro 2xx o respuesta ilegible tras enviar (#210) | `uncertain` | Nunca automático |
 
 - **Incierto.** Un 5xx o un 504 pueden llegar después de que Microsoft
   aceptara el envío, así que no se toman como rechazo.
@@ -74,11 +98,16 @@ Cada estado se distingue como en #29:
   - 4xx rechazado con categoría, 429 con su espera y 5xx;
   - conexión perdida como incierta, enviada una sola vez;
   - tamaño excedido rechazado sin enviar nada;
-  - una concesión sin `Mail.Send` no envía nada.
+  - una concesión sin `Mail.Send` no envía nada;
+  - confirmación de entrega: borrador desde el MIME, `PATCH` con
+    `isDeliveryReceiptRequested` y envío sin cuerpo; sin `Mail.ReadWrite` no
+    se crea el borrador (#210).
 - **Autorización:** flujo de envío con el conjunto pedido, nivel concedido en
   el marcador y renovación que conserva `Mail.Send`.
 - **Núcleo:** el guardián deja pasar `send` solo con el permiso; la
-  clasificación de fallos de Graph en incierto o rechazado.
+  clasificación de fallos de Graph en incierto o rechazado; la confirmación
+  de entrega se pide exactamente cuando la política lo dice, y un fallo
+  antes de enviar es un rechazo (#210).
 - **Interfaz:**
   - una cuenta Graph con permiso de envío puede elegirse como remitente;
   - sin él, no;

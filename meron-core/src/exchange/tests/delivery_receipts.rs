@@ -60,3 +60,20 @@ async fn ews_delivery_receipt_with_a_lost_answer_fails_without_a_second_submissi
     );
     assert_eq!(server.join().expect("server").len(), 1, "sent once");
 }
+
+#[tokio::test]
+async fn ews_delivery_receipt_is_reported_requested_through_the_shared_send_path() {
+    use crate::smtp::DeliveryReceipt;
+    let (url, server) = serve(vec![Step::Reply(created()), Step::Reply(created())]);
+    let (session, _db) = test_session(url);
+    let mut session = crate::backend::Session::Ews(session);
+    // The same call the send path makes for Graph (#210): Exchange always
+    // carries the request, whatever the Bcc or the protection.
+    let asked = session.send_mime_with_receipt(RAW.to_vec(), true, true, true).await.expect("sent asking");
+    assert_eq!(asked, (DeliveryReceipt::Requested, None));
+    let not_asked = session.send_mime_with_receipt(RAW.to_vec(), false, false, false).await.expect("sent");
+    assert_eq!(not_asked, (DeliveryReceipt::NotAsked, None));
+    let requests = server.join().expect("server");
+    assert!(requests[0].contains("<t:IsDeliveryReceiptRequested>true</t:IsDeliveryReceiptRequested>"));
+    assert!(!requests[1].contains("IsDeliveryReceiptRequested"));
+}

@@ -34,6 +34,7 @@ import {
 } from '../lib/shortcuts'
 import type { Account, ChatWallpaper } from '../types'
 import { DEFAULT_REPLY_FORWARD_PREFS, sanitizeReplyForwardPrefs, type ReplyForwardPrefs } from '../lib/replyForward'
+import { DEFAULT_PRINT_OPTIONS, sanitizePrintOptions, type PrintOptions } from '../lib/printOptions'
 import {
   DEFAULT_CALENDAR_PREFS,
   WEEK_START_CHOICES,
@@ -43,6 +44,7 @@ import {
 } from '../lib/calendarWeek'
 import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
+import { clampPaneSize, DETAILS_PANEL_WIDTH, KANBAN_PANE_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
 import { normalizeI18nLanguage, resolveI18nLanguageFromWebLocale, type SupportedI18nLanguage } from '../lib/i18n'
 
 // Persisted user settings. This module maps 1:1 to the `settings` DB table: each
@@ -233,6 +235,8 @@ export type Settings = {
   undoSendSeconds: number
   /** Mail → Replies and forwards: quote, header and forward preferences (ADR-0047). */
   replyForward: ReplyForwardPrefs
+  /** General → Print: headers, scope, order and attachment list (ADR-0060). */
+  print: PrintOptions
   /** Whether native spell checking is requested in composer prose fields. */
   spellCheck: boolean
   /** Offline grammar checking with Harper (#105): off, or the English it
@@ -248,6 +252,8 @@ export type Settings = {
   kanbanBoards: KanbanBoard[]
   threadListWidth: number
   kanbanPaneWidth: number
+  /** Pixel width of the conversation details sidebar beside the reader (ADR-0059). */
+  detailsPanelWidth: number
   /** Pixel width used by every expanded kanban column. */
   kanbanColumnWidth: number
   /** kanbanColumnKey -> whether the column is collapsed to a vertical bar. */
@@ -382,12 +388,14 @@ const DB_KEY = {
   markReadDelaySeconds: 'mark_read_delay_seconds',
   undoSendSeconds: 'undo_send_seconds',
   replyForward: 'reply_forward',
+  print: 'print_options',
   spellCheck: 'spell_check',
   grammarCheck: 'grammar_check',
   signature: 'signature',
   kanbanBoards: 'kanban_boards',
   threadListWidth: 'thread_list_width',
   kanbanPaneWidth: 'kanban_pane_width',
+  detailsPanelWidth: 'details_panel_width',
   kanbanColumnWidth: 'kanban_column_width',
   kanbanMinimizedColumns: 'kanban_minimized_columns',
   hiddenSideNavAccounts: 'hidden_sidenav_accounts',
@@ -587,6 +595,8 @@ export const settings$ = observable<Settings>({
   // thread, short enough that nobody waits on it.
   undoSendSeconds: 5,
   replyForward: DEFAULT_REPLY_FORWARD_PREFS,
+  // A copy: the headers are nested, and the defaults must stay as they are.
+  print: structuredClone(DEFAULT_PRINT_OPTIONS),
   spellCheck: true,
   // Opt-in: it downloads nothing, but it loads a sizable checker on first use.
   grammarCheck: 'off',
@@ -594,6 +604,7 @@ export const settings$ = observable<Settings>({
   kanbanBoards: [],
   threadListWidth: 350,
   kanbanPaneWidth: 33,
+  detailsPanelWidth: 340,
   kanbanColumnWidth: KANBAN_COLUMN_DEFAULT_WIDTH,
   kanbanMinimizedColumns: {},
   hiddenSideNavAccounts: [],
@@ -971,6 +982,8 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const replyForward = sanitizeReplyForwardPrefs(prefs[DB_KEY.replyForward])
     if (replyForward) settings$.replyForward.set(replyForward)
+    const print = sanitizePrintOptions(prefs[DB_KEY.print])
+    if (print) settings$.print.set(print)
 
     if (typeof prefs[DB_KEY.spellCheck] === 'boolean') {
       settings$.spellCheck.set(prefs[DB_KEY.spellCheck] as boolean)
@@ -990,12 +1003,17 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     const threadListWidth = prefs[DB_KEY.threadListWidth]
     if (typeof threadListWidth === 'number' && Number.isFinite(threadListWidth)) {
-      settings$.threadListWidth.set(Math.min(560, Math.max(280, threadListWidth)))
+      settings$.threadListWidth.set(clampPaneSize(threadListWidth, THREAD_LIST_WIDTH))
     }
 
     const paneWidth = prefs[DB_KEY.kanbanPaneWidth]
     if (typeof paneWidth === 'number' && Number.isFinite(paneWidth)) {
-      settings$.kanbanPaneWidth.set(paneWidth)
+      settings$.kanbanPaneWidth.set(clampPaneSize(paneWidth, KANBAN_PANE_WIDTH))
+    }
+
+    const detailsWidth = prefs[DB_KEY.detailsPanelWidth]
+    if (typeof detailsWidth === 'number' && Number.isFinite(detailsWidth)) {
+      settings$.detailsPanelWidth.set(clampPaneSize(detailsWidth, DETAILS_PANEL_WIDTH))
     }
 
     const columnWidth = prefs[DB_KEY.kanbanColumnWidth]

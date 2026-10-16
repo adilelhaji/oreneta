@@ -63,17 +63,6 @@ mod tests {
     use super::{merge_outcome, scheduled_outcome_of, scheduled_send_precheck, sent_late, strip_send_secrets, ScheduledOutcome};
     use meron_core::store::outgoing::{AttemptKind, AttemptState, OutgoingAttempt};
 
-    #[test]
-    fn an_exchange_delivery_receipt_is_reported_as_requested_and_graph_as_unsupported() {
-        use meron_core::smtp::DeliveryReceipt;
-        // ADR-0058: Exchange takes the request with the item it submits.
-        assert_eq!(super::submitted_delivery_receipt(true, true), DeliveryReceipt::Requested);
-        // Graph does not on this path: said, not hidden (ADR-0048).
-        assert_eq!(super::submitted_delivery_receipt(true, false), DeliveryReceipt::Unsupported);
-        assert_eq!(super::submitted_delivery_receipt(false, false), DeliveryReceipt::NotAsked);
-        assert_eq!(super::submitted_delivery_receipt(false, true), DeliveryReceipt::NotAsked);
-    }
-
     fn earlier(state: AttemptState, error: &str) -> OutgoingAttempt {
         OutgoingAttempt {
             id: "s-1".to_string(),
@@ -680,21 +669,86 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         .await
         .unwrap();
         let event = created["event"]["id"].as_str().unwrap().to_owned();
-        assert!(due_calendar_reminders(&engine, now).await.is_empty(), "an account the core has not opened is not watched");
+        assert!(look_for_reminders(&engine, now).await.reminders.is_empty(), "an account the core has not opened is not watched");
         let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
         engine.accounts.lock().await.insert(account.to_string(), creds);
-        let due = due_calendar_reminders(&engine, now).await;
+        let due = look_for_reminders(&engine, now).await;
+        let (local_time, local_date) = {
+            use chrono::TimeZone as _;
+            let at = |instant: i64| chrono::Local.timestamp_opt(instant, 0).earliest().unwrap();
+            let date = at(start).date_naive();
+            let other_day = (date != at(now).date_naive()).then(|| date.format("%Y-%m-%d").to_string());
+            (at(start).format("%H:%M").to_string(), other_day)
+        };
         assert_eq!(
-            due,
+            due.reminders,
             vec![json!({
                 "account": account, "event": event, "subject": "Standup", "location": "Room 2",
-                "start": start, "all_day": false, "minutes": 10,
+                "start": start, "all_day": false, "minutes": 10, "local_time": local_time,
+                "started": false, "local_date": local_date,
             })],
         );
-        assert!(due_calendar_reminders(&engine, now + 60).await.is_empty(), "given once");
+        assert!(look_for_reminders(&engine, now + 60).await.reminders.is_empty(), "given once");
         assert!(
             pim::reminders::take_due(&engine, &[account.to_string()], now + 120).is_empty(),
             "recorded where the phone's refresh looks too",
+        );
+    }
+
+    /// After a change of zone, the watch's look starts reading again the
+    /// calendars of an open account that can hold floating times (#209).
+    #[tokio::test]
+    async fn a_zone_change_makes_the_reminder_watch_read_floating_calendars_again() {
+        use super::*;
+        use chrono::Offset as _;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let account = meron_core::archive::ACCOUNT;
+        let now = now_seconds();
+        {
+            let db = engine.db.lock().unwrap();
+            meron_core::archive::ensure_account(&db, now).unwrap();
+            calendar::upsert_calendars(&db, account, &[calendar::Calendar {
+                id: "sub:holidays".into(),
+                name: "Holidays".into(),
+                kind: calendar::CalendarKind::Subscribed,
+                enabled: true,
+                ..Default::default()
+            }])
+            .unwrap();
+            // The previous look was a minute ago, an hour away from here.
+            let here = chrono::Local::now().offset().fix().local_minus_utc();
+            let elsewhere = chrono::FixedOffset::east_opt(here + 3_600).unwrap();
+            meron_core::calendar::reminders::record_look(&db, account, now - 60, &elsewhere).unwrap();
+        }
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+
+        give_calendar_reminders(&engine, &writer, now).await;
+        let window = format!("calendar:{account}:{}:{}", now - 86_400 * 31, now + 86_400 * 366);
+        assert!(engine.syncing.lock().unwrap().contains(&window), "the floating calendars are being read again");
+    }
+
+    /// The watch's tick runs on a clock that can stand still in a sleep, so
+    /// `system.resumed` wakes it at once rather than at its next tick (#209).
+    #[tokio::test]
+    async fn system_resumed_wakes_the_reminder_watch_before_its_tick() {
+        use super::*;
+        use futures::FutureExt as _;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let mut ticker = tokio::time::interval(Duration::from_secs(3_600));
+        ticker.tick().await; // The first tick is at once; the next an hour off.
+        let mut resumed = Box::pin(engine.resume_signal.notified());
+        resumed.as_mut().enable();
+        assert!(next_reminder_look(&mut ticker, resumed.as_mut()).now_or_never().is_none(), "nothing to wake it yet");
+
+        let request = Request { id: 1, method: "system.resumed".into(), params: json!({}) };
+        dispatch(&engine, &request, &writer).await.unwrap();
+        assert_eq!(
+            next_reminder_look(&mut ticker, resumed.as_mut()).now_or_never(),
+            Some(ReminderWake::Resumed),
+            "woken by the resume, not an hour later by the tick",
         );
     }
 
@@ -996,15 +1050,16 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         }
         store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true})).unwrap();
         // Supported and granted: past the guard (they fail later, with no
-        // Graph profile in this test, but not as "read-only").
-        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move"] {
+        // Graph profile in this test, but not as "read-only"). Moving a
+        // folder is one of them since #210.
+        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move","folders.move"] {
             let error=dispatch(&engine,&request(method,json!({"account":account,"uid":1,"target_folder":"INBOX.x"})),&writer).await.unwrap_err();
             assert!(!error.to_string().contains("read-only"),"{method}: {error}");
         }
         let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
         assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
         // Still unsupported, granted or not.
-        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","folders.move","mail.scheduleSend"] {
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
             let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
             assert!(error.to_string().contains("read-only"),"{method}: {error}");
         }
@@ -1039,6 +1094,28 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         }
         assert!(classify(ErrorKind::TooLarge, None).to_string().contains("too large to send through Microsoft Graph"));
         assert!(classify(ErrorKind::ConsentRequired, None).to_string().contains("allow it in the account settings"));
+    }
+    /// #210: a send asking for a delivery receipt that stopped before
+    /// Microsoft was asked to send (the draft could not be made or marked)
+    /// is a refusal, even when the draft step itself went unanswered.
+    #[test]
+    fn graph_send_stopped_before_sending_is_a_refusal_not_uncertain() {
+        use super::{classify_graph_send_error, smtp};
+        use meron_core::graph::{Error, ErrorKind, NotSent};
+        let classify = |kind, draft_left| {
+            let error = Error { kind, status: None, retry_after_seconds: None };
+            classify_graph_send_error(anyhow::Error::new(NotSent { error, draft_left }))
+        };
+        for kind in [ErrorKind::Uncertain, ErrorKind::Unavailable, ErrorKind::Conflict, ErrorKind::Throttled] {
+            assert!(!smtp::is_uncertain(&classify(kind, false)), "{kind:?}");
+        }
+        let left = classify(ErrorKind::Uncertain, true).to_string();
+        assert!(left.contains("nothing was sent") && left.contains("Drafts"), "{left}");
+        assert!(classify(ErrorKind::ConsentRequired, false).to_string().contains("allow changes"));
+        assert!(classify(ErrorKind::TooLarge, false).to_string().contains("too large to send"));
+        // The draft step done, the send itself unanswered: that may have gone.
+        let sent = Error { kind: ErrorKind::Uncertain, status: None, retry_after_seconds: None };
+        assert!(smtp::is_uncertain(&classify_graph_send_error(anyhow::Error::new(sent))));
     }
     #[tokio::test]
     async fn graph_send_passes_the_guard_only_with_the_send_grant() {
@@ -1667,21 +1744,30 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
 /// is running is accounted for on the next tick without anything to keep in
 /// sync. Each is recorded as raised, so it is given once however many times
 /// its window is resynced.
+///
+/// It looks at its minute tick and as soon as the host says the machine woke
+/// (`system.resumed`). Time is always the wall clock: the tick runs on the
+/// monotonic clock, which stands still while some systems sleep, so what came
+/// due during a sleep is found by the gap since the last look (ADR-0056).
 fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(pim::reminders::TICK);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut resumed = Box::pin(engine.resume_signal.notified());
+        resumed.as_mut().enable();
         loop {
-            ticker.tick().await;
+            if next_reminder_look(&mut ticker, resumed.as_mut()).await == ReminderWake::Resumed {
+                // Listening again before this look, so a resume that lands
+                // during it is not lost.
+                resumed = Box::pin(engine.resume_signal.notified());
+                resumed.as_mut().enable();
+            }
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|epoch| epoch.as_secs() as i64)
                 .unwrap_or_default();
 
-            // Shared with the phone (`pim::reminders`): which are due, and
-            // recorded as raised before they are announced.
-            for detail in due_calendar_reminders(&engine, now).await {
-                emit(&out, "calendar.reminder", detail).await;
-            }
+            give_calendar_reminders(&engine, &out, now).await;
             // Task reminders (ADR-0013): local, so not tied to an account.
             let due = store::task_lists::due_reminders(&engine.db.lock().unwrap(), now).unwrap_or_default();
             for (id, title, due_at) in due {
@@ -1695,11 +1781,48 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
     });
 }
 
+/// What woke the reminder watch.
+#[derive(Debug, PartialEq, Eq)]
+enum ReminderWake {
+    Tick,
+    Resumed,
+}
+
+/// Waits for the reminder watch's next look: its tick, or the machine waking
+/// (`resumed`, enabled before the look it follows), whichever comes first.
+async fn next_reminder_look(
+    ticker: &mut tokio::time::Interval,
+    resumed: std::pin::Pin<&mut tokio::sync::futures::Notified<'_>>,
+) -> ReminderWake {
+    tokio::select! {
+        _ = ticker.tick() => ReminderWake::Tick,
+        _ = resumed => ReminderWake::Resumed,
+    }
+}
+
+/// One look of the reminder watch at `now`: the calendar reminders due,
+/// announced, and the floating calendars a change of zone left to read again.
+async fn give_calendar_reminders(engine: &Arc<Engine>, out: &Writer, now: i64) {
+    // Shared with the phone (`pim::reminders`): which are due, and recorded
+    // as raised before they are announced.
+    let look = look_for_reminders(engine, now).await;
+    for detail in look.reminders {
+        emit(out, "calendar.reminder", detail).await;
+    }
+    // A floating time is read in the zone the machine is in when its calendar
+    // is read: after a change of zone, read those again so their times, and
+    // reminders, follow. Asked again at later looks until done (ADR-0056).
+    for reread in look.reread {
+        spawn_calendar_sync(engine.clone(), out.clone(), reread.account, reread.from, reread.to);
+    }
+}
+
 /// The calendar reminders due now on the accounts the core has open, each
-/// recorded as raised (`pim::reminders::take_due`).
-async fn due_calendar_reminders(engine: &Arc<Engine>, now: i64) -> Vec<Value> {
+/// recorded as raised, in this machine's zone as it is now
+/// (`pim::reminders::look`).
+async fn look_for_reminders(engine: &Arc<Engine>, now: i64) -> pim::reminders::Look {
     let accounts: Vec<String> = engine.accounts.lock().await.keys().cloned().collect();
-    pim::reminders::take_due(engine, &accounts, now)
+    pim::reminders::look(engine, &accounts, now, &chrono::Local)
 }
 
 /// The calendars of an account that hold an invitation's event: CalDAV ones
@@ -3091,6 +3214,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             meron_core::chat::remove_account(&engine.db.lock().unwrap(), &id)?;
             let _ = secrets::delete(&meron_core::chat::secret_key(&id));
             chat_status().lock().unwrap().remove(&id);
+            chat_live().lock().unwrap().remove(&id);
             Ok(json!({ "ok": true }))
         }
         "chat.conversations" => Ok(serde_json::to_value(meron_core::chat::conversations(
@@ -3114,27 +3238,45 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         }
         "chat.send" => {
             let account = req_str(p, "account")?;
-            let conversation = req_str(p, "conversation")?.trim().to_lowercase();
+            let conversation = meron_core::chat::normalize_conversation(&req_str(p, "conversation")?);
             let body = req_str(p, "body")?;
+            // Nicknames picked from the suggestions, sent as references (ADR-0055).
+            let mentions: Vec<String> = p
+                .get("mentions")
+                .and_then(Value::as_array)
+                .map(|list| list.iter().filter_map(Value::as_str).take(50).map(str::to_string).collect())
+                .unwrap_or_default();
             let me = meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
             let id = uuid::Uuid::new_v4().to_string();
-            // To a room, it goes as a group message under the person's nickname there.
-            let room = meron_core::chat::room(&engine.db.lock().unwrap(), &account, &conversation)?;
+            // To a room, it goes as a group message under the person's nickname
+            // there; privately to someone in a room (`room/nick`), under it too.
+            let (kind, sender) = {
+                let db = engine.db.lock().unwrap();
+                match meron_core::chat::split_private(&conversation) {
+                    Some((room, _)) => (
+                        meron_core::chat::KIND_PRIVATE,
+                        meron_core::chat::room_nick(&db, &account, room)?
+                            .context("write privately only to someone in a group you are in")?,
+                    ),
+                    None => match meron_core::chat::room_nick(&db, &account, &conversation)? {
+                        Some(nick) => (meron_core::chat::KIND_GROUP, nick),
+                        None => (meron_core::chat::KIND_CHAT, me.jid.clone()),
+                    },
+                }
+            };
             let mut message = meron_core::chat::ChatMessage::chat(
                 &account,
                 &conversation,
                 &id,
                 "out",
-                room.as_ref().map(|r| r.nick.as_str()).unwrap_or(&me.jid),
+                &sender,
                 &body,
                 now_seconds(),
                 "sending",
             );
-            if room.is_some() {
-                message.kind = meron_core::chat::KIND_GROUP.into();
-            }
+            message.kind = kind.into();
             meron_core::chat::queue_message(&engine.db.lock().unwrap(), &message)?;
-            chat_dispatch(&engine, &message);
+            chat_dispatch(&engine, &message, mentions);
             Ok(json!({ "id": id }))
         }
         "chat.retry" => {
@@ -3148,8 +3290,89 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 "only a message whose sending failed or is uncertain can be sent again"
             );
             meron_core::chat::set_state(&engine.db.lock().unwrap(), &account, &id, "sending")?;
-            chat_dispatch(&engine, &message);
+            // In a room, the people it names (`@nick`, among those there now)
+            // go again as references: the picks themselves are not kept.
+            let mentions = if message.kind == meron_core::chat::KIND_GROUP {
+                let nicks: Vec<String> = chat_live()
+                    .lock()
+                    .unwrap()
+                    .get(&account)
+                    .map(|live| live.lock().unwrap().occupants.list(&message.conversation).into_iter().map(|o| o.nick).collect())
+                    .unwrap_or_default();
+                meron_core::chat::mentions::written_mentions(&message.body, &nicks)
+            } else {
+                Vec::new()
+            };
+            chat_dispatch(&engine, &message, mentions);
             Ok(json!({ "ok": true }))
+        }
+        // Presence (ADR-0055): the person's own status, what the session
+        // knows of others, and asking or answering to see a status, only on
+        // the person's click.
+        "chat.presence" => {
+            let account = req_str(p, "account")?;
+            let live = chat_live().lock().unwrap().get(&account).cloned();
+            meron_core::chat::presence::snapshot(&engine.db.lock().unwrap(), &account, live.as_ref())
+        }
+        "chat.setPresence" => {
+            let account = req_str(p, "account")?;
+            let show = req_str(p, "show")?;
+            let status = p.get("status").and_then(Value::as_str).unwrap_or_default().to_string();
+            meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            if show == "invisible" {
+                // Only where the server said it can hide the person (XEP-0186).
+                let supported = chat_live()
+                    .lock()
+                    .unwrap()
+                    .get(&account)
+                    .and_then(|live| live.lock().unwrap().invisible_supported);
+                anyhow::ensure!(
+                    supported.is_some(),
+                    "connect to check whether this chat server can hide you; nothing was changed"
+                );
+                anyhow::ensure!(supported == Some(true), "this chat server cannot hide you; nothing was changed");
+            }
+            let own = meron_core::chat::presence::save_own(&engine.db.lock().unwrap(), &account, &show, &status)?;
+            if let Some(tx) = chat_sessions().lock().unwrap().get(&account) {
+                let _ = tx.send(meron_core::chat::xmpp::Command::Presence);
+            }
+            Ok(json!({ "show": own.show, "status": own.status }))
+        }
+        "chat.subscribe" | "chat.answerSubscription" => {
+            let account = req_str(p, "account")?;
+            let jid = req_str(p, "jid")?.trim().to_lowercase();
+            anyhow::ensure!(
+                jid.split_once('@').is_some_and(|(local, domain)| !local.is_empty() && domain.contains('.') && !domain.contains('/')),
+                "an address looks like name@server.example"
+            );
+            // Asked only on a live connection: nothing waits to go out later.
+            let online = chat_status().lock().unwrap().get(&account).is_some_and(|s| s["state"] == "online");
+            anyhow::ensure!(online, "this chat account is not connected; nothing was sent");
+            let command = if req.method == "chat.subscribe" {
+                meron_core::chat::xmpp::Command::Subscribe { jid }
+            } else {
+                let allow = p.get("allow").and_then(Value::as_bool).context("missing allow")?;
+                // Letting someone see the status only answers someone who asked.
+                if allow {
+                    let asked = chat_live()
+                        .lock()
+                        .unwrap()
+                        .get(&account)
+                        .is_some_and(|live| live.lock().unwrap().requests.contains(&jid));
+                    anyhow::ensure!(asked, "{jid} has not asked to see your status; nothing was sent");
+                }
+                meron_core::chat::xmpp::Command::AnswerSubscription { jid, allow }
+            };
+            let sent = chat_sessions().lock().unwrap().get(&account).is_some_and(|tx| tx.send(command).is_ok());
+            anyhow::ensure!(sent, "this chat account is not connected; nothing was sent");
+            Ok(json!({ "ok": true }))
+        }
+        "chat.occupants" => {
+            let account = req_str(p, "account")?;
+            let room = req_str(p, "room")?.trim().to_lowercase();
+            let live = chat_live().lock().unwrap().get(&account).cloned();
+            let list = live.map(|live| live.lock().unwrap().occupants.list(&room)).unwrap_or_default();
+            Ok(serde_json::to_value(list)?)
         }
         // Group chats (ADR-0044): joined by the person, joined again on each
         // connection, left by the person.
@@ -3220,7 +3443,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // link; saved from a link only when the person asks, over HTTPS.
         "chat.sendFile" => {
             let account = req_str(p, "account")?;
-            let conversation = req_str(p, "conversation")?.trim().to_lowercase();
+            let conversation = meron_core::chat::normalize_conversation(&req_str(p, "conversation")?);
             let path = std::path::PathBuf::from(req_str(p, "path")?);
             let upload_id = req_str(p, "upload_id")?;
             // Asked only on a live connection: a question queued on a dead
@@ -9283,6 +9506,10 @@ fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()>
         let _ = etx.send((name.to_string(), detail));
     });
     let account_id = id.to_string();
+    // Starts from the saved status, so nothing reports "available" before
+    // the connection says how it went.
+    let live = meron_core::chat::presence::Live::shared(&engine.db.lock().unwrap(), id);
+    chat_live().lock().unwrap().insert(id.to_string(), live.clone());
     let options = meron_core::chat::xmpp::Options {
         room_password: Arc::new(move |room: &str| {
             secrets::load(&meron_core::chat::room_secret_key(&account_id, room))
@@ -9291,13 +9518,14 @@ fn start_chat(engine: &Arc<Engine>, out: Writer, id: &str) -> anyhow::Result<()>
                 .filter(|p| !p.is_empty())
         }),
         file_roots: Vec::new(),
+        live,
     };
     tokio::spawn(meron_core::chat::xmpp::run(account, password, engine.db.clone(), connector, rx, emit_fn, options));
     Ok(())
 }
 
 /// Hands a message to its account's connection; with none, it failed.
-fn chat_dispatch(engine: &Arc<Engine>, message: &meron_core::chat::ChatMessage) {
+fn chat_dispatch(engine: &Arc<Engine>, message: &meron_core::chat::ChatMessage, mentions: Vec<String>) {
     let sent = chat_sessions().lock().unwrap().get(&message.account).is_some_and(|tx| {
         tx.send(meron_core::chat::xmpp::Command::Send {
             conversation: message.conversation.clone(),
@@ -9305,12 +9533,21 @@ fn chat_dispatch(engine: &Arc<Engine>, message: &meron_core::chat::ChatMessage) 
             body: message.body.clone(),
             group: message.kind == meron_core::chat::KIND_GROUP,
             file: message.file_url.clone(),
+            mentions,
         })
         .is_ok()
     });
     if !sent {
         let _ = meron_core::chat::set_state(&engine.db.lock().unwrap(), &message.account, &message.id, "failed");
     }
+}
+
+/// What each chat account's session knows about presence (ADR-0055): the
+/// person's own status as applied, contacts, requests and room occupants.
+fn chat_live() -> &'static std::sync::Mutex<std::collections::HashMap<String, meron_core::chat::presence::Shared>> {
+    static LIVE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, meron_core::chat::presence::Shared>>> =
+        std::sync::OnceLock::new();
+    LIVE.get_or_init(Default::default)
 }
 
 /// Each room's last known state (joining, joined, out, error), by account
@@ -9620,7 +9857,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             )?;
         }
         match perform_send_transaction(engine, p, &account, &to).await {
-            Ok(SendTransaction { raw, archived_by_server, delivery_receipt }) => {
+            Ok(SendTransaction { raw, archived_by_server, delivery_receipt, delivery_receipt_reason }) => {
                 {
                     let db = engine.db.lock().unwrap();
                     outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
@@ -9652,12 +9889,18 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                         "accepted"
                     }
                 };
-                Ok(json!({
+                let mut answer = json!({
                     "ok": true,
                     "outcome": outcome,
                     "attempt_id": attempt_id,
                     "delivery_receipt": delivery_receipt.as_str(),
-                }))
+                });
+                // Why a delivery receipt asked for on Graph was not requested
+                // (#210): "needsChanges", "bcc" or "protected".
+                if let Some(reason) = delivery_receipt_reason {
+                    answer["delivery_receipt_reason"] = json!(reason);
+                }
+                Ok(answer)
             }
             Err(err) if smtp::is_uncertain(&err) => {
                 let reason = format!("{err:#}");
@@ -9678,6 +9921,9 @@ struct SendTransaction {
     archived_by_server: bool,
     /// What became of a delivery receipt request (ADR-0048).
     delivery_receipt: smtp::DeliveryReceipt,
+    /// Why a delivery receipt the sender asked for was not requested, when
+    /// the route could have carried one (#210).
+    delivery_receipt_reason: Option<&'static str>,
 }
 
 /// Builds, protects and transmits one message. Everything up to the server's
@@ -9859,29 +10105,28 @@ async fn perform_send_transaction(
                 protection.as_ref(),
                 receipts.read,
             )?;
-            // A delivery receipt is asked of Exchange on the item it submits
-            // (`IsDeliveryReceiptRequested`, ADR-0058). Graph takes no such
-            // request on this path, and the MIME has no envelope to carry
-            // one (ADR-0048).
-            let ask_delivery = receipts.delivery && creds.is_ews();
-            engine
+            // A delivery receipt is a property of the message on Graph, set
+            // on a draft before it is sent, so it is asked for only where the
+            // account allows changes as well as sending (#210, ADR-0057).
+            // Exchange takes it on the item it submits, next to the MIME
+            // (`IsDeliveryReceiptRequested`, ADR-0058). Where it cannot be
+            // carried the message goes without one, and the sender is told.
+            // Nor, until a real tenant shows a draft keeps them, for a message
+            // with Bcc recipients or signed or encrypted: those go as before.
+            let asked = receipts.delivery;
+            let has_bcc = !bcc.trim().is_empty();
+            let protected = protection.is_some();
+            let (delivery_receipt, delivery_receipt_reason) = engine
                 .with_write_session(&account, |session| {
                     let raw = raw.clone();
-                    Box::pin(async move {
-                        if ask_delivery {
-                            session.send_mime_requesting_delivery(raw).await
-                        } else {
-                            session.send_mime(raw).await
-                        }
-                    })
+                    Box::pin(async move { session.send_mime_with_receipt(raw, asked, has_bcc, protected).await })
                 })
                 .await
                 .map_err(if creds.is_graph() { classify_graph_send_error } else { classify_ews_send_error })?;
             // The server files its own copy, so the caller's Sent step only
             // refreshes the local view — the upload is suppressed for
             // Exchange in `should_append_sent_copy`.
-            let delivery_receipt = submitted_delivery_receipt(receipts.delivery, ask_delivery);
-            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt });
+            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt, delivery_receipt_reason });
         }
         // What the sender asked for, with the keys it needs: built before
         // either branch, and applied by both, so no path sends in the clear
@@ -9905,19 +10150,12 @@ async fn perform_send_transaction(
             receipts,
         )
         .await?;
-        Ok(SendTransaction { raw: sent.raw, archived_by_server: false, delivery_receipt: sent.delivery_receipt })
-}
-
-/// What became of a delivery receipt on a submission made through the mail
-/// session (Exchange or Graph): `asked` by the sender, and `requested` of the
-/// server with the item. Asked and not requested is reported, never hidden
-/// (ADR-0048).
-fn submitted_delivery_receipt(asked: bool, requested: bool) -> smtp::DeliveryReceipt {
-    match (asked, requested) {
-        (false, _) => smtp::DeliveryReceipt::NotAsked,
-        (true, true) => smtp::DeliveryReceipt::Requested,
-        (true, false) => smtp::DeliveryReceipt::Unsupported,
-    }
+        Ok(SendTransaction {
+            raw: sent.raw,
+            archived_by_server: false,
+            delivery_receipt: sent.delivery_receipt,
+            delivery_receipt_reason: None,
+        })
 }
 
 /// An Exchange submission that failed without a verdict.
@@ -9950,11 +10188,18 @@ fn classify_ews_send_error(err: anyhow::Error) -> anyhow::Error {
 /// large is a refusal: nothing was accepted.
 fn classify_graph_send_error(err: anyhow::Error) -> anyhow::Error {
     use meron_core::graph::ErrorKind;
-    let kind = err
-        .chain()
-        .find_map(|cause| cause.downcast_ref::<meron_core::graph::Error>())
-        .map(|e| e.kind);
+    // A send that stopped before Microsoft was asked to send (#210): nothing
+    // left, whatever went wrong, so it is a refusal and never uncertain.
+    let not_sent = err.downcast_ref::<meron_core::graph::NotSent>().cloned();
+    let kind = match &not_sent {
+        Some(not_sent) => Some(not_sent.error.kind),
+        None => err.chain().find_map(|cause| cause.downcast_ref::<meron_core::graph::Error>()).map(|e| e.kind),
+    };
     match kind {
+        Some(ErrorKind::Uncertain | ErrorKind::Unavailable) if not_sent.is_some() => err,
+        Some(ErrorKind::ConsentRequired) if not_sent.is_some() => err.context(
+            "a delivery receipt needs this account to allow changes; allow them in the account settings, or send without one",
+        ),
         Some(ErrorKind::Uncertain | ErrorKind::Unavailable) => err.context(smtp::UncertainSend),
         Some(ErrorKind::TooLarge) => err.context(format!(
             "too large to send through Microsoft Graph (limit {} MB including attachments)",

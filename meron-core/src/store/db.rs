@@ -802,9 +802,14 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         }
         tx.pragma_update(None, "user_version", 63)?;
     }
+    if version < 64 {
+        // What delivery and read reports said about sent messages (ADR-0057).
+        tx.execute_batch(crate::receipts::report::SCHEMA)?;
+        tx.pragma_update(None, "user_version", 64)?;
+    }
     if version < 65 {
         // Exchange distribution lists and task lists, and folder renames for
-        // the interface (ADR-0058). Version 64 is #210's.
+        // the interface (ADR-0058).
         super::contact_groups::migrate_member_addresses(&tx)?;
         crate::task_sync::exchange::migrate(&tx)?;
         tx.execute_batch(crate::folder_move::RENAMES_SCHEMA)?;

@@ -448,13 +448,32 @@ impl Session {
         }
     }
 
-    /// Transmits a message and asks the server to report its delivery
-    /// (ADR-0048). Exchange takes the request on the item it submits
-    /// (ADR-0058); any other session refuses rather than send without it.
-    pub async fn send_mime_requesting_delivery(&mut self, raw: Vec<u8>) -> Result<()> {
+    /// Transmits a message whose sender may have asked for a delivery
+    /// receipt (#210, ADR-0057), answering what became of the request and,
+    /// when it went without one on Graph, why. Microsoft Graph carries it
+    /// where `graph::mail::delivery_receipt` says so; Exchange always, on
+    /// the item it submits (`IsDeliveryReceiptRequested`, ADR-0058); the
+    /// other sessions carry none and send as [`Self::send_mime`] does.
+    pub async fn send_mime_with_receipt(
+        &mut self,
+        raw: Vec<u8>,
+        asked: bool,
+        bcc: bool,
+        protected: bool,
+    ) -> Result<(crate::smtp::DeliveryReceipt, Option<&'static str>)> {
         match self {
-            Session::Ews(session) => session.send_mime(raw, true).await,
-            _ => Err(anyhow::anyhow!("this account cannot ask for a delivery receipt here")),
+            Session::Graph(session) => {
+                let (receipt, withheld) = session.send_mime_with_receipt(raw, asked, bcc, protected).await?;
+                Ok((receipt, withheld.map(crate::graph::mail::Withheld::as_str)))
+            }
+            Session::Ews(session) => {
+                session.send_mime(raw, asked).await?;
+                Ok((crate::receipts::delivery_receipt(asked, true), None))
+            }
+            _ => {
+                self.send_mime(raw).await?;
+                Ok((crate::receipts::delivery_receipt(asked, false), None))
+            }
         }
     }
 

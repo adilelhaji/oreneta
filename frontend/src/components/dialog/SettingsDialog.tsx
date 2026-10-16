@@ -113,6 +113,7 @@ import { LabelsSettingsSection } from './LabelsSettingsSection'
 import { AccountProxyCard, ProxySettingsSection } from './ProxySettingsCard'
 import { AccountSignatureCard, SignatureSettingsSection } from './SignatureSettingsCard'
 import { RepliesForwardsGroup } from './RepliesForwardsGroup'
+import { PrintGroup } from './PrintGroup'
 import { OofSettingsCard } from './OofSettingsCard'
 import { SharedMailboxesCard } from './SharedMailboxesCard'
 import { AccountProfileGroup } from './AccountProfileGroup'
@@ -1076,6 +1077,8 @@ function GeneralSection() {
       <div data-settings-section="signature" tabIndex={-1} aria-label={t('settings.sections.signature')}>
         <SignatureSettingsSection />
       </div>
+
+      <PrintGroup />
 
       <SettingsGroup title={t('shortcuts.title')}>
         <SettingRow

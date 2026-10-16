@@ -622,7 +622,9 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		"chat.markRead", "chat.send", "chat.retry", "context.person",
 		// Group chats and files in chat (ADR-0044).
 		"chat.rooms", "chat.join", "chat.leave", "chat.invitations", "chat.dismissInvitation",
-		"chat.sendFile", "chat.cancelUpload":
+		"chat.sendFile", "chat.cancelUpload",
+		// Presence, mentions and private messages in rooms (ADR-0055).
+		"chat.presence", "chat.setPresence", "chat.subscribe", "chat.answerSubscription", "chat.occupants":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

@@ -88,8 +88,8 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   ruta nueva, todo lo guardado con los nombres viejos la sigue, como tras
   un movimiento contestado, y la interfaz se entera; si sigue donde
   estaba, no se movió; en ambos casos el registro se borra.
-- La interfaz deja mover carpetas en cuentas de Exchange; Graph sigue
-  desactivado hasta #210.
+- La interfaz deja mover carpetas en cuentas de Exchange, con las mismas
+  reglas que IMAP; Graph las mueve por id desde ADR-0057 (#210).
 
 ### 2. Confirmación de entrega (SET-11)
 
@@ -104,12 +104,15 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   petición va en la solicitud. Que un servidor Exchange real la atienda
   junto al MIME no está comprobado todavía (N5); hasta entonces la
   documentación dice «se pide en la solicitud» y la interfaz no promete
-  más. Graph sigue respondiendo `"unsupported"` hasta #210: dicho, no
-  escondido.
+  más. El envío pasa por el mismo camino que Graph
+  (`send_mime_with_receipt` y `receipts::delivery_receipt`, ADR-0057):
+  Exchange siempre lleva la petición; Graph, donde ADR-0057 lo permite, y
+  si no responde `"unsupported"` con el motivo.
 - La confirmación de lectura sigue en la cabecera MIME
   (`Disposition-Notification-To`), como decía ADR-0048; no se duplica en
   `IsReadReceiptRequested`.
-- Interpretar los avisos de entrega que llegan es de #210.
+- Los avisos de entrega y de lectura que llegan se interpretan para todas
+  las cuentas, Exchange incluido, desde ADR-0057 (#210).
 
 ### 3. Listas de distribución como grupos de contactos (SET-19)
 
@@ -282,8 +285,8 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
 - Añadir a una lista de Exchange a alguien de otra libreta (como dirección
   suelta).
 - Las tareas y listas de Exchange en el móvil.
-- Microsoft Graph: mover carpetas y confirmación de entrega (#210); To Do y
-  contactos de Graph.
+- Microsoft Graph: To Do y contactos de Graph (mover carpetas y
+  confirmación de entrega llegaron con ADR-0057, #210).
 
 ## Pruebas
 

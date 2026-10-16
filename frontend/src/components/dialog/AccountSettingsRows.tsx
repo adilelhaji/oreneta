@@ -113,11 +113,18 @@ export function SegmentedRow<T extends string>({
       title={title}
       hint={hint}
       control={
-        <div className="flex items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5">
+        // A named group of pressed/unpressed buttons, so a screen reader
+        // hears which choice is current and what it is a choice of.
+        <div
+          role="group"
+          aria-label={title}
+          className="flex items-center gap-0.5 rounded-control-sm bg-active/70 p-0.5"
+        >
           {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
+              aria-pressed={value === opt.value}
               onClick={() => onChange(opt.value)}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                 value === opt.value ? 'bg-chats text-accent shadow-sm' : 'text-secondary hover:text-primary'

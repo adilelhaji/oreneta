@@ -17,6 +17,7 @@ pub mod itip;
 pub mod meeting;
 pub mod overlap;
 pub mod recurrence;
+pub mod reminders;
 pub mod route;
 pub mod subscription;
 
@@ -731,48 +732,6 @@ pub fn forget_series(conn: &Connection, account: &str, series_id: &str) -> Resul
     )?)
 }
 
-/// Reminders that have come due and have not been raised yet.
-///
-/// Only for events still ahead: a reminder for something already started has
-/// missed its moment, and raising it late would be worse than silence. The
-/// caller marks each as raised, so one reminder is given once even though the
-/// window it lives in is resynced repeatedly.
-pub fn due_reminders(conn: &Connection, account: &str, now: i64) -> Result<Vec<Event>> {
-    let mut stmt = conn.prepare(
-        "SELECT e.calendar_id, e.event_id, e.subject, e.start_utc, e.end_utc,
-                e.all_day, e.location, e.reminder_minutes
-         FROM calendar_events e
-         JOIN calendars c
-           ON c.account = e.account AND c.provider_id = e.calendar_id
-         WHERE e.account = ?1 AND c.enabled = 1
-           AND e.reminder_minutes IS NOT NULL
-           AND e.is_cancelled = 0
-           AND e.start_utc > ?2
-           AND e.start_utc - (e.reminder_minutes * 60) <= ?2
-           AND NOT EXISTS (
-                 SELECT 1 FROM calendar_reminders_fired f
-                 WHERE f.account = e.account
-                   AND f.event_id IN (e.event_id || '@' || e.start_utc, e.event_id))
-         ORDER BY e.start_utc",
-    )?;
-    let events = stmt
-        .query_map(params![account, now], |row| {
-            Ok(Event {
-                calendar_id: row.get(0)?,
-                id: row.get(1)?,
-                subject: row.get(2)?,
-                start: row.get(3)?,
-                end: row.get(4)?,
-                all_day: row.get::<_, i64>(5)? != 0,
-                location: row.get(6)?,
-                reminder_minutes: row.get(7)?,
-                ..Default::default()
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(events)
-}
-
 /// Records that a reminder has been raised, so it is not raised again.
 ///
 /// Recorded for the event *at that start*: an event moved to another time is
@@ -958,6 +917,12 @@ mod tests {
     const HTML_NOTES: &str = "<table bgcolor=\"#EFEFEF\" border=\"0\" width=\"100%\"><tbody><tr>\
 <td align=\"left\" class=\"ph52\" style=\"font-size:16px;color:#494950\">Solicitud:</td></tr>\
 <tr><td style=\"padding:0 40px 20px;\">Revisió del vehicle</td></tr></tbody></table>";
+
+    /// The events whose reminders a first look at `now` gives
+    /// (`reminders::due`, with no previous look to have missed any since).
+    fn due_reminders(conn: &Connection, account: &str, now: i64) -> Result<Vec<Event>> {
+        Ok(reminders::due(conn, account, now, &chrono::Utc, None)?.into_iter().map(|due| due.event).collect())
+    }
 
     #[test]
     fn a_reminder_comes_due_once_and_only_while_the_event_is_still_ahead() {

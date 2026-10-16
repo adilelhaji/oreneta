@@ -7,6 +7,7 @@ export type SettingsSection =
   | 'reading'
   | 'signature'
   | 'repliesForwards'
+  | 'print'
   | 'calendarGeneral'
   | 'contactsGeneral'
   | 'notifications'
@@ -59,6 +60,15 @@ export function settingsDestinations(
       keywords: `reply replies forward forwarding quote quoting header re fwd attachment eml ${t(
         'settingsSearch.aliases.repliesForwards',
         { defaultValue: '' },
+      )}`,
+    },
+    {
+      id: 'settings.section.print',
+      section: 'print' as const,
+      accountId: '',
+      label: t('settings.sections.print'),
+      keywords: `print printing printer paper page header headers bcc attachments conversation order ${t(
+        'settingsSearch.aliases.print',
       )}`,
     },
     {

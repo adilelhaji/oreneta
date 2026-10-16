@@ -110,9 +110,8 @@
 
 ## Pendiente (#87 sigue abierta)
 
-- Mover carpetas en Exchange (EWS `MoveFolder`) y en Microsoft Graph
-  cuando esos adaptadores gestionen carpetas. Exchange ya mueve carpetas
-  (ADR-0058).
+- Mover carpetas en Exchange y en Microsoft Graph: hecho. Exchange con EWS
+  `MoveFolder` (ADR-0058, #211); Microsoft Graph en ADR-0057 (#210).
 - Soltar mensajes sobre una carpeta o una favorita de la navegación: hoy
   no existe arrastrar mensajes a la navegación (solo entre columnas del
   tablero y fuentes RSS); cuando exista, una favorita debe aceptarlo igual

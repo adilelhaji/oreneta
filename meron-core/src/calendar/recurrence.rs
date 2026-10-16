@@ -147,8 +147,8 @@ pub fn next_instant<Tz: TimeZone>(rule: &Recurrence, due: i64, zone: &Tz) -> Opt
     Some(resolve(zone, date.and_time(local.time()))?)
 }
 
-/// A wall-clock time in `zone` as an instant; a time the clock change skips
-/// becomes the first one that exists.
+/// The instant a wall-clock time names in `zone`: the first time round when
+/// clocks go back, the first time that exists after it when they skip it.
 pub(crate) fn resolve<Tz: TimeZone>(zone: &Tz, naive: NaiveDateTime) -> Option<i64> {
     if let Some(at) = zone.from_local_datetime(&naive).earliest() {
         return Some(at.timestamp());

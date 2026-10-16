@@ -46,7 +46,7 @@ export function ReceiptsGroup() {
         title={t('settings.receipts.requestDelivery', { defaultValue: 'Request a delivery receipt on new messages' })}
         hint={t('settings.receipts.requestDeliveryHint', {
           defaultValue:
-            'Asked of your outgoing server, only when it offers delivery notices; you are told when it does not. Exchange accounts ask it of Exchange with each message. Not available for Microsoft 365 accounts.',
+            'Asked of your outgoing server, only when it offers delivery notices; you are told when it does not. On Microsoft 365, only for accounts that allow changes, and not yet for messages with Bcc recipients or that are signed or encrypted. Exchange (EWS) accounts ask it in the request with each message.',
         })}
         checked={requestDelivery}
         onChange={() => settings$.requestDeliveryReceipt.set(!requestDelivery)}

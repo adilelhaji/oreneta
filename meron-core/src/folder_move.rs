@@ -5,9 +5,10 @@
 //! every subfolder follows. IMAP does that with one RENAME, which takes the
 //! inferiors along (RFC 3501 6.3.5); the local store renames its own rows;
 //! Exchange Web Services moves the folder by id with `MoveFolder`, its names
-//! being paths from the top of the mailbox (ADR-0058). Microsoft Graph does
-//! not manage folders in this core yet, so its session refuses it and the UI
-//! shows the move disabled.
+//! being paths from the top of the mailbox (ADR-0058). Microsoft Graph moves
+//! the folder by its id (`POST /mailFolders/{id}/move`, #210, ADR-0057): its
+//! folders are not paths, so the checks there run on the tree Graph
+//! reported.
 //!
 //! The checks run here, on the cached folder list, whatever the caller says:
 //! a special-use folder (or one with a special-use folder inside it) never
@@ -347,7 +348,7 @@ pub async fn move_folder(engine: &Arc<Engine>, params: &Value) -> Result<Value> 
 
     let creds = engine.ensure_valid_creds(&account).await?;
     if creds.is_graph() {
-        anyhow::bail!("Moving folders is not supported on this account yet");
+        return move_graph_folder(engine, &account, &source, parent.as_deref()).await;
     }
     let fallback = creds.is_local_store().then_some("/");
     let plan = plan_folder_move(&engine.db.lock().unwrap(), &account, &source, parent.as_deref(), fallback)
@@ -374,6 +375,28 @@ pub async fn move_folder(engine: &Arc<Engine>, params: &Value) -> Result<Value> 
         "folder": plan.target,
         "renames": plan.renames.iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>(),
         "folders": serde_json::to_value(folders)?,
+    }))
+}
+
+/// The Graph side of `folders.move` (#210): only for an account whose grant
+/// was recorded with changes, one request, and the folder list as the server
+/// has it afterwards, with each folder's parent.
+async fn move_graph_folder(engine: &Arc<Engine>, account: &str, source: &str, parent: Option<&str>) -> Result<Value> {
+    if !crate::graph::mail::writes_enabled(&engine.db.lock().unwrap(), account) {
+        return crate::graph::mail::unsupported();
+    }
+    let moved = engine.graph_mail.session(account)?.move_folder(source, parent).await?;
+    let folders = {
+        let db = engine.db.lock().unwrap();
+        let mut folders = serde_json::to_value(store::get_folders(&db, account)?)?;
+        crate::graph::mail::decorate_folders(&db, account, &mut folders)?;
+        folders
+    };
+    Ok(json!({
+        "ok": true,
+        "folder": moved.folder,
+        "renames": moved.renames.iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>(),
+        "folders": folders,
     }))
 }
 

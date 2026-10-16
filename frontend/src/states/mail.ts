@@ -478,10 +478,12 @@ export async function deleteFolder(accountId: string, folderId: string, name?: s
 
 // Move a folder under another folder of the same account, or back to the top
 // level with a null parent (ADR-0050). Refused here with the reason when the
-// rules forbid it (special-use folders, into its own subtree, Graph and
-// Exchange accounts); confirmed with both names; the core re-checks, renames
-// on the server and reports every path that changed, which favorites, colors,
-// board columns and the open view then follow.
+// rules forbid it (special-use folders, into its own subtree,
+// Graph accounts without changes); confirmed with both names; the
+// core re-checks, moves it on the server (an IMAP RENAME, Exchange's
+// MoveFolder, ADR-0058, or Graph's folder
+// move, ADR-0057) and reports every name that changed, which favorites,
+// colors, board columns and the open view then follow.
 export async function moveFolder(accountId: string, folderId: string, parentId: string | null): Promise<boolean> {
   if (!accountId || !folderId || accountId === 'unified') return false
   const folders = mail$.foldersByAccount[accountId].peek() ?? []
@@ -493,7 +495,9 @@ export async function moveFolder(accountId: string, folderId: string, parentId: 
   const label = source?.name || folderId
   if (block) {
     const reason = FOLDER_MOVE_BLOCK_TEXT[block]
-    showToast(t(reason.key, { defaultValue: reason.text, folder: label }), 'error')
+    // Already there is news, not a failure: after a move whose outcome was
+    // unknown, the refreshed tree may show it done (ADR-0057).
+    showToast(t(reason.key, { defaultValue: reason.text, folder: label }), block === 'sameParent' ? 'info' : 'error')
     return false
   }
   const destination = target ? target.name : t('folders.move.topLevel', { defaultValue: 'Top level' })
@@ -529,6 +533,16 @@ export async function moveFolder(accountId: string, folderId: string, parentId: 
     showToast(t('folders.move.done', { folder: label, destination, defaultValue: 'Moved {folder} to {destination}' }))
     return true
   } catch (error) {
+    // Refused, or of unknown outcome: either way the tree is read again, so
+    // it shows where the folder is now rather than where it was.
+    void invoke<{ folders?: Folder[] }>('mail.folderList', { account_id: accountId, refresh: false }).then(
+      (res) => {
+        if (!res?.folders?.length) return
+        mail$.foldersByAccount[accountId].set(res.folders)
+        if (ui$.selectedAccount.peek() === accountId) mail$.folders.set(res.folders)
+      },
+      () => undefined,
+    )
     showToast(
       error instanceof Error
         ? error.message

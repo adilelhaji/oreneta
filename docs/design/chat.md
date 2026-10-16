@@ -1,6 +1,7 @@
 # Chat (#110, #111)
 
-Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
+Registro de la implementación de ADR-0036, ADR-0044 (grupos y archivos) y
+ADR-0055 (presencia, menciones, avisos y privados en grupos, #208).
 
 ## Piezas
 
@@ -27,13 +28,41 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
   - eventos `chat.room`, `chat.invitation`, `chat.progress` y
     `chat.uploaded`; la contraseña de una invitación se queda en el núcleo
     (llavero) y no llega a la vista.
+- **Presencia, menciones, avisos y privados (ADR-0055, sin esquema
+  nuevo):**
+  - `chat/presence.rs`: el estado propio en la fila de ajustes
+    `chat_presence:<cuenta>`; `plan` decide anunciar, ocultar (XEP-0186) o
+    no anunciar nada; los contactos (mejor dispositivo), las peticiones y
+    quién está en cada grupo, en `Live`, compartido con la app y solo en
+    memoria; `should_notify` y el evento de aviso;
+  - `chat/mentions.rs`: el apodo como palabra entera o una referencia
+    XEP-0372 a nosotros; las referencias de los apodos elegidos al enviar;
+  - `chat/xmpp.rs`: disco#info del servidor en cada conexión, el estado al
+    conectar y al cambiarlo (a los grupos, solo la disponibilidad), las
+    peticiones, quién entra y sale de cada grupo, el apodo que el grupo nos
+    da (210), los privados (`grupo/apodo`, tipo `private`) y el aviso de lo
+    llegado en directo;
+  - RPC `chat.presence/setPresence/subscribe/answerSubscription/occupants`;
+    `chat.send` acepta `mentions`; eventos `chat.own`, `chat.presence`,
+    `chat.subscription`, `chat.occupants` y `chat.notify`;
+  - en Go, `chat.notify` sale como notificación del sistema salvo con «No
+    molestar» u horas tranquilas (como el correo); al pulsarla
+    (`chat:<conversación>`) se abre en la vista Chat.
 - **Aplicación:** la vista «Chat» en la barra lateral (configuración,
   conversaciones con no leídos, historia con el estado de cada envío y
   «Enviar de nuevo»). Con ADR-0044: «Unirse a un grupo», los grupos
   encima de las conversaciones directas, el apodo de quien habla, el
   estado de la sala, «Salir del grupo» con confirmación, las invitaciones
   como propuesta, el clip para enviar un archivo con su progreso y
-  «Cancelar», y los archivos recibidos con su nombre y «Guardar…».
+  «Cancelar», y los archivos recibidos con su nombre y «Guardar…». Con
+  ADR-0055: «Tu estado» y su texto (Invisible desactivado si el servidor no
+  puede), las peticiones con «Permitir» y «Rechazar», el estado de cada
+  contacto en la lista y en la cabecera o «Pedir ver su estado», en un grupo
+  «Personas en el grupo» con «Escribir en privado», el apodo de quien habla
+  para escribirle en privado, las sugerencias al escribir `@` (lista
+  accesible: flechas, Intro o Tab, Escape) y «Te menciona» resaltado; los
+  privados como «apodo (grupo)» (`lib/chatMentions.ts` decide la
+  sugerencia).
 
 ## Pruebas
 
@@ -73,6 +102,38 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
     nombre decodificado; un nombre no sale de su carpeta;
   - solo HTTPS al subir y al guardar (http, ftp, file, credenciales en el
     enlace, rechazados), sin escribir nada.
+- **Presencia, menciones, avisos y privados (ADR-0055):**
+  - el estado propio por cuenta: texto limpio y de 200 caracteres como
+    mucho, un campo dañado vuelve solo a su valor, se olvida al quitar la
+    cuenta;
+  - el guardado se informa antes de conectar y la sesión empieza desde él;
+  - invisible solo si el servidor lo anuncia; sin él, no se anuncia nada y
+    nunca se pasa solo a visible; pasar de anunciado a no anunciado vuelve a
+    entrar en los grupos;
+  - a los contactos, disponibilidad y texto; a los grupos, sin texto;
+  - el estado de un contacto es el de su mejor dispositivo y, desconectado,
+    sigue conocido; una presencia de grupo no es de un contacto; contactos,
+    dispositivos y peticiones tienen límite; «Permitir» solo a quien lo
+    pidió; una sesión nueva empieza de cero;
+  - quién está en un grupo (llega, cambia de apodo, se va) y el apodo que
+    nos da el grupo, guardado tal cual;
+  - una mención: palabra entera, sin distinguir mayúsculas, en cualquier
+    alfabeto, no dentro de otra palabra (un apodo corto, solo tras `@`), o
+    por referencia; las referencias que salen, una por apodo que sigue en el
+    texto, contadas en caracteres; al enviar de nuevo, las de los `@apodo`
+    escritos;
+  - al leer un grupo solo se marca lo que nombra a la persona;
+  - avisa solo lo nuevo, de otro y en directo: no lo repetido, lo retrasado,
+    lo del archivo, lo propio, un grupo sin mención ni nada con «Ocupado»;
+  - un privado es su propia conversación (lista, no leídos, eco desde otro
+    dispositivo, error devuelto, mayúsculas del apodo), no pide recibo y su
+    id de archivo cuenta para ponerse al día; salir de un grupo borra lo del
+    grupo y deja sus privados para leerlos.
+- **Puente Go:** la notificación del chat lleva la conversación como
+  destino y calla con «No molestar» u horas tranquilas aunque los
+  recordatorios pasen; un evento sin cuenta o sin conversación no avisa; el
+  cuerpo de un mensaje de chat es texto para el servicio que lee marcas, y
+  los textos y el destino van protegidos en la plantilla XML de Windows.
 - **Llavero:** las contraseñas de salas e invitaciones están en
   `secret_names` y el contador de escrituras de secretos sube a 13.
 - **Prosody real** (`tests/prosody-xmpp.sh`, también en CI):
@@ -86,7 +147,18 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
   - un archivo de 300 KB por `mod_http_file_share` sobre HTTPS (autoridad
     de pruebas creada por el script, `ORENETA_PROSODY_CA`): progreso,
     enlace recibido con su nombre y guardado idéntico; uno de más de 1 MiB
-    se rechaza antes de subir; uno cancelado no sale.
+    se rechaza antes de subir; uno cancelado no sale;
+  - (ADR-0055, usuarios `eva` y `joan` solo para esto) Eva pide ver el
+    estado de Joan y nada llega hasta que Joan lo permite; luego ve
+    «Ausente — Comiendo» y «Ocupado»; Joan no ve el de Eva; los dos en un
+    grupo, Joan sigue en él mientras no se anuncia y después; ocupado, un
+    mensaje se guarda sin aviso y, disponible, avisa; Prosody no ofrece
+    invisible: Joan «invisible» queda sin anunciar (Eva lo ve desconectado),
+    lo escrito mientras llega una vez al volver y sin aviso;
+  - en un grupo, cada uno sabe quién está; la mención llega marcada y avisa,
+    lo demás no; un privado a `grupo/Ana` llega a Ana como «Pau» aparte del
+    grupo y con aviso, la respuesta llega a Pau y queda aceptada; al salir
+    el privado se queda.
 - **Aplicación:**
   - lista con no leídos, estados visibles;
   - «Enviar de nuevo» solo al pulsar, con el mismo id;
@@ -100,7 +172,15 @@ Registro de la implementación de ADR-0036 y ADR-0044 (grupos y archivos).
   - enviar un archivo con progreso, cancelar, y el aviso de demasiado
     grande;
   - un archivo recibido con su nombre y «Guardar…», sin descargarse solo;
-    uno por http no se ofrece para guardar.
+    uno por http no se ofrece para guardar;
+  - (ADR-0055) el estado y su texto; Invisible desactivado o con su
+    explicación; el aviso de «no se anuncia nada»; pedir ver un estado,
+    permitir y rechazar, solo al pulsar; el estado del contacto, y nada sin
+    conexión; en un grupo, las sugerencias de `@` (sin la persona, flechas,
+    Intro, Escape, no tras una dirección), las menciones enviadas, «Te
+    menciona» solo donde toca y quién está; un privado listado y abierto,
+    con su apodo en mayúsculas, y abierto desde un nombre del grupo; pulsar
+    una notificación abre su conversación en Chat.
 - **Encontrado al probar:** la auditoría axe vio un elemento que no era
   `li` dentro de la lista de mensajes; corregido. Con ADR-0044, el núcleo
   aceptaba copias de carbons y resultados de archivo de cualquier

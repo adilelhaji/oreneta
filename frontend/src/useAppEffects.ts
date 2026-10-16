@@ -5,7 +5,7 @@ import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
-import { onChatEvent } from './states/messaging'
+import { onChatEvent, openChatFromNotification } from './states/messaging'
 import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
@@ -98,6 +98,8 @@ export function useAppEffects() {
       newMessageCount: translationTemplate('notify.newMessageCount'),
       noSubject: t('notify.noSubject'),
       unknownSender: t('notify.unknownSender'),
+      // Go puts the time (and the date, when not today) in place of {time}.
+      reminderStarted: translationTemplate('notify.reminderStarted'),
     }).catch(() => {})
     // Reflect the resolved locale to <html lang>/dir, driving :lang() CJK glyph
     // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
@@ -306,6 +308,11 @@ export function useAppEffects() {
       'notification-clicked',
       (detail: { account?: string; threadId?: string; threadKey?: string }) => {
         const threadId = detail?.threadId || detail?.threadKey
+        // A chat message (ADR-0055): its conversation, in the Chat view.
+        if (threadId?.startsWith('chat:')) {
+          void openChatFromNotification(detail.account ?? '', threadId.slice('chat:'.length))
+          return
+        }
         if (threadId) {
           void openThreadTabById(threadId)
         }
@@ -455,7 +462,18 @@ export function useAppEffects() {
     const offChatStatus = eventsOn('chat.status', (detail: { account?: string }) => onChatEvent('chat.status', detail))
     // Group chats and files in chat (ADR-0044): a room's state, an
     // invitation, and an upload's progress and end.
-    const offChatOthers = ['chat.room', 'chat.invitation', 'chat.progress', 'chat.uploaded'].map((name) =>
+    // Presence, mentions and private messages (ADR-0055): the person's own
+    // status as applied, contacts' statuses, requests, who is in a room.
+    const offChatOthers = [
+      'chat.room',
+      'chat.invitation',
+      'chat.progress',
+      'chat.uploaded',
+      'chat.own',
+      'chat.presence',
+      'chat.subscription',
+      'chat.occupants',
+    ].map((name) =>
       eventsOn(name, (detail: { account?: string }) => onChatEvent(name, detail)),
     )
 
