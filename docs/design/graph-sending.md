@@ -1,116 +1,116 @@
-# Envío por Microsoft Graph (#143)
+# Enviament per Microsoft Graph (#143)
 
-Bajo [ADR-0004](../adr/0004-microsoft-graph.md), que autoriza `Mail.Send` como
-permiso aparte, y sobre el contrato durable de envío de #29
-([outgoing-mail-recovery.md](outgoing-mail-recovery.md)). No hay persistencia
-nueva: cada envío Graph es un intento en `outgoing_attempts`, con los mismos
-estados y la misma recuperación que SMTP y EWS.
+Sota l'[ADR-0004](../adr/0004-microsoft-graph.md), que autoritza `Mail.Send` com
+a permís a part, i sobre el contracte persistent d'enviament de #29
+([outgoing-mail-recovery.md](outgoing-mail-recovery.md)). No hi ha persistència
+nova: cada enviament de Graph és un intent a `outgoing_attempts`, amb els
+mateixos estats i la mateixa recuperació que SMTP i EWS.
 
-## Permiso
+## Permís
 
-- **Petición aparte.** «Permitir el envío» en Ajustes de la cuenta pide
-  `Mail.Send` para esa cuenta. Si la cuenta ya tenía `Mail.ReadWrite`, se pide
-  de nuevo, para no perderlo.
-- **Lo concedido manda.** El marcador no secreto guarda
-  `{"writes": bool, "send": bool}` según lo que devolvió Microsoft.
-- **Renovación.** Pide el mismo conjunto que se tenía. Si se retiró el
-  consentimiento, cae una vez a solo lectura.
-- **Remitente.** Solo la cuenta con sesión iniciada. Buzones compartidos,
-  «enviar como» y delegación quedan en #48: el núcleo rechaza cualquier
-  remitente que no sea la dirección de la cuenta o un alias guardado, como
-  hasta ahora.
+- **Sol·licitud a part.** «Permet l'enviament» a la configuració del compte
+  demana `Mail.Send` per a aquell compte. Si el compte ja tenia
+  `Mail.ReadWrite`, es torna a demanar, per no perdre'l.
+- **Mana el que s'ha concedit.** El marcador no secret desa
+  `{"writes": bool, "send": bool}` segons el que ha retornat Microsoft.
+- **Renovació.** Demana el mateix conjunt que es tenia. Si s'ha retirat el
+  consentiment, passa una vegada a només lectura.
+- **Remitent.** Només el compte amb la sessió iniciada. Les bústies
+  compartides, «envia com a» i la delegació queden a #48: el nucli rebutja
+  qualsevol remitent que no sigui l'adreça del compte o un àlies desat, com
+  fins ara.
 
-## Envío
+## Enviament
 
-- **Mismo MIME.** Se construye con `smtp::build_submission`, el mismo que usa
-  Exchange:
-  - texto y HTML, adjuntos e imágenes en línea por `cid:`;
-  - `Bcc` en las cabeceras, que el servidor quita antes de entregar;
-  - firma o cifrado aplicados igual que en SMTP. Si no se pueden aplicar, no se
-    envía.
-- **Petición.** `POST /me/sendMail` con el MIME en base64
-  (`Content-Type: text/plain`). Microsoft guarda la copia en Elementos
-  enviados; la siguiente sincronización la trae.
-- **Confirmación de entrega** ([ADR-0057](../adr/0057-graph-folder-moves-and-receipt-reports.md)):
-  - `sendMail` con MIME no puede llevarla: es la propiedad
-    `isDeliveryReceiptRequested` del mensaje. Cuando se pide y la cuenta
-    tiene cambios (`Mail.ReadWrite`) además de envío, el mismo MIME se
-    convierte en borrador (`POST /me/messages`), se marca (`PATCH`) y se
-    envía (`POST /me/messages/{id}/send`, 202);
-  - solo para un mensaje **sin Cco y sin firma ni cifrado**: hasta que un
-    inquilino real muestre que el borrador hecho desde MIME conserva los Cco
-    y la protección, perderlos sería silencioso;
-  - sin pedirla, se envía como siempre por `sendMail` (`"none"`). Pedida
-    pero sin cambios, con Cco o protegido, también por `sendMail`, con
-    `delivery_receipt: "unsupported"` y `delivery_receipt_reason`
+- **El mateix MIME.** Es construeix amb `smtp::build_submission`, el mateix que
+  fa servir Exchange:
+  - text i HTML, adjunts i imatges en línia per `cid:`;
+  - `Bcc` a les capçaleres, que el servidor treu abans de lliurar;
+  - signatura o xifratge aplicats igual que a SMTP. Si no es poden aplicar, no
+    s'envia.
+- **Sol·licitud.** `POST /me/sendMail` amb el MIME en base64
+  (`Content-Type: text/plain`). Microsoft desa la còpia a Elements enviats; la
+  sincronització següent la porta.
+- **Confirmació de lliurament** ([ADR-0057](../adr/0057-graph-folder-moves-and-receipt-reports.md)):
+  - `sendMail` amb MIME no la pot portar: és la propietat
+    `isDeliveryReceiptRequested` del missatge. Quan es demana i el compte té
+    canvis (`Mail.ReadWrite`) a més d'enviament, el mateix MIME es converteix
+    en esborrany (`POST /me/messages`), es marca (`PATCH`) i s'envia
+    (`POST /me/messages/{id}/send`, 202);
+  - només per a un missatge **sense Cco i sense signatura ni xifratge**: fins
+    que un inquilí real no demostri que l'esborrany fet a partir del MIME
+    conserva els Cco i la protecció, perdre'ls seria silenciós;
+  - sense demanar-la, s'envia com sempre per `sendMail` (`"none"`). Demanada
+    però sense canvis, amb Cco o protegit, també per `sendMail`, amb
+    `delivery_receipt: "unsupported"` i `delivery_receipt_reason`
     (`needsChanges`, `bcc`, `protected`), que el redactor explica;
-  - un fallo al crear o marcar el borrador es «no enviado»: se borra el
-    borrador y el intento queda rechazado, nunca incierto; si pudo quedar
-    una copia en Borradores (sin respuesta, 5xx o respuesta ilegible al
-    crearlo, o no se pudo borrar), se dice;
-  - el envío del borrador sigue la tabla de abajo. Un incierto dice además
-    que puede quedar una copia en Borradores; un rechazo borra el borrador;
-  - mientras dura el envío, el borrador puede verse en Borradores desde
-    otros clientes. Si la aplicación se cierra entre crearlo y enviarlo,
-    se queda allí y el intento sigue abierto en `outgoing_attempts` (#29),
-    para que la persona lo resuelva.
-- **Límite.** El cuerpo de la petición admite hasta 4 MB. Un mensaje más
-  grande se rechaza antes de enviar, con «demasiado grande para enviarlo por
-  Microsoft Graph». Es un rechazo definitivo y no se ha enviado nada. Subir
-  por sesiones de carga necesitaría borradores en el servidor y queda fuera.
-- **Borradores en el servidor.** Las cuentas Graph no guardan borradores en
-  el servidor en esta entrega. El compositor no lo intenta y el borrador se
-  conserva en el almacén local de #170.
-- **Respuesta rápida.** En IMAP, el texto de una respuesta rápida vuelve al
-  regresar al hilo gracias a su borrador en el servidor. En Graph no hay ese
-  borrador, así que se guarda en memoria por hilo al salir y se repone al
-  volver; sin eso se perdería al cambiar de conversación. Sobrevive mientras
-  la aplicación está abierta, no a un reinicio.
+  - un error en crear o marcar l'esborrany és «no enviat»: se suprimeix
+    l'esborrany i l'intent queda rebutjat, mai incert; si podia haver quedat
+    una còpia a Esborranys (sense resposta, 5xx o resposta il·legible en
+    crear-lo, o no s'ha pogut suprimir), s'indica;
+  - l'enviament de l'esborrany segueix la taula de sota. Un incert indica a més
+    que pot quedar una còpia a Esborranys; un rebuig suprimeix l'esborrany;
+  - mentre dura l'enviament, l'esborrany es pot veure a Esborranys des d'altres
+    clients. Si l'aplicació es tanca entre crear-lo i enviar-lo, s'hi queda i
+    l'intent continua obert a `outgoing_attempts` (#29), perquè la persona el
+    resolgui.
+- **Límit.** El cos de la sol·licitud admet fins a 4 MB. Un missatge més gran es
+  rebutja abans d'enviar-lo, amb «massa gran per enviar-lo per Microsoft
+  Graph». És un rebuig definitiu i no s'ha enviat res. Pujar-lo per sessions de
+  càrrega necessitaria esborranys al servidor i queda fora d'abast.
+- **Esborranys al servidor.** Els comptes de Graph no desen esborranys al
+  servidor en aquest lliurament. El redactor no ho intenta i l'esborrany es
+  conserva al magatzem local de #170.
+- **Resposta ràpida.** A IMAP, el text d'una resposta ràpida torna quan es
+  torna al fil gràcies al seu esborrany al servidor. A Graph no hi ha aquest
+  esborrany, de manera que es desa en memòria per fil en sortir i es restitueix
+  en tornar; sense això es perdria en canviar de conversa. Sobreviu mentre
+  l'aplicació és oberta, no a un reinici.
 
-## Resultados
+## Resultats
 
-Cada estado se distingue como en #29:
+Cada estat es distingeix com a #29:
 
-| Respuesta | Estado | Reintento |
+| Resposta | Estat | Reintent |
 |---|---|---|
-| 202 | `accepted` (aceptado para entrega; no es confirmación de entrega) | — |
-| 400, 401, 403, 404, 413, 429 | `rejected` con el motivo (la petición no se aceptó) | Solo a propósito |
-| Demasiado grande antes de enviar | `rejected` | Solo a propósito, tras reducirlo |
-| Conexión perdida tras enviar, tiempo agotado, 5xx | `uncertain` | Nunca automático |
-| Otro 2xx o respuesta ilegible tras enviar (#210) | `uncertain` | Nunca automático |
+| 202 | `accepted` (acceptat per al lliurament; no és confirmació de lliurament) | — |
+| 400, 401, 403, 404, 413, 429 | `rejected` amb el motiu (la sol·licitud no s'ha acceptat) | Només expressament |
+| Massa gran abans d'enviar | `rejected` | Només expressament, després de reduir-lo |
+| Connexió perduda després d'enviar, temps esgotat, 5xx | `uncertain` | Mai automàtic |
+| Un altre 2xx o resposta il·legible després d'enviar (#210) | `uncertain` | Mai automàtic |
 
-- **Incierto.** Un 5xx o un 504 pueden llegar después de que Microsoft
-  aceptara el envío, así que no se toman como rechazo.
-  - El intento incierto no se reintenta al arrancar ni en ninguna otra parte.
-  - La interfaz ofrece «Enviar de nuevo» o «Marcar como resuelto».
-  - Reenviar algo ya intentado exige `resend`, como en SMTP.
-- **Doble activación.** Pulsar enviar dos veces sobre el mismo `Message-ID`
-  encuentra el intento anterior y se detiene.
-- **Cancelación.** El «deshacer envío» ocurre antes de llamar al núcleo, así
-  que nunca llega a Graph.
-- **Envío programado.** Las cuentas Graph no lo tienen todavía.
+- **Incert.** Un 5xx o un 504 poden arribar després que Microsoft hagi acceptat
+  l'enviament, de manera que no es prenen com a rebuig.
+  - L'intent incert no es reintenta en arrencar ni enlloc més.
+  - La interfície ofereix «Torna a enviar» o «Marca com a resolt».
+  - Tornar a enviar una cosa ja intentada exigeix `resend`, com a SMTP.
+- **Doble activació.** Prémer enviar dues vegades sobre el mateix `Message-ID`
+  troba l'intent anterior i s'atura.
+- **Cancel·lació.** El «desfés l'enviament» passa abans de cridar el nucli, de
+  manera que no arriba mai a Graph.
+- **Enviament programat.** Els comptes de Graph encara no en tenen.
 
-## Pruebas
+## Proves
 
-- **Transporte** (servidor de bucle local):
-  - ruta, cabeceras, `text/plain` y cuerpo en base64 que decodifica al MIME;
-  - 202 aceptado;
-  - 4xx rechazado con categoría, 429 con su espera y 5xx;
-  - conexión perdida como incierta, enviada una sola vez;
-  - tamaño excedido rechazado sin enviar nada;
-  - una concesión sin `Mail.Send` no envía nada;
-  - confirmación de entrega: borrador desde el MIME, `PATCH` con
-    `isDeliveryReceiptRequested` y envío sin cuerpo; sin `Mail.ReadWrite` no
-    se crea el borrador (#210).
-- **Autorización:** flujo de envío con el conjunto pedido, nivel concedido en
-  el marcador y renovación que conserva `Mail.Send`.
-- **Núcleo:** el guardián deja pasar `send` solo con el permiso; la
-  clasificación de fallos de Graph en incierto o rechazado; la confirmación
-  de entrega se pide exactamente cuando la política lo dice, y un fallo
-  antes de enviar es un rechazo (#210).
-- **Interfaz:**
-  - una cuenta Graph con permiso de envío puede elegirse como remitente;
-  - sin él, no;
-  - sus borradores no se guardan en el servidor.
-- **Fuera de estas pruebas:** la entrega real con destinatarios dedicados y
-  autorizados es evidencia de proveedor (#98), no de estos tests.
+- **Transport** (servidor de bucle local):
+  - camí, capçaleres, `text/plain` i cos en base64 que es descodifica al MIME;
+  - 202 acceptat;
+  - 4xx rebutjat amb categoria, 429 amb la seva espera i 5xx;
+  - connexió perduda com a incerta, enviada una sola vegada;
+  - mida excedida rebutjada sense enviar res;
+  - una concessió sense `Mail.Send` no envia res;
+  - confirmació de lliurament: esborrany a partir del MIME, `PATCH` amb
+    `isDeliveryReceiptRequested` i enviament sense cos; sense
+    `Mail.ReadWrite` no es crea l'esborrany (#210).
+- **Autorització:** flux d'enviament amb el conjunt demanat, nivell concedit al
+  marcador i renovació que conserva `Mail.Send`.
+- **Nucli:** el guardià només deixa passar `send` amb el permís; la
+  classificació dels errors de Graph en incert o rebutjat; la confirmació de
+  lliurament es demana exactament quan la política ho diu, i un error abans
+  d'enviar és un rebuig (#210).
+- **Interfície:**
+  - un compte de Graph amb permís d'enviament es pot triar com a remitent;
+  - sense permís, no;
+  - els seus esborranys no es desen al servidor.
+- **Fora d'aquestes proves:** el lliurament real amb destinataris dedicats i
+  autoritzats és evidència de proveïdor (#98), no d'aquestes proves.
