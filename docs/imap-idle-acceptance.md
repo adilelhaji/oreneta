@@ -1,14 +1,16 @@
-# IMAP IDLE acceptance (#121)
+# Acceptació d'IMAP IDLE (#121)
 
-`watch.start` acknowledges scheduling, not readiness. Its asynchronous catch-up
-emits `mail.synced` even for an empty watched folder. Integration acceptance
-captures the event count before starting and waits for that initial event before
-appending the synthetic message. Each event wait has a 60-second deadline.
+`watch.start` confirma la planificació, no que estigui a punt. La seva posada al dia
+asíncrona emet `mail.synced` fins i tot per a una carpeta vigilada buida. L'acceptació
+d'integració captura el recompte d'esdeveniments abans d'iniciar-se i espera aquest
+esdeveniment inicial abans d'afegir el missatge sintètic. Cada espera d'esdeveniment té
+un termini de 60 segons.
 
-The later push must emit another event and put the specific message in the cache;
-the assertion uses `messages.recent(refresh:false)`, never a manual refresh.
-The existing watcher-stop/no-further-push assertions remain unchanged. CI runs
-the full real-sidecar/Maddy suite and repeats the IDLE case three times.
+L'enviament (push) posterior ha d'emetre un altre esdeveniment i posar el missatge
+concret a la memòria cau; l'asserció fa servir `messages.recent(refresh:false)`, mai una
+actualització manual. Les assercions existents d'aturada del vigilant i d'absència de
+més enviaments no canvien. La CI executa la suite completa amb el sidecar real/Maddy i
+repeteix el cas IDLE tres vegades.
 
-This removes an initial-event race observed in PR #120, run 34326510250 attempt 1.
-It does not change the watcher implementation or certify external providers.
+Això elimina una condició de carrera de l'esdeveniment inicial observada al PR #120, execució 34326510250, intent 1.
+No canvia la implementació del vigilant ni certifica proveïdors externs.

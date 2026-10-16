@@ -1,35 +1,37 @@
-# Parity acceptance ledger (#22)
+# Registre d'acceptació de paritat (#22)
 
-[Machine-readable rows](emclient-parity-acceptance.json) refine the
-[roadmap](emclient-parity-plan.md). Scope: S01, the settings-family audit and
-rows for delivered domains (calendar, notes, profiles, Graph, POP3, cloud links,
-platforms). This is not a completed provider matrix or an assertion of full
-settings coverage. #22 remains open for native/provider evidence and detail audit.
+Les [files llegibles per màquina](emclient-parity-acceptance.json) concreten el
+[full de ruta](emclient-parity-plan.md). Abast: S01, l'auditoria de les famílies de
+configuració i files per als dominis lliurats (calendari, notes, perfils, Graph, POP3,
+enllaços al núvol, plataformes). No és una matriu de proveïdors completa ni una
+afirmació de cobertura total de la configuració. #22 continua oberta per a l'evidència
+nativa/de proveïdor i l'auditoria de detall.
 
-The [provider acceptance pack](provider-acceptance.md) (#145/#184) adds a
-per-operation report for the existing isolated IMAP/SMTP integration suite and
-dedicated live-account procedures. A passing fixture report does not promote
-any native/provider ledger row to verified.
+El [paquet d'acceptació de proveïdors](provider-acceptance.md) (#145/#184) afegeix un
+informe per operació per a la bateria d'integració IMAP/SMTP aïllada existent i
+procediments dedicats per a comptes reals. Un informe de fixtures (dades de prova) favorable no promou
+cap fila nativa/de proveïdor del registre d'acceptació a verified.
 
-## Status summary (2026-10-12)
+## Resum d'estat (2026-10-12)
 
 48 rows: 1 verified, 24 implemented-unverified, 23 partial, 0 absent, 0 unassessed, 0 blocked.
-The only verified row (SET-16A) needs neither native nor provider evidence.
-No native Windows (N4) or real-provider (N5) evidence exists yet; it is
-scheduled once on the final version, so every row that requires it stays at
-`implemented-unverified` or below. Rows CAL-01, CAL-02, NOTE-01, ACC-01 and
-GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
-On 2026-10-15 (#210, ADR-0057) SET-07 gained folder moves on Microsoft Graph
-and SET-11 Graph delivery receipts and reading incoming delivery and read
-reports; both stay `partial`, since the Exchange (EWS) parts are absent.
-On 2026-10-16 (#225, ADR-0056) SET-29 gained the grouped desktop notice of
-reminders missed while the machine slept or the app was closed; it stays
-`implemented-unverified` (native evidence pending; the phone does not show
-them yet).
-On 2026-10-16 (#226, ADR-0061) SET-27 gained the right-to-left layout for
-Arabic, with production-entry checks in Arabic for the mailbox, reader and
-composer and for people, tasks, notes, calendar, chat and settings; it stays
-`partial`, since native IME and native Windows evidence are absent.
+L'única fila verified (SET-16A) no necessita evidència nativa ni de proveïdor.
+Encara no hi ha evidència nativa de Windows (N4) ni de proveïdor real (N5); està
+planificada una sola vegada sobre la versió final, de manera que totes les files que la
+requereixen es mantenen a `implemented-unverified` o per sota. Les files CAL-01, CAL-02,
+NOTE-01, ACC-01 i GRAPH-01 es van afegir el 2026-10-12 per a treball lliurat que no tenia
+fila.
+El 2026-10-15 (#210, ADR-0057) SET-07 va incorporar els moviments de carpeta a Microsoft
+Graph i SET-11 les confirmacions de lliurament de Graph i la lectura dels informes de
+lliurament i de lectura entrants; totes dues es mantenen `partial`, perquè les parts
+d'Exchange (EWS) són absents.
+El 2026-10-16 (#225, ADR-0056) SET-29 va incorporar l'avís agrupat d'escriptori dels
+recordatoris perduts mentre la màquina dormia o l'aplicació era tancada; es manté
+`implemented-unverified` (evidència nativa pendent; el telèfon encara no els mostra).
+El 2026-10-16 (#226, ADR-0061) SET-27 va incorporar la disposició de dreta a esquerra
+per a l'àrab, amb comprovacions d'entrada de producció en àrab per a la bústia, el lector
+i l'editor de missatges i per a persones, tasques, notes, calendari, xat i configuració;
+es manté `partial`, perquè falten l'evidència nativa de l'IME i la nativa de Windows.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
@@ -82,48 +84,57 @@ composer and for people, tasks, notes, calendar, chat and settings; it stays
 | ACC-01 | #99 | Accounts/Profiles; Account groups | implemented-unverified | yes | - |
 | GRAPH-01 | #143 | Accounts/Microsoft 365 | partial | yes | yes |
 
-N/P: native/provider evidence required before `verified`. See the JSON for
-what is present or missing per row and the exact commit and test file behind
-each automated evidence item.
+N/P: evidència nativa/de proveïdor requerida abans de `verified`. Vegeu el JSON per saber
+què hi ha o què falta en cada fila i el commit exacte i el fitxer de proves darrere de
+cada element d'evidència automatitzada.
 
-## Provenance and states
+## Procedència i estats
 
-The snapshot identifies current main, source page/version, platform, owning issue,
-code boundary, current evidence level and a concrete acceptance procedure per row.
-S01 uses the existing synthetic fixtures in frontend/baseline/fixtures.ts and the
-production entry test in frontend/e2e/startup.e2e.ts. Keep identical content, clock,
-timezone, fonts, locale, viewport and appearance for comparable screenshots.
-Historical baseline captures do not prove current native/provider behavior.
+La instantània identifica, per a cada fila, el main actual, la pàgina/versió d'origen, la
+plataforma, la incidència responsable, el límit del codi, el nivell d'evidència actual i
+un procediment d'acceptació concret. S01 fa servir les fixtures sintètiques existents a
+frontend/baseline/fixtures.ts i la prova d'entrada de producció a
+frontend/e2e/startup.e2e.ts. Mantingueu idèntics el contingut, el rellotge, el fus horari,
+les fonts, la configuració regional, la finestra de visualització i l'aparença perquè les
+captures de pantalla siguin comparables. Les captures de referència històriques no
+demostren el comportament natiu/de proveïdor actual.
 
-Rows SET-01 through SET-31 name settings families from the official 10.0
-documentation index. On 2026-10-12 each was assessed against the code and its
-tests: `present` says what exists and what is missing, and `partial` means part
-of the outcome is absent. A planned test is not test evidence.
-Each evidence item must name an exact commit and artifact/result URL or repository
-path; a verified row requires automated and all applicable native/provider records.
+Les files SET-01 a SET-31 anomenen famílies de configuració de l'índex de la documentació
+oficial de la versió 10.0. El 2026-10-12 cadascuna es va avaluar respecte del codi i les
+seves proves: `present` diu què existeix i què falta, i `partial` vol dir que part del
+resultat és absent. Una prova planificada no és evidència de prova.
+Cada element d'evidència ha d'indicar un commit exacte i un URL d'artefacte/resultat o un
+camí del repositori; una fila verified requereix els registres automatitzats i tots els
+natius/de proveïdor aplicables.
 
-## S01 visual rubric
+## Rúbrica visual de S01
 
-- 1440px: labelled folder navigation, mail list and reader visible together.
-- 1024px: essential folder/account access remains reachable in compact controls.
-- 599/600/601px: selected reader is visible with usable back/list navigation;
-  compose and actions do not overflow the shell. Check 1024/1025px separately.
-- New-profile cobalt tokens follow art-direction.md; saved themes/modes are not
-  rewritten. Both appearances preserve readable text, controls and selection.
-- Record focus, opened-row, unread and bulk-selection states separately; keyboard
-  operation must not select or act on another account's messages.
-- Long localized labels/subjects, empty/loading/error states, wide HTML and 200%
-  zoom must preserve essential actions. Reduced motion is retained.
-- Screen review checks geometry, typography, hierarchy and task completion, not
-  a guessed similarity percentage or copied proprietary artwork.
+- 1440 px: la navegació de carpetes etiquetada, la llista de correu i el lector, visibles
+  alhora.
+- 1024 px: l'accés essencial a carpetes/comptes continua accessible en controls compactes.
+- 599/600/601 px: el lector seleccionat és visible amb una navegació de tornada/llista
+  utilitzable; la redacció i les accions no desborden el contenidor. Comproveu 1024/1025 px
+  per separat.
+- Els tokens de disseny cobalt dels perfils nous segueixen art-direction.md; els
+  temes/modes desats no es reescriuen. Totes dues aparences conserven la llegibilitat del
+  text, els controls i la selecció.
+- Registreu per separat els estats de focus, fila oberta, no llegit i selecció múltiple;
+  l'ús amb teclat no ha de seleccionar ni actuar sobre missatges d'un altre compte.
+- Les etiquetes/assumptes localitzats llargs, els estats buit/de càrrega/d'error, l'HTML
+  ample i el zoom del 200 % han de conservar les accions essencials. Es manté el moviment
+  reduït.
+- La revisió de pantalla comprova la geometria, la tipografia, la jerarquia i la compleció
+  de tasques, no un percentatge de semblança endevinat ni gràfics propietaris copiats.
 
-## Updating and validation
+## Actualització i validació
 
-Owning PRs update rows only to the evidence level actually obtained. Local browser
-runs with a mock Wails bridge are synthetic; native Windows runtime, real account
-connectivity and delivery require independent evidence. Add provider-specific
-rows rather than relabel a generic test as a provider certification.
+Els PR responsables només actualitzen les files fins al nivell d'evidència realment
+obtingut. Les execucions locals al navegador amb un pont Wails simulat són sintètiques;
+l'execució nativa a Windows, la connectivitat amb comptes reals i el lliurament requereixen
+evidència independent. Afegiu files específiques de proveïdor en lloc de reetiquetar una
+prova genèrica com a certificació d'un proveïdor.
 
-CI runs scripts/ci/parity-ledger.test.cjs through the existing workflow-policy job.
-It validates references, unique IDs, repository paths, states and required evidence
-for verified rows. S01 ends with its actual implementation PRs, not this ledger PR.
+La CI executa scripts/ci/parity-ledger.test.cjs mitjançant el job (tasca de CI) workflow-policy
+existent. Valida les referències, la unicitat dels ID, els camins del repositori, els
+estats i l'evidència requerida per a les files verified. S01 acaba amb els seus PR
+d'implementació reals, no amb aquest PR del registre d'acceptació.
