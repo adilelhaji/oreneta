@@ -113,8 +113,13 @@ Decisión por delegación del propietario (la opción más prudente).
   la clave llevara el inicio (solo el identificador) se borra 16 días
   después de darse (antes, 14).
 - Sin migración de esquema: el inicio se lee de la clave, tras la última
-  `@` (los identificadores de CalDAV pueden llevar una); una clave sin
-  inicio tras su `@` cuenta como anterior.
+  `@` (los identificadores de CalDAV pueden llevar una). Como un
+  identificador antiguo también puede acabar en `@<número>`
+  (`reunion@2000000000`), la clave solo cuenta como `<evento>@<inicio>` si
+  ese evento está guardado con ese inicio (revisión de Codex); si no, se
+  borra como antes, 16 días después de darse. Así una clave antigua no se
+  guarda años por un número que parece un inicio (silenciando ese evento),
+  y la de un evento movido o borrado, que ya no sirve, tampoco.
 - Esto se apoya en que un aviso nunca suena después del inicio de su
   evento. Los lectores solo guardan avisos anteriores al inicio; por si el
   almacén tuviera un plazo negativo, se trata como «al empezar».

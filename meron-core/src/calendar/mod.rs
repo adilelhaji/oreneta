@@ -22,7 +22,7 @@ pub mod route;
 pub mod subscription;
 
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension as _};
 use serde::{Deserialize, Serialize};
 
 /// Where a calendar comes from.
@@ -761,7 +761,13 @@ pub fn mark_reminder_fired(
 /// set more than that ahead of its event was forgotten before the event and
 /// given again (#222). Every record is gone once both its event's start and
 /// its giving are that far back, so the table holds what is ahead or recent.
-/// A record from before the start was in its key has only when it was given.
+///
+/// A record from before the start was in its key (the event id alone) has
+/// only when it was given, and an id can itself end in "@<digits>". So a key
+/// is read as "<event>@<start>" only when that event is stored at that start;
+/// any other is purged by when it was given, as before: a legacy key is never
+/// kept on a number that only looks like a start, and a record whose event
+/// moved or went has no use left (a moved event is a new key).
 pub fn forget_old_reminders(conn: &Connection, now: i64) -> Result<()> {
     let cutoff = now - reminders::GIVEN_KEPT;
     let tx = conn.unchecked_transaction()?;
@@ -771,7 +777,18 @@ pub fn forget_old_reminders(conn: &Connection, now: i64) -> Result<()> {
         .collect::<Result<_, _>>()?;
     for (account, key) in old {
         // The start follows the last '@': event ids can hold one themselves.
-        let start = key.rsplit_once('@').and_then(|(_, start)| start.parse::<i64>().ok());
+        let parsed = key.rsplit_once('@').and_then(|(id, start)| Some((id, start.parse::<i64>().ok()?)));
+        let start = match parsed {
+            Some((id, start)) => tx
+                .query_row(
+                    "SELECT 1 FROM calendar_events WHERE account = ?1 AND event_id = ?2 AND start_utc = ?3 LIMIT 1",
+                    params![account, id, start],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .map(|()| start),
+            None => None,
+        };
         if start.is_none_or(|start| start < cutoff) {
             tx.execute(
                 "DELETE FROM calendar_reminders_fired WHERE account = ?1 AND event_id = ?2",
@@ -1037,6 +1054,24 @@ mod tests {
         let now = 1_800_000_000i64;
         let day = 86_400;
         let keep = reminders::GIVEN_KEPT;
+        // The events kept records are read against: stored at their start.
+        upsert_calendars(&conn, "acct", &[a_calendar()]).unwrap();
+        let at = |id: &str, start: i64| event(id, start, start + 3_600);
+        replace_window(
+            &conn,
+            "acct",
+            "cal",
+            (0, now + 100 * day),
+            &[
+                at("ahead", now + 10 * day),
+                at("recent", now - keep + 60),
+                at("uid2@example.com", now + day),
+                // Moved since its reminder was given: the old key is no use.
+                at("moved", now + 5 * day),
+            ],
+        )
+        .unwrap();
+        mark_reminder_fired(&conn, "acct", "moved", now + 3 * day, now - 20 * day).unwrap();
         // Given 20 days ago for an event still 10 days ahead.
         mark_reminder_fired(&conn, "acct", "ahead", now + 10 * day, now - 20 * day).unwrap();
         // Given 20 days ago for an event that started just inside the window.
@@ -1057,6 +1092,10 @@ mod tests {
             ("legacy-new", now - 60),
             ("uid3@example.com", now - keep - 1),
             ("uid4@example.com", now - 60),
+            // A legacy id that ends in "@<digits>" (Codex review of #222): no
+            // event is stored at that "start", so it is not mistaken for one
+            // and kept until 2033, silencing that event; by when it was given.
+            ("meeting@2000000000", now - keep - 1),
         ] {
             conn.execute(
                 "INSERT INTO calendar_reminders_fired(account, event_id, fired_at) VALUES('acct', ?1, ?2)",
