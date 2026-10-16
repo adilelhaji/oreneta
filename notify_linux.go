@@ -209,6 +209,11 @@ func (a *App) notifyFreedesktop(conn *dbus.Conn, n notification) bool {
 		"desktop-entry": dbus.MakeVariant(linuxDesktopEntry()),
 	}
 
+	// The body may be read as markup (body-markup); a chat message is text.
+	body := n.body
+	if n.plainBody {
+		body = markupText(body)
+	}
 	call := conn.Object(fdoNotificationName, fdoNotificationPath).Call(
 		fdoNotificationNotify,
 		0,
@@ -216,7 +221,7 @@ func (a *App) notifyFreedesktop(conn *dbus.Conn, n notification) bool {
 		uint32(0), // 0 replaces nothing; each arrival gets its own notification.
 		notifyIcon(),
 		n.title,
-		n.body,
+		body,
 		actions,
 		hints,
 		int32(-1), // Let the server pick the timeout.

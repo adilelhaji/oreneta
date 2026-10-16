@@ -1308,6 +1308,9 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'chat.conversations': [],
         'chat.history': [],
         'chat.markRead': { ok: true },
+        // Presence, status requests and room occupants (ADR-0055).
+        'chat.presence': { own: { show: 'available', status: '' }, contacts: {}, requests: [] },
+        'chat.occupants': [],
         // Group chats and their invitations (ADR-0044).
         'chat.rooms': [],
         'chat.invitations': [],
