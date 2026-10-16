@@ -337,10 +337,14 @@ fn open_inner(path: &Path, key: Option<&str>) -> Result<Connection> {
     }
     // Opens of this file in this process take turns, however long the step
     // takes, instead of giving up at the busy timeout while another one
-    // migrates (#227). The holder does the work; the others find it done.
-    // Another process still waits up to the busy timeout.
+    // migrates (#227): the thread blocks until its turn. The first does the
+    // work; the others find it done. Another process still waits up to the
+    // busy timeout.
     let turn = first_open_turn(path);
     let _turn = turn.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if first_open_done(&conn) {
+        return Ok(conn);
+    }
     with_anyhow_busy_retry(|| run_migrations(&conn)).context("run migrations")?;
     with_anyhow_busy_retry(|| invalidate_body_cache_if_needed(&conn))
         .context("invalidate body cache if needed")?;
@@ -348,7 +352,8 @@ fn open_inner(path: &Path, key: Option<&str>) -> Result<Connection> {
 }
 
 /// Whether the schema and the body cache are already current: a read, so it
-/// takes no write lock. Anything unreadable (a new file) means not done.
+/// takes no write lock. Anything that cannot be read (a new file, a busy or
+/// damaged store) means not done, and the full path then reports it.
 fn first_open_done(conn: &Connection) -> bool {
     let version = conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0));
     matches!(version, Ok(SCHEMA_VERSION))
@@ -569,9 +574,9 @@ pub const SCHEMA_VERSION: i64 = 65;
 ///
 /// Pending steps run inside one IMMEDIATE transaction that also bumps
 /// `user_version`, so concurrent first-open callers serialize before reading
-/// the version. In one process they also take turns before it (`open_inner`),
-/// so a long migration is waited for; another process waits up to the busy
-/// timeout. A crash mid-migration rolls back cleanly and the step re-runs
+/// the version. In one process they also take turns before it and skip it once
+/// done (`open_inner`), so a long migration is waited for; another process
+/// waits up to the busy timeout. A crash mid-migration rolls back cleanly and the step re-runs
 /// next launch. Append-only: to evolve the schema, add a new `if version < N`
 /// block; never edit or reorder a shipped one. (Cache-only invalidation lives in
 /// `invalidate_body_cache_if_needed`, kept off this counter so a render change
@@ -888,6 +893,11 @@ pub(super) mod slow_migration {
         *next = None;
         drop(next);
         std::thread::sleep(pause);
+    }
+
+    /// Whether the pause asked for has happened.
+    pub fn spent() -> bool {
+        NEXT.lock().unwrap().is_none()
     }
 }
 
