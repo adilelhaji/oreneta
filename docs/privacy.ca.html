@@ -64,7 +64,7 @@
     intermediari, amb la contrasenya si n'hi heu posat una.</li>
     <li><strong>El fitxer de còpia de seguretat de la configuració</strong>
     (Configuració, Còpia de seguretat, Exporta) només es xifra si li doneu
-    una contrasenya. Si marqueu Inclou les contrasenyes dels comptes, també
+    una contrasenya. Si marqueu «Inclou les contrasenyes dels comptes», també
     conté les contrasenyes i els testimonis dels comptes, i aleshores cal
     una contrasenya.</li>
     <li>Quan elimineu un compte, se n'esborren les dades locals i les
@@ -117,7 +117,7 @@
     <td>La vostra adreça IP i l'adreça de la imatge, encara que no obriu
     mai l'element</td></tr>
     <tr><td><strong>Comprovació d'actualitzacions</strong>, 30 segons
-    després de l'inici i, a partir d'aleshores, un cop al dia. La podeu
+    després que s'iniciï l'aplicació i, a partir d'aleshores, un cop al dia. La podeu
     desactivar a Configuració.</td>
     <td>github.com (les versions publicades d'aquest projecte)</td>
     <td>La vostra adreça IP, i la versió de l'aplicació, el sistema
@@ -131,11 +131,11 @@
     <tr><td><strong>Iniciar la sessió amb Google o Microsoft</strong></td>
     <td>accounts.google.com, oauth2.googleapis.com, www.googleapis.com;
     login.microsoftonline.com</td>
-    <td>Inicieu la sessió a la seva pàgina, al vostre navegador. Després,
+    <td>Inicieu la sessió a la pàgina de Google o de Microsoft, al vostre navegador. Després,
     Oreneta bescanvia el codi que rep per testimonis i, en el cas de Google,
     llegeix el vostre nom, l'adreça i la imatge</td></tr>
     <tr><td><strong>Cercar la configuració del servidor</strong>, quan
-    premeu Cerca la configuració en línia mentre afegiu un compte
+    premeu «Cerca la configuració en línia» mentre afegiu un compte
     manualment. Escriure una adreça no fa cap consulta, i sempre podeu
     introduir vós mateix els servidors.</td>
     <td>El domini del vostre correu (autoconfig.&lt;domini&gt; i
@@ -155,10 +155,10 @@
     <td>La vostra adreça IP i l'adreça de la imatge, que un remitent pot
     fer servir per saber que heu obert el missatge</td></tr>
     <tr><td><strong>Confirmacions de lectura</strong>, quan un missatge en
-    demana una i premeu Envia la confirmació, o bé heu triat Envia sempre a
-    Configuració (mai per al correu de la carpeta de correu brossa, i amb
-    pregunta prèvia igualment per a les llistes de correu o quan l'adreça
-    de confirmació apunta a un altre lloc)</td>
+    demana una i premeu «Envia la confirmació», o bé heu triat «Envia sempre» a
+    Configuració (mai per al correu de la carpeta de correu brossa; i, per a
+    les llistes de correu o quan l'adreça de confirmació apunta a un altre
+    lloc, Oreneta us ho pregunta igualment abans)</td>
     <td>L'adreça que indica el missatge, a través del vostre servidor de
     correu</td>
     <td>Que heu obert el missatge, i quan, amb l'assumpte i el Message-ID,
@@ -169,7 +169,7 @@
     <td>Un resum (hash) SHA-256 de cada adreça mostrada, a Gravatar; el
     domini de l'adreça, a DuckDuckGo</td></tr>
     <tr><td><strong>Actualitzar la llista de rastrejadors</strong>, quan
-    premeu Obtén la llista actual (l'aplicació ja n'inclou una còpia)</td>
+    premeu «Obtén la llista actual» (l'aplicació ja n'inclou una còpia)</td>
     <td>easylist.to</td><td>Una baixada simple</td></tr>
     <tr><td><strong>Idiomes de traducció</strong>, quan en baixeu un. La
     traducció en si es fa a l'ordinador i no envia cap text enlloc.</td>
@@ -218,8 +218,8 @@
     <td>github.com (les versions publicades d'aquest projecte)</td>
     <td>Una baixada simple</td></tr>
     <tr><td><strong>Baixar una actualització</strong>, quan l'accepteu</td>
-    <td>github.com</td><td>Una baixada simple, comprovada abans de fer-la
-    servir amb el resum SHA-256 publicat amb la mateixa versió</td></tr>
+    <td>github.com</td><td>Una baixada simple que, abans de fer-la servir,
+    es comprova amb el resum SHA-256 publicat amb la mateixa versió</td></tr>
   </table></div>
   <p>Les baixades de github.com (actualitzacions, idiomes de traducció, el
   registre de canvis) se serveixen des dels servidors de baixada de GitHub
@@ -233,8 +233,8 @@
   una sincronització), dels enllaços a fitxers, dels fitxers del xat, de
   les baixades de traducció, de la llista de rastrejadors, del registre de
   canvis i de l'assistent (amb un proveïdor que indiqueu, no amb un
-  programa del vostre ordinador), i també el bescanvi d'inici de sessió i
-  les renovacions de testimonis amb Google o Microsoft, la cerca de la
+  programa del vostre ordinador). També hi passen el bescanvi d'inici de
+  sessió i les renovacions de testimonis amb Google o Microsoft, la cerca de la
   configuració del servidor, la imatge del compte i la comprovació i la
   baixada d'actualitzacions.</p>
   <p>Un compte també pot tenir el seu propi servidor intermediari, o
@@ -278,10 +278,10 @@
   <h2>Dades d'usuari de Google</h2>
   <p>Quan inicieu la sessió amb Google, Oreneta sol·licita accés complet a
   Gmail (per llegir, enviar, moure, etiquetar i suprimir el correu quan ho
-  demaneu), al perfil bàsic (per identificar el compte amb el vostre nom,
+  demaneu), accés al perfil bàsic (per identificar el compte amb el vostre nom,
   l'adreça i la imatge), accés complet a Google Calendar (per mostrar els
   calendaris i per crear, editar i suprimir els esdeveniments que li
-  demaneu) i als contactes, només de lectura (per suggerir adreces).</p>
+  demaneu) i accés als contactes, només de lectura (per suggerir adreces).</p>
   <p>L'ús i la transferència que fa Oreneta de la informació rebuda de les
   API de Google s'ajusten a la
   <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
@@ -294,8 +294,8 @@
     ordinador.</li>
     <li>No es venen mai, no s'utilitzen mai per a publicitat ni per entrenar
     models, i ningú excepte vós no les llegeix.</li>
-    <li>No es transfereixen a ningú, excepte quan ho requereix una funció
-    que feu servir, totes indicades més amunt a «Connexions que fa
+    <li>No es transfereixen a ningú, excepte en els casos en què ho requereix
+    una funció que feu servir, tots indicats més amunt a «Connexions que fa
     Oreneta»: l'assistent amb un proveïdor remot (només el que heu revisat i
     confirmat, per a aquella sol·licitud; l'assistent està desactivat fins
     que el configureu), les imatges d'un missatge que decidiu mostrar, les
@@ -319,7 +319,7 @@
   <h2>Contacte</h2>
   <p>Oreneta és programari lliure (AGPL-3.0), desenvolupat obertament a
   <a href="https://github.com/adilelhaji/oreneta">github.com/adilelhaji/oreneta</a>.
-  Per a preguntes sobre aquesta política: obriu-hi una incidència o
+  Si teniu preguntes sobre aquesta política, obriu-hi una incidència o
   escriviu a
   <a href="mailto:adilelhaji@gmail.com">adilelhaji@gmail.com</a>.</p>
 </main>

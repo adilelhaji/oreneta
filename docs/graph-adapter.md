@@ -61,7 +61,7 @@ equiparen els àmbits del recurs d'Outlook, els només d'aplicació o els compar
   proveïdor, testimonis bearer ni URL de punts de control. 401 requereix tornar a autenticar-se;
   403 és política/accés denegat (no necessàriament manca de consentiment); 410 requereix
   tornar a sincronitzar; 429 és limitació de peticions; 5xx és no disponible. Els altres estats inesperats i
-  les pàgines mal formades fallen tancades. Les rutes de correu existents no canvien.
+  les pàgines mal formades es tanquen en cas d'error (fail closed). Les rutes de correu existents no canvien.
 
 ## Properes slices d'implementació
 
