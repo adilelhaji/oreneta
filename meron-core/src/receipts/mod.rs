@@ -12,7 +12,9 @@
 //! This module reads the request out of a message, decides what to do with
 //! it, builds the report (`multipart/report`, RFC 8098 §3) and sends it
 //! through the account that received the message. Asking for receipts on
-//! outgoing mail lives with sending, in [`crate::smtp`].
+//! outgoing mail lives with sending, in [`crate::smtp`] and each protocol's
+//! own send; the rule they share is [`delivery_receipt`]. Reading the
+//! delivery and read reports that come back is [`report`] (ADR-0057).
 
 use std::sync::Arc;
 
@@ -24,6 +26,7 @@ use mail_builder::MessageBuilder;
 use mailparse::{MailHeaderMap as _, ParsedMail};
 use serde::{Deserialize, Serialize};
 
+pub mod report;
 #[cfg(test)]
 mod tests;
 
@@ -237,6 +240,19 @@ pub fn decide(
         (_, Some(caution)) => Verdict::Ask(Some(caution)),
         (Policy::Always, None) => Verdict::SendAutomatically,
         (Policy::Ask, None) => Verdict::Ask(None),
+    }
+}
+
+/// What becomes of a delivery receipt request on one send (ADR-0048,
+/// ADR-0057): the server is asked only when the sender wants a receipt and
+/// the route can carry the request (SMTP that offers DSN; Graph with both
+/// `Mail.Send` and `Mail.ReadWrite`). Otherwise the message goes without
+/// one, and the sender is told it was not requested.
+pub fn delivery_receipt(asked: bool, route_carries: bool) -> crate::smtp::DeliveryReceipt {
+    match (asked, route_carries) {
+        (false, _) => crate::smtp::DeliveryReceipt::NotAsked,
+        (true, true) => crate::smtp::DeliveryReceipt::Requested,
+        (true, false) => crate::smtp::DeliveryReceipt::Unsupported,
     }
 }
 

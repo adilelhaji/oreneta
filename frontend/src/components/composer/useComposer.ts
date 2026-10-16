@@ -22,6 +22,7 @@ import { contextualErrorMessage } from '../../lib/errors'
 import { discardSavedDraftCopy } from '../../states/mail'
 import { scheduleComposed } from '../../states/scheduledSends'
 import { formatDeferredWhen } from '../../lib/date'
+import { deliveryReceiptToast } from '../../lib/deliveryReceipt'
 import { pickFiles, pickImageFiles } from '../../lib/nativeFilePicker'
 import { getComposeSession, registerComposeSession } from '../../states/composeSessions'
 import { accounts$, isSendableAccount } from '../../states/accounts'
@@ -693,13 +694,7 @@ export function useComposer(tabId: string) {
         })
       }
       await discardRemoteDraft(current)
-      showToast(
-        sent?.delivery_receipt === 'unsupported'
-          ? t('receipts.deliveryUnsupported', {
-              defaultValue: 'Message sent. The server does not offer delivery receipts, so none was requested.',
-            })
-          : t('chat.messageSent'),
-      )
+      showToast(deliveryReceiptToast(sent))
       finishClosingMessageTab(tabId)
     } catch (err) {
       // The composer stays open on failure, so autosaving resumes with it.

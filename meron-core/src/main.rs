@@ -1050,15 +1050,16 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         }
         store::setting_set(&engine.db.lock().unwrap(),&meron_core::graph::auth::marker(account),&json!({"writes":true})).unwrap();
         // Supported and granted: past the guard (they fail later, with no
-        // Graph profile in this test, but not as "read-only").
-        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move"] {
+        // Graph profile in this test, but not as "read-only"). Moving a
+        // folder is one of them since #210.
+        for method in ["messages.markRead","messages.markStarred","messages.delete","messages.move","folders.move"] {
             let error=dispatch(&engine,&request(method,json!({"account":account,"uid":1,"target_folder":"INBOX.x"})),&writer).await.unwrap_err();
             assert!(!error.to_string().contains("read-only"),"{method}: {error}");
         }
         let copy=dispatch(&engine,&request("messages.copy",json!({"account":account,"target_account":account,"target_folder":"x","uid":1})),&writer).await;
         assert!(copy.is_err_and(|e|!e.to_string().contains("read-only")));
         // Still unsupported, granted or not.
-        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","folders.move","mail.scheduleSend"] {
+        for method in ["send","save_draft","messages.markAllRead","messages.emptyFolder","folders.create","folders.delete","mail.scheduleSend"] {
             let error=dispatch(&engine,&request(method,json!({"account":account})),&writer).await.unwrap_err();
             assert!(error.to_string().contains("read-only"),"{method}: {error}");
         }
@@ -1093,6 +1094,28 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         }
         assert!(classify(ErrorKind::TooLarge, None).to_string().contains("too large to send through Microsoft Graph"));
         assert!(classify(ErrorKind::ConsentRequired, None).to_string().contains("allow it in the account settings"));
+    }
+    /// #210: a send asking for a delivery receipt that stopped before
+    /// Microsoft was asked to send (the draft could not be made or marked)
+    /// is a refusal, even when the draft step itself went unanswered.
+    #[test]
+    fn graph_send_stopped_before_sending_is_a_refusal_not_uncertain() {
+        use super::{classify_graph_send_error, smtp};
+        use meron_core::graph::{Error, ErrorKind, NotSent};
+        let classify = |kind, draft_left| {
+            let error = Error { kind, status: None, retry_after_seconds: None };
+            classify_graph_send_error(anyhow::Error::new(NotSent { error, draft_left }))
+        };
+        for kind in [ErrorKind::Uncertain, ErrorKind::Unavailable, ErrorKind::Conflict, ErrorKind::Throttled] {
+            assert!(!smtp::is_uncertain(&classify(kind, false)), "{kind:?}");
+        }
+        let left = classify(ErrorKind::Uncertain, true).to_string();
+        assert!(left.contains("nothing was sent") && left.contains("Drafts"), "{left}");
+        assert!(classify(ErrorKind::ConsentRequired, false).to_string().contains("allow changes"));
+        assert!(classify(ErrorKind::TooLarge, false).to_string().contains("too large to send"));
+        // The draft step done, the send itself unanswered: that may have gone.
+        let sent = Error { kind: ErrorKind::Uncertain, status: None, retry_after_seconds: None };
+        assert!(smtp::is_uncertain(&classify_graph_send_error(anyhow::Error::new(sent))));
     }
     #[tokio::test]
     async fn graph_send_passes_the_guard_only_with_the_send_grant() {
@@ -9630,7 +9653,7 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
             )?;
         }
         match perform_send_transaction(engine, p, &account, &to).await {
-            Ok(SendTransaction { raw, archived_by_server, delivery_receipt }) => {
+            Ok(SendTransaction { raw, archived_by_server, delivery_receipt, delivery_receipt_reason }) => {
                 {
                     let db = engine.db.lock().unwrap();
                     outgoing::mark_accepted(&db, &attempt_id, now_seconds())?;
@@ -9662,12 +9685,18 @@ async fn perform_send(engine: &Arc<Engine>, p: &Value) -> anyhow::Result<Value> 
                         "accepted"
                     }
                 };
-                Ok(json!({
+                let mut answer = json!({
                     "ok": true,
                     "outcome": outcome,
                     "attempt_id": attempt_id,
                     "delivery_receipt": delivery_receipt.as_str(),
-                }))
+                });
+                // Why a delivery receipt asked for on Graph was not requested
+                // (#210): "needsChanges", "bcc" or "protected".
+                if let Some(reason) = delivery_receipt_reason {
+                    answer["delivery_receipt_reason"] = json!(reason);
+                }
+                Ok(answer)
             }
             Err(err) if smtp::is_uncertain(&err) => {
                 let reason = format!("{err:#}");
@@ -9688,6 +9717,9 @@ struct SendTransaction {
     archived_by_server: bool,
     /// What became of a delivery receipt request (ADR-0048).
     delivery_receipt: smtp::DeliveryReceipt,
+    /// Why a delivery receipt the sender asked for was not requested, when
+    /// the route could have carried one (#210).
+    delivery_receipt_reason: Option<&'static str>,
 }
 
 /// Builds, protects and transmits one message. Everything up to the server's
@@ -9869,21 +9901,27 @@ async fn perform_send_transaction(
                 protection.as_ref(),
                 receipts.read,
             )?;
-            engine
+            // A delivery receipt is a property of the message on Graph, set
+            // on a draft before it is sent, so it is asked for only where the
+            // account allows changes as well as sending (#210, ADR-0057).
+            // Exchange has no way to carry it here yet (ADR-0048). Without
+            // it the message goes without one, and the sender is told.
+            // Nor, until a real tenant shows a draft keeps them, for a message
+            // with Bcc recipients or signed or encrypted: those go as before.
+            let asked = receipts.delivery;
+            let has_bcc = !bcc.trim().is_empty();
+            let protected = protection.is_some();
+            let (delivery_receipt, delivery_receipt_reason) = engine
                 .with_write_session(&account, |session| {
                     let raw = raw.clone();
-                    Box::pin(async move { session.send_mime(raw).await })
+                    Box::pin(async move { session.send_mime_with_receipt(raw, asked, has_bcc, protected).await })
                 })
                 .await
                 .map_err(if creds.is_graph() { classify_graph_send_error } else { classify_ews_send_error })?;
             // The server files its own copy, so the caller's Sent step only
             // refreshes the local view — the upload is suppressed for
             // Exchange in `should_append_sent_copy`.
-            // A delivery receipt is not asked of Exchange or Graph: the MIME
-            // they submit has no envelope to carry it (ADR-0048).
-            let delivery_receipt =
-                if receipts.delivery { smtp::DeliveryReceipt::Unsupported } else { smtp::DeliveryReceipt::NotAsked };
-            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt });
+            return Ok(SendTransaction { raw, archived_by_server: true, delivery_receipt, delivery_receipt_reason });
         }
         // What the sender asked for, with the keys it needs: built before
         // either branch, and applied by both, so no path sends in the clear
@@ -9907,7 +9945,12 @@ async fn perform_send_transaction(
             receipts,
         )
         .await?;
-        Ok(SendTransaction { raw: sent.raw, archived_by_server: false, delivery_receipt: sent.delivery_receipt })
+        Ok(SendTransaction {
+            raw: sent.raw,
+            archived_by_server: false,
+            delivery_receipt: sent.delivery_receipt,
+            delivery_receipt_reason: None,
+        })
 }
 
 /// An Exchange submission that failed without a verdict.
@@ -9940,11 +9983,18 @@ fn classify_ews_send_error(err: anyhow::Error) -> anyhow::Error {
 /// large is a refusal: nothing was accepted.
 fn classify_graph_send_error(err: anyhow::Error) -> anyhow::Error {
     use meron_core::graph::ErrorKind;
-    let kind = err
-        .chain()
-        .find_map(|cause| cause.downcast_ref::<meron_core::graph::Error>())
-        .map(|e| e.kind);
+    // A send that stopped before Microsoft was asked to send (#210): nothing
+    // left, whatever went wrong, so it is a refusal and never uncertain.
+    let not_sent = err.downcast_ref::<meron_core::graph::NotSent>().cloned();
+    let kind = match &not_sent {
+        Some(not_sent) => Some(not_sent.error.kind),
+        None => err.chain().find_map(|cause| cause.downcast_ref::<meron_core::graph::Error>()).map(|e| e.kind),
+    };
     match kind {
+        Some(ErrorKind::Uncertain | ErrorKind::Unavailable) if not_sent.is_some() => err,
+        Some(ErrorKind::ConsentRequired) if not_sent.is_some() => err.context(
+            "a delivery receipt needs this account to allow changes; allow them in the account settings, or send without one",
+        ),
         Some(ErrorKind::Uncertain | ErrorKind::Unavailable) => err.context(smtp::UncertainSend),
         Some(ErrorKind::TooLarge) => err.context(format!(
             "too large to send through Microsoft Graph (limit {} MB including attachments)",

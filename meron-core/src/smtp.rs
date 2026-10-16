@@ -841,11 +841,7 @@ async fn transport(
 
     let dsn_sent = submit(&mut transport, from, recipients, raw, dsn).await?;
     let _ = with_timeout(Duration::from_secs(10), "smtp quit", transport.quit()).await;
-    Ok(match (want_dsn, dsn_sent) {
-        (false, _) => DeliveryReceipt::NotAsked,
-        (true, true) => DeliveryReceipt::Requested,
-        (true, false) => DeliveryReceipt::Unsupported,
-    })
+    Ok(crate::receipts::delivery_receipt(want_dsn, dsn_sent))
 }
 
 /// Whether an EHLO answer lists the DSN extension (RFC 3461 §4).

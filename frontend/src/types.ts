@@ -176,6 +176,34 @@ export type ComposerAttachment = {
   inlineId?: string
 }
 
+/** What a delivery report (RFC 3464) or read report (RFC 8098) says about
+ * one recipient (ADR-0057). A report is a claim by whoever sent it. */
+export type ReportOutcome = 'delivered' | 'relayed' | 'delayed' | 'failed' | 'displayed' | 'notDisplayed'
+
+export type ReportRecipient = {
+  recipient: string
+  outcome: ReportOutcome
+  /** Enhanced status code, such as 5.1.1, when the report gave one. */
+  status?: string
+  /** The server's own words about it. */
+  diagnostic?: string
+}
+
+export type DeliveryReport = {
+  kind: 'delivery' | 'disposition'
+  original_message_id: string
+  recipients: ReportRecipient[]
+}
+
+export type DeliveryOutcome = ReportRecipient & {
+  kind: 'delivery' | 'disposition'
+  /** The report's own date (seconds), bounded by when it was read. */
+  reported_at: number
+  /** Whether the recipient it names is one the message was addressed to;
+   * null when the message's recipients are not known here. */
+  listed?: boolean | null
+}
+
 export type Message = {
   id: string
   account_id: string
@@ -240,6 +268,14 @@ export type Message = {
   /** Whether the message asks to be told it was read (ADR-0048). What to
    * do about it is asked of the core separately (`receipts.status`). */
   receipt_requested?: boolean
+  /** What the delivery and read reports received say about this message,
+   * when it is one this account sent (ADR-0057). Absent: nobody reported. */
+  delivery?: DeliveryOutcome[]
+  /** The delivery or read report this message is, as the core read it from
+   * its machine-readable part (ADR-0057). Absent or null: not a report. */
+  report?: DeliveryReport | null
+  /** Whether that report names a message of this account (ADR-0057). */
+  report_linked?: boolean
   /**
    * Whether this is worth interrupting for, as the core judged it.
    *

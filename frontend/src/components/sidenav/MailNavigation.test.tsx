@@ -283,8 +283,16 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     menuFor(again, 'Work 4')
     const disabled = again.getByRole('button', { name: /Move folder to…/ })
     expect(disabled.hasAttribute('disabled')).toBe(true)
-    expect(disabled.getAttribute('title')).toBe('Moving folders is not available for this account yet')
+    // A Graph account without changes is told what would allow it (#210).
+    expect(disabled.getAttribute('title')).toBe('Allow changes for this account in its settings to move its folders')
     expect(again.getByRole('button', { name: 'Work 4' }).getAttribute('draggable')).toBe('false')
+    cleanup()
+    const ews = { ...account, provider: 'exchange', ews_url: 'https://ews.example.test/EWS/Exchange.asmx' }
+    const exchange = view({ accounts: [ews], allAccounts: [ews] })
+    menuFor(exchange, 'Work 4')
+    const refused = exchange.getByRole('button', { name: /Move folder to…/ })
+    expect(refused.hasAttribute('disabled')).toBe(true)
+    expect(refused.getAttribute('title')).toBe('Moving folders is not available for this account yet')
   })
 
   it('says when stale favorites were dropped, and lets the note go', () => {

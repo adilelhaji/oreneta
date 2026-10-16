@@ -19,6 +19,9 @@ No native Windows (N4) or real-provider (N5) evidence exists yet; it is
 scheduled once on the final version, so every row that requires it stays at
 `implemented-unverified` or below. Rows CAL-01, CAL-02, NOTE-01, ACC-01 and
 GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
+On 2026-10-15 (#210, ADR-0057) SET-07 gained folder moves on Microsoft Graph
+and SET-11 Graph delivery receipts and reading incoming delivery and read
+reports; both stay `partial`, since the Exchange (EWS) parts are absent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
