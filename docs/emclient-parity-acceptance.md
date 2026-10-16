@@ -22,6 +22,9 @@ GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
 On 2026-10-15 (#210, ADR-0057) SET-07 gained folder moves on Microsoft Graph
 and SET-11 Graph delivery receipts and reading incoming delivery and read
 reports; both stay `partial`, since the Exchange (EWS) parts are absent.
+On 2026-10-16 (#226, ADR-0061) SET-27 gained the right-to-left layout for
+Arabic, with production-entry checks in Arabic; it stays `partial`, since
+native IME and native Windows evidence are absent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
