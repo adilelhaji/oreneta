@@ -1348,7 +1348,7 @@
       "section": "General/Language",
       "outcome": "Full locale coverage, long labels, RTL/CJK and native input",
       "status": "partial",
-      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated; Arabic lays the interface out right to left (logical sides guarded by a test, mirrored icons, menus and arrow keys in reading order) while subjects, names, addresses and bodies keep their own direction (#226, ADR-0061), checked on the production entry at 600/1024/1440 px, light and dark, 100% and 200%, with axe; no native IME or native Windows evidence",
+      "present": "Interface catalogued in 19 languages including Arabic, Japanese and Chinese, with placeholder parity checks and remaining English strings translated. Arabic lays the interface out right to left (#226, ADR-0061): logical sides guarded by a test, mirrored icons, menus and arrow keys in reading order; subjects, names, addresses, bodies and composers keep their own direction; received mail gets per-block direction and outgoing mail declares its right-to-left blocks. Production-entry checks in Arabic cover the mailbox, reader and composer at 600/1024/1440 px in light and dark at 100% and the app's 200% zoom, and people, tasks, notes, calendar, chat and settings at 600/1024 px in light and dark, with axe; plus a context menu at the right edge and switching back to English. Remaining: native IME and native Windows (N4) evidence, kanban column dragging in right to left checked natively, a per-paragraph direction override in the composer, and lines mixing interface and people's text outside the reviewed screens",
       "code": "scripts/i18n/catalog.ts",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1380,6 +1380,22 @@
           },
           {
             "sha": "c6711442c968e03054378a15a8bba7a531549e3a",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "c73ae544ed5e04186626a5de53436d490a4b984c",
+            "result": "frontend/src/components/composer/composerHelpers.test.ts"
+          },
+          {
+            "sha": "c73ae544ed5e04186626a5de53436d490a4b984c",
+            "result": "frontend/src/lib/direction.test.ts"
+          },
+          {
+            "sha": "e6aff0bb9f3c2bdfdbd561d32e0fe95c0309ebdc",
+            "result": "frontend/src/components/mixedDirection.test.tsx"
+          },
+          {
+            "sha": "d4c50d840cf51cf7e8513b83b80dd6fcee8ba711",
             "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
