@@ -1,85 +1,85 @@
-# Importar correo al archivo local (#112, ADR-0014)
+# Importació de correu a l'arxiu local (#112, ADR-0014)
 
-## Uso
+## Ús
 
-**Ajustes → Copia de seguridad → Importar correo**:
-1. Se eligen uno o varios `.eml` o `.mbox`.
-2. Una vista previa indica cuántos mensajes se importarán, cuántos ya están
-   en la carpeta y cuántos no son correo o superan el tamaño máximo. También
-   permite elegir la carpeta del archivo.
-3. Al confirmar, se importan.
+**Configuració → Còpia de seguretat → Importa correu**:
+1. Es trien un o diversos `.eml` o `.mbox`.
+2. Una previsualització indica quants missatges s'importaran, quants ja són
+   a la carpeta i quants no són correu o superen la mida màxima. També
+   permet triar la carpeta de l'arxiu.
+3. En confirmar, s'importen.
 
-La primera vez aparece la cuenta **Archivo local** en la barra lateral. Se
-lee, se busca, se mueve y se borra como cualquier otra, pero no puede enviar
-y no figura entre los remitentes.
+La primera vegada apareix el compte **Arxiu local** a la barra lateral. Es
+llegeix, s'hi cerca, es mou i s'esborra com qualsevol altre, però no pot enviar
+i no figura entre els remitents.
 
-## Desde Outlook (PST)
+## Des d'Outlook (PST)
 
-Oreneta no lee archivos `.pst` ni `.ost` directamente: no existe un lector en
-Rust maduro y mantenido, y el propietario decidió (2026-10-12) no escribir uno
-y documentar la conversión. `readpst` (libpst, GPL) convierte el archivo a
-MBOX y el resultado se importa con lo que ya existe.
+Oreneta no llegeix fitxers `.pst` ni `.ost` directament: no existeix cap lector en
+Rust madur i mantingut, i el propietari va decidir (2026-10-12) no escriure'n cap
+i documentar la conversió. `readpst` (libpst, GPL) converteix el fitxer a
+MBOX i el resultat s'importa amb el que ja existeix.
 
-1. **Instalar `readpst`.**
-   - Linux: el paquete `pst-utils` (Debian/Ubuntu: `sudo apt install pst-utils`;
+1. **Instal·lar `readpst`.**
+   - Linux: el paquet `pst-utils` (Debian/Ubuntu: `sudo apt install pst-utils`;
      Fedora: `sudo dnf install libpst`).
    - macOS: `brew install libpst`.
-   - Windows: dentro de WSL, como en Linux.
-2. **Convertir** (Outlook cerrado, sobre una copia del archivo):
+   - Windows: dins de WSL, com a Linux.
+2. **Convertir** (amb Outlook tancat, sobre una còpia del fitxer):
 
    ```sh
    readpst -8 -o salida/ "Outlook.pst"
    ```
 
-   - Se crea un `.mbox` por carpeta: `Inbox.mbox`, `Sent Items.mbox`...
-   - `-8` escribe los cuerpos en UTF-8 cuando Outlook guardó esa versión.
-   - Los elementos borrados de Outlook no se incluyen; `-D` los añade.
-   - Un `.pst` protegido con contraseña se lee igual: la contraseña de PST
-     no cifra el contenido.
-3. **Importar** de una de estas dos formas:
-   - **Carpeta a carpeta**: *Ajustes → Copia de seguridad → Importar
-     correo*, elegir un `.mbox` e indicar la carpeta del archivo (por
-     ejemplo `Outlook/Bandeja de entrada`). Así cada carpeta queda con el
-     nombre que se elija.
-   - **Todo de una vez**: *Importar de Thunderbird → Elegir carpeta* y
-     elegir `salida/`. Cada `.mbox` se ofrece como una carpeta; se marcan
-     las que se quieran. La carpeta conserva el nombre del archivo, con
-     `.mbox` al final, y se puede renombrar después.
+   - Es crea un `.mbox` per carpeta: `Inbox.mbox`, `Sent Items.mbox`...
+   - `-8` escriu els cossos en UTF-8 quan Outlook n'ha desat aquesta versió.
+   - Els elements esborrats d'Outlook no s'inclouen; `-D` els afegeix.
+   - Un `.pst` protegit amb contrasenya es llegeix igualment: la contrasenya de
+     PST no xifra el contingut.
+3. **Importar** d'una d'aquestes dues maneres:
+   - **Carpeta a carpeta**: *Configuració → Còpia de seguretat → Importa
+     correu*, triar un `.mbox` i indicar la carpeta de l'arxiu (per
+     exemple `Outlook/Safata d'entrada`). Així cada carpeta queda amb el
+     nom que es triï.
+   - **Tot de cop**: *Importa des de Thunderbird → Tria una carpeta* i
+     triar `salida/`. Cada `.mbox` s'ofereix com una carpeta; es marquen
+     les que es vulguin. La carpeta conserva el nom del fitxer, amb
+     `.mbox` al final, i es pot reanomenar després.
 
-Importar dos veces no duplica: los mensajes que ya están se saltan.
+Importar dues vegades no duplica: els missatges que ja hi són se salten.
 
-Calendario y contactos salen en archivos aparte, que el importador de correo
-no toma por mensajes:
-- `Calendar.calendar` es iCalendar: renombrado a `.ics`, se importa desde
-  Calendario (*Importar ICS*).
-- Con `-cv`, `Contacts.contacts` es vCard: renombrado a `.vcf`, se importa
-  desde Contactos. Sin `-cv` es una lista de direcciones.
+El calendari i els contactes surten en fitxers a part, que l'importador de correu
+no pren per missatges:
+- `Calendar.calendar` és iCalendar: reanomenat a `.ics`, s'importa des de
+  Calendari (*Importa ICS*).
+- Amb `-cv`, `Contacts.contacts` és vCard: reanomenat a `.vcf`, s'importa
+  des de Contactes. Sense `-cv` és una llista d'adreces.
 
-Probado con `readpst` 0.6.76 y los archivos de prueba públicos de
-java-libpst (`example-2013.ost`, `dist-list.pst`): una carpeta por `.mbox`,
-separadores `From "dirección" fecha` que el importador reconoce
+Provat amb `readpst` 0.6.76 i els fitxers de prova públics de
+java-libpst (`example-2013.ost`, `dist-list.pst`): una carpeta per `.mbox`,
+separadors `From "dirección" fecha` que l'importador reconeix
 (`archive/tests.rs`).
 
-## Exportar (#112)
+## Exportació (#112)
 
-El menú de acciones de la lista (⋮) ofrece **Exportar carpeta como .mbox** en
-cualquier carpeta de una cuenta IMAP o del archivo local. El núcleo escribe los
-mensajes originales en formato mboxrd (cada línea `>*From ` gana un `>`) por
-lotes de 50, en un `.part` junto al destino que solo se renombra al terminar:
-un fallo a medias no deja un archivo truncado con el nombre elegido. Lo que se
-exporta se vuelve a importar igual (prueba de ida y vuelta).
+El menú d'accions de la llista (⋮) ofereix **Exporta la carpeta com a .mbox** a
+qualsevol carpeta d'un compte IMAP o de l'arxiu local. El nucli escriu els
+missatges originals en format mboxrd (cada línia `>*From ` guanya un `>`) per
+lots de 50, en un `.part` al costat de la destinació que només es reanomena en
+acabar: una fallada a mitges no deixa cap fitxer truncat amb el nom triat. El que
+s'exporta es torna a importar igual (prova d'anada i tornada).
 
-Graph y Exchange no entregan el mensaje original, así que allí no se ofrece;
-guardar un solo mensaje como `.eml` ya existía.
+Graph i Exchange no lliuren el missatge original, de manera que allà no s'ofereix;
+desar un sol missatge com a `.eml` ja existia.
 
-## Pruebas
+## Proves
 
-| Nivel | Qué cubre |
+| Nivell | Què cobreix |
 |---|---|
-| N1 (`archive/tests.rs`) | División de MBOX con LF y CRLF y deshecho de `>From`; importación con hilos y cuerpos sin servidor; duplicados; mover, copiar y borrar conservando los bytes; papelera; corpus difícil (encoded-words, Latin-1 sin charset, cabeceras plegadas, adjunto truncado, LF, sin Message-ID, PDF renombrado, archivo vacío) |
-| N1 despachador (`main.rs`) | Una vista previa no crea nada; importar dos veces no duplica; el archivo no pide reconexión; carpetas, lectura del hilo y borrado a la papelera con las órdenes normales de correo |
-| N2 (`MailImportDialog.test.tsx`) | Vista previa, cambio de carpeta, confirmación y aviso; el archivo nunca se ofrece como remitente |
-| N1 export (`archive/tests.rs`, `main.rs`) | mboxrd con LF, CRLF, `From ` y `>From` en el cuerpo se relee igual; exportar la carpeta o solo los elegidos; un destino imposible no deja `.part` |
-| N2 export (`ExportFolder.test.tsx`, `mailCapabilities.test.ts`) | El elemento solo aparece donde se puede; cancelar no avisa; un fallo se dice; Graph, Exchange y RSS no exportan |
-| N1 PST (`archive/tests.rs`) | La salida de `readpst` (separador `From "dirección"`, `>From` en el cuerpo) se divide en sus mensajes |
-| Guarda ADR-0011 | `archive_messages` se borra con la cuenta |
+| N1 (`archive/tests.rs`) | Divisió de MBOX amb LF i CRLF i desfer `>From`; importació amb fils i cossos sense servidor; duplicats; moure, copiar i esborrar conservant els bytes; paperera; corpus difícil (encoded-words, Latin-1 sense charset, capçaleres plegades, adjunt truncat, LF, sense Message-ID, PDF reanomenat, fitxer buit) |
+| N1 distribuïdor (`main.rs`) | Una previsualització no crea res; importar dues vegades no duplica; l'arxiu no demana reconnexió; carpetes, lectura del fil i esborrat a la paperera amb les ordres normals de correu |
+| N2 (`MailImportDialog.test.tsx`) | Previsualització, canvi de carpeta, confirmació i avís; l'arxiu no s'ofereix mai com a remitent |
+| N1 exportació (`archive/tests.rs`, `main.rs`) | mboxrd amb LF, CRLF, `From ` i `>From` al cos es rellegeix igual; exportar la carpeta o només els triats; una destinació impossible no deixa cap `.part` |
+| N2 exportació (`ExportFolder.test.tsx`, `mailCapabilities.test.ts`) | L'element només apareix on es pot; cancel·lar no avisa; es comunica una fallada; Graph, Exchange i RSS no exporten |
+| N1 PST (`archive/tests.rs`) | La sortida de `readpst` (separador `From "dirección"`, `>From` al cos) es divideix en els seus missatges |
+| Protecció ADR-0011 | `archive_messages` s'esborra amb el compte |
