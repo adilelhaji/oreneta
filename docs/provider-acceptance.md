@@ -13,9 +13,9 @@ El job `integration` existent arrenca maddy 0.8 amb ports només de bucle local 
 i dos comptes sintètics (`alice@maddy.test`, `bob@maddy.test`). El seu servidor
 d'enviament només lliura a les seves bústies locals; no té cap ruta de lliurament SMTP
 remot. Els perfils, la base de dades i la configuració del clauer fan servir la fixture
-de prova temporal existent. L'arnès registra la neteja del contenidor i dels perfils. No
+de prova temporal existent. L'arnès programa la neteja del contenidor i dels perfils. No
 calen comptes reals, credencials ni correu de l'usuari. Les fixtures fan servir ID de
-correlació generats en temps d'execució; les asseveracions sobre adjunts/MIME són a
+correlació generats en temps d'execució; les assercions sobre adjunts/MIME són a
 `integration_test.go`.
 
 La CI executa la bateria de nou amb `-json -count=1`. L'informador llegeix els
@@ -26,23 +26,23 @@ càrregues útils, les adreces dels comptes, els registres del contenidor i els 
 prova desconeguts no es copien a l'informe. Els esdeveniments en brut es queden a
 l'executor (runner) per a aquest job, no a l'artefacte. La comprovació IDLE separada de
 tres execucions continua sent obligatòria; el seu resultat és al job de la CI, no a
-l'informe de 12 resultats. Un informe superat per si sol no pot establir que tot el job o
+l'informe de 12 resultats. Un informe favorable per si sol no pot establir que tot el job o
 les set bateries requerides s'hagin superat.
 
 L'informe registra el SHA exacte de l'origen, l'URL i l'intent del flux de treball
-(workflow), l'estat per prova i els límits real/natiu explícits `not-tested`. Els
-informes dels PR fan referència a la ref de fusió provada; el lliurament requereix una CI
-nova de main per al commit de fusió real. No reetiqueteu mai evidència d'un altre commit.
+(workflow), l'estat per prova i els límits reals/natius explícits `not-tested`. Els
+informes dels PR fan referència a la referència de fusió provada; el lliurament requereix una execució
+nova de la CI a main per al commit de fusió real. No reetiqueteu mai evidència d'un altre commit.
 L'informe registra la procedència que proporciona la CI; no és una atestació
 criptogràfica de l'execució de les proves.
 
 Si falta Docker, la prova d'integració subjacent es pot ometre en local, però no pot
-produir un informe d'acceptació superat. L'evidència obligatòria absent, omesa, fallida,
+produir un informe d'acceptació favorable. L'evidència obligatòria absent, omesa, fallida,
 incompleta, reproduïda o mal formada fa fallar l'informador; les fallades de la
 bateria/del paquet i altres proves fallides també impedeixen l'èxit. Els informes es
 generen en cas de fallada, fins i tot quan falta l'entrada després d'una fallada de
 compilació anterior. La prova de cobertura de la matriu rebutja les subproves de correu
-no classificades o reanomenades.
+no classificades o amb el nom canviat.
 
 Executeu la bateria aïllada en local a Linux amb les dependències de compilació
 existents:
@@ -64,7 +64,7 @@ l'informador i dels casos negatius no requereixen cap servidor:
 Abans de qualsevol execució externa, obteniu una autorització que indiqui el proveïdor,
 els comptes dedicats, les operacions i la llista exacta de destinataris de prova
 permesos. No es pot fer servir cap bústia de producció ni cap aplicació OAuth de Google
-heretada de l'upstream. Mantingueu els testimonis fora del repositori/dels artefactes;
+heretada del projecte original (upstream). Mantingueu els testimonis fora del repositori/dels artefactes;
 registreu els noms dels àmbits, mai els valors dels testimonis. L'aprovisionament, els
 canvis de l'arrendatari (tenant) i l'enviament extern són accions separades, que la CI no
 implica.
@@ -73,7 +73,7 @@ Registreu per operació: SHA del candidat i resum (hash) de l'executable; versio
 l'aplicació/el nucli i del sistema operatiu; tipus de proveïdor/arrendatari; mode
 d'autenticació i àmbits concedits; perfil aïllat; estat inicial de carpetes/memòria cau;
 ID sintètics d'execució/missatge i SHA256 dels adjunts; resultat esperat; resultat
-observat; marques de temps i referència d'evidència censurada; resultat de la neteja.
+observat; marques de temps i referència d'evidència amb dades emmascarades; resultat de la neteja.
 Identifiqueu els comptes amb àlies de prova a l'evidència conservada.
 
 Feu servir una carpeta dedicada que contingui text pla sintètic, Unicode/quoted-printable,
@@ -87,7 +87,7 @@ real com a fixtures.
 | Lectura i paginació | Llegiu cada fixture i travesseu el límit de pàgina; compareu recomptes, ID, cos i resums dels adjunts amb l'estat del servidor | Elimineu només les fixtures de l'execució; distingiu el que no és a la memòria cau del que és absent |
 | Enviament | Envieu un missatge correlacionat de la prova A a la prova B permesa; registreu el resultat de l'enviament, la recepció independent a B i la còpia d'Enviats del servidor com a tres observacions separades | No reenvieu a cegues un resultat incert; conserveu-ne la correlació i inspeccioneu primer l'estat del servidor |
 | Marques/moviments | Canvieu una fixture i observeu-la des d'un client independent; verifiqueu que el correu amb el mateix assumpte a l'altre compte no s'ha tocat | Restaureu la carpeta/les marques originals només per als ID de missatge de l'execució |
-| Esborranys/fitxers | Deseu, reinicieu i torneu a obrir; compareu destinataris, cos i resums dels fitxers; exerciu un desament interromput | Conserveu l'estat incert de l'esborrany fins que es concilii; no deduïu una còpia de seguretat del perfil complet de l'èxit d'un esborrany remot |
+| Esborranys/fitxers | Deseu, reinicieu i torneu a obrir; compareu destinataris, cos i resums dels fitxers; provoqueu un desament interromput | Conserveu l'estat incert de l'esborrany fins que es conciliï; no deduïu una còpia de seguretat del perfil complet de l'èxit d'un esborrany remot |
 | Fora de línia/reconnexió | Desconnecteu només l'entorn de prova; llegiu el correu de la memòria cau i observeu una fallada honesta per a les dades que no hi són; torneu a connectar i compareu els canvis | Restaureu la connectivitat; comproveu duplicats i missatges no enviats/incerts abans de fer més accions |
 | Revocació | Revoqueu només la concessió de prova dedicada, observeu l'error del compte i torneu a autoritzar el mateix principal | Requereix una autorització explícita de revocació de la concessió; preserveu els comptes no relacionats |
 | Límit de freqüència | Feu servir un mecanisme de prova aprovat pel proveïdor, si n'hi ha; registreu Retry-After i l'absència de tempestes de reintents | No satureu mai un servei real per provocar la limitació; altrament deixeu aquesta fila sense provar i feu referència a la cobertura amb fixtures |
@@ -113,7 +113,7 @@ real com a fixtures.
   [canvis](design/graph-message-actions.md),
   [adjunts](design/graph-attachments.md),
   [enviament](design/graph-sending.md)). Una fila real registra els àmbits concedits i el
-  principal fixat; activa la safata d'entrada, obre altres carpetes, pagina i llegeix
+  principal fixat; activa la safata d'entrada, obre altres carpetes, recorre les pàgines i llegeix
   cossos i adjunts de la memòria cau; activa els canvis i comprova cadascun amb Outlook
   on the web; envia a un destinatari autoritzat i comprova Elements enviats; després es torna
   a connectar i comprova la invalidació. Les fixtures de bucle local de Rust cobreixen el

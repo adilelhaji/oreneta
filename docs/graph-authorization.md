@@ -41,7 +41,7 @@ Implementa l'ADR-0004 acceptat; cap canvi a l'OAuth existent d'Outlook/Gmail.
   del cicle de vida. El compte seleccionat es comprova mentre es manté el bloqueig; la supressió
   el manté fins que s'han suprimit el compte local i la memòria cau. Un inici en espera
   no pot recrear una associació a partir d'una comprovació obsoleta de l'existència del compte.
-- La renovació es serialitza amb la desconnexió/reconnexió d'aquesta concessió. Persistir un
+- La renovació es serialitza amb la desconnexió/reconnexió d'aquesta concessió. Desar un
   testimoni d'actualització rotat abans d'informar de l'èxit; si no hi ha rotació, es conserva el
   testimoni actual. La reautenticació, el consentiment revocat i la fallada d'emmagatzematge conserven
   el registre anterior; cap reintent a cegues. La desconnexió local només suprimeix els secrets de Graph,

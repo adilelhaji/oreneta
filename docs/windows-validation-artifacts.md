@@ -25,7 +25,7 @@ correcta de la substitució; ajornar els fitxers bloquejats i les sessions no de
 separada del directori canònic de binaris.
 
 Les proves automatitzades de la política cobreixen l'execució només per llançament manual, el checkout/porta exactes,
-els permisos de només lectura, les compilacions bloquejades, l'ordre nativa abans de l'artefacte,
+els permisos de només lectura, les compilacions bloquejades, l'ordre de la validació nativa abans de l'artefacte,
 l'evidència de fallades i l'absència de publicació. La CI i la compilació nativa llançada
 són evidències obligatòries separades; una definició de flux de treball per si sola no és un
 executable validat.

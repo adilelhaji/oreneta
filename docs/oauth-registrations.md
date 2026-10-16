@@ -7,7 +7,7 @@ Amb data 2026-10-10. No conté credencials: els noms de variable i els
 
 | Client | On és | Propietari | Àmbits |
 |---|---|---|---|
-| Google (Gmail, Calendar, Contactes) | `oauth_inherited.go`, ofuscat | Meron (Nonbili), heretat de la bifurcació | `https://mail.google.com/` (restringit), `userinfo.email` i `userinfo.profile`, `calendar` i `contacts.readonly` (sensibles) |
+| Google (Gmail, Calendari, Contactes) | `oauth_inherited.go`, ofuscat | Meron (Nonbili), heretat de la bifurcació | `https://mail.google.com/` (restringit), `userinfo.email` i `userinfo.profile`, `calendar` i `contacts.readonly` (sensibles) |
 | Microsoft (Outlook IMAP/SMTP i Microsoft Graph) | `oauth_inherited.go`, ofuscat | No consta que sigui d'Oreneta: va arribar amb la bifurcació, sense historial propi | IMAP/SMTP: `IMAP.AccessAsUser.All`, `SMTP.Send`, `offline_access`, `openid email profile`. Graph: `Mail.Read`; i, només si es demanen a part (ADR-0004), `Mail.ReadWrite` i `Mail.Send` |
 | Google o Microsoft propis d'Oreneta | — | Encara no existeixen | — |
 
@@ -74,7 +74,7 @@ amb un client que l'inici de sessió havia rebutjat, o amb un
 - **Pendent de confirmar.** Oreneta desa el correu només al dispositiu.
   No he confirmat a la documentació oficial si això eximeix de l'avaluació;
   només hi ha indicis de tercers. El responsable ho ha de confirmar abans de
-  decidir. No s'ha assumit que calgui una avaluació de pagament ni que no
+  decidir. No s'ha donat per fet que calgui una avaluació de pagament ni que no
   calgui.
 - **Bloquejat fins a autorització expressa:** crear registres, enviar a
   verificació o pagar una avaluació.

@@ -69,7 +69,7 @@ contrasenya a Exchange i només Oreneta l'emmagatzema.
 **"Could not connect… retrying" mentre el correu arriba a poc a poc, o
 `sync <folder>: timed out after 30s` al registre.** DavMail baixa el missatge complet
 d'Exchange per servir cada capçalera, de manera que sincronitzar una carpeta gran
-mitjançant EWS és molt més lent que l'IMAP directe i pot superar el pressupost de temps
+mitjançant EWS és molt més lent que l'IMAP directe i pot superar el límit de temps
 per defecte de 30s per carpeta de la sincronització d'Oreneta. Augmenteu-lo amb la
 variable d'entorn `MERON_SYNC_TIMEOUT` (en segons), p. ex. `MERON_SYNC_TIMEOUT=300`. Per a
 una instal·lació amb Flatpak:
@@ -100,7 +100,7 @@ el directori i les respostes automàtiques, cobreix (ADR-0058):
   (`Clients`). El primer llistat després de l'actualització trasllada al camí tot el que
   es guardava amb aquell nom: el correu de la memòria cau, les regles del compte, les
   converses posposades, les tasques, l'arxivament automàtic, els preferits, els colors,
-  les columnes del tauler i les cerques desades. Només no es pot distingir un nom que
+  les columnes del tauler i les cerques desades. L'única cosa que no es pot distingir és un nom que
   compartien dues carpetes: aquella memòria cau es torna a llegir.
 - **Confirmacions de lliurament:** se sol·liciten a Exchange en la petició de cada
   missatge (`IsDeliveryReceiptRequested`) quan l'interruptor de l'editor de missatges és
@@ -108,7 +108,7 @@ el directori i les respostes automàtiques, cobreix (ADR-0058):
   del MIME.
 - **Contactes i llistes de distribució:** Settings → People → "Read Exchange contacts"
   incorpora la carpeta de contactes. Les persones que conté són només de lectura; les
-  seves llistes de distribució són grups de contactes que es poden crear, reanomenar,
+  seves llistes de distribució són grups de contactes que es poden crear, canviar de nom,
   modificar i suprimir. Una llista modificada en un altre lloc des que es va llegir no se
   sobreescriu mai.
 - **Tasques:** Tasks → "Exchange tasks of …" manté la carpeta de tasques del compte com a

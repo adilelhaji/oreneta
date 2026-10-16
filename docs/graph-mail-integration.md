@@ -47,7 +47,7 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
 ## Identitat i projecció de carpetes
 
 - Els ID de carpeta/element de Graph continuen sent valors opacs, que distingeixen
-  majúscules i minúscules i qualificats pel compte. Taules de Graph separades els fan
+  majúscules i minúscules i que estan qualificats pel compte. Taules de Graph separades els fan
   correspondre als localitzadors de memòria cau existents. No analitzeu ni calculeu mai el
   resum (hash) d'un ID d'element per convertir-lo en un UID ni reutilitzeu la correspondència
   d'EWS. Assigneu substituts locals `u32` duradors de manera monòtona per compte; no
@@ -55,13 +55,13 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
 - Resoleu les carpetes d'ús especial mitjançant els àlies coneguts de Graph, no pels noms
   visibles traduïts. La safata d'entrada fa servir l'àlies de memòria cau `INBOX`
   existent; les altres carpetes fan servir un localitzador d'ID codificat estable. El nom
-  visible i la relació amb el pare són metadades separades, de manera que reanomenar o
+  visible i la relació amb el pare són metadades separades, de manera que canviar el nom o
   canviar de pare no altera les referències desades de la memòria cau/del kanban.
 - Recorreu les pàgines arrel i les pàgines de cada fill visible. Detecteu cicles, enllaços
   repetits, pares incoherents i ID en conflicte. Els límits fiten el treball per pàgina,
-  no la mida de bústia informada: no el trunqueu per considerar-lo després un arbre complet. En aquesta
+  no la mida de bústia informada: no presenteu com a arbre complet un recorregut truncat. En aquesta
   slice no se sol·liciten les carpetes ocultes/exclusives del sistema.
-- Persistiu de manera atòmica el llistat de carpetes complet i correcte. Un recorregut
+- Deseu de manera atòmica el llistat de carpetes complet i correcte. Un recorregut
   fallit deixa intacte el llistat anterior. Només les pertinences de memòria cau
   propietat de Graph es poden retirar quan la seva carpeta no apareix en un llistat de
   substitució complet.
@@ -93,7 +93,7 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
   remotes; les matrius de destinataris buides explícites continuen esborrant els
   destinataris remots obsolets.
 - Una continuació 410/caducada només descarta les etapes i inicia un estat explícit de
-  resincronització completa. Conserveu la memòria cau visible fins que aquesta ronda
+  ressincronització completa. Conserveu la memòria cau visible fins que aquesta ronda
   completa acabi; després elimineu només les seves pertinences de Graph que falten. No es
   barregen recorreguts antics i nous. Els errors de limitació i d'autenticació conserven
   les etapes i retornen una fallada tipada/un retard de reintent; cap reintent cec
@@ -109,18 +109,18 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
 
 ## Porta de validació
 
-Fixtures de proveïdor/magatzem/SQLite: jerarquia completa i interrompuda, noms duplicats,
-reanomenament/canvi de pare, ID opacs, pàgines/deltes dispersos/marques d'eliminació,
+Fixtures de proveïdor/magatzem segur/SQLite: jerarquia completa i interrompuda, noms duplicats,
+canvi de nom/de pare, ID opacs, pàgines/deltes dispersos/làpides,
 moviments, reversió atòmica, recuperació de 410, reinici/cancel·lació, col·lisió/aïllament
 de comptes, conservació d'esborranys/etiquetes locals, sanejament d'HTML i proteccions
 d'operacions no compatibles.
 Les proves del frontend d'entrada de producció cobreixen l'opció de Graph, el progrés de
 l'autorització/l'activació, error/reintent/cancel·lació, el compte de només lectura i la
 regressió de la configuració antiga.
-Les revisions de lògica/de negoci i els set jobs de CI del head exacte precedeixen el
+Les revisions de lògica/de negoci i els set jobs de CI del commit final exacte de la branca (head) precedeixen el
 commit de fusió.
 Les fixtures no estableixen la interoperabilitat amb un arrendatari real ni amb Windows
-natiu; aquestes i els artefactes instal·lables del SHA exacte continuen sent evidència
+natiu; aquesta interoperabilitat i els artefactes instal·lables del SHA exacte continuen sent evidència
 d'acceptació separada.
 
 Textos de la interfície: anglès i castellà; les cadenes noves de Graph fan servir l'anglès

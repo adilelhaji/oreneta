@@ -52,7 +52,7 @@ equiparen els àmbits del recurs d'Outlook, els només d'aplicació o els compar
   declarar-lo directament no afegeix cap paquet resolt nou.
 - Un punt de control de pàgina següent indica que la ronda és incompleta; un punt de control delta
   la tanca. X1 mai no confirma un punt de control ni suprimeix dades. Els consumidors han de
-  detectar cicles de recorregut repetits i persistir de manera atòmica els canvis aplicats amb
+  detectar cicles de recorregut repetits i desar de manera atòmica els canvis aplicats amb
   el punt de control completat a la slice de projecció posterior. Una làpida (tombstone) és un
   canvi del proveïdor, no una ordre per suprimir dades no relacionades o només locals.
 - Els camps de missatge parcials conserven `None` en lloc de fabricar valors falsos/buits.

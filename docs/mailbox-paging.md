@@ -17,7 +17,7 @@ conserven l'ordre del backend i eliminen duplicats per identitat de fil, inclose
 identitats duplicades dins d'una mateixa resposta.
 
 La codificació del cursor, la base de dades i les capacitats d'ordenació admeses no
-canvien. Són garanties de transport/estat, no una certificació d'ordenació extrem a
+canvien. Són garanties de transport/estat, no una certificació d'ordenació d'extrem a
 extrem.
 
 Validació: 21 de les 25 regressions d'estat inicials fallaven a `cde6e1f` abans de la
@@ -51,8 +51,8 @@ files totals. Agrupa la carpeta completa de la memòria cau, conserva les target
 missatge coincident i fa servir el `(date, UID)` coincident més recent per al remitent/la
 data mostrats. Els assumptes arrel canònics i els ID de branca provenen de la carpeta
 completa, no dels resultats filtrats. Els agregats de no llegits/destacats cobreixen la
-targeta de carpeta de la memòria cau; els recomptes de missatges conserven l'eliminació de
-duplicats entre carpetes existent amb l'abast del lector. Les claus de targeta/arrel
+targeta de carpeta de la memòria cau; els recomptes de missatges conserven l'eliminació existent de
+duplicats entre carpetes amb l'abast del lector. Les claus de targeta/arrel
 posposades s'exclouen abans de la paginació. No es recupera cap cos ni canvia cap marca de
 vist.
 
@@ -87,7 +87,7 @@ existent que té en compte la profunditat. Això no activa les rutes noves del n
 ## R4.6 (#73): activació del correu
 
 El correu Recent agrupat fa servir el servei de converses compartit a l'escriptori i al
-mòbil, inclosos els rols unificats els àmbits resolts de les quals només contenen
+mòbil, inclosos els rols unificats els àmbits resolts dels quals només contenen
 comptes de correu.
 La resposta declara `pagination: "conversation-v1"` fins i tot a les pàgines finals/buides.
 La resolució de rols, el límit global i les metadades de la resposta són compartits.

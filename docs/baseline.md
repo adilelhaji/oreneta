@@ -29,7 +29,7 @@ La CI captura la safata d'entrada, el lector, el redactor i les tasques en clar/
 Els artefactes identifiquen el SHA realment provat i la suma de verificació de la fixture. Les captures de
 Chromium són evidència de components, no una prova extrem a extrem en un webview natiu. Els valors per
 defecte Indigo existents es capturen tal com són: la direcció cobalt/marí aprovada és l'objectiu de
-comparació posterior a #32/#33, i aquesta línia base no l'aplica de manera silenciosa.
+la comparació que es farà a #32/#33, i aquesta línia base no l'aplica de manera silenciosa.
 Les importacions de fonts remotes s'eliminen a la compilació només de prova. Les fonts alternatives de la plataforma
 poden canviar les mètriques dels glifs: les captures de pantalla no són comparables píxel a píxel entre diferents
 instal·lacions de SO/fonts. La representació nativa de WebKitGTK/WKWebView/WebView2, l'IME i
@@ -79,7 +79,7 @@ a l'execució de validació de Windows.
 | PGP/S/MIME i còpia de seguretat d'identitat | #11, proves de criptografia i de còpia de seguretat | La interoperabilitat/confiança externa continua a #9/#12/#49; no certificat per simulacions |
 | Suggeriments de correu brossa | #18, proves Rust/React | Només suggeriments; l'explicabilitat i la seguretat davant repeticions continuen a #50 |
 | Sistema de disseny | Components/temes actuals; captures sintètiques de navegador | La direcció artística aprovada continua parcialment sense implementar; sense certificació d'accessibilitat |
-| Versions publicades | Porta d'SHA exacte de #58 i 41 proves | Administració de branques/etiquetes de git i portes restants a #26; no s'ha llançat cap publicació |
+| Versions publicades | Porta de SHA exacte de #58 i 41 proves | Administració de branques/etiquetes de git i portes restants a #26; no s'ha llançat cap publicació |
 
 ## Troballes de fiabilitat
 

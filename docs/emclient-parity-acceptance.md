@@ -9,7 +9,7 @@ nativa/de proveïdor i l'auditoria de detall.
 
 El [paquet d'acceptació de proveïdors](provider-acceptance.md) (#145/#184) afegeix un
 informe per operació per a la bateria d'integració IMAP/SMTP aïllada existent i
-procediments dedicats per a comptes reals. Un informe de fixtures superat no promou
+procediments dedicats per a comptes reals. Un informe de fixtures favorable no promou
 cap fila nativa/de proveïdor del registre a verified.
 
 ## Resum d'estat (2026-10-12)

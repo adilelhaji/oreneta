@@ -2,7 +2,7 @@
 
 L'entrada de producció (`src/main.tsx` → `App` → `boot`) s'ha de renderitzar en un
 navegador després de `bun run build`. Les proves de components i la línia base visual
-sintètica no exerceixen aquest contracte i no poden certificar que una finestra
+sintètica no posen a prova aquest contracte i no poden certificar que una finestra
 empaquetada s'iniciï.
 
 La incidència #75 reprodueix una fallada d'inici a Windows amb `useSyncExternalStore`
@@ -45,7 +45,7 @@ registrar per separat l'inici del nucli incrustat i una consulta de comptes corr
 Les evidències es pugen fins i tot en cas de fallada. No s'utilitza cap substitució
 del depurador, cap compte real ni cap perfil de producció. Això no prova cap
 actualització de l'instal·lador ni l'autenticació amb proveïdors.
-Els registres nativs continuen sent evidència de la CI; la publicació de la versió
+Els registres natius continuen sent evidència de la CI; la publicació de la versió
 només baixa els artefactes distribuïbles `oreneta-*`.
 
 Per a les compilacions que no es publiquen, feu servir la
@@ -54,4 +54,4 @@ més, requereix l'opció de configuració inicial de Graph; l'inici de sessió a
 proveïdors continua sense provar-se.
 
 Referències: [diagnosi de l'entorn d'execució de React duplicat](https://react.dev/warnings/invalid-hook-call-warning#duplicate-react),
-[deduplicació de dependències de Vite](https://vite.dev/config/shared-options.html#resolve-dedupe).
+[desduplicació de dependències de Vite](https://vite.dev/config/shared-options.html#resolve-dedupe).

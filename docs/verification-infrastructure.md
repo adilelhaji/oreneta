@@ -52,9 +52,9 @@ detectables per regla, no accessibilitat verificada.
 
 ## CardDAV contra un servidor real al job d'integració
 
-`radicale_harness_test.go` aixeca Radicale 3.5 a Docker amb autenticació
+`radicale_harness_test.go` engega Radicale 3.5 a Docker amb autenticació
 htpasswd, emmagatzematge en disc i drets només del propietari, igual que
-`maddy_harness_test.go` aixeca el servidor de correu. `integration_contacts_test.go`
+`maddy_harness_test.go` engega el servidor de correu. `integration_contacts_test.go`
 prova la ruta CardDAV del motor contra aquest servidor: descobriment des d'una adreça
 base, primera lectura, canvi al servidor recollit per una sincronització
 posterior, contrasenya rebutjada notificada i conservada amb el seu error, i

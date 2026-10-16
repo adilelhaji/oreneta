@@ -98,7 +98,7 @@ hi ha codi per a la funció.
 | Persones (CardDAV), tasques enllaçades a missatge, kanban, RSS | `carddav/`, `tasks.go`, `components/{people,tasks,kanban}` | #28, #41, #42 |
 | PGP i S/MIME | `crypto/`, `pgp.go`, `smime.go` | #9, #12, #49 |
 | Assistent amb proveïdor explícit i resultats revisables | `assistant.rs`, ADR-0006/0007 | #51, #52 |
-| Privadesa: imatges remotes, diagnòstic redactat, còpia de la configuració | `readerHtml.ts`, `applog.go`, `backup.go` | #54, #107 |
+| Privadesa: imatges remotes, diagnòstic amb dades emmascarades, còpia de la configuració | `readerHtml.ts`, `applog.go`, `backup.go` | #54, #107 |
 | Escriptori: notificacions, safata del sistema, mailto, servidor intermediari (proxy), dreceres, actualitzacions, OOF | arrel Go | #114/#147, #181 |
 | Configuració cercable ES/EN i salut dels comptes | #163, #165 | #149, #150 |
 
@@ -162,9 +162,9 @@ iteració, no al final. Els nivells de prova (N1–N6) es defineixen a la secci�
 | Simulador Graph a la integració | Servidor HTTP local amb respostes enregistrades (carpetes, delta, 429, 401, continuació); els fixtures Rust actuals passen a executar-se contra ell | #47 (nova filla) |
 | Banc de proves (harness) EWS reproduïble | Convertir `ews-smoketest.py` en una prova Go amb l'etiqueta `ews` que faci servir enregistraments SOAP quan no hi ha servidor; execució real només manual | #46/#98 (nova filla) |
 | Fluxos natius a Windows | Ampliar `test-windows-startup.ps1` amb un segon script de fluxos: afegir un compte IMAP contra maddy local, llegir, respondre, tancar i recuperar un esborrany | #147 (nova filla) |
-| Auditor d'accessibilitat | `@axe-core/playwright` a `startup.e2e.ts` i a la baseline; els errors crítics bloquegen, la resta s'informa | #37 |
+| Auditor d'accessibilitat | `@axe-core/playwright` a `startup.e2e.ts` i a la baseline; els errors crítics bloquegen, la resta es comunica | #37 |
 
-Criteri de sortida: les vuit suites existents continuen en verd, l'informe de
+Criteri de sortida: les set suites existents continuen en verd, l'informe de
 cobertura apareix a cada PR i la validació Windows inclou almenys un flux
 de correu complet.
 
@@ -180,9 +180,9 @@ va començar per #29 ([contracte](design/outgoing-mail-recovery.md)).
 
 | It. | Lliurament principal | Incidències | Proves obligatòries al PR | Sortida comprovable |
 |---|---|---|---|---|
-| 1 | **Integritat P0** | #27 escombrada acotada, #29 enviament incert durable, #28 contactes davant d'una sincronització parcial, #9/#12 criptografia | N1: reproducció de cada risc com a prova que falla abans i passa després; N3: enviament interromput contra maddy (tall després de DATA, reinici del sidecar) i CardDAV parcial contra Radicale; N1 criptografia amb claus generades per GnuPG/OpenSSL a la prova | Cada risc amb reproducció automatitzada i correcció fusionada; decisions #24/#25 només on bloquegin |
+| 1 | **Integritat P0** | #27 escombrada limitada, #29 enviament incert durable, #28 contactes davant d'una sincronització parcial, #9/#12 criptografia | N1: reproducció de cada risc com a prova que falla abans i passa després; N3: enviament interromput contra maddy (tall després de DATA, reinici del sidecar) i CardDAV parcial contra Radicale; N1 criptografia amb claus generades per GnuPG/OpenSSL a la prova | Cada risc amb reproducció automatitzada i correcció fusionada; decisions #24/#25 només on bloquegin |
 | 2 | **Esborranys i redacció complets** | #170, #39, #40 | N1 magatzem d'esborranys (concurrència, disc ple, registre corrupte); N2 editor amb reinici simulat, pestanyes múltiples, adjunts; N4 flux natiu «escriure, tancar l'app, tornar a obrir» | Reinici, error de disc i pestanyes múltiples sense pèrdua; visualitzacions prèvies per tipus i error |
-| 3 | **Escriptura a Graph** | #141 accions, #142 adjunts | N1 Rust per operació (èxit, 429 amb Retry-After, 401 revocat, resposta parcial, cancel·lació); N3 contra el simulador Graph; N2 la UI desactiva el que no s'admet també per teclat i en lot | Marques/moure/esborrar amb resultat recuperable; adjunts acotats |
+| 3 | **Escriptura a Graph** | #141 accions, #142 adjunts | N1 Rust per operació (èxit, 429 amb Retry-After, 401 revocat, resposta parcial, cancel·lació); N3 contra el simulador Graph; N2 la UI desactiva el que no s'admet també per teclat i en lot | Marques/moure/esborrar amb resultat recuperable; adjunts de mida limitada |
 | 4 | **Enviament per Graph i continuïtat d'Exchange** | #143, #46, #48 | N3 enviament amb desconnexió entre `createMessage` i `send`, verificant que no es duplica; banc de proves EWS amb enregistraments per a delegació i OOF; N5 una execució autoritzada contra M365 si hi ha compte | Enviament amb resultat incert durable; exposició d'EWS Online documentada per compte/operació |
 | 5 | **Shell de correu tancat** | #33, #34, #35, #36, #87, #30 | N2 producció a 599/600/601, 768/769, 1024/1025, 1440 i zoom del 200 %; captures de pantalla de referència en clar/fosc comparades; N3 ordenació estable amb arribades concurrents contra maddy; N6 axe sense errors crítics | Flux complet de lectura/organització a l'app nativa; preferits, colors i arrossegament; ordenació estable entre pàgines |
 | 6 | **Candidat instal·lable** | #144, #147, #181, #148, #188 (només validació), #145 | N4 instal·lar, actualitzar des de la versió anterior, desinstal·lar i restaurar un perfil sintètic; N6 mesures 1k/10k/100k al dispositiu de referència; N5 files en directe IMAP i M365 amb el procediment de [provider-acceptance.md](provider-acceptance.md) | Executable del SHA exacte amb manifest; files S01 i de proveïdor a `verified` on hi hagi evidència; pilot #55 decidit |
@@ -209,7 +209,7 @@ magatzem local, amb adjunts, revisions, conflicte visible, làpida (tombstone) e
 i migració des de localStorage
 ([contracte](design/editor-draft-recovery.md)). De #39 es lliuren els
 destinataris amb coma al nom en respostes i contactes, i l'avís
-d'adjunt oblidat ([contracte](design/composition-safety.md)). De #40, l'escapament
+d'adjunt oblidat ([contracte](design/composition-safety.md)). De #40, l'escapada
 de plantilles de text i la visualització prèvia de PDF que no redibuixava la pàgina 1
 ni conservava el document en tornar a renderitzar
 ([contracte](design/template-preview-safety.md)). Continuen oberts el flux
@@ -222,7 +222,7 @@ Estat de la iteració 3 (2026-10-10): #141 permet canviar missatges a Graph
 `Mail.ReadWrite` demanat a part, amb el lot resolt abans d'enviar, aturada a la
 primera fallada, resultat incert sense repetició i reconciliació per delta
 ([contracte](design/graph-message-actions.md)). #142 llegeix els adjunts i les
-imatges en línia per MIME amb l'analitzador d'IMAP, n'acota la mida i indica
+imatges inserides per MIME amb l'analitzador d'IMAP, en limita la mida i indica
 que els adjunts al núvol no estan disponibles
 ([contracte](design/graph-attachments.md)). El simulador Graph continua sent el
 servidor de bucle local amb respostes en línia. La certificació amb un
@@ -254,7 +254,7 @@ text secundari il·legible en temes personalitzats (#33); carpeta nova fora
 de l'arbre fins a sincronitzar (#87). Continuen oberts les captures de referència
 comparades (N2), l'ordenació estable amb arribades concurrents contra maddy (N3),
 el flux natiu (N4), i els preferits, colors i arrossegament de #87. L'ordenació per
-columna a la cerca, els destacats, els posposats i la vista unificada amb canals queda com a
+columna a la cerca, als destacats, als posposats i a la vista unificada amb canals queda com a
 decisió del nucli (ADR-0003).
 
 Estat de la iteració 6 (2026-10-10): només avança el que no necessita Windows
@@ -283,7 +283,7 @@ responsable:
 |---|---|---|---|---|
 | 7 | **Còpia completa i restauració** | #171, #172, #173, #113 | N1 format versionat (contrasenya incorrecta, corrupció byte a byte, versió futura, interrupció a mig fer); N3 captura amb escriptures concurrents del sidecar; N4 restauració nativa en un perfil aïllat i activació reversible | ADR-0010 ja aprovada |
 | 8 | **Calendari i invitacions** | #100, #101 (CalDAV), #102 | N3 contra Radicale (recurrència, zones horàries, conflicte d'ETag) i banc de proves EWS (convidar, acceptar, cancel·lar, free/busy); N1 iTIP amb fixtures RFC 5546; N2 vistes amb dates límit (canvi d'hora, anys de traspàs) | Cap |
-| 9 | **Contactes i tasques** | #41, #42, #103 | N3 edició CardDAV amb conflicte i deduplicació; N1 model de tasques amb migració des de la tasca enllaçada; N2 fluxos de recuperació | Model de tasques completes (ADR nova) |
+| 9 | **Contactes i tasques** | #41, #42, #103 | N3 edició CardDAV amb conflicte i desduplicació; N1 model de tasques amb migració des de la tasca enllaçada; N2 fluxos de recuperació | Model de tasques completes (ADR nova) |
 | 10 | **Notes, importació i perfils** | #104, #112, #99 | N1 importació mbox/eml amb un corpus mal format (capçaleres trencades, codificacions mixtes, adjunts truncats) i propietat d'anada i tornada exportar→importar; N3 aïllament entre perfils (credencials, memòria cau, esborranys); N4 canvi de perfil natiu | Emmagatzematge de notes, formats d'importació, model de perfil (tres ADR) |
 
 Estat de la iteració 7 (2026-10-11): el que existeix és la còpia de la
@@ -402,7 +402,7 @@ mbox/eml amb un corpus de regressió versionat al repositori.
 |---|---|---|---|---|
 | 11 | **Organització avançada** | #91 categories, #92 macros, #93 adjunts, #43 vistes vives, #95 etiquetes | N1 classificació determinista amb correcció de l'usuari persistent; N3 macros només sobre el conjunt revisat (regressió de #27); N2 vistes vives que no amplien el lot | Cap |
 | 12 | **Automatització i enviament avançat** | #94, #88, #89, #90, #45 | N3 regles de servidor per proveïdor (Sieve contra maddy, regles de safata d'EWS enregistrades); N1 enviament massiu amb resultat parcial per destinatari; N3 desfer/programat amb reinici a mig fer | Capacitats per proveïdor |
-| 13 | **Privadesa i idioma** | #107, #105, #106, #49, #50 | N1 bloqueig de rastrejadors amb un corpus d'HTML real anonimitzat; N1 gramàtica/traducció amb models empaquetats i comprovació d'absència de xarxa (prova que falla si hi ha un sòcol); N5 interoperabilitat criptogràfica amb Thunderbird/Outlook en comptes de prova | ADR-0001 ja aprovada |
+| 13 | **Privadesa i idioma** | #107, #105, #106, #49, #50 | N1 bloqueig de rastrejadors amb un corpus d'HTML real anonimitzat; N1 gramàtica/traducció amb models empaquetats i comprovació d'absència de xarxa (prova que falla si hi ha un sòcol); N5 interoperabilitat criptogràfica amb Thunderbird/Outlook amb comptes de prova | ADR-0001 ja aprovada |
 | 14 | **Integracions i assistent** | #51, #52, #108, #109 | N1 context de l'assistent: prova que falla si surt un camp no consentit; N3 proveïdors de núvol amb simulador i revocació | Proveïdors i consentiment (ADR) |
 | 15 | **Xat i POP3** | #110 → #111, #97 | N3 POP3 contra maddy (UIDL, reconnexió, esborrament diferit, sense duplicats després d'un reinici); xat segons l'adaptador aprovat | Dues ADR |
 | 16 | **Plataformes i evolució** | #115, #116, #117, #86, #22/#21 | N4 macOS amb un executor (runner) propi per a l'arrencada i un flux de correu; Linux amb `startup:verify` sobre WebKitGTK; registre complet | Cap |
@@ -422,15 +422,15 @@ Estat de la iteració 11 (2026-10-11, per delegació):
   sincronització, Tot i Altres sempre presents i recomptes amb cobertura
   (ADR-0023, [registre](design/inbox-categories.md)).
 - **#95:** inventari d'etiquetes, categories i anotacions per flux,
-  amb la seva prova; etiquetar en lot sense trepitjar altres etiquetes; proves de
+  amb la seva prova; etiquetar en lot sense sobreescriure altres etiquetes; proves de
   moviment, reinici, aïllament i separació. Exchange i IMAP queden
   pendents d'evidència real ([registre](design/labels-certification.md)).
 
 Estat de la iteració 12 (2026-10-12, per delegació):
 - **#89:** una resposta dins del seu període per desfer ja no es perd en
   tancar; dos enviaments simultanis no es donen per enviats; s'avisa que
-  cal l'app i dels enviaments endarrerits; els posposats moguts segueixen
-  la vista (ADR-0024, [registre](design/send-lifecycle.md)).
+  cal l'app i dels enviaments endarrerits; els posposats moguts continuen
+  visibles (ADR-0024, [registre](design/send-lifecycle.md)).
 - **#45:** esperar resposta al que s'ha enviat, amb la resposta reconeguda per
   `In-Reply-To`, conversa i remitent (mai per l'assumpte), dubtes que
   decideix la persona i un recordatori que només avisa dins de l'app
@@ -444,7 +444,7 @@ Estat de la iteració 12 (2026-10-12, per delegació):
   impedeixen enviar, resultat per destinatari, pausa davant dels límits i cap
   reintent a cegues (ADR-0026, [registre](design/personalized-mailings.md)).
 - **#94:** inventari per proveïdor i regles al servidor per ManageSieve,
-  amb traducció exacta o, si no, la regla sencera es queda aquí, sense trepitjar còpies
+  amb traducció exacta o, si no, la regla sencera es queda aquí, sense sobreescriure còpies
   canviades ni desactivar altres scripts i sense aplicar-la dues vegades. Gmail, EWS i
   Graph queden bloquejats per permisos i evidència
   (ADR-0027, [registre](design/server-rules.md)).
@@ -457,7 +457,7 @@ Estat de la iteració 13 (2026-10-12, per delegació):
   (ADR-0028, [registre](design/spam-lists-and-rule-runs.md)).
 - **#49:** OpenPGP i S/MIME comprovats en tots dos sentits contra GnuPG i
   OpenSSL; corregits el `MIME-Version` duplicat, la signatura armada com a missatge i
-  els algorismes no compatibles informats com a danys
+  els algorismes no compatibles notificats com a danys
   ([registre](design/crypto-interop.md)).
 - **#107:** EasyPrivacy fixada amb procedència, aplicada al sanejament del
   nucli (entitats, CSS, `<style>`), recompte visible amb la regla,
@@ -470,12 +470,12 @@ Estat de la iteració 13 (2026-10-12, per delegació):
 - **#106:** traducció amb Bergamot en un worker; models de Mozilla d'un
   registre fix amb resums (hash), baixats pel nucli només a petició i després de
   veure'n la mida i l'origen, comprovats i col·locats de manera atòmica; al
-  lector, amb l'original a un clic; al composer, revisada abans de
+  lector, amb l'original a un clic; a l'editor, revisada abans de
   fer-la servir (ADR-0031, [registre](design/offline-translation.md)).
 - Les proves e2e s'executen ara amb la CSP de producció; així es va veure que
   WebAssembly i els seus workers estaven bloquejats.
-- La iteració 13 queda completa en allò automatitzable; falta N5 (interoperabilitat
-  amb Thunderbird/Outlook en comptes de prova) a la verificació final.
+- La iteració 13 queda completa en el que és automatitzable; falta N5 (interoperabilitat
+  amb Thunderbird/Outlook amb comptes de prova) a la verificació final.
 
 Estat de la iteració 14 (2026-10-12, per delegació):
 - **#51/#52 (estable):** l'assistent està desactivat per defecte, i el que es
@@ -497,7 +497,7 @@ Estat de la iteració 14 (2026-10-12, per delegació):
   en qualsevol calendari, amb «Unir-se». Google Meet es crea, es manté i
   es treu només en triar-lo, sense duplicats. Els altres queden bloquejats pels
   seus registres (ADR-0034, [registre](design/online-meetings.md)).
-- La iteració 14 queda completa en allò automatitzable; falten els registres
+- La iteració 14 queda completa en el que és automatitzable; falten els registres
   OAuth del propietari i N5.
 
 Estat de la iteració 15 (2026-10-12, per delegació):
@@ -514,8 +514,8 @@ Estat de la iteració 15 (2026-10-12, per delegació):
 
 Estat de la iteració 16 (2026-10-12, per delegació):
 - **#86:** «Historial amb …» al tauler de la conversa: converses,
-  reunions properes i fitxers d'aquella persona en aquell compte, cadascun
-  obrint el seu origen. Coincideix per adreça completa i diu quant
+  reunions properes i fitxers d'aquella persona en aquell compte; cadascun
+  obre el seu origen. Coincideix per adreça completa i diu quant
   correu hi ha aquí ([registre](design/contextual-sidebar.md)).
 - **#115:** el binari de producció arrenca dues vegades en un perfil nou
   sobre WebKitGTK (Linux) i WKWebView (macOS) amb la CSP de producció, a la
@@ -537,7 +537,7 @@ Estat de la iteració 16 (2026-10-12, per delegació):
 - **#102, el que queda pendent d'ADR-0019:** proposar una altra hora (COUNTER) des de la
   targeta d'una invitació, i com a organitzador veure la proposta, rebutjar-la
   (DECLINECOUNTER) o obrir-la a l'editor amb l'hora proposada. Desar en
-  calendaris locals i CalDAV no avisa els assistents, i així es diu. L'editor
+  calendaris locals i CalDAV no avisa els assistents, i així s'indica. L'editor
   i les targetes avisen de les coincidències amb l'agenda pròpia,
   sense xarxa. La disponibilitat d'altres persones des dels servidors queda
   bloquejada (ADR-0043, [registre](design/counter-proposals.md)).
@@ -598,7 +598,7 @@ quan, a més, hi ha N4/N5 aplicable.
    anteriors. Si una família no s'hi aplica, el PR ho diu.
 3. **Cap ruta d'escriptura cap a un proveïdor sense prova de resultat
    incert**: desconnexió entre petició i confirmació, reintent i
-   deduplicació.
+   desduplicació.
 4. **La cobertura per paquet no baixa** respecte a main; una baixada exigeix
    una justificació explícita al PR.
 5. **Cap prova s'omet, es desactiva o es marca com a inestable (flaky)** per obtenir el verd;

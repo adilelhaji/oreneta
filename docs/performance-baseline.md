@@ -7,7 +7,7 @@ abans de proposar cap dependència de virtualització o de bancs de proves (benc
 
 `node scripts/perf/mail-dataset.mjs --sizes=1000,10000,100000` genera les mateixes
 metadades de missatges a cada execució. El generador no té efectes secundaris i no
-contacta cap proveïdor. Cada informe registra les mides sol·licitades, el SHA-256 del
+contacta amb cap proveïdor. Cada informe registra les mides sol·licitades, el SHA-256 del
 conjunt de dades canònic, el commit, Node/l'entorn d'execució, la plataforma i l'estat
 de la memòria cau.
 
