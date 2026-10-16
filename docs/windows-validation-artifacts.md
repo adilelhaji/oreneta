@@ -1,54 +1,54 @@
-# Windows validation artifacts (#131)
+# Artefactes de validació de Windows (#131)
 
-Child of #114. Build the existing Wails/Rust application for Windows amd64;
-no architecture, signing or update-channel change. Do not dispatch `release.yml`
-for validation: its manual path also publishes a public release.
+Filla de #114. Compilar l'aplicació Wails/Rust existent per a Windows amd64;
+cap canvi d'arquitectura, de signatura ni de canal d'actualització. No llançar `release.yml`
+per a la validació: la seva via manual també publica una versió pública.
 
-`windows-validation.yml` is an explicit CI-only build with read-only repository
-permissions. Check out the dispatch SHA, require its completed seven-job main
-CI through the existing release-gate policy (without a tag requirement), then
-build locked Rust/Bun dependencies, the embedded sidecar and NSIS installer.
-Never substitute a newer branch checkout for the checked commit.
+`windows-validation.yml` és una compilació explícita només de CI amb permisos de
+repositori de només lectura. Fa el checkout del SHA del llançament, exigeix que la seva CI de main de set jobs
+s'hagi completat mitjançant la política de porta de publicació existent (sense requisit d'etiqueta) i després
+compila les dependències bloquejades de Rust/Bun, el sidecar incrustat i l'instal·lador NSIS.
+No substituir mai el commit comprovat per un checkout més nou de la branca.
 
-The existing isolated native startup/restart test must pass and find the Graph
-account choice. No sign-in, real mailbox or existing user profile is used.
-Upload diagnostics even on failure; upload canonical `oreneta.exe` and
-`oreneta-amd64-installer.exe` only after native validation succeeds. A JSON
-manifest binds both SHA256 hashes to the full source SHA and workflow run.
+La prova nativa aïllada existent d'arrencada/reinici ha de passar i trobar l'opció de compte
+Graph. No es fa servir cap inici de sessió, bústia real ni perfil d'usuari existent.
+Pujar els diagnòstics fins i tot en cas de fallada; pujar els canònics `oreneta.exe` i
+`oreneta-amd64-installer.exe` només després que la validació nativa tingui èxit. Un manifest JSON
+vincula els dos resums SHA256 al SHA complet del codi font i a l'execució del flux de treball.
 
-This pipeline creates CI artifacts, never tags, releases, updater manifests or
-store submissions. It does not certify account-provider interoperability,
-installer upgrade/uninstall, signing, other architectures or eM Client parity.
-After download, verify both hashes and source SHA before replacing local output.
-Retire only superseded application binaries to the Recycle Bin after successful
-replacement verification; defer locked files/unsaved sessions. Keep evidence
-separate from the canonical binary directory.
+Aquest procés crea artefactes de CI, mai etiquetes, versions publicades, manifests de l'actualitzador ni
+enviaments a botigues. No certifica la interoperabilitat amb proveïdors de comptes,
+l'actualització/desinstal·lació de l'instal·lador, la signatura, altres arquitectures ni la paritat amb eM Client.
+Després de la baixada, verificar els dos resums i el SHA del codi font abans de substituir la sortida local.
+Retirar a la Paperera de reciclatge només els binaris d'aplicació substituïts, després d'una verificació
+correcta de la substitució; ajornar els fitxers bloquejats i les sessions no desades. Mantenir l'evidència
+separada del directori canònic de binaris.
 
-Automated policy tests cover dispatch-only execution, exact checkout/gate,
-read-only permissions, locked builds, native-before-artifact ordering,
-failure evidence and absence of publication. CI plus the dispatched native
-build are separate required evidence; a workflow definition alone is not a
-validated executable.
+Les proves automatitzades de la política cobreixen l'execució només per llançament manual, el checkout/porta exactes,
+els permisos de només lectura, les compilacions bloquejades, l'ordre nativa abans de l'artefacte,
+l'evidència de fallades i l'absència de publicació. La CI i la compilació nativa llançada
+són evidències obligatòries separades; una definició de flux de treball per si sola no és un
+executable validat.
 
-The 2026-10-06 candidate (run 37426555798) rendered onboarding and started the
-embedded engine but failed the zoom check before sending Ctrl+0. Its C# INPUT
-union omitted MOUSEINPUT, producing a 32-byte structure instead of Win64's
-40-byte ABI. Keep all three Win32 union members. Main Windows CI runs
-`scripts/test-windows-startup.ps1 -ValidateInputLayout` to assert the marshalled
-size and union offset without launching an app or sending input. The packaged
-startup/restart and actual zoom checks remain mandatory.
-See Microsoft's [INPUT definition](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-input).
+El candidat del 2026-10-06 (execució 37426555798) va representar la incorporació i va iniciar el
+motor incrustat, però va fallar la comprovació de zoom abans d'enviar Ctrl+0. La seva unió INPUT de C#
+ometia MOUSEINPUT, cosa que produïa una estructura de 32 bytes en lloc de l'ABI de 40 bytes
+de Win64. Cal mantenir els tres membres de la unió Win32. La CI de Windows de main executa
+`scripts/test-windows-startup.ps1 -ValidateInputLayout` per comprovar la mida
+serialitzada i el desplaçament de la unió sense llançar cap aplicació ni enviar entrada. Les comprovacions
+d'arrencada/reinici empaquetades i la de zoom real continuen sent obligatòries.
+Vegeu la [definició d'INPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-input) de Microsoft.
 
-Run 37429870187 subsequently confirmed that Wails disables browser keyboard
-accelerators. Native zoom acceptance uses Ctrl+wheel, with enlargement and
-restoration measured on both launches; see [mail boundaries](design/mail-boundaries.md).
-Rust dependency caches are retained if a later native check fails, avoiding a
-full dependency rebuild during diagnosis. This does not upload failed application
-binaries or relax the exact-source CI/native artifact gate.
+L'execució 37429870187 va confirmar després que Wails desactiva les dreceres de teclat
+del navegador. L'acceptació del zoom natiu fa servir Ctrl+roda, amb l'ampliació i la
+restauració mesurades en tots dos llançaments; vegeu [límits del correu](design/mail-boundaries.md).
+Les memòries cau de dependències de Rust es conserven si una comprovació nativa posterior falla, cosa que evita
+recompilar totes les dependències durant el diagnòstic. Això no puja binaris d'aplicació
+fallits ni relaxa la porta d'artefactes de CI/nativa de codi font exacte.
 
-Run 37434499697 reached native zoom but found the editor outside the visible
-portion of the scrollable form. The check now exercises Tab/Shift+Tab reachability
-before asserting focus, full editor bounds, growth and restoration. It records
-pre-scroll accessibility geometry even on failure. A 410x280 CSS-pixel browser
-regression covers the same keyboard route and all provider choices; it does not
-replace the required native candidate run.
+L'execució 37434499697 va arribar al zoom natiu però va trobar l'editor fora de la part visible
+del formulari desplaçable. Ara la comprovació exercita l'accessibilitat per Tab/Maj+Tab
+abans de comprovar el focus, els límits complets de l'editor, el creixement i la restauració. Registra
+la geometria d'accessibilitat prèvia al desplaçament fins i tot en cas de fallada. Una prova de regressió del navegador
+de 410x280 píxels CSS cobreix la mateixa ruta de teclat i totes les opcions de proveïdor; no
+substitueix l'execució nativa obligatòria del candidat.

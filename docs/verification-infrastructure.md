@@ -1,98 +1,98 @@
-# Infraestructura de verificación (iteración 0)
+# Infraestructura de verificació (iteració 0)
 
-Entregas de la iteración 0 del [plan de finalización](completion-plan-2026-10-09.md),
-que preparan las pruebas que las iteraciones siguientes necesitan. Ninguna de
-ellas certifica un proveedor real ni la aplicación nativa; declaran lo que miden
-y dónde termina su evidencia.
+Lliuraments de la iteració 0 del [pla de finalització](completion-plan-2026-10-09.md),
+que preparen les proves que necessiten les iteracions següents. Cap
+d'ells certifica un proveïdor real ni l'aplicació nativa; declaren què mesuren
+i on acaba la seva evidència.
 
-## Cobertura medida en cada ejecución de CI
+## Cobertura mesurada en cada execució de CI
 
-| Capa | Comando en `test.yml` | Artefacto |
+| Capa | Ordre a `test.yml` | Artefacte |
 |---|---|---|
-| Go | `go test -tags webkit2_41 -coverprofile=coverage/go.out ./...` y `go tool cover -func` | `coverage-go-<sha>` (perfil y resumen) |
-| Rust | `cargo llvm-cov --lcov` sobre `meron-core` y `cargo llvm-cov report --summary-only` | `coverage-rust-<sha>` (lcov y resumen) |
+| Go | `go test -tags webkit2_41 -coverprofile=coverage/go.out ./...` i `go tool cover -func` | `coverage-go-<sha>` (perfil i resum) |
+| Rust | `cargo llvm-cov --lcov` sobre `meron-core` i `cargo llvm-cov report --summary-only` | `coverage-rust-<sha>` (lcov i resum) |
 | Frontend | `bun test --coverage --coverage-reporter=lcov --coverage-reporter=text` | `coverage-frontend-<sha>` (lcov) |
 
-Las suites son las mismas que antes: `cargo llvm-cov` ejecuta los tests del motor
-con binarios instrumentados y un test que falla sigue fallando el job. No se fija
-umbral todavía; el primer informe de `main` es la referencia que la puerta
-«por PR» del plan usará para exigir que la cobertura por paquete no baje. El
-job `go-windows` y el móvil no miden cobertura en esta entrega.
+Les suites són les mateixes que abans: `cargo llvm-cov` executa les proves del motor
+amb binaris instrumentats i una prova que falla continua fent fallar el job. Encara
+no es fixa cap llindar; el primer informe de `main` és la referència que la porta
+«per PR» del pla farà servir per exigir que la cobertura per paquet no baixi. El
+job `go-windows` i el mòbil no mesuren cobertura en aquest lliurament.
 
-Referencia local del motor Rust en el código de esta entrega (Linux, 891 tests):
-61,7 % de líneas, 59,1 % de funciones, 58,5 % de regiones. Es una medida de
-sesión, no un umbral ni evidencia de CI; el valor de referencia oficial será el
-del primer artefacto en `main`.
+Referència local del motor Rust en el codi d'aquest lliurament (Linux, 891 proves):
+61,7 % de línies, 59,1 % de funcions, 58,5 % de regions. És una mesura de
+sessió, no un llindar ni evidència de CI; el valor de referència oficial serà el
+del primer artefacte a `main`.
 
-Localmente: `go test -coverprofile`, `bun test --coverage` y, con
-`cargo-llvm-cov` y el componente `llvm-tools-preview` instalados,
+Localment: `go test -coverprofile`, `bun test --coverage` i, amb
+`cargo-llvm-cov` i el component `llvm-tools-preview` instal·lats,
 `cargo llvm-cov --manifest-path meron-core/Cargo.toml`.
 
-## Auditoría automática de accesibilidad
+## Auditoria automàtica d'accessibilitat
 
-`frontend/e2e/startup.e2e.ts` ejecuta `@axe-core/playwright` con las reglas
-WCAG 2.1 A/AA sobre tres pantallas de la entrada de producción: la
-incorporación sin cuenta y el buzón con cuenta, lista y conversación, en los
-temas claro y oscuro a 1440 px. Una violación `critical` o `serious` falla el
-test; el resultado completo, incluidas las moderadas y menores y las reglas
-`incomplete`, se adjunta al informe y se escribe en `startup-results/axe-*.json`,
-que ya sube el artefacto `baseline-<sha>`.
+`frontend/e2e/startup.e2e.ts` executa `@axe-core/playwright` amb les regles
+WCAG 2.1 A/AA sobre tres pantalles de l'entrada de producció: la
+incorporació sense compte i la bústia amb compte, llista i conversa, en els
+temes clar i fosc a 1440 px. Una violació `critical` o `serious` fa fallar la
+prova; el resultat complet, incloses les moderades i menors i les regles
+`incomplete`, s'adjunta a l'informe i s'escriu a `startup-results/axe-*.json`,
+que ja puja l'artefacte `baseline-<sha>`.
 
-La primera ejecución encontró una violación seria real: el acento del tema
-oscuro (`#7ea6ff`) sobre el fondo activo (`#293f63`) daba 4,42:1 en la carpeta
-y la cuenta seleccionadas. El fondo activo oscuro pasa a `#253a5c` (4,78:1 con
-el acento, 9,7:1 con el texto, sigue distinguible de la superficie) y
-`themes.test.ts` exige desde ahora acento sobre fondo activo ≥ 4,5:1 en ambos
-temas por defecto.
+La primera execució va trobar una violació greu real: l'accent del tema
+fosc (`#7ea6ff`) sobre el fons actiu (`#293f63`) donava 4,42:1 a la carpeta
+i al compte seleccionats. El fons actiu fosc passa a `#253a5c` (4,78:1 amb
+l'accent, 9,7:1 amb el text, continua distingible de la superfície) i
+`themes.test.ts` exigeix des d'ara accent sobre fons actiu ≥ 4,5:1 en tots dos
+temes per defecte.
 
-Lo que esta auditoría no cubre sigue en #37: orden de foco real, anuncios de
-lector de pantalla, comprobación nativa en Windows, pantallas secundarias y los
-estados con el bridge real. Una ejecución verde es ausencia de violaciones
-detectables por regla, no accesibilidad verificada.
+El que aquesta auditoria no cobreix continua a #37: ordre de focus real, anuncis de
+lector de pantalla, comprovació nativa a Windows, pantalles secundàries i els
+estats amb el pont real. Una execució verda és absència de violacions
+detectables per regla, no accessibilitat verificada.
 
-## CardDAV contra un servidor real en el job de integración
+## CardDAV contra un servidor real al job d'integració
 
-`radicale_harness_test.go` levanta Radicale 3.5 en Docker con autenticación
-htpasswd, almacenamiento en disco y derechos solo del propietario, igual que
-`maddy_harness_test.go` levanta el servidor de correo. `integration_contacts_test.go`
-prueba la ruta CardDAV del motor contra él: descubrimiento desde una dirección
-base, primera lectura, cambio en el servidor recogido por una sincronización
-posterior, contraseña rechazada notificada y conservada con su error, y
-servidor inaccesible sin perder los contactos ya leídos.
+`radicale_harness_test.go` aixeca Radicale 3.5 a Docker amb autenticació
+htpasswd, emmagatzematge en disc i drets només del propietari, igual que
+`maddy_harness_test.go` aixeca el servidor de correu. `integration_contacts_test.go`
+prova la ruta CardDAV del motor contra aquest servidor: descobriment des d'una adreça
+base, primera lectura, canvi al servidor recollit per una sincronització
+posterior, contrasenya rebutjada notificada i conservada amb el seu error, i
+servidor inaccessible sense perdre els contactes ja llegits.
 
-El servidor queda disponible también para CalDAV (#101) y para las pruebas de
-contactos parciales de #28 y #41. La imagen se descarga en el job `integration`;
-el informe de aceptación sigue cubriendo solo `TestIntegrationMailFlow`, pero un
-fallo de `TestIntegrationContacts` falla el job.
+El servidor queda disponible també per a CalDAV (#101) i per a les proves de
+contactes parcials de #28 i #41. La imatge es baixa al job `integration`;
+l'informe d'acceptació continua cobrint només `TestIntegrationMailFlow`, però una
+fallada de `TestIntegrationContacts` fa fallar el job.
 
-Para que esta ruta fuera comprobable, el modo `MERON_KEYRING=off` del motor
-guarda ahora los secretos en memoria durante la vida del proceso, como su propio
-comentario prometía: una fuente de contactos que almacena su contraseña y la lee
-al sincronizar funciona igual que con llavero; solo se pierde la persistencia
-entre reinicios. Los registros Graph siguen fallando cerrados en ese modo.
+Perquè aquesta ruta fos comprovable, el mode `MERON_KEYRING=off` del motor
+desa ara els secrets en memòria durant la vida del procés, com prometia el seu propi
+comentari: una font de contactes que emmagatzema la contrasenya i la llegeix
+en sincronitzar funciona igual que amb clauer; només es perd la persistència
+entre reinicis. Els registres Graph continuen fallant tancats en aquest mode.
 
-## Simulador Graph y grabaciones EWS: alcance decidido
+## Simulador Graph i enregistraments EWS: abast decidit
 
-- **Graph.** Los tests Rust de `graph/` ya levantan un servidor HTTP local por
-  prueba (límite de peticiones, ámbitos, continuación, cancelación, reversión de
-  caché). Falta un simulador reutilizable que atraviese el sidecar entero y que
-  sirva a las escrituras de #141–#143. Decisión: extraer el servidor falso a un
-  helper compartido cuando llegue la iteración 3, con las respuestas grabadas
-  que esas slices necesiten; no se añade ahora un segundo simulador paralelo.
-- **EWS.** `ews-smoketest.py` prueba contra un Exchange real a mano. Las
-  grabaciones SOAP reproducibles exigen un servidor de pruebas o grabaciones
-  autorizadas (dependencia 6 del plan). Hasta entonces, la cobertura EWS sigue
-  siendo la unitaria de `exchange.rs` y la ejecución manual del smoke test;
-  no se inventan grabaciones sintéticas que simulen un servidor nunca observado.
+- **Graph.** Les proves Rust de `graph/` ja aixequen un servidor HTTP local per
+  prova (límit de peticions, àmbits, continuació, cancel·lació, reversió de
+  memòria cau). Falta un simulador reutilitzable que travessi el sidecar sencer i que
+  serveixi per a les escriptures de #141–#143. Decisió: extreure el servidor fals a un
+  mòdul auxiliar compartit quan arribi la iteració 3, amb les respostes enregistrades
+  que necessitin aquestes slices; ara no s'afegeix un segon simulador paral·lel.
+- **EWS.** `ews-smoketest.py` prova contra un Exchange real a mà. Els
+  enregistraments SOAP reproduïbles exigeixen un servidor de proves o enregistraments
+  autoritzats (dependència 6 del pla). Fins aleshores, la cobertura EWS continua
+  sent la unitària d'`exchange.rs` i l'execució manual de la prova bàsica (smoke test);
+  no s'inventen enregistraments sintètics que simulin un servidor mai observat.
 
-## Flujos nativos en Windows: diseño, pendiente de ejecución
+## Fluxos natius a Windows: disseny, pendent d'execució
 
-`scripts/test-windows-startup.ps1` demuestra arranque, reinicio, elección Graph
-y zoom. El siguiente script, `test-windows-mail-flows.ps1`, debe, sobre el
-ejecutable de SHA exacto y un perfil sintético: iniciar maddy local, añadir una
-cuenta IMAP por el asistente, abrir un mensaje sintético, responder, cerrar la
-aplicación con un borrador abierto y comprobar su recuperación al reabrir. Cada
-paso usa la accesibilidad de Windows como el script actual, deja captura y
-geometría, y no toca cuentas reales. No se incluye en esta entrega porque no
-hay runner Windows en esta sesión para validarlo; un script sin ejecutar no es
-evidencia y no debe parecerlo. Entra con #147 en la iteración 6.
+`scripts/test-windows-startup.ps1` demostra arrencada, reinici, elecció Graph
+i zoom. El següent script, `test-windows-mail-flows.ps1`, ha de, sobre
+l'executable de SHA exacte i un perfil sintètic: iniciar maddy local, afegir un
+compte IMAP per l'assistent, obrir un missatge sintètic, respondre, tancar
+l'aplicació amb un esborrany obert i comprovar-ne la recuperació en tornar-la a obrir. Cada
+pas fa servir l'accessibilitat de Windows com l'script actual, deixa captura de pantalla i
+geometria, i no toca comptes reals. No s'inclou en aquest lliurament perquè no
+hi ha executor (runner) Windows en aquesta sessió per validar-lo; un script sense executar no és
+evidència i no ho ha de semblar. Entra amb #147 a la iteració 6.

@@ -1,19 +1,22 @@
-# Cross-platform desktop tests
+# Proves d'escriptori multiplataforma
 
-Issue #76: filesystem tests must never use a real user profile. The shared test
-fixture sets `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, redirects XDG data,
-state/runtime paths and clears inherited XDG config/cache and development-profile
-overrides. Each test gets separate temporary config and
-cache roots using the host OS convention. Media, avatar, wallpaper, updater and
-sidecar tests use this fixture. Production path selection is unchanged.
-Environment fixtures must not run with `t.Parallel()`.
+Incidència #76: les proves del sistema de fitxers no han de fer servir mai un perfil
+d'usuari real. El fixture de proves compartit defineix `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, redirigeix els camins XDG de dades,
+d'estat i d'execució, i neteja les substitucions heretades de configuració/memòria cau
+XDG i de perfil de desenvolupament. Cada prova obté arrels temporals separades de
+configuració i de memòria cau segons la convenció del sistema operatiu amfitrió. Les
+proves de mitjans, avatar, fons de pantalla, actualitzador i sidecar fan servir aquest
+fixture. La selecció de camins de producció no canvia.
+Els fixtures d'entorn no s'han d'executar amb `t.Parallel()`.
 
-XDG assertions apply on Linux; Windows/macOS must retain their native directory
-conventions even when XDG overrides exist. Foreign-OS update-channel fixtures
-expect paths normalized by the host filesystem API. Symlink coverage is skipped
-only for Windows error 1314 (missing symlink privilege), never for other errors.
+Les assercions XDG s'apliquen a Linux; Windows/macOS han de conservar les seves
+convencions natives de directoris fins i tot quan hi ha substitucions XDG. Els fixtures
+de canal d'actualització d'un altre sistema operatiu esperen camins normalitzats per
+l'API del sistema de fitxers amfitrió. La cobertura d'enllaços simbòlics només s'omet
+per a l'error 1314 de Windows (manca del privilegi d'enllaç simbòlic), mai per a altres
+errors.
 
-CI runs the full Go suite on Windows in addition to Linux. The release quality
-gate requires the `go-windows` job on the exact main commit. Native executable
-startup and restart remain separate release-build checks documented in
-[desktop startup](desktop-startup.md).
+La CI executa la suite completa de Go a Windows, a més de Linux. La porta de qualitat de
+publicació requereix el job `go-windows` sobre el commit exacte de main. L'inici i el
+reinici de l'executable natiu continuen sent comprovacions separades de la compilació de
+publicació, documentades a [inici a l'escriptori](desktop-startup.md).

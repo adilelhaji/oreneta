@@ -1,34 +1,43 @@
-# Account setup assistant
+# Assistent de configuració de comptes
 
-Issue #79 adopts eM Client's email-first, guided setup and explicit manual
-alternative, not its visuals, authentication registrations or provider claims.
-[Reference](https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Accounts/Create%20New%20Account.htm).
+La incidència #79 adopta d'eM Client la configuració guiada que comença per l'adreça de
+correu electrònic i l'alternativa manual explícita, però no n'adopta l'aspecte visual,
+els registres d'autenticació ni les afirmacions sobre proveïdors.
+[Referència](https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Accounts/Create%20New%20Account.htm).
 
-First-run and Add account share two steps: email, then connection. Exact public
-Google/Microsoft domains suggest the existing OAuth flow; other domains use the
-existing IMAP/SMTP discovery. Custom corporate domains are not assumed to use
-either provider: explicit Google/Microsoft shortcuts and manual Exchange remain
-available. Provider authorization determines the final OAuth account address.
+La primera execució i l'acció d'afegir un compte comparteixen dos passos: primer l'adreça
+de correu electrònic i després la connexió. Els dominis públics exactes de
+Google/Microsoft suggereixen el flux OAuth existent; els altres dominis fan servir la
+detecció IMAP/SMTP existent. No es dona per fet que els dominis corporatius
+personalitzats facin servir cap dels dos proveïdors: les dreceres explícites de
+Google/Microsoft i l'Exchange manual continuen disponibles. L'autorització del proveïdor
+determina l'adreça final del compte OAuth.
 
-Manual setup retains IMAP/SMTP, Exchange and RSS. Back preserves the address;
-starting another connection clears credentials and server settings. Discovery
-must not overwrite user edits or populate a different address. Discovered/guessed
-settings are not proof of authentication. Account save remains the connection
-validation; errors preserve the form for correction. OAuth availability and
-browser waiting are explained, not represented by unexplained disabled buttons.
+La configuració manual manté IMAP/SMTP, Exchange i RSS. Tornar enrere conserva l'adreça;
+iniciar una altra connexió esborra les credencials i els paràmetres del servidor. La
+detecció no ha de sobreescriure les modificacions de l'usuari ni emplenar una adreça
+diferent. Els paràmetres detectats o endevinats no són prova d'autenticació. Desar el
+compte continua sent la validació de la connexió; els errors conserven el formulari
+perquè es pugui corregir. La disponibilitat d'OAuth i l'espera al navegador s'expliquen,
+en lloc de representar-se amb botons desactivats sense explicació.
 
-No Go/Rust transport, OAuth scope, keyring, certificate-trust or edit/reconnect
-contract changes. No new discovery network services. English/Spanish copy is
-provided; other catalogs use English for new keys pending translation.
-New-address validation does not retroactively reject existing account identities;
-editing server settings with a blank password keeps the stored credential.
+No canvia cap contracte de transport Go/Rust, d'àmbit OAuth, de clauer, de confiança en
+certificats ni d'edició/reconnexió. No s'afegeix cap servei de xarxa nou de detecció. Es
+proporcionen els textos en anglès i en castellà; els altres catàlegs fan servir l'anglès
+per a les claus noves fins que es tradueixin.
+La validació de les adreces noves no rebutja retroactivament les identitats de comptes
+existents; editar els paràmetres del servidor amb la contrasenya en blanc conserva la
+credencial desada.
 
-Verification: pure address/provider tests and production-entry browser tests
-with explicit synthetic Wails replies cover validation, provider choices,
-manual discovery, failed/successful save, back navigation and modal reuse.
-First-run native smoke identifies the email input and both provider choices.
-Back/close invalidates pending frontend OAuth callbacks; it does not revoke a
-grant at the provider. No account is saved from a discarded callback. A new
-attempt continues to use the backend's existing Begin/state validation.
-Real-provider authorization and server interoperability are not simulated proof
-of working credentials.
+Verificació: les proves pures d'adreça/proveïdor i les proves de navegador sobre
+l'entrada de producció amb respostes sintètiques explícites de Wails cobreixen la
+validació, les opcions de proveïdor, la detecció manual, el desament fallit/correcte, la
+navegació enrere i la reutilització del diàleg modal.
+La prova de fum nativa de la primera execució identifica el camp de l'adreça de correu
+electrònic i les dues opcions de proveïdor.
+Tornar enrere o tancar invalida les crides de retorn (callbacks) OAuth pendents del
+frontend; no revoca cap concessió al proveïdor. No es desa cap compte a partir d'una
+crida de retorn descartada. Un intent nou continua fent servir la validació existent de
+Begin/state del backend.
+L'autorització amb proveïdors reals i la interoperabilitat amb servidors no són una
+prova simulada de credencials que funcionin.
