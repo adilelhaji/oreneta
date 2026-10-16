@@ -1,33 +1,34 @@
-# ADR-0042: Archivos adjuntos en las notas
+# ADR-0042: Fitxers adjunts a les notes
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-12.
-- Alcance: #104, sobre ADR-0015.
+- Data: 2026-10-12.
+- Abast: #104, sobre ADR-0015.
 
-## Decisión
+## Decisió
 
-- **Dónde se guardan:** dentro de la base del perfil, junto a la nota
+- **On es desen:** dins de la base de dades del perfil, al costat de la nota
   (`note_attachments`, esquema 57).
-  - La copia completa del perfil (ADR-0017) los lleva sin más; la caché de
-    adjuntos del correo, en cambio, queda fuera de esa copia.
-  - Nada fuera del perfil tiene que volver a encontrarse.
-- **Qué se guarda:** una copia del archivo elegido, hasta 25 MB por archivo
-  y 50 por nota. El archivo original no se vuelve a tocar. Uno mayor se
-  rechaza con la indicación de enlazarlo.
-- **Guardar una copia:**
-  - se escribe junto al destino y se renombra al terminar;
-  - si algo falla, no queda un archivo cortado con el nombre elegido;
-  - el nombre se reduce a un nombre de archivo, sin carpetas.
-- **Papelera:**
-  - mientras la nota está en la papelera, sus archivos se conservan y se
-    pueden guardar, pero no añadir ni quitar;
-  - al borrar la nota para siempre, o a los 30 días, se van con ella.
-- **Quitar un archivo** pregunta antes y deja intacto el original.
+  - La còpia completa del perfil (ADR-0017) els inclou sense més; la memòria
+    cau d'adjunts del correu, en canvi, queda fora d'aquesta còpia.
+  - No cal tornar a trobar res de fora del perfil.
+- **Què es desa:** una còpia del fitxer triat, fins a 25 MB per fitxer
+  i 50 per nota. El fitxer original no es torna a tocar. Un de més gran es
+  rebutja amb la indicació d'enllaçar-lo.
+- **Desar una còpia:**
+  - s'escriu al costat de la destinació i es reanomena en acabar;
+  - si alguna cosa falla, no queda un fitxer tallat amb el nom triat;
+  - el nom es redueix a un nom de fitxer, sense carpetes.
+- **Paperera:**
+  - mentre la nota és a la paperera, els seus fitxers es conserven i es
+    poden desar, però no afegir ni treure;
+  - en suprimir la nota definitivament, o al cap de 30 dies, se'n van amb ella.
+- **Treure un fitxer** pregunta abans i deixa intacte l'original.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Guardarlos en la carpeta de medios:** esa carpeta es caché y la copia
-  del perfil no la incluye, así que los adjuntos se perderían al restaurar.
-- **Insertarlos en el HTML de la nota:** inflaría el texto, que tiene un
-  límite de 8 MB y se busca entero.
+- **Desar-los a la carpeta multimèdia:** aquesta carpeta és memòria cau i la
+  còpia del perfil no la inclou, de manera que els adjunts es perdrien en
+  restaurar.
+- **Inserir-los a l'HTML de la nota:** inflaria el text, que té un
+  límit de 8 MB i es cerca sencer.

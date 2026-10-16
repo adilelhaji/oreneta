@@ -1,123 +1,123 @@
-# ADR-0050: Carpetas favoritas, colores y mover carpetas
+# ADR-0050: Carpetes preferides, colors i moure carpetes
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
-- Fecha: 2026-10-13.
-- Alcance: la fila SET-07 de la paridad con eM Client 10.4 (#87),
-  «General → Carpetas». La navegación de carpetas por cuenta y crear una
-  carpeta que entra en el árbol antes de la siguiente sincronización ya
-  estaban; faltaban las favoritas, los colores y arrastrar carpetas.
+- Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
+  revisió del propietari al final del pla.
+- Data: 2026-10-13.
+- Abast: la fila SET-07 de la paritat amb eM Client 10.4 (#87),
+  «General → Carpetes». La navegació de carpetes per compte i crear una
+  carpeta que entra a l'arbre abans de la sincronització següent ja
+  hi eren; faltaven les preferides, els colors i arrossegar carpetes.
 
-## Decisión
+## Decisió
 
-- **Favoritas:**
-  - cualquier carpeta de cualquier cuenta, el archivo local incluido, se
-    marca o desmarca desde su menú contextual (clic derecho, Mayús+F10 o la
+- **Preferides:**
+  - qualsevol carpeta de qualsevol compte, l'arxiu local inclòs, es
+    marca o desmarca des del seu menú contextual (clic dret, Maj+F10 o la
     tecla de menú);
-  - una sección «Favoritas» arriba del todo en la navegación de correo las
-    muestra en el orden que elija la persona, con sus no leídos y, si hay
-    más de una cuenta en juego, el nombre de la cuenta;
-  - el orden se cambia arrastrando, con Alt+↑/Alt+↓ (el foco se queda en
-    la carpeta movida y un aviso `aria-live` dice su nueva posición) o con
-    «Subir»/«Bajar» del menú;
-  - se guardan solo aquí, como preferencia (`folder_favorites`), con la
-    clave cuenta + ruta de la carpeta en su servidor; ningún servidor se
-    entera.
-- **Colores:**
-  - una paleta fija de nueve colores con nombre (rojo, naranja, amarillo,
-    verde, verde azulado, azul, morado, rosa, gris); el lector de pantalla
-    dice el nombre, nunca un código;
-  - cada color tiene un tono para el tema claro y otro para el oscuro, y
-    todos guardan al menos 3:1 contra las superficies de la navegación
-    (reposo, encima y actual), el mínimo de WCAG 1.4.11 para una marca
-    que no es texto; una prueba lo comprueba;
-  - se ve como un punto junto al nombre y tiñe el icono, en el árbol y en
-    Favoritas; el estilo va en CSS por atributo (`data-folder-color`), sin
-    estilos en línea, así que sirve con la CSP de producción;
-  - preferencia local (`folder_colors`), con la misma clave que las
-    favoritas.
-- **Qué pasa cuando una carpeta cambia:**
-  - mover una carpeta: el núcleo devuelve cada ruta que cambió (la carpeta
-    y sus subcarpetas) y favoritas, colores, columnas de tableros y la
-    vista abierta siguen a la ruta nueva;
-  - borrar una carpeta: la subcarpeta entera que el núcleo informa se
-    lleva sus favoritas y colores;
-  - quitar una cuenta: se lleva las suyas;
-  - una carpeta que desaparece por otro camino (borrada o renombrada en
-    otro cliente) deja de estar en la lista de su cuenta: su favorita y su
-    color se quitan con un aviso visible («N carpetas favoritas ya no
-    existen y se han quitado»). Una lista vacía o con solo la Bandeja de
-    entrada no cuenta, porque es lo que muestra una cuenta antes de su
-    primera sincronización.
-- **Mover carpetas:**
-  - se arrastra una carpeta sobre otra de la misma cuenta, sobre una
-    favorita de esa cuenta o sobre el título «Carpetas» (nivel superior);
-  - la alternativa de teclado es «Mover carpeta a…» del menú, que abre un
-    selector con solo los destinos posibles y «Nivel superior»;
-  - siempre se confirma, con el nombre de la carpeta y el del destino;
-  - nunca se mueven Bandeja de entrada, Enviados, Borradores, Papelera,
-    Correo no deseado ni Archivo (ni una carpeta que tenga una de ellas
-    dentro), ni una carpeta dentro de sí misma o de una subcarpeta suya,
-    ni a otra cuenta, ni a donde ya está, ni encima de una carpeta con el
-    mismo nombre. La interfaz no acepta esos destinos y dice por qué; el
-    núcleo vuelve a comprobarlo todo sobre su propia lista;
-  - mover es renombrar la ruta jerárquica: `Trabajo` sobre `Proyectos`
-    pasa a `Proyectos/Trabajo` con el delimitador que anuncie el servidor
-    (`.` en servidores tipo `INBOX.`). Un servidor sin delimitador no
-    tiene jerarquía y se rechaza; el archivo local y POP3 usan `/`.
-- **Núcleo (`folders.move`, `meron_core::folder_move`):**
-  - planifica sobre la lista guardada: comprueba las reglas y calcula los
-    nombres nuevos de la carpeta y de toda su subcarpeta;
-  - IMAP: un `RENAME` (RFC 3501 6.3.5 mueve también las inferiores), tras
-    sacar la sesión reutilizada del buzón con `EXAMINE INBOX`, como al
-    borrar; nunca se repite, porque si se pierde la respuesta el resultado
-    es incierto y la siguiente sincronización de carpetas dice la verdad;
-  - archivo local y POP3: se renombran sus filas (`archive_messages`), que
-    son su servidor;
-  - después se concilia la caché en una transacción: carpetas (con su
-    delimitador), mensajes, estado de sincronización e ids de Exchange
-    pasan a la ruta nueva; los resultados de búsqueda guardados de las
-    rutas viejas se tiran. Los UID se conservan: si el servidor cambió
-    UIDVALIDITY con el renombrado, la siguiente sincronización lo ve y
-    vuelve a traer la carpeta, como con cualquier otro cambio;
-  - responde con la carpeta nueva, la lista de renombrados y las carpetas,
-    para que el puente y la interfaz no tengan que adivinar.
-- **Microsoft Graph y Exchange (EWS):** este núcleo todavía no gestiona
-  carpetas en ninguno de los dos (tampoco crear ni borrar), así que mover
-  queda desactivado con el motivo a la vista («Mover carpetas aún no está
-  disponible en esta cuenta») y el núcleo lo rechaza igualmente; en Graph
-  además lo para la guarda de solo lectura.
-- **Puente:** `mail.folderMove` en Go valida la petición, llama a
-  `folders.move` (30 s de margen, como borrar) y da forma a las carpetas.
+  - una secció «Preferides» a dalt de tot a la navegació de correu les
+    mostra en l'ordre que triï la persona, amb els seus no llegits i, si hi ha
+    més d'un compte en joc, el nom del compte;
+  - l'ordre es canvia arrossegant, amb Alt+↑/Alt+↓ (el focus es queda a
+    la carpeta moguda i un avís `aria-live` en diu la nova posició) o amb
+    «Pujar»/«Baixar» del menú;
+  - es desen només aquí, com a preferència (`folder_favorites`), amb la
+    clau compte + ruta de la carpeta al seu servidor; cap servidor no se
+    n'assabenta.
+- **Colors:**
+  - una paleta fixa de nou colors amb nom (vermell, taronja, groc,
+    verd, verd blavós, blau, morat, rosa, gris); el lector de pantalla
+    diu el nom, mai un codi;
+  - cada color té un to per al tema clar i un altre per al fosc, i
+    tots mantenen almenys 3:1 contra les superfícies de la navegació
+    (repòs, a sobre i actual), el mínim de WCAG 1.4.11 per a una marca
+    que no és text; una prova ho comprova;
+  - es veu com un punt al costat del nom i tenyeix la icona, a l'arbre i a
+    Preferides; l'estil va en CSS per atribut (`data-folder-color`), sense
+    estils en línia, de manera que serveix amb la CSP de producció;
+  - preferència local (`folder_colors`), amb la mateixa clau que les
+    preferides.
+- **Què passa quan una carpeta canvia:**
+  - moure una carpeta: el nucli retorna cada ruta que ha canviat (la carpeta
+    i les seves subcarpetes) i preferides, colors, columnes de taulers i la
+    visualització oberta segueixen la ruta nova;
+  - suprimir una carpeta: la subcarpeta sencera que informa el nucli
+    s'emporta les seves preferides i colors;
+  - treure un compte: s'emporta les seves;
+  - una carpeta que desapareix per un altre camí (suprimida o reanomenada en
+    un altre client) deixa de ser a la llista del seu compte: la seva preferida i el seu
+    color es treuen amb un avís visible («N carpetes preferides ja no
+    existeixen i s'han tret»). Una llista buida o amb només la Safata
+    d'entrada no compta, perquè és el que mostra un compte abans de la seva
+    primera sincronització.
+- **Moure carpetes:**
+  - s'arrossega una carpeta sobre una altra del mateix compte, sobre una
+    preferida d'aquest compte o sobre el títol «Carpetes» (nivell superior);
+  - l'alternativa de teclat és «Moure carpeta a…» del menú, que obre un
+    selector amb només les destinacions possibles i «Nivell superior»;
+  - sempre es confirma, amb el nom de la carpeta i el de la destinació;
+  - mai no es mouen Safata d'entrada, Enviats, Esborranys, Paperera,
+    Correu brossa ni Arxiu (ni una carpeta que en tingui una a
+    dins), ni una carpeta dins d'ella mateixa o d'una subcarpeta seva,
+    ni a un altre compte, ni on ja és, ni damunt d'una carpeta amb el
+    mateix nom. La interfície no accepta aquestes destinacions i diu per què; el
+    nucli ho torna a comprovar tot sobre la seva pròpia llista;
+  - moure és reanomenar la ruta jeràrquica: `Trabajo` sobre `Proyectos`
+    passa a `Proyectos/Trabajo` amb el delimitador que anunciï el servidor
+    (`.` en servidors tipus `INBOX.`). Un servidor sense delimitador no
+    té jerarquia i es rebutja; l'arxiu local i POP3 fan servir `/`.
+- **Nucli (`folders.move`, `meron_core::folder_move`):**
+  - planifica sobre la llista desada: comprova les regles i calcula els
+    noms nous de la carpeta i de tota la seva subcarpeta;
+  - IMAP: un `RENAME` (RFC 3501 6.3.5 també mou les inferiors), després de
+    treure la sessió reutilitzada de la bústia amb `EXAMINE INBOX`, com en
+    suprimir; mai no es repeteix, perquè si es perd la resposta el resultat
+    és incert i la sincronització de carpetes següent diu la veritat;
+  - arxiu local i POP3: es reanomenen les seves files (`archive_messages`), que
+    són el seu servidor;
+  - després es concilia la memòria cau en una transacció: carpetes (amb el seu
+    delimitador), missatges, estat de sincronització i ids d'Exchange
+    passen a la ruta nova; els resultats de cerca desats de les
+    rutes velles es descarten. Els UID es conserven: si el servidor ha canviat
+    UIDVALIDITY amb el reanomenament, la sincronització següent ho veu i
+    torna a portar la carpeta, com amb qualsevol altre canvi;
+  - respon amb la carpeta nova, la llista de reanomenades i les carpetes,
+    perquè el pont i la interfície no hagin d'endevinar.
+- **Microsoft Graph i Exchange (EWS):** aquest nucli encara no gestiona
+  carpetes en cap dels dos (tampoc crear ni suprimir), de manera que moure
+  queda desactivat amb el motiu a la vista («Moure carpetes encara no està
+  disponible en aquest compte») i el nucli ho rebutja igualment; a Graph
+  a més ho atura la protecció de només lectura.
+- **Pont:** `mail.folderMove` a Go valida la petició, crida
+  `folders.move` (30 s de marge, com suprimir) i dona forma a les carpetes.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Guardar favoritas y colores en el servidor (anotaciones IMAP METADATA
-  o categorías de Exchange):** pocos servidores lo admiten y cada uno a su
-  manera; eM Client también lo guarda en local.
-- **Elegir cualquier color (selector libre):** no se puede garantizar el
-  contraste en los dos temas ni dar un nombre que lea el lector de
+- **Desar preferides i colors al servidor (anotacions IMAP METADATA
+  o categories d'Exchange):** pocs servidors ho admeten i cadascun a la seva
+  manera; eM Client també ho desa en local.
+- **Triar qualsevol color (selector lliure):** no es pot garantir el
+  contrast en els dos temes ni donar un nom que llegeixi el lector de
   pantalla.
-- **Borrar la caché de la carpeta movida y volver a descargarla:** más
-  sencillo, pero obliga a bajar otra vez todo el correo de la carpeta y
-  sus subcarpetas por un cambio de nombre.
-- **Mover con `CREATE` + `COPY` + `DELETE`:** no es atómico, duplica el
-  correo si se corta a medias y pierde los UID; `RENAME` es la operación
-  del protocolo para esto.
-- **Implementar ya `MoveFolder` de EWS y `move` de Graph:** ninguno de los
-  dos adaptadores gestiona carpetas todavía y sus ids de carpeta no son
-  rutas; hacerlo bien es trabajo de su propia decisión.
+- **Esborrar la memòria cau de la carpeta moguda i tornar-la a baixar:** més
+  senzill, però obliga a baixar una altra vegada tot el correu de la carpeta i
+  les seves subcarpetes per un canvi de nom.
+- **Moure amb `CREATE` + `COPY` + `DELETE`:** no és atòmic, duplica el
+  correu si es talla a mitges i perd els UID; `RENAME` és l'operació
+  del protocol per a això.
+- **Implementar ja `MoveFolder` d'EWS i `move` de Graph:** cap dels
+  dos adaptadors no gestiona carpetes encara i els seus ids de carpeta no són
+  rutes; fer-ho bé és feina de la seva pròpia decisió.
 
-## Pendiente (#87 sigue abierta)
+## Pendent (#87 continua oberta)
 
-- Mover carpetas en Exchange y en Microsoft Graph: hecho. Exchange con EWS
-  `MoveFolder` (ADR-0058, #211); Microsoft Graph en ADR-0057 (#210).
-- Soltar mensajes sobre una carpeta o una favorita de la navegación: hoy
-  no existe arrastrar mensajes a la navegación (solo entre columnas del
-  tablero y fuentes RSS); cuando exista, una favorita debe aceptarlo igual
-  que su carpeta.
-- Reglas de correo para todas las cuentas cuyo destino es una carpeta
-  movida: siguen apuntando a la ruta vieja. Las de la propia cuenta ya la
-  siguen (ADR-0058).
-- Evidencia nativa en Windows y de proveedores reales (la fila exige
+- Moure carpetes a Exchange i a Microsoft Graph: fet. Exchange amb EWS
+  `MoveFolder` (ADR-0058, #211); Microsoft Graph a ADR-0057 (#210).
+- Deixar anar missatges sobre una carpeta o una preferida de la navegació: avui
+  no existeix arrossegar missatges a la navegació (només entre columnes del
+  tauler i fonts RSS); quan existeixi, una preferida ho ha d'acceptar igual
+  que la seva carpeta.
+- Regles de correu per a tots els comptes la destinació de les quals és una carpeta
+  moguda: continuen apuntant a la ruta vella. Les del mateix compte ja la
+  segueixen (ADR-0058).
+- Evidència nativa a Windows i de proveïdors reals (la fila exigeix
   `requiresNative`).

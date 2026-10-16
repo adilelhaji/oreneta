@@ -1,102 +1,103 @@
-# ADR-0044: Grupos y archivos en el chat (XMPP)
+# ADR-0044: Grups i fitxers al xat (XMPP)
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-12.
-- Alcance: lo que ADR-0036 dejó pendiente de #111: grupos (MUC, XEP-0045) y
-  archivos (HTTP File Upload, XEP-0363) con progreso y cancelación.
+- Data: 2026-10-12.
+- Abast: el que ADR-0036 va deixar pendent de #111: grups (MUC, XEP-0045) i
+  fitxers (HTTP File Upload, XEP-0363) amb progrés i cancel·lació.
 
-## Decisión
+## Decisió
 
-- **Unirse a un grupo:**
-  - por su dirección (`sala@servicio.ejemplo`) y un apodo; la contraseña
-    de la sala, si la tiene, va al llavero (`chat-room:<cuenta>:<sala>`),
-    nunca al almacén;
-  - la sala se guarda (`chat_rooms`, esquema 58) y se vuelve a entrar en
-    cada conexión nueva; una sesión reanudada (XEP-0198) sigue dentro y no
-    entra otra vez;
-  - una sala nueva se acepta con la configuración por omisión («sala
-    instantánea»), para que otros puedan entrar;
-  - lo que diga la sala de nuestra entrada (dentro, fuera, contraseña
-    errónea, apodo ocupado, solo miembros, vetado, no existe, llena) llega
-    a la vista como estado de la sala, no como error genérico.
-- **Historia de un grupo:**
-  - al entrar se pide a la sala lo dicho desde el último mensaje guardado
-    aquí (`<history since>`), o los 50 últimos si no hay nada;
-  - si ya conocemos un id del archivo de la sala, se recorre además su
-    archivo (XEP-0313 contra la dirección de la sala), por páginas;
-  - solo cuenta el `stanza-id` que pone la sala (`by` igual a la sala);
-    uno puesto por otro se ignora, como en el chat directo;
-  - el id de archivo de una sala no se mezcla con el de la cuenta: cada
-    conversación tiene el suyo.
-- **Un mensaje se guarda una vez** también en un grupo: por su `origin-id`
-  o su id, y por el `stanza-id` de la sala. Lo propio que la sala devuelve
-  (eco) no es un mensaje nuevo: confirma el enviado y lo pasa a «aceptado».
-  Se reconoce por el apodo o, si el apodo cambió, porque ese id salió de
-  aquí.
-- **Quién dijo qué:** cada mensaje de un grupo guarda el apodo de quien
-  habla; la sala hablando sin apodo y los cambios de tema no son mensajes.
-- **Estados en un grupo:** enviando → enviado → aceptado (ack XEP-0198 o
-  eco de la sala). No se pide recibo de entrega en un grupo. Un error
-  devuelto para un id nuestro lo deja en «no enviado». Tras una
-  desconexión, lo no confirmado queda en «puede que no haya llegado» y no
-  se reenvía solo, igual que en el directo.
-- **Salir:** la sala deja de entrarse, se borra la contraseña del llavero y
-  lo guardado aquí de ella. El archivo de la sala no se toca.
-- **Invitaciones:**
-  - directas (XEP-0249) o a través de la sala (XEP-0045); se guardan
-    (`chat_invitations`) y se muestran como propuesta;
-  - entrar es decisión de la persona: «Unirse…» abre el mismo formulario,
-    con la dirección ya puesta, y «Ahora no» la aparta;
-  - una contraseña que traiga la invitación va al llavero; la vista solo
-    sabe que existe;
-  - como mucho 20 invitaciones esperando por cuenta; otra más, o una para
-    una sala en la que ya se está, no se guarda.
-- **Enviar un archivo:**
-  - el servicio de subida se busca en el servidor de la cuenta (disco#info
-    del dominio y de sus elementos), una vez por sesión;
-  - el límite de tamaño es el del formulario del servicio (`max-file-size`):
-    un archivo mayor se rechaza aquí, antes de pedir sitio y sin enviar
-    nada;
-  - se pide un sitio (slot) con nombre y tamaño, y tanto el `PUT` como el
-    `GET` deben ser HTTPS; si no, no se usa;
-  - el archivo se sube con `PUT` por HTTPS, con el proxy de la app y sin
-    seguir redirecciones; solo pasan las cabeceras que permite XEP-0363;
-  - el progreso llega cada 256 KB (`chat.progress`) y el final una vez
-    (`chat.uploaded`); cancelar corta el envío y no sale ningún mensaje;
-  - subido, el enlace sale como mensaje normal, con el enlace en el cuerpo
-    y como OOB (XEP-0066), y sigue las reglas de estado de siempre;
-    «Enviar de nuevo» vuelve a mandar el mismo enlace con el mismo id.
-- **Recibir un archivo:**
-  - un mensaje con enlace OOB se muestra como archivo, con su nombre
-    (último tramo de la ruta, decodificado y sin barras ni puntos al
-    principio) y «Guardar…»;
-  - nunca se descarga solo: solo cuando la persona elige dónde guardarlo;
-  - solo por HTTPS, sin credenciales en el enlace y sin redirecciones; se
-    escribe al lado con `.part` y se renombra al terminar.
+- **Unir-se a un grup:**
+  - per la seva adreça (`sala@servicio.ejemplo`) i un sobrenom; la contrasenya
+    de la sala, si en té, va al clauer (`chat-room:<cuenta>:<sala>`),
+    mai al magatzem;
+  - la sala es desa (`chat_rooms`, esquema 58) i s'hi torna a entrar a
+    cada connexió nova; una sessió represa (XEP-0198) continua a dins i no
+    hi entra una altra vegada;
+  - una sala nova s'accepta amb la configuració per defecte («sala
+    instantània»), perquè altres hi puguin entrar;
+  - el que digui la sala de la nostra entrada (a dins, a fora, contrasenya
+    errònia, sobrenom ocupat, només membres, vetat, no existeix, plena) arriba
+    a la visualització com a estat de la sala, no com a error genèric.
+- **Historial d'un grup:**
+  - en entrar es demana a la sala el que s'ha dit des de l'últim missatge desat
+    aquí (`<history since>`), o els 50 últims si no hi ha res;
+  - si ja coneixem un id de l'arxiu de la sala, també se'n recorre
+    l'arxiu (XEP-0313 contra l'adreça de la sala), per pàgines;
+  - només compta l'`stanza-id` que posa la sala (`by` igual a la sala);
+    un de posat per un altre s'ignora, com al xat directe;
+  - l'id d'arxiu d'una sala no es barreja amb el del compte: cada
+    conversa té el seu.
+- **Un missatge es desa una vegada** també en un grup: pel seu `origin-id`
+  o el seu id, i per l'`stanza-id` de la sala. El que és propi i la sala
+  retorna (eco) no és un missatge nou: confirma l'enviat i el passa a
+  «acceptat». Es reconeix pel sobrenom o, si el sobrenom ha canviat, perquè
+  aquest id va sortir d'aquí.
+- **Qui va dir què:** cada missatge d'un grup desa el sobrenom de qui
+  parla; la sala parlant sense sobrenom i els canvis de tema no són missatges.
+- **Estats en un grup:** enviant → enviat → acceptat (ack XEP-0198 o
+  eco de la sala). No es demana confirmació de lliurament en un grup. Un error
+  retornat per a un id nostre el deixa en «no enviat». Després d'una
+  desconnexió, el que no s'ha confirmat queda en «potser no ha arribat» i no
+  es reenvia sol, igual que al directe.
+- **Sortir:** ja no s'entra a la sala, s'esborra la contrasenya del clauer i
+  el que s'ha desat aquí d'aquesta sala. L'arxiu de la sala no es toca.
+- **Invitacions:**
+  - directes (XEP-0249) o a través de la sala (XEP-0045); es desen
+    (`chat_invitations`) i es mostren com a proposta;
+  - entrar és decisió de la persona: «Unir-se…» obre el mateix formulari,
+    amb l'adreça ja posada, i «Ara no» l'aparta;
+  - una contrasenya que porti la invitació va al clauer; la visualització
+    només sap que existeix;
+  - com a màxim 20 invitacions en espera per compte; una altra més, o una
+    per a una sala on ja s'és, no es desa.
+- **Enviar un fitxer:**
+  - el servei de pujada es cerca al servidor del compte (disco#info
+    del domini i dels seus elements), una vegada per sessió;
+  - el límit de mida és el del formulari del servei (`max-file-size`):
+    un fitxer més gran es rebutja aquí, abans de demanar lloc i sense enviar
+    res;
+  - es demana un lloc (slot) amb nom i mida, i tant el `PUT` com el
+    `GET` han de ser HTTPS; si no, no es fa servir;
+  - el fitxer es puja amb `PUT` per HTTPS, amb el servidor intermediari
+    (proxy) de l'aplicació i sense seguir redireccions; només passen les
+    capçaleres que permet XEP-0363;
+  - el progrés arriba cada 256 KB (`chat.progress`) i el final una vegada
+    (`chat.uploaded`); cancel·lar talla l'enviament i no surt cap missatge;
+  - un cop pujat, l'enllaç surt com a missatge normal, amb l'enllaç al cos
+    i com a OOB (XEP-0066), i segueix les regles d'estat de sempre;
+    «Tornar a enviar» torna a enviar el mateix enllaç amb el mateix id.
+- **Rebre un fitxer:**
+  - un missatge amb enllaç OOB es mostra com a fitxer, amb el seu nom
+    (últim tram del camí, descodificat i sense barres ni punts al
+    principi) i «Desar…»;
+  - mai no es baixa sol: només quan la persona tria on desar-lo;
+  - només per HTTPS, sense credencials a l'enllaç i sense redireccions;
+    s'escriu al costat amb `.part` i es reanomena en acabar.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Pedir siempre a la sala su historia completa por MAM:** no todas las
-  salas tienen archivo y el primer acceso traería meses. La historia de la
-  sala desde el último mensaje, y el archivo solo para rellenar huecos,
-  basta.
-- **Guardar la contraseña de la invitación en el almacén o en memoria:** el
-  almacén no guarda secretos (ADR-0036) y en memoria se perdería al
+- **Demanar sempre a la sala el seu historial complet per MAM:** no totes les
+  sales tenen arxiu i el primer accés portaria mesos. N'hi ha prou amb
+  l'historial de la sala des de l'últim missatge, i l'arxiu només per a
+  omplir buits.
+- **Desar la contrasenya de la invitació al magatzem o a la memòria:** el
+  magatzem no desa secrets (ADR-0036) i a la memòria es perdria en
   reiniciar.
-- **Descargar los archivos recibidos para previsualizarlos:** sería tráfico
-  hacia servidores de otros sin que la persona lo pida.
-- **Cliente HTTP propio sobre `crate::tls` para el certificado fijado:** el
-  servicio de subida suele ser otro nombre que el servidor XMPP, así que el
-  certificado fijado de la cuenta no le corresponde; se usa ureq, como en
-  #108, con las raíces habituales y el proxy de la app.
+- **Baixar els fitxers rebuts per a previsualitzar-los:** seria trànsit
+  cap a servidors d'altres sense que la persona ho demani.
+- **Client HTTP propi sobre `crate::tls` per al certificat fixat:** el
+  servei de pujada sol tenir un nom diferent del servidor XMPP, de manera que
+  el certificat fixat del compte no li correspon; es fa servir ureq, com a
+  #108, amb les arrels habituals i el servidor intermediari de l'aplicació.
 
-## Pendiente (#111 sigue abierta)
+## Pendent (#111 continua oberta)
 
-- Mensajes privados dentro de una sala: hoy se ignoran.
-- Invitar a otros desde aquí, cambiar de apodo y la lista de ocupantes.
-- Cifrar archivos (XEP-0454) y miniaturas.
-- Presencia, menciones y notificaciones del sistema.
-- Rocket.Chat; Teams y Slack cuando existan los registros.
-- N5: un servidor XMPP público con dos cuentas de prueba, también para
-  grupos y archivos.
+- Missatges privats dins d'una sala: avui s'ignoren.
+- Convidar altres des d'aquí, canviar de sobrenom i la llista d'ocupants.
+- Xifrar fitxers (XEP-0454) i miniatures.
+- Presència, mencions i notificacions del sistema.
+- Rocket.Chat; Teams i Slack quan existeixin els registres.
+- N5: un servidor XMPP públic amb dos comptes de prova, també per a
+  grups i fitxers.

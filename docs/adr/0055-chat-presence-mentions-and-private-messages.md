@@ -1,179 +1,179 @@
-# ADR-0055: Presencia, menciones, avisos y mensajes privados en el chat (XMPP)
+# ADR-0055: Presència, mencions, avisos i missatges privats al xat (XMPP)
 
-- Estado: aceptada por delegación (el propietario delegó las decisiones de
-  #208: «la opción más prudente»); pendiente de revisión del propietario al
-  final del plan.
-- Fecha: 2026-10-15.
-- Alcance: #208, hija de #111 (fila SET-21 del libro de paridad, «Chat →
-  General» de eM Client 10.4). Completa lo que ADR-0036 y ADR-0044 dejaron
-  pendiente: la presencia y el estado propios, la presencia de los contactos,
-  las menciones en los grupos, las notificaciones del sistema y los mensajes
-  privados dentro de un grupo. El borrador #198 se usó como referencia y se
-  revisó punto por punto; las diferencias están en «Alternativas
-  descartadas».
+- Estat: acceptada per delegació (el propietari va delegar les decisions de
+  #208: «la opción más prudente»); pendent de revisió del propietari al
+  final del pla.
+- Data: 2026-10-15.
+- Abast: #208, filla de #111 (fila SET-21 del llibre de paritat, «Xat →
+  General» d'eM Client 10.4). Completa el que ADR-0036 i ADR-0044 van deixar
+  pendent: la presència i l'estat propis, la presència dels contactes,
+  les mencions als grups, les notificacions del sistema i els missatges
+  privats dins d'un grup. L'esborrany #198 es va fer servir com a referència
+  i es va revisar punt per punt; les diferències són a «Alternatives
+  descartades».
 
-## Decisión
+## Decisió
 
-- **El estado propio, por cuenta:**
-  - «Disponible», «Ausente», «Ocupado» (`dnd`) e «Invisible», y un texto de
-    estado de hasta 200 caracteres (sin caracteres de control);
-  - se guarda como una fila de ajustes (`chat_presence:<cuenta>`, JSON), sin
-    tablas ni columnas nuevas; un campo inválido vuelve a su valor por omisión
-    («Disponible», sin texto) sin tocar el otro. Al quitar la cuenta se borra;
-  - se anuncia al conectar y cada vez que la persona lo cambia; la vista
-    muestra siempre el guardado, también antes de conectar, y la sesión
-    empieza desde él (nunca desde «Disponible» por omisión).
-- **A quién llega:**
-  - el estado se anuncia sin destinatario, así que el servidor solo lo da a
-    los contactos a los que la persona permitió verlo (suscripción, RFC 6121);
-  - a los grupos en los que está dentro llega solo la disponibilidad
-    (ausente, ocupado), **nunca el texto**: en un grupo hay gente que la
-    persona no eligió;
-  - la persona no recibe nada nuevo de nadie: la presencia de los demás la
-    manda su servidor.
-- **Invisible, solo donde el servidor lo admite** (XEP-0186):
-  - en cada conexión se pregunta al servidor de la cuenta qué admite
-    (disco#info); si anuncia `urn:xmpp:invisible:0`, «Invisible» se puede
-    elegir; si no, aparece desactivado con el motivo y el núcleo lo rechaza;
-  - invisible, la persona sigue recibiendo mensajes en directo y sus
-    contactos la ven desconectada. Los grupos en los que ya está la siguen
-    viendo (entrar en un grupo es presencia dirigida); la vista lo dice;
-  - sin conexión no se sabe qué admite: «Invisible» espera a conectar y la
-    vista lo dice («Conéctate para comprobar si este servidor puede
-    ocultarte»);
-  - si un «Invisible» guardado se encuentra con un servidor que ya no lo
-    admite, **no se anuncia nada** (la persona sigue oculta, como pidió): sus
-    contactos la ven desconectada y los mensajes directos y las peticiones
-    para ver su estado esperan en el servidor hasta que elija otro estado;
-    al elegirlo se anuncia y se recupera lo que llegó al archivo. Nunca pasa
-    sola a visible;
-  - si ya estaba anunciada, pasar a no anunciada envía «no disponible» a
-    todos, y el servidor la saca también de los grupos (RFC 6121 §4.6); por
-    eso se vuelve a entrar en ellos enseguida: los grupos la siguen viendo,
-    disponible, como dice la vista.
-- **La presencia de los contactos:**
-  - llega del servidor y se guarda solo en memoria, para la sesión: una
-    sesión nueva empieza de cero. No va al almacén, porque al volver estaría
-    vieja;
-  - un contacto visto que se desconecta, o del que el servidor dice que está
-    desconectado (lo dice de los que la persona puede ver), queda como
-    «Desconectado» para la sesión, sin volver a ofrecer «Pedir ver su
-    estado»;
-  - como cualquiera puede mandar presencia, se guardan como mucho 1000
-    contactos, 50 dispositivos por contacto y 200 peticiones; lo que pasa de
-    ahí se descarta. Una presencia con la marca de grupo (`muc#user`) nunca
-    es de un contacto;
-  - de un contacto con varios dispositivos se muestra el de prioridad más
-    alta y, a igualdad, el más disponible (charlando, disponible, ausente,
-    ausente mucho tiempo, ocupado);
-  - se muestra junto a cada conversación directa y en su cabecera, con su
-    texto de estado.
-- **Ver el estado de otro es decisión de la persona:**
-  - «Pedir ver su estado» manda la petición (`subscribe`) solo al pulsar;
-  - las peticiones de otros se muestran como propuesta, con «Permitir»
-    (`subscribed`) y «Rechazar» (`unsubscribed`); nada se contesta solo y
-    permitir no pide lo mismo de vuelta. «Permitir» solo contesta a quien lo
-    pidió en esta sesión; «Rechazar» vale para cualquiera;
-  - las peticiones pendientes se guardan solo en memoria: el servidor las
-    vuelve a entregar en cada conexión.
-- **Menciones en un grupo:**
-  - un mensaje de otro menciona a la persona si su texto contiene su apodo en
-    ese grupo como palabra entera (sin distinguir mayúsculas; letras, cifras
-    y `_` de cualquier alfabeto forman palabra), o si lleva una referencia
-    XEP-0372 a su dirección o a su sitio en el grupo (`grupo/apodo`). Un
-    apodo de menos de tres caracteres solo menciona tras `@` («al», «Jo» son
-    también palabras corrientes). Lo propio nunca menciona;
-  - al escribir `@` y el principio de un apodo, el editor ofrece los que
-    están en el grupo ahora (sin la persona), filtrados por ese principio, a
-    lo sumo 8; flechas, Intro o Tab para elegir y Escape para cerrar. Lo
-    elegido se escribe como `@apodo `;
-  - los apodos elegidos salen además como referencias XEP-0372 (`begin` y
-    `end` en caracteres), solo si siguen en el texto al enviar. Lo elegido no
-    se guarda: «Enviar de nuevo» manda como referencias los apodos escritos
-    con `@` de quienes están en el grupo en ese momento;
-  - quién está en cada grupo sale de la presencia del grupo, en memoria; un
-    apodo que el grupo nos cambia (estado 210) se guarda tal cual lo da el
-    grupo, aunque no sea uno que aceptaríamos al unirse, para que las
-    menciones y el eco sigan funcionando;
-  - el resaltado se calcula al leer la historia con el apodo actual, sin
-    columna nueva. Una mención hecha solo por referencia, sin el apodo en el
-    texto, avisa al llegar pero no queda resaltada después.
-- **Notificaciones del sistema:**
-  - decide el núcleo, que sabe cómo llegó cada mensaje (función pura
-    `should_notify`): solo un mensaje guardado por primera vez, de otra
-    persona y llegado en directo, o como copia de uno recibido en otro
-    dispositivo (carbons `received`: llega en directo y es nuevo aquí). Lo
-    que llega al ponerse al día (archivo, historia del grupo, mensajes con
-    retraso) no avisa: se ve como no leído;
-  - mensajes directos y privados: siempre; en un grupo, solo las menciones;
-  - nunca mientras el estado propio de esa cuenta es «Ocupado», y la vista
-    lo dice bajo el selector;
-  - el núcleo emite `chat.notify` (cuenta, conversación, tipo, grupo, quién
-    y el texto, o el nombre del archivo, cortado a 280 caracteres; el título,
-    a 120); el puente
-    Go muestra la notificación salvo con «No molestar» o en horas tranquilas
-    (ADR-0049): un mensaje de chat cuenta como un mensaje, igual que el
-    correo, y no como un recordatorio;
-  - el título es quien escribe y, en un grupo o en privado, `· grupo`, sin
-    textos nuevos que traducir en Go; al pulsarla se abre esa conversación
-    en la vista Chat;
-  - lo que escribió otro se muestra como texto: en Linux el cuerpo se escapa
-    para el servicio de notificaciones que lee marcas (`body-markup`) y, en
-    Windows, título, cuerpo y destino se protegen para la plantilla XML de
-    la notificación, que los inserta tal cual (esto último también arregla
-    el correo, cuyo destino puede llevar `<` y `>` de un Message-ID).
-- **Mensajes privados dentro de un grupo** (XEP-0045 §7.5):
-  - son una conversación propia, `grupo@servicio/apodo` (tipo `private`),
-    listada con las directas como «apodo (grupo)»; el apodo conserva sus
-    mayúsculas;
-  - se abren desde el apodo de quien habla en el grupo o desde la lista de
-    quién está; salen como `chat` a `grupo/apodo`, con `origin-id`, la marca
-    `muc#user` y sin pedir recibo (lo reparte el grupo);
-  - solo se reconocen como privados los de un grupo en el que la persona
-    está; uno del grupo sin apodo no es una conversación; un error devuelto
-    para uno nuestro lo deja en «no enviado», como siempre;
-  - al salir del grupo, sus privados **se quedan** para leerlos: el archivo
-    del grupo no los guarda, así que borrarlos los perdería. Escribir en
-    ellos otra vez necesita volver a estar en el grupo (sin él no hay apodo
-    con el que escribir y el núcleo lo rechaza).
+- **L'estat propi, per compte:**
+  - «Disponible», «Absent», «Ocupat» (`dnd`) i «Invisible», i un text
+    d'estat de fins a 200 caràcters (sense caràcters de control);
+  - es desa com una fila de paràmetres (`chat_presence:<cuenta>`, JSON), sense
+    taules ni columnes noves; un camp no vàlid torna al seu valor per defecte
+    («Disponible», sense text) sense tocar l'altre. En treure el compte se suprimeix;
+  - s'anuncia en connectar i cada vegada que la persona el canvia; la
+    visualització mostra sempre el desat, també abans de connectar, i la sessió
+    comença des d'aquest (mai des de «Disponible» per defecte).
+- **A qui arriba:**
+  - l'estat s'anuncia sense destinatari, així que el servidor només el dona als
+    contactes als quals la persona ha permès veure'l (subscripció, RFC 6121);
+  - als grups on és només hi arriba la disponibilitat
+    (absent, ocupat), **mai el text**: en un grup hi ha gent que la
+    persona no ha triat;
+  - la persona no rep res de nou de ningú: la presència dels altres l'envia
+    el seu servidor.
+- **Invisible, només on el servidor ho admet** (XEP-0186):
+  - a cada connexió es pregunta al servidor del compte què admet
+    (disco#info); si anuncia `urn:xmpp:invisible:0`, «Invisible» es pot
+    triar; si no, apareix desactivat amb el motiu i el nucli el rebutja;
+  - invisible, la persona continua rebent missatges en directe i els seus
+    contactes la veuen desconnectada. Els grups on ja és la continuen
+    veient (entrar en un grup és presència dirigida); la visualització ho diu;
+  - sense connexió no se sap què admet: «Invisible» espera a connectar i la
+    visualització ho diu («Connecta't per a comprovar si aquest servidor et pot
+    amagar»);
+  - si un «Invisible» desat es troba amb un servidor que ja no l'admet,
+    **no s'anuncia res** (la persona continua amagada, com va demanar): els seus
+    contactes la veuen desconnectada i els missatges directes i les peticions
+    per a veure el seu estat esperen al servidor fins que triï un altre estat;
+    en triar-lo s'anuncia i es recupera el que ha arribat a l'arxiu. Mai no
+    passa tota sola a visible;
+  - si ja estava anunciada, passar a no anunciada envia «no disponible» a
+    tothom, i el servidor la treu també dels grups (RFC 6121 §4.6); per
+    això s'hi torna a entrar de seguida: els grups la continuen veient,
+    disponible, com diu la visualització.
+- **La presència dels contactes:**
+  - arriba del servidor i es desa només en memòria, per a la sessió: una
+    sessió nova comença de zero. No va al magatzem, perquè en tornar seria
+    antiga;
+  - un contacte vist que es desconnecta, o del qual el servidor diu que és
+    desconnectat (ho diu dels que la persona pot veure), queda com a
+    «Desconnectat» per a la sessió, sense tornar a oferir «Demanar veure el
+    seu estat»;
+  - com que qualsevol pot enviar presència, es desen com a màxim 1000
+    contactes, 50 dispositius per contacte i 200 peticions; el que passa
+    d'aquí es descarta. Una presència amb la marca de grup (`muc#user`) mai no
+    és d'un contacte;
+  - d'un contacte amb diversos dispositius es mostra el de prioritat més
+    alta i, a igualtat, el més disponible (xerrant, disponible, absent,
+    absent molt de temps, ocupat);
+  - es mostra al costat de cada conversa directa i a la seva capçalera, amb el
+    seu text d'estat.
+- **Veure l'estat d'un altre és decisió de la persona:**
+  - «Demanar veure el seu estat» envia la petició (`subscribe`) només en prémer;
+  - les peticions d'altres es mostren com a proposta, amb «Permetre»
+    (`subscribed`) i «Rebutjar» (`unsubscribed`); res no es contesta tot sol i
+    permetre no demana el mateix de tornada. «Permetre» només respon a qui ho
+    ha demanat en aquesta sessió; «Rebutjar» val per a qualsevol;
+  - les peticions pendents es desen només en memòria: el servidor les
+    torna a lliurar a cada connexió.
+- **Mencions en un grup:**
+  - un missatge d'un altre menciona la persona si el seu text conté el seu
+    sobrenom en aquell grup com a paraula sencera (sense distingir majúscules;
+    lletres, xifres i `_` de qualsevol alfabet formen paraula), o si porta una
+    referència XEP-0372 a la seva adreça o al seu lloc al grup (`grupo/apodo`).
+    Un sobrenom de menys de tres caràcters només menciona després de `@` («al»,
+    «Jo» també són paraules corrents). El que és propi mai no menciona;
+  - en escriure `@` i el principi d'un sobrenom, l'editor ofereix els que
+    són al grup ara (sense la persona), filtrats per aquest principi, com a
+    molt 8; fletxes, Retorn o Tab per a triar i Escapada per a tancar. El que
+    s'ha triat s'escriu com a `@apodo `;
+  - els sobrenoms triats surten a més com a referències XEP-0372 (`begin` i
+    `end` en caràcters), només si continuen al text en enviar. El que s'ha
+    triat no es desa: «Tornar a enviar» envia com a referències els sobrenoms
+    escrits amb `@` dels qui són al grup en aquell moment;
+  - qui és a cada grup surt de la presència del grup, en memòria; un
+    sobrenom que el grup ens canvia (estat 210) es desa tal com el dona el
+    grup, encara que no sigui un que acceptaríem en unir-nos-hi, perquè les
+    mencions i l'eco continuïn funcionant;
+  - el ressaltat es calcula en llegir l'historial amb el sobrenom actual,
+    sense columna nova. Una menció feta només per referència, sense el sobrenom
+    al text, avisa en arribar però no queda ressaltada després.
+- **Notificacions del sistema:**
+  - decideix el nucli, que sap com ha arribat cada missatge (funció pura
+    `should_notify`): només un missatge desat per primera vegada, d'una altra
+    persona i arribat en directe, o com a còpia d'un de rebut en un altre
+    dispositiu (carbons `received`: arriba en directe i és nou aquí). El
+    que arriba en posar-se al dia (arxiu, historial del grup, missatges amb
+    retard) no avisa: es veu com a no llegit;
+  - missatges directes i privats: sempre; en un grup, només les mencions;
+  - mai mentre l'estat propi d'aquell compte és «Ocupat», i la visualització
+    ho diu sota el selector;
+  - el nucli emet `chat.notify` (compte, conversa, tipus, grup, qui
+    i el text, o el nom del fitxer, retallat a 280 caràcters; el títol,
+    a 120); el pont
+    Go mostra la notificació llevat que hi hagi «No molestar» o hores de silenci
+    (ADR-0049): un missatge de xat compta com un missatge, igual que el
+    correu, i no com un recordatori;
+  - el títol és qui escriu i, en un grup o en privat, `· grupo`, sense
+    textos nous per a traduir a Go; en prémer-la s'obre aquella conversa
+    a la visualització Xat;
+  - el que ha escrit un altre es mostra com a text: a Linux el cos s'escapa
+    per al servei de notificacions que llegeix marques (`body-markup`) i, a
+    Windows, títol, cos i destinació es protegeixen per a la plantilla XML de
+    la notificació, que els insereix tal com són (això últim també arregla
+    el correu, la destinació del qual pot portar `<` i `>` d'un Message-ID).
+- **Missatges privats dins d'un grup** (XEP-0045 §7.5):
+  - són una conversa pròpia, `grupo@servicio/apodo` (tipus `private`),
+    llistada amb les directes com a «sobrenom (grup)»; el sobrenom conserva
+    les seves majúscules;
+  - s'obren des del sobrenom de qui parla al grup o des de la llista de
+    qui hi és; surten com a `chat` a `grupo/apodo`, amb `origin-id`, la marca
+    `muc#user` i sense demanar confirmació de lliurament (el reparteix el grup);
+  - només es reconeixen com a privats els d'un grup on és la
+    persona; un del grup sense sobrenom no és una conversa; un error retornat
+    per a un dels nostres el deixa en «no enviat», com sempre;
+  - en sortir del grup, els seus privats **es queden** per a llegir-los:
+    l'arxiu del grup no els desa, així que suprimir-los els perdria. Tornar-hi
+    a escriure necessita tornar a ser al grup (sense això no hi ha sobrenom
+    amb què escriure i el nucli ho rebutja).
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Tablas y columnas nuevas (esquema 63/64, como en #198):** otras tareas
-  añaden migraciones a la vez y los números chocarían; el estado cabe en una
-  fila de ajustes y la mención se calcula al leer. Por eso una mención hecha
-  solo por referencia avisa al llegar pero no queda resaltada después.
-- **Borrar los privados al salir del grupo:** se perderían sin remedio, sin
-  que la persona lo haya pedido.
-- **Leer la lista de contactos del servidor (roster) para saber a quién se
-  puede ver:** necesita contestar a sus avisos de cambios; recordar lo visto
-  en la sesión, y lo que el servidor dice de los contactos desconectados,
-  basta para no ofrecer pedirlo otra vez. Gestionar quién ve el estado queda
-  pendiente.
-- **Invisible enviando «no disponible» y consultando el archivo cada poco
-  (#198):** la persona dejaría de recibir en directo y saldría de los
-  grupos; XEP-0186 es la forma estándar y, sin ella, se dice que no se puede.
-- **Ausente sola por inactividad (#198):** necesita saber la inactividad del
-  sistema en cada plataforma desde Go; queda pendiente.
-- **Modos de aviso por conversación (todo, menciones, silencio, #198):** no
-  los pide #208; el silencio general ya lo dan «No molestar» y las horas
-  tranquilas.
-- **Mandar el texto de estado también a los grupos:** lo verían personas
-  que la persona no eligió.
-- **Decidir las notificaciones en la vista:** la vista no sabe si un
-  mensaje llegó en directo o del archivo, y con la ventana en la bandeja sus
-  temporizadores se retrasan (ADR-0049).
-- **Avisar también de lo recuperado al conectar:** al abrir la aplicación
-  tras días cerrada saldría una notificación por cada mensaje antiguo.
-- **Pedir recibo de entrega en los privados:** el grupo los reparte y el
-  recibo del otro revelaría cuándo lee a alguien que no está entre sus
-  contactos.
+- **Taules i columnes noves (esquema 63/64, com a #198):** altres tasques
+  afegeixen migracions alhora i els números xocarien; l'estat cap en una
+  fila de paràmetres i la menció es calcula en llegir. Per això una menció feta
+  només per referència avisa en arribar però no queda ressaltada després.
+- **Suprimir els privats en sortir del grup:** es perdrien sense remei, sense
+  que la persona ho hagi demanat.
+- **Llegir la llista de contactes del servidor (roster) per a saber qui es
+  pot veure:** necessita contestar als seus avisos de canvis; recordar el que
+  s'ha vist a la sessió, i el que el servidor diu dels contactes desconnectats,
+  n'hi ha prou per a no oferir demanar-ho una altra vegada. Gestionar qui veu
+  l'estat queda pendent.
+- **Invisible enviant «no disponible» i consultant l'arxiu sovint
+  (#198):** la persona deixaria de rebre en directe i sortiria dels
+  grups; XEP-0186 és la manera estàndard i, sense això, es diu que no es pot.
+- **Absent automàticament per inactivitat (#198):** necessita saber la
+  inactivitat del sistema a cada plataforma des de Go; queda pendent.
+- **Modes d'avís per conversa (tot, mencions, silenci, #198):** no
+  els demana #208; el silenci general ja el donen «No molestar» i les hores
+  de silenci.
+- **Enviar el text d'estat també als grups:** el veurien persones
+  que la persona no ha triat.
+- **Decidir les notificacions a la visualització:** la visualització no sap
+  si un missatge ha arribat en directe o de l'arxiu, i amb la finestra a la
+  safata els seus temporitzadors es retarden (ADR-0049).
+- **Avisar també del que s'ha recuperat en connectar:** en obrir l'aplicació
+  després de dies tancada sortiria una notificació per cada missatge antic.
+- **Demanar confirmació de lliurament als privats:** el grup els reparteix i
+  la confirmació de l'altre revelaria a algú que no és entre els seus
+  contactes quan llegeix.
 
-## Pendiente (#111 sigue abierta)
+## Pendent (#111 continua oberta)
 
-- Ausente por inactividad y silenciar una conversación concreta.
-- Gestionar quién puede ver el estado propio (retirar un permiso dado).
-- Un contador de menciones sin leer.
-- Probar «Invisible» contra un servidor con XEP-0186 (el Prosody de CI no lo
-  trae) y la notificación nativa en Windows (N4).
-- Rocket.Chat; Teams y Slack cuando existan los registros.
+- Absent per inactivitat i silenciar una conversa concreta.
+- Gestionar qui pot veure l'estat propi (retirar un permís donat).
+- Un comptador de mencions sense llegir.
+- Provar «Invisible» contra un servidor amb XEP-0186 (el Prosody de CI no el
+  porta) i la notificació nativa a Windows (N4).
+- Rocket.Chat; Teams i Slack quan existeixin els registres.
