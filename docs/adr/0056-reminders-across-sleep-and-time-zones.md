@@ -1,10 +1,13 @@
 # ADR-0056: Recordatorios tras una suspensión y un cambio de zona horaria
 
 - Estado: aceptada por delegación (el propietario delegó las decisiones de
-  diseño de #209 en la opción más prudente); pendiente de revisión del
-  propietario al final del plan, en especial el punto marcado «a confirmar».
-- Fecha: 2026-10-15.
-- Alcance: #209 (fila SET-29 del libro de paridad, padre #100), sobre los
+  diseño de #209 y #225 en la opción más prudente); pendiente de revisión
+  del propietario al final del plan. El punto que quedó «a confirmar» (los
+  avisos de eventos terminados) lo decidió el propietario: se muestran
+  (#225, ver «Ampliación del 2026-10-16: avisos perdidos»). Solo queda «a
+  confirmar» lo que aún se aparta de esa decisión: el móvil no los muestra.
+- Fecha: 2026-10-15; ampliada el 2026-10-16 (#225).
+- Alcance: #209 y #225 (fila SET-29 del libro de paridad, padre #100), sobre los
   recordatorios comunes de ADR-0045 (`pim::reminders`). Diseño:
   [recordatorios del calendario](../design/calendar-reminders.md).
 
@@ -32,16 +35,14 @@ sobrevivía a un reinicio. Pero:
   ambos solo hace mirar otra vez el mismo hueco, y lo anotado impide repetir.
   Se borra con la cuenta (ADR-0011).
 - **Qué da una mirada**: cada aviso no anotado cuya hora ha llegado, una sola
-  vez, si sigue sirviendo:
+  vez:
   - su evento aún no ha empezado (a tiempo, o sincronizado tarde), o
-  - no había vencido en la mirada anterior y su evento no ha terminado: venció
-    mientras nadie miraba (equipo dormido, aplicación cerrada) o un cambio de
-    zona lo adelantó.
-- **Un aviso cuyo evento terminó antes de mirar no se da** (a confirmar por
-  el propietario). Es una diferencia de paridad: eM Client y Outlook muestran
-  los avisos vencidos. Se eligió no darlos porque ya no sirven y, tras una
-  noche, serían una ráfaga; si el propietario prefiere verlos, hará falta un
-  aviso agrupado de «vencidos» (con textos e interfaz nuevos).
+  - no había vencido en la mirada anterior: venció mientras nadie miraba
+    (equipo dormido, aplicación cerrada) o un cambio de zona lo adelantó. Si
+    su evento sigue, se da solo; si ya terminó, es un aviso perdido.
+- **Un aviso cuyo evento terminó antes de mirar** no se daba (#209); desde
+  #225 se da en un único aviso agrupado de avisos perdidos, por decisión del
+  propietario (ver «Ampliación del 2026-10-16: avisos perdidos»).
 - **Un aviso «al empezar»** (0 minutos) se da en la primera mirada desde el
   inicio, mientras el evento sigue: antes no se daba nunca (corrección). Un
   evento sin duración cuenta como en curso durante su primer minuto, así que
@@ -114,8 +115,8 @@ sobrevivía a un reinicio. Pero:
   tocar la construcción de `Event` en todos los proveedores, para un caso raro
   (CalDAV casi siempre escribe `TZID`). Releer ya es lo que el modelo define.
 - **Agrupar los avisos perdidos en un aviso nuevo y contar los de eventos
-  terminados** (borrador #198): añade eventos, textos e interfaz. Queda como
-  camino si el propietario quiere ver los vencidos (ver arriba).
+  terminados** (borrador #198): descartada en #209 por añadir eventos, textos
+  e interfaz; adoptada en #225 cuando el propietario decidió verlos.
 - **Dar también los avisos de eventos terminados, uno a uno**: tras una noche
   dormido llegaría una ráfaga de avisos inútiles.
 - **Recordar la mirada anterior solo en memoria**: no cubre la aplicación
@@ -125,3 +126,79 @@ sobrevivía a un reinicio. Pero:
   zona anterior hasta que alguien abriera el calendario.
 - **Detectar el cambio de zona por su nombre IANA**: no siempre está
   disponible y no da la zona anterior para calcular; el desfase sí.
+
+## Ampliación del 2026-10-16: avisos perdidos (#225)
+
+El propietario decidió que los avisos de eventos que terminaron mientras
+nadie miraba se muestren, como en eM Client y Outlook, sin ráfaga. El resto
+lo decidió la delegación, con la opción más prudente.
+
+- **Qué es un aviso perdido**: uno no anotado que venció después de la mirada
+  anterior (la misma regla y el mismo límite de 14 días que arriba) y cuyo
+  evento ya terminó en el momento de mirar. Sin mirada anterior no hay
+  perdidos: no se sabe qué hueco hubo. Una reunión rechazada (Exchange
+  «decline», Google «declined») no se cuenta como perdida.
+- **Un solo aviso**: todos los perdidos aún no mostrados, de todas las
+  cuentas, van en un único evento `calendar.missedReminders`: `count`
+  (cuántos en total), `keys` (la cuenta y la clave `<evento>@<inicio>` de
+  cada uno), los 20 más recientes como `calendar.reminder` en `reminders`
+  (cada uno con su `key` y `at`), del más reciente al más antiguo (la reunión
+  perdida más reciente es la que más probablemente aún pide algo, y no debe
+  quedar tras el «…»), y los días que abarcan en la zona actual: `day` (el
+  más reciente) y `first_day`. «Más reciente» es por `at`, cuándo empieza el
+  evento en la zona actual: un día completo empieza a su medianoche local,
+  no a la medianoche UTC que guarda `start`; Go ordena igual al juntar.
+- **La notificación** (Go): el título dice cuántos (`notify.missedReminders`)
+  y el cuerpo, uno por línea, cuándo y qué, hasta 5 y «…» si hay más. El
+  título es neutro, «N avisos perdidos», y no «mientras el equipo dormía»:
+  el hueco también puede venir de tener la aplicación cerrada. En idiomas
+  con más formas de plural que «uno/otro» (polaco, árabe, letón) dice el
+  número sin plural («Pominięte przypomnienia: N»), porque Go solo elige
+  entre esas dos. Los asuntos son texto de otros (invitaciones): cada uno
+  ocupa una línea (sin saltos ni caracteres de control, hasta 80
+  caracteres) y se muestra como texto, nunca como marcado; igual el asunto
+  y el lugar de un aviso suelto.
+- **Al pulsarla** se abre el calendario en el día más reciente con avisos
+  perdidos: en vista de día si todos son de ese día y, si abarcan más días,
+  en vista de semana de ese día, que muestra los demás alrededor
+  (`calendar:AAAA-MM-DD` o `calendar:week:AAAA-MM-DD` como destino del clic).
+- **Nunca se descarta**: el núcleo ya los anotó como dados, así que Go guarda
+  el aviso (y le suma los que lleguen entretanto, una vez cada clave)
+  mientras no puede mostrarlo, y lo muestra en cuanto puede:
+  - al arrancar, hasta que la interfaz le ha dicho el idioma y el plan de
+    silencio, o 30 segundos como mucho: la primera mirada llega antes, y sin
+    esperar saldría en inglés, sin respetar el silencio ni sonar;
+  - durante las horas de silencio que retienen los avisos, hasta que acaban
+    (al final del intervalo, o con el plan que quita una pausa indefinida).
+  Suena cuando se muestra (`calendar.missedRemindersShown`), no al llegar.
+- **Ni si la aplicación se cierra antes de mostrarlo** (revisión de #225):
+  la memoria de Go no basta. El núcleo guarda cada perdido (`meta`,
+  `reminders.missed`, con su evento) en la misma transacción en que lo anota
+  como dado: los dos o ninguno. Los vuelve a decir al arrancar el vigilante
+  hasta que Go, tras mostrar el aviso, confirma sus `keys`
+  (`reminders.missedShown`); entonces los suelta y no los dice más. Un aviso
+  nuevo los incluye también, y Go los junta por clave, así que no salen
+  dos veces. Si la aplicación se cierra entre mostrarlo y confirmarlo, se
+  muestra otra vez al arrancar: antes dos veces que ninguna. Se eligió
+  guardarlo en el núcleo y no en un archivo de Go porque el núcleo ya es
+  quien anota qué se dio, en el mismo almacén y en la misma transacción.
+  Lo guardado está acotado: un perdido sin mostrar cuyo evento terminó hace
+  más de 14 días (el hueco que mira una mirada) se suelta al guardar el
+  siguiente; los de una cuenta borrada se van con ella.
+- **Una vez**: cada perdido se anota como dado antes de devolverlo, igual que
+  los demás; ni otra mirada, ni un reinicio, ni un despertar lo repiten. Si
+  no se puede anotar, no se muestra y la mirada no se anota: sale en el
+  aviso agrupado de la mirada siguiente.
+- **Lo que sigue en curso** no cambia: se da solo, diciendo «Empezó a las…».
+- **Cuentas en pausa o silenciadas**: no muestran nada, tampoco luego (su
+  mirada avanza igual).
+- **Lo que hay en el almacén al mirar**: al despertar se mira antes de releer
+  los calendarios, así que una reunión cancelada o movida mientras el equipo
+  dormía puede salir como perdida. Y un evento con fecha pasada que llega en
+  el hueco (una sincronización, un calendario que se vuelve a mostrar) sale
+  como perdido si su aviso venció y su evento terminó dentro del hueco.
+- **Móvil** (a confirmar por el propietario: es lo único que aún se aparta
+  de su decisión): no tiene aviso agrupado. `take_due` (`pim.refresh`) deja
+  los perdidos sin anotar y sin dar, como antes de #225, así que la respuesta
+  y `PimRefresh.kt` no cambian. Darlos en el móvil necesita un aviso agrupado
+  en Android e iOS. Issue de seguimiento: #230.

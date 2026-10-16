@@ -97,7 +97,30 @@ func (a *App) setNotifyQuiet(payload map[string]any) (any, error) {
 	currentQuiet = plan
 	quietMu.Unlock()
 	setTrayDoNotDisturbChecked(plan.quiet)
+	// A missed-reminders notice waiting for the plan, or for quiet hours to
+	// end, may go now (#225).
+	a.missedRemindersKnowQuiet()
 	return map[string]any{"ok": true}, nil
+}
+
+// suppressedUntil is when a notification of this kind stops being held back,
+// if it is now and the plan says until when: the end of the interval now is
+// in, and of any that follows on from it. An open-ended pause has no end; a
+// new plan says when it is over.
+func (p quietPlan) suppressedUntil(kind quietKind, now time.Time) (time.Time, bool) {
+	if !p.suppresses(kind, now) || p.indefinite {
+		return time.Time{}, false
+	}
+	end := now.UnixMilli()
+	for extended := true; extended; {
+		extended = false
+		for _, interval := range p.intervals {
+			if interval[0] <= end && end < interval[1] {
+				end, extended = interval[1], true
+			}
+		}
+	}
+	return time.UnixMilli(end), true
 }
 
 // toggleDoNotDisturbFromTray hands the click to the frontend, which owns the

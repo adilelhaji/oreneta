@@ -752,6 +752,63 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         );
     }
 
+    /// A meeting that came and went while the machine slept: the watch's
+    /// look on waking gathers its reminder into the one missed-reminders
+    /// notice, not a reminder of its own, and gives it once (#225).
+    #[tokio::test]
+    async fn the_reminder_watch_gathers_missed_reminders_into_one_notice() {
+        use super::*;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let account = meron_core::archive::ACCOUNT;
+        // A fixed clock (2027-01-15 08:00 UTC); the zone is this machine's,
+        // as the watch's is, and nothing below depends on it.
+        let now = 1_800_000_000;
+        let start = now - 3 * 3_600;
+        {
+            let db = engine.db.lock().unwrap();
+            meron_core::archive::ensure_account(&db, now).unwrap();
+            calendar::upsert_calendars(&db, account, &[calendar::Calendar {
+                id: "local:home".into(),
+                name: "Home".into(),
+                enabled: true,
+                ..Default::default()
+            }])
+            .unwrap();
+            let meeting = calendar::Event {
+                id: "standup".into(),
+                calendar_id: "local:home".into(),
+                subject: "Standup".into(),
+                start,
+                end: start + 1_800,
+                reminder_minutes: Some(15),
+                ..Default::default()
+            };
+            calendar::replace_window(&db, account, "local:home", (now - 86_400, now + 86_400), &[meeting]).unwrap();
+            // Last looked at before the reminder rang; asleep since.
+            meron_core::calendar::reminders::record_look(&db, account, start - 3_600, &chrono::Local).unwrap();
+        }
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+
+        let woke = look_for_reminders(&engine, now).await;
+        assert!(woke.reminders.is_empty(), "over: not a reminder of its own");
+        let missed = woke.missed.expect("one notice");
+        assert_eq!(missed["count"], 1);
+        assert_eq!(missed["reminders"][0]["event"], "standup");
+        assert_eq!(missed["reminders"][0]["started"], true);
+        let next = look_for_reminders(&engine, now + 60).await;
+        assert_eq!((next.reminders.len(), next.missed), (0, None), "given once");
+
+        // Not yet shown: a restart of the core says it again; once the host
+        // says it showed it (with the keys it held), no more.
+        let again = pim::reminders::pending_missed_notice(&engine, now + 120, &chrono::Local).expect("said again");
+        assert_eq!(again["keys"], missed["keys"]);
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = Request { id: 1, method: "reminders.missedShown".into(), params: json!({ "keys": missed["keys"] }) };
+        dispatch(&engine, &request, &writer).await.unwrap();
+        assert_eq!(pim::reminders::pending_missed_notice(&engine, now + 180, &chrono::Local), None);
+    }
+
     #[tokio::test]
     async fn the_local_address_book_saves_and_refuses_a_stale_edit() {
         use super::*;
@@ -1755,6 +1812,16 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut resumed = Box::pin(engine.resume_signal.notified());
         resumed.as_mut().enable();
+        // Missed reminders the host had not shown when it last quit (held at
+        // start or through quiet hours): said again, until it says it showed
+        // them (`reminders.missedShown`, #225).
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|epoch| epoch.as_secs() as i64)
+            .unwrap_or_default();
+        if let Some(missed) = pim::reminders::pending_missed_notice(&engine, now, &chrono::Local) {
+            emit(&out, "calendar.missedReminders", missed).await;
+        }
         loop {
             if next_reminder_look(&mut ticker, resumed.as_mut()).await == ReminderWake::Resumed {
                 // Listening again before this look, so a resume that lands
@@ -1808,6 +1875,10 @@ async fn give_calendar_reminders(engine: &Arc<Engine>, out: &Writer, now: i64) {
     let look = look_for_reminders(engine, now).await;
     for detail in look.reminders {
         emit(out, "calendar.reminder", detail).await;
+    }
+    // What came due while nobody looked and is over: one notice (#225).
+    if let Some(missed) = look.missed {
+        emit(out, "calendar.missedReminders", missed).await;
     }
     // A floating time is read in the zone the machine is in when its calendar
     // is read: after a change of zone, read those again so their times, and
@@ -8746,6 +8817,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "system.resumed" => {
             engine.clear_all_pools();
             engine.resume_signal.notify_waiters();
+            Ok(json!({ "ok": true }))
+        }
+
+        // The host showed a missed-reminders notice (#225): the reminders it
+        // held, `keys: [{account, key}]`, are no longer said again at start.
+        "reminders.missedShown" => {
+            let shown: Vec<(String, String)> = p
+                .get("keys")
+                .and_then(Value::as_array)
+                .map(|keys| {
+                    keys.iter()
+                        .filter_map(|k| Some((k.get("account")?.as_str()?.to_string(), k.get("key")?.as_str()?.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default();
+            pim::reminders::missed_shown(engine, &shown)?;
             Ok(json!({ "ok": true }))
         }
 

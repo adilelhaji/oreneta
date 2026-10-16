@@ -22,6 +22,10 @@ GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
 On 2026-10-15 (#210, ADR-0057) SET-07 gained folder moves on Microsoft Graph
 and SET-11 Graph delivery receipts and reading incoming delivery and read
 reports; both stay `partial`, since the Exchange (EWS) parts are absent.
+On 2026-10-16 (#225, ADR-0056) SET-29 gained the grouped desktop notice of
+reminders missed while the machine slept or the app was closed; it stays
+`implemented-unverified` (native evidence pending; the phone does not show
+them yet).
 On 2026-10-16 (#226, ADR-0061) SET-27 gained the right-to-left layout for
 Arabic, with production-entry checks in Arabic for the mailbox, reader and
 composer and for people, tasks, notes, calendar, chat and settings; it stays

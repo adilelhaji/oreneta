@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Archivé",
   "notification.markReadFailed": "Échec du marquage comme lu",
   "notification.undoFailed": "Échec de l'annulation",
+  "notify.missedReminders": "{count, plural, one {1 rappel manqué} other {{count} rappels manqués}}",
   "notify.newMessage": "Nouveau message",
   "notify.newMessageCount": "{count, plural, one {1 nouveau message} other {{count} nouveaux messages}}",
   "notify.noSubject": "(pas de sujet de mail)",

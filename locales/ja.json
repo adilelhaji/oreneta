@@ -962,6 +962,7 @@
   "notification.archivedTitle": "アーカイブしました",
   "notification.markReadFailed": "既読にできませんでした",
   "notification.undoFailed": "元に戻せませんでした",
+  "notify.missedReminders": "{count, plural, one {見逃したリマインダー 1 件} other {見逃したリマインダー {count} 件}}",
   "notify.newMessage": "新しいメッセージ",
   "notify.newMessageCount": "{count, plural, one {1 件の新しいメッセージ} other {{count} 件の新しいメッセージ}}",
   "notify.noSubject": "(メールの件名はありません)",

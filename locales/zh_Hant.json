@@ -962,6 +962,7 @@
   "notification.archivedTitle": "已封存",
   "notification.markReadFailed": "無法標示為已讀",
   "notification.undoFailed": "無法復原",
+  "notify.missedReminders": "{count, plural, one {錯過了 1 個提醒} other {錯過了 {count} 個提醒}}",
   "notify.newMessage": "新消息",
   "notify.newMessageCount": "{count, plural, one {1 則新訊息} other {{count} 新消息}}",
   "notify.noSubject": "（沒有電子郵件主題）",

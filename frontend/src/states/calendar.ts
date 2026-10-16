@@ -557,6 +557,19 @@ export function openCalendarOn(date: Date) {
   ui$.calendarOpen.set(true)
 }
 
+/// A notice of missed reminders was clicked (#225): the calendar on the day
+/// it names ("YYYY-MM-DD", the reader's local day), in the week view when it
+/// says so ("week:YYYY-MM-DD", misses on several days), or on today when it
+/// names none it can read.
+export function openCalendarFromNotification(target: string) {
+  const week = target.startsWith('week:')
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(week ? target.slice('week:'.length) : target)
+  const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date()
+  const real = match && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3])
+  openCalendarOn(real ? date : new Date())
+  if (week) calendar$.view.set('week')
+}
+
 export function openEvent(event: CalendarEvent) {
   calendar$.viewing.set({ ...event })
 }

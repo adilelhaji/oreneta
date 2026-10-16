@@ -5,7 +5,8 @@ import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
-import { onChatEvent, openChatFromNotification } from './states/messaging'
+import { onChatEvent } from './states/messaging'
+import { onNotificationClicked } from './states/notificationClick'
 import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
@@ -21,7 +22,7 @@ import {
   refreshAccountFoldersCache,
   inboxUnread,
 } from './states/mail'
-import { flushComposeDrafts, openMailtoCompose, openThreadTabById, restoreLocalDrafts } from './states/compose'
+import { flushComposeDrafts, openMailtoCompose, restoreLocalDrafts } from './states/compose'
 import { accounts$, refreshAccountPictures } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
@@ -100,6 +101,7 @@ export function useAppEffects() {
       unknownSender: t('notify.unknownSender'),
       // Go puts the time (and the date, when not today) in place of {time}.
       reminderStarted: translationTemplate('notify.reminderStarted'),
+      missedReminders: translationTemplate('notify.missedReminders'),
     }).catch(() => {})
     // Reflect the resolved locale to <html lang>/dir, driving :lang() CJK glyph
     // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
@@ -304,20 +306,8 @@ export function useAppEffects() {
   useEffect(() => {
     const eventsOn = (window as any).runtime?.EventsOn
     if (!eventsOn) return
-    const offNotification = eventsOn(
-      'notification-clicked',
-      (detail: { account?: string; threadId?: string; threadKey?: string }) => {
-        const threadId = detail?.threadId || detail?.threadKey
-        // A chat message (ADR-0055): its conversation, in the Chat view.
-        if (threadId?.startsWith('chat:')) {
-          void openChatFromNotification(detail.account ?? '', threadId.slice('chat:'.length))
-          return
-        }
-        if (threadId) {
-          void openThreadTabById(threadId)
-        }
-      },
-    )
+    // A mail thread, a chat (ADR-0055) or missed reminders (#225).
+    const offNotification = eventsOn('notification-clicked', onNotificationClicked)
     return () => {
       if (typeof offNotification === 'function') offNotification()
     }

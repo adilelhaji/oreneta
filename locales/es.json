@@ -962,6 +962,7 @@
   "notification.archivedTitle": "Archivado",
   "notification.markReadFailed": "No se pudo marcar como leído",
   "notification.undoFailed": "No se pudo deshacer",
+  "notify.missedReminders": "{count, plural, one {1 aviso perdido} other {{count} avisos perdidos}}",
   "notify.newMessage": "Nuevo mensaje",
   "notify.newMessageCount": "{count, plural, one {1 mensaje nuevo} other {{count} mensajes nuevos}}",
   "notify.noSubject": "(sin asunto de correo electrónico)",
