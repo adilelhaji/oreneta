@@ -101,7 +101,15 @@ ADR-0055 (presencia, menciones, avisos y privados en grupos, #208).
   - el enlace sale en el cuerpo y como OOB y vuelve como archivo con su
     nombre decodificado; un nombre no sale de su carpeta;
   - solo HTTPS al subir y al guardar (http, ftp, file, credenciales en el
-    enlace, rechazados), sin escribir nada.
+    enlace, rechazados), sin escribir nada;
+  - una pregunta sin respuesta termina en su plazo y cuenta como fallo,
+    no como un «no» del servidor; una búsqueda sin servicio termina las
+    subidas que esperan con `noService` o, si una pregunta quedó sin
+    respuesta, con `disconnected`; un sitio sin respuesta, con
+    `disconnected` (#220).
+- **tokio-xmpp parcheado (#220):** un receptor consultado mientras se
+  envía algo vuelve a despertarse (`third_party/tokio-xmpp`, en CI); sin el
+  parche, la prueba falla.
 - **Presencia, menciones, avisos y privados (ADR-0055):**
   - el estado propio por cuenta: texto limpio y de 200 caracteres como
     mucho, un campo dañado vuelve solo a su valor, se olvida al quitar la
@@ -185,4 +193,8 @@ ADR-0055 (presencia, menciones, avisos y privados en grupos, #208).
   `li` dentro de la lista de mensajes; corregido. Con ADR-0044, el núcleo
   aceptaba copias de carbons y resultados de archivo de cualquier
   remitente; ahora solo del propio servidor (o de una sala unida, para su
-  archivo).
+  archivo). Con #220, las pruebas contra Prosody fallaban de vez en cuando
+  (13 de 300 rondas): tokio-xmpp 6.0.0 perdía el aviso de su receptor si
+  se le consultaba mientras se enviaba algo, y la sesión dejaba de recibir
+  sin desconectarse. Se usa una copia parcheada (`third_party/tokio-xmpp`)
+  y las preguntas de una subida tienen plazo.

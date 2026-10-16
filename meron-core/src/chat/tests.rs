@@ -420,6 +420,92 @@ fn files_come_and_go_over_https_only() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A question about a file that gets no answer ends at its deadline as a
+/// failure; one answered in time comes through as it was (#220).
+#[tokio::test]
+async fn an_unanswered_upload_question_ends_at_its_deadline() {
+    let late = xmpp::within(std::time::Duration::from_millis(50), std::future::pending()).await;
+    assert!(
+        matches!(late, Err(tokio_xmpp::IqFailure::SendError(ref e)) if e.kind() == std::io::ErrorKind::TimedOut),
+        "{late:?}"
+    );
+    let answered = xmpp::within(std::time::Duration::from_secs(5), async { Ok(tokio_xmpp::IqResponse::Result(None)) }).await;
+    assert!(matches!(answered, Ok(tokio_xmpp::IqResponse::Result(None))), "{answered:?}");
+}
+
+/// A discovery question with no answer (a failure, as at its deadline) is
+/// noted; a server's "no" is not. The first upload service answering is
+/// the one used, and a slot never answered is a failed connection (#220).
+#[test]
+fn upload_answers_are_read_and_a_missing_one_is_noted() {
+    use files::FileError;
+    use tokio_xmpp::parsers::stanza_error::{DefinedCondition, ErrorType, StanzaError};
+    use tokio_xmpp::{IqFailure, IqResponse};
+    let none = || Err(IqFailure::SendError(std::io::Error::new(std::io::ErrorKind::TimedOut, "no answer in time")));
+    let refused = || Ok(IqResponse::Error(StanzaError::new(ErrorType::Cancel, DefinedCondition::ServiceUnavailable, "en", "")));
+    let service = || {
+        Ok(IqResponse::Result(Some(element(
+            "<query xmlns='http://jabber.org/protocol/disco#info'>\
+               <feature var='urn:xmpp:http:upload:0'/>\
+               <x type='result' xmlns='jabber:x:data'>\
+                 <field var='FORM_TYPE' type='hidden'><value>urn:xmpp:http:upload:0</value></field>\
+                 <field var='max-file-size'><value>1048576</value></field>\
+               </x></query>",
+        ))))
+    };
+    let jid = |j: &str| tokio_xmpp::parsers::jid::Jid::from_str(j).unwrap();
+
+    let mut uploads = xmpp::Uploads { searching: 3, ..Default::default() };
+    xmpp::info_answered(&mut uploads, jid("chat.test"), refused());
+    assert_eq!((uploads.searching, uploads.unanswered, uploads.service.is_none()), (2, false, true));
+    xmpp::info_answered(&mut uploads, jid("rooms.chat.test"), none());
+    assert_eq!((uploads.searching, uploads.unanswered, uploads.service.is_none()), (1, true, true));
+    xmpp::info_answered(&mut uploads, jid("upload.chat.test"), service());
+    assert_eq!(uploads.searching, 0);
+    assert_eq!(uploads.service, Some((jid("upload.chat.test"), Some(1_048_576))));
+    xmpp::info_answered(&mut uploads, jid("other.chat.test"), service());
+    assert_eq!(uploads.service.as_ref().map(|(j, _)| j.to_string()).as_deref(), Some("upload.chat.test"), "the first one stays");
+
+    let mut items = xmpp::Uploads { searching: 1, ..Default::default() };
+    xmpp::discovery_answered(&mut items, &none());
+    assert_eq!((items.searching, items.unanswered), (0, true));
+
+    assert_eq!(xmpp::slot_from(none()).err(), Some(FileError::Disconnected));
+    assert!(matches!(xmpp::slot_from(refused()), Err(FileError::Refused { .. })));
+    assert!(matches!(xmpp::slot_from(Ok(IqResponse::Result(None))), Err(FileError::Refused { .. })));
+}
+
+/// With the search over and no service, the waiting uploads end once each:
+/// "disconnected" when a question went unanswered, "no service" when all
+/// were answered. While questions are out, they keep waiting (#220).
+#[test]
+fn a_search_without_a_service_ends_the_waiting_uploads() {
+    use files::FileError;
+    let upload = |id: &str| xmpp::Upload {
+        id: id.into(),
+        conversation: "pau@chat.test".into(),
+        group: false,
+        path: "x.bin".into(),
+        name: "x.bin".into(),
+        size: 1,
+        cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    };
+    let ended = std::sync::Mutex::new(Vec::new());
+    let record = |u: &xmpp::Upload, result: Result<String, FileError>| ended.lock().unwrap().push((u.id.clone(), result.err()));
+    let mut uploads = xmpp::Uploads { searching: 1, unanswered: true, waiting: vec![upload("a")], ..Default::default() };
+    xmpp::end_search(&mut uploads, &record);
+    assert!(ended.lock().unwrap().is_empty() && uploads.waiting.len() == 1, "a question is still out");
+    uploads.searching = 0;
+    xmpp::end_search(&mut uploads, &record);
+    uploads.waiting.push(upload("b"));
+    xmpp::end_search(&mut uploads, &record);
+    assert_eq!(
+        *ended.lock().unwrap(),
+        vec![("a".to_string(), Some(FileError::Disconnected)), ("b".to_string(), Some(FileError::NoService))]
+    );
+    assert!(uploads.waiting.is_empty() && !uploads.unanswered);
+}
+
 // ---- Presence, mentions, notifications and private messages (ADR-0055) -----------------
 
 fn stanza<T: TryFrom<tokio_xmpp::parsers::minidom::Element>>(xml: &str) -> T
@@ -1060,21 +1146,24 @@ fn start_session(id: &str, jid: &str, db: Arc<std::sync::Mutex<Connection>>, opt
     Session { tx, events: Arc::new(std::sync::Mutex::new(erx)), task }
 }
 
-/// Waits (off the reactor) for an event that matches; panics after 20 s.
+/// Waits (off the reactor) for an event that matches; panics after 20 s,
+/// naming the events that came instead.
 async fn wait_event(session: &Session, what: &'static str, matches: impl Fn(&str, &serde_json::Value) -> bool + Send + 'static) -> serde_json::Value {
     let events = session.events.clone();
     tokio::task::spawn_blocking(move || {
         let events = events.lock().unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let mut seen = Vec::new();
         while std::time::Instant::now() < deadline {
             if let Ok((name, detail)) = events.recv_timeout(std::time::Duration::from_millis(200)) {
                 assert_ne!(detail["state"], "error", "{name}: {detail}");
                 if matches(&name, &detail) {
                     return detail;
                 }
+                seen.push(format!("{name} {detail}"));
             }
         }
-        panic!("never saw: {what}");
+        panic!("never saw: {what}; saw instead: {seen:?}");
     })
     .await
     .unwrap()
