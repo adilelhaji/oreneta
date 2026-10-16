@@ -239,18 +239,18 @@ fn outcome_of(conn: &rusqlite::Connection, account: &str, id: &str) -> Vec<(Stri
 fn a_final_word_replaces_a_delay_and_is_never_replaced_by_one() {
     let conn = db();
     sent_message(&conn, ACCOUNT, 1, "P@x");
-    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delayed, Kind::Delivery, "<P@x>"), 100).unwrap();
+    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delayed, Kind::Delivery, "<P@x>"), 100, 1_000).unwrap();
     assert_eq!(outcome_of(&conn, ACCOUNT, "p@x"), vec![("bob@example.net".into(), Outcome::Delayed)]);
     // Delivered, even with an earlier date than the delay notice.
-    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "p@x"), 90).unwrap();
+    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "p@x"), 90, 1_000).unwrap();
     assert_eq!(outcome_of(&conn, ACCOUNT, "<P@X>"), vec![("bob@example.net".into(), Outcome::Delivered)]);
-    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delayed, Kind::Delivery, "p@x"), 200).unwrap();
+    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delayed, Kind::Delivery, "p@x"), 200, 1_000).unwrap();
     assert_eq!(outcome_of(&conn, ACCOUNT, "p@x"), vec![("bob@example.net".into(), Outcome::Delivered)]);
     // Recording the same report again changes nothing.
-    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "p@x"), 90).unwrap();
+    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "p@x"), 90, 1_000).unwrap();
     assert_eq!(outcomes(&conn, ACCOUNT, "p@x").unwrap().len(), 1);
     // A read report is kept beside the delivery one, not over it.
-    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Displayed, Kind::Disposition, "p@x"), 300).unwrap();
+    record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Displayed, Kind::Disposition, "p@x"), 300, 1_000).unwrap();
     assert_eq!(outcomes(&conn, ACCOUNT, "p@x").unwrap().len(), 2);
 }
 
@@ -260,9 +260,10 @@ fn a_report_naming_no_message_is_not_kept_and_reports_stay_with_their_account() 
     let count = |conn: &rusqlite::Connection| -> i64 {
         conn.query_row("SELECT count(*) FROM delivery_reports", [], |r| r.get(0)).unwrap()
     };
-    assert!(!record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, ""), 1).unwrap());
-    // A message this account never had: nothing is kept, whatever it claims.
-    assert!(!record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, "p@x"), 1).unwrap());
+    assert!(!record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, ""), 1, 1_000).unwrap());
+    // A message this account does not have: not linked, whatever it claims;
+    // it waits, bounded, in case the message appears.
+    assert!(!record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Failed, Kind::Delivery, "p@x"), 1, 1_000).unwrap());
     assert_eq!(count(&conn), 0);
     // One sent through this app is known even before its Sent copy is.
     crate::store::outgoing::begin_attempt(
@@ -275,10 +276,10 @@ fn a_report_naming_no_message_is_not_kept_and_reports_stay_with_their_account() 
         1,
     )
     .unwrap();
-    assert!(record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "sent-here@x"), 1).unwrap());
+    assert!(record(&conn, ACCOUNT, &one("bob@example.net", Outcome::Delivered, Kind::Delivery, "sent-here@x"), 1, 1_000).unwrap());
     assert_eq!(count(&conn), 1);
     sent_message(&conn, "other@example.org", 1, "p@x");
-    record(&conn, "other@example.org", &one("bob@example.net", Outcome::Failed, Kind::Delivery, "p@x"), 1).unwrap();
+    record(&conn, "other@example.org", &one("bob@example.net", Outcome::Failed, Kind::Delivery, "p@x"), 1, 1_000).unwrap();
     assert!(outcomes(&conn, ACCOUNT, "p@x").unwrap().is_empty());
     assert_eq!(outcome_of(&conn, "other@example.org", "p@x").len(), 1);
     assert!(outcomes(&conn, ACCOUNT, "").unwrap().is_empty());
@@ -335,4 +336,54 @@ Action: failed\r\nStatus: 5.1.1\r\nDiagnostic-Code: smtp; 550 user\u{200B} unkno
     let found = report(&wrap("delivery-status", "message/delivery-status", fields, "message/rfc822", ORIGINAL)).unwrap();
     assert_eq!(found.recipients[0].recipient, "bob@example.net");
     assert_eq!(found.recipients[0].diagnostic, "550 user unknown");
+}
+
+fn pending(conn: &rusqlite::Connection, account: &str) -> i64 {
+    conn.query_row("SELECT count(*) FROM delivery_reports_pending WHERE account = ?1", [account], |r| r.get(0)).unwrap()
+}
+
+/// A report that arrives before its sent message is synchronized (Inbox
+/// before Sent) is linked once the message is there, not lost.
+#[test]
+fn a_report_arriving_before_its_sent_message_is_linked_when_the_message_appears() {
+    let conn = db();
+    let bounce = wrap("delivery-status", "message/delivery-status", POSTFIX_FAILED, "message/rfc822", ORIGINAL);
+    let parsed = crate::parse::parse_message(bounce.as_bytes(), None);
+    crate::store::save_cached_message(&conn, ACCOUNT, "INBOX", 7, &parsed).unwrap();
+    assert_eq!(pending(&conn, ACCOUNT), 1);
+    assert!(outcomes(&conn, ACCOUNT, "plan-1@example.com").unwrap().is_empty(), "nothing to show it on yet");
+
+    // The Sent copy arrives later.
+    let sent = crate::parse::parse_message(ORIGINAL.as_bytes(), None);
+    crate::store::save_cached_message(&conn, ACCOUNT, "Sent", 1, &sent).unwrap();
+    let linked = outcomes(&conn, ACCOUNT, &sent.message_id).unwrap();
+    assert_eq!(linked.len(), 1);
+    assert_eq!((linked[0].outcome, linked[0].status.as_str()), (Outcome::Failed, "5.1.1"));
+    assert_eq!(pending(&conn, ACCOUNT), 0, "linked, so no longer waiting");
+
+    // Another account's waiting report is never linked to this one's message.
+    record(&conn, "other@example.org", &one("x@example.net", Outcome::Delivered, Kind::Delivery, &sent.message_id), 1, 1).unwrap();
+    assert_eq!(outcomes(&conn, ACCOUNT, &sent.message_id).unwrap().len(), 1);
+    assert_eq!(pending(&conn, "other@example.org"), 1);
+}
+
+#[test]
+fn reports_waiting_for_a_message_are_bounded_by_age_and_number() {
+    let conn = db();
+    let now = 10 * PENDING_MAX_AGE;
+    record(&conn, ACCOUNT, &one("a@example.net", Outcome::Failed, Kind::Delivery, "old@x"), 1, now - PENDING_MAX_AGE - 1).unwrap();
+    record(&conn, ACCOUNT, &one("a@example.net", Outcome::Failed, Kind::Delivery, "new@x"), 1, now).unwrap();
+    // Too old: gone; the recent one stays.
+    let ids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT original_message_id FROM delivery_reports_pending ORDER BY 1").unwrap();
+        stmt.query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect()
+    };
+    assert_eq!(ids, vec!["new@x".to_string()]);
+    for i in 0..PENDING_MAX_ROWS + 5 {
+        record(&conn, ACCOUNT, &one("a@example.net", Outcome::Failed, Kind::Delivery, &format!("m{i}@x")), 1, now + i).unwrap();
+    }
+    assert_eq!(pending(&conn, ACCOUNT), PENDING_MAX_ROWS);
+    // The oldest went first.
+    let oldest: i64 = conn.query_row("SELECT min(received_at) FROM delivery_reports_pending", [], |r| r.get(0)).unwrap();
+    assert_eq!(oldest, now + 5);
 }

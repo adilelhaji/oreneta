@@ -617,10 +617,10 @@ mod tests {
             to: "Bob <bob@example.net>".into(),
             ..Default::default()
         };
-        // Kept only once this account has the message it names.
-        assert!(!crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000).unwrap());
+        // A report that arrives before its sent message waits for it, and is
+        // linked once the message is there.
+        assert!(!crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000, 1_760_000_000).unwrap());
         crate::store::save_cached_message(&conn, "acc", "Sent", 20, &sent).unwrap();
-        assert!(crate::receipts::report::record(&conn, "acc", &failed, 1_760_000_000).unwrap());
 
         let mut value = thread_message_json("acc", "tid", "Sent", &header(20, true), Some(&sent), &HashSet::new());
         super::attach_delivery(&conn, "acc", &mut value).unwrap();

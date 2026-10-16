@@ -1556,12 +1556,14 @@ async fn a_report_too_large_for_its_mime_still_shows_its_text() {
     assert!(body.report.is_none());
 }
 
-/// A source that lists the reports in a folder and hands their MIME over.
+/// A source that lists the reports in a folder, page by page, and hands
+/// their MIME over: each read takes the next answer queued for that item.
 struct Reports {
     inner: Writer,
-    listed: Vec<String>,
-    mime: Mutex<HashMap<String, Vec<u8>>>,
+    pages: Vec<Vec<String>>,
+    mime: Mutex<HashMap<String, VecDeque<Result<Vec<u8>>>>>,
     reads: Mutex<Vec<String>>,
+    listings: Mutex<usize>,
 }
 impl Source for Reports {
     fn folders(&self, p: Option<&ResourceId>, c: Option<&Checkpoint>) -> Result<Page<Folder>> {
@@ -1576,47 +1578,116 @@ impl Source for Reports {
     fn message(&self, id: &ResourceId) -> Result<Message> {
         self.inner.message(id)
     }
-    fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
+    fn report_ids(&self, folder: &ResourceId, cursor: Option<&Checkpoint>) -> Result<Page<ResourceId>> {
         assert_eq!(folder.opaque(), "in");
-        assert!(limit > 0);
-        self.listed.iter().map(|id| ResourceId::new(ACCOUNT, ResourceKind::Message, id)).collect()
+        *self.listings.lock().unwrap() += 1;
+        let index: usize = cursor.map(|c| c.url.rsplit('=').next().unwrap().parse().unwrap()).unwrap_or(0);
+        let items = self.pages[index].iter().map(|id| ResourceId::new(ACCOUNT, ResourceKind::Message, id)).collect::<Result<_>>()?;
+        let checkpoint = (index + 1 < self.pages.len()).then(|| Checkpoint {
+            account: ACCOUNT.into(),
+            collection: "/v1.0/me/mailFolders/in/messages".into(),
+            url: format!("https://graph.microsoft.com/v1.0/me/mailFolders/in/messages?$skip={}", index + 1),
+            kind: CheckpointKind::NextPage,
+        });
+        Ok(Page { items, checkpoint })
     }
     fn message_mime(&self, id: &ResourceId) -> Result<Vec<u8>> {
         self.reads.lock().unwrap().push(id.opaque().to_owned());
-        self.mime.lock().unwrap().get(id.opaque()).cloned().ok_or_else(|| Error::new(ErrorKind::NotFound))
+        self.mime
+            .lock()
+            .unwrap()
+            .get_mut(id.opaque())
+            .and_then(VecDeque::pop_front)
+            .unwrap_or_else(|| Err(Error::new(ErrorKind::NotFound)))
     }
 }
-
-/// #210: a report that arrived is read at sync, so the sent message it
-/// names shows what it says before anybody opens it; it is read once.
-#[tokio::test]
-async fn reports_are_read_at_sync_and_linked_without_being_opened() {
+/// A session over `Reports`: m3 is the message this account sent, cached
+/// with its Message-ID; the listing and the MIME answers are the test's.
+fn report_session(pages: Vec<Vec<&str>>, mime: Vec<(&str, Vec<Result<Vec<u8>>>)>) -> (Db, Arc<Reports>, Session) {
     let (db, writer, session) = writable_session();
     let lease = session.lease.clone();
     drop(session);
     let writer = Arc::into_inner(writer).unwrap();
-    // m3 is the message this account sent; m2 is a bounce about it; m1 a
-    // report whose MIME says nothing readable.
     let sent = crate::parse::Message { message_id: "plan-1@example.test".into(), ..Default::default() };
     crate::store::save_cached_message(&db.lock().unwrap(), ACCOUNT, "INBOX", 3, &sent).unwrap();
     let source = Arc::new(Reports {
         inner: writer,
-        listed: vec!["m2".into(), "m1".into()],
-        mime: Mutex::new(HashMap::from([
-            ("m2".to_string(), NDR.as_bytes().to_vec()),
-            ("m1".to_string(), b"Subject: odd\r\n\r\nnot a report".to_vec()),
-        ])),
+        pages: pages.into_iter().map(|page| page.into_iter().map(str::to_owned).collect()).collect(),
+        mime: Mutex::new(mime.into_iter().map(|(id, answers)| (id.to_owned(), answers.into_iter().collect())).collect()),
         reads: Mutex::new(vec![]),
+        listings: Mutex::new(0),
     });
     let session = Session { db: db.clone(), lease, source: source.clone(), lock: Arc::new(Mutex::new(())) };
-    enqueue(&source.inner.inner, page("in", "sync-1", true, vec![]));
+    (db, source, session)
+}
+async fn sync(source: &Reports, session: &Session, token: &str) {
+    enqueue(&source.inner.inner, page("in", token, true, vec![]));
     session.sync_folder("INBOX", 50).await.unwrap();
-    let linked = crate::receipts::report::outcomes(&db.lock().unwrap(), ACCOUNT, "plan-1@example.test").unwrap();
-    assert_eq!(linked.len(), 1);
-    assert_eq!(linked[0].status, "5.1.10");
-    assert_eq!(source.reads.lock().unwrap().clone(), vec!["m2", "m1"]);
+}
+fn reads(source: &Reports) -> Vec<String> {
+    source.reads.lock().unwrap().clone()
+}
+fn linked(db: &Db) -> Vec<crate::receipts::report::Stored> {
+    crate::receipts::report::outcomes(&db.lock().unwrap(), ACCOUNT, "plan-1@example.test").unwrap()
+}
+
+/// #210: a report that arrived is read at sync, so the sent message it
+/// names shows what it says before anybody opens it; it is read once, and
+/// the listing is followed past its first page.
+#[tokio::test]
+async fn reports_are_read_at_sync_and_linked_without_being_opened() {
+    let odd = b"Subject: odd\r\n\r\nnot a report".to_vec();
+    // m2 is a bounce about m3, on the second page; m1 a report whose MIME
+    // says nothing readable.
+    let (db, source, session) = report_session(
+        vec![vec!["m1"], vec!["m2"]],
+        vec![("m1", vec![Ok(odd)]), ("m2", vec![Ok(NDR.as_bytes().to_vec())])],
+    );
+    sync(&source, &session, "sync-1").await;
+    assert_eq!(linked(&db).len(), 1);
+    assert_eq!(linked(&db)[0].status, "5.1.10");
+    assert_eq!(reads(&source), vec!["m1", "m2"]);
+    assert_eq!(*source.listings.lock().unwrap(), 2, "both pages of the listing were read");
     // The next sync reads neither again.
-    enqueue(&source.inner.inner, page("in", "sync-2", true, vec![]));
-    session.sync_folder("INBOX", 50).await.unwrap();
-    assert_eq!(source.reads.lock().unwrap().len(), 2);
+    sync(&source, &session, "sync-2").await;
+    assert_eq!(reads(&source).len(), 2);
+}
+
+/// #210: a report that cannot be read for a reason of its own is marked and
+/// passed over, so the ones after it are still read.
+#[tokio::test]
+async fn a_report_that_cannot_be_read_does_not_hold_the_others_back() {
+    let (db, source, session) = report_session(
+        vec![vec!["m1", "m2"]],
+        vec![("m1", vec![Err(Error::new(ErrorKind::TooLarge))]), ("m2", vec![Ok(NDR.as_bytes().to_vec())])],
+    );
+    sync(&source, &session, "sync-1").await;
+    assert_eq!(reads(&source), vec!["m1", "m2"]);
+    assert_eq!(linked(&db).len(), 1);
+    let error: Option<String> = db
+        .lock()
+        .unwrap()
+        .query_row("SELECT json_extract(json,'$.report_error') FROM messages WHERE account=?1 AND folder='INBOX' AND uid=1", [ACCOUNT], |r| r.get(0))
+        .unwrap();
+    assert_eq!(error.as_deref(), Some("TooLarge"));
+    // Marked: not asked for again on every sync.
+    sync(&source, &session, "sync-2").await;
+    assert_eq!(reads(&source).len(), 2);
+}
+
+/// #210: a failure of the server (throttling) stops this sync's scan, and
+/// the next sync picks up where it stopped: nothing is starved.
+#[tokio::test]
+async fn a_throttled_scan_stops_and_the_next_sync_carries_on() {
+    let throttled = Error { kind: ErrorKind::Throttled, status: Some(429), retry_after_seconds: Some(5) };
+    let (db, source, session) = report_session(
+        vec![vec!["m1", "m2"]],
+        vec![("m1", vec![Err(throttled), Ok(b"Subject: odd\r\n\r\nx".to_vec())]), ("m2", vec![Ok(NDR.as_bytes().to_vec())])],
+    );
+    sync(&source, &session, "sync-1").await;
+    assert_eq!(reads(&source), vec!["m1"], "stopped at the throttled read");
+    assert!(linked(&db).is_empty());
+    sync(&source, &session, "sync-2").await;
+    assert_eq!(reads(&source), vec!["m1", "m1", "m2"]);
+    assert_eq!(linked(&db).len(), 1);
 }

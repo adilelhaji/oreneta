@@ -759,13 +759,15 @@ impl Client {
         self.post_raw(&url, b"", &[202]).map(|_| ()).map_err(applied_or_unknown)
     }
 
-    /// The reports in a folder (#210): ids of up to `limit` items whose class
+    /// The reports in a folder (#210): one page of ids of items whose class
     /// is a delivery or read report, so they can be read as MIME at sync
-    /// without waiting to be opened. Best effort for the caller: a refusal
-    /// of this query leaves reports to be read when opened.
-    pub fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
+    /// without waiting to be opened; `cursor` continues from the page before
+    /// (`@odata.nextLink`, validated like any other page link). Best effort
+    /// for the caller: a refusal of this query leaves reports to be read
+    /// when opened.
+    pub fn report_ids(&self, folder: &ResourceId, cursor: Option<&Checkpoint>) -> Result<Page<ResourceId>> {
         #[derive(Deserialize)]
-        struct Id {
+        struct ReportId {
             id: String,
         }
         self.grant.authorize(true)?;
@@ -777,14 +779,17 @@ impl Client {
             .collect::<Vec<_>>()
             .join("%20or%20");
         url.set_query(Some(&format!(
-            "$select=id&$top={}&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20'String%200x001A'%20and%20({classes}))",
-            limit.clamp(1, 50)
+            "$select=id&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20'String%200x001A'%20and%20({classes}))"
         )));
-        let page: WirePage<Id> = self.get(&url)?;
-        if page.value.len() > MAX_ITEMS {
-            return Err(Error::new(ErrorKind::InvalidResponse));
-        }
-        page.value.iter().take(limit).map(|item| self.response_id(ResourceKind::Message, &item.id)).collect()
+        let page: Page<ReportId> = self.page(url, cursor, false)?;
+        Ok(Page {
+            items: page
+                .items
+                .iter()
+                .map(|item| self.response_id(ResourceKind::Message, &item.id))
+                .collect::<Result<_>>()?,
+            checkpoint: page.checkpoint,
+        })
     }
     /// One POST of a MIME body (or none). No redirects, no retry; a
     /// transport failure is `Uncertain`, as for every write.

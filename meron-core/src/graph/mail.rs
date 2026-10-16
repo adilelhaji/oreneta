@@ -108,8 +108,8 @@ pub trait Source: Send + Sync {
         Err(Error::new(ErrorKind::ConsentRequired))
     }
     /// Delivery and read reports in a folder, by item class (#210).
-    fn report_ids(&self, _folder: &ResourceId, _limit: usize) -> Result<Vec<ResourceId>> {
-        Ok(Vec::new())
+    fn report_ids(&self, _folder: &ResourceId, _cursor: Option<&Checkpoint>) -> Result<Page<ResourceId>> {
+        Ok(Page { items: Vec::new(), checkpoint: None })
     }
 }
 impl Source for Client {
@@ -161,8 +161,8 @@ impl Source for Client {
     fn send_draft(&self, draft: &ResourceId) -> Result<()> {
         Client::send_draft(self, draft)
     }
-    fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
-        Client::report_ids(self, folder, limit)
+    fn report_ids(&self, folder: &ResourceId, cursor: Option<&Checkpoint>) -> Result<Page<ResourceId>> {
+        Client::report_ids(self, folder, cursor)
     }
 }
 pub struct NativeSource {
@@ -231,8 +231,8 @@ impl Source for NativeSource {
     fn send_draft(&self, draft: &ResourceId) -> Result<()> {
         self.client()?.send_draft(draft)
     }
-    fn report_ids(&self, folder: &ResourceId, limit: usize) -> Result<Vec<ResourceId>> {
-        self.client()?.report_ids(folder, limit)
+    fn report_ids(&self, folder: &ResourceId, cursor: Option<&Checkpoint>) -> Result<Page<ResourceId>> {
+        self.client()?.report_ids(folder, cursor)
     }
 }
 fn auth_error(error: auth::Failure) -> Error {
@@ -884,6 +884,19 @@ impl Withheld {
     }
 }
 
+/// The report listing is followed for at most this many pages a sync.
+const REPORT_PAGES: usize = 10;
+
+/// Whether a failure to read a report is the report's own (it will fail the
+/// same way next time, so it is passed over) rather than the server's or the
+/// account's (which stops the scan until the next sync).
+fn report_error_is_its_own(kind: ErrorKind) -> bool {
+    matches!(
+        kind,
+        ErrorKind::TooLarge | ErrorKind::NotFound | ErrorKind::InvalidResponse | ErrorKind::InvalidInput | ErrorKind::Conflict
+    )
+}
+
 /// What becomes of a delivery receipt request from this account (ADR-0048,
 /// ADR-0057). Graph carries it only on a draft, so only an account whose
 /// grant was recorded with changes as well as sending asks for one, and only
@@ -1275,41 +1288,73 @@ impl Session {
     /// Delivery and read reports in the folder are read as MIME at sync, a
     /// few each time (#210): so the sent message they name shows what they
     /// say without the report being opened, and one cached before this
-    /// version is read again. Best effort: whatever fails is left to the next
-    /// sync, or to the report being opened.
+    /// version is read again. The listing is followed page by page (up to
+    /// `REPORT_PAGES` pages a sync), skipping reports already read, so ones
+    /// beyond the first page are reached too. A report that cannot be read
+    /// for a reason of its own (too large, gone, unreadable) is marked as
+    /// such and passed over, so it never holds the others back; a failure of
+    /// the server or the account (throttling, no connection, sign-in) stops
+    /// this sync's scan, and the next sync starts again. Best effort: nothing
+    /// here fails the sync.
     fn read_new_reports(&self, folder: &str) {
         const PER_SYNC: usize = 20;
         let account = &self.lease.account;
         let Ok(remote) = self.folder(folder) else { return };
-        let Ok(ids) = self.source.report_ids(&remote, PER_SYNC) else { return };
-        for id in ids {
-            let pending: Option<u32> = {
+        let mut cursor: Option<Checkpoint> = None;
+        let mut read = 0;
+        for _ in 0..REPORT_PAGES {
+            let Ok(page) = self.source.report_ids(&remote, cursor.as_ref()) else { return };
+            for id in page.items {
+                if read >= PER_SYNC {
+                    return;
+                }
+                let pending: Option<u32> = {
+                    let conn = self.db.lock().unwrap();
+                    conn.query_row(
+                        "SELECT i.uid FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id
+                          WHERE i.account=?1 AND i.remote_id=?2 AND m.folder_id=?3
+                            AND NOT EXISTS(SELECT 1 FROM messages WHERE account=?1 AND folder=?4 AND uid=i.uid
+                                  AND (json_extract(json,'$.report') IS NOT NULL OR json_extract(json,'$.report_read')=1))",
+                        params![account, id.opaque(), remote.opaque(), folder],
+                        |r| r.get(0),
+                    )
+                    .optional()
+                    .ok()
+                    .flatten()
+                };
+                let Some(uid) = pending else { continue };
+                read += 1;
+                let outcome = match self.source.message_mime(&id) {
+                    Ok(raw) => Ok(crate::parse::parse_message(&raw, None)),
+                    Err(error) if report_error_is_its_own(error.kind) => Err(error.kind),
+                    // The server or the account, not this report: stop here.
+                    Err(_) => return,
+                };
                 let conn = self.db.lock().unwrap();
-                conn.query_row(
-                    "SELECT i.uid FROM graph_items i JOIN graph_memberships m ON m.account=i.account AND m.remote_id=i.remote_id
-                      WHERE i.account=?1 AND i.remote_id=?2 AND m.folder_id=?3
-                        AND NOT EXISTS(SELECT 1 FROM messages WHERE account=?1 AND folder=?4 AND uid=i.uid
-                              AND (json_extract(json,'$.report') IS NOT NULL OR json_extract(json,'$.report_read')=1))",
-                    params![account, id.opaque(), remote.opaque(), folder],
-                    |r| r.get(0),
-                )
-                .optional()
-                .ok()
-                .flatten()
-            };
-            let Some(uid) = pending else { continue };
-            let Ok(raw) = self.source.message_mime(&id) else { break };
-            let parsed = crate::parse::parse_message(&raw, None);
-            let conn = self.db.lock().unwrap();
-            if check(&conn, &self.lease).is_err() || crate::store::save_cached_message(&conn, account, folder, uid, &parsed).is_err() {
-                break;
+                if check(&conn, &self.lease).is_err() {
+                    return;
+                }
+                let failed = match &outcome {
+                    Ok(parsed) => {
+                        if crate::store::save_cached_message(&conn, account, folder, uid, parsed).is_err() {
+                            return;
+                        }
+                        None
+                    }
+                    Err(kind) => Some(format!("{kind:?}")),
+                };
+                // Read once: a report whose MIME says nothing readable, or that
+                // cannot be read at all (and why), is not asked for again on
+                // every sync. Opening it still reads it.
+                let _ = conn.execute(
+                    "UPDATE messages SET json=json_set(json,'$.report_read',1,'$.report_error',?4) WHERE account=?1 AND folder=?2 AND uid=?3",
+                    params![account, folder, uid, failed],
+                );
             }
-            // Read once: a report whose MIME says nothing readable is not
-            // fetched again on every sync.
-            let _ = conn.execute(
-                "UPDATE messages SET json=json_set(json,'$.report_read',1) WHERE account=?1 AND folder=?2 AND uid=?3",
-                params![account, folder, uid],
-            );
+            match page.checkpoint {
+                Some(next) if next.kind == CheckpointKind::NextPage => cursor = Some(next),
+                _ => return,
+            }
         }
     }
     pub fn list_folders(&self) -> anyhow::Result<Vec<crate::imap::Folder>> {

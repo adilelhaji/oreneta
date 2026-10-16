@@ -95,18 +95,26 @@
     DSN, en la copia o las cabeceras del original que devuelve
     (`message/rfc822`, `text/rfc822-headers`, `message/global[-headers]`).
     Se guarda por cuenta en `delivery_reports` (esquema 64) al guardar el
-    cuerpo en caché, sea cual sea el protocolo que lo trajo, **solo si la
-    cuenta tiene ese mensaje** (en su caché o en `outgoing_attempts`); si
-    no, no se guarda nada y el informe se queda como un mensaje normal, así
-    que la tabla no crece con lo que no vincula nada. Una palabra final
+    cuerpo en caché, sea cual sea el protocolo que lo trajo, cuando la
+    cuenta tiene ese mensaje (en su caché o en `outgoing_attempts`). Si
+    todavía no lo tiene (la Bandeja de entrada se sincronizó antes que
+    Enviados, por ejemplo), el informe espera en
+    `delivery_reports_pending`, como mucho 90 días y 1000 por cuenta (se van
+    los más antiguos), y se vincula en cuanto el mensaje aparece y se
+    muestra; mientras, el informe se ve como un mensaje normal. Una palabra final
     sustituye a un retraso y nunca al revés; si no, gana el informe más
     reciente, con su fecha acotada por el momento en que se lee (una fecha
     futura no puede ganar). Un informe en Enviados o Borradores (una
     confirmación que envió esta cuenta) no cuenta como recibido;
   - **cuándo se vincula:** cuando se lee el cuerpo del informe. En Graph,
-    al sincronizar una carpeta se piden (una consulta, por clase de
-    elemento) hasta 20 informes aún no leídos y se lee su MIME, también los
-    guardados antes de esta versión; cada uno se lee una sola vez. En IMAP y
+    al sincronizar una carpeta se recorre la lista de informes por clase de
+    elemento, página a página (hasta 10 páginas por sincronización),
+    saltando los ya leídos, y se lee el MIME de hasta 20 nuevos, también los
+    guardados antes de esta versión; cada uno se lee una sola vez. Uno que
+    no se puede leer por sí mismo (demasiado grande, ya no está, ilegible)
+    se marca con el motivo y se pasa al siguiente; un fallo del servidor o
+    de la cuenta (límite, conexión, inicio de sesión) para el recorrido
+    hasta la siguiente sincronización, que vuelve a empezar. En IMAP y
     EWS depende de que el cuerpo se descargue (precarga o al abrirlo); un
     informe guardado en caché antes de esta versión no se vuelve a leer;
   - **dónde se ve, y cómo:** un informe es una afirmación de quien lo
@@ -168,9 +176,8 @@
   hilo) no lleva todavía los informes, igual que `receipt_requested`.
 - La versión de esquema 64 puede chocar con otras ramas abiertas a la vez;
   si otra rama se fusiona antes, esta renumera su migración.
-- Un informe que llega antes de que la cuenta tenga en caché el mensaje
-  enviado (y que no se envió desde esta aplicación) no se guarda y no se
-  vuelve a intentar.
+- Un informe que espera más de 90 días a su mensaje, o que queda fuera de
+  los 1000 que esperan por cuenta, se pierde; el informe sigue en el buzón.
 - Confirmación de entrega en Graph para mensajes con Cco o firmados o
   cifrados, cuando la evidencia N5 muestre que el borrador los conserva
   (comprobando también los destinatarios del borrador antes de enviarlo).

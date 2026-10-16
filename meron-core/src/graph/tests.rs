@@ -990,16 +990,32 @@ fn a_send_answered_with_an_unexpected_success_is_uncertain_not_refused() {
 }
 
 #[test]
-fn reports_in_a_folder_are_found_by_their_item_class() {
-    let fixture = Fixture::new(|_| vec![ok(json!({"value":[{"id":"R1"},{"id":"R2"}]}))]);
-    let found = writer(&fixture, "Mail.Read").report_ids(&folder("F/1"), 20).unwrap();
-    assert_eq!(found, vec![message("R1"), message("R2")]);
-    let request = &fixture.requests()[0];
-    assert!(request.starts_with("GET /v1.0/me/mailFolders/F%2F1/messages?$select=id&$top=20&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20%27String%200x001A%27%20and%20(ep/value%20eq%20%27REPORT.IPM.Note.NDR%27"), "{request}");
-    assert!(request.contains("REPORT.IPM.Note.IPNRN"), "{request}");
+fn reports_in_a_folder_are_found_by_their_item_class_page_by_page() {
+    let fixture = Fixture::new(|base| {
+        vec![
+            ok(json!({"value":[{"id":"R1"},{"id":"R2"}],
+                "@odata.nextLink": format!("{base}me/mailFolders/F1/messages?$skip=100&$select=id")})),
+            ok(json!({"value":[{"id":"R3"}]})),
+        ]
+    });
+    let client = writer(&fixture, "Mail.Read");
+    let first = client.report_ids(&folder("F1"), None).unwrap();
+    assert_eq!(first.items, vec![message("R1"), message("R2")]);
+    let next = first.checkpoint.expect("a next page");
+    assert_eq!(next.kind(), CheckpointKind::NextPage);
+    let second = client.report_ids(&folder("F1"), Some(&next)).unwrap();
+    assert_eq!(second.items, vec![message("R3")]);
+    assert!(second.checkpoint.is_none());
+    let requests = fixture.requests();
+    assert!(requests[0].starts_with("GET /v1.0/me/mailFolders/F1/messages?$select=id&$filter=singleValueExtendedProperties/any(ep:ep/id%20eq%20%27String%200x001A%27%20and%20(ep/value%20eq%20%27REPORT.IPM.Note.NDR%27"), "{}", requests[0]);
+    assert!(requests[0].contains("REPORT.IPM.Note.IPNRN"), "{}", requests[0]);
+    assert!(requests[1].starts_with("GET /v1.0/me/mailFolders/F1/messages?$skip=100"), "{}", requests[1]);
+    // A next page for another folder is not followed.
+    let other = Fixture::new(|base| vec![ok(json!({"value":[], "@odata.nextLink": format!("{base}me/mailFolders/OTHER/messages?$skip=1")}))]);
+    assert_eq!(writer(&other, "Mail.Read").report_ids(&folder("F1"), None).unwrap_err().kind, ErrorKind::InvalidResponse);
     // A read-basic grant does not read messages.
     let none = Fixture::new(|_| vec![]);
-    assert_eq!(writer(&none, "Mail.ReadBasic").report_ids(&folder("F1"), 20).unwrap_err().kind, ErrorKind::ConsentRequired);
+    assert_eq!(writer(&none, "Mail.ReadBasic").report_ids(&folder("F1"), None).unwrap_err().kind, ErrorKind::ConsentRequired);
     assert!(none.requests().is_empty());
 }
 

@@ -341,7 +341,27 @@ CREATE TABLE IF NOT EXISTS delivery_reports (
   reported_at         INTEGER NOT NULL,
   PRIMARY KEY (account, original_message_id, kind, recipient)
 );
+-- Reports about a message this account does not have yet (its Sent copy
+-- not synchronized, say), kept a while, and only so many, until it does.
+CREATE TABLE IF NOT EXISTS delivery_reports_pending (
+  account             TEXT NOT NULL,
+  original_message_id TEXT NOT NULL,
+  kind                TEXT NOT NULL,
+  recipient           TEXT NOT NULL,
+  outcome             TEXT NOT NULL,
+  status              TEXT NOT NULL DEFAULT '',
+  diagnostic          TEXT NOT NULL DEFAULT '',
+  reported_at         INTEGER NOT NULL,
+  received_at         INTEGER NOT NULL,
+  PRIMARY KEY (account, original_message_id, kind, recipient)
+);
 ";
+
+/// A report about a message the account does not have yet waits this long
+/// for it to appear (90 days)...
+pub const PENDING_MAX_AGE: i64 = 90 * 24 * 3600;
+/// ...and no more than this many wait per account; the oldest go first.
+pub const PENDING_MAX_ROWS: i64 = 1000;
 
 /// Whether this account has the message `original` (a key): cached in one
 /// of its folders, or sent through it here (`outgoing_attempts`).
@@ -356,42 +376,126 @@ fn known_message(conn: &rusqlite::Connection, account: &str, original: &str) -> 
     )?)
 }
 
-/// Keeps what a report says, for the account that received it, when it
-/// names a message this account has; anything else (a report about a
-/// message it never had, or naming none) is not kept, so the table cannot
-/// fill with what links to nothing. True when it was kept. A final word
-/// (delivered, failed, relayed) replaces a delay and is never replaced by
-/// one; otherwise the later report wins. Recording the same report again
-/// changes nothing. `reported_at` is the report's own date, which the
-/// caller bounds by the present, so a date in the future cannot win.
-pub fn record(conn: &rusqlite::Connection, account: &str, report: &Report, reported_at: i64) -> Result<bool> {
-    let original = super::key(&report.original_message_id);
-    if original.is_empty() || !known_message(conn, account, &original)? {
-        return Ok(false);
-    }
-    for item in &report.recipients {
-        conn.execute(
-            "INSERT INTO delivery_reports(account, original_message_id, kind, recipient, outcome, status, diagnostic, reported_at)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+/// One recipient's word into `table`: a final word (delivered, failed,
+/// relayed) replaces a delay and is never replaced by one; otherwise the
+/// later report wins. The same word again changes nothing.
+#[allow(clippy::too_many_arguments)]
+fn upsert(
+    conn: &rusqlite::Connection,
+    table: &str,
+    account: &str,
+    original: &str,
+    kind: &str,
+    recipient: &str,
+    outcome: &str,
+    status: &str,
+    diagnostic: &str,
+    reported_at: i64,
+    received_at: i64,
+) -> Result<()> {
+    let (extra_column, extra_value) = if table == "delivery_reports_pending" { (", received_at", ", ?9") } else { ("", "") };
+    conn.execute(
+        &format!(
+            "INSERT INTO {table}(account, original_message_id, kind, recipient, outcome, status, diagnostic, reported_at{extra_column})
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8{extra_value})
              ON CONFLICT(account, original_message_id, kind, recipient) DO UPDATE SET
                outcome = excluded.outcome, status = excluded.status,
                diagnostic = excluded.diagnostic, reported_at = excluded.reported_at
-             WHERE (delivery_reports.outcome = 'delayed' AND excluded.outcome <> 'delayed')
-                OR ((delivery_reports.outcome = 'delayed') = (excluded.outcome = 'delayed')
-                    AND excluded.reported_at >= delivery_reports.reported_at)",
-            rusqlite::params![
-                account,
-                original,
-                report.kind.as_str(),
-                item.recipient,
-                item.outcome.as_str(),
-                item.status,
-                item.diagnostic,
-                reported_at
-            ],
+             WHERE ({table}.outcome = 'delayed' AND excluded.outcome <> 'delayed')
+                OR (({table}.outcome = 'delayed') = (excluded.outcome = 'delayed')
+                    AND excluded.reported_at >= {table}.reported_at)"
+        ),
+        rusqlite::params_from_iter(
+            [
+                rusqlite::types::Value::from(account.to_string()),
+                original.to_string().into(),
+                kind.to_string().into(),
+                recipient.to_string().into(),
+                outcome.to_string().into(),
+                status.to_string().into(),
+                diagnostic.to_string().into(),
+                reported_at.into(),
+                received_at.into(),
+            ]
+            .into_iter()
+            .take(if extra_column.is_empty() { 8 } else { 9 }),
+        ),
+    )?;
+    Ok(())
+}
+
+/// Keeps what a report says, for the account that received it. When the
+/// account has the message the report names, it is linked at once (true).
+/// When it does not have it yet (the report arrived before the Sent copy
+/// was synchronized, say), the report waits in `delivery_reports_pending`,
+/// bounded by age and number, and is linked as soon as the message is
+/// there (see [`link_pending`]); false. A report naming no message is not
+/// kept at all. `reported_at` is the report's own date, which the caller
+/// bounds by the present (`now`), so a date in the future cannot win.
+pub fn record(conn: &rusqlite::Connection, account: &str, report: &Report, reported_at: i64, now: i64) -> Result<bool> {
+    let original = super::key(&report.original_message_id);
+    if original.is_empty() {
+        return Ok(false);
+    }
+    let known = known_message(conn, account, &original)?;
+    let table = if known { "delivery_reports" } else { "delivery_reports_pending" };
+    for item in &report.recipients {
+        upsert(
+            conn,
+            table,
+            account,
+            &original,
+            report.kind.as_str(),
+            &item.recipient,
+            item.outcome.as_str(),
+            &item.status,
+            &item.diagnostic,
+            reported_at,
+            now,
         )?;
     }
-    Ok(true)
+    if !known {
+        // Bounded: too old, then too many (the oldest first).
+        conn.execute(
+            "DELETE FROM delivery_reports_pending WHERE account = ?1 AND received_at < ?2",
+            rusqlite::params![account, now - PENDING_MAX_AGE],
+        )?;
+        conn.execute(
+            "DELETE FROM delivery_reports_pending WHERE rowid IN (
+               SELECT rowid FROM delivery_reports_pending WHERE account = ?1
+                ORDER BY received_at DESC, rowid DESC LIMIT -1 OFFSET ?2)",
+            rusqlite::params![account, PENDING_MAX_ROWS],
+        )?;
+    }
+    Ok(known)
+}
+
+/// Links the reports waiting for `original` (a key) once the account has
+/// that message, under the same rules as [`record`]. Called when the
+/// message is shown, so a report that arrived before its sent message is
+/// linked the first time that message is there to show it on.
+fn link_pending(conn: &rusqlite::Connection, account: &str, original: &str) -> Result<()> {
+    let waiting: Vec<(String, String, String, String, String, i64)> = {
+        let mut stmt = conn.prepare(
+            "SELECT kind, recipient, outcome, status, diagnostic, reported_at FROM delivery_reports_pending
+              WHERE account = ?1 AND original_message_id = ?2",
+        )?;
+        stmt.query_map(rusqlite::params![account, original], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?
+    };
+    if waiting.is_empty() || !known_message(conn, account, original)? {
+        return Ok(());
+    }
+    for (kind, recipient, outcome, status, diagnostic, reported_at) in waiting {
+        upsert(conn, "delivery_reports", account, original, &kind, &recipient, &outcome, &status, &diagnostic, reported_at, 0)?;
+    }
+    conn.execute(
+        "DELETE FROM delivery_reports_pending WHERE account = ?1 AND original_message_id = ?2",
+        rusqlite::params![account, original],
+    )?;
+    Ok(())
 }
 
 /// A report's date bounded by the present (`now`): a report dated in the
@@ -416,12 +520,16 @@ pub struct Stored {
 }
 
 /// The reports this account received about its message `message_id`, by
-/// kind then recipient. Another account's reports are never included.
+/// kind then recipient, linking any that were waiting for it. Another
+/// account's reports are never included.
 pub fn outcomes(conn: &rusqlite::Connection, account: &str, message_id: &str) -> Result<Vec<Stored>> {
     let original = super::key(message_id);
     if original.is_empty() {
         return Ok(Vec::new());
     }
+    // A report that arrived before the message it names is linked now, if
+    // the message has since appeared.
+    link_pending(conn, account, &original)?;
     let mut stmt = conn.prepare(
         "SELECT kind, recipient, outcome, status, diagnostic, reported_at FROM delivery_reports
           WHERE account = ?1 AND original_message_id = ?2 ORDER BY kind, recipient",

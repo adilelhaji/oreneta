@@ -116,10 +116,14 @@ sin leer nunca el cuerpo de un error.
   `IPNNRN`), se lee su MIME y lo interpreta el núcleo como cualquier otro
   informe (ADR-0057). Si el MIME es demasiado grande, se muestra el texto.
 - Al sincronizar una carpeta, una consulta por clase de elemento
-  (`$filter` sobre `singleValueExtendedProperties`, `$select=id`, hasta 20)
-  encuentra los informes que aún no se han leído y se lee su MIME, también
-  los guardados antes; cada uno, una sola vez. Es de mejor esfuerzo: si la
-  consulta falla, los informes se leen al abrirlos.
+  (`$filter` sobre `singleValueExtendedProperties`, `$select=id`) se sigue
+  página a página por `@odata.nextLink` (validado como cualquier enlace de
+  página; hasta 10 páginas), saltando los informes ya leídos, y se lee el
+  MIME de hasta 20 nuevos, también los guardados antes; cada uno, una sola
+  vez. Uno que falla por sí mismo (demasiado grande, ya no está, ilegible)
+  se marca con el motivo y no frena a los demás; un fallo del servidor o de
+  la cuenta para el recorrido hasta la siguiente sincronización. Es de
+  mejor esfuerzo: si la consulta falla, los informes se leen al abrirlos.
 
 ## Interfaz
 
