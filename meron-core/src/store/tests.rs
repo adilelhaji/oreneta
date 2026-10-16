@@ -3531,6 +3531,40 @@ fn concurrent_first_open_runs_migrations_once() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Opens of one file in one process wait for a migration that holds its
+/// write lock longer than the busy timeout, instead of failing with
+/// "database is locked" (#227).
+#[test]
+fn concurrent_opens_wait_for_a_migration_longer_than_the_busy_timeout() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    db::slow_migration::next_for(&path, std::time::Duration::from_secs(6));
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(6));
+    let handles = (0..6)
+        .map(|_| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                db::open_at(&path).map(|_| ())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.join().unwrap().unwrap();
+    }
+
+    let conn = Connection::open(&path).unwrap();
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, db::SCHEMA_VERSION);
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     let conn = test_conn();
