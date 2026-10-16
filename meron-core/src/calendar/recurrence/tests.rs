@@ -140,13 +140,53 @@ fn rules_read_back_as_written() {
         let parsed = parse(text).unwrap_or_else(|e| panic!("{text}: {e}"));
         assert_eq!(format(&parsed, anchor, all_day), text, "round trip of {text}");
     }
-    // A timed task's end is the end of that day here, in UTC.
+    // A timed task's end is read as the date that instant falls on here, and
+    // written back as the end of that day here, in UTC. Noon UTC on 31
+    // December is that day from UTC-11 to UTC+11, but already 1 January at
+    // UTC+12 and beyond (#221; zone by zone in the test below).
     let r = parse("FREQ=DAILY;UNTIL=20261231T120000Z").unwrap();
-    assert_eq!(super::super::start_date(r.until.unwrap(), false), Some(d(2026, 12, 31)));
+    let noon = chrono::Utc.with_ymd_and_hms(2026, 12, 31, 12, 0, 0).unwrap();
+    let here = noon.with_timezone(&chrono::Local).date_naive();
+    assert_eq!(super::super::start_date(r.until.unwrap(), false), Some(here));
     let written = format(&r, d(2026, 10, 13), false);
     assert!(written.starts_with("FREQ=DAILY;UNTIL=") && written.ends_with('Z'), "{written}");
     let again = parse(&written).unwrap();
-    assert_eq!(super::super::start_date(again.until.unwrap(), false), Some(d(2026, 12, 31)), "{written}");
+    assert_eq!(super::super::start_date(again.until.unwrap(), false), Some(here), "{written}");
+}
+
+/// RFC 5545 bounds a series at an `UNTIL` in UTC as an instant: an
+/// occurrence on the date that instant falls on where the reader is, at a
+/// time up to it, belongs to the series. So the last date is read in the
+/// reader's zone, not in UTC: at UTC+12 and beyond (Auckland's summer is
+/// UTC+13) noon UTC on 31 December is 1 January, and a task due at 00:30
+/// on 1 January there (11:30 UTC on the 31st) is the series' last (#221).
+#[test]
+fn a_utc_until_is_the_date_it_falls_on_where_the_reader_is() {
+    let noon = chrono::Utc.with_ymd_and_hms(2026, 12, 31, 12, 0, 0).unwrap();
+    for (name, last) in [
+        ("Pacific/Auckland", d(2027, 1, 1)),
+        ("Pacific/Kiritimati", d(2027, 1, 1)),
+        ("Asia/Tokyo", d(2026, 12, 31)),
+        ("Europe/Madrid", d(2026, 12, 31)),
+        ("America/Los_Angeles", d(2026, 12, 31)),
+        ("Pacific/Pago_Pago", d(2026, 12, 31)),
+    ] {
+        let zone: chrono_tz::Tz = name.parse().unwrap();
+        let until = read_until_in("20261231T120000Z", &zone).unwrap();
+        let end = zone.timestamp_opt(until, 0).unwrap();
+        assert_eq!(end.naive_local(), last.and_hms_opt(23, 59, 0).unwrap(), "{name}");
+        // Whatever the zone, an occurrence at the UNTIL instant itself is in.
+        assert!(noon.timestamp() <= until, "{name}");
+    }
+    // In Auckland, the 00:30 occurrence on 1 January is before the UNTIL.
+    let auckland: chrono_tz::Tz = "Pacific/Auckland".parse().unwrap();
+    let half_past = auckland.with_ymd_and_hms(2027, 1, 1, 0, 30, 0).unwrap();
+    assert!(half_past.timestamp() <= noon.timestamp());
+    // A date, or a floating time, is that date wherever the reader is.
+    for text in ["20261231", "20261231T120000"] {
+        let until = read_until_in(text, &auckland).unwrap();
+        assert_eq!(auckland.timestamp_opt(until, 0).unwrap().date_naive(), d(2026, 12, 31), "{text}");
+    }
 }
 
 #[test]

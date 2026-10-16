@@ -95,10 +95,13 @@ jobs:
       # The runner's clock is UTC, where calendar dates and instants coincide.
       # Run the calendar tests again east and west of UTC, where they do not;
       # the reminders too, whose all-day ones ring by the local midnight (#209).
+      # Auckland is UTC+12 or +13, where a UTC midday is already the next
+      # date (#221).
       - name: Calendar tests outside UTC
         run: |
           TZ=Asia/Tokyo cargo test --manifest-path meron-core/Cargo.toml --lib -- calendar:: pim::reminders::
           TZ=America/Los_Angeles cargo test --manifest-path meron-core/Cargo.toml --lib -- calendar:: pim::reminders::
+          TZ=Pacific/Auckland cargo test --manifest-path meron-core/Cargo.toml --lib -- calendar:: pim::reminders::
       # POP3 against a real Dovecot (#97): deletion at QUIT, UIDLs and
       # dot-stuffing as a server does them, which the fake server cannot vouch for.
       - name: POP3 against Dovecot
