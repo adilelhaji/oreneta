@@ -798,6 +798,15 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert_eq!(missed["reminders"][0]["started"], true);
         let next = look_for_reminders(&engine, now + 60).await;
         assert_eq!((next.reminders.len(), next.missed), (0, None), "given once");
+
+        // Not yet shown: a restart of the core says it again; once the host
+        // says it showed it (with the keys it held), no more.
+        let again = pim::reminders::pending_missed_notice(&engine, now + 120, &chrono::Local).expect("said again");
+        assert_eq!(again["keys"], missed["keys"]);
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let request = Request { id: 1, method: "reminders.missedShown".into(), params: json!({ "keys": missed["keys"] }) };
+        dispatch(&engine, &request, &writer).await.unwrap();
+        assert_eq!(pim::reminders::pending_missed_notice(&engine, now + 180, &chrono::Local), None);
     }
 
     #[tokio::test]
@@ -1803,6 +1812,16 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut resumed = Box::pin(engine.resume_signal.notified());
         resumed.as_mut().enable();
+        // Missed reminders the host had not shown when it last quit (held at
+        // start or through quiet hours): said again, until it says it showed
+        // them (`reminders.missedShown`, #225).
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|epoch| epoch.as_secs() as i64)
+            .unwrap_or_default();
+        if let Some(missed) = pim::reminders::pending_missed_notice(&engine, now, &chrono::Local) {
+            emit(&out, "calendar.missedReminders", missed).await;
+        }
         loop {
             if next_reminder_look(&mut ticker, resumed.as_mut()).await == ReminderWake::Resumed {
                 // Listening again before this look, so a resume that lands
@@ -8798,6 +8817,22 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "system.resumed" => {
             engine.clear_all_pools();
             engine.resume_signal.notify_waiters();
+            Ok(json!({ "ok": true }))
+        }
+
+        // The host showed a missed-reminders notice (#225): the reminders it
+        // held, `keys: [{account, key}]`, are no longer said again at start.
+        "reminders.missedShown" => {
+            let shown: Vec<(String, String)> = p
+                .get("keys")
+                .and_then(Value::as_array)
+                .map(|keys| {
+                    keys.iter()
+                        .filter_map(|k| Some((k.get("account")?.as_str()?.to_string(), k.get("key")?.as_str()?.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default();
+            pim::reminders::missed_shown(engine, &shown)?;
             Ok(json!({ "ok": true }))
         }
 

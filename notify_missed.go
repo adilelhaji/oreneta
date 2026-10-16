@@ -21,7 +21,14 @@ import (
 //   - while quiet hours hold reminders back, until they end.
 //
 // Notices that arrive while one is held (an account connecting later, the
-// next look) are merged into it: one notification for them all.
+// next look) are merged into it by reminder key: one notification for them
+// all, none twice.
+//
+// Holding in memory is not enough on its own: the app can quit or crash
+// first. The core keeps every missed reminder until the bridge says it
+// showed it (`reminders.missedShown` with the notice's `keys`) and says the
+// notice again whenever it starts, so a held notice is not lost with the
+// process, and once confirmed it is not said again.
 
 // missedStartupWait is how long a notice waits at start for the language and
 // the quiet plan before it goes with what the bridge has.
@@ -63,6 +70,20 @@ var (
 		if a != nil && a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, name, detail)
 		}
+	}
+	// confirmMissedShown tells the core the notice holding keys was shown, off
+	// the caller's goroutine; tests replace it. If it does not get through,
+	// the core says the notice again at its next start: shown twice rather
+	// than lost.
+	confirmMissedShown = func(a *App, keys []any) {
+		if a == nil || a.sidecar == nil {
+			return
+		}
+		go func() {
+			if _, err := a.sidecar.Call("reminders.missedShown", map[string]any{"keys": keys}); err != nil {
+				a.logf("missed reminders shown, not confirmed to the core: %v", err)
+			}
+		}()
 	}
 )
 
@@ -141,28 +162,68 @@ func (a *App) releaseMissedReminders() {
 	a.showMissedReminders(notice)
 }
 
-// mergeMissedNotices adds notice to held: the counts add up, the details are
-// kept newest first, as many as missedRemindersKept, and the days span both.
+// missedKey is a reminder's identity in a notice, its account and its key
+// ("<event>@<start>"); empty from a core that does not say it.
+func missedKey(item any) string {
+	r, _ := item.(map[string]any)
+	account, _ := r["account"].(string)
+	key, _ := r["key"].(string)
+	if key == "" {
+		return ""
+	}
+	return account + "\x00" + key
+}
+
+// mergeMissedNotices adds notice to held, each reminder once by its key: the
+// keys are the union of both and the count how many they are, the details
+// are kept newest first by when their events start where the reader is
+// (`at`, which puts an all-day event at its local midnight, not at the UTC
+// one its stored `start` is), as many as missedRemindersKept, and the days
+// span both.
 func mergeMissedNotices(held, notice map[string]any) map[string]any {
 	if held == nil {
-		held = map[string]any{"count": float64(0), "day": "", "first_day": "", "reminders": []any{}}
+		held = map[string]any{"keys": []any{}, "unkeyed": float64(0), "day": "", "first_day": "", "reminders": []any{}}
 	}
-	count := func(m map[string]any) float64 {
-		reminders, _ := m["reminders"].([]any)
-		if c, ok := m["count"].(float64); ok && c >= float64(len(reminders)) {
-			return c
+	union := func(lists ...[]any) []any {
+		var out []any
+		seen := map[string]bool{}
+		for _, list := range lists {
+			for _, item := range list {
+				id := missedKey(item)
+				if id != "" && seen[id] {
+					continue
+				}
+				seen[id] = true
+				out = append(out, item)
+			}
 		}
-		return float64(len(reminders))
+		return out
+	}
+	heldKeys, _ := held["keys"].([]any)
+	newKeys, hasKeys := notice["keys"].([]any)
+	keys := union(heldKeys, newKeys)
+	// A notice without keys (an older core) counts as it says.
+	unkeyed, _ := held["unkeyed"].(float64)
+	if !hasKeys {
+		newReminders, _ := notice["reminders"].([]any)
+		c, ok := notice["count"].(float64)
+		if !ok || c < float64(len(newReminders)) {
+			c = float64(len(newReminders))
+		}
+		unkeyed += c
 	}
 	heldReminders, _ := held["reminders"].([]any)
 	newReminders, _ := notice["reminders"].([]any)
-	reminders := append(append([]any{}, heldReminders...), newReminders...)
-	start := func(item any) float64 {
+	reminders := union(heldReminders, newReminders)
+	at := func(item any) float64 {
 		r, _ := item.(map[string]any)
-		s, _ := r["start"].(float64)
-		return s
+		if at, ok := r["at"].(float64); ok {
+			return at
+		}
+		start, _ := r["start"].(float64)
+		return start
 	}
-	sort.SliceStable(reminders, func(i, j int) bool { return start(reminders[i]) > start(reminders[j]) })
+	sort.SliceStable(reminders, func(i, j int) bool { return at(reminders[i]) > at(reminders[j]) })
 	if len(reminders) > missedRemindersKept {
 		reminders = reminders[:missedRemindersKept]
 	}
@@ -182,7 +243,10 @@ func mergeMissedNotices(held, notice map[string]any) map[string]any {
 			first = candidate
 		}
 	}
-	return map[string]any{"count": count(held) + count(notice), "day": latest, "first_day": first, "reminders": reminders}
+	return map[string]any{
+		"count": float64(len(keys)) + unkeyed, "keys": keys, "unkeyed": unkeyed,
+		"day": latest, "first_day": first, "reminders": reminders,
+	}
 }
 
 // showMissedReminders raises the one notification for a notice: how many in
@@ -233,4 +297,8 @@ func (a *App) showMissedReminders(m map[string]any) {
 		plainBody: true,
 	})
 	emitToFrontend(a, missedRemindersShownEvent, map[string]any{"count": count})
+	// Shown: the core may let these go and not say them again.
+	if keys, _ := m["keys"].([]any); len(keys) > 0 {
+		confirmMissedShown(a, keys)
+	}
 }

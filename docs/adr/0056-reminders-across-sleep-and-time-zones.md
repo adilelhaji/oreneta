@@ -138,12 +138,16 @@ lo decidió la delegación, con la opción más prudente.
   evento ya terminó en el momento de mirar. Sin mirada anterior no hay
   perdidos: no se sabe qué hueco hubo. Una reunión rechazada (Exchange
   «decline», Google «declined») no se cuenta como perdida.
-- **Un solo aviso**: todos los perdidos de una mirada, de todas las cuentas,
-  van en un único evento `calendar.missedReminders`: `count` (cuántos en
-  total), los 20 más recientes como `calendar.reminder` en `reminders`, del
-  más reciente al más antiguo (la reunión perdida más reciente es la que más
-  probablemente aún pide algo, y no debe quedar tras el «…»), y los días que
-  abarcan en la zona actual: `day` (el más reciente) y `first_day`.
+- **Un solo aviso**: todos los perdidos aún no mostrados, de todas las
+  cuentas, van en un único evento `calendar.missedReminders`: `count`
+  (cuántos en total), `keys` (la cuenta y la clave `<evento>@<inicio>` de
+  cada uno), los 20 más recientes como `calendar.reminder` en `reminders`
+  (cada uno con su `key` y `at`), del más reciente al más antiguo (la reunión
+  perdida más reciente es la que más probablemente aún pide algo, y no debe
+  quedar tras el «…»), y los días que abarcan en la zona actual: `day` (el
+  más reciente) y `first_day`. «Más reciente» es por `at`, cuándo empieza el
+  evento en la zona actual: un día completo empieza a su medianoche local,
+  no a la medianoche UTC que guarda `start`; Go ordena igual al juntar.
 - **La notificación** (Go): el título dice cuántos (`notify.missedReminders`)
   y el cuerpo, uno por línea, cuándo y qué, hasta 5 y «…» si hay más. El
   título es neutro, «N avisos perdidos», y no «mientras el equipo dormía»:
@@ -159,14 +163,28 @@ lo decidió la delegación, con la opción más prudente.
   en vista de semana de ese día, que muestra los demás alrededor
   (`calendar:AAAA-MM-DD` o `calendar:week:AAAA-MM-DD` como destino del clic).
 - **Nunca se descarta**: el núcleo ya los anotó como dados, así que Go guarda
-  el aviso (y le suma los que lleguen entretanto) mientras no puede
-  mostrarlo, y lo muestra en cuanto puede:
+  el aviso (y le suma los que lleguen entretanto, una vez cada clave)
+  mientras no puede mostrarlo, y lo muestra en cuanto puede:
   - al arrancar, hasta que la interfaz le ha dicho el idioma y el plan de
     silencio, o 30 segundos como mucho: la primera mirada llega antes, y sin
     esperar saldría en inglés, sin respetar el silencio ni sonar;
   - durante las horas de silencio que retienen los avisos, hasta que acaban
     (al final del intervalo, o con el plan que quita una pausa indefinida).
   Suena cuando se muestra (`calendar.missedRemindersShown`), no al llegar.
+- **Ni si la aplicación se cierra antes de mostrarlo** (revisión de #225):
+  la memoria de Go no basta. El núcleo guarda cada perdido (`meta`,
+  `reminders.missed`, con su evento) en la misma transacción en que lo anota
+  como dado: los dos o ninguno. Los vuelve a decir al arrancar el vigilante
+  hasta que Go, tras mostrar el aviso, confirma sus `keys`
+  (`reminders.missedShown`); entonces los suelta y no los dice más. Un aviso
+  nuevo los incluye también, y Go los junta por clave, así que no salen
+  dos veces. Si la aplicación se cierra entre mostrarlo y confirmarlo, se
+  muestra otra vez al arrancar: antes dos veces que ninguna. Se eligió
+  guardarlo en el núcleo y no en un archivo de Go porque el núcleo ya es
+  quien anota qué se dio, en el mismo almacén y en la misma transacción.
+  Lo guardado está acotado: un perdido sin mostrar cuyo evento terminó hace
+  más de 14 días (el hueco que mira una mirada) se suelta al guardar el
+  siguiente; los de una cuenta borrada se van con ella.
 - **Una vez**: cada perdido se anota como dado antes de devolverlo, igual que
   los demás; ni otra mirada, ni un reinicio, ni un despertar lo repiten. Si
   no se puede anotar, no se muestra y la mirada no se anota: sale en el

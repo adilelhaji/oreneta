@@ -28,6 +28,7 @@
 use anyhow::Result;
 use chrono::{FixedOffset, Offset as _, TimeZone};
 use rusqlite::{params, Connection, OptionalExtension as _};
+use serde::{Deserialize, Serialize};
 
 use super::Event;
 
@@ -142,6 +143,84 @@ pub fn record_look<Tz: TimeZone>(conn: &Connection, account: &str, now: i64, zon
 /// added again starts with no gap to look into.
 pub fn forget_looks(conn: &Connection, account: &str) -> Result<()> {
     conn.execute("DELETE FROM meta WHERE key IN (?1, ?2)", params![look_key(account), reread_key(account)])?;
+    let missed = pending_missed(conn)?;
+    if missed.iter().any(|m| m.account == account) {
+        write_missed(conn, &missed.into_iter().filter(|m| m.account != account).collect::<Vec<_>>())?;
+    }
+    Ok(())
+}
+
+// ---- Missed reminders not yet shown (#225) -------------------------------------
+
+/// Where the missed reminders given but not yet shown are kept: one list for
+/// the whole store, so the notice survives the host quitting before it could
+/// show it (held at start, or through quiet hours).
+const MISSED_KEY: &str = "reminders.missed";
+
+/// A missed reminder recorded as given (`calendar_reminders_fired`) whose
+/// notice the host has not yet said it showed (`missed_shown`). Kept with its
+/// event, so the notice can be said again after a restart.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Missed {
+    pub account: String,
+    /// The record's key, `<event>@<start>`: what the host confirms.
+    pub key: String,
+    pub event: Event,
+}
+
+/// The key a missed reminder is known by, as its record of being given.
+pub fn missed_key(event: &Event) -> String {
+    format!("{}@{}", event.id, event.start)
+}
+
+/// The missed reminders not yet shown, oldest given first. A list that cannot
+/// be read is none: it is written whole again at the next missed reminder.
+pub fn pending_missed(conn: &Connection) -> Result<Vec<Missed>> {
+    let value: Option<String> =
+        conn.query_row("SELECT value FROM meta WHERE key = ?1", params![MISSED_KEY], |row| row.get(0)).optional()?;
+    Ok(value.and_then(|value| serde_json::from_str(&value).ok()).unwrap_or_default())
+}
+
+fn write_missed(conn: &Connection, missed: &[Missed]) -> Result<()> {
+    if missed.is_empty() {
+        conn.execute("DELETE FROM meta WHERE key = ?1", params![MISSED_KEY])?;
+    } else {
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES(?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![MISSED_KEY, serde_json::to_string(missed)?],
+        )?;
+    }
+    Ok(())
+}
+
+/// Records a missed reminder as given and keeps it until its notice is shown,
+/// both or neither: a crash in between can neither give it twice nor lose it.
+/// What is kept is bounded by the gap a look looks into: one whose event
+/// ended more than [`MAX_GAP`] ago is let go unshown.
+pub fn give_missed(conn: &Connection, account: &str, event: &Event, now: i64) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    super::mark_reminder_fired(&tx, account, &event.id, event.start, now)?;
+    let key = missed_key(event);
+    let mut missed: Vec<Missed> = pending_missed(&tx)?
+        .into_iter()
+        .filter(|m| m.event.end.max(m.event.start) >= now - MAX_GAP && !(m.account == account && m.key == key))
+        .collect();
+    missed.push(Missed { account: account.to_string(), key, event: event.clone() });
+    write_missed(&tx, &missed)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// The host showed the notice holding these (account, key) pairs: they are
+/// let go. Others, given since, stay for the next notice.
+pub fn missed_shown(conn: &Connection, shown: &[(String, String)]) -> Result<()> {
+    let missed = pending_missed(conn)?;
+    let left: Vec<Missed> =
+        missed.iter().filter(|m| !shown.iter().any(|(a, k)| *a == m.account && *k == m.key)).cloned().collect();
+    if left.len() != missed.len() {
+        write_missed(conn, &left)?;
+    }
     Ok(())
 }
 

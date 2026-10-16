@@ -77,26 +77,57 @@ fn event_date<Tz: TimeZone>(event: &calendar::Event, zone: &Tz) -> Option<chrono
 /// A host shows a few lines, so more is only weight on the wire.
 pub const MISSED_DETAILED: usize = 20;
 
-/// The `calendar.missedReminders` detail (#225): how many reminders a look
-/// found missed (`count`), the most recent [`MISSED_DETAILED`] of them as
-/// `calendar.reminder` details, newest first, since the latest missed meeting
-/// is the likeliest still to need something, and the days they span on the
-/// clock of `zone` ("YYYY-MM-DD"): `day`, the most recent, and `first_day`.
-/// `None` when nothing was missed.
-fn missed_notice<Tz: TimeZone>(mut missed: Vec<(i64, String, calendar::Event)>, zone: &Tz, now: i64) -> Option<Value>
+/// The `calendar.missedReminders` detail (#225) for the missed reminders not
+/// yet shown: how many (`count`), and `keys`, every one's `{account, key}`,
+/// for the host to say back once shown (`reminders.missedShown`); the most
+/// recent [`MISSED_DETAILED`] as `calendar.reminder` details, newest first,
+/// since the latest missed meeting is the likeliest still to need something,
+/// each with its `key` and `at`, when its event starts here (an all-day one
+/// at the local midnight, not the stored UTC one), which is what newest
+/// means; and the days they span on the clock of `zone` ("YYYY-MM-DD"):
+/// `day`, the most recent, and `first_day`. `None` when there are none.
+fn missed_notice<Tz: TimeZone>(missed: Vec<when::Missed>, zone: &Tz, now: i64) -> Option<Value>
 where
     Tz::Offset: std::fmt::Display,
 {
-    missed.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)).then_with(|| a.2.id.cmp(&b.2.id)));
+    let mut missed: Vec<(i64, when::Missed)> = missed
+        .into_iter()
+        .map(|m| (when::timing(&m.event, zone).map_or(m.event.start, |timing| timing.start), m))
+        .collect();
+    missed.sort_by(|a, b| {
+        b.0.cmp(&a.0).then_with(|| a.1.account.cmp(&b.1.account)).then_with(|| a.1.key.cmp(&b.1.key))
+    });
     let date = |event: &calendar::Event| event_date(event, zone).map(|day| day.format("%Y-%m-%d").to_string());
-    let day = date(&missed.first()?.2);
-    let first_day = date(&missed.last()?.2);
+    let day = date(&missed.first()?.1.event);
+    let first_day = date(&missed.last()?.1.event);
+    let keys: Vec<Value> = missed.iter().map(|(_, m)| json!({ "account": m.account, "key": m.key })).collect();
     let reminders: Vec<Value> = missed
         .iter()
         .take(MISSED_DETAILED)
-        .map(|(_, account, event)| reminder_detail(account, event, zone, now))
+        .map(|(at, m)| {
+            let mut detail = reminder_detail(&m.account, &m.event, zone, now);
+            detail["key"] = json!(m.key);
+            detail["at"] = json!(at);
+            detail
+        })
         .collect();
-    Some(json!({ "count": missed.len(), "day": day, "first_day": first_day, "reminders": reminders }))
+    Some(json!({ "count": missed.len(), "keys": keys, "day": day, "first_day": first_day, "reminders": reminders }))
+}
+
+/// The notice of every missed reminder not yet shown, for a host that starts
+/// (or starts again): what it held when it quit is said again, so a notice
+/// held at start or through quiet hours is not lost with the process.
+pub fn pending_missed_notice<Tz: TimeZone>(engine: &Arc<Engine>, now: i64, zone: &Tz) -> Option<Value>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let missed = when::pending_missed(&engine.db.lock().unwrap()).ok()?;
+    missed_notice(missed, zone, now)
+}
+
+/// The host showed a notice: the (account, key) pairs it held are let go.
+pub fn missed_shown(engine: &Arc<Engine>, shown: &[(String, String)]) -> anyhow::Result<()> {
+    when::missed_shown(&engine.db.lock().unwrap(), shown)
 }
 
 /// An account whose floating calendars are to be read again after a change
@@ -120,9 +151,9 @@ impl Reread {
 pub struct Look {
     /// The `calendar.reminder` details to give, each already recorded.
     pub reminders: Vec<Value>,
-    /// The reminders that came due while nobody looked and whose events
-    /// ended before this look, each already recorded: one
-    /// `calendar.missedReminders` notice for them all (#225).
+    /// When this look found reminders that came due while nobody looked and
+    /// whose events ended before it, each recorded and kept until shown: one
+    /// `calendar.missedReminders` notice for all those not yet shown (#225).
     pub missed: Option<Value>,
     /// Accounts whose zone changed and that have calendars a floating time
     /// can come from (CalDAV, subscribed): to be read again, since such a
@@ -168,7 +199,7 @@ where
     Tz::Offset: std::fmt::Display,
 {
     let mut look = Look::default();
-    let mut gathered = Vec::new();
+    let mut gathered = false;
     for account in accounts {
         let paused = engine.is_paused(account);
         let quiet = paused || engine.is_muted(account);
@@ -190,16 +221,23 @@ where
         if !quiet {
             match when::due(&db, account, now, zone, previous) {
                 Ok(due) => {
-                    for Due { event, timing, missed: was_missed } in due {
+                    for Due { event, missed: was_missed, .. } in due {
                         if was_missed && missed == Missed::Leave {
                             continue;
                         }
-                        if calendar::mark_reminder_fired(&db, account, &event.id, event.start, now).is_err() {
+                        // A missed one is kept until its notice is shown,
+                        // with its record, in one go (`give_missed`).
+                        let given = if was_missed {
+                            when::give_missed(&db, account, &event, now)
+                        } else {
+                            calendar::mark_reminder_fired(&db, account, &event.id, event.start, now)
+                        };
+                        if given.is_err() {
                             complete = false;
                             continue;
                         }
                         if was_missed {
-                            gathered.push((timing.start, account.clone(), event));
+                            gathered = true;
                         } else {
                             look.reminders.push(reminder_detail(account, &event, zone, now));
                         }
@@ -212,7 +250,11 @@ where
             let _ = when::record_look(&db, account, now, zone);
         }
     }
-    look.missed = missed_notice(gathered, zone, now);
+    // New ones found: the notice says them with any still not shown, which
+    // the host merges by key with what it holds.
+    if gathered {
+        look.missed = pending_missed_notice(engine, now, zone);
+    }
     look
 }
 
