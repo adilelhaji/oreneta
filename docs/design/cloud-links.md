@@ -1,34 +1,34 @@
-# Enlaces a archivos en la nube (#108)
+# Enllaços a fitxers al núvol (#108)
 
-Registro de la implementación de ADR-0033.
+Registre de la implementació de l'ADR-0033.
 
-## Piezas
+## Peces
 
-- **Núcleo:**
-  - `meron-core/src/cloud/` tiene las cuentas (`cloud_accounts`, esquema
-    51, sin contraseña), las capacidades, la subida con progreso y
-    cancelación, el enlace comprobado y su retirada;
+- **Nucli:**
+  - `meron-core/src/cloud/` conté els comptes (`cloud_accounts`, esquema 51,
+    sense contrasenya), les capacitats, la pujada amb progrés i cancel·lació,
+    l'enllaç comprovat i la seva retirada;
   - RPC `cloud.providers/list/save/check/remove/upload/cancel/share/revoke`;
-  - eventos `cloud.progress` y `cloud.uploaded`.
-- **Puente Go:** `cloud.pickFile` elige el archivo con el diálogo nativo y
-  pasa su ruta, y el núcleo lo lee del disco.
-- **Aplicación:** grupo de Ajustes «Almacenamiento en la nube» y diálogo
-  «Compartir un archivo por enlace» en el composer.
+  - esdeveniments `cloud.progress` i `cloud.uploaded`.
+- **Pont Go:** `cloud.pickFile` tria el fitxer amb el diàleg natiu i en passa
+  el camí, i el nucli el llegeix del disc.
+- **Aplicació:** grup de Configuració «Emmagatzematge al núvol» i diàleg
+  «Comparteix un fitxer per enllaç» al redactor.
 
-## Pruebas
+## Proves
 
-Contra un servidor local que responde como Nextcloud:
-- la contraseña no va en la tabla, solo hay proveedores usables y no se
-  admiten HTTP ni rutas con `..`;
-- las capacidades se leen bien;
-- la subida va a su carpeta con un nombre libre y se codifica la ruta;
-- una contraseña revocada y un almacenamiento lleno se dicen y se limpian;
-- cancelar borra lo subido;
-- el enlace es de solo lectura, con contraseña y caducidad leídas de
-  vuelta;
-- un enlace editable, sin caducidad o sin contraseña se retira;
-- las exigencias del servidor se aplican antes de crear nada.
+Contra un servidor local que respon com Nextcloud:
+- la contrasenya no va a la taula, només hi ha proveïdors utilitzables i no
+  s'admeten HTTP ni camins amb `..`;
+- les capacitats es llegeixen bé;
+- la pujada va a la seva carpeta amb un nom lliure i el camí es codifica;
+- una contrasenya revocada i un emmagatzematge ple s'indiquen i es netegen;
+- cancel·lar esborra el que s'ha pujat;
+- l'enllaç és de només lectura, amb contrasenya i caducitat llegides de
+  tornada;
+- un enllaç editable, sense caducitat o sense contrasenya es retira;
+- les exigències del servidor s'apliquen abans de crear res.
 
-En la aplicación: destino y reglas del servidor, progreso, enlace final y
-lo que permite, la contraseña fuera del mensaje, almacenamiento lleno y
-enlace retirado. En Go: descripción del archivo elegido.
+A l'aplicació: destinació i regles del servidor, progrés, enllaç final i el que
+permet, la contrasenya fora del missatge, emmagatzematge ple i enllaç retirat.
+A Go: descripció del fitxer triat.
