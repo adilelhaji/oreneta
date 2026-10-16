@@ -88,7 +88,7 @@ export function useAppEffects() {
   // Catalan on a fresh profile whatever the system speaks; a saved choice,
   // "System" included, wins once it is read (ADR-0062).
   useEffect(() => {
-    applyInterfaceLanguage(targetInterfaceLanguage(language, languageLoaded))
+    applyInterfaceLanguage(targetInterfaceLanguage(language, languageLoaded), languageLoaded)
   }, [language, languageLoaded])
 
   // Notification sounds, do not disturb and quiet hours (ADR-0049).

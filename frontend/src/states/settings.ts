@@ -45,11 +45,12 @@ import {
 import { sanitizeNameDisplay, sanitizeNameSort, type NameDisplay, type NameSort } from '../lib/contactNames'
 import { DEFAULT_NOTIFICATION_PREFS, sanitizeNotificationPrefs, type NotificationPrefs } from '../lib/quietHours'
 import { clampPaneSize, DETAILS_PANEL_WIDTH, KANBAN_PANE_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
-import {
+import i18n, {
   DEFAULT_I18N_LANGUAGE,
   languageChoiceFromStore,
   normalizeI18nLanguage,
   resolveInterfaceLanguage,
+  systemLocales,
   type LanguageChoice,
   type SupportedI18nLanguage,
 } from '../lib/i18n'
@@ -554,14 +555,20 @@ applyFontSelection(fontBootstrap)
 // cache is only a paint-time hint.
 const LANG_CACHE_KEY = 'meron-language-cache'
 
-/** Reflect a locale to the document and refresh the paint-time cache. */
-export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
+/**
+ * Reflect a locale to the document and refresh the paint-time cache. The
+ * cache is left alone (`remember: false`) while the profile's choice is not
+ * known, so a language shown only for want of it is not taken for the next
+ * run's (ADR-0062).
+ */
+export function applyDocumentLanguage(lang: SupportedI18nLanguage, { remember = true } = {}) {
   const root = document.documentElement
   // Our codes use "_" (zh_Hant, pt_BR); the lang attribute wants BCP-47 "-".
   root.lang = lang.replace('_', '-')
   // Arabic, and any right-to-left language added later, mirrors the layout
   // (ADR-0061); switching back restores left to right without a reload.
   root.dir = languageDirection(lang)
+  if (!remember) return
   try {
     localStorage.setItem(profileKey(LANG_CACHE_KEY), lang)
   } catch {
@@ -572,29 +579,50 @@ export function applyDocumentLanguage(lang: SupportedI18nLanguage) {
 /**
  * The language the interface shows before the profile's choice is read: the
  * one the last run showed, or the default on a fresh profile (ADR-0062).
+ * Unreadable storage, or a language this version lacks, is a fresh profile.
  */
-export const bootstrapLanguage: SupportedI18nLanguage = (function bootstrapDocumentLanguage() {
-  let cached: SupportedI18nLanguage | null = null
+export function readPaintLanguage(
+  storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage,
+): SupportedI18nLanguage {
   try {
-    cached = normalizeI18nLanguage(localStorage.getItem(profileKey(LANG_CACHE_KEY)))
+    return normalizeI18nLanguage(storage?.getItem(profileKey(LANG_CACHE_KEY))) ?? DEFAULT_I18N_LANGUAGE
   } catch {
-    // Storage unavailable: paint in the default language.
+    return DEFAULT_I18N_LANGUAGE
   }
-  const language = cached ?? DEFAULT_I18N_LANGUAGE
-  try {
-    applyDocumentLanguage(language)
-  } catch {
-    // Best effort; useAppEffects re-applies once the DB-backed language resolves.
-  }
-  return language
-})()
+}
+
+/**
+ * The paint-time language, applied when this module loads: to the strings,
+ * so the very first render is already in it rather than in English until an
+ * effect runs, and to <html lang>/dir. The cache is not rewritten here.
+ */
+export const bootstrapLanguage: SupportedI18nLanguage = readPaintLanguage()
+void i18n.changeLanguage(bootstrapLanguage)
+try {
+  applyDocumentLanguage(bootstrapLanguage, { remember: false })
+} catch {
+  // Best effort; useAppEffects re-applies once the DB-backed language resolves.
+}
 
 /** Whether the profile's language choice has been read from the store yet. */
 export const languageLoaded$ = observable(false)
 
 /** The language the interface shows for a choice (the current one by default). */
 export function interfaceLanguage(choice: LanguageChoice | null = settings$.language.peek()): SupportedI18nLanguage {
-  return resolveInterfaceLanguage(choice, navigator.language)
+  return resolveInterfaceLanguage(choice, systemLocales())
+}
+
+/**
+ * The stored preferences boot asks for, and whether reading them worked at
+ * all: a failed read is not a profile without rows (ADR-0062).
+ */
+export async function readStoredPrefs(keys: string[]): Promise<{ prefs: Record<string, unknown>; read: boolean }> {
+  try {
+    const result = await invoke<{ prefs: Record<string, unknown> }>('app.prefsGet', { keys })
+    return { prefs: result?.prefs || {}, read: true }
+  } catch {
+    return { prefs: {}, read: false }
+  }
 }
 
 export const settings$ = observable<Settings>({
@@ -917,8 +945,13 @@ export function setUnifiedInboxSideNavVisible(visible: boolean) {
   settings$.showUnifiedInboxInSideNav.set(visible)
 }
 
-/** Apply persisted settings loaded from the DB (via `app.prefsGet`). */
-export function hydrateSettings(prefs: Record<string, unknown>) {
+/**
+ * Apply persisted settings loaded from the DB (via `app.prefsGet`).
+ * `languageRead: false` says the read failed: the language is then left as
+ * it is (the paint-time one at start-up, the known choice on a re-boot)
+ * instead of being taken for a profile that never chose (ADR-0062).
+ */
+export function hydrateSettings(prefs: Record<string, unknown>, { languageRead = true } = {}) {
   hydrating = true
   try {
     // Theme ids are validated for existence at resolve time (resolveThemeDef
@@ -1104,8 +1137,10 @@ export function hydrateSettings(prefs: Record<string, unknown>) {
 
     // A row present means someone chose, "System" included; none means the
     // profile has never chosen and gets the default language (ADR-0062).
-    settings$.language.set(languageChoiceFromStore(Object.hasOwn(prefs, DB_KEY.language), prefs[DB_KEY.language]))
-    languageLoaded$.set(true)
+    if (languageRead) {
+      settings$.language.set(languageChoiceFromStore(Object.hasOwn(prefs, DB_KEY.language), prefs[DB_KEY.language]))
+      languageLoaded$.set(true)
+    }
 
     const shortcutOverrides = sanitizeShortcutOverrides(prefs[DB_KEY.shortcutOverrides])
     if (shortcutOverrides) settings$.shortcutOverrides.set(shortcutOverrides)

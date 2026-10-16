@@ -25,6 +25,8 @@ export function nativeLabels(): Record<string, string> {
     unknownSender: t('notify.unknownSender'),
     // Go puts the time (and the date, when not today) in place of {time}.
     reminderStarted: translationTemplate('notify.reminderStarted'),
+    // When the event did not start today: Go puts its date and time in.
+    reminderStartedOn: translationTemplate('notify.reminderStartedOn'),
     missedReminders: translationTemplate('notify.missedReminders'),
   }
 }
@@ -32,12 +34,13 @@ export function nativeLabels(): Record<string, string> {
 /**
  * Shows the interface in `language`: the strings, Go's own tray and
  * notification labels, and <html lang>/dir, which drive :lang() CJK glyph
- * selection (see index.css) and RTL and refresh the paint-time cache.
+ * selection (see index.css) and RTL. The paint-time cache is refreshed only
+ * once the profile's choice is known (`remember`), ADR-0062.
  */
-export function applyInterfaceLanguage(language: SupportedI18nLanguage) {
+export function applyInterfaceLanguage(language: SupportedI18nLanguage, remember = true) {
   if (i18n.language !== language) {
     void i18n.changeLanguage(language)
   }
   void invoke('i18n.setNativeLabels', nativeLabels()).catch(() => {})
-  applyDocumentLanguage(language)
+  applyDocumentLanguage(language, { remember })
 }

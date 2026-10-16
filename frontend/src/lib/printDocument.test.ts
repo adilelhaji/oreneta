@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import i18n from './i18n'
 import { buildPrintDocument, escapeHtml, printableBody, printedMessages } from './printDocument'
 import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './printOptions'
 import type { Message } from '../types'
@@ -64,6 +65,15 @@ describe('a conversation on paper', () => {
   it('names the page after the subject, so a printed sheet can be filed', () => {
     expect(build([message()], 'Quarterly report')).toContain('<title>Quarterly report</title>')
     expect(build([message()], '   ')).toContain('<title>(no subject)</title>')
+  })
+
+  it('says "no subject" in the interface language (#231)', async () => {
+    await i18n.changeLanguage('ca')
+    try {
+      expect(build([message()], '   ')).toContain('<title>(sense assumpte)</title>')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 
   it('keeps the line breaks of a plain-text message', () => {

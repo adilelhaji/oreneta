@@ -17,7 +17,7 @@ import {
   Clock,
   Ban,
 } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { t as translate, useTranslation } from '../../lib/i18n'
 import { ui$ } from '../../states/ui'
 import { moveFeed, openFeedEdit } from '../../states/feeds'
 import { FloatingContextMenu } from '../menu/FloatingContextMenu'
@@ -138,7 +138,7 @@ export function useThreadContextMenu(accounts: Account[]): ThreadContextMenuCont
           y: event.clientY,
           threadId: thread.thread_id,
           accountId: thread.account_id,
-          subject: thread.subject || '(no subject)',
+          subject: thread.subject || translate('threads.noSubject'),
           name: thread.from_name || thread.subject || 'this feed',
           url: thread.feed_url,
           unread: thread.unread,
@@ -153,7 +153,7 @@ export function useThreadContextMenu(accounts: Account[]): ThreadContextMenuCont
         x: event.clientX,
         y: event.clientY,
         threadId: thread.thread_id,
-        subject: thread.subject || '(no subject)',
+        subject: thread.subject || translate('threads.noSubject'),
         accountId: thread.account_id,
         folderId: thread.folder_id,
         unread: thread.unread,

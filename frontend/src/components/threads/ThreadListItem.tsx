@@ -61,7 +61,7 @@ export function ThreadListItem({
   const threadAccount = accounts.find((acc) => acc.id === thread.account_id)
   const badgeLabel = threadAccount ? threadAccount.display_name || threadAccount.email : ''
   const accountBadgeVisible = showAccountBadge ?? selectedAccount === 'unified'
-  const threadTitle = thread.subject || '(no subject)'
+  const threadTitle = thread.subject || t('threads.noSubject')
   // RSS feed rows carry a feed_url (and, once cached, a feed_icon). For those,
   // skip the email-based gravatar/favicon resolution and use the feed's icon.
   const isRSS = !!thread.feed_url

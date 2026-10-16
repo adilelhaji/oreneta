@@ -11,6 +11,11 @@ if (!(globalThis as any).document) {
   GlobalRegistrator.register({ url: 'https://meron.test/' })
 }
 
+// The interface starts in the language the last run showed, and in Catalan
+// on a fresh profile (ADR-0062). The suite reads English, so it starts as a
+// profile that last showed English; the first-run tests say what they need.
+localStorage.setItem('meron-language-cache', 'en')
+
 // React 19's `act` needs this to keep effect flushing deterministic; without it
 // every render logs a warning about updates not wrapped in act().
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true

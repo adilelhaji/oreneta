@@ -4,6 +4,7 @@ import i18n, {
   SYSTEM_LANGUAGE_CHOICE,
   languageChoiceFromStore,
   intlLocale,
+  regionalLocale,
   languageNativeNames,
   resolveI18nLanguageFromWebLocale,
   resolveInterfaceLanguage,
@@ -72,6 +73,29 @@ describe('the interface language a profile shows (ADR-0062)', () => {
   it('is the chosen language once chosen', () => {
     expect(resolveInterfaceLanguage('es', 'en-US')).toBe('es')
     expect(resolveInterfaceLanguage('en', 'ca-ES')).toBe('en')
+  })
+
+  it('for "System" walks the system languages in order', () => {
+    expect(resolveInterfaceLanguage(SYSTEM_LANGUAGE_CHOICE, ['nl-NL', 'pt-PT', 'en-US'])).toBe('pt')
+    expect(resolveInterfaceLanguage(SYSTEM_LANGUAGE_CHOICE, ['nl-NL', 'fy'])).toBe('en')
+    expect(resolveInterfaceLanguage(SYSTEM_LANGUAGE_CHOICE, [])).toBe('en')
+  })
+
+  it('writes dates in the system locale when it speaks the interface language', () => {
+    // English on en-GB keeps day-month order; the same for pt-PT and es-MX.
+    expect(regionalLocale('en', ['en-GB', 'ca-ES'])).toBe('en-GB')
+    expect(regionalLocale('en', ['en-IN'])).toBe('en-IN')
+    expect(regionalLocale('es', ['es-MX'])).toBe('es-MX')
+    expect(regionalLocale('de', ['de-CH'])).toBe('de-CH')
+    expect(regionalLocale('pt', ['pt-PT'])).toBe('pt-PT')
+    // Brazilian interface on a Portuguese system: the interface's own.
+    expect(regionalLocale('pt_BR', ['pt-PT'])).toBe('pt-BR')
+    // Catalan interface on an English system: Catalan dates.
+    expect(regionalLocale('ca', ['en-US'])).toBe('ca')
+    expect(regionalLocale('ca', ['ca-ES'])).toBe('ca-ES')
+    expect(regionalLocale('en', [])).toBe('en')
+    const date = new Date(2026, 9, 16)
+    expect(date.toLocaleDateString(regionalLocale('en', ['en-GB']), { day: 'numeric', month: 'short' })).toBe('16 Oct')
   })
 
   it('follows the system for "System", in English when the catalog lacks it', () => {

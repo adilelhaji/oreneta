@@ -95,25 +95,57 @@ export function languageChoiceFromStore(present: boolean, value: unknown): Langu
   return SYSTEM_LANGUAGE_CHOICE
 }
 
+/** The system's preferred locales, most wanted first. */
+export function systemLocales(): readonly string[] {
+  try {
+    if (navigator.languages?.length) return navigator.languages
+    return navigator.language ? [navigator.language] : []
+  } catch {
+    return []
+  }
+}
+
 /**
  * The interface language for a choice: the default when nothing was chosen,
- * the system's language (or English, the catalog's source, when the system
- * speaks one the catalog lacks) for "System", else the chosen one.
+ * for "System" the first of the system's preferred languages the catalog
+ * has (English, the catalog's source, when it has none), else the chosen one.
  */
 export function resolveInterfaceLanguage(
   choice: LanguageChoice | null | undefined,
-  systemLocale?: string,
+  system: string | readonly string[] = [],
 ): SupportedI18nLanguage {
-  if (choice === SYSTEM_LANGUAGE_CHOICE) return resolveI18nLanguageFromWebLocale(systemLocale) ?? 'en'
+  if (choice === SYSTEM_LANGUAGE_CHOICE) {
+    for (const locale of typeof system === 'string' ? [system] : system) {
+      const language = resolveI18nLanguageFromWebLocale(locale)
+      if (language) return language
+    }
+    return 'en'
+  }
   return normalizeI18nLanguage(choice) ?? DEFAULT_I18N_LANGUAGE
 }
 
 /**
- * The BCP 47 tag dates and numbers are written in: the interface language's,
+ * The locale dates and numbers are written in (ADR-0062): the system's own
+ * when it speaks the interface language, so an English interface on an
+ * en-GB system keeps day-month order; otherwise the interface language's,
  * so a Catalan interface on an English system says "16 d’oct." (#231).
  */
+export function regionalLocale(language: SupportedI18nLanguage, system: readonly string[]): string {
+  const preferred = system[0]
+  if (preferred && resolveI18nLanguageFromWebLocale(preferred) === language) {
+    try {
+      const [supported] = Intl.DateTimeFormat.supportedLocalesOf([preferred.replace('_', '-')])
+      if (supported) return supported
+    } catch {
+      // A tag Intl rejects: fall back to the interface language's.
+    }
+  }
+  return localeForIntl(language)
+}
+
+/** {@link regionalLocale} for the language the interface shows now. */
 export function intlLocale(): string {
-  return localeForIntl(currentLanguage)
+  return regionalLocale(currentLanguage, systemLocales())
 }
 
 export function t(key: string, values: TranslationValues = {}): string {

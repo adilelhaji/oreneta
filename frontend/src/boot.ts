@@ -1,6 +1,6 @@
 import type { Account, SystemCheck } from './types'
 import { invoke } from './lib/bridge'
-import { hydrateSettings, SETTINGS_DB_KEYS } from './states/settings'
+import { hydrateSettings, readStoredPrefs, SETTINGS_DB_KEYS } from './states/settings'
 import { restoreUiSession, UI_SESSION_KEYS, ui$ } from './states/ui'
 import { ensureDefaultKanbanBoard, restoreKanbanSession, KANBAN_SESSION_KEYS } from './states/kanban'
 import { accounts$ } from './states/accounts'
@@ -16,19 +16,18 @@ export async function boot() {
   const [systemResult, accountResult, prefsResult] = await Promise.all([
     invoke<SystemCheck>('system.check'),
     invoke<{ accounts: Account[] }>('account.list'),
-    invoke<{ prefs: Record<string, unknown> }>('app.prefsGet', {
-      keys: [
-        ...SETTINGS_DB_KEYS,
-        ...UI_SESSION_KEYS,
-        ...KANBAN_SESSION_KEYS,
-        ...ASSISTANT_PREF_KEYS,
-        ...ACCOUNT_GROUP_KEYS,
-        ...FOLDER_PREF_KEYS,
-      ],
-    }).catch(() => ({ prefs: {} })),
+    readStoredPrefs([
+      ...SETTINGS_DB_KEYS,
+      ...UI_SESSION_KEYS,
+      ...KANBAN_SESSION_KEYS,
+      ...ASSISTANT_PREF_KEYS,
+      ...ACCOUNT_GROUP_KEYS,
+      ...FOLDER_PREF_KEYS,
+    ]),
   ])
-  const prefs = prefsResult.prefs || {}
-  hydrateSettings(prefs)
+  const prefs = prefsResult.prefs
+  // A failed read is not a profile that never chose a language (ADR-0062).
+  hydrateSettings(prefs, { languageRead: prefsResult.read })
   hydrateAssistant(prefs)
   hydrateAccountGroups(prefs)
   hydrateFolderPrefs(prefs)

@@ -3236,6 +3236,9 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
 const caCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../locales/ca.json', import.meta.url)), 'utf8'),
 ) as Record<string, string>
+const esCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/es.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
 
 for (const systemLocale of ['en-US', 'es-ES', 'ja-JP']) {
   test(`a fresh profile starts in Catalan on a ${systemLocale} system; a saved choice wins (#231)`, async ({
@@ -3268,6 +3271,66 @@ for (const systemLocale of ['en-US', 'es-ES', 'ja-JP']) {
     }
   })
 }
+
+// Until the stored choice is read, the interface is in the language the last
+// run showed, Catalan on a fresh profile: from the first paint, not English
+// until an effect runs (#231, ADR-0062).
+for (const [cache, language] of [
+  [null, 'ca'],
+  ['es', 'es'],
+] as const) {
+  test(`before the stored choice is read the interface is already in ${language} (#231)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language: cache })
+    await page.addInitScript(
+      ({ cache }) => {
+        if (cache) localStorage.setItem('meron-language-cache', cache)
+        const probe = (window as any).startupProbe
+        const app = (window as any).go.main.App
+        const invoke = app.Invoke
+        let release = () => {}
+        const held = new Promise<void>((resolve) => (release = resolve))
+        probe.releasePrefs = () => release()
+        app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+          if (command === 'app.prefsGet') await held
+          return invoke(command, payload)
+        }
+      },
+      { cache },
+    )
+    const catalog = language === 'ca' ? caCatalog : esCatalog
+    const unread = page.getByRole('button', { name: catalog['filters.unread'], exact: true })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(unread).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Unread', exact: true })).toHaveCount(0)
+    await page.evaluate(() => (window as any).startupProbe.releasePrefs())
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(unread).toBeVisible()
+    expect(errors).toEqual([])
+  })
+}
+
+test('a failed read of the stored choice keeps the language the profile last showed (#231)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'es' })
+  await page.addInitScript(() => {
+    localStorage.setItem('meron-language-cache', 'es')
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      if (command === 'app.prefsGet') throw new Error('Synthetic core outage')
+      return invoke(command, payload)
+    }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+  await expect(page.getByRole('button', { name: esCatalog['filters.unread'], exact: true })).toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('meron-language-cache'))).toBe('es')
+  expect(errors).toEqual([])
+})
 
 test('switching from Catalan to English and back is saved and shown without a reload (#231)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })

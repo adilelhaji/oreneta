@@ -12,7 +12,7 @@ import {
 import type { ComponentType } from 'react'
 import type { Account, Attachment, Message } from '../../types'
 import { PdfIcon, type IconProps } from '../icons/Icons'
-import { intlLocale } from '../../lib/i18n'
+import { intlLocale, t } from '../../lib/i18n'
 
 /** Any icon usable in attachment rows: a lucide icon or our custom SVGs. */
 export type FileIconComponent = ComponentType<IconProps>
@@ -166,16 +166,21 @@ export function formatDateDivider(epochSeconds: number): string {
   const today = dateOnly(new Date())
   const yesterday = new Date(today)
   yesterday.setDate(today.getDate() - 1)
-  if (date.getTime() === today.getTime()) return 'Today'
-  if (date.getTime() === yesterday.getTime()) return 'Yesterday'
+  if (date.getTime() === today.getTime()) return t('dateGroup.today')
+  if (date.getTime() === yesterday.getTime()) return t('dateGroup.yesterday')
 
   return date.toLocaleDateString(intlLocale(), { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-export function formatFullTimestamp(epochSeconds: number): string {
+/**
+ * A message's full date and time, in the interface's locale by default. Text
+ * that leaves the app (a forwarded message's header) passes `[]`, the
+ * system's, so it does not change with the interface language (ADR-0062).
+ */
+export function formatFullTimestamp(epochSeconds: number, locale: string | string[] = intlLocale()): string {
   if (!epochSeconds) return ''
   const date = new Date(epochSeconds * 1000)
-  return date.toLocaleString(intlLocale(), {
+  return date.toLocaleString(locale, {
     weekday: 'short',
     year: 'numeric',
     month: 'short',

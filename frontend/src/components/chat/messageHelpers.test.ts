@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, setSystemTime, spyOn } from 'bun:test'
-import { intlLocale } from '../../lib/i18n'
+import i18n, { intlLocale } from '../../lib/i18n'
 import {
   escapeRegExp,
+  formatDateDivider,
   extractAddr,
   formatFileSize,
   formatMessageStamp,
@@ -258,5 +259,25 @@ describe('attachments the provider cannot hand over (#142)', () => {
     } as any
     const media = getVisibleMedia(message, { load_remote_images: false } as any, false)
     expect(media.files.map((file: any) => file.unavailable ?? file.filename)).toEqual(['link', 'tooLarge'])
+  })
+})
+
+describe('date dividers in the interface language (#231)', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('names today and yesterday from the catalog', async () => {
+    const noon = new Date()
+    noon.setHours(12, 0, 0, 0)
+    const before = new Date(noon)
+    before.setDate(noon.getDate() - 1)
+    const now = noon.getTime() / 1000
+    const yesterday = before.getTime() / 1000
+    expect(formatDateDivider(now)).toBe('Today')
+    expect(formatDateDivider(yesterday)).toBe('Yesterday')
+    await i18n.changeLanguage('ca')
+    expect(formatDateDivider(now)).toBe('Avui')
+    expect(formatDateDivider(yesterday)).toBe('Ahir')
   })
 })

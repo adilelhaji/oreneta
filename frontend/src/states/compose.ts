@@ -111,7 +111,7 @@ function forwardedPlainBody(message: Message): string {
   const header = [
     '---------- Forwarded message ---------',
     headerLine('From', formatMessageFrom(message)),
-    headerLine('Date', formatFullTimestamp(message.date)),
+    headerLine('Date', formatFullTimestamp(message.date, [])),
     headerLine('Subject', message.subject || '(no subject)'),
     headerLine('To', message.to),
     headerLine('Cc', message.cc),
@@ -122,7 +122,7 @@ function forwardedPlainBody(message: Message): string {
 function forwardedHtmlBody(message: Message): string {
   const rows: Array<[string, string | undefined]> = [
     ['From', formatMessageFrom(message)],
-    ['Date', formatFullTimestamp(message.date)],
+    ['Date', formatFullTimestamp(message.date, [])],
     ['Subject', message.subject || '(no subject)'],
     ['To', message.to],
     ['Cc', message.cc],
