@@ -4,9 +4,9 @@
 import { invoke } from '../lib/bridge'
 import { t } from '../lib/i18n'
 import type { Account, Invitation, Message } from '../types'
-import { calendar$, editEvent, startOfDay, type CalendarEvent } from './calendar'
+import { editEvent, openCalendarOn, type CalendarEvent } from './calendar'
 import { sendComposed } from './compose'
-import { showToast, ui$ } from './ui'
+import { showToast } from './ui'
 
 export type Answer = { sequence: number; response: string; calendar_id: string; answered_at: number }
 export type InvitationStatus = { answer: Answer | null; calendars: string[] }
@@ -268,13 +268,6 @@ export async function declineProposal(
  * place. Saving goes through the ordinary update, and only that.
  */
 export function editWithProposal(accountId: string, event: Omit<CalendarEvent, 'accountId'>, proposal: Invitation) {
-  calendar$.anchor.set(startOfDay(new Date(proposal.start * 1000)).getTime())
-  calendar$.view.set('day')
-  ui$.peopleOpen.set(false)
-  ui$.tasksOpen.set(false)
-  ui$.notesOpen.set(false)
-  ui$.attachmentsOpen.set(false)
-  ui$.messagingOpen.set(false)
-  ui$.calendarOpen.set(true)
+  openCalendarOn(new Date(proposal.start * 1000))
   editEvent({ ...event, accountId, start: proposal.start, end: proposal.end })
 }

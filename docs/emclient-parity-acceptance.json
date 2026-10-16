@@ -1116,7 +1116,7 @@
       "section": "Widgets/General",
       "outcome": "Sidebar widgets, agenda and contextual history with reliable scope",
       "status": "partial",
-      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); a standalone agenda widget, panel resizing and remembering the last section are absent",
+      "present": "Per-person history (conversations, upcoming meetings, files) in the open account with coverage stated (#86); in the same conversation details sidebar, an agenda section with the next 7 days of enabled calendars and dated open tasks, overdue first, each opening its item; the sidebar, thread list and board pane resizable by pointer and keyboard within limits and kept across restarts; the last section restored for the main window (#212, ADR-0059). Absent: a widget pane independent of the selected message, as the agenda is reachable only from an open conversation (not at startup without one, nor in the Calendar, Tasks, Contacts or Notes views)",
       "code": "docs/design/contextual-sidebar.md",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1133,6 +1133,30 @@
           {
             "sha": "5a776161ebcc5923c0e0ff4d7fc541cf43af07be",
             "result": "frontend/src/components/chat/PersonHistory.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/components/chat/SidebarAgenda.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/components/chat/ConversationDetailsPanel.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/components/resizer/PaneResizer.test.tsx"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/lib/agenda.test.ts"
+          },
+          {
+            "sha": "4fafc4d7fb7146b85e58ef4b715a96a85170b076",
+            "result": "frontend/src/lib/paneResize.test.ts"
           }
         ],
         "native": [],

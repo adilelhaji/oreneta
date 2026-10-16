@@ -339,3 +339,23 @@ describe('conventional mail defaults', () => {
     }
   })
 })
+
+describe('pane sizes (#212)', () => {
+  afterEach(() => {
+    settings$.threadListWidth.set(350)
+    settings$.kanbanPaneWidth.set(33)
+    settings$.detailsPanelWidth.set(340)
+  })
+
+  it('restores every remembered pane size within its limits', () => {
+    hydrateSettings({ thread_list_width: 400, kanban_pane_width: 40, details_panel_width: 480 })
+    expect(settings$.threadListWidth.get()).toBe(400)
+    expect(settings$.kanbanPaneWidth.get()).toBe(40)
+    expect(settings$.detailsPanelWidth.get()).toBe(480)
+    // A size stored by hand or by another version never leaves a pane unusable.
+    hydrateSettings({ thread_list_width: 9000, kanban_pane_width: 95, details_panel_width: -3 })
+    expect(settings$.threadListWidth.get()).toBe(560)
+    expect(settings$.kanbanPaneWidth.get()).toBe(60)
+    expect(settings$.detailsPanelWidth.get()).toBe(280)
+  })
+})
