@@ -50,7 +50,7 @@ A més:
   - si la conversa es mou, es troben a la seva carpeta actual;
   - una clau feta d'un uid no es cerca en una altra carpeta, perquè allà aquell
     uid és un altre missatge;
-  - en despertar no es promet «de tornada a la safata d'entrada»: mai no
+  - en despertar-se no es promet «de tornada a la safata d'entrada»: mai no
     s'ha mogut.
 
 ## Pendent

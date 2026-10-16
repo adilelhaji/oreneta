@@ -3,7 +3,7 @@
 - Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
   revisió del propietari al final del pla.
 - Data: 2026-10-13.
-- Abast: fila S01-07 del llibre de paritat
+- Abast: fila S01-07 del registre d'acceptació
   (`docs/emclient-parity-acceptance.json`), #35. eM Client 10.4 plega al
   lector el text citat de les respostes i pot ajustar a l'amplada de
   la finestra un missatge maquetat més ample que ella. Oreneta ja contenia

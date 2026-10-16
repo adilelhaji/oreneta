@@ -4,7 +4,7 @@
   revisió del propietari al final del pla.
 - Data: 2026-10-13.
 - Abast: el que ADR-0013 i ADR-0039 van deixar fora de #103 (fila SET-20
-  del llibre de paritat amb eM Client 10.4, «Tasks»): crear i editar la
+  del registre d'acceptació amb eM Client 10.4, «Tasks»): crear i editar la
   repetició d'una tasca, i completar una ocurrència sense perdre la sèrie,
   en llistes locals i en llistes CalDAV.
 

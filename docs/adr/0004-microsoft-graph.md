@@ -12,7 +12,7 @@ deduïda d'un domini de correu electrònic. Sense migració automàtica, sense
 protocol alternatiu de reserva, sense servei públic ni accés només
 d'aplicació. Les concessions OAuth existents no canvien; els testimonis del
 recurs d'Outlook no s'han de reutilitzar mai com a concessions de Graph. El
-consentiment i la política del tenant són requisits separats.
+consentiment i la política del tenant (inquilí) són requisits separats.
 
 Els permisos es demanen de manera incremental: `Mail.ReadBasic` per a
 descobrir carpetes i metadades bàsiques, `Mail.Read` per a la lectura
@@ -35,7 +35,7 @@ servei global i a la bústia de l'usuari que ha iniciat la sessió.
   proveïdor, lligats al compte i a la col·lecció d'origen. Només se segueixen
   URL HTTPS de Graph v1.0 validats per a aquella col·lecció exacta. Mai no es
   reenvien testimonis bearer a través de redireccions. S'obté una pàgina
-  acotada cada vegada; els errors no són captures buides correctes.
+  limitada cada vegada; els errors no són captures buides correctes.
 - Es preserven les categories d'error de Graph: reautenticació, accés
   denegat, no trobat, conflicte, limitació de peticions, punt de control
   caducat, no disponible, resposta no vàlida i fallada de transport. Es
@@ -45,7 +45,7 @@ servei global i a la bústia de l'usuari que ha iniciat la sessió.
 - Una ronda de delta completa només pot avançar el seu punt de control de
   manera atòmica amb els canvis corresponents de la memòria cau. Les
   lectures incompletes no han de suprimir dades locals. Un punt de control
-  rebutjat requereix una resincronització explícita, no fusionar una primera
+  rebutjat requereix una ressincronització explícita, no fusionar una primera
   pàgina nova en un recorregut antic. Les escriptures fan servir testimonis
   de concurrència quan s'admeten; un enviament incert es concilia, mai no es
   repeteix automàticament.
@@ -59,7 +59,7 @@ servei global i a la bústia de l'usuari que ha iniciat la sessió.
 ## Lliurament
 
 1. #125: adaptador de lectura natiu, concessió de Graph explícita en memòria,
-   contractes de transport i de punt de control; validació amb fixtures i
+   contractes de transport i de punt de control; validació amb fixtures (dades de prova) i
    loopback. Encara no és un rerefons de compte que l'usuari pugui activar,
    sense intercanvi OAuth i sense canvi de comptes de producció.
 2. Consentiment OAuth/PKCE per compte i cicle de vida de credencials segur i

@@ -18,8 +18,8 @@ i les noves capacitats d'ordenació queden fora d'aquesta decisió.
 Abans d'utilitzar-los, es validen la versió, els identificadors, les columnes duplicades i les amplades. Es preserven
 les versions futures desconegudes sense escriptures silencioses. Els usuaris existents sense aquesta
 preferència conserven la disposició compacta actual. Calen la configuració per teclat, el desplaçament
-horitzontal acotat, el restabliment explícit i les proves de reinici i d'aïllament entre comptes.
+horitzontal limitat, el restabliment explícit i les proves de reinici i d'aïllament entre comptes.
 El document del contracte defineix els valors per defecte i els límits detallats.
 
-La implementació avança en incidències acotades i revisades, amb la CI en verd. L'aprovació no
+La implementació avança en incidències fitades i revisades, amb la CI en verd. L'aprovació no
 autoritza publicacions, canvis de proveïdor ni afirmacions de paritat completa.

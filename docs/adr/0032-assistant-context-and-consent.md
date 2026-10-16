@@ -12,7 +12,7 @@
   - l'assistent està desactivat per defecte (`assistant_enabled`);
   - desactivat, no apareix a les converses ni al composer;
   - activat, cada petició continua necessitant revisió i confirmació, que
-    el nucli exigeix: sense la casella marcada i un token igual al de la
+    el nucli exigeix: sense la casella marcada i un testimoni (token) igual al de la
     previsualització, no s'envia res.
 - **Proveïdor:**
   - format de chat completions (OpenAI), el que entenen Ollama,
@@ -29,7 +29,7 @@
   - Una prova falla si apareix un camp nou en el que s'envia.
 - **El que es revisa és el que surt:**
   - la previsualització del nucli retorna el cos exacte de la petició;
-  - el token és el seu hash juntament amb el proveïdor, i en executar es refà i es
+  - el testimoni és el seu resum (hash) juntament amb el proveïdor, i en executar es refà i es
     compara;
   - el quadre de diàleg mostra la destinació i el cos exacte.
 - **El correu són dades, no ordres:**

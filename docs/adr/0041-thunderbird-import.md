@@ -26,7 +26,7 @@
   s'importen i es compten a la previsualització; mai no es recupera un correu
   que la persona va suprimir.
 - **Destinació:** l'arxiu local (ADR-0014), a
-  `Thunderbird/<cuenta>/<carpetas>`. Se segueix la mateixa regla de duplicats
+  `Thunderbird/<cuenta>/<carpetas>`. Se segueix la mateixa regla de desduplicació
   per Message-ID, de manera que importar dues vegades no afegeix res.
 - **Previsualització obligatòria:** abans de desar res es diu, per carpeta,
   quants missatges són nous, quants ja hi són i quants estaven suprimits.

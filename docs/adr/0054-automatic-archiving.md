@@ -3,7 +3,7 @@
 - Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
   revisió del propietari al final del pla.
 - Data: 2026-10-13.
-- Abast: #112 (fila SET-13 del llibre de paritat, «Correu → Arxivament
+- Abast: #112 (fila SET-13 del registre d'acceptació, «Correu → Arxivament
   automàtic» d'eM Client 10.4), sobre ADR-0014 (arxiu local) i amb la
   programació d'ADR-0037.
 

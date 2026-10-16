@@ -12,9 +12,9 @@
 ## Decisió
 
 Conservar l'exportació de configuració com a opció independent i afegir una
-còpia manual local xifrada del perfil persistit. Primer, fer durables els
+còpia manual local xifrada del perfil desat. Primer, fer durables els
 esborranys complets i els seus fitxers. Una captura no es presenta com a completa
-si hi ha dades pendents de persistir, fitxers omesos o errors sense resoldre.
+si hi ha dades pendents de desar, fitxers omesos o errors sense resoldre.
 
 La captura coordina les escriptures de base i fitxers; no copia una base viva a
 cegues. L'arxiu té format versionat, manifest i límits de mida i

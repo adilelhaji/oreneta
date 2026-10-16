@@ -29,7 +29,7 @@ L'assumpte, el remitent i el cos es tracten com a entrada no fiable; les
 instruccions que es trobin al correu mai no autoritzen enviar, suprimir,
 moure, arxivar, canviar regles ni cridar cap altra eina.
 
-El contracte admet una mida d'entrada acotada, errors del proveïdor i una
+El contracte admet una mida d'entrada limitada, errors del proveïdor i una
 fallada explícita sense connexió. El consumidor pot descartar un resultat
 pendent; la cancel·lació del transport continua sent una qüestió de seguiment
 de la incidència #52. La capa de l'assistent no desa les peticions ni les

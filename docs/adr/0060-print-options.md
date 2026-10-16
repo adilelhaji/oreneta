@@ -3,7 +3,7 @@
 - Estat: acceptada per delegació (el propietari va delegar les decisions de
   disseny de #213); pendent de revisió del propietari al final del pla.
 - Data: 2026-10-15.
-- Abast: #213, fila SET-05 del llibre de paritat («General → Imprimir»
+- Abast: #213, fila SET-05 del registre d'acceptació («General → Imprimir»
   d'eM Client 10.4), sobre la impressió de #35. Les garanties de #35 no
   canvien: el contingut remot continua bloquejat i el que en queda fora es diu.
   Disseny: [docs/design/printing.md](../design/printing.md).

@@ -7,7 +7,7 @@
   (#225, vegeu «Ampliació del 2026-10-16: avisos perduts»). Només queda «a
   confirmar» el que encara s'aparta d'aquesta decisió: el mòbil no els mostra.
 - Data: 2026-10-15; ampliada el 2026-10-16 (#225).
-- Abast: #209 i #225 (fila SET-29 del llibre de paritat, pare #100), sobre els
+- Abast: #209 i #225 (fila SET-29 del registre d'acceptació, pare #100), sobre els
   recordatoris comuns d'ADR-0045 (`pim::reminders`). Disseny:
   [recordatoris del calendari](../design/calendar-reminders.md).
 
@@ -111,7 +111,7 @@ Decisió per delegació del propietari (l'opció més prudent).
   zona horària, pels esdeveniments de dia sencer), i també el moment en
   què es va donar. Passat això cap mirada no el pot tornar a donar: ni és per
   endavant ni ha vençut dins del buit que es mira.
-- **Acotat**: tot registre acaba esborrat; la taula només guarda avisos
+- **Limitat**: tot registre acaba esborrat; la taula només guarda avisos
   d'esdeveniments per endavant o dels últims 16 dies. Un registre anterior al
   fet que la clau portés l'inici (només l'identificador) s'esborra 16 dies
   després de donar-se (abans, 14).
@@ -220,7 +220,7 @@ la va decidir la delegació, amb l'opció més prudent.
   mostra una altra vegada en arrencar: millor dues vegades que cap. Es va
   triar guardar-lo al nucli i no en un fitxer de Go perquè el nucli ja és
   qui anota què s'ha donat, en el mateix magatzem i en la mateixa transacció.
-  El que es guarda està acotat: un perdut sense mostrar l'esdeveniment del
+  El que es guarda està limitat: un perdut sense mostrar l'esdeveniment del
   qual va acabar fa més de 14 dies (el buit que mira una mirada) es deixa anar
   en guardar el següent; els d'un compte suprimit se'n van amb ell.
 - **Una vegada**: cada perdut s'anota com a donat abans de retornar-lo, igual

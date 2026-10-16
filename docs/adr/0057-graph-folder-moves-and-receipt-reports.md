@@ -5,7 +5,7 @@
   propietari al final del pla.
 - Data: 2026-10-15.
 - Abast: #210, sobre les files SET-07 (#87, carpetes) i SET-11 (#107,
-  confirmacions) del llibre de paritat. Completa el que ADR-0050 i ADR-0048
+  confirmacions) del registre d'acceptació. Completa el que ADR-0050 i ADR-0048
   van deixar pendent per a Microsoft Graph i afegeix llegir els informes que
   arriben, en tots els tipus de compte. Exchange (EWS) en queda fora: és una
   altra incidència (#211), que pot reutilitzar `receipts::delivery_receipt`.
@@ -104,7 +104,7 @@
     els més antics), i es vincula tan aviat com el missatge apareix i es
     mostra; mentrestant, l'informe es veu com un missatge normal. Una paraula
     final substitueix un retard i mai al revés; si no, guanya l'informe més
-    recent, amb la data acotada pel moment en què es llegeix (una data
+    recent, amb la data limitada pel moment en què es llegeix (una data
     futura no pot guanyar). Un informe a Enviats o Esborranys (una
     confirmació que ha enviat aquest compte) no compta com a rebut;
   - **quan es vincula:** quan es llegeix el cos de l'informe. A Graph,

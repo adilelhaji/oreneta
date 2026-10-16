@@ -104,7 +104,7 @@ què *significa* el vincle un cop creat.
 Un compte IMAP simple la resposta `PERMANENTFLAGS` del qual no inclou `\*`
 no pot portar un vincle basat en paraules clau: el servidor ha dit al
 client, dins del mateix protocol, que no admet marques arbitràries. La
-configuració d'Oreneta ha de dir **"No disponible en aquest compte"** per a
+configuració d'Oreneta ha de dir **«No disponible en aquest compte»** per a
 aquell compte, explícitament, en lloc d'amagar l'opció de vincle sense cap
 explicació o de descartar en silenci l'etiqueta a la sincronització
 següent. Una etiqueta que sembla que viatja i no ho fa és pitjor que una

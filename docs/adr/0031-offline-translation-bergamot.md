@@ -78,7 +78,7 @@
 - Serveis en línia (DeepL, Google): el text surt de l'equip.
 - Models més nous de Mozilla (`moz-fx-translations-data`): més idiomes,
   però fets per al Bergamot de Firefox, no per al paquet publicat, i
-  sense un registre estable de hashes.
+  sense un registre estable de resums (hash).
 - Remote Settings de Firefox: un servei de Mozilla pensat per a Firefox;
   afegiria una dependència de xarxa que no cal.
 

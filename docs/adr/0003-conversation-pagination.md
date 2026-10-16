@@ -12,7 +12,7 @@ assumpte, continuen sent la identitat de la fila. Aquesta decisió no autoritza
 cap projecció persistent, migració d'esquema ni canvi de proveïdor.
 
 Per al correu basat en la memòria cau, l'elegibilitat fa servir les facetes
-existents a nivell de missatge. El representant és l'últim missatge coincident
+existents de cada missatge. El representant és l'últim missatge coincident
 segons `(date, UID)`, independentment del sentit de l'ordenació. La
 normalització de destinataris de sortida i de noms visibles s'aplica abans
 d'ordenar. Es preserven les regles existents d'identitat d'assumpte i branca
@@ -57,7 +57,7 @@ fora de les garanties de completesa basades en la memòria cau.
 2. Seguiment: obtenció de candidats basada en la memòria cau, adaptadors
    d'escriptori/mòbil, paginació global unificada i gestió de refresc/errors
    al client amb proves d'integració.
-3. Conciliar per separat les captures de cerca, l'eliminació de duplicats
+3. Conciliar per separat les captures de cerca, la desduplicació
    entre carpetes dels destacats, l'ordenació de despertada dels posposats i
    l'RSS abans d'activar-hi aquest contracte.
 

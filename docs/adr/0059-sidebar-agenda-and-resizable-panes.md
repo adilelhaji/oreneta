@@ -4,7 +4,7 @@
   disseny de #212 en l'opció més prudent); pendent de revisió del
   propietari al final del pla.
 - Data: 2026-10-15.
-- Abast: #212 (fila SET-23 del llibre de paritat, «Widgets» d'eM Client
+- Abast: #212 (fila SET-23 del registre d'acceptació, «Widgets» d'eM Client
   10.4), sobre la barra lateral contextual de #86.
 
 ## Decisió
@@ -124,7 +124,7 @@
   tornar a la mida de partida i passar del màxim), captura perduda,
   teclat, dreta a esquerra, límits.
 - `frontend/src/components/chat/ConversationDetailsPanel.test.tsx`: secció
-  recordada i restaurada, amplada persistida i restaurada.
+  recordada i restaurada, amplada desada i restaurada.
 - `frontend/src/states/settings.test.ts`: mides desades ajustades.
 - `frontend/e2e/startup.e2e.ts`: entrada de producció a 600, 1024 i 1440
   px, clar i fosc, text al 200 % i equivalent de zoom del 200 %

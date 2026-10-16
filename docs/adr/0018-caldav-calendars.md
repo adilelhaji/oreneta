@@ -68,7 +68,7 @@ recurrències.
 - Proves:
   - N1 amb un servidor fals amb estat (descobriment, versions,
     conflictes, ocurrències, origen);
-  - N3 contra Radicale al job d'integració: edició que conserva
+  - N3 contra Radicale al job (tasca de CI) d'integració: edició que conserva
     assistents, conflicte sense escriptura, sèrie amb excepció i EXDATE.
 - Queda fora: cua sense connexió (les escriptures requereixen xarxa i fallen
   visiblement sense xarxa), invitacions (iMIP) i proveïdors certificats

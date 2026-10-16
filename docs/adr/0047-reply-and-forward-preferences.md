@@ -65,7 +65,7 @@
     del nucli (el mateix camí que «Desar com a .eml») cap a un fitxer
     temporal privat, el llegeix, l'esborra i retorna els bytes en base64 amb un
     nom de fitxer sanejat; els bytes no travessen el protocol JSON
-    acotat del nucli;
+    limitat del nucli;
   - límit de 50 MB: un original més gran no passaria els límits dels
     proveïdors un cop codificat;
   - l'esborrany s'obre amb l'assumpte «Fwd:» i el cos buit (amb signatura),
@@ -89,7 +89,7 @@
   cada bombolla enviada el repetiria; a més, la bombolla optimista i
   l'esborrany compartit haurien de distingir el text propi del citat.
 - **Portar l'original al navegador pel protocol del nucli:** les seves
-  respostes tenen una mida de línia acotada; escriure a un fitxer temporal
+  respostes tenen una mida de línia limitada; escriure a un fitxer temporal
   ja existeix i no la té.
 - **Base64 per a tot `message/rfc822`:** funciona a la pràctica, però RFC
   2046 ho prohibeix i alguns lectors estrictes no obren l'adjunt com a

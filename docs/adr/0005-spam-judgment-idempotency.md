@@ -18,7 +18,7 @@ manté l'aprenentatge idempotent i fa que les correccions siguin reversibles
 sense inflar l'evidència.
 
 La identitat és el `messages.id` local, qualificat per `account`; l'abast
-forà del compte el garanteixen la clau de la taula i la consulta. Els camins
+de clau forana del compte el garanteixen la clau de la taula i la consulta. Els camins
 de trasllat de correu transfereixen el judici de la fila d'origen de la
 memòria cau a la fila de destinació actualitzada mitjançant la identitat
 estable del proveïdor (Gmail/message-id) abans de suprimir la fila d'origen.
@@ -29,7 +29,7 @@ servidor/Sieve ni comportament nou del proveïdor.
 ## Conseqüències
 
 - Els comptadors agregats es poden reparar tornant a aplicar les files de judici actuals.
-- Un judici sobreviu a un nou judici i no es pot confondre amb un resultat derivat.
+- Un judici sobreviu quan es torna a jutjar i no es pot confondre amb un resultat derivat.
 - Moure un missatge jutjat en preserva la decisió actual i la contribució als
   agregats; suprimir una fila de la memòria cau no pot deixar evidència
   d'aprenentatge òrfena.

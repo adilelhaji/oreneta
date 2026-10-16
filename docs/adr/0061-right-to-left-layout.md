@@ -4,7 +4,7 @@
   disseny de #226 en l'opció més prudent); pendent de revisió del
   propietari al final del pla.
 - Data: 2026-10-16.
-- Abast: #226, filla de #37 (fila SET-27 del llibre de paritat, «General →
+- Abast: #226, filla de #37 (fila SET-27 del registre d'acceptació, «General →
   Idioma» d'eM Client 10.4). L'esborrany #198 es va fer servir només com a
   referència de quins components calia tocar; no es fusiona. Fora d'abast: la
   prova nativa de mètodes d'entrada (execució N4) i altres idiomes de dreta a

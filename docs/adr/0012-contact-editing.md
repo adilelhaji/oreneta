@@ -20,8 +20,7 @@
 4. **Conflictes.** Si el servidor respon que l'element ha canviat, no es desa
    res: es torna a llegir la versió del servidor i es mostren totes dues perquè la
    persona triï. Mai no es fusiona ni se sobreescriu en silenci.
-5. Supressió, duplicats, vCard i fotos segons la proposta: confirmació
-   anomenant la llibreta, enllaç local que es pot desfer i sense fotos per URL remot.
+5. Supressió, duplicats, vCard i fotos segons la proposta: confirmació que anomena la llibreta, enllaç local que es pot desfer i sense fotos per URL remot.
 
 ## Conseqüències
 

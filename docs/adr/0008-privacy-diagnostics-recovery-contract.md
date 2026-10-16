@@ -10,7 +10,7 @@
 
 ## Decisió
 
-1. **El diagnòstic és només local.** Oreneta manté registres locals acotats al
+1. **El diagnòstic és només local.** Oreneta manté registres locals limitats al
    fitxer canònic `oreneta.log`, emmascara
    les adreces de correu electrònic i els valors semblants a credencials abans de mostrar-los o exportar-los, i mai no
    envia telemetria per defecte. L'exportació és explícita i l'usuari la pot revisar.
@@ -28,11 +28,11 @@
 - L'abast de privadesa continua sent local i auditable, sense cap servei ni dependència nous.
 - Una restauració de la configuració és més petita i més segura, però no restaura el correu
   de la memòria cau ni les sessions del proveïdor.
-- La verificació del hash protegeix la integritat; la política d'autenticitat/signatura i
+- La verificació del resum (hash) protegeix la integritat; la política d'autenticitat/signatura i
   l'evidència de reversió nativa continuen sent treball de seguiment separat.
 
 ## Límit de la validació
 
 Les proves sintètiques poden demostrar l'emmascarament, la gestió dels secrets de la còpia de seguretat i el comportament
-del hash o de les etapes de les actualitzacions. No poden certificar la interoperabilitat amb els proveïdors, la recuperació
+del resum o de les etapes de les actualitzacions. No poden certificar la interoperabilitat amb els proveïdors, la recuperació
 nativa a Windows ni el lliurament d'actualitzacions en producció.

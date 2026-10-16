@@ -4,7 +4,7 @@
   #208: «la opción más prudente»); pendent de revisió del propietari al
   final del pla.
 - Data: 2026-10-15.
-- Abast: #208, filla de #111 (fila SET-21 del llibre de paritat, «Xat →
+- Abast: #208, filla de #111 (fila SET-21 del registre d'acceptació, «Xat →
   General» d'eM Client 10.4). Completa el que ADR-0036 i ADR-0044 van deixar
   pendent: la presència i l'estat propis, la presència dels contactes,
   les mencions als grups, les notificacions del sistema i els missatges

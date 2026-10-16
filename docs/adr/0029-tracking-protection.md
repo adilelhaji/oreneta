@@ -10,7 +10,7 @@
 
 - **Llista:**
   - una còpia fixa d'EasyPrivacy, `easylist/easylist@4b79596e`, va amb
-    l'aplicació, amb la seva procedència, el seu hash i la seva llicència (GPL-3.0+ o
+    l'aplicació, amb la seva procedència, el seu resum (hash) i la seva llicència (GPL-3.0+ o
     CC BY-SA 3.0+);
   - només se'n baixa una de nova quan la persona ho demana, i únicament
     des de `easylist.to`;

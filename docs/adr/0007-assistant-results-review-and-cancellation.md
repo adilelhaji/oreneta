@@ -7,7 +7,7 @@
 
 ## Decisió
 
-La incidència #52 consumeix el límit del proveïdor de l'ADR-0006 en tres fragments acotats:
+La incidència #52 consumeix el límit del proveïdor de l'ADR-0006 en tres fragments fitats:
 
 1. Els resultats de **resum** són text més referències opcionals a les fonts. Les fonts porten
    la identitat del compte i del missatge del context revisat; les fonts desconegudes

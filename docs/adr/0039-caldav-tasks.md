@@ -30,7 +30,7 @@ Radicale. Faltava decidir:
     accepten tasques: si una no les accepta, ho diu la primera lectura.
 - **Canvis locals primer:** crear, editar, completar i suprimir es
   desen aquí i es marquen com a pendents (`put` o `delete`).
-  - Una tasca suprimida que ja és al servidor queda oculta (làpida)
+  - Una tasca suprimida que ja és al servidor queda oculta com a làpida (tombstone)
     fins que se suprimeix allà, perquè en cal la versió per a suprimir-la.
   - No s'envia res en segon pla. Se sincronitza en obrir Tasques i amb
     el botó «Sincronitzar».

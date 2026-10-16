@@ -72,7 +72,7 @@ opcional queda per a una versió 2 del format, en una secció a part.
   3. el manifest, amb format, versió, data, versió de l'aplicació,
      esquema, clau de la base, entrades amb SHA-256 i exclusions;
   4. una marca de final.
-- El manifest va al final per a calcular el hash de cada entrada en una
+- El manifest va al final per a calcular el resum (hash) de cada entrada en una
   sola passada.
 - Límits:
   - 4 GiB per entrada i 200 000 entrades;
