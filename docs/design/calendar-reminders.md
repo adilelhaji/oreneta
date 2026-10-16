@@ -18,7 +18,10 @@ Fila SET-29 del [libro de paridad](../emclient-parity-acceptance.md).
 
 - **Una vez.** Cada aviso dado se anota como `<evento>@<inicio guardado>`
   (`calendar_reminders_fired`) antes de devolverlo. Un evento movido es un
-  inicio nuevo y se avisa de nuevo.
+  inicio nuevo y se avisa de nuevo. La anotación se borra cuando ese inicio
+  y el momento en que se dio quedan más de 16 días atrás
+  (`forget_old_reminders`, `GIVEN_KEPT`; #222): un aviso puesto semanas
+  antes de su evento no se da dos veces, y la tabla no crece sin fin.
 - **A tiempo**: se da en la primera mirada desde su hora mientras el evento
   no ha empezado.
 - **Tras una suspensión o con la aplicación cerrada**: si venció después de la
@@ -97,6 +100,9 @@ o +13, #221).
     `a_zero_length_events_at_the_start_reminder_is_given_in_its_first_minute`;
   - reinicio: `no_reminder_fires_twice_across_a_restart_followed_by_a_resume`
     (almacén en archivo y dos motores);
+  - registro (#222): `a_reminder_set_weeks_ahead_is_given_once`,
+    `old_records_are_forgotten`, y en `calendar::tests`
+    `records_of_given_reminders_are_forgotten_by_their_events_start`;
   - zona: `after_a_time_zone_change_timed_reminders_keep_their_instant_and_all_day_ones_follow`,
     `a_time_zone_change_asks_to_reread_floating_calendars_until_they_are_read`,
     `a_muted_account_reads_again_and_a_paused_one_keeps_its_zone_change_until_resumed`,
