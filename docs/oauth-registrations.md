@@ -95,7 +95,7 @@ amb un client que l'inici de sessió havia rebutjat, o amb un
   - sense client, també amb una variable buida, la renovació s'atura amb
     el motiu;
   - prioritat: el del compte, després el de l'amfitrió, després el de l'entorn.
-- **CI** (job `go`):
+- **CI** (job (tasca de CI) `go`):
   - compila el binari distribuïble;
   - `scripts/ci/inherited-oauth.cjs` comprova que no conté cap dels
     valors d'`oauth_inherited.go` i informa només dels noms;

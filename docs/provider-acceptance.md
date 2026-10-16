@@ -3,16 +3,16 @@
 La [matriu](provider-acceptance-matrix.json) fa correspondre cada subprova actual de
 `TestIntegrationMailFlow` a 12 resultats per a l'usuari. És un paquet executable
 **IMAP/SMTP aïllat**, no una certificació de Gmail, Workspace, Graph ni de la interfície
-de Windows. El [registre de paritat](emclient-parity-acceptance.md) conserva els seus
+de Windows. El [registre d'acceptació de paritat](emclient-parity-acceptance.md) conserva els seus
 requisits natius/de proveïdor independents. #145 continua oberta per a l'evidència real i
 les fixtures/procediments restants; #184 lliura aquesta slice d'informes.
 
 ## Execució automàtica i evidència
 
-El job `integration` existent arrenca maddy 0.8 amb ports només de bucle local (loopback)
+El job (tasca de CI) `integration` existent arrenca maddy 0.8 amb ports només de bucle local (loopback)
 i dos comptes sintètics (`alice@maddy.test`, `bob@maddy.test`). El seu servidor
 d'enviament només lliura a les seves bústies locals; no té cap ruta de lliurament SMTP
-remot. Els perfils, la base de dades i la configuració del clauer fan servir la fixture
+remot. Els perfils, la base de dades i la configuració del clauer fan servir la fixture (dades de prova)
 de prova temporal existent. L'arnès programa la neteja del contenidor i dels perfils. No
 calen comptes reals, credencials ni correu de l'usuari. Les fixtures fan servir ID de
 correlació generats en temps d'execució; les assercions sobre adjunts/MIME són a
@@ -66,11 +66,11 @@ els comptes dedicats, les operacions i la llista exacta de destinataris de prova
 permesos. No es pot fer servir cap bústia de producció ni cap aplicació OAuth de Google
 heretada del projecte original (upstream). Mantingueu els testimonis fora del repositori/dels artefactes;
 registreu els noms dels àmbits, mai els valors dels testimonis. L'aprovisionament, els
-canvis de l'arrendatari (tenant) i l'enviament extern són accions separades, que la CI no
+canvis del tenant (inquilí del proveïdor) i l'enviament extern són accions separades, que la CI no
 implica.
 
 Registreu per operació: SHA del candidat i resum (hash) de l'executable; versions de
-l'aplicació/el nucli i del sistema operatiu; tipus de proveïdor/arrendatari; mode
+l'aplicació/el nucli i del sistema operatiu; tipus de proveïdor/tenant; mode
 d'autenticació i àmbits concedits; perfil aïllat; estat inicial de carpetes/memòria cau;
 ID sintètics d'execució/missatge i SHA256 dels adjunts; resultat esperat; resultat
 observat; marques de temps i referència d'evidència amb dades emmascarades; resultat de la neteja.
@@ -101,7 +101,7 @@ real com a fixtures.
 - **Gmail per a consumidors i Google Workspace:** execucions separades; registreu el mode
   OAuth o de contrasenya d'aplicació i la política aplicable. Concilieu les etiquetes de
   Gmail amb les carpetes IMAP, Enviats i Paperera al compte autoritzat. Els resultats de
-  consumidor no poden certificar les restriccions d'un arrendatari de Workspace. No feu
+  consumidor no poden certificar les restriccions d'un tenant de Workspace. No feu
   servir el client OAuth inclòs a Meron: executeu una compilació `-tags distributable`
   amb un client propietat de l'aplicació
   ([registres](oauth-registrations.md)).

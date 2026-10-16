@@ -5,7 +5,7 @@ cap canvi d'arquitectura, de signatura ni de canal d'actualització. No llançar
 per a la validació: la seva via manual també publica una versió pública.
 
 `windows-validation.yml` és una compilació explícita només de CI amb permisos de
-repositori de només lectura. Fa el checkout del SHA del llançament, exigeix que la seva CI de main de set jobs
+repositori de només lectura. Fa el checkout (còpia de treball) del SHA del llançament, exigeix que la seva CI de main de set jobs (tasques de CI)
 s'hagi completat mitjançant la política de porta de publicació existent (sense requisit d'etiqueta de git) i després
 compila les dependències bloquejades de Rust/Bun, el sidecar incrustat i l'instal·lador NSIS.
 No substituir mai el commit comprovat per un checkout més nou de la branca.

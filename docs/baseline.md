@@ -5,7 +5,7 @@
 Codi de referència: `fe72de7c777718b2649969d18d40be84b96bfd0c` (2026-09-08).
 Els PR #11, #18, #20 i #58 estan integrats. La [CI de main](https://github.com/adilelhaji/oreneta/actions/runs/34221227862)
 va superar Go, Rust, frontend, mòbil, integració amb Maddy i política de fluxos de treball.
-Aquella execució és anterior a la fixture de navegador; els resultats nous del navegador corresponen a la CI del
+Aquella execució és anterior a la fixture (dades de prova) de navegador; els resultats nous del navegador corresponen a la CI del
 PR propi de #59 o de main i no s'han d'atribuir a aquesta execució històrica de referència.
 
 Aquesta és una línia base d'enginyeria interna, no l'entrada al pilot ni l'aprovació de proveïdors.
@@ -48,13 +48,13 @@ en aquell amfitrió en castellà; els resultats de la suite completa i de la CI 
 
 ## Reproducció a la CI
 
-El job `frontend` instal·la els fitxers de bloqueig de l'arrel i del frontend, genera i
+El job (tasca de CI) `frontend` instal·la els fitxers de bloqueig de l'arrel i del frontend, genera i
 valida els catàlegs, executa les proves de catàlegs, la comprovació de tipus i les proves de Bun, i després instal·la
 el Chromium fixat de Playwright i executa `bun run baseline:verify`. L'executor de proves
 gestiona el seu propi servidor Vite només de bucle local (loopback); no és un script de desplegament. L'executor
 de la fixture és Playwright 1.63.0 amb Bun 1.4.2 i Node 22 a la CI.
 
-Cadascuna de les 24 captures produeix un PNG i una procedència JSON (SHA del checkout, SHA del flux de treball,
+Cadascuna de les 24 captures produeix un PNG i una procedència JSON (SHA del checkout (còpia de treball), SHA del flux de treball,
 suma de verificació de la fixture, navegador/entorn d'execució i paràmetres de pantalla). La CI puja
 l'artefacte `baseline-<workflow SHA>` amb l'informe HTML i les traces de fallada. Els SHA de checkout
 dels PR poden ser el commit de fusió sintètic de GitHub; la procedència registra tots dos
@@ -73,7 +73,7 @@ a l'execució de validació de Windows.
 |---|---|---|
 | Correu IMAP/SMTP i MIME complex | Proves Rust/Go; integració sintètica amb Maddy; proves de l'analitzador IMAP incorporat (#19) | Implementat; sense certificació de lliurament amb proveïdors reals |
 | Etiquetes de Gmail | #20, proves d'emmagatzematge/traducció | Enllaços explícits; interoperabilitat real amb Gmail/OAuth no verificada |
-| Exchange/delegació/calendari | Backend EWS, proves de l'analitzador i exemples de sondeig | Compatibilitat de tenant/plataforma no verificada; #46/#48 són responsables de la validació de continuïtat/delegació |
+| Exchange/delegació/calendari | Backend EWS, proves de l'analitzador i exemples de sondeig | Compatibilitat de tenant (inquilí de Microsoft 365)/plataforma no verificada; #46/#48 són responsables de la validació de continuïtat/delegació |
 | Contactes | Codi CardDAV/Google/Exchange i proves d'anàlisi | El risc de sincronització incompleta continua a #28 |
 | Tasques locals vinculades a missatges | #18, proves Rust/Go/React | Només locals; #42 és responsable de la validació de recuperació |
 | PGP/S/MIME i còpia de seguretat d'identitat | #11, proves de criptografia i de còpia de seguretat | La interoperabilitat/confiança externa continua a #9/#12/#49; no certificat per simulacions |

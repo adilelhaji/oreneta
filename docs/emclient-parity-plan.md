@@ -11,7 +11,7 @@ reutilitzades, inclòs el programa; 2 tancades sense esborrar l'historial.
 
 Programa: [#21](https://github.com/adilelhaji/oreneta/issues/21).
 Inventari d'execució: [manifest del backlog](emclient-parity-backlog.json).
-Casos d'acceptació i evidència actual: [registre versionat](emclient-parity-acceptance.md).
+Casos d'acceptació i evidència actual: [registre d'acceptació versionat](emclient-parity-acceptance.md).
 Això substitueix la **planificació i l'abast** de l'antic pla de pilot intern, no els seus
 requisits de seguretat no resolts. La planificació no aprova arquitectura nova.
 
@@ -43,7 +43,7 @@ implica **paritat parcial**, amb la mancança restant visible.
 Línia de base d'aquest pla: la branca main remota
 `100976d423258eb302bcc903c9c059838666e40c` (PR #82).
 La [línia de base històrica](baseline.md) recull evidència més antiga i no s'ha de llegir com
-el registre actual de finalització.
+el registre d'acceptació actual de finalització.
 
 - El PR #81 va lliurar una referència sintètica navegable, no un client de correu real.
 - El PR #82 va integrar la navegació real per comptes/carpetes per sobre de 1024 px, no el redisseny complet.
@@ -68,7 +68,7 @@ La incidència responsable ha de concretar cada fila en casos d'acceptació vers
 el comportament de referència, els punts d'entrada del codi, els límits del proveïdor i el SHA de l'evidència.
 Aquest és l'inventari complet de línies de treball, no una afirmació que cada microfunció
 ja s'hagi analitzat per enginyeria inversa. #22 és responsable de l'auditoria de configuració/menús/proveïdors;
-els requisits descoberts de nou han de tenir una incidència abans que s'accepti el registre.
+els requisits descoberts de nou han de tenir una incidència abans que s'accepti el registre d'acceptació.
 
 | Capacitat | Resultats requerits | Incidències responsables | Estat actual |
 |---|---|---|---|

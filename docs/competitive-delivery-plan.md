@@ -45,7 +45,7 @@ que cal mesurar; no s'afirma que Oreneta ja superi el competidor en aquests punt
   ([execució](https://github.com/adilelhaji/oreneta/actions/runs/34483379658)).
   El binari local és del SHA `e20fe87a072f49486609f689456727958d02b2db`:
   el seu manifest n'acredita l'arrencada, però no l'instal·lador ni els proveïdors reals.
-- El registre actual conté 4 files `implemented-unverified`, 8 `partial` i
+- El registre d'acceptació actual conté 4 files `implemented-unverified`, 8 `partial` i
   27 `unassessed`. És un inventari parcial d'acceptació, no una mesura de tota
   l'aplicació ni una prova d'absència de les funcions no avaluades.
 
@@ -132,7 +132,7 @@ en producció abans de considerar-les lliurades.
 
 Mantenir els contractes de [direcció artística](design/art-direction.md) i
 [límits dels panells](design/mail-boundaries.md). La producció fa servir un sol panell per sota de
-769 CSS px i navegació completa per sobre de 1024; el fixture històric de
+769 CSS px i navegació completa per sobre de 1024; el fixture (dades de prova) històric de
 #32 no redefineix aquests límits. Verificar 599/600/601, 768/769, 1024/1025 i 1440,
 zoom al 200 %, textos llargs i moviment reduït; conservar les preferències existents.
 
@@ -199,5 +199,5 @@ subdivisions de l'abast existent, recollides al manifest; no substitueixen les
 65 tasques originals ni redueixen la matriu del producte.
 
 Aquest encàrrec lliura planificació i tasques. No n'inicia per si mateix la implementació,
-no publica versions, no modifica comptes/tenants ni contracta serveis. Tota
+no publica versions, no modifica comptes/tenants (inquilins dels proveïdors) ni contracta serveis. Tota
 limitació d'accés, decisió o plataforma continua visible fins que es resolgui.

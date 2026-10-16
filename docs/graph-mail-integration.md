@@ -9,7 +9,7 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
   detecció del domini mai no la tria implícitament. La configuració d'Outlook existent
   manté IMAP/SMTP. La reconnexió de Graph manté el compte seleccionat i el principal
   fixat.
-- Després de l'autorització al backend, inicieu un job d'activació cancel·lable. Llegiu
+- Després de l'autorització al backend, inicieu un job (tasca en segon pla) d'activació cancel·lable. Llegiu
   la jerarquia completa de carpetes visibles i completeu la ronda delta inicial de la
   safata d'entrada abans de publicar un compte nou `engine=mail`,
   `auth_type=graph_oauth`. Informeu del progrés/dels errors mentre s'espera; l'autorització
@@ -109,7 +109,7 @@ d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàti
 
 ## Porta de validació
 
-Fixtures de proveïdor/magatzem segur/SQLite: jerarquia completa i interrompuda, noms duplicats,
+Fixtures (dades de prova) de proveïdor/magatzem segur/SQLite: jerarquia completa i interrompuda, noms duplicats,
 canvi de nom/de pare, ID opacs, pàgines/deltes dispersos/làpides,
 moviments, reversió atòmica, recuperació de 410, reinici/cancel·lació, col·lisió/aïllament
 de comptes, conservació d'esborranys/etiquetes locals, sanejament d'HTML i proteccions
@@ -119,7 +119,7 @@ l'autorització/l'activació, error/reintent/cancel·lació, el compte de només
 regressió de la configuració antiga.
 Les revisions de lògica/de negoci i els set jobs de CI del commit final exacte de la branca (head) precedeixen el
 commit de fusió.
-Les fixtures no estableixen la interoperabilitat amb un arrendatari real ni amb Windows
+Les fixtures no estableixen la interoperabilitat amb un tenant (inquilí de Microsoft 365) real ni amb Windows
 natiu; aquesta interoperabilitat i els artefactes instal·lables del SHA exacte continuen sent evidència
 d'acceptació separada.
 

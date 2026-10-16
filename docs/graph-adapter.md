@@ -72,10 +72,10 @@ equiparen els àmbits del recurs d'Outlook, els només d'aplicació o els compar
 3. Escriptures, adjunts, actualitzacions condicionals i cicle de vida d'enviament conciliat.
 4. Calendari/contactes i capacitats delegades; acceptació amb proveïdors/nativa.
 
-Les proves de fixture/bucle local (loopback) d'X1 s'executen al job de CI de Rust existent, fora de línia respecte de
-Microsoft. Proven el comportament del protocol, no l'autorització d'un tenant real ni la
+Les proves de fixture/bucle local (loopback) d'X1 s'executen al job (tasca de CI) de Rust existent, fora de línia respecte de
+Microsoft. Proven el comportament del protocol, no l'autorització d'un tenant (inquilí de Microsoft 365) real ni la
 representació a Windows/WebView2. #46 i el programa de paritat continuen oberts.
-La fixture de bucle local canvia explícitament els sòcols acceptats a mode bloquejant
+La fixture (dades de prova) de bucle local canvia explícitament els sòcols acceptats a mode bloquejant
 (Windows hereta el mode de l'escoltador), i el seu cas de servidor intermediari completa CONNECT
 abans de llegir el GET tunelitzat. La fallada de transport fa servir una connexió pròpia,
 no un port efímer alliberat. Ordre local:

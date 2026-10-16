@@ -11,7 +11,7 @@ els seus lliuraments de prova; la secció 5 defineix què vol dir «ben provat»
 infraestructura de verificació falta construir. No substitueix la
 [matriu de paritat](emclient-parity-plan.md) ni l'[auditoria d'incidències](competitive-backlog-audit.md),
 i no aprova cap arquitectura nova. Les xifres i els estats provenen de GitHub,
-del registre i d'una inspecció del codi; **no són evidència d'acceptació**.
+del registre d'acceptació i d'una inspecció del codi; **no són evidència d'acceptació**.
 
 ## 1. Estat actual en xifres
 
@@ -29,13 +29,13 @@ del registre i d'una inspecció del codi; **no són evidència d'acceptació**.
 
 | Capa | Què hi ha | Quant | On s'executa |
 |---|---|---|---|
-| Unitàries Rust (motor) | Protocol IMAP/SMTP/EWS, analitzador MIME, store, Graph, criptografia, calendari | ≈890 proves | job `rust` |
+| Unitàries Rust (motor) | Protocol IMAP/SMTP/EWS, analitzador MIME, store, Graph, criptografia, calendari | ≈890 proves | job (tasca de CI) `rust` |
 | Unitàries Go (app d'escriptori) | Comptes, rutes, notificacions, actualitzacions, enganxament, S/MIME, Graph OAuth | 164 funcions de prova en 33 fitxers | jobs `go`, `go-windows` |
-| Unitàries i de component TS | Estats, lib, components, fixtures de referència (baseline) | ≈915 casos en 93 fitxers | job `frontend` (bun test) |
+| Unitàries i de component TS | Estats, lib, components, fixtures (dades de prova) de referència (baseline) | ≈915 casos en 93 fitxers | job `frontend` (bun test) |
 | Entrada de producció | Arrencada i navegació amb el pont Wails simulat, 1440/1024/600 px, clar/fosc, zoom | `frontend/e2e/startup.e2e.ts` + `frontend/baseline/` (Playwright) | job `frontend` |
 | Integració aïllada | Flux IMAP/SMTP real contra maddy a Docker, 39 subproves, 12 resultats d'usuari, IDLE ×3 | `integration_test.go` + informe JSON | job `integration` |
 | Mòbil | Proves Kotlin shared/ui | 61 fitxers | job `mobile` |
-| Política de CI | Porta de publicació, registre, acceptació, validació Windows | 64 proves Node | job `workflow-policy` |
+| Política de CI | Porta de publicació, registre d'acceptació, acceptació, validació Windows | 64 proves Node | job `workflow-policy` |
 | Natiu Windows | Arrencada, reinici, elecció de Graph, zoom amb roda i teclat | `scripts/test-windows-startup.ps1` | `windows-validation.yml`, **manual** |
 | Rendiment | Generador determinista 1k/10k/100k, ordenació i filtre | `scripts/perf/` | local, sense CI |
 | Proveïdor real | Procediment documentat, **no executat** | [provider-acceptance.md](provider-acceptance.md) | cap |
@@ -57,7 +57,7 @@ del registre i d'una inspecció del codi; **no són evidència d'acceptació**.
 - **Accessibilitat sense comprovació automàtica**: les proves de producció miren el focus
   i el teclat, però no executen cap auditor de contrast/rols.
 - **Rendiment sense dispositiu de referència** i sense llindars calibrats.
-- **Cap fila `verified`** del registre: tota l'evidència és sintètica.
+- **Cap fila `verified`** del registre d'acceptació: tota l'evidència és sintètica.
 
 ### El que es va lliurar entre el 05-10 i el 09-10
 
@@ -79,7 +79,7 @@ proveïdor real.
 
 Resultat d'inspeccionar el codi actual, no de provar-lo contra eM Client.
 «Existeix» vol dir que hi ha implementació i proves automàtiques; «sense evidència»,
-que falta la verificació nativa/de proveïdor que exigeix el registre; «absent», que no
+que falta la verificació nativa/de proveïdor que exigeix el registre d'acceptació; «absent», que no
 hi ha codi per a la funció.
 
 ### Existeix, falta l'acceptació nativa/de proveïdor
@@ -134,7 +134,7 @@ heretat de Meron, no el xat d'eM Client; no compta per a C26.
 
 Definim tres candidats acumulatius. Cadascun té un abast declarat i es
 pot lliurar als usuaris per separat; «completa» en sentit de paritat és el
-tercer. Cap no es considera assolit fins que les seves files del registre siguin
+tercer. Cap no es considera assolit fins que les seves files del registre d'acceptació siguin
 `verified`.
 
 | Candidat | Abast | Portes del pla anterior |
@@ -226,7 +226,7 @@ imatges inserides per MIME amb l'analitzador d'IMAP, en limita la mida i indica
 que els adjunts al núvol no estan disponibles
 ([contracte](design/graph-attachments.md)). El simulador Graph continua sent el
 servidor de bucle local amb respostes en línia. La certificació amb un
-inquilí (tenant) real (#98) i l'evidència nativa continuen pendents.
+tenant (inquilí de Microsoft 365) real (#98) i l'evidència nativa continuen pendents.
 
 Estat de la iteració 4 (2026-10-10): #143 envia des de comptes Graph amb
 `Mail.Send` demanat a part, amb el MIME d'Exchange, l'intent durable de #29,
@@ -529,7 +529,7 @@ Estat de la iteració 16 (2026-10-12, per delegació):
   ([registre](design/mobile-inventory.md)).
 - **#117:** diferències (delta) d'eM Client 11 respecte a Oreneta. Una font secundària
   diu que la 11 ja és estable, però no està confirmat a emclient.com.
-  Moure la referència del registre (10.4.5674.0) ho decideix el propietari
+  Moure la referència del registre d'acceptació (10.4.5674.0) ho decideix el propietari
   ([registre](design/emclient-11-delta.md)).
 - **Registre d'acceptació:** les files del que s'ha lliurat a les iteracions 13 a 16 tenen
   el seu estat i la seva execució en verd de la CI. Cap no passa a `verified`: falta
@@ -551,7 +551,7 @@ Estat de la iteració 16 (2026-10-12, per delegació):
   dues persones en una sala i un fitxer per HTTPS
   (ADR-0044, [registre](design/chat.md)).
 
-Criteri de sortida C-C: totes les files obligatòries Windows/proveïdor del registre
+Criteri de sortida C-C: totes les files obligatòries Windows/proveïdor del registre d'acceptació
 `verified`; qualsevol exclusió manté la declaració de **paritat parcial**.
 
 ### Mode d'execució acordat el 2026-10-11
@@ -605,7 +605,7 @@ quan, a més, hi ha N4/N5 aplicable.
    una prova inestable es corregeix o s'elimina amb la seva incidència.
 6. **Entrada de producció** per a tot canvi visual: 600/1024/1440, clar/fosc,
    castellà i anglès, teclat i zoom del 200 %, amb una captura de pantalla pujada com a artefacte.
-7. **Evidència identificada per SHA** al registre: estat real assolit
+7. **Evidència identificada per SHA** al registre d'acceptació: estat real assolit
    (`implemented-unverified`, `partial` o `verified`), mai inferit d'una simulació.
 
 ### Infraestructura que falta i ordre de construcció
@@ -629,7 +629,7 @@ quan, a més, hi ha N4/N5 aplicable.
 | Porta | Condició |
 |---|---|
 | **Per PR** | Set suites en verd al SHA exacte, cobertura no inferior, N2 amb captures de pantalla si hi ha canvi visual, revisió tècnica i de producte |
-| **Per iteració** | `windows-validation.yml` llançat sobre el commit de fusió final; registre actualitzat; N6-perf registrat si la iteració toca llistes, memòria cau o arrencada |
+| **Per iteració** | `windows-validation.yml` llançat sobre el commit de fusió final; registre d'acceptació actualitzat; N6-perf registrat si la iteració toca llistes, memòria cau o arrencada |
 | **Per candidat** | Files N5 executades amb comptes autoritzats; instal·lació, actualització i recuperació natives; comparació dels fluxos de #32 aplicables; cap fila obligatòria del candidat per sota de `verified` |
 | **Per publicar** | Porta de `verify-release.yml` + signatura + decisió humana separada; aquest pla no la concedeix |
 
@@ -642,7 +642,7 @@ condicionen la iteració 6 i les posteriors.
    candidat distribuïble amb inici de sessió ni files N5 de Gmail/M365.
 2. **Comptes de prova dedicats** per proveïdor (IMAP genèric, Gmail, Workspace,
    M365, EWS on-prem) i autorització escrita d'operacions i destinataris, per a
-   #145/#98. Sense ells el registre no pot passar d'`implemented-unverified`.
+   #145/#98. Sense ells el registre d'acceptació no pot passar d'`implemented-unverified`.
 3. **Equip Windows de referència** per a l'evidència nativa (#147, #148, #181) i
    política de signatura/Application Control; identitat de Partner Center per a #188.
 4. **Cinc decisions d'arquitectura** en forma d'ADR abans de la seva iteració:

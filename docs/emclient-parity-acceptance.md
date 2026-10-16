@@ -9,8 +9,8 @@ nativa/de proveïdor i l'auditoria de detall.
 
 El [paquet d'acceptació de proveïdors](provider-acceptance.md) (#145/#184) afegeix un
 informe per operació per a la bateria d'integració IMAP/SMTP aïllada existent i
-procediments dedicats per a comptes reals. Un informe de fixtures favorable no promou
-cap fila nativa/de proveïdor del registre a verified.
+procediments dedicats per a comptes reals. Un informe de fixtures (dades de prova) favorable no promou
+cap fila nativa/de proveïdor del registre d'acceptació a verified.
 
 ## Resum d'estat (2026-10-12)
 
@@ -134,7 +134,7 @@ l'execució nativa a Windows, la connectivitat amb comptes reals i el lliurament
 evidència independent. Afegiu files específiques de proveïdor en lloc de reetiquetar una
 prova genèrica com a certificació d'un proveïdor.
 
-La CI executa scripts/ci/parity-ledger.test.cjs mitjançant el job workflow-policy
+La CI executa scripts/ci/parity-ledger.test.cjs mitjançant el job (tasca de CI) workflow-policy
 existent. Valida les referències, la unicitat dels ID, els camins del repositori, els
 estats i l'evidència requerida per a les files verified. S01 acaba amb els seus PR
-d'implementació reals, no amb aquest PR del registre.
+d'implementació reals, no amb aquest PR del registre d'acceptació.

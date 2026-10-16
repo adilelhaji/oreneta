@@ -14,7 +14,7 @@ i on acaba la seva evidència.
 | Frontend | `bun test --coverage --coverage-reporter=lcov --coverage-reporter=text` | `coverage-frontend-<sha>` (lcov) |
 
 Les suites són les mateixes que abans: `cargo llvm-cov` executa les proves del motor
-amb binaris instrumentats i una prova que falla continua fent fallar el job. Encara
+amb binaris instrumentats i una prova que falla continua fent fallar el job (tasca de CI). Encara
 no es fixa cap llindar; el primer informe de `main` és la referència que la porta
 «per PR» del pla farà servir per exigir que la cobertura per paquet no baixi. El
 job `go-windows` i el mòbil no mesuren cobertura en aquest lliurament.

@@ -18,7 +18,7 @@ dependències enllaçades d'un altre gestor de paquets. Substituïu un arbre
 `node_modules` mixt per una instal·lació nova i bloquejada. Això també evita còpies
 obsoletes de dependències peer de Tiptap/ProseMirror.
 
-El job de frontend de la CI (integració contínua) executa `bun run test:bundler`
+El job (tasca de CI) de frontend de la integració contínua executa `bun run test:bundler`
 (resolució de producció amb un duplicat enllaçat deliberat) i `bun run startup:verify`
 (compilació més navegador). Les traces i les captures de pantalla de l'inici es pugen
 al costat de les evidències de la línia base.

@@ -4,7 +4,7 @@ Els fluxos de treball (workflows) de publicació d'escriptori i d'Android depene
 `verify-release.yml` abans de compilar o de llegir els secrets de signatura. La porta és
 de només lectura i requereix que l'última execució **push a main** de `test.yml` per al
 commit exacte de la publicació hagi acabat correctament. Les set suites (`go`, `go-windows`, `rust`, `frontend`, `mobile`, `integration`
-i `workflow-policy`) han d'estar presents i haver acabat correctament; els jobs omesos,
+i `workflow-policy`) han d'estar presents i haver acabat correctament; els jobs (tasques de CI) omesos,
 absents, cancel·lats, fallits i pendents bloquegen la publicació. No n'hi ha prou amb una
 execució verda d'un PR ni amb una execució verda d'un altre commit. La porta també es tanca en cas
 d'error d'API o de permisos (fail closed).

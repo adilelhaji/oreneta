@@ -18,7 +18,7 @@ Implementa l'ADR-0004 acceptat; cap canvi a l'OAuth existent d'Outlook/Gmail.
   resposta limitada i temps d'espera. Els errors exposen categories locals, no les descripcions del
   proveïdor. No es demana ni una contrasenya ni un secret d'aplicació.
 - Validar RS256 amb el punt final JWKS v2 fix de Microsoft i `ring`; ignorar
-  els URL de clau proporcionats pel testimoni. Validar l'emissor/tenant, l'audiència, la caducitat, el nonce i
+  els URL de clau proporcionats pel testimoni. Validar l'emissor/tenant (inquilí de Microsoft 365), l'audiència, la caducitat, el nonce i
   el parell immutable `(tenantId, objectId)`. Comprovar un `at_hash` opcional. La renovació fa servir
   el principal fixat; mai no s'ha de reinterpretar un testimoni d'Outlook com a testimoni de Graph.
 - El correu electrònic serveix per a la visualització i l'associació local, no és la identitat de Microsoft. La primera associació
@@ -49,7 +49,7 @@ Implementa l'ADR-0004 acceptat; cap canvi a l'OAuth existent d'Outlook/Gmail.
 - L'èxit d'OAuth significa **autoritzat**, no un compte de correu actiu. #128 és responsable de la
   projecció i l'activació. Les proves no impliquen cap verificació amb proveïdors reals.
 
-Validació: fixtures sintètiques de JWT/JWKS signats, d'OAuth i de clauer; caducitat,
+Validació: fixtures (dades de prova) sintètiques de JWT/JWKS signats, d'OAuth i de clauer; caducitat,
 discrepància d'àmbit/recurs/nonce/principal, cancel·lació/repetició, rotació de la renovació,
 fallada d'emmagatzematge i respostes sense secrets. La CI obligatòria existent continua sent la porta de qualitat.
 La fixture HTTP consumeix els cossos POST abans de tancar el sòcol per evitar que un
