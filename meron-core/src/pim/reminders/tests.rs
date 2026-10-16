@@ -158,18 +158,56 @@ fn hidden_calendars_and_unlisted_accounts_raise_nothing() {
     assert_eq!(take_due(&engine, &a(), NOW).len(), 1);
 }
 
-#[test]
-fn old_records_are_forgotten() {
-    let engine = engine_with(&[event("soon", NOW + 600, Some(15))]);
-    assert_eq!(take_due(&engine, &a(), NOW).len(), 1);
-    forget_old(&engine, NOW + 15 * 86_400);
-    let left: i64 = engine
+fn given_count(engine: &Arc<Engine>) -> i64 {
+    engine
         .db
         .lock()
         .unwrap()
         .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(left, 0);
+        .unwrap()
+}
+
+/// Records of past events are still forgotten (#222): kept while their
+/// event is ahead or recent, gone once it started longer ago than any look
+/// gives a reminder for.
+#[test]
+fn old_records_are_forgotten() {
+    let engine = engine_with(&[event("soon", NOW + 600, Some(15))]);
+    assert_eq!(take_due(&engine, &a(), NOW).len(), 1);
+    forget_old(&engine, NOW + 600 + when::GIVEN_KEPT - 60);
+    assert_eq!(given_count(&engine), 1, "its event started within the window");
+    forget_old(&engine, NOW + 600 + when::GIVEN_KEPT + 60);
+    assert_eq!(given_count(&engine), 0);
+}
+
+/// A reminder set 20 days ahead of its event (Google allows four weeks, a
+/// VALARM any length) is given once: 15 days on, past the fortnight the
+/// record used to live, it is still recorded and is not given again, nor at
+/// any look up to the event (#222).
+#[test]
+fn a_reminder_set_weeks_ahead_is_given_once() {
+    let start = at("2026-11-20T09:00:00Z");
+    let engine = engine_with(&[event("conference", start, Some(20 * 24 * 60))]);
+    let rang = start - 20 * 86_400;
+    assert!(look(&engine, &a(), rang - 60, &Madrid).reminders.is_empty(), "not yet");
+    assert_eq!(names(&look(&engine, &a(), rang, &Madrid)), ["conference"]);
+    let later = rang + 15 * 86_400;
+    forget_old(&engine, later);
+    assert_eq!(given_count(&engine), 1, "kept while its event is ahead");
+    for now in [later, later + 60, start - 60, start] {
+        forget_old(&engine, now);
+        assert!(take_due(&engine, &a(), now).is_empty(), "the phone's look at {now}");
+        assert!(look(&engine, &a(), now, &Madrid).reminders.is_empty(), "the desktop's look at {now}");
+    }
+    // A look 15 days later with no look in between (the app closed all the
+    // while): the gap is still not a reason to give it again.
+    let closed = engine_with(&[event("conference", start, Some(20 * 24 * 60))]);
+    assert_eq!(names(&look(&closed, &a(), rang, &Madrid)), ["conference"]);
+    forget_old(&closed, later);
+    assert!(look(&closed, &a(), later, &Madrid).reminders.is_empty());
+    // Once the event is long past, the record goes.
+    forget_old(&engine, start + when::GIVEN_KEPT + 60);
+    assert_eq!(given_count(&engine), 0);
 }
 
 // ---- Suspend and resume (#209) ----------------------------------------------

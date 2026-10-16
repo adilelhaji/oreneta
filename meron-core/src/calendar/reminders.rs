@@ -30,14 +30,21 @@ use rusqlite::{params, Connection, OptionalExtension as _};
 
 use super::Event;
 
-/// How far back a previous look is believed: the life of the record of
-/// reminders given (`forget_old_reminders`), so nothing older can be given
-/// twice.
+/// How far back a previous look is believed: no reminder that rang longer
+/// ago than this is given, so its record need not outlive it (#222).
 pub const MAX_GAP: i64 = 14 * 86_400;
 
 /// How far an all-day event's local midnight can be from its stored UTC one,
 /// with room to spare: no zone is more than 14 hours from UTC.
 const ZONE_SLACK: i64 = 2 * 86_400;
+
+/// How long after its event's start a record of a reminder given is kept
+/// (`forget_old_reminders`): by then the reminder rang longer ago than any
+/// look gives one ([`MAX_GAP`]), wherever the reader is ([`ZONE_SLACK`]), and
+/// the event has started, so it cannot be given again. Kept by the event, not
+/// by when it was given: a reminder set weeks ahead stays recorded until its
+/// event is past (#222).
+pub const GIVEN_KEPT: i64 = MAX_GAP + ZONE_SLACK;
 
 /// How long an event with no length counts as on: a look's tick.
 pub const ZERO_LENGTH_ON: i64 = 60;

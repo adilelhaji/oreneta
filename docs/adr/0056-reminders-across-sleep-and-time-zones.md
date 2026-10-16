@@ -47,8 +47,10 @@ sobrevivía a un reinicio. Pero:
   evento sin duración cuenta como en curso durante su primer minuto, así que
   su aviso «al empezar» lo da la mirada de ese minuto.
 - **Límites del hueco**: un reloj atrasado no abre hueco (la mirada anterior
-  cuenta como «ahora»); un hueco se mira como mucho 14 días hacia atrás, la
-  vida del registro de avisos dados. Sin mirada anterior (primera vez, o tras
+  cuenta como «ahora»); un hueco se mira como mucho 14 días hacia atrás, y
+  el registro de avisos dados guarda cada uno hasta 16 días después del
+  inicio de su evento (#222, ver «Ampliación del 2026-10-16: registro de
+  avisos dados»). Sin mirada anterior (primera vez, o tras
   actualizar) solo se da lo que aún no ha empezado, como antes.
 - **Si el almacén falla** al buscar lo vencido o al anotar un aviso, ese
   aviso no se da y la mirada no se anota: la siguiente vuelve a mirar el
@@ -91,6 +93,27 @@ sobrevivía a un reinicio. Pero:
   calendarios en su refresco de cada 15 minutos (ADR-0045), que es también
   lo que borra la relectura pendiente. En Android, `chrono::Local` podría
   dar UTC si el sistema no le dice la zona; queda para la prueba nativa.
+
+## Ampliación del 2026-10-16: registro de avisos dados (#222)
+
+Decisión por delegación del propietario (la opción más prudente).
+
+- **Problema**: el registro de avisos dados se borraba 14 días después de
+  darse cada aviso. Un aviso puesto más de 14 días antes de su evento
+  (Google permite cuatro semanas; un VALARM, cualquier plazo) se borraba
+  con el evento aún por delante y se daba otra vez.
+- **Ahora** cada registro se guarda hasta que el inicio del evento por el
+  que se dio (la clave `<evento>@<inicio>`) queda más de 16 días atrás
+  (`GIVEN_KEPT`: los 14 días que se mira hacia atrás más 2 de margen de
+  zona horaria, por los eventos de día completo), y también el momento en
+  que se dio. Pasado eso ninguna mirada puede volver a darlo: ni está por
+  delante ni venció dentro del hueco que se mira.
+- **Acotado**: todo registro acaba borrado; la tabla solo guarda avisos de
+  eventos por delante o de los últimos 16 días. Un registro anterior a que
+  la clave llevara el inicio (solo el identificador) se borra 16 días
+  después de darse (antes, 14).
+- Sin migración de esquema: el inicio se lee de la clave, tras la última
+  `@` (los identificadores de CalDAV pueden llevar una).
 
 ## Consecuencias
 
