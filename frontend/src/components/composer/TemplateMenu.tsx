@@ -59,7 +59,7 @@ export function TemplateMenu({ onPick }: { onPick: (template: Template) => void 
         onClick={() => setOpen((value) => !value)}
       />
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-control border border-border bg-chats p-1 shadow-overlay">
+        <div className="absolute bottom-full start-0 z-50 mb-2 w-64 rounded-control border border-border bg-chats p-1 shadow-overlay">
           {stored.length === 0 && (
             <p className="px-3 py-2 text-caption leading-snug text-secondary">{t('templates.none')}</p>
           )}

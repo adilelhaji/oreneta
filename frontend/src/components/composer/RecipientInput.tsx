@@ -200,6 +200,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
           ref={inputRef}
           autoFocus={autoFocus}
           value={pending}
+          dir="auto"
           placeholder={committed.length === 0 ? placeholder : undefined}
           spellCheck={false}
           className={inputClass}
@@ -230,7 +231,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
         />
       </div>
       {open && total > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-overlay">
+        <ul className="absolute start-0 end-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-control-sm border border-border bg-chats py-1 shadow-overlay">
           {groupMatches.map((group, index) => (
             <li
               key={`group:${group.id}`}

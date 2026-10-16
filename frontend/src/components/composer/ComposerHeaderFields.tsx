@@ -98,6 +98,7 @@ export function ComposerHeaderFields({
         <span className={labelClass}>{t('composer.fields.subject')}</span>
         <input
           value={draft.subject}
+          dir="auto"
           onChange={(e) => update({ subject: e.target.value })}
           placeholder={t('composer.fields.subject')}
           spellCheck={spellCheck}
