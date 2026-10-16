@@ -132,7 +132,7 @@ directament.
 Amb servidor intermediari, la cerca de la configuració se salta la consulta DNS
 SRV (RFC 6186): el DNS no passa per un servidor intermediari HTTP/SOCKS i
 preguntar al resolutor local revelaria el domini fora del servidor intermediari.
-Es recorre a la suposició `imap.<dominio>`/`smtp.<dominio>`.
+Es recorre a la suposició `imap.<domini>`/`smtp.<domini>`.
 
 ## El que no fa servir el servidor intermediari
 
@@ -153,7 +153,7 @@ coneix el servidor intermediari de l'aplicació. Així ho diu `docs/privacy.html
 ## Cerca de la configuració només a petició
 
 Abans, la cerca s'iniciava en sortir del camp de l'adreça electrònica i enviava
-l'adreça a `autoconfig.<dominio>` i el domini a la base de dades de Mozilla. Ara
+l'adreça a `autoconfig.<domini>` i el domini a la base de dades de Mozilla. Ara
 només s'inicia amb el botó «Find settings online» d'`AccountDialogCustom`, amb
 una nota que anomena a qui es pregunta. L'assistent ja no la inicia en prémer
 «Continue» ni a la configuració manual.

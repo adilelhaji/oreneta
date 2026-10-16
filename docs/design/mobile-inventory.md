@@ -82,7 +82,7 @@ arquitectura de plataforma nova.
     d'una hora; una fallada no es torna a provar abans del seu interval en aquell
     procés. El que ha vençut es decideix amb `synced_at` i `last_sync_at` del
     magatzem, de manera que una tasca en segon pla en un procés nou decideix igual;
-  - crea la llibreta de cada compte de Google (`google-<cuenta>`), com fa
+  - crea la llibreta de cada compte de Google (`google-<compte>`), com fa
     l'escriptori quan es prem «Sincronitza els contactes de Google».
   En primer pla, `MeronApp` la crida cada minut (només recordatoris) i
   cada 15 minuts amb lectura; a iOS la lectura segueix la regla de les

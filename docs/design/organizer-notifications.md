@@ -46,7 +46,7 @@
   - Es rebutja si l'organitza una altra persona, si no queda ningú a qui avisar o
     si el calendari no és local ni CalDAV.
 - `calendar/itip.rs`:
-  - `organizer_notice(objeto, Notice, ocurrencia, yo, ahora)`: REQUEST amb
+  - `organizer_notice(objecte, Notice, ocurrència, jo, ara)`: REQUEST amb
     la sèrie sencera (RRULE, EXDATE, excepcions i VTIMEZONE) o només una
     ocurrència amb el seu RECURRENCE-ID (la seva excepció, o l'ocurrència tal com
     la dona la sèrie); CANCEL amb STATUS:CANCELLED. Sense VALARM. ORGANIZER = jo

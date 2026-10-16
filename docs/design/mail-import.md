@@ -28,7 +28,7 @@ MBOX i el resultat s'importa amb el que ja existeix.
 2. **Convertir** (amb Outlook tancat, sobre una còpia del fitxer):
 
    ```sh
-   readpst -8 -o salida/ "Outlook.pst"
+   readpst -8 -o sortida/ "Outlook.pst"
    ```
 
    - Es crea un `.mbox` per carpeta: `Inbox.mbox`, `Sent Items.mbox`...
@@ -42,7 +42,7 @@ MBOX i el resultat s'importa amb el que ja existeix.
      exemple `Outlook/Safata d'entrada`). Així cada carpeta queda amb el
      nom que es triï.
    - **Tot de cop**: *Importa des de Thunderbird → Tria una carpeta* i
-     triar `salida/`. Cada `.mbox` s'ofereix com una carpeta; es marquen
+     triar `sortida/`. Cada `.mbox` s'ofereix com una carpeta; es marquen
      les que es vulguin. La carpeta conserva el nom del fitxer, amb
      `.mbox` al final, i es pot reanomenar després.
 
@@ -57,7 +57,7 @@ no pren per missatges:
 
 Provat amb `readpst` 0.6.76 i els fitxers de prova públics de
 java-libpst (`example-2013.ost`, `dist-list.pst`): una carpeta per `.mbox`,
-separadors `From "dirección" fecha` que l'importador reconeix
+separadors `From "adreça" data` que l'importador reconeix
 (`archive/tests.rs`).
 
 ## Exportació (#112)
@@ -81,5 +81,5 @@ desar un sol missatge com a `.eml` ja existia.
 | N2 (`MailImportDialog.test.tsx`) | Previsualització, canvi de carpeta, confirmació i avís; l'arxiu no s'ofereix mai com a remitent |
 | N1 exportació (`archive/tests.rs`, `main.rs`) | mboxrd amb LF, CRLF, `From ` i `>From` al cos es rellegeix igual; exportar la carpeta o només els triats; una destinació impossible no deixa cap `.part` |
 | N2 exportació (`ExportFolder.test.tsx`, `mailCapabilities.test.ts`) | L'element només apareix on es pot; cancel·lar no avisa; es comunica una fallada; Graph, Exchange i RSS no exporten |
-| N1 PST (`archive/tests.rs`) | La sortida de `readpst` (separador `From "dirección"`, `>From` al cos) es divideix en els seus missatges |
+| N1 PST (`archive/tests.rs`) | La sortida de `readpst` (separador `From "adreça"`, `>From` al cos) es divideix en els seus missatges |
 | Protecció ADR-0011 | `archive_messages` s'esborra amb el compte |
