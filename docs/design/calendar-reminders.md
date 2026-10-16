@@ -82,7 +82,8 @@ Fila SET-29 del [libro de paridad](../emclient-parity-acceptance.md).
 
 Todas con reloj y zona controlados (instantes fijos y zonas con nombre), sin
 esperas. CI pasa `calendar::` y `pim::reminders::` también con
-`TZ=Asia/Tokyo` y `TZ=America/Los_Angeles`.
+`TZ=Asia/Tokyo`, `TZ=America/Los_Angeles` y `TZ=Pacific/Auckland` (UTC+12
+o +13, #221).
 
 - `pim::reminders::tests`:
   - suspensión: `a_reminder_due_during_a_suspend_fires_exactly_once_after_resume`,

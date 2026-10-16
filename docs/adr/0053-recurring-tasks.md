@@ -33,6 +33,21 @@
   - `UNTIL` va como fecha si la tarea vence en un día sin hora, y como el
     final de ese día aquí, en UTC, si tiene hora (debe tener la forma del
     inicio).
+  - Al leerlo (aclarado el 2026-10-16, #221), un `UNTIL` en UTC es la
+    fecha en que cae ese instante en la zona de este ordenador, no en UTC:
+    RFC 5545 corta la serie en ese instante, y una ocurrencia de esa fecha
+    a una hora anterior es de la serie. En UTC+12 o más, el mediodía UTC
+    del 31 de diciembre ya es el 1 de enero; CI pasa las pruebas del
+    calendario también con `TZ=Pacific/Auckland`.
+  - Límite conocido: la regla guarda una fecha y no un instante. Es exacto
+    cuando `UNTIL` es la última ocurrencia o el final de su día en la zona
+    del lector, que es lo que escribe Oreneta. Con otro `UNTIL`, una
+    tarea con hora posterior a la de `UNTIL` ese día tiene una ocurrencia
+    más que en la RFC: por ejemplo con el mediodía UTC, o con el final del
+    día en UTC (`…T235959Z`, como escriben otros clientes) leído en
+    cualquier zona que no sea UTC. Además, al volver a escribir la regla,
+    `UNTIL` pasa al final de ese día aquí: un `UNTIL` ajeno sale hasta casi
+    un día más tarde y otros clientes ven la serie algo más larga.
   - «Diaria en lunes a viernes», como la escribe Thunderbird, se lee como
     semanal en esos días.
 - **Fin de mes:** el 31 de un mes de 30 días es el 30, y el 29 de febrero
