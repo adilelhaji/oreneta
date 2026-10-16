@@ -103,7 +103,7 @@ export function WeekView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Day headings, and the all-day strip beneath them. */}
-      <div className="shrink-0 border-b border-border pr-3">
+      <div className="shrink-0 border-b border-border pe-3">
         <div className="grid" style={{ gridTemplateColumns: `3.5rem repeat(${columns.length}, 1fr)` }}>
           {week === null ? (
             <div />
@@ -111,7 +111,7 @@ export function WeekView({
             <div
               data-week-number={week}
               title={t('calendar.weekNumberTitle', { defaultValue: 'Week {week}', week })}
-              className="self-center pr-2 text-right text-2xs font-semibold tabular-nums text-secondary"
+              className="self-center pe-2 text-end text-2xs font-semibold tabular-nums text-secondary"
             >
               {t('calendar.weekNumberShort', { defaultValue: 'W{week}', week })}
             </div>
@@ -140,7 +140,7 @@ export function WeekView({
               </span>
             </button>
           ))}
-          <div className="row-start-2 pb-1 pr-1 text-right text-2xs uppercase tracking-wide text-secondary/70">
+          <div className="row-start-2 pb-1 pe-1 text-end text-2xs uppercase tracking-wide text-secondary/70">
             {t('calendar.allDay', { defaultValue: 'All day' })}
           </div>
           {allDayByColumn.map((dayEvents, i) => (
@@ -154,7 +154,7 @@ export function WeekView({
                     mouse.preventDefault()
                     onEventMenu(mouse.clientX, mouse.clientY, event)
                   }}
-                  className="truncate rounded px-1.5 py-px text-left text-2xs font-medium text-white cursor-pointer hover:opacity-90"
+                  className="truncate rounded px-1.5 py-px text-start text-2xs font-medium text-white cursor-pointer hover:opacity-90"
                   style={{ backgroundColor: colorOf(event) }}
                 >
                   {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
@@ -172,7 +172,7 @@ export function WeekView({
             {hours.map((hour) => (
               <span
                 key={hour}
-                className="absolute right-2 -translate-y-1/2 text-2xs tabular-nums text-secondary/80"
+                className="absolute end-2 -translate-y-1/2 text-2xs tabular-nums text-secondary/80"
                 style={{ top: hour * HOUR_PX }}
               >
                 {hour === 0 ? '' : `${String(hour).padStart(2, '0')}:00`}
@@ -184,7 +184,7 @@ export function WeekView({
               key={date.getTime()}
               data-day-column={date.getTime()}
               data-workday={working.includes(isoWeekday(date))}
-              className="relative border-l border-border/60"
+              className="relative border-s border-border/60"
               style={{ height: 24 * HOUR_PX }}
               onDoubleClick={(mouse) => {
                 const bounds = mouse.currentTarget.getBoundingClientRect()
@@ -221,16 +221,16 @@ export function WeekView({
                       mouse.preventDefault()
                       onEventMenu(mouse.clientX, mouse.clientY, event)
                     }}
-                    className={`absolute overflow-hidden rounded-md border-l-2 px-1.5 py-0.5 text-left text-2xs leading-tight transition-opacity hover:opacity-90 cursor-pointer ${
+                    className={`absolute overflow-hidden rounded-md border-s-2 px-1.5 py-0.5 text-start text-2xs leading-tight transition-opacity hover:opacity-90 cursor-pointer ${
                       event.is_cancelled ? 'line-through opacity-55' : ''
                     }`}
                     style={{
                       top,
                       height: Math.max(bottom - top, 20),
-                      left: `calc(${(lane / laneCount) * 100}% + 2px)`,
+                      insetInlineStart: `calc(${(lane / laneCount) * 100}% + 2px)`,
                       width: `calc(${100 / laneCount}% - 4px)`,
                       backgroundColor: `${color}26`,
-                      borderLeftColor: color,
+                      borderInlineStartColor: color,
                     }}
                   >
                     <span className="block truncate font-medium text-primary">

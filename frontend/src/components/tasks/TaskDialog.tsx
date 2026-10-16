@@ -273,7 +273,7 @@ export function TaskDialog() {
       footer={
         <>
           {editing && (
-            <Button variant="danger" size="sm" onClick={() => void remove()} disabled={busy} className="mr-auto">
+            <Button variant="danger" size="sm" onClick={() => void remove()} disabled={busy} className="me-auto">
               <Trash2 size={14} strokeWidth={1.75} />
               {t('buttons.delete')}
             </Button>

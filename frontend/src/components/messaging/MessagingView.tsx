@@ -165,7 +165,7 @@ export function MessagingView() {
     <div className="flex min-w-0 flex-1 bg-chats">
       <section
         aria-label={t('messaging.conversations', { defaultValue: 'Conversations' })}
-        className={`flex w-72 shrink-0 flex-col border-r border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
+        className={`flex w-72 shrink-0 flex-col border-e border-border max-[769px]:w-full ${conversation ? 'max-[769px]:hidden' : ''}`}
       >
         <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <CompactNavigation />
@@ -193,7 +193,7 @@ export function MessagingView() {
           )}
           <span
             role="status"
-            className={`ml-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
+            className={`ms-auto text-caption ${state === 'online' ? 'text-success' : 'text-secondary'}`}
             title={status[account]?.message}
           >
             {state === 'online'
@@ -433,7 +433,7 @@ export function MessagingView() {
                   </span>
                   <button
                     type="button"
-                    className="ml-auto text-caption font-normal text-secondary underline cursor-pointer"
+                    className="ms-auto text-caption font-normal text-secondary underline cursor-pointer"
                     onClick={() =>
                       void confirmAction({
                         title: t('messaging.leaveTitle', { defaultValue: 'Leave this group?' }),
@@ -464,7 +464,7 @@ export function MessagingView() {
                     <button
                       type="button"
                       onClick={() => void openPrivate(openRoom.room, o.nick)}
-                      className="ml-auto text-accent underline cursor-pointer"
+                      className="ms-auto text-accent underline cursor-pointer"
                     >
                       {t('messaging.writePrivately', { nick: o.nick, defaultValue: 'Write privately to {nick}' })}
                     </button>
@@ -488,7 +488,7 @@ export function MessagingView() {
                 {roomUploads.map(([id, u]) => (
                   <li key={id} className="flex items-center gap-2 text-secondary">
                     <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
-                    <span className="truncate text-primary">{u.name}</span>
+                    <span dir="auto" className="truncate text-primary">{u.name}</span>
                     {u.error ? (
                       <>
                         <span role="alert" className="text-danger">
@@ -497,7 +497,7 @@ export function MessagingView() {
                         <button
                           type="button"
                           onClick={() => dismissChatUpload(id)}
-                          className="ml-auto underline cursor-pointer"
+                          className="ms-auto underline cursor-pointer"
                         >
                           {t('messaging.dismiss', { defaultValue: 'Dismiss' })}
                         </button>
@@ -516,7 +516,7 @@ export function MessagingView() {
                         <button
                           type="button"
                           onClick={() => void cancelChatUpload(id)}
-                          className="ml-auto underline cursor-pointer"
+                          className="ms-auto underline cursor-pointer"
                         >
                           {t('buttons.cancel', { defaultValue: 'Cancel' })}
                         </button>
@@ -538,7 +538,7 @@ export function MessagingView() {
                   id="chat-mention-suggestions"
                   role="listbox"
                   aria-label={t('messaging.mentionSuggestions', { defaultValue: 'People to mention' })}
-                  className="absolute bottom-full left-4 z-10 mb-1 flex min-w-48 flex-col rounded-control-sm border border-border bg-raised py-1 text-sm shadow-lg"
+                  className="absolute bottom-full start-4 z-10 mb-1 flex min-w-48 flex-col rounded-control-sm border border-border bg-raised py-1 text-sm shadow-lg"
                 >
                   {suggestions.map((nick, index) => (
                     <li
@@ -873,7 +873,7 @@ function ConversationButton({
       type="button"
       aria-current={current}
       onClick={onOpen}
-      className={`flex w-full flex-col gap-0.5 px-3 py-2 text-left cursor-pointer ${
+      className={`flex w-full flex-col gap-0.5 px-3 py-2 text-start cursor-pointer ${
         current ? 'bg-accent/10' : 'hover:bg-hover'
       }`}
     >
@@ -881,10 +881,10 @@ function ConversationButton({
         {group && <Users size={14} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {privateInRoom && <Lock size={12} strokeWidth={1.75} className="shrink-0 text-secondary" aria-hidden="true" />}
         {show && <PresenceDot show={show} />}
-        <span className="truncate text-sm font-semibold text-primary">{name}</span>
+        <span dir="auto" className="truncate text-sm font-semibold text-primary">{name}</span>
         {show && <span className="sr-only">{showLabel(show, t)}</span>}
         {unread > 0 && (
-          <span className="ml-auto rounded-full bg-accent px-1.5 text-2xs font-semibold text-on-accent">
+          <span className="ms-auto rounded-full bg-accent px-1.5 text-2xs font-semibold text-on-accent">
             {t('messaging.unread', { count: unread, defaultValue: '{count} new' })}
           </span>
         )}

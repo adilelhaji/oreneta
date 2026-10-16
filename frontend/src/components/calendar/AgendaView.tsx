@@ -103,7 +103,7 @@ function EventRow({
         <p className={`truncate text-ui font-medium text-primary ${event.is_cancelled ? 'line-through' : ''}`}>
           {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
           {continues && (
-            <span className="ml-1.5 font-normal text-secondary">
+            <span className="ms-1.5 font-normal text-secondary">
               {t('calendar.continues', { defaultValue: '· continues' })}
             </span>
           )}
@@ -112,7 +112,7 @@ function EventRow({
           {event.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <MapPin size={14} className="shrink-0" strokeWidth={1.75} />
-              <span className="truncate">{event.location}</span>
+              <span dir="auto" className="truncate">{event.location}</span>
             </span>
           )}
           {event.is_recurring && (
@@ -123,7 +123,7 @@ function EventRow({
           )}
           {/* The organizer of an internal meeting often has no address the
               server will share, so the name is what identifies them. */}
-          {event.organizer?.name && <span className="truncate">{event.organizer.name}</span>}
+          {event.organizer?.name && <span dir="auto" className="truncate">{event.organizer.name}</span>}
         </div>
       </div>
     </li>

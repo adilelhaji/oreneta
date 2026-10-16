@@ -205,7 +205,7 @@ export function EventDetails() {
                   <li key={`${person.addr}:${index}`} className="flex items-baseline gap-2">
                     {/* The name is what identifies someone here: an internal
                         directory often gives no address the server will share. */}
-                    <span className="min-w-0 truncate text-primary">{person.name || person.addr}</span>
+                    <span dir="auto" className="min-w-0 truncate text-primary">{person.name || person.addr}</span>
                     {person.response && (
                       <span className="shrink-0 text-2xs text-secondary">{responseLabel(person.response, t)}</span>
                     )}
@@ -269,7 +269,7 @@ export function EventDetails() {
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
           {readOnly ? (
-            <p className="mr-auto text-caption text-secondary">
+            <p className="me-auto text-caption text-secondary">
               {t('calendar.readOnlyEvent', {
                 defaultValue: 'This calendar is read-only — it belongs to whoever publishes it.',
               })}
@@ -278,7 +278,7 @@ export function EventDetails() {
             <button
               type="button"
               onClick={() => (event.is_recurring && event.series_id ? setAsking(true) : void deleteEvent(event))}
-              className="mr-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
+              className="me-auto inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger-soft cursor-pointer"
             >
               <Trash2 size={14} strokeWidth={1.75} />
               {t('calendar.delete', { defaultValue: 'Delete' })}
