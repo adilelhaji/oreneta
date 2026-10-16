@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="256x256" href="icon-256.png">
+<link rel="alternate" hreflang="en" href="privacy.html">
+<title>Oreneta — Política de privadesa</title>
+<style>
+  :root { --ink: #16233a; --muted: #6b7a90; --accent: #2056dd; }
+  * { margin: 0; box-sizing: border-box; }
+  body { font: 16px/1.65 system-ui, sans-serif; color: var(--ink); background: #fff; }
+  main { max-width: 42rem; margin: 0 auto; padding: 4rem 1.5rem; }
+  h1 { font-size: 1.8rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  p, li { margin: .4rem 0; }
+  ul { padding-left: 1.2rem; }
+  a { color: var(--accent); }
+  .updated { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; margin: .6rem 0; }
+  th, td { text-align: left; vertical-align: top; padding: .45rem .5rem; border-top: 1px solid #dde3ec; }
+  th { font-weight: 600; }
+  .wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Política de privadesa d'Oreneta</h1>
+  <p class="updated">Darrera actualització: 15 d'octubre de 2026</p>
+  <p class="updated"><a href="privacy.html" hreflang="en" lang="en">Read it in English</a></p>
+
+  <h2>En poques paraules</h2>
+  <p>Oreneta és una aplicació d'escriptori. No té cap servidor propi, ni
+  comptes propis, ni analítiques, ni telemetria, ni informes de fallades.
+  El vostre correu, els calendaris, els contactes, les notes i les
+  credencials es queden a l'ordinador i només viatgen als servidors dels
+  comptes que hi afegiu i als pocs serveis que s'indiquen més avall. Aquí
+  s'esmenta cadascun d'aquests serveis amb allò que rep, i les taules
+  indiquen quines connexions es fan per si soles i quines només quan les
+  activeu o les demaneu.</p>
+
+  <h2>Què desa Oreneta, i on</h2>
+  <ul>
+    <li><strong>El correu, els calendaris, els contactes, les tasques, les
+    notes i el xat</strong> es desen en una base de dades local a
+    l'ordinador, perquè l'aplicació funcioni ràpidament i fora de
+    línia.</li>
+    <li><strong>Les credencials</strong> (contrasenyes dels comptes,
+    testimonis d'OAuth, contrasenyes d'aplicació) es desen al clauer del
+    sistema operatiu. A Linux, si no hi ha cap servei de clauer, es desen en
+    un fitxer local xifrat la clau del qual es desa al costat, cosa que les
+    protegeix menys que un clauer. La contrasenya d'un servidor intermediari
+    (proxy) es desa a la base de dades local, no al clauer.</li>
+    <li><strong>Les còpies de seguretat del perfil</strong>, fetes
+    manualment o de manera programada, es xifren amb una contrasenya que
+    trieu i es desen on trieu. Mai no inclouen les contrasenyes ni els
+    testimonis dels comptes; sí que inclouen la configuració del servidor
+    intermediari, amb la contrasenya si n'hi heu posat una.</li>
+    <li><strong>El fitxer de còpia de seguretat de la configuració</strong>
+    (Configuració, Còpia de seguretat, Exporta) només es xifra si li doneu
+    una contrasenya. Si marqueu Inclou les contrasenyes dels comptes, també
+    conté les contrasenyes i els testimonis dels comptes, i aleshores cal
+    una contrasenya.</li>
+    <li>Quan elimineu un compte, se n'esborren les dades locals i les
+    credencials desades, excepte el que heu escrit i no heu enviat: es
+    conserven els esborranys locals no enviats, els enviaments programats i
+    el registre dels enviaments de resultat incert, i cap d'ells no s'envia
+    un cop el compte ja no hi és. Suprimir un perfil pot esborrar totes les
+    dades d'aquest perfil.</li>
+  </ul>
+
+  <h2>Connexions que fa Oreneta</h2>
+
+  <h3>Les que es fan sense que les demaneu cada vegada</h3>
+  <div class="wrap"><table>
+    <tr><th>Què</th><th>A on</th><th>Què rep</th></tr>
+    <tr><td><strong>Els vostres comptes</strong>: correu (IMAP, SMTP, POP3,
+    Exchange, Microsoft Graph), calendaris i contactes (CalDAV, CardDAV,
+    Google Calendar, Google People), xat (XMPP), canals (RSS/Atom) i
+    subscripcions de calendari que hi afegiu</td>
+    <td>Els servidors d'aquests comptes, i les adreces que hi heu
+    introduït</td>
+    <td>El que necessita el protocol: les vostres dades d'inici de sessió i
+    els elements que llegiu, envieu o canvieu</td></tr>
+    <tr><td><strong>El vostre estat de xat</strong> (disponible, absent,
+    ocupat i el seu text), quan es connecta un compte de xat i quan el
+    canvieu</td>
+    <td>El vostre servidor de xat, que només el passa als contactes a qui
+    heu permès veure'l; els grups dels quals formeu part només saben si
+    esteu absent o ocupat, mai el text</td>
+    <td>El vostre estat i el seu text. Amb «Invisible», els contactes us
+    veuen fora de línia; els grups dels quals formeu part us continuen
+    veient disponible. En un servidor que no us pot amagar, no s'anuncia
+    res als contactes, i els missatges directes esperen al servidor fins
+    que trieu un altre estat</td></tr>
+    <tr><td><strong>Mantenir vàlida una sessió iniciada amb Google o
+    Microsoft</strong>, cada vegada que en caduca el testimoni d'accés</td>
+    <td>oauth2.googleapis.com; login.microsoftonline.com</td>
+    <td>El testimoni d'actualització que Oreneta va rebre quan vau iniciar
+    la sessió</td></tr>
+    <tr><td><strong>Imatges dels canals</strong>, a cada sincronització
+    d'un canal: les imatges dels elements del canal que encara no s'han
+    desat, i la icona del mateix canal. Activades per defecte per als
+    canals; si desactiveu les imatges remotes per a un compte de canals, no
+    es baixa ni l'una cosa ni l'altra. Després, les imatges desades es
+    mostren des de l'ordinador. Els rastrejadors coneguts no es baixen mai;
+    el lector indica quines imatges i quins vídeos ha deixat fora d'un
+    element.</td>
+    <td>Els llocs que allotgen les imatges i la icona, que el canal
+    indica</td>
+    <td>La vostra adreça IP i l'adreça de la imatge, encara que no obriu
+    mai l'element</td></tr>
+    <tr><td><strong>Comprovació d'actualitzacions</strong>, 30 segons
+    després de l'inici i, a partir d'aleshores, un cop al dia. La podeu
+    desactivar a Configuració.</td>
+    <td>github.com (les versions publicades d'aquest projecte)</td>
+    <td>La vostra adreça IP, i la versió de l'aplicació, el sistema
+    operatiu i el tipus de processador a la capçalera User-Agent de la
+    sol·licitud</td></tr>
+  </table></div>
+
+  <h3>Les que només es fan quan les activeu o les demaneu</h3>
+  <div class="wrap"><table>
+    <tr><th>Què</th><th>A on</th><th>Què rep</th></tr>
+    <tr><td><strong>Iniciar la sessió amb Google o Microsoft</strong></td>
+    <td>accounts.google.com, oauth2.googleapis.com, www.googleapis.com;
+    login.microsoftonline.com</td>
+    <td>Inicieu la sessió a la seva pàgina, al vostre navegador. Després,
+    Oreneta bescanvia el codi que rep per testimonis i, en el cas de Google,
+    llegeix el vostre nom, l'adreça i la imatge</td></tr>
+    <tr><td><strong>Cercar la configuració del servidor</strong>, quan
+    premeu Cerca la configuració en línia mentre afegiu un compte
+    manualment. Escriure una adreça no fa cap consulta, i sempre podeu
+    introduir vós mateix els servidors.</td>
+    <td>El domini del vostre correu (autoconfig.&lt;domini&gt; i
+    &lt;domini&gt;/.well-known/autoconfig), la base de dades de proveïdors
+    de Mozilla (autoconfig.thunderbird.net) i, sense servidor intermediari,
+    el vostre resolutor DNS</td>
+    <td>L'adreça completa, al vostre domini; només el domini, a Mozilla i al
+    DNS</td></tr>
+    <tr><td><strong>La imatge del compte</strong>, quan afegiu un compte de
+    Google o hi poseu vós mateix l'adreça d'una imatge</td>
+    <td>Els servidors d'imatges de Google (lh3.googleusercontent.com) o
+    l'adreça que hi heu posat</td><td>Una baixada simple</td></tr>
+    <tr><td><strong>Imatges del correu</strong>. Desactivades fins que
+    decidiu mostrar-les. Quan es mostren, els rastrejadors coneguts es
+    bloquegen, tret que els permeteu per a aquell missatge.</td>
+    <td>Els llocs que allotgen les imatges</td>
+    <td>La vostra adreça IP i l'adreça de la imatge, que un remitent pot
+    fer servir per saber que heu obert el missatge</td></tr>
+    <tr><td><strong>Confirmacions de lectura</strong>, quan un missatge en
+    demana una i premeu Envia la confirmació, o bé heu triat Envia sempre a
+    Configuració (mai per al correu de la carpeta de correu brossa, i amb
+    pregunta prèvia igualment per a les llistes de correu o quan l'adreça
+    de confirmació apunta a un altre lloc)</td>
+    <td>L'adreça que indica el missatge, a través del vostre servidor de
+    correu</td>
+    <td>Que heu obert el missatge, i quan, amb l'assumpte i el Message-ID,
+    la vostra adreça i que la confirmació l'ha enviada Oreneta</td></tr>
+    <tr><td><strong>Imatges reals dels interlocutors</strong> (desactivades
+    per defecte)</td>
+    <td>gravatar.com i, després, icons.duckduckgo.com</td>
+    <td>Un resum (hash) SHA-256 de cada adreça mostrada, a Gravatar; el
+    domini de l'adreça, a DuckDuckGo</td></tr>
+    <tr><td><strong>Actualitzar la llista de rastrejadors</strong>, quan
+    premeu Obtén la llista actual (l'aplicació ja n'inclou una còpia)</td>
+    <td>easylist.to</td><td>Una baixada simple</td></tr>
+    <tr><td><strong>Idiomes de traducció</strong>, quan en baixeu un. La
+    traducció en si es fa a l'ordinador i no envia cap text enlloc.</td>
+    <td>github.com (la còpia d'aquest projecte dels models de Mozilla,
+    comprovada amb resums fixos)</td>
+    <td>Quin parell d'idiomes heu triat (dos parells quan una traducció
+    passa per l'anglès)</td></tr>
+    <tr><td><strong>L'assistent</strong>, desactivat fins que el
+    configureu, i només sobre els missatges que trieu, després d'haver vist
+    exactament què s'enviarà. D'entrada només apareix seleccionat el
+    missatge més recent de la conversa, sense comptar els vostres
+    esborranys (si la conversa només conté esborranys vostres, apareix
+    seleccionat l'esborrany més nou, i el veieu a la sol·licitud abans que
+    s'enviï res); marqueu els altres missatges i les dades dels adjunts que
+    també vulgueu enviar.</td>
+    <td>El servei que configureu: un programa al vostre ordinador o un
+    proveïdor que indiqueu (només HTTPS). Una sol·licitud a un programa del
+    vostre ordinador hi va directament i mai no passa per cap servidor
+    intermediari; una sol·licitud a un proveïdor passa pel vostre servidor
+    intermediari, si n'heu configurat un. Si el servei redirigeix la
+    sol·licitud a un altre lloc, no es reenvia.</td>
+    <td>El text dels missatges que heu seleccionat, amb el remitent,
+    l'assumpte, els identificadors interns i els noms, els tipus i les mides
+    dels adjunts; l'acció que heu triat; i la vostra clau d'API, si n'heu
+    introduït una. Un proveïdor remot els tracta d'acord amb la seva pròpia
+    política de privadesa.</td></tr>
+    <tr><td><strong>Compartir un fitxer com a enllaç</strong></td>
+    <td>El vostre servidor Nextcloud o ownCloud</td>
+    <td>Les vostres dades d'inici de sessió en aquest servidor i el fitxer
+    que heu triat; s'hi crea un enllaç públic al fitxer</td></tr>
+    <tr><td><strong>Regles del servidor</strong> (Sieve), quan comproveu,
+    deseu o elimineu regles al servidor</td>
+    <td>El vostre servidor de correu</td><td>Les vostres dades d'inici de
+    sessió i les regles que heu escrit</td></tr>
+    <tr><td><strong>Fitxers al xat</strong>, quan n'envieu o en deseu
+    un</td>
+    <td>Quan envieu: el servei de pujada que indica el vostre servidor de
+    xat. Quan deseu un fitxer que algú us ha enviat: l'adreça que n'ha
+    donat el remitent.</td>
+    <td>El fitxer que envieu, o una baixada simple</td></tr>
+    <tr><td><strong>Veure l'estat de xat d'algú</strong>, quan demaneu
+    veure'l o responeu a algú que demana veure el vostre</td>
+    <td>El vostre servidor de xat, que ho passa a aquella persona</td>
+    <td>La sol·licitud, o la vostra resposta (permetre o denegar)</td></tr>
+    <tr><td><strong>El registre de canvis</strong>, quan l'obriu</td>
+    <td>github.com (les versions publicades d'aquest projecte)</td>
+    <td>Una baixada simple</td></tr>
+    <tr><td><strong>Baixar una actualització</strong>, quan l'accepteu</td>
+    <td>github.com</td><td>Una baixada simple, comprovada abans de fer-la
+    servir amb el resum SHA-256 publicat amb la mateixa versió</td></tr>
+  </table></div>
+  <p>Les baixades de github.com (actualitzacions, idiomes de traducció, el
+  registre de canvis) se serveixen des dels servidors de baixada de GitHub
+  (*.githubusercontent.com).</p>
+  <p>Els enllaços de reunions (Meet, Zoom, Teams i altres) només es
+  reconeixen al text dels esdeveniments i s'obren al navegador; Oreneta no
+  es comunica directament amb aquests serveis. Un enllaç de Google Meet
+  només es crea mitjançant Google Calendar quan ho marqueu.</p>
+  <p>Si configureu un servidor intermediari, hi passen les connexions dels
+  comptes, dels canals (i de les imatges i les icones que se'n desen durant
+  una sincronització), dels enllaços a fitxers, dels fitxers del xat, de
+  les baixades de traducció, de la llista de rastrejadors, del registre de
+  canvis i de l'assistent (amb un proveïdor que indiqueu, no amb un
+  programa del vostre ordinador), i també el bescanvi d'inici de sessió i
+  les renovacions de testimonis amb Google o Microsoft, la cerca de la
+  configuració del servidor, la imatge del compte i la comprovació i la
+  baixada d'actualitzacions.</p>
+  <p>Un compte també pot tenir el seu propi servidor intermediari, o
+  connectar-se directament. IMAP, SMTP, POP3, les regles del servidor,
+  Microsoft Graph, Exchange (EWS), Google Calendar, els contactes de Google,
+  i els calendaris CalDAV i les subscripcions de calendari que tingueu dins
+  d'un compte segueixen aquesta elecció, i també la imatge del compte. Les
+  llibretes d'adreces CardDAV afegides des de Configuració i les llistes de
+  tasques CalDAV no pertanyen a cap compte, de manera que fan servir el
+  servidor intermediari de l'aplicació, o es connecten directament si
+  l'aplicació no en té.</p>
+  <p>Si no es pot arribar al servidor intermediari, aquestes connexions
+  fallen en lloc d'evitar-lo. El mateix passa amb un servidor intermediari
+  que heu triat però que heu deixat sense servidor o port, per a
+  l'aplicació o per a un compte, i amb una configuració de servidor
+  intermediari que no s'ha pogut llegir: totes les connexions que l'haurien
+  de fer servir es rebutgen fins que es completi o es pugui tornar a
+  llegir, i cap no es fa directament. Quan la sincronització del correu
+  d'un compte es rebutja d'aquesta manera, Oreneta indica que la causa és
+  la configuració del servidor intermediari i ofereix obrir-la.
+  Les connexions que ja estan obertes quan canvia el servidor intermediari
+  continuen fins que es tornen a connectar. La imatge del compte sempre és
+  només una còpia desada a l'ordinador. Si no s'ha pogut baixar, Oreneta
+  mostra les vostres inicials (o, si heu activat les imatges reals per a
+  les adreces, la de la vostra adreça), manté l'adreça fora de la vista i
+  ho torna a provar per la mateixa via en iniciar-se i quan canvia una
+  configuració de servidor intermediari; la vista web no carrega mai
+  aquella adreça.</p>
+  <p>La cerca de la configuració del servidor omet la consulta DNS mentre
+  hi ha un servidor intermediari configurat, perquè el DNS no hi pot
+  passar. Les imatges que es mostren al correu, les imatges i els vídeos
+  que es mostren en un element d'un canal i que no estan desats a
+  l'ordinador, les imatges dels interlocutors i la pàgina d'inici de sessió
+  que s'obre al navegador no fan servir el servidor intermediari de
+  l'aplicació: la vista web i el navegador es connecten per si
+  mateixos.</p>
+  <p>La vista web del sistema operatiu (per exemple, Microsoft Edge
+  WebView2 a Windows) pot fer connexions pròpies, d'acord amb la política
+  del seu fabricant.</p>
+
+  <h2>Dades d'usuari de Google</h2>
+  <p>Quan inicieu la sessió amb Google, Oreneta sol·licita accés complet a
+  Gmail (per llegir, enviar, moure, etiquetar i suprimir el correu quan ho
+  demaneu), al perfil bàsic (per identificar el compte amb el vostre nom,
+  l'adreça i la imatge), accés complet a Google Calendar (per mostrar els
+  calendaris i per crear, editar i suprimir els esdeveniments que li
+  demaneu) i als contactes, només de lectura (per suggerir adreces).</p>
+  <p>L'ús i la transferència que fa Oreneta de la informació rebuda de les
+  API de Google s'ajusten a la
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google
+  API Services User Data Policy</a> (política de dades d'usuari dels serveis
+  d'API de Google), inclosos els requisits d'ús limitat (Limited Use). En
+  particular:</p>
+  <ul>
+    <li>Les dades d'usuari de Google només s'utilitzen per oferir les
+    funcions de correu, calendari i contactes que veieu, al vostre
+    ordinador.</li>
+    <li>No es venen mai, no s'utilitzen mai per a publicitat ni per entrenar
+    models, i ningú excepte vós no les llegeix.</li>
+    <li>No es transfereixen a ningú, excepte quan ho requereix una funció
+    que feu servir, totes indicades més amunt a «Connexions que fa
+    Oreneta»: l'assistent amb un proveïdor remot (només el que heu revisat i
+    confirmat, per a aquella sol·licitud; l'assistent està desactivat fins
+    que el configureu), les imatges d'un missatge que decidiu mostrar, les
+    confirmacions de lectura que envieu i, si activeu les imatges reals dels
+    interlocutors, un resum d'una adreça a Gravatar i el seu domini a
+    DuckDuckGo.</li>
+  </ul>
+
+  <h2>Revocar l'accés</h2>
+  <p>Si elimineu un compte a la configuració d'Oreneta, se n'esborren les
+  dades locals i les credencials desades, excepte els esborranys no enviats
+  i els enviaments programats, que es conserven tal com s'ha descrit més
+  amunt.
+  També podeu revocar en qualsevol moment l'accés d'Oreneta al vostre
+  compte de Google a
+  <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>,
+  i al vostre compte de Microsoft a
+  <a href="https://account.live.com/consent/Manage">account.live.com/consent/Manage</a>
+  (comptes de feina i d'escola: <a href="https://myapps.microsoft.com">myapps.microsoft.com</a>).</p>
+
+  <h2>Contacte</h2>
+  <p>Oreneta és programari lliure (AGPL-3.0), desenvolupat obertament a
+  <a href="https://github.com/adilelhaji/oreneta">github.com/adilelhaji/oreneta</a>.
+  Per a preguntes sobre aquesta política: obriu-hi una incidència o
+  escriviu a
+  <a href="mailto:adilelhaji@gmail.com">adilelhaji@gmail.com</a>.</p>
+</main>
+</body>
+</html>
