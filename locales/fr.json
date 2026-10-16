@@ -963,6 +963,7 @@
   "notify.newMessage": "Nouveau message",
   "notify.newMessageCount": "{count, plural, one {1 nouveau message} other {{count} nouveaux messages}}",
   "notify.noSubject": "(pas de sujet de mail)",
+  "notify.reminderStarted": "Commencé à {time}",
   "notify.unknownSender": "expéditeur inconnu",
   "oof.audienceAll": "Tout le monde",
   "oof.audienceKnown": "Contacts connus",

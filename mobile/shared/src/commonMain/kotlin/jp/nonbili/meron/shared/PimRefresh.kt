@@ -51,6 +51,9 @@ data class CalendarReminder(
     val start: Long,
     val allDay: Boolean = false,
     val minutes: Long? = null,
+    /** The start on the core's clock ("HH:MM") in the zone it is in now;
+     *  null for an all-day event, or from a core that does not say it. */
+    val localTime: String? = null,
 ) {
     /** Stable per event and start, so a platform that is handed the same
      *  reminder twice replaces its notification rather than adding one. */
@@ -127,6 +130,7 @@ fun parseCalendarReminder(json: String): CalendarReminder? {
         start = start,
         allDay = entries.bool("all_day") ?: false,
         minutes = entries.long("minutes"),
+        localTime = entries.string("local_time")?.takeIf { it.isNotBlank() },
     )
 }
 

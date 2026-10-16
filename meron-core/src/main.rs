@@ -669,21 +669,86 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         .await
         .unwrap();
         let event = created["event"]["id"].as_str().unwrap().to_owned();
-        assert!(due_calendar_reminders(&engine, now).await.is_empty(), "an account the core has not opened is not watched");
+        assert!(look_for_reminders(&engine, now).await.reminders.is_empty(), "an account the core has not opened is not watched");
         let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
         engine.accounts.lock().await.insert(account.to_string(), creds);
-        let due = due_calendar_reminders(&engine, now).await;
+        let due = look_for_reminders(&engine, now).await;
+        let (local_time, local_date) = {
+            use chrono::TimeZone as _;
+            let at = |instant: i64| chrono::Local.timestamp_opt(instant, 0).earliest().unwrap();
+            let date = at(start).date_naive();
+            let other_day = (date != at(now).date_naive()).then(|| date.format("%Y-%m-%d").to_string());
+            (at(start).format("%H:%M").to_string(), other_day)
+        };
         assert_eq!(
-            due,
+            due.reminders,
             vec![json!({
                 "account": account, "event": event, "subject": "Standup", "location": "Room 2",
-                "start": start, "all_day": false, "minutes": 10,
+                "start": start, "all_day": false, "minutes": 10, "local_time": local_time,
+                "started": false, "local_date": local_date,
             })],
         );
-        assert!(due_calendar_reminders(&engine, now + 60).await.is_empty(), "given once");
+        assert!(look_for_reminders(&engine, now + 60).await.reminders.is_empty(), "given once");
         assert!(
             pim::reminders::take_due(&engine, &[account.to_string()], now + 120).is_empty(),
             "recorded where the phone's refresh looks too",
+        );
+    }
+
+    /// After a change of zone, the watch's look starts reading again the
+    /// calendars of an open account that can hold floating times (#209).
+    #[tokio::test]
+    async fn a_zone_change_makes_the_reminder_watch_read_floating_calendars_again() {
+        use super::*;
+        use chrono::Offset as _;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let account = meron_core::archive::ACCOUNT;
+        let now = now_seconds();
+        {
+            let db = engine.db.lock().unwrap();
+            meron_core::archive::ensure_account(&db, now).unwrap();
+            calendar::upsert_calendars(&db, account, &[calendar::Calendar {
+                id: "sub:holidays".into(),
+                name: "Holidays".into(),
+                kind: calendar::CalendarKind::Subscribed,
+                enabled: true,
+                ..Default::default()
+            }])
+            .unwrap();
+            // The previous look was a minute ago, an hour away from here.
+            let here = chrono::Local::now().offset().fix().local_minus_utc();
+            let elsewhere = chrono::FixedOffset::east_opt(here + 3_600).unwrap();
+            meron_core::calendar::reminders::record_look(&db, account, now - 60, &elsewhere).unwrap();
+        }
+        let creds = store::load_account(&engine.db.lock().unwrap(), account).unwrap().unwrap();
+        engine.accounts.lock().await.insert(account.to_string(), creds);
+
+        give_calendar_reminders(&engine, &writer, now).await;
+        let window = format!("calendar:{account}:{}:{}", now - 86_400 * 31, now + 86_400 * 366);
+        assert!(engine.syncing.lock().unwrap().contains(&window), "the floating calendars are being read again");
+    }
+
+    /// The watch's tick runs on a clock that can stand still in a sleep, so
+    /// `system.resumed` wakes it at once rather than at its next tick (#209).
+    #[tokio::test]
+    async fn system_resumed_wakes_the_reminder_watch_before_its_tick() {
+        use super::*;
+        use futures::FutureExt as _;
+        let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer = Arc::new(Mutex::new(tokio::io::stdout()));
+        let mut ticker = tokio::time::interval(Duration::from_secs(3_600));
+        ticker.tick().await; // The first tick is at once; the next an hour off.
+        let mut resumed = Box::pin(engine.resume_signal.notified());
+        resumed.as_mut().enable();
+        assert!(next_reminder_look(&mut ticker, resumed.as_mut()).now_or_never().is_none(), "nothing to wake it yet");
+
+        let request = Request { id: 1, method: "system.resumed".into(), params: json!({}) };
+        dispatch(&engine, &request, &writer).await.unwrap();
+        assert_eq!(
+            next_reminder_look(&mut ticker, resumed.as_mut()).now_or_never(),
+            Some(ReminderWake::Resumed),
+            "woken by the resume, not an hour later by the tick",
         );
     }
 
@@ -1656,21 +1721,30 @@ fn spawn_deferred_watch(engine: Arc<Engine>, out: Writer) {
 /// is running is accounted for on the next tick without anything to keep in
 /// sync. Each is recorded as raised, so it is given once however many times
 /// its window is resynced.
+///
+/// It looks at its minute tick and as soon as the host says the machine woke
+/// (`system.resumed`). Time is always the wall clock: the tick runs on the
+/// monotonic clock, which stands still while some systems sleep, so what came
+/// due during a sleep is found by the gap since the last look (ADR-0056).
 fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(pim::reminders::TICK);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut resumed = Box::pin(engine.resume_signal.notified());
+        resumed.as_mut().enable();
         loop {
-            ticker.tick().await;
+            if next_reminder_look(&mut ticker, resumed.as_mut()).await == ReminderWake::Resumed {
+                // Listening again before this look, so a resume that lands
+                // during it is not lost.
+                resumed = Box::pin(engine.resume_signal.notified());
+                resumed.as_mut().enable();
+            }
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|epoch| epoch.as_secs() as i64)
                 .unwrap_or_default();
 
-            // Shared with the phone (`pim::reminders`): which are due, and
-            // recorded as raised before they are announced.
-            for detail in due_calendar_reminders(&engine, now).await {
-                emit(&out, "calendar.reminder", detail).await;
-            }
+            give_calendar_reminders(&engine, &out, now).await;
             // Task reminders (ADR-0013): local, so not tied to an account.
             let due = store::task_lists::due_reminders(&engine.db.lock().unwrap(), now).unwrap_or_default();
             for (id, title, due_at) in due {
@@ -1684,11 +1758,48 @@ fn spawn_reminder_watch(engine: Arc<Engine>, out: Writer) {
     });
 }
 
+/// What woke the reminder watch.
+#[derive(Debug, PartialEq, Eq)]
+enum ReminderWake {
+    Tick,
+    Resumed,
+}
+
+/// Waits for the reminder watch's next look: its tick, or the machine waking
+/// (`resumed`, enabled before the look it follows), whichever comes first.
+async fn next_reminder_look(
+    ticker: &mut tokio::time::Interval,
+    resumed: std::pin::Pin<&mut tokio::sync::futures::Notified<'_>>,
+) -> ReminderWake {
+    tokio::select! {
+        _ = ticker.tick() => ReminderWake::Tick,
+        _ = resumed => ReminderWake::Resumed,
+    }
+}
+
+/// One look of the reminder watch at `now`: the calendar reminders due,
+/// announced, and the floating calendars a change of zone left to read again.
+async fn give_calendar_reminders(engine: &Arc<Engine>, out: &Writer, now: i64) {
+    // Shared with the phone (`pim::reminders`): which are due, and recorded
+    // as raised before they are announced.
+    let look = look_for_reminders(engine, now).await;
+    for detail in look.reminders {
+        emit(out, "calendar.reminder", detail).await;
+    }
+    // A floating time is read in the zone the machine is in when its calendar
+    // is read: after a change of zone, read those again so their times, and
+    // reminders, follow. Asked again at later looks until done (ADR-0056).
+    for reread in look.reread {
+        spawn_calendar_sync(engine.clone(), out.clone(), reread.account, reread.from, reread.to);
+    }
+}
+
 /// The calendar reminders due now on the accounts the core has open, each
-/// recorded as raised (`pim::reminders::take_due`).
-async fn due_calendar_reminders(engine: &Arc<Engine>, now: i64) -> Vec<Value> {
+/// recorded as raised, in this machine's zone as it is now
+/// (`pim::reminders::look`).
+async fn look_for_reminders(engine: &Arc<Engine>, now: i64) -> pim::reminders::Look {
     let accounts: Vec<String> = engine.accounts.lock().await.keys().cloned().collect();
-    pim::reminders::take_due(engine, &accounts, now)
+    pim::reminders::look(engine, &accounts, now, &chrono::Local)
 }
 
 /// The calendars of an account that hold an invitation's event: CalDAV ones

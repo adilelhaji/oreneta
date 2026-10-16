@@ -1289,9 +1289,9 @@
       "issue": 100,
       "section": "General/Reminders",
       "outcome": "Event reminders survive restart, suspend and timezone changes",
-      "status": "partial",
-      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a resume listener exists, but suspend and time-zone changes have no automated test and no native evidence",
-      "code": "meron-core/src/calendar/mod.rs",
+      "status": "implemented-unverified",
+      "present": "Event reminders are stored, fire once, fire again when the event moves and resume after restart; a reminder that came due during a suspend or while the app was closed fires once on the next look while its event is on, the watch looks at once on resume, all-day reminders follow the local midnight of the current zone, timed ones keep their instant and floating ones are re-read after a zone change (ADR-0056), all with automated tests including runs under other TZ values; native Windows suspend and zone-change evidence remains",
+      "code": "meron-core/src/calendar/reminders.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
@@ -1303,6 +1303,18 @@
           {
             "sha": "ed1b52f2dbaaf23e8f26600c3f2fcdfbdc751005",
             "result": "meron-core/src/calendar/mod.rs"
+          },
+          {
+            "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
+            "result": "meron-core/src/pim/reminders/tests.rs"
+          },
+          {
+            "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
+            "result": "meron-core/src/calendar/reminders.rs"
+          },
+          {
+            "sha": "52fd8469e3238841127ac244891d422c8d4a075d",
+            "result": "notify_quiet_test.go"
           }
         ],
         "native": [],

@@ -58,6 +58,23 @@ class PimRefreshTest {
     }
 
     @Test
+    fun theCoresLocalTimeIsKeptWhenItSaysOne() {
+        val timed =
+            parseCalendarReminder(
+                """{"account":"a","event":"e","subject":"Standup","location":null,"start":10,"all_day":false,""" +
+                    """"minutes":5,"local_time":"09:00","started":false,"local_date":null}""",
+            )
+        assertEquals(CalendarReminder("a", "e", "Standup", null, 10, false, 5, "09:00"), timed)
+        val allDay =
+            parseCalendarReminder(
+                """{"account":"a","event":"d","subject":"Trip","start":10,"all_day":true,""" +
+                    """"minutes":15,"local_time":null,"started":false,"local_date":"2026-10-21"}""",
+            )
+        assertEquals(CalendarReminder("a", "d", "Trip", null, 10, true, 15, null), allDay)
+        assertNull(allDay?.localTime, "an all-day event has no time")
+    }
+
+    @Test
     fun paramsCarryWhatToReadAndLeaveOutAll() {
         assertEquals("""{"sync":true,"force":false}""", PimRefreshParams().toJson())
         assertEquals(

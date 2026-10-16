@@ -60,7 +60,7 @@ GRAPH-01 were added on 2026-10-12 for delivered work that had no row.
 | SET-26 | #116 | Settings/QR Export | partial | yes | - |
 | SET-27 | #37 | General/Language | partial | yes | - |
 | SET-28 | #29 | Mail/Send; General/Confirmations | implemented-unverified | yes | - |
-| SET-29 | #100 | General/Reminders | partial | yes | - |
+| SET-29 | #100 | General/Reminders | implemented-unverified | yes | - |
 | S15-01 | #97 | Accounts/POP3 | implemented-unverified | yes | yes |
 | S14-01 | #108 | Compose/Attachments | partial | yes | yes |
 | S16-01 | #115 | Platforms/macOS and Linux | partial | yes | - |

@@ -60,7 +60,7 @@
   `source_sync`, `sources`); los brazos del escritorio las llaman y
   responden igual.
   - **Recordatorios compartidos.** `pim::reminders::take_due` decide qué
-    recordatorios han vencido (`calendar::due_reminders`) y los marca como
+    recordatorios han vencido (`calendar::reminders::due`, ADR-0056) y los marca como
     dados antes de devolverlos, con la forma del evento
     `calendar.reminder`. El vigilante de minuto del escritorio
     (`spawn_reminder_watch`) la llama con las cuentas que tiene abiertas y
