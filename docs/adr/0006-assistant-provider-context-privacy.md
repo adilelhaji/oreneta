@@ -1,54 +1,61 @@
-# ADR-0006: Explicit assistant provider and context boundary
+# ADR-0006: Proveïdor explícit de l'assistent i límit del context
 
-- Status: accepted
-- Date: 2026-09-10
-- Scope: issue #51 / capability C24
-- Approval: user approved the local-first plus explicit remote-provider recommendation on 2026-09-10
+- Estat: acceptada
+- Data: 2026-09-10
+- Abast: incidència #51 / capacitat C24
+- Aprovació: l'usuari va aprovar la recomanació de prioritat local més proveïdor remot explícit el 2026-09-10
 
-## Decision
+## Decisió
 
-Oreneta exposes an assistant through a provider-neutral contract with two
-explicit modes:
+Oreneta exposa un assistent mitjançant un contracte neutral respecte del
+proveïdor, amb dos modes explícits:
 
-1. **Local-first**: a configured local provider receives the selected context
-   without leaving the device. If no local provider is configured, the action
-   is unavailable rather than silently falling back to a network service.
-2. **Remote provider**: a user-configured endpoint is opt-in per action. The
-   request declares the provider, endpoint, model identifier and selected
-   context. Oreneta does not host a model or proxy requests through an Oreneta
-   service.
+1. **Prioritat local**: un proveïdor local configurat rep el context
+   seleccionat sense que surti del dispositiu. Si no hi ha cap proveïdor local
+   configurat, l'acció no està disponible, en lloc de recórrer en silenci a un
+   servei de xarxa.
+2. **Proveïdor remot**: un punt d'accés configurat per l'usuari s'activa
+   explícitament per a cada acció. La petició declara el proveïdor, el punt
+   d'accés, l'identificador del model i el context seleccionat. Oreneta no
+   allotja cap model ni fa passar peticions per cap servei d'Oreneta.
 
-The UI must show a reviewable context manifest before activation. Only the
-messages and attachments explicitly selected for that action may be sent. A
-preview token binds the reviewed provider, action and context to the later
-execution request; stale or altered previews are rejected.
-Subject, sender and body are treated as untrusted input; instructions found in
-mail never authorize sending, deleting, moving, filing, changing rules or
-calling another tool.
+La interfície ha de mostrar un manifest del context revisable abans de
+l'activació. Només es poden enviar els missatges i els fitxers adjunts
+seleccionats explícitament per a aquella acció. Un testimoni de
+previsualització lliga el proveïdor, l'acció i el context revisats a la
+petició d'execució posterior; les previsualitzacions obsoletes o alterades es
+rebutgen.
+L'assumpte, el remitent i el cos es tracten com a entrada no fiable; les
+instruccions que es trobin al correu mai no autoritzen enviar, suprimir,
+moure, arxivar, canviar regles ni cridar cap altra eina.
 
-The contract supports bounded input size, provider errors and an explicit
-offline failure. The caller may discard a pending result; transport
-cancellation remains a follow-up concern for issue #52. Requests and
-responses are not persisted by the assistant layer. This slice does not store
-provider credentials; any future credential storage must use the existing
-secret boundary. Provider responses are held only for the active action unless
-the caller saves the result as ordinary user-authored content.
+El contracte admet una mida d'entrada limitada, errors del proveïdor i una
+fallada explícita sense connexió. El consumidor pot descartar un resultat
+pendent; la cancel·lació del transport continua sent una qüestió de seguiment
+de la incidència #52. La capa de l'assistent no desa les peticions ni les
+respostes. Aquest fragment no desa credencials del proveïdor; qualsevol
+emmagatzematge futur de credencials ha de fer servir el límit de secrets
+existent. Les respostes del proveïdor només es conserven per a l'acció
+activa, tret que el consumidor desi el resultat com a contingut ordinari
+escrit per l'usuari.
 
-## Consequences
+## Conseqüències
 
-- Provider adapters can be added without changing mail storage or account
-  synchronization.
-- Remote use is auditable at the action boundary and cannot become a hidden
-  background mailbox indexer.
-- A local provider is the privacy-preserving default but requires the user to
-  install/configure a compatible runtime; no model runtime is bundled by this
-  ADR.
-- Implementations of summaries, drafts and task extraction remain a separate
-  work package (#52) and must consume this contract rather than bypass it.
+- Es poden afegir adaptadors de proveïdor sense canviar l'emmagatzematge del
+  correu ni la sincronització dels comptes.
+- L'ús remot es pot auditar al límit de l'acció i no es pot convertir en un
+  indexador ocult de la bústia en segon pla.
+- Un proveïdor local és l'opció per defecte que preserva la privadesa, però
+  requereix que l'usuari instal·li i configuri un entorn d'execució
+  compatible; aquest ADR no inclou cap entorn d'execució de models.
+- Les implementacions de resums, esborranys i extracció de tasques continuen
+  sent un paquet de treball separat (#52) i han de consumir aquest contracte
+  en lloc d'esquivar-lo.
 
-## Non-goals
+## Fora d'abast
 
-- No Oreneta-hosted AI service, subscription, telemetry or remote mailbox
-  indexing.
-- No automatic actions derived from message content.
-- No provider-specific SDK or credential flow is selected by this ADR.
+- Cap servei d'IA allotjat per Oreneta, subscripció, telemetria ni indexació
+  remota de la bústia.
+- Cap acció automàtica derivada del contingut dels missatges.
+- Aquest ADR no selecciona cap SDK ni flux de credencials específic de cap
+  proveïdor.

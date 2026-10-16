@@ -1,26 +1,27 @@
-# ADR-0007: Reviewable assistant results and cooperative cancellation
+# ADR-0007: Resultats de l'assistent revisables i cancel·lació cooperativa
 
-- Status: accepted
-- Date: 2026-09-10
-- Scope: issue #52 / capability C24
-- Approval: user approved the summary/draft/task slices and execution-id cancellation on 2026-09-10
+- Estat: acceptada
+- Data: 2026-09-10
+- Abast: incidència #52 / capacitat C24
+- Aprovació: l'usuari va aprovar els fragments de resum/esborrany/tasca i la cancel·lació per identificador d'execució el 2026-09-10
 
-## Decision
+## Decisió
 
-Issue #52 consumes the provider boundary from ADR-0006 in three bounded slices:
+La incidència #52 consumeix el límit del proveïdor de l'ADR-0006 en tres fragments fitats:
 
-1. **Summary** results are text plus optional source references. Sources carry
-   the account and message identity from the reviewed context; unknown sources
-   are displayed as unlinked text rather than guessed links.
-2. **Draft** results are text placed into a new editable composer draft only
-   after an explicit user action. Recipients and threading are derived from the
-   selected message; sending is never part of the assistant operation.
-3. **Task** results are suggestions shown to the user. Saving a suggestion
-   calls the existing local linked-task contract only after confirmation. The
-   existing one-open-task-per-thread rule remains unchanged; duplicate selected
-   suggestions for one thread are coalesced into one note.
+1. Els resultats de **resum** són text més referències opcionals a les fonts. Les fonts porten
+   la identitat del compte i del missatge del context revisat; les fonts desconegudes
+   es mostren com a text sense enllaç en lloc d'enllaços endevinats.
+2. Els resultats d'**esborrany** són text que es col·loca en un esborrany nou i editable
+   del redactor només després d'una acció explícita de l'usuari. Els destinataris i el fil
+   es deriven del missatge seleccionat; l'enviament mai no forma part de l'operació
+   de l'assistent.
+3. Els resultats de **tasca** són suggeriments que es mostren a l'usuari. Desar un suggeriment
+   crida el contracte existent de tasques locals vinculades només després de la confirmació. La
+   regla existent d'una sola tasca oberta per fil no canvia; els suggeriments seleccionats
+   duplicats per a un mateix fil es fusionen en una sola nota.
 
-Providers return a JSON result envelope when available:
+Els proveïdors retornen un sobre de resultat JSON quan és possible:
 
 ```json
 {
@@ -30,24 +31,25 @@ Providers return a JSON result envelope when available:
 }
 ```
 
-Non-JSON provider output is retained as plain text without inferred sources or
-tasks. The assistant layer never persists the envelope.
+La sortida del proveïdor que no és JSON es conserva com a text pla sense fonts ni
+tasques deduïdes. La capa de l'assistent mai no desa el sobre.
 
-Each execution has a caller-generated `execution_id`. A cancel request marks
-that execution cancelled; the transport is bounded by its existing timeout,
-and the result is rejected both before dispatch and after the provider returns.
-Late results cannot update the UI. This is cooperative cancellation at the
-assistant boundary; interruptible provider transports remain future work.
+Cada execució té un `execution_id` generat pel consumidor. Una petició de cancel·lació
+marca aquella execució com a cancel·lada; el transport queda limitat pel seu temps
+d'espera existent, i el resultat es rebutja tant abans de l'enviament com després que
+el proveïdor respongui. Els resultats tardans no poden actualitzar la interfície. Això
+és cancel·lació cooperativa al límit de l'assistent; els transports de proveïdor
+interrompibles continuen sent treball futur.
 
-## Consequences
+## Conseqüències
 
-- Summary provenance is explicit and account-scoped.
-- Draft creation is reversible user editing, not an external mail action.
-- Task extraction cannot silently create or multiply tasks.
-- Provider-specific response adapters are not selected by this ADR.
+- La procedència dels resums és explícita i limitada a l'abast del compte.
+- La creació d'esborranys és una edició reversible de l'usuari, no una acció de correu externa.
+- L'extracció de tasques no pot crear ni multiplicar tasques en silenci.
+- Aquest ADR no selecciona adaptadors de resposta específics de cap proveïdor.
 
-## Non-goals
+## Fora d'abast
 
-- No automatic send, delete, move, filing, rule changes or task creation.
-- No persisted prompts, responses, credentials or mailbox-wide indexing.
-- No change to the existing task schema or one-open-task-per-thread invariant.
+- Cap enviament, supressió, trasllat, arxivament, canvi de regles ni creació de tasques automàtics.
+- Cap indicació (prompt), resposta, credencial ni indexació de tota la bústia desades.
+- Cap canvi a l'esquema de tasques existent ni a l'invariant d'una sola tasca oberta per fil.

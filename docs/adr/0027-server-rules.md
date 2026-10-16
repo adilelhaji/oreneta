@@ -1,55 +1,55 @@
-# ADR-0027: Reglas en el servidor
+# ADR-0027: Regles al servidor
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
-  el 2026-10-12. Cubre la puerta de #94
-  (adaptadores y permisos nuevos por proveedor).
-- Fecha: 2026-10-12.
-- Alcance: primera entrega de #94.
+- Estat: acceptada; presa per delegació i revisada pel propietari
+  el 2026-10-12. Cobreix la porta de #94
+  (adaptadors i permisos nous per proveïdor).
+- Data: 2026-10-12.
+- Abast: primer lliurament de #94.
 
-## Inventario por proveedor
+## Inventari per proveïdor
 
-| Proveedor | Reglas en el servidor | Respuesta automática y reenvío | Estado |
+| Proveïdor | Regles al servidor | Resposta automàtica i reenviament | Estat |
 |---|---|---|---|
-| IMAP con ManageSieve (RFC 5804; Dovecot Pigeonhole, Fastmail, Stalwart…) | Script Sieve | `vacation` y `redirect` de Sieve | **Reglas: implementado.** Respuesta automática y reenvío: no |
-| Gmail | Filtros de la API de Gmail (`settings.filters`) | `settings.sendAs`, `vacation`, reenvío verificado | Bloqueado: permiso `gmail.settings.basic` y registro OAuth propio |
-| Exchange EWS | `GetInboxRules` / `UpdateInboxRules` | OOF ya existe (#48); el reenvío es una regla | Bloqueado: hacen falta grabaciones reales, que no se inventan |
-| Microsoft Graph | `messageRules` | `mailboxSettings.automaticRepliesSetting` | Bloqueado: permiso `MailboxSettings.ReadWrite` y consentimiento |
-| Archivo local, RSS | No aplica | No aplica | — |
+| IMAP amb ManageSieve (RFC 5804; Dovecot Pigeonhole, Fastmail, Stalwart…) | Script Sieve | `vacation` i `redirect` de Sieve | **Regles: implementat.** Resposta automàtica i reenviament: no |
+| Gmail | Filtres de l'API de Gmail (`settings.filters`) | `settings.sendAs`, `vacation`, reenviament verificat | Bloquejat: permís `gmail.settings.basic` i registre OAuth propi |
+| Exchange EWS | `GetInboxRules` / `UpdateInboxRules` | OOF ja existeix (#48); el reenviament és una regla | Bloquejat: calen enregistraments reals, que no s'inventen |
+| Microsoft Graph | `messageRules` | `mailboxSettings.automaticRepliesSetting` | Bloquejat: permís `MailboxSettings.ReadWrite` i consentiment |
+| Fitxer local, RSS | No s'aplica | No s'aplica | — |
 
-## Decisión
+## Decisió
 
-- **Las mismas reglas, en otro sitio:**
-  - las reglas de Oreneta se traducen a un script Sieve llamado `oreneta`;
-  - una regla solo va al servidor si Sieve dice exactamente lo mismo, o
-    algo más estrecho en casos de espacios, nunca algo más amplio;
-  - si alguna parte no se puede decir, la regla entera se queda aquí, con
-    el motivo a la vista;
-  - ejemplos que se quedan: «es» o «empieza por» en una dirección, que aquí
-    compara también el nombre; un texto que mezcla nombre y dirección; una
-    etiqueta no enlazada a una palabra clave; una extensión que el servidor
-    no ofrece.
-- **Qué se escribe y qué no:**
-  - solo se escribe el script `oreneta`;
-  - si la copia del servidor cambió desde la última escritura, se muestra y
-    no se reemplaza sin permiso;
-  - nunca se desactiva otro script activo; si hay uno, el de Oreneta queda
-    guardado pero apagado, y se dice;
-  - el servidor comprueba el script (`CHECKSCRIPT`) antes de guardarlo.
-- **Sin aplicar dos veces:**
-  - con el script activo, el motor local se salta esas reglas en esa cuenta
+- **Les mateixes regles, en un altre lloc:**
+  - les regles d'Oreneta es tradueixen a un script Sieve anomenat `oreneta`;
+  - una regla només va al servidor si Sieve diu exactament el mateix, o
+    alguna cosa més estreta en casos d'espais, mai alguna cosa més àmplia;
+  - si alguna part no es pot dir, la regla sencera es queda aquí, amb
+    el motiu a la vista;
+  - exemples que es queden: «és» o «comença per» en una adreça, que aquí
+    compara també el nom; un text que barreja nom i adreça; una
+    etiqueta no enllaçada a una paraula clau; una extensió que el servidor
+    no ofereix.
+- **Què s'escriu i què no:**
+  - només s'escriu l'script `oreneta`;
+  - si la còpia del servidor ha canviat des de l'última escriptura, es mostra i
+    no es reemplaça sense permís;
+  - mai no es desactiva cap altre script actiu; si n'hi ha un, el d'Oreneta queda
+    desat però apagat, i es diu;
+  - el servidor comprova l'script (`CHECKSCRIPT`) abans de desar-lo.
+- **Sense aplicar dues vegades:**
+  - amb l'script actiu, el motor local se salta aquestes regles en aquest compte
     (`server_rules`);
-  - al quitarlas del servidor vuelven a funcionar aquí;
-  - un script guardado pero inactivo no quita nada de aquí.
-- **Seguridad:**
-  - ManageSieve solo con STARTTLS y la contraseña de la cuenta;
-  - un servidor sin TLS se rechaza;
-  - las cuentas OAuth no usan ManageSieve.
-- **Sin reenvíos ni respuestas automáticas en el servidor:** ninguna prueba
-  ni acción activa un reenvío a un tercero.
+  - en treure-les del servidor tornen a funcionar aquí;
+  - un script desat però inactiu no treu res d'aquí.
+- **Seguretat:**
+  - ManageSieve només amb STARTTLS i la contrasenya del compte;
+  - un servidor sense TLS es rebutja;
+  - els comptes OAuth no fan servir ManageSieve.
+- **Sense reenviaments ni respostes automàtiques al servidor:** cap prova
+  ni acció no activa un reenviament a un tercer.
 
-## Pendiente
+## Pendent
 
-- Respuesta automática con `vacation` de Sieve.
-- Adaptadores para Gmail, EWS y Graph, cuando haya permisos y evidencia
+- Resposta automàtica amb `vacation` de Sieve.
+- Adaptadors per a Gmail, EWS i Graph, quan hi hagi permisos i evidència
   real.
-- Prueba contra Dovecot Pigeonhole real (N5).
+- Prova contra Dovecot Pigeonhole real (N5).

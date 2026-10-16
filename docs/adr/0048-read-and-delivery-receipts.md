@@ -1,127 +1,127 @@
-# ADR-0048: Confirmaciones de lectura y de entrega
+# ADR-0048: Confirmacions de lectura i de lliurament
 
-- Estado: aceptada por delegación («Tomo yo la recomendada»); pendiente de
-  revisión del propietario al final del plan.
-- Fecha: 2026-10-13.
-- Alcance: la fila SET-11 de la paridad con eM Client 10.4 (#107), «Correo →
-  Privacidad / Confirmaciones». El bloqueo de contenido remoto y la
-  protección contra rastreadores (ADR-0029) ya existían; faltaba qué hacer
-  con las confirmaciones: pedirlas al enviar y contestar a las que piden
-  los mensajes recibidos.
+- Estat: acceptada per delegació («Tomo yo la recomendada»); pendent de
+  revisió del propietari al final del pla.
+- Data: 2026-10-13.
+- Abast: la fila SET-11 de la paritat amb eM Client 10.4 (#107), «Correu →
+  Privadesa / Confirmacions». El bloqueig de contingut remot i la
+  protecció contra rastrejadors (ADR-0029) ja existien; faltava què fer
+  amb les confirmacions: demanar-les en enviar i respondre les que demanen
+  els missatges rebuts.
 
-## Decisión
+## Decisió
 
-- **Pedir confirmaciones al enviar:**
-  - el redactor tiene dos interruptores, «Pedir confirmación de lectura» y
-    «Pedir confirmación de entrega», que empiezan con lo elegido en
-    Ajustes → Confirmaciones (ambos apagados por omisión; ajuste global,
-    no por cuenta);
-  - la de lectura es la cabecera `Disposition-Notification-To` con la
-    dirección del remitente (RFC 8098 §2.1). Se escribe sobre el mensaje ya
-    construido y antes de firmar o cifrar, así que una firma la cubre; la
-    copia de Enviados también la lleva. Va igual por SMTP que por Exchange
-    (EWS) y Microsoft Graph, que leen la cabecera del MIME que se les
-    entrega;
-  - la de entrega se pide al servidor por SMTP (DSN, RFC 3461):
-    `RET=HDRS` en `MAIL FROM` y `NOTIFY=SUCCESS,FAILURE` con
-    `ORCPT=rfc822;<dirección>` en cada `RCPT TO`. Solo si el servidor
-    anuncia `DSN` en su respuesta a `EHLO` (que se repite antes de
-    autenticar, porque la biblioteca no conserva esa extensión). Si no la
-    anuncia, el mensaje sale igual, sin la petición, y el envío responde
-    `delivery_receipt: "unsupported"`; el redactor lo dice al confirmar el
-    envío. Sin pedirla, en la conexión no cambia nada;
-  - un envío programado guarda las dos peticiones con el resto del
-    mensaje.
-- **Contestar a las que piden los mensajes recibidos:**
-  - al leer un mensaje, el núcleo extrae la petición
-    (`Disposition-Notification-To`, `Return-Path`, si viene de una lista
+- **Demanar confirmacions en enviar:**
+  - el redactor té dos interruptors, «Demanar confirmació de lectura» i
+    «Demanar confirmació de lliurament», que comencen amb el que s'ha triat a
+    Paràmetres → Confirmacions (tots dos desactivats per defecte; paràmetre global,
+    no per compte);
+  - la de lectura és la capçalera `Disposition-Notification-To` amb
+    l'adreça del remitent (RFC 8098 §2.1). S'escriu sobre el missatge ja
+    construït i abans de signar o xifrar, de manera que una signatura la cobreix; la
+    còpia d'Enviats també la porta. Va igual per SMTP que per Exchange
+    (EWS) i Microsoft Graph, que llegeixen la capçalera del MIME que se'ls
+    lliura;
+  - la de lliurament es demana al servidor per SMTP (DSN, RFC 3461):
+    `RET=HDRS` a `MAIL FROM` i `NOTIFY=SUCCESS,FAILURE` amb
+    `ORCPT=rfc822;<dirección>` a cada `RCPT TO`. Només si el servidor
+    anuncia `DSN` en la seva resposta a `EHLO` (que es repeteix abans
+    d'autenticar, perquè la biblioteca no conserva aquesta extensió). Si no
+    l'anuncia, el missatge surt igual, sense la petició, i l'enviament respon
+    `delivery_receipt: "unsupported"`; el redactor ho diu en confirmar
+    l'enviament. Sense demanar-la, a la connexió no canvia res;
+  - un enviament programat desa les dues peticions amb la resta del
+    missatge.
+- **Respondre les que demanen els missatges rebuts:**
+  - en llegir un missatge, el nucli n'extreu la petició
+    (`Disposition-Notification-To`, `Return-Path`, si ve d'una llista
     —`List-Id`, `List-Post`, `List-Unsubscribe` o `Precedence`
-    bulk/list/junk— y `Original-Recipient`) y la guarda con el mensaje en
-    caché. Un informe (`multipart/report`) no se contesta nunca. La vista
-    solo recibe `receipt_requested`;
-  - la política se elige en Ajustes: «Preguntar cada vez» (por omisión),
-    «Enviar siempre» o «No enviar nunca». Se guarda en el ajuste
-    `read_receipt_policy`, que lee el núcleo; un valor desconocido cuenta
-    como «preguntar»;
-  - la decisión es una función pura (`receipts::decide`), en este orden:
-    sin petición, nada; ya contestado, nada más; sin Message-ID, silencio
-    (no se podría recordar ni nombrar); en Correo no deseado, silencio
-    siempre (contestar confirmaría que la dirección funciona); «nunca»,
-    silencio; si viene de una lista, o la confirmación iría a un dominio
-    distinto del de `Return-Path` (o no hay `Return-Path`), se pregunta
-    aunque la política sea «siempre» (RFC 8098 §2.1); si no, «siempre»
-    envía sin preguntar y «preguntar» pregunta;
-  - preguntar es una barra que no bloquea, encima del cuerpo: «El remitente
-    pidió que le avisaras cuando leyeras esto. Enviar confirmación / No
-    enviar», con el motivo de precaución cuando lo hay. No contestar no
-    envía nada;
-  - la respuesta, sea cual sea, se recuerda por cuenta y Message-ID
-    (`receipt_answers`, esquema 59) y no se vuelve a preguntar. Se borra
-    con la cuenta;
-  - antes de enviar se reclama la fila (`INSERT OR IGNORE`), así dos
-    lecturas del mismo mensaje no mandan dos confirmaciones. Si el servidor
-    rechaza el envío, la fila se suelta y se puede volver a preguntar; si
-    el resultado es dudoso (se entregó y no hubo respuesta), se queda como
-    enviada, para no mandar una segunda.
-- **La confirmación que se envía** se construye en el núcleo
+    bulk/list/junk— i `Original-Recipient`) i la desa amb el missatge a la
+    memòria cau. Un informe (`multipart/report`) no es respon mai. La vista
+    només rep `receipt_requested`;
+  - la política es tria a Paràmetres: «Preguntar cada vegada» (per defecte),
+    «Enviar sempre» o «No enviar mai». Es desa al paràmetre
+    `read_receipt_policy`, que llegeix el nucli; un valor desconegut compta
+    com a «preguntar»;
+  - la decisió és una funció pura (`receipts::decide`), en aquest ordre:
+    sense petició, res; ja respost, res més; sense Message-ID, silenci
+    (no es podria recordar ni anomenar); a Correu brossa, silenci
+    sempre (respondre confirmaria que l'adreça funciona); «mai»,
+    silenci; si ve d'una llista, o la confirmació aniria a un domini
+    diferent del de `Return-Path` (o no hi ha `Return-Path`), es pregunta
+    encara que la política sigui «sempre» (RFC 8098 §2.1); si no, «sempre»
+    envia sense preguntar i «preguntar» pregunta;
+  - preguntar és una barra que no bloqueja, damunt del cos: «El remitent
+    ha demanat que l'avisessis quan llegissis això. Enviar confirmació / No
+    enviar», amb el motiu de precaució quan n'hi ha. No respondre no
+    envia res;
+  - la resposta, sigui quina sigui, es recorda per compte i Message-ID
+    (`receipt_answers`, esquema 59) i no es torna a preguntar. S'esborra
+    amb el compte;
+  - abans d'enviar es reclama la fila (`INSERT OR IGNORE`), així dues
+    lectures del mateix missatge no envien dues confirmacions. Si el servidor
+    rebutja l'enviament, la fila s'allibera i es pot tornar a preguntar; si
+    el resultat és dubtós (s'ha lliurat i no hi ha hagut resposta), es queda com a
+    enviada, per no enviar-ne una segona.
+- **La confirmació que s'envia** es construeix al nucli
   (`receipts::build_mdn`): `multipart/report;
-  report-type=disposition-notification` con una parte de texto para la
-  persona y la parte `message/disposition-notification` (en 7bit, nunca
-  quoted-printable ni base64) con `Reporting-UA: Oreneta` (sin versión ni
-  nombre de equipo), `Original-Recipient` si el mensaje lo traía,
-  `Final-Recipient: rfc822;<dirección propia>`, `Original-Message-ID` y
+  report-type=disposition-notification` amb una part de text per a la
+  persona i la part `message/disposition-notification` (en 7bit, mai
+  quoted-printable ni base64) amb `Reporting-UA: Oreneta` (sense versió ni
+  nom d'equip), `Original-Recipient` si el missatge el portava,
+  `Final-Recipient: rfc822;<dirección propia>`, `Original-Message-ID` i
   `Disposition: manual-action/MDN-sent-manually; displayed` o
-  `automatic-action/MDN-sent-automatically; displayed`. Asunto
-  «Read: …», `In-Reply-To` y `References` al original; la automática
-  lleva además `Auto-Submitted: auto-replied` (RFC 3834). Los campos
-  largos se pliegan en espacios; nombres y asuntos no ASCII van como
-  palabras codificadas. Si alguna dirección no es ASCII se usa
+  `automatic-action/MDN-sent-automatically; displayed`. Assumpte
+  «Read: …», `In-Reply-To` i `References` a l'original; l'automàtica
+  porta a més `Auto-Submitted: auto-replied` (RFC 3834). Els camps
+  llargs es pleguen en espais; noms i assumptes no ASCII van com a
+  paraules codificades. Si alguna adreça no és ASCII es fa servir
   `message/global-disposition-notification` en 8bit (RFC 6533).
-- **Se envía por la cuenta que recibió el mensaje**, desde la dirección
-  propia a la que iba dirigido (o la principal), por su servidor SMTP o
-  por Exchange/Graph, a las direcciones de la petición. No se guarda
-  copia en Enviados, como la respuesta de fuera de la oficina.
-- **Nada sale sin la persona:** solo su clic o su elección explícita de
-  «siempre». Es la misma idea que la protección contra rastreadores: una
-  confirmación dice que abriste el mensaje y cuándo, que es justo lo que
-  un píxel de seguimiento intenta averiguar. La página de privacidad lo
-  dice en su fila.
+- **S'envia pel compte que ha rebut el missatge**, des de l'adreça
+  pròpia a la qual anava adreçat (o la principal), pel seu servidor SMTP o
+  per Exchange/Graph, a les adreces de la petició. No se'n desa
+  còpia a Enviats, com la resposta de fora de l'oficina.
+- **Res no surt sense la persona:** només el seu clic o la seva elecció explícita de
+  «sempre». És la mateixa idea que la protecció contra rastrejadors: una
+  confirmació diu que has obert el missatge i quan, que és justament el que
+  un píxel de seguiment intenta esbrinar. La pàgina de privadesa ho
+  diu a la seva fila.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **`MAIL FROM:<>` (remitente nulo) para la confirmación,** como sugiere
-  RFC 8098 §3: muchos servidores de envío autenticado lo rechazan o lo
-  reescriben. Se usa la dirección de la cuenta; `Auto-Submitted` evita los
-  bucles en la automática.
-- **Preguntar también en Correo no deseado:** contestar a correo basura
-  confirma la dirección; si el mensaje sale de ahí, se pregunta entonces.
-- **Volver a pedir el mensaje entero al servidor para leer las cabeceras
-  cada vez que se abre:** sería una descarga por mensaje abierto. La
-  petición se extrae al analizar el cuerpo y se guarda con él.
-- **Pedir confirmación de entrega a Exchange o Graph por cabeceras MIME
-  (`Return-Receipt-To`):** no es un estándar y no hay forma de saber si se
-  respeta; se dice que no está disponible en vez de prometerlo.
+- **`MAIL FROM:<>` (remitent nul) per a la confirmació,** com suggereix
+  RFC 8098 §3: molts servidors d'enviament autenticat el rebutgen o el
+  reescriuen. Es fa servir l'adreça del compte; `Auto-Submitted` evita els
+  bucles en l'automàtica.
+- **Preguntar també a Correu brossa:** respondre a correu brossa
+  confirma l'adreça; si el missatge en surt, es pregunta llavors.
+- **Tornar a demanar el missatge sencer al servidor per llegir les capçaleres
+  cada vegada que s'obre:** seria una baixada per missatge obert. La
+  petició s'extreu en analitzar el cos i es desa amb ell.
+- **Demanar confirmació de lliurament a Exchange o Graph per capçaleres MIME
+  (`Return-Receipt-To`):** no és un estàndard i no hi ha manera de saber si es
+  respecta; es diu que no està disponible en comptes de prometre-ho.
 
-## Pendiente
+## Pendent
 
-- **Confirmación de entrega en EWS y Graph:** hecho. En EWS se pide en el
-  propio elemento, junto al MIME (`IsDeliveryReceiptRequested`, ADR-0058);
-  falta la evidencia con un servidor real. En Graph se pide desde ADR-0057
-  sobre un borrador, solo en cuentas con cambios y, de momento, sin Cco ni
-  firma o cifrado; si no, responde «unsupported» con el motivo.
-- **Mensajes en caché de antes de esta versión:** no tienen la petición
-  guardada y no muestran la barra hasta que se vuelven a descargar. No se
-  invalida la caché entera por esto.
-- **Mensajes de Graph leídos sin MIME:** si la lectura no pasa por el
-  analizador MIME, no se ve la petición (`isReadReceiptRequested` del
-  recurso no se lee todavía).
-- **Interpretar las confirmaciones y avisos de entrega recibidos** (mostrar
-  lo que dicen en el mensaje enviado): hecho en ADR-0057 (#210). Se vinculan
-  cuando el informe se lee (en Graph, al sincronizar; en IMAP y EWS, cuando
-  su cuerpo se descarga o se abre); los guardados en caché antes de esa
-  versión solo se vinculan si se vuelven a leer.
-- **Prueba con servidor real:** el maddy 0.8 de la integración no anuncia
-  DSN, así que la prueba comprueba que la de entrega se informa como no
-  disponible y que la de lectura llega de bob a alice tras su clic. Un
-  servidor con DSN (Postfix) cubriría el camino `requested`.
-- Un ajuste por cuenta en lugar de global, si alguien lo pide.
+- **Confirmació de lliurament a EWS i Graph:** fet. A EWS es demana en el
+  mateix element, al costat del MIME (`IsDeliveryReceiptRequested`, ADR-0058);
+  falta l'evidència amb un servidor real. A Graph es demana des d'ADR-0057
+  sobre un esborrany, només en comptes amb canvis i, de moment, sense còpia oculta ni
+  signatura o xifratge; si no, respon «unsupported» amb el motiu.
+- **Missatges a la memòria cau d'abans d'aquesta versió:** no tenen la petició
+  desada i no mostren la barra fins que es tornen a baixar. No
+  s'invalida tota la memòria cau per això.
+- **Missatges de Graph llegits sense MIME:** si la lectura no passa per
+  l'analitzador MIME, no es veu la petició (`isReadReceiptRequested` del
+  recurs encara no es llegeix).
+- **Interpretar les confirmacions i els avisos de lliurament rebuts** (mostrar
+  el que diuen al missatge enviat): fet a ADR-0057 (#210). Es vinculen
+  quan l'informe es llegeix (a Graph, en sincronitzar; a IMAP i EWS, quan
+  el seu cos es baixa o s'obre); els desats a la memòria cau abans d'aquella
+  versió només es vinculen si es tornen a llegir.
+- **Prova amb servidor real:** el maddy 0.8 de la integració no anuncia
+  DSN, de manera que la prova comprova que la de lliurament s'informa com a no
+  disponible i que la de lectura arriba de bob a alice després del seu clic. Un
+  servidor amb DSN (Postfix) cobriria el camí `requested`.
+- Un paràmetre per compte en lloc de global, si algú ho demana.

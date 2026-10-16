@@ -1,38 +1,38 @@
-# ADR-0040: Grupos de cuentas
+# ADR-0040: Grups de comptes
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-12.
-- Alcance: #99 (la parte de grupos de cuentas; los perfiles son ADR-0016).
+- Data: 2026-10-12.
+- Abast: #99 (la part de grups de comptes; els perfils són l'ADR-0016).
 
-## Decisión
+## Decisió
 
-- **Qué es un grupo:** un nombre y las cuentas que la persona elige. Es una
-  vista: no mueve, copia ni guarda correo, y una cuenta puede estar en
-  varios grupos.
-- **Cómo se ve:** a través de la bandeja unificada, limitada a las cuentas
-  del grupo. Los grupos aparecen debajo de «Bandeja unificada» en la
-  navegación de cuentas y en el menú contextual del botón unificado de la
+- **Què és un grup:** un nom i els comptes que la persona tria. És una
+  vista: no mou, copia ni desa correu, i un compte pot ser en
+  diversos grups.
+- **Com es veu:** a través de la safata unificada, limitada als comptes
+  del grup. Els grups apareixen sota «Safata unificada» a la
+  navegació de comptes i al menú contextual del botó unificat de la
   barra lateral.
-- **Inclusión explícita:**
-  - un grupo muestra exactamente las cuentas que nombra, aunque alguna esté
-    excluida de la bandeja unificada general;
-  - la bandeja unificada sin grupo sigue mostrando las cuentas incluidas,
-    como antes.
-- **Vistas separadas:** cada grupo es una vista distinta de la lista, así
-  que una lista cargada para un grupo no se muestra para otro.
-- **Al salir de la vista unificada** se sale también del grupo.
-- **Guardado:** en las preferencias del perfil (`account_groups`). Viaja con
-  la copia completa del perfil y no se sincroniza con ningún servidor.
-- **Consistencia:**
-  - quitar una cuenta la saca de todos los grupos;
-  - borrar un grupo no toca sus cuentas;
-  - los datos dañados se leen como «sin grupos», sin romper la vista.
+- **Inclusió explícita:**
+  - un grup mostra exactament els comptes que anomena, encara que algun estigui
+    exclòs de la safata unificada general;
+  - la safata unificada sense grup continua mostrant els comptes inclosos,
+    com abans.
+- **Vistes separades:** cada grup és una vista diferent de la llista, de manera
+  que una llista carregada per a un grup no es mostra per a un altre.
+- **En sortir de la vista unificada** se surt també del grup.
+- **Desament:** a les preferències del perfil (`account_groups`). Viatja amb
+  la còpia completa del perfil i no se sincronitza amb cap servidor.
+- **Coherència:**
+  - treure un compte el treu de tots els grups;
+  - suprimir un grup no toca els seus comptes;
+  - les dades malmeses es llegeixen com a «sense grups», sense trencar la vista.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Carpetas globales por grupo en el núcleo:** la vista unificada ya se
-  compone en la aplicación cuenta a cuenta, así que basta con limitar qué
-  cuentas entran.
-- **Una cuenta en un solo grupo:** obliga a elegir entre, por ejemplo,
-  «Trabajo» y «Todo lo de Ana». Una vista no necesita esa exclusión.
+- **Carpetes globals per grup al nucli:** la vista unificada ja es
+  compon a l'aplicació compte per compte, de manera que n'hi ha prou de limitar quins
+  comptes hi entren.
+- **Un compte en un sol grup:** obliga a triar entre, per exemple,
+  «Feina» i «Tot el de l'Ana». Una vista no necessita aquesta exclusió.

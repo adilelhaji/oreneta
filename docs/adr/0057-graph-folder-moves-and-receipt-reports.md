@@ -1,183 +1,184 @@
-# ADR-0057: Mover carpetas y pedir confirmación de entrega en Graph; leer los informes de entrega y de lectura
+# ADR-0057: Moure carpetes i demanar confirmació de lliurament a Graph; llegir els informes de lliurament i de lectura
 
-- Estado: aceptada por delegación (el propietario delegó las decisiones de
-  diseño de #210: «la opción más prudente»); pendiente de revisión del
-  propietario al final del plan.
-- Fecha: 2026-10-15.
-- Alcance: #210, sobre las filas SET-07 (#87, carpetas) y SET-11 (#107,
-  confirmaciones) del libro de paridad. Completa lo que ADR-0050 y ADR-0048
-  dejaron pendiente para Microsoft Graph y añade leer los informes que
-  llegan, en todos los tipos de cuenta. Exchange (EWS) queda fuera: es otra
-  incidencia (#211), que puede reutilizar `receipts::delivery_receipt`.
+- Estat: acceptada per delegació (el propietari va delegar les decisions de
+  disseny de #210: «la opción más prudente»); pendent de revisió del
+  propietari al final del pla.
+- Data: 2026-10-15.
+- Abast: #210, sobre les files SET-07 (#87, carpetes) i SET-11 (#107,
+  confirmacions) del registre d'acceptació. Completa el que ADR-0050 i ADR-0048
+  van deixar pendent per a Microsoft Graph i afegeix llegir els informes que
+  arriben, en tots els tipus de compte. Exchange (EWS) en queda fora: és una
+  altra incidència (#211), que pot reutilitzar `receipts::delivery_receipt`.
 
-## Decisión
+## Decisió
 
-- **Mover una carpeta en Graph** (`folders.move`, el mismo comando que IMAP):
-  - solo en una cuenta cuyo permiso se guardó con cambios (`Mail.ReadWrite`,
-    #141). Sin él, la guarda de solo lectura lo para antes de nada y la
-    interfaz dice «Permite los cambios de esta cuenta en sus ajustes para
-    mover sus carpetas». No hace falta ningún permiso nuevo;
-  - las carpetas de Graph no son rutas sino ids opacos con su padre, así que
-    las reglas de ADR-0050 se comprueban sobre el árbol que Graph informó
-    (`graph_folders`): nunca una carpeta especial (Bandeja de entrada,
-    Enviados, Borradores, Elementos eliminados, Correo no deseado, Archivo),
-    ni una que tenga una dentro, ni una carpeta de búsqueda (ni hacia ella),
-    ni dentro de sí misma o de una subcarpeta, ni adonde ya está, ni al lado
-    de otra con el mismo nombre (sin distinguir mayúsculas, como Exchange).
-    La interfaz aplica las mismas reglas recorriendo `parent_id`;
-  - una sola petición, `POST /me/mailFolders/{id}/move` con
-    `{"destinationId": …}` (la raíz del buzón para el nivel superior), con
-    `Prefer: IdType="ImmutableId"`, sin redirecciones y sin repetirla nunca.
-    La respuesta tiene que decir el padre pedido. Un éxito de otra forma
-    (otro padre, ninguno, una respuesta ilegible) o un 5xx no es ni
-    confirmación ni rechazo: es **incierto**. Solo un rechazo del servidor
-    (4xx) se dice «no se movió»;
-  - después, haya ido bien, mal o en duda, se vuelve a leer el árbol de
-    carpetas: la caché dice dónde está la carpeta en el servidor, no dónde se
-    intentó dejar;
-  - **resultado incierto**: se dice «no se sabe si se movió; no se ha
-    repetido». El árbol ya se leyó de nuevo en el núcleo y la interfaz
-    vuelve a pedir la lista, así que volver a pedirlo encuentra la carpeta en
-    su sitio: «ya está ahí», dicho como información y no como error, sin
-    segunda petición;
-  - con ids inmutables la carpeta conserva su id, y por tanto su nombre
-    local: no hay renombrados y los mensajes en caché se quedan. Si Graph
-    devuelve otro id, se informa ese renombrado para que favoritas, colores
-    y vistas lo sigan.
-- **Pedir confirmación de entrega en Graph:**
-  - Graph envía el MIME tal cual (`sendMail` en base64, #143), sin sobre
-    donde poner la petición. `isDeliveryReceiptRequested` es una propiedad
-    del mensaje, que solo se puede fijar sobre un borrador. Así que, cuando
-    se pide, el envío va en tres pasos: borrador a partir del mismo MIME
-    (`POST /me/messages`, `text/plain` en base64), `PATCH` con
-    `{"isDeliveryReceiptRequested": true}` y `POST /me/messages/{id}/send`;
-  - **la política** es la de ADR-0048, ahora en una función pequeña y
-    compartida, `receipts::delivery_receipt(pedida, la_vía_la_lleva)`: se
-    pide solo si la persona la quiere y la vía puede llevarla (SMTP con
-    DSN; Graph con cambios además de envío). Sin pedirla, nada cambia;
-  - **prudencia hasta tener evidencia de Microsoft 365:** no se sabe todavía
-    si un borrador hecho desde MIME conserva los destinatarios Cco ni la
-    firma o el cifrado byte a byte. Perder un Cco sería silencioso. Así que
-    el borrador solo se usa para un mensaje sin Cco y sin firma ni cifrado.
-    En los demás casos (o sin cambios permitidos) el mensaje sale como
-    siempre por `sendMail`, sin la petición, y el envío responde
-    `delivery_receipt: "unsupported"` con `delivery_receipt_reason`
+- **Moure una carpeta a Graph** (`folders.move`, la mateixa ordre que IMAP):
+  - només en un compte el permís del qual es va desar amb canvis
+    (`Mail.ReadWrite`, #141). Sense aquest permís, la protecció de només
+    lectura l'atura abans de res i la interfície diu «Permet els canvis
+    d'aquest compte als seus paràmetres per a moure'n les carpetes». No cal
+    cap permís nou;
+  - les carpetes de Graph no són rutes sinó ids opacs amb el seu pare, així que
+    les regles d'ADR-0050 es comproven sobre l'arbre que Graph ha informat
+    (`graph_folders`): mai una carpeta especial (Safata d'entrada,
+    Enviats, Esborranys, Elements suprimits, Correu brossa, Arxiu),
+    ni una que en tingui una a dins, ni una carpeta de cerca (ni cap a ella),
+    ni dins d'ella mateixa o d'una subcarpeta, ni allà on ja és, ni al costat
+    d'una altra amb el mateix nom (sense distingir majúscules, com Exchange).
+    La interfície aplica les mateixes regles recorrent `parent_id`;
+  - una sola petició, `POST /me/mailFolders/{id}/move` amb
+    `{"destinationId": …}` (l'arrel de la bústia per al nivell superior), amb
+    `Prefer: IdType="ImmutableId"`, sense redireccions i sense repetir-la mai.
+    La resposta ha de dir el pare demanat. Un èxit d'una altra forma
+    (un altre pare, cap, una resposta il·legible) o un 5xx no és ni
+    confirmació ni rebuig: és **incert**. Només un rebuig del servidor
+    (4xx) es diu «no s'ha mogut»;
+  - després, tant si ha anat bé com si ha anat malament o és dubtós, es torna
+    a llegir l'arbre de carpetes: la memòria cau diu on és la carpeta al
+    servidor, no on es va intentar deixar;
+  - **resultat incert**: es diu «no se sap si s'ha mogut; no s'ha
+    repetit». L'arbre ja s'ha tornat a llegir al nucli i la interfície
+    torna a demanar la llista, així que tornar-ho a demanar troba la carpeta
+    al seu lloc: «ja hi és», dit com a informació i no com a error, sense
+    segona petició;
+  - amb ids immutables la carpeta conserva el seu id, i per tant el seu nom
+    local: no hi ha reanomenaments i els missatges a la memòria cau s'hi
+    queden. Si Graph retorna un altre id, s'informa d'aquest reanomenament
+    perquè preferides, colors i vistes el segueixin.
+- **Demanar confirmació de lliurament a Graph:**
+  - Graph envia el MIME tal qual (`sendMail` en base64, #143), sense sobre
+    on posar la petició. `isDeliveryReceiptRequested` és una propietat
+    del missatge, que només es pot fixar sobre un esborrany. Així que, quan
+    es demana, l'enviament va en tres passos: esborrany a partir del mateix
+    MIME (`POST /me/messages`, `text/plain` en base64), `PATCH` amb
+    `{"isDeliveryReceiptRequested": true}` i `POST /me/messages/{id}/send`;
+  - **la política** és la d'ADR-0048, ara en una funció petita i
+    compartida, `receipts::delivery_receipt(pedida, la_vía_la_lleva)`: es
+    demana només si la persona la vol i la via la pot portar (SMTP amb
+    DSN; Graph amb canvis a més d'enviament). Sense demanar-la, res no canvia;
+  - **prudència fins a tenir evidència de Microsoft 365:** encara no se sap
+    si un esborrany fet des de MIME conserva els destinataris en còpia oculta ni la
+    signatura o el xifratge byte a byte. Perdre una còpia oculta seria silenciós. Així
+    que l'esborrany només es fa servir per a un missatge sense còpia oculta i sense
+    signatura ni xifratge. En els altres casos (o sense canvis permesos) el
+    missatge surt com sempre per `sendMail`, sense la petició, i l'enviament
+    respon `delivery_receipt: "unsupported"` amb `delivery_receipt_reason`
     (`needsChanges`, `bcc` o `protected`), que el redactor explica;
-  - un fallo antes del último paso (borrador o marca) es «no enviado»
-    (`NotSent`): nada salió, se borra el borrador y el intento queda como
-    rechazado, nunca como incierto. Si el borrador no se pudo borrar, o su
-    creación quedó sin respuesta, se dice que puede quedar una copia en
-    Borradores;
-  - el último paso es un envío como los demás (#143, contrato de #29): 202
-    aceptado; sin respuesta, 5xx, cualquier otro 2xx o una respuesta
-    ilegible, **incierto**, sin deshacer ni repetir, diciendo que puede
-    quedar una copia en Borradores; solo un rechazo (4xx) borra el borrador
-    y deja el intento como rechazado. `sendMail` sigue la misma regla;
-  - el borrador puede verse en Borradores desde otros clientes durante el
-    instante que tarda el envío. Si la aplicación se cierra entre crear el
-    borrador y enviarlo, el borrador queda allí y el intento queda abierto
-    en `outgoing_attempts` (#29), que la persona resuelve;
-  - la copia de Enviados la guarda Microsoft, como con `sendMail`.
-- **Leer los informes que llegan** (todos los tipos de cuenta):
-  - el analizador MIME del núcleo reconoce un `multipart/report` de primer
-    nivel con `report-type=delivery-status` (DSN, RFC 3464) o
-    `disposition-notification` (MDN, RFC 8098), y lee solo su parte para
-    máquinas (`message/delivery-status`, `message/disposition-notification`
-    y sus variantes `global` de RFC 6533), nunca el texto para personas;
-  - de cada destinatario: entregado, reenviado sin más informes (`relayed`,
-    `expanded`), retrasado, fallido (con su código de estado RFC 3463 y las
-    palabras del servidor, limitadas a 500 caracteres y sin caracteres de
-    control), mostrado o tratado sin mostrar (`deleted`, `dispatched`,
-    `processed`). Lo que no se reconoce (`denied`, `failed` de RFC 3798,
-    acciones inventadas) no se interpreta: un informe mal formado se queda
-    como un mensaje normal;
-  - **vínculo:** por Message-ID. El MDN lo dice en `Original-Message-ID`; el
-    DSN, en la copia o las cabeceras del original que devuelve
+  - una fallada abans de l'últim pas (esborrany o marca) és «no enviat»
+    (`NotSent`): no ha sortit res, se suprimeix l'esborrany i l'intent queda
+    com a rebutjat, mai com a incert. Si l'esborrany no s'ha pogut suprimir, o
+    la seva creació ha quedat sense resposta, es diu que pot quedar una còpia
+    a Esborranys;
+  - l'últim pas és un enviament com els altres (#143, contracte de #29): 202
+    acceptat; sense resposta, 5xx, qualsevol altre 2xx o una resposta
+    il·legible, **incert**, sense desfer ni repetir, dient que pot
+    quedar una còpia a Esborranys; només un rebuig (4xx) suprimeix l'esborrany
+    i deixa l'intent com a rebutjat. `sendMail` segueix la mateixa regla;
+  - l'esborrany es pot veure a Esborranys des d'altres clients durant
+    l'instant que triga l'enviament. Si l'aplicació es tanca entre crear
+    l'esborrany i enviar-lo, l'esborrany hi queda i l'intent queda obert
+    a `outgoing_attempts` (#29), que la persona resol;
+  - la còpia d'Enviats la desa Microsoft, com amb `sendMail`.
+- **Llegir els informes que arriben** (tots els tipus de compte):
+  - l'analitzador MIME del nucli reconeix un `multipart/report` de primer
+    nivell amb `report-type=delivery-status` (DSN, RFC 3464) o
+    `disposition-notification` (MDN, RFC 8098), i en llegeix només la part
+    per a màquines (`message/delivery-status`, `message/disposition-notification`
+    i les seves variants `global` de RFC 6533), mai el text per a persones;
+  - de cada destinatari: lliurat, reenviat sense més informes (`relayed`,
+    `expanded`), endarrerit, fallit (amb el seu codi d'estat RFC 3463 i les
+    paraules del servidor, limitades a 500 caràcters i sense caràcters de
+    control), mostrat o tractat sense mostrar (`deleted`, `dispatched`,
+    `processed`). El que no es reconeix (`denied`, `failed` de RFC 3798,
+    accions inventades) no s'interpreta: un informe mal format es queda
+    com un missatge normal;
+  - **vincle:** per Message-ID. L'MDN el diu a `Original-Message-ID`; el
+    DSN, a la còpia o a les capçaleres de l'original que retorna
     (`message/rfc822`, `text/rfc822-headers`, `message/global[-headers]`).
-    Se guarda por cuenta en `delivery_reports` (esquema 64) al guardar el
-    cuerpo en caché, sea cual sea el protocolo que lo trajo, cuando la
-    cuenta tiene ese mensaje (en su caché o en `outgoing_attempts`). Si
-    todavía no lo tiene (la Bandeja de entrada se sincronizó antes que
-    Enviados, por ejemplo), el informe espera en
-    `delivery_reports_pending`, como mucho 90 días y 1000 por cuenta (se van
-    los más antiguos), y se vincula en cuanto el mensaje aparece y se
-    muestra; mientras, el informe se ve como un mensaje normal. Una palabra final
-    sustituye a un retraso y nunca al revés; si no, gana el informe más
-    reciente, con su fecha acotada por el momento en que se lee (una fecha
-    futura no puede ganar). Un informe en Enviados o Borradores (una
-    confirmación que envió esta cuenta) no cuenta como recibido;
-  - **cuándo se vincula:** cuando se lee el cuerpo del informe. En Graph,
-    al sincronizar una carpeta se recorre la lista de informes por clase de
-    elemento, página a página (hasta 10 páginas por sincronización),
-    saltando los ya leídos, y se lee el MIME de hasta 20 nuevos, también los
-    guardados antes de esta versión; cada uno se lee una sola vez. Uno que
-    no se puede leer por sí mismo (demasiado grande, ya no está, ilegible)
-    se marca con el motivo y se pasa al siguiente; un fallo del servidor o
-    de la cuenta (límite, conexión, inicio de sesión) para el recorrido
-    hasta la siguiente sincronización, que vuelve a empezar. En IMAP y
-    EWS depende de que el cuerpo se descargue (precarga o al abrirlo); un
-    informe guardado en caché antes de esta versión no se vuelve a leer;
-  - **dónde se ve, y cómo:** un informe es una afirmación de quien lo
-    envía, y se dice así: «El informe dice que se entregó a…», «El programa
-    de correo de … dice que se mostró», con su fecha, «a fecha de …» para un
-    retraso, los fallos primero, y marcado cuando nombra a alguien a quien
-    el mensaje no iba dirigido. El motivo de un fallo se da con una frase
-    para los códigos RFC 3463 comunes (x.1.1/x.1.10 la dirección no existe,
-    x.2.2 buzón lleno, x.7.x rechazado por la política del servidor, 4.x.x
-    problema temporal) y las palabras del servidor aparte, sin repetir el
-    código; direcciones y motivos van aislados (bidi) y sin caracteres de
-    formato (Cf), para que un texto de derecha a izquierda no reordene la
-    frase. En el propio informe se ve lo que dice, con el título «Informe de
-    entrega» o «Informe de lectura», y «sobre un mensaje que enviaste» solo
-    si casa con uno de esta cuenta. Nada se envía ni se contesta por
-    leerlos;
-  - en Graph, un mensaje sin adjuntos se lee de su JSON, que en un informe
-    solo trae el texto para personas. Al leer un mensaje se pide también su
-    clase (`$expand` de la propiedad extendida `String 0x001A`); si es
-    `REPORT.*`, se lee su MIME. Basta `Mail.Read`.
-- **Privacidad:** no cambia lo que sale del equipo. El borrador vive unos
-  instantes en el propio buzón de Microsoft, que ya recibía el mensaje; leer
-  la clase del mensaje y los informes no manda nada. `docs/privacy.html` no
-  cambia.
+    Es desa per compte a `delivery_reports` (esquema 64) en desar el
+    cos a la memòria cau, sigui quin sigui el protocol que l'ha portat, quan
+    el compte té aquest missatge (a la seva memòria cau o a
+    `outgoing_attempts`). Si encara no el té (la Safata d'entrada s'ha
+    sincronitzat abans que Enviats, per exemple), l'informe espera a
+    `delivery_reports_pending`, com a molt 90 dies i 1000 per compte (se'n van
+    els més antics), i es vincula tan aviat com el missatge apareix i es
+    mostra; mentrestant, l'informe es veu com un missatge normal. Una paraula
+    final substitueix un retard i mai al revés; si no, guanya l'informe més
+    recent, amb la data limitada pel moment en què es llegeix (una data
+    futura no pot guanyar). Un informe a Enviats o Esborranys (una
+    confirmació que ha enviat aquest compte) no compta com a rebut;
+  - **quan es vincula:** quan es llegeix el cos de l'informe. A Graph,
+    en sincronitzar una carpeta es recorre la llista d'informes per classe
+    d'element, pàgina a pàgina (fins a 10 pàgines per sincronització),
+    saltant els ja llegits, i es llegeix el MIME de fins a 20 de nous, també
+    els desats abans d'aquesta versió; cadascun es llegeix una sola vegada. Un
+    que no es pot llegir per si mateix (massa gran, ja no hi és, il·legible)
+    es marca amb el motiu i es passa al següent; una fallada del servidor o
+    del compte (límit, connexió, inici de sessió) atura el recorregut
+    fins a la sincronització següent, que torna a començar. A IMAP i
+    EWS depèn que el cos es baixi (precàrrega o en obrir-lo); un
+    informe desat a la memòria cau abans d'aquesta versió no es torna a llegir;
+  - **on es veu, i com:** un informe és una afirmació de qui l'envia, i es
+    diu així: «L'informe diu que s'ha lliurat a…», «El programa de correu
+    de … diu que s'ha mostrat», amb la seva data, «a data de …» per a un
+    retard, les fallades primer, i marcat quan anomena algú a qui el
+    missatge no anava dirigit. El motiu d'una fallada es dona amb una frase
+    per als codis RFC 3463 comuns (x.1.1/x.1.10 l'adreça no existeix,
+    x.2.2 bústia plena, x.7.x rebutjat per la política del servidor, 4.x.x
+    problema temporal) i les paraules del servidor a part, sense repetir el
+    codi; adreces i motius van aïllats (bidi) i sense caràcters de
+    format (Cf), perquè un text de dreta a esquerra no reordeni la
+    frase. En el mateix informe es veu el que diu, amb el títol «Informe de
+    lliurament» o «Informe de lectura», i «sobre un missatge que vas enviar»
+    només si coincideix amb un d'aquest compte. No s'envia ni es respon res
+    per llegir-los;
+  - a Graph, un missatge sense adjunts es llegeix del seu JSON, que en un
+    informe només porta el text per a persones. En llegir un missatge també
+    se'n demana la classe (`$expand` de la propietat estesa `String 0x001A`);
+    si és `REPORT.*`, se'n llegeix el MIME. N'hi ha prou amb `Mail.Read`.
+- **Privadesa:** no canvia el que surt de l'equip. L'esborrany viu uns
+  instants a la mateixa bústia de Microsoft, que ja rebia el missatge; llegir
+  la classe del missatge i els informes no envia res. `docs/privacy.html` no
+  canvia.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Enviar en JSON (`sendMail` con el objeto `message`) cuando se pide la
-  confirmación:** perdería la firma y el cifrado, las imágenes en línea y
-  todo lo que el MIME ya construye igual para SMTP, EWS y Graph.
-- **Cabecera `Return-Receipt-To` en el MIME:** no es un estándar y no hay
-  forma de saber si Exchange la respeta (ya descartada en ADR-0048).
-- **Repetir automáticamente un movimiento o un envío inciertos:** puede
-  duplicar; se lee el estado del servidor en su lugar.
-- **Mover carpetas en Graph como en IMAP, renombrando rutas:** sus carpetas
-  no son rutas; el id y el padre son la verdad.
-- **Interpretar informes por el asunto o el texto («Undeliverable:…»):**
-  depende del idioma y del servidor y se puede falsificar sin esfuerzo; solo
-  se lee la parte para máquinas.
-- **Pedir el MIME de todos los mensajes de Graph para encontrar informes:**
-  una descarga por mensaje abierto; la clase del elemento basta para saber
-  cuáles lo son.
-- **Ocultar o archivar los informes vinculados:** la persona decide qué
-  hace con su correo; el informe se queda donde llegó.
+- **Enviar en JSON (`sendMail` amb l'objecte `message`) quan es demana la
+  confirmació:** perdria la signatura i el xifratge, les imatges en línia i
+  tot el que el MIME ja construeix igual per a SMTP, EWS i Graph.
+- **Capçalera `Return-Receipt-To` al MIME:** no és un estàndard i no hi ha
+  manera de saber si Exchange la respecta (ja descartada a ADR-0048).
+- **Repetir automàticament un moviment o un enviament incerts:** pot
+  duplicar; en lloc d'això es llegeix l'estat del servidor.
+- **Moure carpetes a Graph com a IMAP, reanomenant rutes:** les seves carpetes
+  no són rutes; l'id i el pare són la veritat.
+- **Interpretar informes per l'assumpte o el text («Undeliverable:…»):**
+  depèn de l'idioma i del servidor i es pot falsificar sense esforç; només
+  es llegeix la part per a màquines.
+- **Demanar el MIME de tots els missatges de Graph per a trobar informes:**
+  una baixada per missatge obert; n'hi ha prou amb la classe de l'element per
+  a saber quins ho són.
+- **Amagar o arxivar els informes vinculats:** la persona decideix què
+  fa amb el seu correu; l'informe es queda on ha arribat.
 
-## Pendiente
+## Pendent
 
-- **Evidencia con Microsoft 365 real** (la ejecución N5 final): que
-  `/mailFolders/{id}/move` conserva el id con `ImmutableId`; que un borrador
-  creado desde MIME conserva Message-ID, `Bcc`, firma y cifrado al marcarlo
-  y enviarlo; que el MIME de un `REPORT.IPM.Note.IPNRN` o `.NDR` llega como
+- **Evidència amb Microsoft 365 real** (l'execució N5 final): que
+  `/mailFolders/{id}/move` conserva l'id amb `ImmutableId`; que un esborrany
+  creat des de MIME conserva Message-ID, `Bcc`, signatura i xifratge en marcar-lo
+  i enviar-lo; que el MIME d'un `REPORT.IPM.Note.IPNRN` o `.NDR` arriba com a
   `multipart/report`.
-- Exchange (EWS): mover carpetas y pedir confirmación de entrega (#211).
-- Un informe recibido en otra cuenta que la que envió el mensaje no se
-  vincula (aislamiento entre cuentas).
-- Un informe es una afirmación de quien lo envía: se muestra como lo que
-  dice, sin comprobar que el destinatario fuera uno de los del mensaje.
-- La lectura de un solo mensaje por id de UID (`messages.read`, fuera de un
-  hilo) no lleva todavía los informes, igual que `receipt_requested`.
-- La versión de esquema 64 puede chocar con otras ramas abiertas a la vez;
-  si otra rama se fusiona antes, esta renumera su migración.
-- Un informe que espera más de 90 días a su mensaje, o que queda fuera de
-  los 1000 que esperan por cuenta, se pierde; el informe sigue en el buzón.
-- Confirmación de entrega en Graph para mensajes con Cco o firmados o
-  cifrados, cuando la evidencia N5 muestre que el borrador los conserva
-  (comprobando también los destinatarios del borrador antes de enviarlo).
+- Exchange (EWS): moure carpetes i demanar confirmació de lliurament (#211).
+- Un informe rebut en un compte diferent del que va enviar el missatge no es
+  vincula (aïllament entre comptes).
+- Un informe és una afirmació de qui l'envia: es mostra com el que
+  diu, sense comprovar que el destinatari fos un dels del missatge.
+- La lectura d'un sol missatge per id d'UID (`messages.read`, fora d'un
+  fil) encara no porta els informes, igual que `receipt_requested`.
+- La versió d'esquema 64 pot topar amb altres branques obertes alhora;
+  si una altra branca es fusiona abans, aquesta en renumera la migració.
+- Un informe que espera més de 90 dies el seu missatge, o que queda fora dels
+  1000 que esperen per compte, es perd; l'informe continua a la bústia.
+- Confirmació de lliurament a Graph per a missatges amb còpia oculta o signats o
+  xifrats, quan l'evidència N5 mostri que l'esborrany els conserva
+  (comprovant també els destinataris de l'esborrany abans d'enviar-lo).

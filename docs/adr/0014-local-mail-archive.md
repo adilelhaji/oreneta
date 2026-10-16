@@ -1,58 +1,58 @@
-# ADR-0014: Archivo local de correo e importación EML/MBOX
+# ADR-0014: Arxiu local de correu i importació EML/MBOX
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #112 (importación y archivos de datos locales).
-- Aprobación: el responsable delegó el 2026-10-11 las decisiones pendientes
-  en la opción más prudente, que revisará al final (plan de finalización,
-  «Modo de ejecución acordado»).
+- Data: 2026-10-11.
+- Abast: primer lliurament de #112 (importació i arxius de dades locals).
+- Aprovació: el responsable va delegar el 2026-10-11 les decisions pendents
+  en l'opció més prudent, que revisarà al final (pla de finalització,
+  «Mode d'execució acordat»).
 
-## Decisión
+## Decisió
 
-- Un **archivo local** es una cuenta más (`local-archive`, `auth_type`
-  `local_archive`) cuyo «servidor» es la base de datos del perfil. No tiene
-  contraseña, no sincroniza, no envía ni responde automáticamente, y nunca
-  usa la red.
-- Para el resto del núcleo es una variante más de la sesión de correo
-  (`backend::Session::Local`), junto a IMAP, EWS y Graph. Así, listas,
-  hilos, búsqueda, marcas, mover, copiar y borrar funcionan con el mismo
-  código que en las demás cuentas.
-- **Almacenamiento.** Cada mensaje se guarda dos veces en la base de datos
-  cifrada del perfil:
-  - analizado, en las mismas tablas que el correo sincronizado (cabeceras,
-    cuerpo, adjuntos);
-  - en sus bytes originales (`archive_messages`), para releerlo, exportarlo
-    o copiarlo a un servidor tal como llegó.
+- Un **arxiu local** és un compte més (`local-archive`, `auth_type`
+  `local_archive`) el «servidor» del qual és la base de dades del perfil. No té
+  contrasenya, no sincronitza, no envia ni respon automàticament, i mai no
+  fa servir la xarxa.
+- Per a la resta del nucli és una variant més de la sessió de correu
+  (`backend::Session::Local`), al costat d'IMAP, EWS i Graph. Així, llistes,
+  fils, cerca, marques, moure, copiar i suprimir funcionen amb el mateix
+  codi que en els altres comptes.
+- **Emmagatzematge.** Cada missatge es desa dues vegades a la base de dades
+  xifrada del perfil:
+  - analitzat, a les mateixes taules que el correu sincronitzat (capçaleres,
+    cos, adjunts);
+  - en els seus bytes originals (`archive_messages`), per a rellegir-lo, exportar-lo
+    o copiar-lo a un servidor tal com va arribar.
 
-  Entra en la copia completa del perfil (ADR-0010).
-- **Importación** de `.eml` (un mensaje) y `.mbox` (varios, con `>From`
-  deshecho), en dos pasos: vista previa y confirmación.
-  - Los archivos se leen en el núcleo a partir de sus rutas y nunca se
-    modifican.
-  - Se rechazan los archivos de más de 1 GB y los mensajes de más de 100 MB.
-  - Se omite lo que no es correo, y lo que ya está en la carpeta (mismo
-    Message-ID) no se añade dos veces.
-  - Lo importado queda como leído.
-- **Borrar** mueve el mensaje a la papelera del archivo; borrar en la
-  papelera lo elimina.
-- **Copiar o mover entre el archivo y una cuenta** usa el flujo de copia
-  existente: los bytes originales van y vienen.
+  Entra a la còpia completa del perfil (ADR-0010).
+- **Importació** de `.eml` (un missatge) i `.mbox` (diversos, amb `>From`
+  desfet), en dos passos: previsualització i confirmació.
+  - Els fitxers es llegeixen al nucli a partir dels seus camins i mai no es
+    modifiquen.
+  - Es rebutgen els fitxers de més d'1 GB i els missatges de més de 100 MB.
+  - S'omet el que no és correu, i el que ja és a la carpeta (mateix
+    Message-ID) no s'afegeix dues vegades.
+  - El que s'importa queda com a llegit.
+- **Suprimir** mou el missatge a la paperera de l'arxiu; suprimir a la
+  paperera l'elimina.
+- **Copiar o moure entre l'arxiu i un compte** fa servir el flux de còpia
+  existent: els bytes originals van i venen.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Carpetas en disco (Maildir).** Habrían quedado fuera del cifrado de la
-  base de datos y de la copia completa, y requerían un segundo modelo de
+- **Carpetes al disc (Maildir).** Haurien quedat fora del xifratge de la
+  base de dades i de la còpia completa, i requerien un segon model de
   lectura.
-- **Importar dentro de una cuenta IMAP.** Habría subido correo antiguo a un
-  servidor sin que se pidiera.
-- **PST (Outlook).** Es un formato propietario que no tiene una biblioteca
-  madura en Rust. Queda como fila pendiente de #112, sin contar para la
-  paridad.
+- **Importar dins d'un compte IMAP.** Hauria pujat correu antic a un
+  servidor sense que s'hagués demanat.
+- **PST (Outlook).** És un format propietari que no té cap biblioteca
+  madura en Rust. Queda com a fila pendent de #112, sense comptar per a la
+  paritat.
 
-## Pendiente (#112)
+## Pendent (#112)
 
 - Exportar a EML o MBOX.
-- Importación por partes de archivos de más de 1 GB, y reanudación.
-- Ajustes y perfiles de Thunderbird y Postbox.
+- Importació per parts de fitxers de més d'1 GB, i represa.
+- Paràmetres i perfils de Thunderbird i Postbox.
 - PST.

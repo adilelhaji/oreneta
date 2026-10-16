@@ -1,30 +1,29 @@
-# ADR-0012: Edición de contactos y conflictos de escritura
+# ADR-0012: Edició de contactes i conflictes d'escriptura
 
-- Estado: aceptada.
-- Fecha: 2026-10-11.
-- Alcance: #41. La política de conflictos se aplica también a tareas (#103) y
-  a cualquier escritura nueva en calendario.
-- Aprobación humana: «Local y después CardDAV» y «No guardar y mostrar ambas»,
-  elegidas entre las opciones de
-  [la propuesta](../design/contact-editing-decisions.md).
+- Estat: acceptada.
+- Data: 2026-10-11.
+- Abast: #41. La política de conflictes s'aplica també a les tasques (#103) i
+  a qualsevol escriptura nova al calendari.
+- Aprovació humana: «Local y después CardDAV» i «No guardar y mostrar ambas»,
+  escollides entre les opcions de
+  [la proposta](../design/contact-editing-decisions.md).
 
-## Decisión
+## Decisió
 
-1. **Primero una libreta local** («en este equipo»), sin servidor.
-2. **Después CardDAV**, con versión (ETag): `PUT` con `If-Match` y alta con
-   `If-None-Match: *`, probada contra Radicale en CI. Las libretas sin permiso
-   de escritura no ofrecen edición.
-3. **Google y Exchange no se editan** en esta decisión. Google necesita el
-   permiso `contacts`, que depende de los registros OAuth propios (#144).
-   Exchange necesita evidencia de un servidor real.
-4. **Conflictos.** Si el servidor responde que el elemento cambió, no se guarda
-   nada: se relee la versión del servidor y se muestran las dos para que la
-   persona elija. Nunca se fusiona ni se sobrescribe en silencio.
-5. Borrado, duplicados, vCard y fotos según la propuesta: confirmación
-   nombrando la libreta, enlace local deshacible y sin fotos por URL remota.
+1. **Primer, una llibreta local** («en aquest equip»), sense servidor.
+2. **Després, CardDAV**, amb versió (ETag): `PUT` amb `If-Match` i alta amb
+   `If-None-Match: *`, provada contra Radicale a CI. Les llibretes sense permís
+   d'escriptura no ofereixen edició.
+3. **Google i Exchange no s'editen** en aquesta decisió. Google necessita el
+   permís `contacts`, que depèn dels registres OAuth propis (#144).
+   Exchange necessita evidència d'un servidor real.
+4. **Conflictes.** Si el servidor respon que l'element ha canviat, no es desa
+   res: es torna a llegir la versió del servidor i es mostren totes dues perquè la
+   persona triï. Mai no es fusiona ni se sobreescriu en silenci.
+5. Supressió, duplicats, vCard i fotos segons la proposta: confirmació que anomena la llibreta, enllaç local que es pot desfer i sense fotos per URL remot.
 
-## Consecuencias
+## Conseqüències
 
-`people` necesita una columna de versión, rellenada en la siguiente
-sincronización. Una libreta local queda solo en el equipo, y la interfaz lo
-dice.
+`people` necessita una columna de versió, que s'emplena en la sincronització
+següent. Una llibreta local queda només a l'equip, i la interfície
+ho diu.

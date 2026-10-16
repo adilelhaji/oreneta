@@ -1,184 +1,187 @@
-# ADR-0061: Diseño de derecha a izquierda para el árabe
+# ADR-0061: Disseny de dreta a esquerra per a l'àrab
 
-- Estado: aceptada por delegación (el propietario delegó las decisiones de
-  diseño de #226 en la opción más prudente); pendiente de revisión del
-  propietario al final del plan.
-- Fecha: 2026-10-16.
-- Alcance: #226, hija de #37 (fila SET-27 del libro de paridad, «General →
-  Idioma» de eM Client 10.4). El borrador #198 se usó solo como referencia de
-  qué componentes tocar; no se fusiona. Fuera de alcance: la prueba nativa de
-  métodos de entrada (ejecución N4) y otros idiomas de derecha a izquierda que
-  no están en el catálogo. Diseño: [docs/design/right-to-left.md](../design/right-to-left.md).
+- Estat: acceptada per delegació (el propietari va delegar les decisions de
+  disseny de #226 en l'opció més prudent); pendent de revisió del
+  propietari al final del pla.
+- Data: 2026-10-16.
+- Abast: #226, filla de #37 (fila SET-27 del registre d'acceptació, «General →
+  Idioma» d'eM Client 10.4). L'esborrany #198 es va fer servir només com a
+  referència de quins components calia tocar; no es fusiona. Fora d'abast: la
+  prova nativa de mètodes d'entrada (execució N4) i altres idiomes de dreta a
+  esquerra que no són al catàleg. Disseny: [docs/design/right-to-left.md](../design/right-to-left.md).
 
-## Decisión
+## Decisió
 
-- **Qué decide la dirección:** el idioma de la interfaz. `applyDocumentLanguage`
-  pone `lang` y `dir` en `<html>` (`dir="rtl"` para el árabe) al arrancar,
-  desde la caché de la última sesión, y cada vez que cambia el idioma; volver
-  a un idioma de izquierda a derecha restaura `dir="ltr"` sin recargar. La
-  lista de idiomas de derecha a izquierda es fija en `lib/direction.ts`, no
-  una consulta a `Intl.Locale`: WebKitGTK y Bun no exponen todos esa
-  información y la misma respuesta en todas partes vale más.
-- **Propiedades lógicas, no lados:** márgenes, rellenos, posiciones, bordes,
-  esquinas y alineación usan las utilidades lógicas de Tailwind 4.3
+- **Què decideix la direcció:** l'idioma de la interfície. `applyDocumentLanguage`
+  posa `lang` i `dir` a `<html>` (`dir="rtl"` per a l'àrab) en arrencar,
+  des de la memòria cau de l'última sessió, i cada vegada que canvia l'idioma;
+  tornar a un idioma d'esquerra a dreta restaura `dir="ltr"` sense recarregar.
+  La llista d'idiomes de dreta a esquerra és fixa a `lib/direction.ts`, no
+  una consulta a `Intl.Locale`: WebKitGTK i Bun no exposen tots dos aquesta
+  informació i la mateixa resposta a tot arreu val més.
+- **Propietats lògiques, no costats:** marges, farciments, posicions, vores,
+  cantonades i alineació fan servir les utilitats lògiques de Tailwind 4.3
   (`ms/me`, `ps/pe`, `start/end`, `border-s/e`, `rounded-s/e/ss/se/es/ee`,
-  `text-start/end`) y las propiedades lógicas de CSS
+  `text-start/end`) i les propietats lògiques de CSS
   (`margin-inline-start`, `inset-inline-end`, `float: inline-start`…). No
-  hace falta ninguna dependencia nueva. Donde no hay forma lógica (una
-  sombra interior, un desplazamiento con `translate-x`), la regla de
-  derecha a izquierda va al lado con la variante `rtl:` o con
+  cal cap dependència nova. On no hi ha forma lògica (una
+  ombra interior, un desplaçament amb `translate-x`), la regla de
+  dreta a esquerra va al costat amb la variant `rtl:` o amb
   `[dir='rtl']`.
-- **Un guardián en las pruebas:** `lib/physicalDirection.ts` busca clases y
-  estilos con lado físico en todos los componentes y en `App.tsx`; la prueba
-  falla con cada uno nuevo. Lee los valores arbitrarios enteros
-  (`ml-(--gap)`, `pl-[clamp(1px,2px,3px)]`) y salta los comentarios, también
-  los de JSX. Se aceptan sin entrada en la lista: una clase emparejada en la
-  misma línea con su contraparte `rtl:`/`ltr:`, y el centrado
-  `left-1/2 -translate-x-1/2`, que cae en el mismo sitio en las dos
-  direcciones. La lista de excepciones, cada una con su motivo:
-  - las asas de las esquinas de una imagen en el redactor: sus nombres dicen
-    «arriba a la izquierda» y el arrastre se calcula en píxeles de pantalla;
-  - el estilo en línea de la cita del correo que sale, una regla por
-    dirección: los clientes de correo (Outlook entre ellos) no admiten
-    propiedades lógicas.
+- **Un guardià a les proves:** `lib/physicalDirection.ts` cerca classes i
+  estils amb costat físic en tots els components i a `App.tsx`; la prova
+  falla amb cadascun de nou. Llegeix els valors arbitraris sencers
+  (`ml-(--gap)`, `pl-[clamp(1px,2px,3px)]`) i se salta els comentaris,
+  també els de JSX. S'accepten sense entrada a la llista: una classe
+  aparellada a la mateixa línia amb la seva contrapart `rtl:`/`ltr:`, i el
+  centrat `left-1/2 -translate-x-1/2`, que cau al mateix lloc en les dues
+  direccions. La llista d'excepcions, cadascuna amb el seu motiu:
+  - les nanses de les cantonades d'una imatge al redactor: els seus noms
+    diuen «a dalt a l'esquerra» i l'arrossegament es calcula en píxels de
+    pantalla;
+  - l'estil en línia de la citació del correu que surt, una regla per
+    direcció: els clients de correu (Outlook entre ells) no admeten
+    propietats lògiques.
 
-  No mira (se revisan a mano): las coordenadas y transformaciones en objetos
-  `style` (`left`, `right`, `float`, `translateX`: las posiciones tomadas del
-  puntero o de un rectángulo son físicas por naturaleza), ni `src/lib` ni
+  No mira (es revisen a mà): les coordenades i transformacions en objectes
+  `style` (`left`, `right`, `float`, `translateX`: les posicions preses del
+  punter o d'un rectangle són físiques per naturalesa), ni `src/lib` ni
   `index.css`.
-- **Iconos:** se reflejan los que apuntan a lo largo de la línea (flechas de
-  atrás y adelante, chevrones, responder, reenviar, deshacer, enviar, la cita
-  de una respuesta, los paneles laterales, las listas y el ajuste de línea).
-  No se reflejan los de medios, las marcas, las flechas de orden (arriba y
-  abajo) ni los logotipos. Un chevrón girado con `rotate-*` ya apunta en
-  vertical y no se refleja; `no-mirror` excluye un icono. Un chevrón de
-  desplegar que gira al abrirse se gira 180° en vez de reflejarse, para que
-  la animación sea un cuarto de vuelta y no un parpadeo. Una sola regla en
-  `index.css` por nombre de clase de Lucide, no un cambio en cada uso. Las
-  flechas escritas como texto («→», «←») salen de `forwardArrow` y
-  `backArrow`, que las invierten en derecha a izquierda.
-- **Teclado en el sentido de lectura:**
-  - en los separadores de paneles (ya lo hacía `PaneResizer`, ADR-0059), en
-    las pestañas (proveedores de cuenta, listas de tareas) y en los grupos de
-    opción (tipo de calendario, color de categoría), las flechas laterales
-    siguen la lectura: en árabe la flecha izquierda va al siguiente. Inicio y
-    Fin van a los extremos; las pestañas y los grupos se recorren en círculo.
-    Si el foco aún no estaba en ningún elemento, la flecha solo lo lleva al
-    primero, sin elegirlo;
-  - en el visor de imágenes, la flecha izquierda pasa a la siguiente en
-    árabe, como los botones, que también se reflejan;
-  - las listas y los menús verticales no cambian: arriba y abajo no tienen
-    lado;
-  - las pestañas siguen siendo todas alcanzables con Tab, como antes (una
-    prueba de arranque lo exige); las flechas se añaden, no sustituyen.
-- **Menús y ventanas emergentes:** el punto de anclaje de un menú es su borde
-  de inicio. `FloatingContextMenu` lo abre hacia la derecha en izquierda a
-  derecha y hacia la izquierda en derecha a izquierda, siempre dentro de la
-  ventana. Lo mide en el borde izquierdo de la ventana antes de colocarlo (un
-  menú medido junto al borde derecho se estrecha y parte sus etiquetas) y lo
-  vuelve a colocar cuando cambia de ancho (una fila que llega después). Los
-  botones pasan el borde que corresponde (`startEdgeX`, `endAlignedX`,
-  `besideEndX`, `flyoutX`); los submenús se abren pasado el borde final de su
-  fila, o pasado el inicial si no caben. El panel de detalles en
-  superposición entra desde el borde final. Los avisos (toasts) están
-  centrados y no cambian.
-- **El contenido de las personas conserva su dirección:**
-  - asuntos, nombres, direcciones, etiquetas, títulos de eventos y tareas,
-    nombres de carpeta y de archivo llevan `dir="auto"` (o `<bdi>` cuando el
-    texto va dentro de una línea con texto de la interfaz): el navegador los
-    ordena por sus propias letras y no reordenan lo que los rodea. En la
-    tarjeta de la lista, la línea del asunto toma la dirección del asunto
-    solo, no de la marca «Borrador» que va delante;
-  - se alinean con la interfaz, no consigo mismos (`text-align: match-parent`
-    para `[dir="auto"]`, sin especificidad, de modo que una clase de
-    alineación explícita sigue mandando). Un asunto latino en la lista árabe
-    queda a la derecha, pero se lee y se corta (con «…») por su propio final;
-  - las listas de nombres en una frase («para Ana, Marc») aíslan cada nombre
-    (marcas FSI/PDI) y en árabe se separan con la coma árabe «،». Una lista
-    de izquierda a derecha en una interfaz de izquierda a derecha sale igual
-    que antes;
-  - el texto que alguien escribió y se lee o se escribe en varias líneas
-    (cuerpos en texto plano, el redactor en texto y en formato, la respuesta
-    rápida, el chat, las notas de eventos y contactos, las traducciones y
-    reescrituras propuestas, los adjuntos de texto) toma la dirección de cada
-    párrafo (`unicode-bidi: plaintext`) y se alinea con ella. Los campos
-    vacíos siguen a la interfaz (`dir` solo cuando hay texto: un campo vacío
-    con `dir="auto"` se quedaría de izquierda a derecha). El código, los
-    registros, los scripts de reglas y las peticiones exactas al asistente
-    son siempre de izquierda a derecha (`dir="ltr"`);
-  - un mensaje HTML que declara su `dir` se respeta. En uno que no declara
-    nada, cada bloque de texto (párrafo, elemento de lista, título, cita, y
-    las celdas y `div` con texto propio) recibe `dir="auto"`; el `<body>`
-    nunca: un boletín de izquierda a derecha cuyo primer texto es árabe (a
-    menudo un preencabezado oculto) conserva sus tablas de maquetación de
-    izquierda a derecha, y un mensaje que mezcla párrafos lee cada uno en su
-    dirección;
-  - **el correo que sale declara la dirección de sus bloques de derecha a
-    izquierda:** al guardar y al enviar, cada párrafo, título, lista o cita
-    cuyo primer carácter fuerte es de derecha a izquierda lleva `dir="rtl"`,
-    y una cita así lleva la barra a la derecha (`border-right`,
-    `padding-right`). Un párrafo de izquierda a derecha dentro de una lista o
-    cita marcada lleva `dir="ltr"`. El correo escrito de izquierda a derecha
-    sale byte a byte como antes (una prueba lo comprueba), y lo que ya
-    declara su dirección (un original citado) no se toca. Así una respuesta
-    en árabe sobre una cita en inglés llega a Outlook, Apple Mail o Gmail con
-    cada parte en su dirección.
-  - **qué es un carácter fuerte de derecha a izquierda** (`firstStrongDirection`,
-    para el correo que sale y la línea del asunto): una letra de una escritura
-    de derecha a izquierda (hebreo, árabe, siríaco, thaana, n'ko, samaritano,
-    mandeo y los bloques de derecha a izquierda de los planos suplementarios)
-    o las marcas RLM y ALM; cualquier otra letra, o LRM, es de izquierda a
-    derecha. Los dígitos, los signos combinantes, la puntuación, la marca de
-    orden de bytes y los unidores no cuentan, como en `dir="auto"`. Un rango
-    de puntos de código no basta: entre las escrituras árabes y hebreas hay
-    escrituras índicas y tailandesas que son de izquierda a derecha.
-- **Accesibilidad hallada por las pruebas en árabe**, defectos que ya estaban
-  en todos los idiomas y que se corrigen, aunque cambian lo que se ve en
-  todos ellos:
-  - contraste por debajo de 4,5:1 con el tema claro por opacidades sobre
-    `text-secondary`: los metadatos de las filas de mensaje (fecha,
-    destinatarios), la cabecera de la conversación, los títulos de grupo de
-    la lista de calendarios y de la navegación de Ajustes. Se quitan esas
-    opacidades (el texto secundario sigue siéndolo por color y peso);
-  - los desplegables de Ajustes no tenían nombre accesible: toman el título
-    de su fila;
-  - dos contenedores de Ajustes (la firma y Actualizaciones) tenían
-    `aria-label` sin rol: pasan a ser `role="group"`.
+- **Icones:** es reflecteixen les que apunten al llarg de la línia (fletxes
+  d'enrere i endavant, xebrons, respondre, reenviar, desfer, enviar, la
+  citació d'una resposta, les subfinestres laterals, les llistes i l'ajust de
+  línia). No es reflecteixen les de mitjans, les marques, les fletxes d'ordre
+  (amunt i avall) ni els logotips. Un xebró girat amb `rotate-*` ja apunta en
+  vertical i no es reflecteix; `no-mirror` exclou una icona. Un xebró de
+  desplegar que gira en obrir-se es gira 180° en lloc de reflectir-se, perquè
+  l'animació sigui un quart de volta i no un parpelleig. Una sola regla a
+  `index.css` per nom de classe de Lucide, no un canvi a cada ús. Les
+  fletxes escrites com a text («→», «←») surten de `forwardArrow` i
+  `backArrow`, que les inverteixen en dreta a esquerra.
+- **Teclat en el sentit de lectura:**
+  - als separadors de subfinestres (ja ho feia `PaneResizer`, ADR-0059), a
+    les pestanyes (proveïdors de compte, llistes de tasques) i als grups
+    d'opció (tipus de calendari, color de categoria), les fletxes laterals
+    segueixen la lectura: en àrab la fletxa esquerra va al següent. Inici i
+    Fi van als extrems; les pestanyes i els grups es recorren en cercle.
+    Si el focus encara no era en cap element, la fletxa només el porta al
+    primer, sense triar-lo;
+  - al visor d'imatges, la fletxa esquerra passa a la següent en
+    àrab, com els botons, que també es reflecteixen;
+  - les llistes i els menús verticals no canvien: amunt i avall no tenen
+    costat;
+  - les pestanyes continuen sent totes accessibles amb Tab, com abans (una
+    prova d'arrencada ho exigeix); les fletxes s'afegeixen, no substitueixen.
+- **Menús i finestres emergents:** el punt d'ancoratge d'un menú és la seva
+  vora d'inici. `FloatingContextMenu` l'obre cap a la dreta en esquerra a
+  dreta i cap a l'esquerra en dreta a esquerra, sempre dins de la
+  finestra. El mesura a la vora esquerra de la finestra abans de col·locar-lo
+  (un menú mesurat al costat de la vora dreta s'estreny i parteix les seves
+  etiquetes) i el torna a col·locar quan canvia d'amplada (una fila que
+  arriba després). Els botons passen la vora que correspon (`startEdgeX`,
+  `endAlignedX`, `besideEndX`, `flyoutX`); els submenús s'obren passada la
+  vora final de la seva fila, o passada la inicial si no hi caben. La subfinestra
+  de detalls en superposició entra des de la vora final. Els avisos (toasts)
+  estan centrats i no canvien.
+- **El contingut de les persones conserva la seva direcció:**
+  - assumptes, noms, adreces, etiquetes, títols d'esdeveniments i tasques,
+    noms de carpeta i de fitxer porten `dir="auto"` (o `<bdi>` quan el
+    text va dins d'una línia amb text de la interfície): el navegador els
+    ordena per les seves pròpies lletres i no reordenen el que els envolta. A
+    la targeta de la llista, la línia de l'assumpte pren la direcció de
+    l'assumpte sol, no de la marca «Esborrany» que va davant;
+  - s'alineen amb la interfície, no amb si mateixos (`text-align: match-parent`
+    per a `[dir="auto"]`, sense especificitat, de manera que una classe
+    d'alineació explícita continua manant). Un assumpte llatí a la llista
+    àrab queda a la dreta, però es llegeix i es talla (amb «…») pel seu propi
+    final;
+  - les llistes de noms en una frase («per a Ana, Marc») aïllen cada nom
+    (marques FSI/PDI) i en àrab se separen amb la coma àrab «،». Una llista
+    d'esquerra a dreta en una interfície d'esquerra a dreta surt igual
+    que abans;
+  - el text que algú ha escrit i que es llegeix o s'escriu en diverses línies
+    (cossos en text pla, el redactor en text i en format, la resposta
+    ràpida, el xat, les notes d'esdeveniments i contactes, les traduccions i
+    reescriptures proposades, els adjunts de text) pren la direcció de cada
+    paràgraf (`unicode-bidi: plaintext`) i s'hi alinea. Els camps
+    buits segueixen la interfície (`dir` només quan hi ha text: un camp buit
+    amb `dir="auto"` es quedaria d'esquerra a dreta). El codi, els
+    registres, els scripts de regles i les peticions exactes a l'assistent
+    són sempre d'esquerra a dreta (`dir="ltr"`);
+  - un missatge HTML que declara el seu `dir` es respecta. En un que no
+    declara res, cada bloc de text (paràgraf, element de llista, títol,
+    citació, i les cel·les i `div` amb text propi) rep `dir="auto"`; el
+    `<body>` mai: un butlletí d'esquerra a dreta el primer text del qual és
+    àrab (sovint un preencapçalament ocult) conserva les seves taules de
+    maquetació d'esquerra a dreta, i un missatge que barreja paràgrafs llegeix
+    cadascun en la seva direcció;
+  - **el correu que surt declara la direcció dels seus blocs de dreta a
+    esquerra:** en desar i en enviar, cada paràgraf, títol, llista o citació
+    el primer caràcter fort del qual és de dreta a esquerra porta `dir="rtl"`,
+    i una citació així porta la barra a la dreta (`border-right`,
+    `padding-right`). Un paràgraf d'esquerra a dreta dins d'una llista o
+    citació marcada porta `dir="ltr"`. El correu escrit d'esquerra a dreta
+    surt byte a byte com abans (una prova ho comprova), i el que ja
+    declara la seva direcció (un original citat) no es toca. Així una resposta
+    en àrab sobre una citació en anglès arriba a Outlook, Apple Mail o Gmail
+    amb cada part en la seva direcció.
+  - **què és un caràcter fort de dreta a esquerra** (`firstStrongDirection`,
+    per al correu que surt i la línia de l'assumpte): una lletra d'una
+    escriptura de dreta a esquerra (hebreu, àrab, siríac, thaana, n'ko,
+    samarità, mandeu i els blocs de dreta a esquerra dels plans
+    suplementaris) o les marques RLM i ALM; qualsevol altra lletra, o LRM, és
+    d'esquerra a dreta. Els dígits, els signes combinants, la puntuació, la
+    marca d'ordre de bytes i els unidors no compten, com a `dir="auto"`. Amb
+    un rang de punts de codi no n'hi ha prou: entre les escriptures àrabs i
+    hebrees hi ha escriptures índiques i tailandeses que són d'esquerra a
+    dreta.
+- **Accessibilitat trobada per les proves en àrab**, defectes que ja hi eren
+  en tots els idiomes i que es corregeixen, encara que canvien el que es veu
+  en tots ells:
+  - contrast per sota de 4,5:1 amb el tema clar per opacitats sobre
+    `text-secondary`: les metadades de les files de missatge (data,
+    destinataris), la capçalera de la conversa, els títols de grup de
+    la llista de calendaris i de la navegació de Paràmetres. Es treuen
+    aquestes opacitats (el text secundari continua sent-ho per color i pes);
+  - els desplegables de Paràmetres no tenien nom accessible: prenen el títol
+    de la seva fila;
+  - dos contenidors de Paràmetres (la signatura i Actualitzacions) tenien
+    `aria-label` sense rol: passen a ser `role="group"`.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Fusionar #198:** se cortó de un `main` antiguo (anterior a la agenda de
-  la barra lateral, los separadores, la impresión y la presencia del chat) y
-  no tenía pruebas.
-- **Un plugin de PostCSS que invierta la hoja de estilos (rtlcss):** una
-  dependencia nueva y una segunda hoja para mantener, cuando Tailwind ya
-  tiene utilidades lógicas.
-- **`Intl.Locale().textInfo` para saber la dirección:** no está en todos los
-  motores en los que corre la aplicación.
-- **`dir="auto"` en cada bloque del correo que sale (opción `textDirection`
-  de Tiptap):** cambiaría el HTML de todos los mensajes enviados, en todos
-  los idiomas, y los borradores guardados. Se declara solo la dirección de
-  derecha a izquierda, que es la que un cliente no supone.
-- **`dir="auto"` en el `<body>` del mensaje recibido** (la primera versión de
-  esta decisión): giraba boletines enteros por un preencabezado árabe.
-- **`Intl.ListFormat` para unir nombres:** en «unit» cambia el separador de
-  otros idiomas («A y B» en español, ninguno en chino); se usa la coma del
-  idioma y nada más.
-- **Alinear el texto de las personas consigo mismo:** una lista árabe con
-  unos asuntos a la derecha y otros a la izquierda se lee peor; la
-  alineación sigue a la interfaz y la dirección al texto.
-- **Pestañas con tabulación itinerante (solo la activa con Tab):** es el
-  patrón WAI-ARIA, pero cambia el orden de Tab que ya usan las personas y las
-  pruebas de arranque; las flechas se añaden sin quitar nada.
+- **Fusionar #198:** es va tallar d'un `main` antic (anterior a l'agenda de
+  la barra lateral, els separadors, la impressió i la presència del xat) i
+  no tenia proves.
+- **Un plugin de PostCSS que inverteixi el full d'estils (rtlcss):** una
+  dependència nova i un segon full per mantenir, quan Tailwind ja
+  té utilitats lògiques.
+- **`Intl.Locale().textInfo` per saber la direcció:** no és en tots els
+  motors en què s'executa l'aplicació.
+- **`dir="auto"` a cada bloc del correu que surt (opció `textDirection`
+  de Tiptap):** canviaria l'HTML de tots els missatges enviats, en tots
+  els idiomes, i els esborranys desats. Es declara només la direcció de
+  dreta a esquerra, que és la que un client no suposa.
+- **`dir="auto"` al `<body>` del missatge rebut** (la primera versió
+  d'aquesta decisió): girava butlletins sencers per un preencapçalament àrab.
+- **`Intl.ListFormat` per unir noms:** en «unit» canvia el separador
+  d'altres idiomes («A y B» en castellà, cap en xinès); es fa servir la coma
+  de l'idioma i res més.
+- **Alinear el text de les persones amb si mateix:** una llista àrab amb
+  uns assumptes a la dreta i d'altres a l'esquerra es llegeix pitjor;
+  l'alineació segueix la interfície i la direcció, el text.
+- **Pestanyes amb tabulació itinerant (només l'activa amb Tab):** és el
+  patró WAI-ARIA, però canvia l'ordre de Tab que ja fan servir les persones i
+  les proves d'arrencada; les fletxes s'afegeixen sense treure res.
 
-## Pendiente
+## Pendent
 
-- Prueba nativa en Windows con método de entrada árabe (ejecución N4 final):
-  SET-27 no pasa a «verified» sin ella.
-- Cambiar a mano la dirección de un párrafo en el redactor (Ctrl+Mayús+
-  derecha/izquierda, como Word u Outlook): fuera de #226, en su propia issue.
-- Arrastrar columnas del tablero (dnd-kit) en derecha a izquierda: el orden
-  se calcula con rectángulos reales y el teclado mueve en el sentido de la
-  flecha, pero falta comprobarlo en la aplicación nativa.
-- Las líneas que mezclan texto de la interfaz y de las personas fuera de las
-  revisadas aquí se revisarán con la prueba nativa.
+- Prova nativa a Windows amb mètode d'entrada àrab (execució N4 final):
+  SET-27 no passa a «verified» sense ella.
+- Canviar a mà la direcció d'un paràgraf al redactor (Ctrl+Maj+
+  dreta/esquerra, com Word o Outlook): fora de #226, en la seva pròpia incidència.
+- Arrossegar columnes del tauler (dnd-kit) en dreta a esquerra: l'ordre
+  es calcula amb rectangles reals i el teclat mou en el sentit de la
+  fletxa, però falta comprovar-ho a l'aplicació nativa.
+- Les línies que barregen text de la interfície i de les persones fora de les
+  revisades aquí es revisaran amb la prova nativa.

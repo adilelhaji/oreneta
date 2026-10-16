@@ -1,24 +1,24 @@
-# ADR-0013: Listas de tareas locales
+# ADR-0013: Llistes de tasques locals
 
-- Estado: aceptada.
-- Fecha: 2026-10-11.
-- Alcance: primera entrega de #103.
-- Aprobación humana: «Listas locales y migración», elegida entre las opciones
-  de [la propuesta](../design/full-tasks-decisions.md).
+- Estat: acceptada.
+- Data: 2026-10-11.
+- Abast: primer lliurament de #103.
+- Aprovació humana: «Listas locales y migración», escollida entre les opcions
+  de [la proposta](../design/full-tasks-decisions.md).
 
-## Decisión
+## Decisió
 
-- Listas y tareas sueltas guardadas en el equipo, con título, nota, fecha
-  límite, recordatorio, prioridad (baja, normal o alta), estado y enlace
-  opcional a una conversación.
-- Las tareas enlazadas actuales pasan a una lista local «Seguimiento de
-  correo» sin perder ningún campo. La regla de una tarea abierta por
-  conversación se mantiene.
-- Sin sincronización, repetición ni delegación en esta entrega. El siguiente
-  paso es CalDAV (VTODO), con la política de conflictos de ADR-0012 y una
-  decisión sobre la cola sin conexión que se toma junto con la del calendario.
+- Llistes i tasques soltes desades a l'equip, amb títol, nota, data
+  límit, recordatori, prioritat (baixa, normal o alta), estat i enllaç
+  opcional a una conversa.
+- Les tasques enllaçades actuals passen a una llista local «Seguiment de
+  correu» sense perdre cap camp. La regla d'una tasca oberta per
+  conversa es manté.
+- Sense sincronització, repetició ni delegació en aquest lliurament. El pas
+  següent és CalDAV (VTODO), amb la política de conflictes de l'ADR-0012 i una
+  decisió sobre la cua sense connexió que es pren juntament amb la del calendari.
 
-## Consecuencias
+## Conseqüències
 
-La migración se prueba en ida y vuelta (N1) y no cambia el comportamiento de
-las tareas enlazadas validado en #42.
+La migració es prova en anada i tornada (N1) i no canvia el comportament de
+les tasques enllaçades validat a #42.

@@ -1,54 +1,54 @@
-# ADR-0038: Borrar un perfil con datos
+# ADR-0038: Suprimir un perfil amb dades
 
-- Estado: aceptada; tomada por delegación y revisada por el propietario
+- Estat: acceptada; presa per delegació i revisada pel propietari
   el 2026-10-12.
-- Fecha: 2026-10-12.
-- Alcance: #99, sobre ADR-0016.
+- Data: 2026-10-12.
+- Abast: #99, sobre l'ADR-0016.
 
 ## Problema
 
-Las contraseñas y claves de un perfil están en el llavero del sistema, con
-nombres que solo conoce su propia base. Borrar sus carpetas desde otro
-perfil dejaría esas entradas en el llavero para siempre. Por eso, hasta
-ahora, solo se podía borrar un perfil que nunca se había abierto.
+Les contrasenyes i les claus d'un perfil són al clauer del sistema, amb
+noms que només coneix la seva pròpia base. Suprimir-ne les carpetes des d'un altre
+perfil deixaria aquestes entrades al clauer per sempre. Per això, fins
+ara, només es podia suprimir un perfil que no s'havia obert mai.
 
-## Decisión
+## Decisió
 
-- **Cerrojo de perfil abierto:** cada proceso tiene un cerrojo del sistema
-  sobre `.oreneta-running.lock` en la carpeta de su perfil mientras se
-  ejecuta (`flock` o `LockFileEx`). Borrar un perfil toma ese cerrojo
-  primero, así que un perfil abierto en otra ventana no se borra («ciérrala
-  primero»).
-- **Confirmación:** para borrar un perfil con datos hay que escribir su
-  nombre exacto. El texto dice qué se borra de este equipo y que el correo
-  y los datos de los servidores no se tocan.
-- **Llavero:** el núcleo se ejecuta una vez dentro de ese perfil
-  (`--purge-profile`, con su `MERON_PROFILE` y su base). Lee la base y
-  borra cada entrada que nombra:
-  - las cuentas;
-  - las libretas;
-  - los calendarios CalDAV;
-  - el chat y la nube;
-  - las claves OpenPGP y las identidades S/MIME;
-  - la contraseña de las copias programadas;
-  - los registros de Graph.
+- **Bloqueig de perfil obert:** cada procés té un bloqueig del sistema
+  sobre `.oreneta-running.lock` a la carpeta del seu perfil mentre
+  s'executa (`flock` o `LockFileEx`). Suprimir un perfil pren primer aquest
+  bloqueig, de manera que un perfil obert en una altra finestra no se suprimeix («tanca-la
+  primer»).
+- **Confirmació:** per a suprimir un perfil amb dades cal escriure'n el
+  nom exacte. El text diu què se suprimeix d'aquest equip i que el correu
+  i les dades dels servidors no es toquen.
+- **Clauer:** el nucli s'executa una vegada dins d'aquest perfil
+  (`--purge-profile`, amb el seu `MERON_PROFILE` i la seva base). Llegeix la base i
+  suprimeix cada entrada que anomena:
+  - els comptes;
+  - les llibretes;
+  - els calendaris CalDAV;
+  - el xat i el núvol;
+  - les claus OpenPGP i les identitats S/MIME;
+  - la contrasenya de les còpies programades;
+  - els registres de Graph.
 
-  La clave de la base se borra la última. Nunca actúa sobre el perfil
-  principal. Una prueba cuenta los lugares del núcleo que guardan un
-  secreto y falla si aparece uno nuevo sin añadirlo a esta lista.
-- **Orden:**
+  La clau de la base se suprimeix l'última. Mai no actua sobre el perfil
+  principal. Una prova compta els llocs del nucli que desen un
+  secret i falla si n'apareix un de nou sense afegir-lo a aquesta llista.
+- **Ordre:**
   1. purgar;
-  2. quitar el perfil de la lista, para que ya no pueda abrirse;
-  3. soltar el cerrojo (Windows no borra un archivo abierto);
-  4. borrar las carpetas.
-- **Si la purga falla** (la base no se puede leer, el llavero no responde):
-  no se borra nada y se pregunta. «Borrar igualmente» deja esas entradas
-  en el llavero, y se dice.
+  2. treure el perfil de la llista, perquè ja no es pugui obrir;
+  3. alliberar el bloqueig (Windows no suprimeix un fitxer obert);
+  4. suprimir les carpetes.
+- **Si la purga falla** (la base no es pot llegir, el clauer no respon):
+  no se suprimeix res i es pregunta. «Suprimir igualment» deixa aquestes entrades
+  al clauer, i es diu.
 
-## Alternativas descartadas
+## Alternatives descartades
 
-- **Enumerar el llavero por prefijo:** no todas las plataformas lo
-  permiten.
-- **Pedir que se abra el perfil y se quiten sus cuentas a mano:** era lo
-  anterior. Es lento, y un perfil que no se puede abrir (base dañada) no se
-  podía borrar nunca.
+- **Enumerar el clauer per prefix:** no totes les plataformes ho
+  permeten.
+- **Demanar que s'obri el perfil i se'n treguin els comptes a mà:** era el que
+  es feia abans. És lent, i un perfil que no es pot obrir (base malmesa) no es
+  podia suprimir mai.
