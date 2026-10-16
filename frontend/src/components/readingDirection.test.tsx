@@ -5,6 +5,7 @@ import { AccountProviderGrid } from './dialog/AccountProviderGrid'
 import { Gallery } from './chat/Gallery'
 import { FloatingContextMenu } from './menu/FloatingContextMenu'
 import type { SetupMode } from '../states/ui'
+import { handleGroupArrowKeys } from '../lib/direction'
 
 // Keyboard and placement in the reading direction (#226, ADR-0061). The
 // document direction is what the interface language sets on <html>.
@@ -59,6 +60,36 @@ describe('tabs follow the reading direction', () => {
     expect(selectedTab(view)).toContain('Microsoft Graph')
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
     expect(selectedTab(view)).toContain('Microsoft Graph')
+  })
+})
+
+describe('a group reached with focus on none of its items', () => {
+  it('moves focus to an item without picking it', () => {
+    const picked: string[] = []
+    const view = render(
+      <div dir="rtl">
+        <div
+          role="radiogroup"
+          tabIndex={-1}
+          aria-label="Colour"
+          onKeyDown={(event) => handleGroupArrowKeys(event, '[role="radio"]')}
+        >
+          {['red', 'green', 'blue'].map((colour) => (
+            <button key={colour} type="button" role="radio" aria-checked={false} onClick={() => picked.push(colour)}>
+              {colour}
+            </button>
+          ))}
+        </div>
+      </div>,
+    )
+    const group = view.getByRole('radiogroup')
+    group.focus()
+    fireEvent.keyDown(group, { key: 'ArrowLeft' })
+    expect(document.activeElement?.textContent).toBe('red')
+    expect(picked).toEqual([])
+    // From there the arrows pick, in reading order.
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' })
+    expect(picked).toEqual(['green'])
   })
 })
 

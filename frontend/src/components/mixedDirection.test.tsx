@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { cleanup, render } from '@testing-library/react'
 import i18n from '../lib/i18n'
+import { firstStrongDirection, type TextDirection } from '../lib/direction'
 import { applyDocumentLanguage } from '../states/settings'
 import { ThreadListItem } from './threads/ThreadListItem'
 import { ThreadTable } from './threads/ThreadTable'
@@ -13,9 +14,10 @@ import type { Message } from '../types'
 
 // Text people write keeps its own direction inside the interface's (#226,
 // ADR-0061): a Latin subject in the Arabic interface, an Arabic one in the
-// English interface. The element holding it is isolated (dir="auto" or <bdi>),
-// so the browser orders it by its own letters and it cannot reorder the
-// interface text around it.
+// English interface. happy-dom does not resolve dir="auto", so the direction
+// each piece of text ends up with is worked out here by the HTML rule the
+// browser applies (the production-entry checks read the real computed
+// `direction` in Chromium).
 afterEach(async () => {
   cleanup()
   await i18n.changeLanguage('en')
@@ -47,13 +49,38 @@ function message(over: Partial<Message> = {}): Message {
   } as Message
 }
 
-/** The nearest element that isolates the text and lets it pick its direction. */
-function isolatingHolder(container: HTMLElement, text: string): Element | null {
-  const holder = [...container.querySelectorAll('*')].find(
-    (element) => [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent?.includes(text)),
-  )
-  return holder?.closest('[dir="auto"], bdi') ?? null
+/** Text of an element as dir="auto" reads it: nested elements with their own direction are skipped. */
+function autoText(element: Element): string {
+  let text = ''
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === 3) text += node.textContent ?? ''
+    else if (node instanceof Element && !node.hasAttribute('dir') && node.tagName !== 'BDI') text += autoText(node)
+  }
+  return text
 }
+
+/** The direction an element resolves to under the HTML rules for `dir`. */
+function resolvedDirection(element: Element | null): TextDirection {
+  if (!element) return 'ltr'
+  const dir = element.getAttribute('dir')
+  if (dir === 'ltr' || dir === 'rtl') return dir
+  if (dir === 'auto' || element.tagName === 'BDI') {
+    return firstStrongDirection(autoText(element)) ?? resolvedDirection(element.parentElement)
+  }
+  return resolvedDirection(element.parentElement)
+}
+
+/** The element that holds the text itself. */
+function holderOf(container: HTMLElement, text: string): Element {
+  const holder = [...container.querySelectorAll('*')].find((element) =>
+    [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent?.includes(text)),
+  )
+  if (!holder) throw new Error(`no element holds ${text}`)
+  return holder
+}
+
+/** True when the text is isolated from what surrounds it (dir="auto" or <bdi> on the way up). */
+const isolated = (holder: Element) => !!holder.closest('[dir="auto"], [dir="ltr"], [dir="rtl"]:not(html), bdi')
 
 async function interfaceIn(language: 'en' | 'ar') {
   await i18n.changeLanguage(language)
@@ -71,12 +98,13 @@ describe('the interface direction follows its language', () => {
   })
 })
 
-for (const [language, subject, from] of [
-  ['ar', LATIN, 'Ana Ruiz'],
-  ['en', ARABIC, ARABIC_NAME],
+for (const [language, subject, from, own] of [
+  ['ar', LATIN, 'Ana Ruiz', 'ltr'],
+  ['en', ARABIC, ARABIC_NAME, 'rtl'],
 ] as const) {
+  const ui = language === 'ar' ? 'rtl' : 'ltr'
   describe(`${language === 'ar' ? 'a Latin' : 'an Arabic'} subject in the ${language === 'ar' ? 'Arabic' : 'English'} interface`, () => {
-    it('keeps its own direction in a list card', async () => {
+    it('reads in its own direction in a list card, inside a row in the interface direction', async () => {
       await interfaceIn(language)
       const view = render(
         <ThreadListItem
@@ -87,13 +115,16 @@ for (const [language, subject, from] of [
           onSelect={() => undefined}
         />,
       )
-      expect(isolatingHolder(view.container, subject)).not.toBeNull()
-      expect(isolatingHolder(view.container, from)).not.toBeNull()
-      expect(isolatingHolder(view.container, 'See the attached figures')).not.toBeNull()
-      expect(view.container.textContent).toContain(subject)
+      for (const text of [subject, from]) {
+        const holder = holderOf(view.container, text)
+        expect(isolated(holder)).toBe(true)
+        expect(resolvedDirection(holder)).toBe(own)
+      }
+      expect(isolated(holderOf(view.container, 'See the attached figures'))).toBe(true)
+      expect(resolvedDirection(view.container.firstElementChild)).toBe(ui)
     })
 
-    it('keeps its own direction in a table row', async () => {
+    it('reads in its own direction in a table row', async () => {
       await interfaceIn(language)
       const view = render(
         <ThreadTable
@@ -105,48 +136,59 @@ for (const [language, subject, from] of [
           onContextMenu={() => undefined}
         />,
       )
-      expect(isolatingHolder(view.container, subject)).not.toBeNull()
-      expect(isolatingHolder(view.container, from)).not.toBeNull()
+      for (const text of [subject, from]) expect(resolvedDirection(holderOf(view.container, text))).toBe(own)
+      expect(resolvedDirection(view.container.querySelector('table'))).toBe(ui)
     })
 
-    it('keeps its own direction in the reader heading and its tooltip', async () => {
+    it('reads in its own direction in the reader heading and its tooltip', async () => {
       await interfaceIn(language)
       const view = render(<ConversationSubject subject={subject} copyLabel="Copy" onCopy={() => undefined} />)
-      const holders = [...view.container.querySelectorAll('bdi, [dir="auto"]')].filter(
-        (element) => element.textContent === subject,
+      const holders = [...view.container.querySelectorAll('*')].filter(
+        (element) =>
+          element.childNodes.length === 1 && element.firstChild?.nodeType === 3 && element.textContent === subject,
       )
       expect(holders).toHaveLength(2)
+      for (const holder of holders) expect(resolvedDirection(holder)).toBe(own)
     })
   })
 }
 
 describe('names and labels from people', () => {
-  it('isolates each name in the line under the subject, so commas stay put', () => {
-    const view = render(
-      <ReadingHeaderSummary
-        summary={{
-          participants: [
-            { name: ARABIC_NAME, address: 'layla@example.com', self: false },
-            { name: 'Marc', address: 'marc@example.com', self: false },
-          ],
-          partial: false,
-          messageCount: 2,
-          unreadCount: 0,
-          lastDate: null,
-        }}
-        onOpenDetails={() => undefined}
-        onSenderMenu={() => undefined}
-        detailsOpen={false}
-      />,
-    )
-    const names = [...view.container.querySelectorAll('bdi')].map((element) => element.textContent)
-    expect(names).toEqual([ARABIC_NAME, 'Marc'])
+  it('isolates each name in the line under the subject, so separators stay put', async () => {
+    const summary = {
+      participants: [
+        { name: ARABIC_NAME, address: 'layla@example.com', self: false },
+        { name: 'Marc', address: 'marc@example.com', self: false },
+      ],
+      partial: false,
+      messageCount: 2,
+      unreadCount: 0,
+      lastDate: null,
+    }
+    const show = () =>
+      render(
+        <ReadingHeaderSummary
+          summary={summary}
+          onOpenDetails={() => undefined}
+          onSenderMenu={() => undefined}
+          detailsOpen={false}
+        />,
+      )
+    let view = show()
+    const names = [...view.container.querySelectorAll('bdi')]
+    expect(names.map((element) => element.textContent)).toEqual([ARABIC_NAME, 'Marc'])
+    expect(names.map(resolvedDirection)).toEqual(['rtl', 'ltr'])
     expect(view.container.textContent).toContain(`${ARABIC_NAME}, Marc`)
+    cleanup()
+    // In Arabic the names are separated with the Arabic comma.
+    await interfaceIn('ar')
+    view = show()
+    expect(view.container.textContent).toContain(`${ARABIC_NAME}، Marc`)
   })
 
   it('lets a chip (a recipient, a label) take the direction of its own text', () => {
     const view = render(<Chip>{ARABIC_NAME}</Chip>)
-    expect(isolatingHolder(view.container, ARABIC_NAME)).not.toBeNull()
+    expect(resolvedDirection(holderOf(view.container, ARABIC_NAME))).toBe('rtl')
   })
 })
 
@@ -162,14 +204,16 @@ describe('message bodies', () => {
       />,
     )
     expect(view.container.querySelector('.bidi-plaintext')?.textContent).toContain(ARABIC)
-    expect(view.container.querySelector('pre')?.getAttribute('dir')).toBe('ltr')
+    expect(resolvedDirection(view.container.querySelector('pre code'))).toBe('ltr')
   })
 
-  it('lets an HTML message that declares nothing take the direction of its text, and keeps a declared one', () => {
+  it('lets each paragraph of an HTML message that declares nothing take its own direction, and keeps a declared one', () => {
     const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html')
-    expect(parse(prepareBubbleHtml(`<p>${ARABIC}</p>`)).body.getAttribute('dir')).toBe('auto')
-    expect(parse(prepareBubbleHtml(`<html dir="ltr"><body><p>${LATIN}</p></body></html>`)).body.hasAttribute('dir')).toBe(
-      false,
-    )
+    const mixed = parse(prepareBubbleHtml(`<p>${ARABIC}</p><p>${LATIN}</p>`))
+    expect([...mixed.body.querySelectorAll('p')].map(resolvedDirection)).toEqual(['rtl', 'ltr'])
+    expect(mixed.body.hasAttribute('dir')).toBe(false)
+    const declared = parse(prepareBubbleHtml(`<html dir="ltr"><body><p>${ARABIC}</p></body></html>`))
+    expect(declared.querySelector('p')!.hasAttribute('dir')).toBe(false)
+    expect(resolvedDirection(declared.querySelector('p'))).toBe('ltr')
   })
 })

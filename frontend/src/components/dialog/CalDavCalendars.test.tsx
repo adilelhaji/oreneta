@@ -122,3 +122,25 @@ it('imports a .ics file only after showing what it adds, and offers it only wher
   expect(calls[1].payload).toEqual({ account: imap.id, calendar: 'local:1', path: '/tmp/a.ics', confirm: true })
   expect(ui$.toast.get()).toBe('Imported 2 events')
 })
+
+// The calendar kind is a radio group: the sideways arrows follow the reading
+// direction (#226, ADR-0061), up and down go through it top to bottom.
+it('picks the next calendar kind with the left arrow in right to left', () => {
+  document.documentElement.dir = 'rtl'
+  try {
+    bridge(() => ({}))
+    const view = render(<NewCalendarDialog onClose={() => {}} />)
+    const radios = view.getAllByRole('radio')
+    const checked = () => radios.findIndex((radio) => radio.getAttribute('aria-checked') === 'true')
+    const start = checked()
+    radios[start].focus()
+    fireEvent.keyDown(radios[start], { key: 'ArrowLeft' })
+    expect(checked()).toBe((start + 1) % radios.length)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' })
+    expect(checked()).toBe(start)
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(checked()).toBe((start + 1) % radios.length)
+  } finally {
+    document.documentElement.dir = ''
+  }
+})
