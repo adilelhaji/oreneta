@@ -967,6 +967,7 @@
   "notify.newMessageCount": "{count, plural, one {1 則新訊息} other {{count} 新消息}}",
   "notify.noSubject": "（沒有電子郵件主題）",
   "notify.reminderStarted": "已於 {time} 開始",
+  "notify.reminderStartedOn": "已於 {date} {time} 開始",
   "notify.unknownSender": "未知寄件人",
   "oof.audienceAll": "所有人",
   "oof.audienceKnown": "已知聯絡人",

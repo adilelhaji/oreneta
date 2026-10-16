@@ -7,7 +7,10 @@ import {
   flattenObject,
   foldPlurals,
   iosLocale,
+  languageNativeNames,
   placeholders,
+  readCanonicalCatalogs,
+  supportedLocales,
   validateCatalogs,
 } from './catalog'
 
@@ -79,6 +82,22 @@ describe('catalog validation helpers', () => {
     ).toThrow(/placeholder mismatch/)
   })
 
+  test('rejects an apostrophe that would quote ICU syntax', () => {
+    // Catalan elides before a vowel: "d'{name}" would show "{name}" literally.
+    for (const value of ["Compte d'{name}", "Esborra l'{count, plural, one {x} other {y}}", "Fet'#{name}", "Obre'<b>{name}</b>", "Tanca'>{name}"]) {
+      expect(() => validateCatalogs({ en: { k: 'Account {name}' }, ca: { k: value } })).toThrow(/apostrophe/)
+    }
+    // An apostrophe between letters, a doubled one, or a typographic one is plain text.
+    expect(() =>
+      validateCatalogs({
+        en: { k: 'Account {name}' },
+        ca: { k: "L'adreça de {name}" },
+        fr: { k: "L''{name}" },
+        it: { k: 'Account d’{name}' },
+      }),
+    ).not.toThrow()
+  })
+
   test('extracts named placeholders but ignores plural count', () => {
     expect(
       placeholders('{count, plural, one {{count} file from {sender}} other {{count} files from {sender}}}'),
@@ -86,8 +105,24 @@ describe('catalog validation helpers', () => {
   })
 })
 
+describe('the shipped catalogs', () => {
+  test('include Catalan among the twenty locales', () => {
+    expect(supportedLocales).toHaveLength(20)
+    expect(supportedLocales).toContain('ca')
+    expect(languageNativeNames.ca).toBe('Català')
+  })
+
+  test('all validate against English: same keys, placeholders and valid ICU', () => {
+    const catalogs = readCanonicalCatalogs()
+    expect(() => validateCatalogs(catalogs)).not.toThrow()
+    expect(Object.keys(catalogs.ca).sort()).toEqual(Object.keys(catalogs.en).sort())
+  })
+})
+
 describe('platform mapping helpers', () => {
   test('maps special locale identifiers explicitly', () => {
+    expect(androidLocaleDir('ca')).toBe('values-ca')
+    expect(iosLocale('ca')).toBe('ca')
     expect(androidLocaleDir('pt_BR')).toBe('values-pt-rBR')
     expect(androidLocaleDir('zh_Hans')).toBe('values-b+zh+Hans')
     expect(androidLocaleDir('zh_Hant')).toBe('values-b+zh+Hant')

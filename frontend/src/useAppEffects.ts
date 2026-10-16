@@ -26,7 +26,8 @@ import { flushComposeDrafts, openMailtoCompose, restoreLocalDrafts } from './sta
 import { accounts$, refreshAccountPictures } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
-import { settings$, applyDocumentLanguage } from './states/settings'
+import { settings$, languageLoaded$ } from './states/settings'
+import { applyInterfaceLanguage, targetInterfaceLanguage } from './states/interfaceLanguage'
 import { applyUpdateStatus, loadUpdateStatus, runUpdateCheck } from './states/update'
 import type { UpdateStatus } from './lib/update'
 import { useFoldersByAccount } from './lib/kanbanData'
@@ -36,7 +37,7 @@ import { loadCategories } from './states/categories'
 import { forgetScheduledSend, markScheduledSendFailed, refreshScheduledSends } from './states/scheduledSends'
 import { refreshOutgoingAttempts } from './states/outgoingAttempts'
 import { mayShowMailToast, startNotifications } from './states/notifications'
-import i18n, { resolveI18nLanguageFromWebLocale, t, translationTemplate } from './lib/i18n'
+import { t } from './lib/i18n'
 
 const DEFAULT_RSS_SYNC_INTERVAL_MINUTES = 60
 const MIN_RSS_SYNC_INTERVAL_MINUTES = 5
@@ -59,6 +60,7 @@ export function useAppEffects() {
   const query = useValue(ui$.query)
   const startupSyncDone = useRef(false)
   const language = useValue(settings$.language)
+  const languageLoaded = useValue(languageLoaded$)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
   const autoUpdateCheck = useValue(settings$.autoUpdateCheck)
 
@@ -83,30 +85,11 @@ export function useAppEffects() {
     }
   }, [])
 
+  // Catalan on a fresh profile whatever the system speaks; a saved choice,
+  // "System" included, wins once it is read (ADR-0062).
   useEffect(() => {
-    const systemLanguage = resolveI18nLanguageFromWebLocale(navigator.language) || 'en'
-    const targetLanguage = language || systemLanguage
-    if (i18n.language !== targetLanguage) {
-      void i18n.changeLanguage(targetLanguage)
-    }
-    void invoke('i18n.setNativeLabels', {
-      trayShow: t('tray.showOreneta'),
-      trayHide: t('tray.hideToTray'),
-      trayHideTooltip: t('tray.hideOrenetaTooltip'),
-      trayQuit: t('tray.quitOreneta'),
-      trayDoNotDisturb: t('tray.doNotDisturb', { defaultValue: 'Do not disturb' }),
-      newMessage: t('notify.newMessage'),
-      newMessageCount: translationTemplate('notify.newMessageCount'),
-      noSubject: t('notify.noSubject'),
-      unknownSender: t('notify.unknownSender'),
-      // Go puts the time (and the date, when not today) in place of {time}.
-      reminderStarted: translationTemplate('notify.reminderStarted'),
-      missedReminders: translationTemplate('notify.missedReminders'),
-    }).catch(() => {})
-    // Reflect the resolved locale to <html lang>/dir, driving :lang() CJK glyph
-    // selection (see index.css) and RTL. Synced to a paint-time cache in settings.
-    applyDocumentLanguage(targetLanguage)
-  }, [language])
+    applyInterfaceLanguage(targetInterfaceLanguage(language, languageLoaded), languageLoaded)
+  }, [language, languageLoaded])
 
   // Notification sounds, do not disturb and quiet hours (ADR-0049).
   useEffect(() => startNotifications(), [])

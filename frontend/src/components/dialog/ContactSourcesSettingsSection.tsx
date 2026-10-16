@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BookUser, RefreshCw, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { accounts$ } from '../../states/accounts'
 import { confirmAction, showToast } from '../../states/ui'
 import {
@@ -122,7 +122,7 @@ export function ContactSourcesSettingsSection() {
                     {source.lastError
                       ? source.lastError
                       : source.lastSyncAt
-                        ? t('contacts.lastSynced', { when: new Date(source.lastSyncAt * 1000).toLocaleString() })
+                        ? t('contacts.lastSynced', { when: new Date(source.lastSyncAt * 1000).toLocaleString(intlLocale()) })
                         : t('contacts.neverSynced')}
                   </span>
                 </div>

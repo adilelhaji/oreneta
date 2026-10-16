@@ -1,5 +1,5 @@
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { firstDayOfWeek, type Frequency, type Recurrence } from '../../states/calendar'
 import { settings$ } from '../../states/settings'
 import { weekdayOrder } from '../../lib/calendarWeek'
@@ -67,7 +67,7 @@ export function RepeatFields({
 
   const ends: 'never' | 'on' | 'after' = rule?.until ? 'on' : rule?.count ? 'after' : 'never'
   const monthlyMode = rule?.month_week === -1 ? 'last' : rule?.month_week ? 'nth' : 'day'
-  const weekdayName = startDate.toLocaleDateString(undefined, { weekday: 'long' })
+  const weekdayName = startDate.toLocaleDateString(intlLocale(), { weekday: 'long' })
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -230,7 +230,7 @@ const WEEKDAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 /// A weekday's full name in the reader's language, 0 = Monday. 5 January
 /// 2026 was a Monday.
 function weekdayLabel(day: number): string {
-  return new Date(2026, 0, 5 + day).toLocaleDateString(undefined, { weekday: 'long' })
+  return new Date(2026, 0, 5 + day).toLocaleDateString(intlLocale(), { weekday: 'long' })
 }
 
 function daysInMonth(date: Date): number {

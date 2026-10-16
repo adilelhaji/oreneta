@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pin, Plus, Search, StickyNote, Trash2 } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { clsx } from '../../lib/utils'
 import { loadNotes, noteTitle, notes$ } from '../../states/notes'
 import { Button } from '../button/Button'
@@ -155,7 +155,7 @@ export function NotesView() {
                       )}
                       <span className="flex flex-wrap gap-x-2 text-2xs text-secondary">
                         <span>
-                          {new Date(note.updated_at * 1000).toLocaleString(undefined, {
+                          {new Date(note.updated_at * 1000).toLocaleString(intlLocale(), {
                             dateStyle: 'medium',
                             timeStyle: 'short',
                           })}

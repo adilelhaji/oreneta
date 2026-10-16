@@ -967,6 +967,7 @@
   "notify.newMessageCount": "{count, plural, one {1 new message} other {{count} new messages}}",
   "notify.noSubject": "(no subject)",
   "notify.reminderStarted": "Started at {time}",
+  "notify.reminderStartedOn": "Started on {date} at {time}",
   "notify.unknownSender": "unknown sender",
   "oof.audienceAll": "Everyone",
   "oof.audienceKnown": "Known contacts",

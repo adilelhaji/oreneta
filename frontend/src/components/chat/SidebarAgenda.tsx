@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CalendarDays, ListTodo, Loader2 } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { invoke } from '../../lib/bridge'
 import { agendaQueryWindow, buildAgenda, type AgendaGroup, type AgendaItem } from '../../lib/agenda'
 import { accounts$ } from '../../states/accounts'
@@ -177,9 +177,9 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
         ? t('calendar.today')
         : key === tomorrow
           ? t('sidebar.agendaTomorrow')
-          : new Date(key).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+          : new Date(key).toLocaleDateString(intlLocale(), { weekday: 'long', day: 'numeric', month: 'long' })
   const time = (seconds: number) =>
-    new Date(seconds * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    new Date(seconds * 1000).toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' })
   const section = 'px-4 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-secondary'
   const row = 'flex w-full items-center gap-2 px-4 py-1.5 text-start text-caption hover:bg-hover cursor-pointer'
 
@@ -190,7 +190,7 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
         ? t('calendar.allDay')
         : // An event under way since an earlier day shows the day it began.
           item.at * 1000 < today
-          ? new Date(item.at * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+          ? new Date(item.at * 1000).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short' })
           : time(item.at)
 
   return (

@@ -21,7 +21,7 @@ type nativeLabels struct {
 	trayShow, trayHide, trayHideTooltip, trayQuit         string
 	trayDoNotDisturb                                      string
 	newMessage, newMessageCount, noSubject, unknownSender string
-	reminderStarted, missedReminders                      string
+	reminderStarted, reminderStartedOn, missedReminders   string
 }
 
 var (
@@ -33,7 +33,7 @@ var (
 		newMessage:       "New message",
 		newMessageCount:  "{count, plural, one {1 new message} other {{count} new messages}}",
 		noSubject:        "(no subject)", unknownSender: "unknown sender",
-		reminderStarted: "Started at {time}",
+		reminderStarted: "Started at {time}", reminderStartedOn: "Started on {date} at {time}",
 		missedReminders: "{count, plural, one {1 missed reminder} other {{count} missed reminders}}",
 	}
 )
@@ -64,6 +64,7 @@ func (a *App) setNativeLabels(payload map[string]any) (any, error) {
 	set(&currentLabels.noSubject, "noSubject")
 	set(&currentLabels.unknownSender, "unknownSender")
 	set(&currentLabels.reminderStarted, "reminderStarted")
+	set(&currentLabels.reminderStartedOn, "reminderStartedOn")
 	set(&currentLabels.missedReminders, "missedReminders")
 	labels := currentLabels
 	// Released before trayMenuMu is taken: trayReady holds trayMenuMu while it
@@ -382,7 +383,15 @@ func (a *App) notifyReminder(detail any) {
 	// after a sleep, can have.
 	body := reminderWhen(m)
 	if started && !allDay && body != "" {
-		body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
+		// Not today: the date has a phrase of its own, as "at 2026-10-20
+		// 09:00" reads wrong in most languages (#231).
+		localDate, _ := m["local_date"].(string)
+		localTime, _ := m["local_time"].(string)
+		if localDate != "" && localTime != "" {
+			body = strings.NewReplacer("{date}", localDate, "{time}", localTime).Replace(labels.reminderStartedOn)
+		} else {
+			body = strings.ReplaceAll(labels.reminderStarted, "{time}", body)
+		}
 	}
 	if location != "" {
 		if body != "" {

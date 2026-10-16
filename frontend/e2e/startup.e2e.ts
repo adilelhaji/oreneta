@@ -16,7 +16,12 @@ type SetupOptions = {
   oauth?: 'waiting' | 'late' | 'success' | 'error'
   discovery?: 'guess' | 'failure'
   saveError?: boolean
-  language?: string
+  /**
+   * The stored interface language. English unless given, so the checks that
+   * read English text keep reading it; null leaves the row out, as on a fresh
+   * profile, which starts in Catalan (#231, ADR-0062).
+   */
+  language?: string | null
   existingEmail?: string
   navigation?: boolean
   theme?: string
@@ -1247,7 +1252,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
         'app.prefsGet': {
           prefs: {
             auto_update_check: false,
-            language: options.language,
+            ...(options.language === null ? {} : { language: options.language ?? 'en' }),
             ...(options.navigation
               ? {
                   session_account: template.id,
@@ -3225,3 +3230,334 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
     }
   }
 })
+
+// Catalan, the language a fresh profile starts in (#231, ADR-0062). The
+// labels come from the shipped catalog, so the checks follow its wording.
+const caCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/ca.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+const esCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/es.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+
+for (const systemLocale of ['en-US', 'es-ES', 'ja-JP']) {
+  test(`a fresh profile starts in Catalan on a ${systemLocale} system; a saved choice wins (#231)`, async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: systemLocale })
+    try {
+      const fresh = await context.newPage()
+      const errors = await prepareStartup(fresh, true, { navigation: true, language: null })
+      await fresh.goto('http://127.0.0.1:4182/')
+      await expect(fresh.locator('html')).toHaveAttribute('lang', 'ca')
+      await expect(fresh.getByTitle(caCatalog['people.title'], { exact: true })).toBeVisible()
+      // Nothing was chosen, so nothing is written as a choice.
+      const writes = await fresh.evaluate(() =>
+        (window as any).startupProbe.requests.filter(
+          (request: any) => request.command === 'app.prefsSet' && request.payload.key === 'language',
+        ),
+      )
+      expect(writes).toEqual([])
+      expect(errors).toEqual([])
+
+      const saved = await context.newPage()
+      const savedErrors = await prepareStartup(saved, true, { navigation: true, language: 'en' })
+      await saved.goto('http://127.0.0.1:4182/')
+      await expect(saved.locator('html')).toHaveAttribute('lang', 'en')
+      await expect(saved.getByTitle('People', { exact: true })).toBeVisible()
+      expect(savedErrors).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+}
+
+// Until the stored choice is read, the interface is in the language the last
+// run showed, Catalan on a fresh profile: from the first paint, not English
+// until an effect runs (#231, ADR-0062).
+for (const [cache, language] of [
+  [null, 'ca'],
+  ['es', 'es'],
+] as const) {
+  test(`before the stored choice is read the interface is already in ${language} (#231)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language: cache })
+    await page.addInitScript(
+      ({ cache }) => {
+        if (cache) localStorage.setItem('meron-language-cache', cache)
+        const probe = (window as any).startupProbe
+        const app = (window as any).go.main.App
+        const invoke = app.Invoke
+        let release = () => {}
+        const held = new Promise<void>((resolve) => (release = resolve))
+        probe.releasePrefs = () => release()
+        app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+          if (command === 'app.prefsGet') await held
+          return invoke(command, payload)
+        }
+      },
+      { cache },
+    )
+    const catalog = language === 'ca' ? caCatalog : esCatalog
+    const unread = page.getByRole('button', { name: catalog['filters.unread'], exact: true })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(unread).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Unread', exact: true })).toHaveCount(0)
+    await page.evaluate(() => (window as any).startupProbe.releasePrefs())
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(unread).toBeVisible()
+    expect(errors).toEqual([])
+  })
+}
+
+test('a failed read of the stored choice keeps the language the profile last showed (#231)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: 'es' })
+  await page.addInitScript(() => {
+    localStorage.setItem('meron-language-cache', 'es')
+    const app = (window as any).go.main.App
+    const invoke = app.Invoke
+    app.Invoke = async (command: string, payload: Record<string, unknown>) => {
+      if (command === 'app.prefsGet') throw new Error('Synthetic core outage')
+      return invoke(command, payload)
+    }
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+  await expect(page.getByRole('button', { name: esCatalog['filters.unread'], exact: true })).toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('meron-language-cache'))).toBe('es')
+  expect(errors).toEqual([])
+})
+
+test('switching from Catalan to English and back is saved and shown without a reload (#231)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, language: null })
+  await page.goto('/')
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('lang', 'ca')
+  const navigations: string[] = []
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations.push(frame.url())
+  })
+  await page.getByRole('textbox').first().focus()
+  await page.keyboard.press('Control+Comma')
+  const language = page.locator('select').filter({ has: page.locator('option[value="ca"]') })
+  // Nobody chose yet: the picker shows the language in use.
+  await expect(language).toHaveValue('ca')
+  await expect(language.locator('option[value="ca"]')).toHaveText('Català')
+  await language.selectOption('en')
+  await expect(html).toHaveAttribute('lang', 'en')
+  await language.selectOption('system')
+  await expect(html).toHaveAttribute('lang', 'en')
+  await language.selectOption('ca')
+  await expect(html).toHaveAttribute('lang', 'ca')
+  const writes = await page.evaluate(() =>
+    (window as any).startupProbe.requests
+      .filter((request: any) => request.command === 'app.prefsSet' && request.payload.key === 'language')
+      .map((request: any) => request.payload.value),
+  )
+  expect(writes).toEqual(['en', 'system', 'ca'])
+  // Go's tray and notification labels follow the switch.
+  const labels = await page.evaluate(() =>
+    (window as any).startupProbe.requests
+      .filter((request: any) => request.command === 'i18n.setNativeLabels')
+      .map((request: any) => request.payload.trayQuit),
+  )
+  expect(labels.at(-1)).toBe(caCatalog['tray.quitOreneta'])
+  expect(labels).toContain('Quit Oreneta')
+  await page.keyboard.press('Escape')
+  expect(navigations).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// What a check of "nothing leaves the window" reads in left to right: no
+// horizontal scroll, and no control or heading past either edge.
+async function ltrInView(page: Page, where: string) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), where).toBe(true)
+  const outside = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        'button, [role=button], [role=tab], [role=option], a[href], input, select, textarea, h1, h2, h3',
+      ),
+    ]
+      .filter((element) => {
+        const box = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        if (box.width === 0 || box.height === 0 || style.visibility === 'hidden') return false
+        return box.left < -1 || box.right > innerWidth + 1
+      })
+      .map(
+        (element) =>
+          element.getAttribute('aria-label') ?? element.getAttribute('title') ?? element.textContent?.trim().slice(0, 40),
+      ),
+  )
+  expect(outside, where).toEqual([])
+}
+
+// The production entry in Catalan, whose strings run longer than English:
+// every main screen stays inside the window at 100% and 200%, and axe finds
+// nothing critical or serious (#231).
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  for (const width of [600, 1024, 1440]) {
+    test(`Catalan interface stays inside the window and passes axe: ${theme}, ${width}px (#231)`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language: 'ca', theme })
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ca')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await page.evaluate(() => {
+        const replies = (window as any).startupProbe.replies
+        replies['people.list'] = {
+          people: [
+            {
+              id: 'local::montserrat', source: 'local', account: '', book: 'local',
+              name: 'Montserrat Puigdomènech i Vilaseca — Coordinació internacional de projectes',
+              organisation: 'Departament de recerca i atenció a la ciutadania', note: 'Contacte sintètic', photo: '',
+              emails: [{ addr: 'coordinacio.internacional.projectes@example.test', label: '' }], phones: [],
+              version: '1', editable: true,
+            },
+          ],
+        }
+        replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 1 }] }
+        replies['tasks.list'] = {
+          tasks: [
+            {
+              id: 1, thread_id: '', account_id: '', folder_id: '', note: 'Revisió pendent', due_at: null,
+              completed_at: null, created_at: 0, subject: '', from_name: '', from_addr: '', linked: false,
+              list_id: 'mail', title: 'Revisar la proposta de coordinació internacional abans de la reunió',
+              priority: 2, reminder_at: null, revision: 1,
+            },
+          ],
+        }
+        const note = {
+          id: 'note:ca', title: 'Notes de la reunió', html: '<p>Text de la nota</p>', text: 'Text de la nota',
+          tags: [], pinned: false, revision: 1, created_at: 0, updated_at: 1760000000, deleted_at: null,
+        }
+        replies['notes.list'] = { notes: [{ ...note, preview: note.text }], tags: [] }
+        replies['notes.get'] = { note }
+        replies['calendar.list'] = {
+          calendars: [
+            {
+              id: 'local-ca', name: 'Planificació de l’equip internacional', is_default: true, enabled: true,
+              kind: 'local', read_only: false, synced_at: 0,
+            },
+          ],
+        }
+        replies['calendar.events'] = { events: [] }
+        replies['chat.accounts'] = [{ id: 'c1', jid: 'anna@chat.test', host: '', port: 5222 }]
+        replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+        replies['chat.conversations'] = [
+          { conversation: 'pau@chat.test', last_body: 'Bon dia', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+        ]
+        replies['chat.history'] = [
+          {
+            account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in',
+            sender: 'pau@chat.test', body: 'Bon dia, Anna', stamp: 1760000000, state: 'received',
+          },
+        ]
+      })
+
+      const blocking: string[] = []
+      const check = async (screen: string) => {
+        await ltrInView(page, screen)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-ca-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
+        writeFileSync(info.outputPath(`axe-ca-${screen}.json`), body)
+        for (const violation of results.violations) {
+          if (violation.impact === 'critical' || violation.impact === 'serious') {
+            const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+            blocking.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+          }
+        }
+        await info.attach(`ca-${screen}`, {
+          body: await page.screenshot({ path: info.outputPath(`ca-${screen}.png`), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+      }
+      // The rail on a wide window; the "More" menu on a narrow one.
+      const openArea = async (key: string) => {
+        if (width < 769) {
+          await page.getByRole('button', { name: caCatalog['common.more'], exact: true }).first().click()
+          await page.getByRole('button', { name: caCatalog[key], exact: true }).last().click()
+        } else {
+          await page.getByTitle(caCatalog[key], { exact: true }).click()
+        }
+      }
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      // 200%: the app's own zoom (#181), six steps up.
+      const at200 = async (screen: string) => {
+        for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+        await ltrInView(page, `${screen} at 200%`)
+        await page.keyboard.press(`${mod}+Digit0`)
+      }
+
+      await check('mailbox')
+      await at200('mailbox')
+
+      await openArea('people.title')
+      await page.getByRole('option', { name: /Montserrat Puigdomènech/ }).click()
+      await expect(page.getByRole('heading', { name: /Montserrat Puigdomènech/ })).toBeVisible()
+      await check('people')
+      await at200('people')
+      if (width < 769) await page.getByRole('button', { name: caCatalog['buttons.back'], exact: true }).click()
+
+      await openArea('tasks.title')
+      await expect(page.getByText('Revisar la proposta de coordinació internacional abans de la reunió')).toBeVisible()
+      await check('tasks')
+      await at200('tasks')
+
+      await openArea('notes.title')
+      await page.getByRole('button', { name: /Notes de la reunió/ }).click()
+      await expect(page.getByLabel(caCatalog['notes.titleLabel'])).toHaveValue('Notes de la reunió')
+      await check('notes')
+
+      await openArea('calendar.title')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await check('calendar')
+      await at200('calendar')
+      // Dates in Catalan: the month view names the month as Catalan does.
+      // (Its days of the adjacent months fail axe's contrast rule in every
+      // language, so the audit above runs on the default view.)
+      const month = page.getByRole('button', { name: caCatalog['calendar.viewMonth'], exact: true })
+      await month.click()
+      await expect(month).toHaveAttribute('aria-pressed', 'true')
+      const monthName = await page.evaluate(() => new Date().toLocaleDateString('ca', { month: 'long' }))
+      await expect(page.getByRole('heading', { level: 1 })).toContainText(new RegExp(monthName, 'i'))
+      await ltrInView(page, 'calendar month')
+
+      await openArea('messaging.title')
+      await page.getByRole('button', { name: /pau@chat.test/ }).click()
+      await expect(page.getByText('Bon dia, Anna')).toBeVisible()
+      await check('chat')
+
+      // Settings at 100%: at 200% some of its selects run past a 1024 px
+      // window in every language, English included (not a translation issue).
+      await page.keyboard.press('Control+Comma')
+      await expect(page.getByRole('dialog').first()).toBeVisible()
+      await check('settings')
+      await page.keyboard.press('Escape')
+
+      // The mail workspace again, fresh: a conversation and the composer.
+      await page.goto('/')
+      await expect(page.locator('[data-thread-list]')).toBeVisible()
+      await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      await check('conversation')
+      await at200('conversation')
+      await page.keyboard.press(`${mod}+KeyN`)
+      await expect(page.locator('.tiptap[contenteditable="true"]')).toBeVisible()
+      await check('composer')
+      await at200('composer')
+
+      expect(blocking).toEqual([])
+      expect(errors).toEqual([])
+    })
+  }
+}

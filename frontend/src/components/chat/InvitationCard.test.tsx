@@ -454,3 +454,19 @@ it('a refused proposal only says so', async () => {
   await waitFor(() => expect(calls.length).toBeGreaterThan(0))
   expect(calls.some((c) => c.command === 'invite.counterStatus')).toBe(false)
 })
+
+it('formats both ends of the meeting range in the interface language', async () => {
+  const { when } = await import('./InvitationCard')
+  const { default: i18n, intlLocale } = await import('../../lib/i18n')
+  await i18n.changeLanguage('ca')
+  try {
+    const start = Date.UTC(2026, 9, 20, 9, 0) / 1000
+    const end = Date.UTC(2026, 9, 21, 17, 30) / 1000
+    const range = when(start, end, false)
+    const to = new Date(end * 1000).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' })
+    expect(range.endsWith(` – ${to}`)).toBe(true)
+    expect(range).not.toMatch(/\b(AM|PM|Oct)\b/)
+  } finally {
+    await i18n.changeLanguage('en')
+  }
+})

@@ -338,7 +338,7 @@ export function AssistantReviewDialog({ messages, onClose }: { messages: Message
                     />
                     <span className="min-w-0 flex-1">
                       <div id={subjectId} className="truncate text-xs font-semibold text-primary">
-                        {candidate.subject || '(no subject)'}
+                        {candidate.subject || t('threads.noSubject')}
                       </div>
                       <div className="truncate text-caption text-secondary">
                         {candidate.sender || 'Unknown sender'} · {candidate.body.length} bytes

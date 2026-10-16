@@ -46,7 +46,9 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
   const toggleLabel = (id: string) => ui$.filters.set(nextFilters(filters, `label:${id}` as const))
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-1.5">
+    // Wraps rather than running past the window: longer translations
+    // (Catalan, #231) and 200% text fill a narrow window's width.
+    <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
       {offered.map(({ facet, icon: Icon, labelKey }) => {
         const on = filters.includes(facet)
         return (
@@ -56,7 +58,7 @@ export function QuickFilterBar({ hideSnoozed }: { hideSnoozed?: boolean }) {
             aria-pressed={on}
             onClick={() => ui$.filters.set(nextFilters(filters, facet))}
             className={clsx(
-              'flex items-center gap-1.5 rounded-control-sm px-2 py-1 text-caption font-semibold transition-colors cursor-pointer',
+              'flex items-center gap-1.5 whitespace-nowrap rounded-control-sm px-2 py-1 text-caption font-semibold transition-colors cursor-pointer',
               on ? 'bg-accent/12 text-accent' : 'text-secondary hover:bg-hover hover:text-primary',
             )}
           >

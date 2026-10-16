@@ -13,7 +13,7 @@ import {
   Send,
   Users,
 } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { applyMention, mentionCandidates, mentionQuery, mentionsKept } from '../../lib/chatMentions'
 import {
   answerStatusRequest,
@@ -949,7 +949,7 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
   const group = !!room
   const mine = message.direction === 'out'
   const mention = group && !mine && !!message.mention
-  const time = new Date(message.stamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const time = new Date(message.stamp * 1000).toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' })
   const states: Record<string, { icon: typeof Check; label: string }> = {
     sending: { icon: Clock, label: t('messaging.state.sending', { defaultValue: 'Sending' }) },
     sent: { icon: Check, label: t('messaging.state.sent', { defaultValue: 'Sent' }) },

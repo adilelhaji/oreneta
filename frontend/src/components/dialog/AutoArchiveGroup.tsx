@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { showToast } from '../../states/ui'
 import {
   autoArchiveRan$,
@@ -17,8 +17,8 @@ import {
 import { SettingsGroup } from './AccountSettingsRows'
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
-const when = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleString() : '')
-const day = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleDateString() : '')
+const when = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleString(intlLocale()) : '')
+const day = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000).toLocaleDateString(intlLocale()) : '')
 const same = (a: AutoArchivePolicy, b: AutoArchivePolicy) => JSON.stringify(a) === JSON.stringify(b)
 
 /**

@@ -12,6 +12,7 @@
 import type { Message } from '../types'
 import { stripTrackingPixels } from '../components/chat/readerHtml'
 import { DEFAULT_PRINT_OPTIONS, type PrintOptions } from './printOptions'
+import { intlLocale, t } from './i18n'
 
 /** Escapes text for placing in HTML. */
 export function escapeHtml(text: string): string {
@@ -98,7 +99,7 @@ function senderBlock(message: Message, labels: BlockLabels, options: PrintOption
     ? `<span class="who">${escapeHtml(name)}</span> &lt;${escapeHtml(address)}&gt;`
     : `<span class="who">${escapeHtml(address)}</span>`
   const { headers } = options
-  const stamp = headers.date && message.date ? ` · ${escapeHtml(new Date(message.date * 1000).toLocaleString())}` : ''
+  const stamp = headers.date && message.date ? ` · ${escapeHtml(new Date(message.date * 1000).toLocaleString(intlLocale()))}` : ''
   const files = options.attachments ? (message.attachments ?? []).map((file) => file.filename).filter(Boolean) : []
 
   return [
@@ -198,7 +199,7 @@ export function buildPrintDocument(args: {
   const printed = printedMessages(args.messages, options, args.messageId, (message) => !!marks[message.id])
   const single = options.scope === 'message'
   // One message prints under its own subject, which may be a reply's.
-  const subject = (single && printed[0]?.subject.trim()) || args.subject.trim() || '(no subject)'
+  const subject = (single && printed[0]?.subject.trim()) || args.subject.trim() || t('threads.noSubject')
   const messages = printed.map((message) => senderBlock(message, args, options, marks[message.id])).join('\n')
   // The message's own policy is stripped with its other <meta> tags, so the
   // printout states its own: no scripts, no frames, no forms, and remote
@@ -231,7 +232,7 @@ export function buildPrintDocument(args: {
 <style>${STYLE}</style>
 </head>
 <body>
-${heading}<div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString())}</div>
+${heading}<div class="thread-meta">${escapeHtml(args.printedLabel)} ${escapeHtml(args.printedAt.toLocaleString(intlLocale()))}</div>
 ${notice}
 ${messages}
 </body>

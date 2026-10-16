@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Hourglass } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import {
   awaiting$,
   loadAwaiting,
@@ -14,7 +14,7 @@ import { Button } from '../button/Button'
 import { Dialog } from '../dialog/Dialog'
 
 const day = (seconds: number) =>
-  new Date(seconds * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  new Date(seconds * 1000).toLocaleString(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' })
 
 /**
  * Everything the person is waiting on a reply to (#45, ADR-0025): what

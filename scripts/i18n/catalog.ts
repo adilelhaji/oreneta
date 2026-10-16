@@ -31,6 +31,7 @@ type PluralCategory = (typeof pluralCategories)[number]
 
 const supportedLocales = [
   'ar',
+  'ca',
   'de',
   'el',
   'en',
@@ -54,6 +55,7 @@ type SupportedLocale = (typeof supportedLocales)[number]
 
 const languageNativeNames: Record<SupportedLocale, string> = {
   ar: 'العربية',
+  ca: 'Català',
   de: 'Deutsch',
   el: 'Ελληνικά',
   en: 'English',
@@ -129,6 +131,7 @@ function validateCatalogs(catalogs: Record<string, Catalog>) {
         throw new Error(`${locale}.${key} must be a non-empty string`)
       }
       validateBalancedBraces(locale, key, value)
+      validateNoQuotingApostrophe(locale, key, value)
       validateIcuSyntax(locale, key, value)
       const expected = enPlaceholders[key] ?? []
       const actual = placeholders(value)
@@ -394,6 +397,21 @@ function validateIcuSyntax(locale: string, key: string, value: string) {
   }
 }
 
+/// Rejects an ASCII apostrophe written right before ICU syntax.
+///
+/// In ICU an apostrophe before `{`, `}`, `#`, `|`, `<` or `>` opens a quoted
+/// literal: `d'{name}` can parse and still show the text "{name}" instead
+/// of the name, which neither the syntax nor the placeholder check sees.
+/// Languages that elide before a vowel (Catalan, French, Italian) meet this
+/// as soon as a placeholder follows an article or preposition (#231).
+function validateNoQuotingApostrophe(locale: string, key: string, value: string) {
+  if (/(?<!')'[{}#|<>]/.test(value)) {
+    throw new Error(
+      `${locale}.${key} has an apostrophe right before ICU syntax, which quotes it. Do not elide before a placeholder, or use ’.`,
+    )
+  }
+}
+
 function validateBalancedBraces(locale: string, key: string, value: string) {
   let depth = 0
   for (const char of value) {
@@ -453,6 +471,9 @@ export {
   flattenObject,
   foldPlurals,
   iosLocale,
+  languageNativeNames,
   placeholders,
+  readCanonicalCatalogs,
+  supportedLocales,
   validateCatalogs,
 }

@@ -6,6 +6,8 @@ import { settings$ } from './settings'
 import { ui$ } from './ui'
 import { mail$ } from './mail'
 import { DEFAULT_REPLY_FORWARD_PREFS, type ReplyForwardPrefs } from '../lib/replyForward'
+import i18n from '../lib/i18n'
+import { formatFullTimestamp } from '../components/chat/messageHelpers'
 
 // Mail → Replies and forwards (ADR-0047), as the composer applies it.
 
@@ -174,6 +176,20 @@ describe('reply in the full editor', () => {
 })
 
 describe('forward', () => {
+  it('writes the forwarded header in the system locale, not the interface language (ADR-0062)', async () => {
+    await i18n.changeLanguage('ca')
+    try {
+      await forwardMessage(original())
+      const text = draft()?.text ?? ''
+      expect(text).toContain(`Date: ${formatFullTimestamp(DATE, [])}`)
+      if (formatFullTimestamp(DATE, 'ca') !== formatFullTimestamp(DATE, [])) {
+        expect(text).not.toContain(formatFullTimestamp(DATE, 'ca'))
+      }
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
   it('attaches the original as message/rfc822 when forwarding as attachment', async () => {
     setPrefs({ forwardMode: 'attachment' })
     rawReply = () => ({ data: 'RnJvbTogYQ0KDQpi', size: 12, filename: 'Plan.eml' })

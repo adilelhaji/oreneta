@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { KeyRound, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { decryptMessage, verifyMessage, type DecryptResult } from '../../states/pgp'
 import { decryptSmimeMessage, verifySmimeMessage } from '../../states/smime'
 import type { SignatureResult } from '../../states/signatureVerdict'
@@ -219,7 +219,7 @@ export function ProtectionNotice({ message }: { message: Message }) {
   if (result?.verdict === 'certificateNotValid') {
     const when = new Date(
       (result.reason === 'expired' ? result.notAfter : result.notBefore) * 1000,
-    ).toLocaleDateString()
+    ).toLocaleDateString(intlLocale())
     return (
       <Notice tone="warning" className="mb-2" title={t('crypto.certificateNotValidTitle')}>
         <span className="flex items-start gap-1.5">

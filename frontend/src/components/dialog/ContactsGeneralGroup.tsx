@@ -21,7 +21,8 @@ export function ContactsGeneralGroup() {
   const { t } = useTranslation()
   const display = useValue(settings$.contactNameDisplay)
   const sort = useValue(settings$.contactNameSort)
-  const language = useValue(settings$.language) ?? i18n.language
+  // The language the interface shows; useTranslation re-renders on a change.
+  const language = i18n.language
   const defaults = localeNameDefaults(language || 'en')
   const icon = { size: 16, strokeWidth: 1.75 }
   const selectClass = 'w-48 rounded-control py-1.5 ps-3 font-semibold'

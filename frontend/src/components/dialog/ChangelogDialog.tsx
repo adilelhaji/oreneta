@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollText } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { intlLocale, useTranslation } from '../../lib/i18n'
 import { ui$ } from '../../states/ui'
 import { fetchChangelog, type ChangelogRelease } from '../../lib/changelog'
 import { Button } from '../button/Button'
@@ -13,7 +13,7 @@ function formatDate(iso: string): string {
   if (!iso) return ''
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(intlLocale(), { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 export function ChangelogDialog() {

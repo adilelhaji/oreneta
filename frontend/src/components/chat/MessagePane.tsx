@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useValue } from '@legendapp/state/react'
-import { useTranslation } from '../../lib/i18n'
+import { t as translate, useTranslation } from '../../lib/i18n'
 import { compose$, openComposeTab, withoutHydratedQuickReplyDraft } from '../../states/compose'
 import { ui$ } from '../../states/ui'
 import { mail$, getActiveThread, loadThread } from '../../states/mail'
@@ -37,7 +37,7 @@ function threadFromTab(tab: MessageTab, fallback: Message | null): Message {
     from_name: '',
     from_addr: tab.from,
     to: '',
-    subject: tab.subject || '(no subject)',
+    subject: tab.subject || translate('threads.noSubject'),
     preview: '',
     body: '',
     date: tab.date ?? 0,
@@ -335,7 +335,7 @@ export function MessagePane() {
             media={mediaItems}
             files={fileItems}
             participants={participants}
-            scopeTitle={activeThread.subject || '(no subject)'}
+            scopeTitle={activeThread.subject || t('threads.noSubject')}
             // For RSS, from_name duplicates the subject (both the feed title), so
             // show the feed host instead; otherwise show the sender name.
             scopeSubtitle={isRSS ? activeThread.from_addr : activeThread.from_name || activeThread.from_addr}
