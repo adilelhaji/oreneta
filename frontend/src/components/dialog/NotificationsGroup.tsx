@@ -51,7 +51,7 @@ function SoundChoiceRow({
             aria-label={title}
             value={value}
             onChange={(event) => onChange(event.target.value as NotificationSoundId)}
-            className="w-32 rounded-control py-1.5 pl-3 font-semibold"
+            className="w-32 rounded-control py-1.5 ps-3 font-semibold"
           >
             {NOTIFICATION_SOUNDS.map((id) => (
               <option key={id} value={id} className="bg-chats text-primary">
@@ -143,7 +143,7 @@ export function NotificationsGroup() {
                 onChange={(event) => set({ volume: Number(event.target.value) })}
                 className="w-32 accent-[var(--color-accent)] cursor-pointer"
               />
-              <span className="w-9 text-right text-caption font-bold text-secondary">{prefs.volume}%</span>
+              <span className="w-9 text-end text-caption font-bold text-secondary">{prefs.volume}%</span>
             </label>
           }
         />

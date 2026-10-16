@@ -79,7 +79,7 @@ export function SettingsSearch() {
               onClick={() => activate(item)}
               onMouseEnter={() => setIndex(i)}
               onFocus={() => setIndex(i)}
-              className={`block w-full rounded-control px-3 py-2 text-left text-ui wrap-anywhere ${selected === i ? 'bg-accent/10 text-primary' : 'text-secondary hover:bg-hover'}`}
+              className={`block w-full rounded-control px-3 py-2 text-start text-ui wrap-anywhere ${selected === i ? 'bg-accent/10 text-primary' : 'text-secondary hover:bg-hover'}`}
             >
               {item.label}
             </button>

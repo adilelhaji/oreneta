@@ -19,6 +19,7 @@ import { SelectInput, TextInput } from '../field/Field'
 import { Notice } from '../notice/Notice'
 import { Dialog } from './Dialog'
 import { isSubscriptionUrl } from '../../lib/subscriptionUrl'
+import { handleGroupArrowKeys } from '../../lib/direction'
 
 /// Creating a calendar, asking first where it should live.
 ///
@@ -131,6 +132,8 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
       <div
         className="grid grid-cols-2 gap-1 rounded-panel border border-border/80 bg-raised p-1 min-[520px]:grid-cols-4"
         role="radiogroup"
+        // Arrows pick the next kind, sideways in reading order (ADR-0061).
+        onKeyDown={(event) => handleGroupArrowKeys(event, '[role="radio"]')}
       >
         <KindTab
           active={kind === 'account'}
@@ -214,7 +217,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
               </Labelled>
               {found !== null && (
                 <fieldset className="flex flex-col gap-1.5">
-                  <legend className="mb-1 pl-0.5 text-caption font-semibold text-secondary">
+                  <legend className="mb-1 ps-0.5 text-caption font-semibold text-secondary">
                     {t('calendar.foundCalendars', { defaultValue: 'Calendars on this server' })}
                   </legend>
                   {found.map((calendar) => (
@@ -331,7 +334,7 @@ function KindTab({
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex w-full flex-col gap-1.5">
-      <span className="pl-0.5 text-caption font-semibold text-secondary">{label}</span>
+      <span className="ps-0.5 text-caption font-semibold text-secondary">{label}</span>
       {children}
     </label>
   )

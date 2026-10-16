@@ -165,7 +165,7 @@ export function LabelsSettingsSection() {
                   </div>
 
                   {isExpanded && (
-                    <div className="ml-6 flex flex-col gap-2 rounded-control-sm border border-border bg-raised p-2.5">
+                    <div className="ms-6 flex flex-col gap-2 rounded-control-sm border border-border bg-raised p-2.5">
                       {Object.entries(label.links).length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {Object.entries(label.links).map(([accountId, remoteName]) => {

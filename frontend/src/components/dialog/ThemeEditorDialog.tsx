@@ -205,7 +205,7 @@ function ThemePreview({ tokens }: { tokens: ReturnType<typeof deriveThemeTokens>
         <div className="w-9 shrink-0 bg-sidenav p-1.5">
           <div className="mx-auto h-6 w-6 rounded-control-sm" style={{ background: tokens.accent }} />
         </div>
-        <div className="w-28 shrink-0 border-r border-border bg-chats p-1.5 flex flex-col gap-1">
+        <div className="w-28 shrink-0 border-e border-border bg-chats p-1.5 flex flex-col gap-1">
           <div className="rounded-control-sm bg-accent/15 px-1.5 py-1">
             <div className="text-2xs font-bold text-accent">Alice</div>
             <div className="text-[0.4375rem] text-secondary truncate">See you tomorrow!</div>

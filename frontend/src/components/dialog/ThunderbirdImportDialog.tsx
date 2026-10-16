@@ -155,13 +155,13 @@ export function ThunderbirdImportDialog({ onClose }: { onClose: () => void }) {
                 <li key={profile.path}>
                   <button
                     type="button"
-                    className="w-full rounded-control px-2 py-1.5 text-left hover:bg-hover"
+                    className="w-full rounded-control px-2 py-1.5 text-start hover:bg-hover"
                     disabled={busy}
                     onClick={() => void open(profile.path)}
                     title={profile.path}
                   >
                     <span className="text-primary">{profile.name}</span>
-                    <span className="ml-2 text-2xs text-secondary">{profile.path}</span>
+                    <span className="ms-2 text-2xs text-secondary">{profile.path}</span>
                   </button>
                 </li>
               ))}

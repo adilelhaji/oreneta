@@ -87,7 +87,7 @@ export function ProfilesGroup() {
               <span className="min-w-0 truncate text-xs text-primary">
                 {name}
                 {profile.active && (
-                  <span className="ml-2 text-2xs font-semibold text-secondary">
+                  <span className="ms-2 text-2xs font-semibold text-secondary">
                     {t('profiles.thisWindow', { defaultValue: 'This window' })}
                   </span>
                 )}

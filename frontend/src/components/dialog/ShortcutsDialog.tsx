@@ -210,7 +210,7 @@ function ShortcutRow({
         </div>
       </div>
       {conflict && (
-        <p role="alert" className="mt-1 text-right text-caption text-danger">
+        <p role="alert" className="mt-1 text-end text-caption text-danger">
           {t('shortcuts.conflict', { name: SHORTCUT_LABELS[conflict] })}
         </p>
       )}

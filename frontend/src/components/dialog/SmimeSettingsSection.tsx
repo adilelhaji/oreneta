@@ -110,7 +110,7 @@ export function SmimeSettingsSection() {
                     <span className="block truncate text-ui font-semibold">
                       {identity.subject || identity.addresses[0] || t('crypto.unnamedKey')}
                     </span>
-                    <span className="block truncate text-2xs text-secondary">{identity.addresses.join(', ')}</span>
+                    <span dir="auto" className="block truncate text-2xs text-secondary">{identity.addresses.join(', ')}</span>
                   </div>
                   <button
                     type="button"
@@ -146,7 +146,7 @@ export function SmimeSettingsSection() {
                 void unlockIdentity()
               }}
             >
-              <span className="min-w-0 flex-1 truncate text-2xs text-secondary">{pendingIdentity.name}</span>
+              <span dir="auto" className="min-w-0 flex-1 truncate text-2xs text-secondary">{pendingIdentity.name}</span>
               <input
                 type="password"
                 value={identityPassword}

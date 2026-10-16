@@ -37,7 +37,7 @@ export function CalendarGeneralGroup() {
   const set = (partial: Partial<CalendarPrefs>) => settings$.calendar.set({ ...prefs, ...partial })
   const icon = { size: 16, strokeWidth: 1.75 }
   const working = workDays(prefs)
-  const selectClass = 'w-44 rounded-control py-1.5 pl-3 font-semibold'
+  const selectClass = 'w-44 rounded-control py-1.5 ps-3 font-semibold'
 
   const select = (
     label: string,

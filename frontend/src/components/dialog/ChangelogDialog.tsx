@@ -78,7 +78,7 @@ export function ChangelogDialog() {
                 <h3 className="text-base font-bold tracking-tight">{release.version}</h3>
                 <span className="text-xs font-semibold text-secondary tabular-nums">{formatDate(release.date)}</span>
               </div>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-secondary">
+              <ul className="mt-2 list-disc space-y-1 ps-5 text-sm leading-6 text-secondary">
                 {release.notes.map((note, index) => (
                   <li key={index}>{note}</li>
                 ))}
