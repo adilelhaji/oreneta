@@ -18,7 +18,7 @@ proves del que necessita comptes delegats reals.
   Graph les rebutja en començar (`graph.authBegin`), i el remitent només pot ser
   el compte o un àlies desat.
 - **Necessita comptes reals.** Falta verificar:
-  - accés complet davant de «Envia com a» i «Envia en nom de»;
+  - accés complet davant d'«Envia com a» i «Envia en nom de»;
   - on queda la còpia enviada (la bústia compartida o la del delegat);
   - què veu l'usuari quan l'administrador retira el permís.
   Es farà amb comptes delegats de prova autoritzats (#98, files de

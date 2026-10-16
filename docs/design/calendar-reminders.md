@@ -43,10 +43,10 @@ Fila SET-29 del [registre d'acceptació de paritat](../emclient-parity-acceptanc
   (`reminders.missedShown`): el vigilant el torna a dir en arrencar, de manera
   que tancar l'aplicació abans de mostrar-lo no el perd, i un cop confirmat ja
   no es diu més. No es repeteix després d'una altra comprovació, d'un reinici
-  o d'un despertar. «Més recent» és per `at`, l'inici a la zona actual. Sense
+  o d'un despertar. «Més recent» es determina per `at`, l'inici a la zona actual. Sense
   comprovació anterior no hi ha perduts. El mòbil encara no els mostra (els
   deixa sense anotar, com abans).
-- **El que hi ha en comprovar**: en despertar es comprova abans de rellegir
+- **El que hi ha en comprovar**: en despertar-se es comprova abans de rellegir
   els calendaris, de manera que una reunió cancel·lada o moguda mentre l'equip
   dormia pot sortir com a perduda; i un esdeveniment passat que arriba dins del
   buit (una sincronització, un calendari que es torna a mostrar) surt com a
@@ -54,9 +54,9 @@ Fila SET-29 del [registre d'acceptació de paritat](../emclient-parity-acceptanc
 - **En començar** (0 minuts): es dona a la primera comprovació des de l'inici.
   Un esdeveniment que comença en el mateix segon de la comprovació encara no ha
   començat, de manera que també el dona una primera comprovació sense cap
-  d'anterior. Un esdeveniment sense durada compta com a en curs durant el seu
+  d'anterior. Un esdeveniment sense durada es considera en curs durant el seu
   primer minut.
-- **En despertar**, l'escriptori comprova immediatament (`system.resumed`),
+- **En despertar-se**, l'escriptori comprova immediatament (`system.resumed`),
   sense esperar el minut següent.
 - **Si el magatzem falla**, l'avís afectat no es dona i la comprovació no
   s'anota: la següent el dona, una vegada.
@@ -86,7 +86,7 @@ Fila SET-29 del [registre d'acceptació de paritat](../emclient-parity-acceptanc
 ## Proves
 
 Totes amb el rellotge i la zona controlats (instants fixos i zones amb nom),
-sense esperes. La CI passa `calendar::` i `pim::reminders::` també amb
+sense esperes. La CI executa `calendar::` i `pim::reminders::` també amb
 `TZ=Asia/Tokyo`, `TZ=America/Los_Angeles` i `TZ=Pacific/Auckland` (UTC+12
 o +13, #221).
 
@@ -148,7 +148,7 @@ o +13, #221).
   `TestMergedMissedNoticesKeepTheNewestTwentyAndSpanTheirDays`,
   `TestMissedRemindersAreMergedByKeyAndConfirmedOnceShown`,
   `TestMergedMissedNoticesOrderByTheLocalStart`.
-- Frontend: `calendarNotification.test.ts` (el clic, per
+- Interfície: `calendarNotification.test.ts` (el clic, per
   `onNotificationClicked`, obre el dia o la setmana), `notifications.test.ts`
   (sona quan Go el mostra).
 - Kotlin: `PimRefreshTest.theCoresLocalTimeIsKeptWhenItSaysOne`.

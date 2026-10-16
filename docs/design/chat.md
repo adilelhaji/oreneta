@@ -45,15 +45,15 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
     `chat.send` accepta `mentions`; esdeveniments `chat.own`, `chat.presence`,
     `chat.subscription`, `chat.occupants` i `chat.notify`;
   - a Go, `chat.notify` surt com a notificació del sistema excepte amb «No
-    molestis» o hores tranquil·les (com el correu); en prémer-la
-    (`chat:<conversa>`) s'obre a la vista Xat.
+    molestis» o hores de silenci (com el correu); en prémer-la
+    (`chat:<conversa>`) s'obre a la vista «Xat».
 - **Aplicació:** la vista «Xat» a la barra lateral (configuració, converses
   amb no llegits, historial amb l'estat de cada enviament i «Torna a enviar»).
   Amb l'ADR-0044: «Uneix-te a un grup», els grups damunt de les converses
   directes, el sobrenom de qui parla, l'estat de la sala, «Surt del grup» amb
   confirmació, les invitacions com a proposta, el clip per enviar un fitxer
   amb el progrés i «Cancel·la», i els fitxers rebuts amb el nom i «Desa…».
-  Amb l'ADR-0055: «El teu estat» i el seu text (Invisible desactivat si el
+  Amb l'ADR-0055: «El teu estat» i el seu text («Invisible» desactivat si el
   servidor no ho admet), les peticions amb «Permet» i «Rebutja», l'estat de
   cada contacte a la llista i a la capçalera o «Demana veure el seu estat»,
   en un grup «Persones del grup» amb «Escriu en privat», el sobrenom de qui
@@ -103,7 +103,7 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
 - **Presència, mencions, avisos i privats (ADR-0055):**
   - l'estat propi per compte: text net i de 200 caràcters com a màxim, un camp
     malmès torna només al seu valor, s'oblida en treure el compte;
-  - el desat s'informa abans de connectar i la sessió en parteix;
+  - l'estat desat es comunica abans de connectar i la sessió en parteix;
   - invisible només si el servidor ho anuncia; sense això, no s'anuncia res i
     mai no es passa sol a visible; passar d'anunciat a no anunciat torna a
     entrar als grups;
@@ -128,7 +128,7 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
     seu id d'arxiu compta per posar-se al dia; sortir d'un grup esborra el que
     és del grup i en deixa els privats per llegir-los.
 - **Pont Go:** la notificació del xat porta la conversa com a destinació i
-  calla amb «No molestis» o hores tranquil·les encara que els recordatoris
+  calla amb «No molestis» o hores de silenci encara que els recordatoris
   passin; un esdeveniment sense compte o sense conversa no avisa; el cos d'un
   missatge de xat és text per al servei que llegeix marques, i els textos i la
   destinació van protegits a la plantilla XML de Windows.
@@ -142,7 +142,7 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
     sobrenom, l'eco propi queda acceptat una vegada amb l'id de la sala, i qui
     torna entra sol una altra vegada i rep el que s'ha dit mentrestant una
     sola vegada, dues vegades seguides; sortir deixa la sala;
-  - un fitxer de 300 KB per `mod_http_file_share` sobre HTTPS (autoritat de
+  - un fitxer de 300 kB per `mod_http_file_share` sobre HTTPS (autoritat de
     proves creada per l'script, `ORENETA_PROSODY_CA`): progrés, enllaç rebut
     amb el nom i desat idèntic; un de més d'1 MiB es rebutja abans de pujar-lo;
     un de cancel·lat no surt;
@@ -171,14 +171,14 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
   - enviar un fitxer amb progrés, cancel·lar, i l'avís de massa gran;
   - un fitxer rebut amb el nom i «Desa…», sense baixar-se sol; un per http no
     s'ofereix per desar;
-  - (ADR-0055) l'estat i el seu text; Invisible desactivat o amb la seva
+  - (ADR-0055) l'estat i el seu text; «Invisible» desactivat o amb la seva
     explicació; l'avís de «no s'anuncia res»; demanar veure un estat,
     permetre i rebutjar, només en prémer; l'estat del contacte, i res sense
     connexió; en un grup, els suggeriments d'`@` (sense la persona, fletxes,
     Retorn, Escapada, no després d'una adreça), les mencions enviades, «Et
     menciona» només on correspon i qui hi ha; un privat llistat i obert, amb
     el sobrenom en majúscules, i obert des d'un nom del grup; prémer una
-    notificació n'obre la conversa a Xat.
+    notificació n'obre la conversa a «Xat».
 - **Trobat en provar:** l'auditoria axe va detectar un element que no era `li`
   dins de la llista de missatges; corregit. Amb l'ADR-0044, el nucli acceptava
   còpies de carbons i resultats d'arxiu de qualsevol remitent; ara només del

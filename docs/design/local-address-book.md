@@ -3,7 +3,7 @@
 ## Què fa
 
 - **Persones** té un botó «Contacte nou». Els contactes de la llibreta local
-  tenen «Edita» i «Elimina». Els de llibretes sincronitzades (CardDAV, Google,
+  tenen «Edita» i «Suprimeix». Els de llibretes sincronitzades (CardDAV, Google,
   Exchange) continuen sent de només lectura i no mostren aquests botons.
 - Els contactes locals només es desen en aquest equip, i l'editor ho indica. No
   tenen compte, de manera que eliminar un compte no els afecta (ADR-0011).

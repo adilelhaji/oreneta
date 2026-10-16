@@ -21,7 +21,7 @@ Part de #39 lliurada a la iteració 2. La recuperació completa d'esborranys
 ## Contracte
 
 - **Llista d'adreces.** Es divideix amb el mateix analitzador de l'editor: les
-  comes i els punts i comes separen, excepte dins de cometes o de `<…>`.
+  comes i els punts i coma separen, excepte dins de cometes o de `<…>`.
 - **Noms en escriure una adreça.** Un nom amb `, ; < > "` es posa entre cometes
   i s'escapa en construir la resposta i en acceptar un contacte.
 - **Duplicats.** Un destinatari repetit no s'afegeix dues vegades al camp. El
@@ -47,7 +47,7 @@ Part de #39 lliurada a la iteració 2. La recuperació completa d'esborranys
 ## Proves
 
 - `lib/address.test.ts` i `states/replyRecipients.test.ts` cobreixen la divisió
-  amb cometes i punts i comes. També la resposta, la resposta a tothom amb
+  amb cometes i punts i coma. També la resposta, la resposta a tothom amb
   l'adreça pròpia entre cometes, `Reply-To` amb un nom entre cometes, l'àlies
   darrere d'un nom entre cometes i el contacte del desplegable. Els casos de
   resposta, resposta a tothom i contacte fallaven abans del canvi.

@@ -30,8 +30,7 @@
 Es conserva un registre per compte, només per a la sessió, i un registre a part
 sense atribuir. Descartar l'avís amaga l'avís destacat, no el registre. Un
 control compacte de sincronització del compte manté els detalls accessibles.
-Els comptes independents no se sobreescriuen mai entre ells. Els comptes
-eliminats s'esporguen; una compleció tardana d'un reintent no en pot tornar a
+Els comptes independents no se sobreescriuen mai entre ells. Els registres dels comptes eliminats se suprimeixen; una compleció tardana d'un reintent no en pot tornar a
 crear el registre ni sobreescriure un error més recent.
 
 Es mostra l'evidència existent: autenticació necessària, compte en pausa,
@@ -62,14 +61,14 @@ continuen sent feina d'acceptació de #150.
 
 ## Límit de la verificació
 
-La cobertura automatitzada exercita errors simultanis, el descart d'avisos,
+La cobertura automatitzada inclou errors simultanis, el descart d'avisos,
 activitat parcial o sense atribuir, comptes desconeguts o eliminats, comptes en
 pausa o que requereixen autenticació, sol·licituds a la cua, confirmacions
 falses, absents o rebutjades, sol·licituds duplicades, errors més recents i
 respostes tardanes. Les proves de components cobreixen el focus, la
 configuració exacta del compte i l'omissió dels diagnòstics en brut. Els casos
 d'entrada de producció cobreixen el castellà, el mode clar i fosc, 600/1440 px,
-el teclat, el zoom al 200%, el restabliment de la sessió i l'absència
+el teclat, el zoom al 200 %, el restabliment de la sessió i l'absència
 d'invocació d'enviament. Les revisions tècniques i de producte lleugeres estan
 resoltes; la CI del commit exacte és la condició per fusionar.
 

@@ -24,8 +24,7 @@ Contra un servidor local que respon com Nextcloud:
 - la pujada va a la seva carpeta amb un nom lliure i el camí es codifica;
 - una contrasenya revocada i un emmagatzematge ple s'indiquen i es netegen;
 - cancel·lar esborra el que s'ha pujat;
-- l'enllaç és de només lectura, amb contrasenya i caducitat llegides de
-  tornada;
+- l'enllaç és de només lectura, amb contrasenya i caducitat tornades a llegir;
 - un enllaç editable, sense caducitat o sense contrasenya es retira;
 - les exigències del servidor s'apliquen abans de crear res.
 

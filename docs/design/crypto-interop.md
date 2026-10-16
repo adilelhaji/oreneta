@@ -16,7 +16,7 @@
 - La signatura separada d'OpenPGP sortia armada com a `PGP MESSAGE`; ara és
   `PGP SIGNATURE`, com esperen els lectors de l'RFC 3156.
 - A S/MIME, RSAES-OAEP, AES-GCM (AuthEnvelopedData) o un xifratge desconegut
-  s'informaven com a missatge malmès. Ara són «no compatible» i s'anomena
+  es mostraven com a missatge malmès. Ara són «no compatible» i s'anomena
   l'algorisme.
 
 ## Estats que es distingeixen

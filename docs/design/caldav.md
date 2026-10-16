@@ -10,7 +10,7 @@
 
 Es llegeixen i s'editen com els altres calendaris. Si algú ha canviat un
 esdeveniment en un altre dispositiu, en desar no s'escriu res: s'avisa i
-s'actualitza. Treure'l d'aquí no el suprimeix del servidor.
+s'actualitza. Treure el calendari d'aquí no el suprimeix del servidor.
 
 ## Fitxers .ics
 
@@ -42,7 +42,7 @@ A la configuració de cada calendari, **Fitxers de calendari**:
 
 | Nivell | Què cobreix |
 |---|---|
-| N1 `calendar/ics/tests.rs` | Seqüències d'escapament i plegament; anada i tornada d'un esdeveniment; dia sencer; sèrie que manté l'hora local després del canvi d'hora; edició que conserva assistents, organitzador, X- i substitueix l'alarma; desplaçament de sèrie que conserva la primera data; excepció, segona excepció que reemplaça i EXDATE; recordatoris; exportació; UTC pla; `Z` amb `TZID` |
+| N1 `calendar/ics/tests.rs` | Seqüències d'escapada i plegament; anada i tornada d'un esdeveniment; dia sencer; sèrie que manté l'hora local després del canvi d'hora; edició que conserva assistents, organitzador, X- i substitueix l'alarma; desplaçament de sèrie que conserva la primera data; excepció, segona excepció que reemplaça i EXDATE; recordatoris; exportació; UTC pla; `Z` amb `TZID` |
 | N1 `calendar/caldav/tests.rs` | Descobriment pel principal amb permisos i colors; crear, llegir la versió, conflicte sense escriptura i edició des de la versió actual; ocurrències canviades i suprimides; finestra incompleta rebutjada; res enviat a un altre servidor |
 | N1 protecció ADR-0011 | `caldav_objects` se suprimeix amb el compte; les contrasenyes també |
 | N3 `integration_caldav_test.go` (Radicale) | Descobrir i afegir; edició que conserva assistents i línies d'altri; conflicte sense escriptura; sèrie amb una ocurrència canviada i una altra suprimida |

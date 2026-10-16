@@ -26,7 +26,7 @@ pròpia de l'aplicació, no un `zoom` de CSS a l'arrel.
   - un avís indica la mida nova;
   - es desa i es recupera després de reiniciar.
 - **Per què no el `zoom` de CSS:** amb `zoom` a l'arrel, les media queries
-  continuen mesurant la finestra en píxels sense zoom, i el disseny adaptable
+  continuen mesurant la finestra en píxels sense zoom, i el disseny responsiu
   deixa de correspondre al que es veu. Amb l'escala pròpia, les media queries
   continuen llegint l'amplada real.
 - **El que no s'escala sol**, i s'ha canviat perquè ho faci:

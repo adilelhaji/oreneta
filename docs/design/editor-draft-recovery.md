@@ -31,7 +31,7 @@ faltaven.
   d'un descart, el text continua a la pantalla per enviar-lo o copiar-lo. La
   làpida (tombstone) no se sobreescriu mai.
 - **Tancar la pestanya.** Enviar, descartar o tancar conservant l'esborrany del
-  servidor esborren la còpia local. L'esborrat espera l'escriptura en curs i
+  servidor esborren la còpia local. L'esborrament espera l'escriptura en curs i
   deixa una làpida. Així una escriptura tardana no pot ressuscitar un esborrany
   ja enviat o descartat. Si no s'havia arribat a desar res de la pestanya, no
   s'esborra res. Reobrir un enviament desfet crea una pestanya amb un altre
@@ -46,7 +46,7 @@ faltaven.
     n'és la migració;
   - una pestanya tancada abans d'acabar la lectura s'esborra aleshores, sense
     reaparèixer;
-  - un esborrany il·legible s'informa com a error i no es converteix mai en un
+  - un esborrany il·legible es notifica com a error i no es converteix mai en un
     de buit.
   Les pestanyes obertes es llegeixen després de l'última espera, de manera que
   una pestanya oberta mentrestant no es perd.
@@ -64,12 +64,11 @@ faltaven.
 ## Proves
 
 - `localDraftSync.test.ts` fa servir un magatzem fals amb les regles de revisió
-  i de làpida del nucli. Cobreix els bytes exactes de base64, cap escriptura
-  abans de la lectura, el document complet amb adjunts i revisions
+  i de làpida del nucli. Cobreix els bytes exactes de base64, l'absència d'escriptures abans de la lectura, el document complet amb adjunts i revisions
   encadenades, l'escriptura omesa si no canvia res i la pausa d'escriptura.
-  També cobreix el bolcatge en tancar, el conflicte amb «conserva aquesta
-  versió», el descart en un altre lloc i l'error amb reintent. Prova l'esborrat
-  després d'una escriptura en curs sense ressurrecció, l'escriptura pendent
+  També cobreix el bolcatge en tancar, el conflicte amb «Conserva aquesta
+  versió», el descart en un altre lloc i l'error amb reintent. Prova l'esborrament
+  després d'una escriptura en curs sense resurrecció, l'escriptura pendent
   anul·lada en tancar, la recuperació amb adjunts i la revisió de partida, i la
   migració des de localStorage. Comprova la pestanya tancada abans de la
   lectura, l'esborrany il·legible, l'error de llistat i la pestanya oberta

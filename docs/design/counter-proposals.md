@@ -22,7 +22,7 @@
   la seva nota.
 - **Coincidències:** l'editor, la targeta d'una invitació, el formulari de
   proposta i la targeta d'una proposta mostren «Coincideix amb: A, B, C i N
-  més» quan l'hora se solapa amb esdeveniments propis.
+  més» quan l'hora s'encavalla amb esdeveniments propis.
 
 ## Nucli
 

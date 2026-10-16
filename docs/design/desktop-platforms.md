@@ -30,6 +30,5 @@ Arrencar no és paritat. A macOS continuen sense evidència:
 
 Aquesta evidència necessita un Mac amb sessió d'usuari, la signatura i la
 notarització d'Apple i comptes de prova. Tot això depèn del propietari, igual
-que la verificació nativa de Windows. Linux continua sent una plataforma amb
-regressió comprovada; el seu resultat no demostra res sobre la paritat a macOS
+que la verificació nativa de Windows. Linux continua sent una plataforma amb proves de regressió; el seu resultat no demostra res sobre la paritat a macOS
 o a Windows.

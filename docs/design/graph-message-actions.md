@@ -125,7 +125,7 @@ sense llegir mai el cos d'un error.
   20 de nous, també els desats abans; cadascun, una sola vegada. Un que falla
   per si mateix (massa gran, ja no hi és, il·legible) es marca amb el motiu i
   no frena els altres; un error del servidor o del compte atura el recorregut
-  fins a la sincronització següent. És de millor esforç: si la consulta falla,
+  fins a la sincronització següent. Es fa tant com es pot, sense garantia: si la consulta falla,
   els informes es llegeixen en obrir-los.
 
 ## Interfície

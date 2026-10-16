@@ -45,7 +45,7 @@ l'octubre del 2022. Per tant:
   final del qual és Exchange Online: `outlook.office365.com`,
   `outlook.office.com` o els núvols nacionals `.us`, `.de` i
   `partner.outlook.cn` (`exchange::is_exchange_online`).
-- La configuració d'aquell compte mostra l'avís amb la sortida: treure'l i
+- La Configuració d'aquell compte mostra l'avís amb la sortida: treure'l i
   afegir la bústia com a Microsoft Graph. L'ADR-0004 no permet convertir-lo
   sobre la marxa.
 - L'inventari dels comptes reals del pilot el fa el responsable amb aquesta

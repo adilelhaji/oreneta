@@ -105,9 +105,9 @@ sol gruix:
 
 | Token | Mida | Traç | Ús |
 |---|---|---|---|
-| `icon-sm` | 14 | 1.75 | En línia amb `text-caption`/`text-ui`, elements de menú, accions de fila |
-| `icon-md` | 16 | 1.75 | Botons, la majoria d'icones autònomes |
-| `icon-lg` | 20 | 1.75 | Capçaleres de diàleg, marques d'estat buit |
+| `icon-sm` | 14 | 1,75 | En línia amb `text-caption`/`text-ui`, elements de menú, accions de fila |
+| `icon-md` | 16 | 1,75 | Botons, la majoria d'icones autònomes |
+| `icon-lg` | 20 | 1,75 | Capçaleres de diàleg, marques d'estat buit |
 
 Dues excepcions queden fora de l'escala expressament i no s'han de documentar
 com a tokens: les icones de 7 px dins de les miniatures de temes i fons

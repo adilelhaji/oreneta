@@ -4,7 +4,7 @@ Registre de la implementació de l'ADR-0032.
 
 ## Defectes trobats i corregits
 
-- **Format incompatible:** la sol·licitud feia servir un format propi contra
+- **Format incompatible:** la sol·licitud feia servir un format propi amb
   `/v1/chat/completions`, de manera que no funcionava amb Ollama ni amb cap
   proveïdor real. Ara fa servir chat completions i llegeix
   `choices[0].message.content`.
@@ -25,14 +25,14 @@ Registre de la implementació de l'ADR-0032.
   - una injecció no tanca el bloc delimitat;
   - es permeten instruccions de reescriptura;
   - un proveïdor fals en aquest equip rep exactament el cos revisat i la clau;
-  - un error 500 s'informa sense el seu cos;
+  - un error 500 es notifica sense el seu cos;
   - cancel·lar respon en menys de 2 s amb el proveïdor tardant 5 s.
 - **Aplicació:**
   - desactivat per defecte;
   - JSON en un bloc de codi, i les «accions» de la resposta s'ignoren;
   - el diàleg de revisió d'una conversa comença amb només el missatge més
     recent marcat (la data més alta; amb dates iguals o desconegudes, l'últim
-    de la llista) i cap detall d'adjunt; la resta l'afegeix la persona, i la
+    de la llista) i sense cap detall d'adjunt; la resta l'afegeix la persona, i la
     previsualització canvia amb cada casella (#196,
     `AssistantReviewDialog.test.tsx`);
   - un esborrany no compta com el més recent, tret que la conversa només

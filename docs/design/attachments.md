@@ -16,5 +16,5 @@ obrint-ne el missatge.
 | Nivell | Què cobreix |
 |---|---|
 | N1 `store/attachment_list/tests.rs` | Llista amb origen, sense imatges en línia; fitxer sense baixar i enllaç al núvol; cobertura; filtres per compte, nom (paraules), remitent, tipus, dates i mida; `%` literal; pàgines i límit màxim; tipus per MIME o extensió |
-| N2 `AttachmentsView.test.tsx` | Llista, recompte, avís de cobertura, desar només el que és al disc, obrir el missatge; filtres enviats al nucli; una resposta antiga no trepitja una de nova |
+| N2 `AttachmentsView.test.tsx` | Llista, recompte, avís de cobertura, desar només el que és al disc, obrir el missatge; filtres enviats al nucli; una resposta antiga no sobreescriu una de nova |
 | N6 `startup.e2e.ts` | Auditoria axe de la vista en mode clar i fosc |

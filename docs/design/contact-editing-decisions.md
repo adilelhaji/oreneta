@@ -11,7 +11,7 @@ codi. Fins aleshores no hi ha cap escriptura de contactes.
   `book`, `uid`), però no la seva versió: no hi ha cap columna d'ETag ni
   d'`etag` de Google ni de `ChangeKey` d'Exchange. Sense versió, una escriptura
   no pot detectar un canvi d'altri.
-- **#28** ja garanteix que una sincronització incompleta no esborra contactes.
+- **#28** ja garanteix que una sincronització incompleta no suprimeix contactes.
 
 ## Decisions
 

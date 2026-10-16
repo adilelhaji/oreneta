@@ -35,7 +35,7 @@ servidor equival a lliurar-la allà on apunti.
   HTTPS (proveïdors que reparteixen DAV entre amfitrions, com les particions
   d'iCloud); un servidor HTTP local només conserva el seu propi origen.
 - En el descobriment, un `href` de principal o de home-set que no compleix
-  aquesta regla compta com a pas sense resultat i se n'informa el motiu; no
+  aquesta regla compta com a pas sense resultat i se n'indica el motiu; no
   s'ofereix una llibreta en un origen no permès.
 - En llegir una llibreta, les targetes només es demanen al mateix origen de la
   llibreta. Un `href` a un altre servidor atura la lectura sense enviar-hi res.
@@ -56,7 +56,7 @@ preservades seria una millora posterior, no necessària per als criteris de #28.
   `propstat` 403 seguit de 200, XML tallat, vCard no vàlida, llibreta buida
   sense segona sol·licitud, la llibreta que es llista a si mateixa, targeta en
   un altre amfitrió sense cap sol·licitud enviada, regles d'origen i
-  descobriment sense baixar a HTTP.
+  descobriment sense passar d'HTTPS a HTTP.
 - Integració amb Radicale (`TestIntegrationContacts`): descobriment, lectura,
   canvi, supressió real recollida, contrasenya rebutjada i servidor caigut amb
   els contactes conservats.
