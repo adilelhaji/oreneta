@@ -96,18 +96,14 @@ export function handleGroupArrowKeys(
     (item) => !(item as HTMLButtonElement).disabled,
   )
   const current = event.target instanceof Element ? event.target.closest<HTMLElement>(selector) : null
-  const next = groupIndexForKey(
-    event.key,
-    current ? items.indexOf(current) : -1,
-    items.length,
-    elementDirection(event.currentTarget),
-    orientation,
-  )
+  const index = current ? items.indexOf(current) : -1
+  const next = groupIndexForKey(event.key, index, items.length, elementDirection(event.currentTarget), orientation)
   if (next === null) return false
   event.preventDefault()
   const item = items[next]
   item.focus()
-  item.click()
+  // Focus that was not on an item yet only arrives; it picks nothing.
+  if (index >= 0) item.click()
   return true
 }
 
@@ -170,16 +166,126 @@ export function menuLeft(
   return Math.max(margin, Math.min(desired, viewportWidth - width - margin))
 }
 
+// Letters of the scripts written right to left: Hebrew, Arabic, Syriac,
+// Thaana, NKo, Samaritan, Mandaic and their presentation forms, plus the
+// historic right-to-left blocks of the supplementary planes.
+const RTL_LETTER = /[֐-ࣿיִ-﷿ﹰ-﻿\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u
+const LETTER = /\p{L}/u
+
+/**
+ * The direction of a text's first strong character, as `dir="auto"` decides
+ * it: a right-to-left letter makes it 'rtl', any other letter 'ltr'. Digits,
+ * punctuation and spaces are not strong; text with none of either is null.
+ */
+export function firstStrongDirection(text: string): TextDirection | null {
+  for (const char of text) {
+    if (RTL_LETTER.test(char)) return 'rtl'
+    if (LETTER.test(char)) return 'ltr'
+  }
+  return null
+}
+
+/** The text an element shows itself, without what sits in nested elements. */
+function ownText(element: Element): string {
+  let text = ''
+  for (const node of Array.from(element.childNodes)) if (node.nodeType === 3) text += node.textContent ?? ''
+  return text
+}
+
+/**
+ * The text `dir="auto"` would read in an element: nested elements that set
+ * their own direction (a `dir`, a `<bdi>`) do not count.
+ */
+export function directionalText(element: Element): string {
+  let text = ''
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === 3) text += node.textContent ?? ''
+    else if (node.nodeType === 1) {
+      const child = node as Element
+      if (!child.hasAttribute('dir') && child.tagName !== 'BDI') text += directionalText(child)
+    }
+  }
+  return text
+}
+
+// Blocks that carry running text in a message.
+const TEXT_BLOCKS = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, figcaption'
+// Containers that only count when text sits directly in them.
+const TEXT_CONTAINERS = 'td, th, div'
+
 /**
  * A message shown in its own frame keeps its own direction. One that declares
  * `dir` on <html> or <body> is left alone (a left-to-right message is never
- * turned around, nor the reverse); one that declares nothing gets
- * `dir="auto"` on its body, so an Arabic message reads right to left and a
- * Latin one left to right whatever the interface language.
+ * turned around, nor the reverse). In one that declares nothing, each block
+ * of text takes the direction of its own first letters (`dir="auto"`), never
+ * the body as a whole: a left-to-right newsletter whose first words (often a
+ * hidden preheader) are Arabic keeps its layout tables left to right, and a
+ * message that mixes paragraphs reads each one in its own direction. Blocks
+ * inside an element that already declares `dir` are left as they are.
  */
 export function applyContentDirection(doc: Document) {
   const body = doc.body
   if (!body) return
   if (doc.documentElement.hasAttribute('dir') || body.hasAttribute('dir')) return
-  body.setAttribute('dir', 'auto')
+  // Decided before anything is marked: only the sender's own `dir` counts.
+  const candidates = [
+    ...Array.from(body.querySelectorAll(TEXT_BLOCKS)),
+    ...Array.from(body.querySelectorAll(TEXT_CONTAINERS)).filter((element) => ownText(element).trim() !== ''),
+  ].filter((element) => !element.closest('[dir]'))
+  for (const element of candidates) element.setAttribute('dir', 'auto')
+  // Text written straight into the body, outside any block, has nothing
+  // else to carry its direction.
+  if (ownText(body).trim() !== '' && !body.querySelector('table')) body.setAttribute('dir', 'auto')
+}
+
+/**
+ * Outgoing mail declares the direction of its right-to-left blocks (ADR-0061):
+ * a paragraph, heading, list or quote whose first strong character is
+ * right to left gets `dir="rtl"`, so the receiving client lays it out and
+ * punctuates it correctly. Left-to-right blocks get nothing, so mail written
+ * in a left-to-right language leaves byte for byte as before. Blocks inside an
+ * element that already declares `dir` (a quoted original) are left alone.
+ */
+export function markRightToLeftBlocks(root: ParentNode) {
+  // Only blocks outside a direction the content already declares; decided
+  // before anything is marked, so every `dir` met below is one set here.
+  const blocks = Array.from(root.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, ul, ol, blockquote')).filter(
+    (element) => !element.closest('[dir]'),
+  )
+  for (const element of blocks) {
+    const own = firstStrongDirection(directionalText(element))
+    const around = element.parentElement?.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'rtl' : 'ltr'
+    // A left-to-right paragraph inside a list or quote marked right to left
+    // says so; anywhere else left to right is what a client assumes.
+    if (own && own !== around) element.setAttribute('dir', own)
+  }
+}
+
+/** An arrow pointing forward along the line ("from … to …", "then"). */
+export function forwardArrow(direction: TextDirection = documentDirection()): string {
+  return direction === 'rtl' ? '←' : '→'
+}
+
+/** An arrow pointing back along the line ("back to …"). */
+export function backArrow(direction: TextDirection = documentDirection()): string {
+  return direction === 'rtl' ? '→' : '←'
+}
+
+/** Separator between names in a list, in the interface language's punctuation. */
+export function nameSeparator(language?: string | null): string {
+  return languageDirection(language) === 'rtl' ? '، ' : ', '
+}
+
+/**
+ * A list of names as one string for a translated sentence ("to {recipients}").
+ * Each name that could reorder its neighbours (a right-to-left name, or any
+ * name in a right-to-left interface) is wrapped in FIRST STRONG ISOLATE …
+ * POP DIRECTIONAL ISOLATE; a left-to-right list in a left-to-right interface
+ * is returned exactly as before.
+ */
+export function formatNameList(names: string[], language?: string | null): string {
+  const rtlInterface = languageDirection(language) === 'rtl'
+  return names
+    .map((name) => (rtlInterface || firstStrongDirection(name) === 'rtl' ? `⁨${name}⁩` : name))
+    .join(nameSeparator(language))
 }

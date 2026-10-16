@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import {
   applyContentDirection,
+  backArrow,
   besideEndX,
+  directionalText,
+  firstStrongDirection,
+  formatNameList,
+  forwardArrow,
+  nameSeparator,
   documentDirection,
   elementDirection,
   endAlignedX,
@@ -137,18 +143,88 @@ describe('where a menu opens from its button', () => {
 describe('a message keeps its own direction (ADR-0061)', () => {
   const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html')
 
-  it('lets a message that declares nothing take the direction of its text', () => {
-    const doc = parse('<p>مرحبا</p>')
+  it('gives each block of a message that declares nothing its own direction, never the body', () => {
+    const doc = parse('<p>مرحبا</p><p>Hello</p><ul><li>واحد</li></ul><h2>Plan</h2><blockquote>نص</blockquote>')
+    applyContentDirection(doc)
+    expect(doc.body.hasAttribute('dir')).toBe(false)
+    for (const element of doc.body.querySelectorAll('p, li, h2, blockquote')) {
+      expect(element.getAttribute('dir')).toBe('auto')
+    }
+  })
+
+  it('keeps a left-to-right newsletter laid out left to right despite an Arabic preheader', () => {
+    const doc = parse(
+      '<div style="display:none">عرض خاص لهذا الأسبوع</div>' +
+        '<table width="600"><tr><td><img src="logo.png"></td><td>Weekly news from the shop</td></tr>' +
+        '<tr><td colspan="2"><p>Read the full story</p></td></tr></table>',
+    )
+    applyContentDirection(doc)
+    // Nothing that holds the layout takes a direction.
+    expect(doc.body.hasAttribute('dir')).toBe(false)
+    expect(doc.querySelector('table')!.hasAttribute('dir')).toBe(false)
+    expect(doc.querySelector('td')!.hasAttribute('dir')).toBe(false)
+    expect(doc.querySelector('tr')!.hasAttribute('dir')).toBe(false)
+    // The preheader and the text blocks each read their own way.
+    expect(doc.querySelector('div')!.getAttribute('dir')).toBe('auto')
+    expect(doc.querySelectorAll('td')[1].getAttribute('dir')).toBe('auto')
+    expect(doc.querySelector('p')!.getAttribute('dir')).toBe('auto')
+  })
+
+  it('lets text written straight into a body without layout take its direction', () => {
+    const doc = parse('مرحبا يا آنا')
     applyContentDirection(doc)
     expect(doc.body.getAttribute('dir')).toBe('auto')
   })
 
   it('never turns around a message that declares its direction', () => {
-    const onHtml = parse('<html dir="ltr"><body><p>Hello</p></body></html>')
+    const onHtml = parse('<html dir="ltr"><body><p>مرحبا</p></body></html>')
     applyContentDirection(onHtml)
     expect(onHtml.body.hasAttribute('dir')).toBe(false)
-    const onBody = parse('<body dir="rtl"><p>مرحبا</p></body>')
+    expect(onHtml.querySelector('p')!.hasAttribute('dir')).toBe(false)
+    const onBody = parse('<body dir="rtl"><p>Hello</p></body>')
     applyContentDirection(onBody)
     expect(onBody.body.getAttribute('dir')).toBe('rtl')
+    expect(onBody.querySelector('p')!.hasAttribute('dir')).toBe(false)
+    const inside = parse('<div dir="ltr"><p>مرحبا</p></div><p>Hi</p>')
+    applyContentDirection(inside)
+    expect(inside.querySelectorAll('p')[0].hasAttribute('dir')).toBe(false)
+    expect(inside.querySelectorAll('p')[1].getAttribute('dir')).toBe('auto')
+  })
+})
+
+describe('the first strong character', () => {
+  it('reads letters, not digits or punctuation', () => {
+    expect(firstStrongDirection('12, (مرحبا) Hello')).toBe('rtl')
+    expect(firstStrongDirection('— Hello مرحبا')).toBe('ltr')
+    expect(firstStrongDirection('שלום')).toBe('rtl')
+    expect(firstStrongDirection('日本語')).toBe('ltr')
+    expect(firstStrongDirection('42 / 7')).toBeNull()
+  })
+
+  it('skips nested text that sets its own direction, as dir="auto" does', () => {
+    const doc = new DOMParser().parseFromString('<p><span dir="ltr">Hello</span> مرحبا <bdi>Hi</bdi></p>', 'text/html')
+    expect(firstStrongDirection(directionalText(doc.querySelector('p')!))).toBe('rtl')
+  })
+})
+
+describe('names and arrows in the interface language', () => {
+  it('lists names as before in a left-to-right interface', () => {
+    expect(formatNameList(['Alice', 'Bob Jones'], 'en')).toBe('Alice, Bob Jones')
+    expect(nameSeparator('es')).toBe(', ')
+  })
+
+  it('isolates each name and uses the Arabic comma in Arabic', () => {
+    expect(formatNameList(['Alice', 'ليلى'], 'ar')).toBe('⁨Alice⁩، ⁨ليلى⁩')
+  })
+
+  it('isolates a right-to-left name even in a left-to-right interface', () => {
+    expect(formatNameList(['ليلى', 'Bob'], 'en')).toBe('⁨ليلى⁩, Bob')
+  })
+
+  it('points arrows along the line', () => {
+    expect(forwardArrow('ltr')).toBe('→')
+    expect(forwardArrow('rtl')).toBe('←')
+    expect(backArrow('ltr')).toBe('←')
+    expect(backArrow('rtl')).toBe('→')
   })
 })
