@@ -103,8 +103,13 @@ func TestSidecarCallTimeouts(t *testing.T) {
 		// Task lists on a CalDAV server (ADR-0039).
 		"tasks.caldavDiscover":  60 * time.Second,
 		"tasks.caldavAdd":       60 * time.Second,
+		"tasks.exchangeAdd":     60 * time.Second,
 		"tasks.resolveConflict": 60 * time.Second,
 		"tasks.sync":            5 * time.Minute,
+		// Exchange contacts and distribution lists (ADR-0058).
+		"exchange.contacts.sync": 2 * time.Minute,
+		"people.groupSave":       60 * time.Second,
+		"people.groupDelete":     60 * time.Second,
 		// Automatic archiving (ADR-0054): a preview searches the chosen
 		// folders; a run copies or moves every old message.
 		"autoArchive.preview": 10 * time.Minute,

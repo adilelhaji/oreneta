@@ -849,6 +849,12 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     // What a POP3 account downloaded, and when it deletes from the server (#97).
     ("pop3_seen", "account"),
     ("pop3_policy", "account"),
+    // Folder renames waiting for the interface, and the Exchange accounts
+    // whose folders are named by path already (ADR-0058).
+    ("folder_renames", "account"),
+    ("ews_folder_paths", "account"),
+    // Exchange folder moves whose answer was lost, until a listing settles them.
+    ("ews_uncertain_moves", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an
@@ -893,6 +899,8 @@ pub fn delete_account(conn: &Connection, id: &str) -> Result<AccountRemoval> {
             OR person_id IN (SELECT id FROM people WHERE account = ?1)",
         params![id],
     )?;
+    // Task lists kept in the account's Tasks folder go with it (ADR-0058).
+    crate::task_sync::exchange::forget_account(&tx, id)?;
     // A person's addresses and numbers have no account column of their own.
     for child in ["person_emails", "person_phones"] {
         tx.execute(

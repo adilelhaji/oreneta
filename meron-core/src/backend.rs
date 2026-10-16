@@ -93,7 +93,9 @@ impl Session {
             Session::Local(_) => Ok(()),
             Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::prepare_folder_delete(session).await,
-            Session::Ews(_) => ews_unsupported("prepare_folder_delete"),
+            // Stateless per call: no mailbox is selected that would need
+            // leaving first.
+            Session::Ews(_) => Ok(()),
         }
     }
 
@@ -109,12 +111,14 @@ impl Session {
     /// Rename `from` to `to` (ADR-0050). IMAP's RENAME carries the inferiors
     /// with it; the local store has no server, so it is handed the whole
     /// subtree in `renames` (the source first) and renames each row itself.
+    /// Exchange moves the folder by id, and its subfolders go with it
+    /// (ADR-0058).
     pub async fn rename_folder(&mut self, from: &str, to: &str, renames: &[(String, String)]) -> Result<()> {
         match self {
             Session::Local(session) => session.rename_folders(renames),
             Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::rename_folder(session, from, to).await,
-            Session::Ews(_) => ews_unsupported("rename_folder"),
+            Session::Ews(session) => session.move_folder(from, to, renames).await,
         }
     }
 
@@ -440,15 +444,16 @@ impl Session {
             Session::Imap(_) => Err(anyhow::anyhow!(
                 "IMAP accounts send through SMTP, not the mail session"
             )),
-            Session::Ews(session) => session.send_mime(raw).await,
+            Session::Ews(session) => session.send_mime(raw, false).await,
         }
     }
 
     /// Transmits a message whose sender may have asked for a delivery
     /// receipt (#210, ADR-0057), answering what became of the request and,
     /// when it went without one on Graph, why. Microsoft Graph carries it
-    /// where `graph::mail::delivery_receipt` says so; the other sessions
-    /// carry none and send as [`Self::send_mime`] does.
+    /// where `graph::mail::delivery_receipt` says so; Exchange always, on
+    /// the item it submits (`IsDeliveryReceiptRequested`, ADR-0058); the
+    /// other sessions carry none and send as [`Self::send_mime`] does.
     pub async fn send_mime_with_receipt(
         &mut self,
         raw: Vec<u8>,
@@ -460,6 +465,10 @@ impl Session {
             Session::Graph(session) => {
                 let (receipt, withheld) = session.send_mime_with_receipt(raw, asked, bcc, protected).await?;
                 Ok((receipt, withheld.map(crate::graph::mail::Withheld::as_str)))
+            }
+            Session::Ews(session) => {
+                session.send_mime(raw, asked).await?;
+                Ok((crate::receipts::delivery_receipt(asked, true), None))
             }
             _ => {
                 self.send_mime(raw).await?;

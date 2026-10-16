@@ -381,6 +381,25 @@ pub async fn sync_source(engine: &Arc<Engine>, id: &str) -> Result<()> {
     let source = store::contact_source(&engine.db.lock().unwrap(), id)?
         .with_context(|| format!("no such contact source: {id}"))?;
 
+    // An Exchange account's Contacts folder (ADR-0058): its people, and its
+    // distribution lists with the members who are no contact here.
+    if source.kind == "exchange" {
+        let fetched = super::exchange_book::fetch(engine, &source.account).await;
+        let now = chrono::Utc::now().timestamp();
+        let db = engine.db.lock().unwrap();
+        return match fetched {
+            Ok(book) => {
+                super::exchange_book::store_book(&db, &super::exchange_book::origin(&source.account), &book, now)?;
+                store::mark_contact_source_synced(&db, id, "", "", now)?;
+                Ok(())
+            }
+            Err(error) => {
+                store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
+                Err(error)
+            }
+        };
+    }
+
     let fetched = match source.kind.as_str() {
         "carddav" => {
             let password = crate::secrets::load(id)
@@ -527,8 +546,10 @@ pub fn groups(engine: &Arc<Engine>) -> Result<Value> {
                 "version": group.version,
                 "members": members,
                 // The local book's, and a CardDAV book's unless the server
-                // said it is read-only. Google's labels are read here only.
+                // said it is read-only, and an Exchange account's lists
+                // (ADR-0058). Google's labels are read here only.
                 "editable": group.origin.source == "local"
+                    || group.origin.source == "exchange"
                     || (group.origin.source == "carddav"
                         && writable.get(&group.origin.book).copied().flatten() != Some(false)),
             })
@@ -658,6 +679,26 @@ pub async fn group_save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             };
             record_group_outcome(engine, &origin, outcome, id.as_deref())
         }
+        // An Exchange account's distribution lists (ADR-0058).
+        "exchange" => {
+            let account = match (&stored, book) {
+                (Some(stored), _) => stored.origin.account.clone(),
+                (None, book) => {
+                    store::contact_source(&engine.db.lock().unwrap(), book.unwrap_or_default())?
+                        .context("that address book is no longer set up")?
+                        .account
+                }
+            };
+            let client = super::exchange_book::client(engine, &account).await?;
+            let origin = super::exchange_book::origin(&account);
+            let db = engine.db.clone();
+            let read_at = version.clone().unwrap_or_default();
+            let written = tokio::task::spawn_blocking(move || {
+                super::exchange_book::save_group(&client, &db, &origin, stored.as_ref(), &read_at, &name, &members, now_unix())
+            })
+            .await??;
+            Ok(written.to_json(id.as_deref().unwrap_or_default()))
+        }
         _ => anyhow::bail!("this address book's groups are read-only here"),
     }
 }
@@ -689,6 +730,18 @@ pub async fn group_delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             })
             .await??;
             record_group_outcome(engine, &stored.origin, outcome, Some(&id))
+        }
+        // An Exchange account's distribution lists (ADR-0058).
+        "exchange" => {
+            let client = super::exchange_book::client(engine, &stored.origin.account).await?;
+            let origin = super::exchange_book::origin(&stored.origin.account);
+            let db = engine.db.clone();
+            let stored = stored.clone();
+            let written = tokio::task::spawn_blocking(move || {
+                super::exchange_book::delete_group(&client, &db, &origin, &stored, &version, now_unix())
+            })
+            .await??;
+            Ok(written.to_json(&id))
         }
         _ => anyhow::bail!("this address book's groups are read-only here"),
     }

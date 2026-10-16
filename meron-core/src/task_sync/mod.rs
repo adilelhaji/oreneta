@@ -30,6 +30,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::calendar::caldav::{self, Object, RemoteCalendar};
 use crate::carddav::client::{credentials_may_follow, starting_point_for, Transport, Written};
 
+pub mod exchange;
 pub mod vtodo;
 
 /// The keychain entry holding a bound list's password.
@@ -160,6 +161,9 @@ pub struct Report {
     pub conflicts: usize,
     /// The queue stopped on a conflict; the list's other changes wait.
     pub stopped: bool,
+    /// Changes the server could never take (an Exchange list, ADR-0058),
+    /// set aside with their reason while the others went on.
+    pub rejected: usize,
 }
 
 /// One sync at a time: two at once would send the same change twice.

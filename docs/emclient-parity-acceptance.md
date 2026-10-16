@@ -13,7 +13,7 @@ any native/provider ledger row to verified.
 
 ## Status summary (2026-10-12)
 
-48 rows: 1 verified, 23 implemented-unverified, 24 partial, 0 absent, 0 unassessed, 0 blocked.
+48 rows: 1 verified, 24 implemented-unverified, 23 partial, 0 absent, 0 unassessed, 0 blocked.
 The only verified row (SET-16A) needs neither native nor provider evidence.
 No native Windows (N4) or real-provider (N5) evidence exists yet; it is
 scheduled once on the final version, so every row that requires it stays at

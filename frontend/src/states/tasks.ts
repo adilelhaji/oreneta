@@ -56,6 +56,9 @@ export type TaskList = {
   synced_at?: number | null
   last_error?: string
   conflicts?: number
+  /** ADR-0058: the Exchange account whose Tasks folder the list is; empty
+   * or absent for any other list. */
+  ews_account?: string
 }
 
 /** One collection a CalDAV server offers. */
@@ -92,9 +95,10 @@ export const tasks$ = observable({
   syncing: false,
 })
 
-/** Whether a list is kept on a CalDAV server (ADR-0039). */
+/** Whether a list is kept on a server: a CalDAV collection (ADR-0039) or
+ * an Exchange account's Tasks folder (ADR-0058). */
 export function isRemoteList(list: TaskList | undefined): boolean {
-  return !!list?.remote_url
+  return !!list?.remote_url || !!list?.ews_account
 }
 
 /** A list's name as the reader sees it: the mail list's is translated. */
@@ -296,6 +300,18 @@ export async function addCalDavTaskList(input: {
   password: string
 }): Promise<string> {
   const res = await invoke<{ id?: string }>('tasks.caldavAdd', input)
+  await Promise.all([loadTaskLists(), loadTasks()])
+  if (res?.id) tasks$.selectedList.set(res.id)
+  return res?.id ?? ''
+}
+
+/**
+ * Keeps an Exchange account's Tasks folder as a list (ADR-0058), read once
+ * before it is added. Returns the new list's id, or throws why it could not
+ * be read.
+ */
+export async function addExchangeTaskList(account: string, name: string): Promise<string> {
+  const res = await invoke<{ id?: string }>('tasks.exchangeAdd', { account, name })
   await Promise.all([loadTaskLists(), loadTasks()])
   if (res?.id) tasks$.selectedList.set(res.id)
   return res?.id ?? ''

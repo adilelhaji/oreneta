@@ -104,12 +104,11 @@
 
 ## Pendiente
 
-- **Confirmación de entrega en EWS:** envía MIME (`CreateItem` con
-  `MimeContent` y `SendAndSaveCopy`), sin sobre donde poner la petición;
-  `IsDeliveryReceiptRequested` solo existe en el envío como objeto XML.
-  Hoy responde «unsupported» (#211). En Graph se pide desde ADR-0057 sobre
-  un borrador, solo en cuentas con cambios y, de momento, sin Cco ni firma o
-  cifrado; si no, responde «unsupported» con el motivo.
+- **Confirmación de entrega en EWS y Graph:** hecho. En EWS se pide en el
+  propio elemento, junto al MIME (`IsDeliveryReceiptRequested`, ADR-0058);
+  falta la evidencia con un servidor real. En Graph se pide desde ADR-0057
+  sobre un borrador, solo en cuentas con cambios y, de momento, sin Cco ni
+  firma o cifrado; si no, responde «unsupported» con el motivo.
 - **Mensajes en caché de antes de esta versión:** no tienen la petición
   guardada y no muestran la barra hasta que se vuelven a descargar. No se
   invalida la caché entera por esto.

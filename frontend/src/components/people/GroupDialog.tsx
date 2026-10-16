@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Users } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { contactSources$, loadContactSources, writableBooks } from '../../states/contactSources'
+import { contactSources$, groupBooks, loadContactSources } from '../../states/contactSources'
 import { people$, saveGroup } from '../../states/people'
 import { Dialog } from '../dialog/Dialog'
 import { Button } from '../button/Button'
@@ -12,8 +12,9 @@ const labelClass = 'text-caption font-bold uppercase tracking-wide text-secondar
 
 /**
  * Names a new contact group or renames one (ADR-0052). A new group is kept on
- * this computer or in a CardDAV book; one on a server is seen by every app
- * that reads the book, and can only hold that book's people.
+ * this computer, in a CardDAV book or as an Exchange account's distribution
+ * list (ADR-0058); one on a server is seen by every app that reads the book,
+ * and can only hold that book's people.
  */
 export function GroupDialog() {
   const { t } = useTranslation()
@@ -26,7 +27,7 @@ export function GroupDialog() {
     if (open && !sourcesLoaded) void loadContactSources()
   }, [open, sourcesLoaded])
   if (!editing) return null
-  const books = writableBooks(sources)
+  const books = groupBooks(sources)
   const close = () => people$.groupEditing.set(null)
   const submit = async () => {
     if (!editing.name.trim()) return

@@ -205,6 +205,27 @@ func TestFolderDeleteReshapesFoldersAndRefusesBadTargets(t *testing.T) {
 	}
 }
 
+// A folder listing that renamed folders (ADR-0058) says so, so the interface
+// can carry favorites, colors and board columns across.
+func TestFolderListPassesListingRenames(t *testing.T) {
+	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
+		"renames": []any{map[string]any{"from": "Clients", "to": "INBOX/Clients"}},
+		"folders": []any{map[string]any{"name": "INBOX/Clients", "delimiter": "/"}},
+	}})
+	out, err := app.folderList(map[string]any{"account_id": "acc", "refresh": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCall(t, writer.calls[0], "folders.list", map[string]any{"account": "acc", "refresh": false})
+	result, _ := out.(map[string]any)
+	if renames, _ := result["renames"].([]any); len(renames) != 1 {
+		t.Fatalf("renames = %#v, want the sidecar's list", result["renames"])
+	}
+	if folders, _ := result["folders"].([]Folder); len(folders) != 1 || folders[0].ID != "INBOX/Clients" {
+		t.Fatalf("folders = %#v", result["folders"])
+	}
+}
+
 func TestFolderMovePassesRenamesAndRefusesBadTargets(t *testing.T) {
 	app, writer := newMailHandlerTestApp(t, sidecarResponsePlan{Result: map[string]any{
 		"ok":      true,

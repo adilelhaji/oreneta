@@ -62,7 +62,17 @@ func (a *App) folderList(payload map[string]any) (any, error) {
 	if isRSSAccountID(req.AccountID) {
 		return res, nil
 	}
-	return foldersJSON(req.AccountID, res), nil
+	out := foldersJSON(req.AccountID, res)
+	// Renames a folder listing made (ADR-0058), for favorites, colors, board
+	// columns and saved searches to follow.
+	if m, isMap := res.(map[string]any); isMap {
+		if renames, found := m["renames"]; found {
+			if shaped, isShaped := out.(map[string]any); isShaped {
+				shaped["renames"] = renames
+			}
+		}
+	}
+	return out, nil
 }
 
 func (a *App) folderCreate(payload map[string]any) (any, error) {

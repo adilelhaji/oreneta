@@ -2074,6 +2074,42 @@ async fn sync_task_list(engine: &Arc<Engine>, binding: meron_core::task_sync::Bi
     }
 }
 
+/// The client for a task list kept in an Exchange account (ADR-0058): the
+/// account's own sign-in.
+async fn exchange_task_client(engine: &Arc<Engine>, account: &str) -> anyhow::Result<meron_core::exchange::EwsClient> {
+    meron_core::pim::exchange_book::client(engine, account).await
+}
+
+/// Syncs one task list kept in an Exchange account, answering what happened
+/// as [`sync_task_list`] does.
+async fn sync_exchange_task_list(engine: &Arc<Engine>, list_id: String, account: String) -> Value {
+    let outcome = match exchange_task_client(engine, &account).await {
+        Err(error) => Err(error),
+        Ok(client) => {
+            let db = engine.db.clone();
+            let list = list_id.clone();
+            tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::exchange::sync(&db, &client, &list, now_seconds())
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+        }
+    };
+    match outcome {
+        Ok(report) => json!({ "id": list_id, "ok": true, "report": report }),
+        Err(error) => {
+            // A sign-in that failed never reached the sync, which records its
+            // own failures: the list still says why.
+            let _ = engine.db.lock().unwrap().execute(
+                "UPDATE task_lists SET last_error = ?2 WHERE id = ?1",
+                rusqlite::params![list_id, format!("{error:#}")],
+            );
+            json!({ "id": list_id, "ok": false, "error": format!("{error:#}") })
+        }
+    }
+}
+
 /// Now, as epoch seconds. A clock that cannot be read is treated as the epoch,
 /// which shows as "never synced" rather than as a plausible wrong time.
 /// Sweeps previewed and not yet confirmed. Process-wide: a review is a thing
@@ -4194,11 +4230,40 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "tasks.sync" => {
             let wanted = p.get("list_id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string);
             let bindings = meron_core::task_sync::bindings(&engine.db.lock().unwrap())?;
+            let exchange = meron_core::task_sync::exchange::bindings(&engine.db.lock().unwrap())?;
             let mut results = Vec::new();
             for binding in bindings.into_iter().filter(|b| wanted.as_ref().is_none_or(|id| *id == b.list_id)) {
                 results.push(sync_task_list(engine, binding).await);
             }
+            for (list, account) in exchange.into_iter().filter(|(list, _)| wanted.as_ref().is_none_or(|id| id == list)) {
+                results.push(sync_exchange_task_list(engine, list, account).await);
+            }
             Ok(json!({ "lists": results }))
+        }
+        // A list kept in an Exchange account's Tasks folder (ADR-0058),
+        // read once before it is added, like a CalDAV one.
+        "tasks.exchangeAdd" => {
+            let account = req_str(p, "account")?;
+            let client = exchange_task_client(engine, &account).await?;
+            let id = meron_core::task_sync::exchange::add_list(
+                &engine.db.lock().unwrap(),
+                &account,
+                p.get("name").and_then(Value::as_str).unwrap_or_default(),
+                now_seconds(),
+            )?;
+            let db = engine.db.clone();
+            let list = id.clone();
+            let first = tokio::task::spawn_blocking(move || {
+                meron_core::task_sync::exchange::sync(&db, &client, &list, now_seconds())
+            })
+            .await?;
+            match first {
+                Ok(report) => Ok(json!({ "ok": true, "id": id, "report": report })),
+                Err(error) => {
+                    store::task_lists::delete_list(&engine.db.lock().unwrap(), &id)?;
+                    Err(error)
+                }
+            }
         }
         "tasks.resolveConflict" => {
             let id = req_i64(p, "id")?;
@@ -4215,6 +4280,17 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     error => Err(error),
                 })?
                 .context("this task no longer exists")?;
+            let exchange = meron_core::task_sync::exchange::binding(&engine.db.lock().unwrap(), &list_id)?;
+            if let Some(account) = exchange {
+                let client = exchange_task_client(engine, &account).await?;
+                let db = engine.db.clone();
+                tokio::task::spawn_blocking(move || {
+                    meron_core::task_sync::exchange::resolve_conflict(&db, &client, id, keep, now_seconds())
+                })
+                .await??;
+                let synced = sync_exchange_task_list(engine, list_id, account).await;
+                return Ok(json!({ "ok": true, "sync": synced }));
+            }
             let binding = meron_core::task_sync::binding(&engine.db.lock().unwrap(), &list_id)?
                 .context("this list is not kept on a server")?;
             let transport = task_transport(&binding)?;
@@ -4348,6 +4424,11 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // holds. One source per account, so asking twice re-reads rather than
         // doubling everybody.
         "google.contacts.sync" => pim::people::google_sync(engine, p).await,
+
+        // An Exchange account's Contacts folder and its distribution lists
+        // (ADR-0058), read with the account's own sign-in. One book per
+        // account, like Google's.
+        "exchange.contacts.sync" => pim::exchange_book::sync(engine, p).await,
 
         "carddav.sync" => pim::people::source_sync(engine, p).await,
 
@@ -6722,10 +6803,19 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
             let mut folders = serde_json::to_value(store::get_folders(&engine.db.lock().unwrap(), &account)?)?;
             meron_core::graph::mail::decorate_folders(&engine.db.lock().unwrap(),&account,&mut folders)?;
+            // Renames a folder listing made (ADR-0058), for the interface to
+            // carry favorites, colors, board columns and searches across.
+            let renames = meron_core::folder_move::take_renames(&engine.db.lock().unwrap(), &account)?;
             if p.get("refresh").and_then(Value::as_bool).unwrap_or(true) {
                 spawn_folder_sync(engine.clone(), out.clone(), account);
             }
-            Ok(json!({ "folders": folders }))
+            if renames.is_empty() {
+                return Ok(json!({ "folders": folders }));
+            }
+            Ok(json!({
+                "folders": folders,
+                "renames": renames.iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>(),
+            }))
         }
 
         "folders.create" => {
@@ -10018,8 +10108,9 @@ async fn perform_send_transaction(
             // A delivery receipt is a property of the message on Graph, set
             // on a draft before it is sent, so it is asked for only where the
             // account allows changes as well as sending (#210, ADR-0057).
-            // Exchange has no way to carry it here yet (ADR-0048). Without
-            // it the message goes without one, and the sender is told.
+            // Exchange takes it on the item it submits, next to the MIME
+            // (`IsDeliveryReceiptRequested`, ADR-0058). Where it cannot be
+            // carried the message goes without one, and the sender is told.
             // Nor, until a real tenant shows a draft keeps them, for a message
             // with Bcc recipients or signed or encrypted: those go as before.
             let asked = receipts.delivery;

@@ -46,16 +46,15 @@ export const FOLDER_MOVE_BLOCK_TEXT: Record<FolderMoveBlock, { key: string; text
 }
 
 /**
- * Whether this account's folders can be moved here at all. IMAP and the local
- * stores (archive, POP3) can; Microsoft Graph can once the account allows
- * changes (#210); Exchange (EWS) does not manage folders in the core yet, and
- * RSS and the unified view have no folders.
+ * Whether this account's folders can be moved here at all. IMAP, Exchange
+ * (EWS, ADR-0058) and the local stores (archive, POP3) can; Microsoft Graph
+ * can once the account allows changes (#210); RSS and the unified view have
+ * no folders.
  */
 export function folderMovesSupported(account: Account | undefined): boolean {
   if (!account) return false
   if (account.auth_type === 'graph_oauth') return account.graph_writes === true
   if (account.auth_type === 'rss' || account.provider === 'rss') return false
-  if (account.provider === 'exchange' || !!account.ews_url) return false
   return true
 }
 
