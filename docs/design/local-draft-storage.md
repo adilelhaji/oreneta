@@ -51,7 +51,7 @@ Identificador: 1–128 caràcters ASCII alfanumèrics, guionet o guió baix. Doc
 serialitzat: fins a 64 MiB; cossos HTML i de text: fins a 8 MiB cadascun; camps
 de capçalera: fins a 64 KiB; fins a 64 adjunts i 40 MiB de bytes adjunts en
 conjunt. Es validen el base64 i la mida declarada exacta, els identificadors
-d'adjunt únics, i el MIME i el nom acotats. Màxim 256 esborranys actius; les
+d'adjunt únics, i el MIME i el nom limitats. Màxim 256 esborranys actius; les
 làpides no compten com a actives. No es trunca ni s'elimina automàticament
 contingut per complir aquests límits. El transport del nucli admet respostes de
 fins a 65 MiB per al document de 64 MiB i el seu embolcall. Un error de lectura o

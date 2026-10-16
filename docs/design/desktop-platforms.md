@@ -11,7 +11,7 @@ El que es comprova a cada plataforma, i el que no.
 
   Desa una captura i el registre de cada arrencada. Falla si el nucli no
   s'inicia o si l'aplicació mostra la pantalla d'error.
-- **Linux:** WebKitGTK 4.1 sota Xvfb, a la tasca `linux-native` de la CI.
+- **Linux:** WebKitGTK 4.1 sota Xvfb, a la tasca (job) `linux-native` de la CI.
   També passa en local.
 - **macOS:** WKWebView a l'executor allotjat de GitHub, a la tasca
   `macos-native`. El repositori és públic, de manera que aquests minuts no

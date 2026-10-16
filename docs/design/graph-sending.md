@@ -38,7 +38,7 @@ mateixos estats i la mateixa recuperació que SMTP i EWS.
     en esborrany (`POST /me/messages`), es marca (`PATCH`) i s'envia
     (`POST /me/messages/{id}/send`, 202);
   - només per a un missatge **sense Cco i sense signatura ni xifratge**: fins
-    que un inquilí real no demostri que l'esborrany fet a partir del MIME
+    que un inquilí (tenant) real no demostri que l'esborrany fet a partir del MIME
     conserva els Cco i la protecció, perdre'ls seria silenciós;
   - sense demanar-la, s'envia com sempre per `sendMail` (`"none"`). Demanada
     però sense canvis, amb Cco o protegit, també per `sendMail`, amb

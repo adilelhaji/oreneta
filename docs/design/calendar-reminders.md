@@ -1,7 +1,7 @@
 # Recordatoris del calendari: suspensió, reinici i zona horària (#209, #225)
 
 Decisió: [ADR-0056](../adr/0056-reminders-across-sleep-and-time-zones.md).
-Fila SET-29 del [llibre de paritat](../emclient-parity-acceptance.md).
+Fila SET-29 del [registre d'acceptació de paritat](../emclient-parity-acceptance.md).
 
 ## On es troba
 

@@ -13,7 +13,7 @@ afegida és el nivell concedit, dins del marcador de concessió que ja existia.
   compte («Permet els canvis»), que sol·licita `Mail.ReadWrite`. Res no demana
   `Mail.Send`.
 - **Mana el que s'ha concedit.** El nivell és el que retorna Microsoft, no el
-  que s'ha demanat. Si l'inquilí retalla el permís, el compte continua en
+  que s'ha demanat. Si l'inquilí (tenant) retalla el permís, el compte continua en
   només lectura i la interfície ho indica.
 - **Rebutjar o cancel·lar** l'autorització de canvis no toca la concessió
   existent: la lectura continua igual.

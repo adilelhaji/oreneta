@@ -25,7 +25,7 @@
   hi ha cap flux complet d'inici i fi de la sincronització en segon pla ni cap
   hora persistent de l'última sincronització completa.
 
-## Lliurament acotat
+## Lliurament limitat
 
 Es conserva un registre per compte, només per a la sessió, i un registre a part
 sense atribuir. Descartar l'avís amaga l'avís destacat, no el registre. Un
@@ -92,7 +92,7 @@ actualitzacions manuals repetides no dupliquen una sol·licitud en curs.
 La resposta informa de les sol·licituds acceptades, no confirmades, ja
 pendents i omeses, incloent-hi els resultats mixtos. L'acceptació no és mai la
 compleció de la sincronització i no esborra mai un error conegut. Aquesta acció
-no mostra ni registra errors en brut. L'actualització acotada de la llista es
+no mostra ni registra errors en brut. L'actualització limitada de la llista es
 manté després d'una sol·licitud acceptada: `mail.sync` actua per defecte sobre
 la safata d'entrada, mentre que la sol·licitud de llista actualitza la carpeta
 seleccionada, el rol unificat o la cerca en directe. Els esdeveniments en segon

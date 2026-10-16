@@ -1,6 +1,6 @@
 # eM Client 11: diferències separades de la referència (#117)
 
-La referència estable del llibre (ledger) continua fixada en **10.4.5674.0**.
+La referència estable del registre d'acceptació continua fixada en **10.4.5674.0**.
 El validador ho exigeix. La versió 11 se segueix a part.
 
 - **Beta:** 11.0.282.0 (2026-09-03) i, després, 11.0.865.0, observada a
@@ -23,6 +23,6 @@ El validador ho exigeix. La versió 11 se segueix a part.
 | Fixar converses | No |
 
 Cap fila no és un bloqueig de la paritat estable amb la 10.4. Si la 11 passa a
-ser la referència, cada fila «No» necessita la seva pròpia incidència acotada i
+ser la referència, cada fila «No» necessita la seva pròpia incidència limitada i
 la seva revisió d'arquitectura. Cada fila porta la seva versió i la seva data
 d'origen.

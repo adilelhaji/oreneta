@@ -77,4 +77,4 @@ sempre, amb el mateix camí per compte, carpeta i UID que IMAP i EWS.
 - **Baixada interrompuda.** Es tracta com un error de lectura. La propera
   obertura ho torna a intentar.
 - **Sense evidència real.** La previsualització al binari natiu i la
-  certificació amb un inquilí real queden a #98.
+  certificació amb un inquilí (tenant) real queden a #98.

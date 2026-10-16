@@ -2,7 +2,7 @@
 
 Un calendari subscrit és un fitxer `.ics` publicat per un altre. Oreneta el
 baixa i n'expandeix les sèries ell mateix, a `meron-core/src/calendar/subscription.rs`.
-Els defectes següents es van reproduir amb fixtures abans de corregir-los.
+Els defectes següents es van reproduir amb dades de prova (fixtures) abans de corregir-los.
 
 ## Què es corregeix
 
