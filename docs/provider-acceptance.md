@@ -1,46 +1,51 @@
-# Repeatable mail acceptance (#145, slice #184)
+# Acceptació repetible del correu (#145, slice #184)
 
-The [matrix](provider-acceptance-matrix.json) maps every current subtest of
-`TestIntegrationMailFlow` to 12 user outcomes. This is an executable **isolated
-IMAP/SMTP** pack, not a certification of Gmail, Workspace, Graph or the Windows
-UI. The [parity ledger](emclient-parity-acceptance.md) retains its independent
-native/provider requirements. #145 remains open for live evidence and remaining
-fixtures/procedures; #184 delivers this reporting slice.
+La [matriu](provider-acceptance-matrix.json) fa correspondre cada subprova actual de
+`TestIntegrationMailFlow` a 12 resultats per a l'usuari. És un paquet executable
+**IMAP/SMTP aïllat**, no una certificació de Gmail, Workspace, Graph ni de la interfície
+de Windows. El [registre de paritat](emclient-parity-acceptance.md) conserva els seus
+requisits natius/de proveïdor independents. #145 continua oberta per a l'evidència real i
+les fixtures/procediments restants; #184 lliura aquesta slice d'informes.
 
-## Automatic execution and evidence
+## Execució automàtica i evidència
 
-The existing `integration` job starts maddy 0.8 with loopback-only ports and two
-synthetic accounts (`alice@maddy.test`, `bob@maddy.test`). Its submission server
-delivers only to its local mailboxes; it has no remote SMTP delivery route.
-Profiles, database and keyring settings use the existing temporary test fixture.
-Container and profile cleanup are registered by the harness. No real accounts,
-credentials or user mail are required. Fixtures use runtime correlation IDs;
-attachment/MIME assertions live in `integration_test.go`.
+El job `integration` existent arrenca maddy 0.8 amb ports només de bucle local (loopback)
+i dos comptes sintètics (`alice@maddy.test`, `bob@maddy.test`). El seu servidor
+d'enviament només lliura a les seves bústies locals; no té cap ruta de lliurament SMTP
+remot. Els perfils, la base de dades i la configuració del clauer fan servir la fixture
+de prova temporal existent. L'arnès registra la neteja del contenidor i dels perfils. No
+calen comptes reals, credencials ni correu de l'usuari. Les fixtures fan servir ID de
+correlació generats en temps d'execució; les asseveracions sobre adjunts/MIME són a
+`integration_test.go`.
 
-CI runs the suite afresh with `-json -count=1`. The reporter reads that execution's
-events and writes `integration-results/report.json`; only this sanitized file
-is uploaded as `isolated-mail-acceptance-<sha>-attempt-<n>`, preserving separate
-rerun artifacts. Free-form logs, payloads, account
-addresses, container logs and unknown test names are not copied into the report.
-Raw events remain on the runner for this job, not in the artifact. The separate
-three-run IDLE check remains mandatory; its result is in the CI job, not in the
-12-outcome report. A passing report alone cannot establish that the whole job
-or all seven required suites passed.
+La CI executa la bateria de nou amb `-json -count=1`. L'informador llegeix els
+esdeveniments d'aquella execució i escriu `integration-results/report.json`; només aquest
+fitxer sanejat es puja com a `isolated-mail-acceptance-<sha>-attempt-<n>`, de manera que
+es conserven artefactes separats per a cada reexecució. Els registres de text lliure, les
+càrregues útils, les adreces dels comptes, els registres del contenidor i els noms de
+prova desconeguts no es copien a l'informe. Els esdeveniments en brut es queden a
+l'executor (runner) per a aquest job, no a l'artefacte. La comprovació IDLE separada de
+tres execucions continua sent obligatòria; el seu resultat és al job de la CI, no a
+l'informe de 12 resultats. Un informe superat per si sol no pot establir que tot el job o
+les set bateries requerides s'hagin superat.
 
-The report records exact source SHA, workflow URL and attempt, test-level status and
-explicit `not-tested` live/native boundaries. PR reports refer to the tested
-merge ref; delivery requires fresh main CI for the actual merge commit. Never
-relabel evidence from another commit. The report records provenance supplied
-by CI; it is not a cryptographic attestation of test execution.
+L'informe registra el SHA exacte de l'origen, l'URL i l'intent del flux de treball
+(workflow), l'estat per prova i els límits real/natiu explícits `not-tested`. Els
+informes dels PR fan referència a la ref de fusió provada; el lliurament requereix una CI
+nova de main per al commit de fusió real. No reetiqueteu mai evidència d'un altre commit.
+L'informe registra la procedència que proporciona la CI; no és una atestació
+criptogràfica de l'execució de les proves.
 
-Missing Docker can skip the underlying integration test locally, but cannot
-produce a passing acceptance report. Missing, skipped, failed, incomplete,
-replayed or malformed mandatory evidence fails the reporter; suite/package
-failures and other failing tests also block success. Reports are generated on
-failure, including missing input after an earlier build failure. The matrix
-coverage test rejects unclassified or renamed mail subtests.
+Si falta Docker, la prova d'integració subjacent es pot ometre en local, però no pot
+produir un informe d'acceptació superat. L'evidència obligatòria absent, omesa, fallida,
+incompleta, reproduïda o mal formada fa fallar l'informador; les fallades de la
+bateria/del paquet i altres proves fallides també impedeixen l'èxit. Els informes es
+generen en cas de fallada, fins i tot quan falta l'entrada després d'una fallada de
+compilació anterior. La prova de cobertura de la matriu rebutja les subproves de correu
+no classificades o reanomenades.
 
-Run the isolated suite locally on Linux with the existing build dependencies:
+Executeu la bateria aïllada en local a Linux amb les dependències de compilació
+existents:
 
 ```sh
 cargo build --manifest-path meron-core/Cargo.toml
@@ -48,71 +53,79 @@ mkdir -p integration-results
 MERON_KEYRING=off go test -tags 'integration webkit2_41' -json -count=1 -timeout 10m . > integration-results/events.jsonl
 ```
 
-The reporter's CI invocation is in `.github/workflows/test.yml` and receives the
-actual run URL and tested SHA from GitHub. Local runs are not CI evidence; do not
-bind local results to an unrelated workflow URL. Reporter/negative-case tests
-require no server: `node --test scripts/ci/provider-acceptance.test.cjs`.
+La invocació de l'informador a la CI és a `.github/workflows/test.yml` i rep de GitHub
+l'URL real de l'execució i el SHA provat. Les execucions locals no són evidència de CI; no
+vinculeu resultats locals a un URL de flux de treball no relacionat. Les proves de
+l'informador i dels casos negatius no requereixen cap servidor:
+`node --test scripts/ci/provider-acceptance.test.cjs`.
 
-## Dedicated live-account procedure (not executed)
+## Procediment dedicat per a comptes reals (no executat)
 
-Before any external run, obtain authorization naming the provider, dedicated
-accounts, operations and exact test-recipient allowlist. No production mailbox
-or inherited upstream Google OAuth application may be used. Keep tokens outside
-the repository/artifacts; record scope names, never token values. Provisioning,
-tenant changes and external sending are separate actions, not implied by CI.
+Abans de qualsevol execució externa, obteniu una autorització que indiqui el proveïdor,
+els comptes dedicats, les operacions i la llista exacta de destinataris de prova
+permesos. No es pot fer servir cap bústia de producció ni cap aplicació OAuth de Google
+heretada de l'upstream. Mantingueu els testimonis fora del repositori/dels artefactes;
+registreu els noms dels àmbits, mai els valors dels testimonis. L'aprovisionament, els
+canvis de l'arrendatari (tenant) i l'enviament extern són accions separades, que la CI no
+implica.
 
-Record per operation: candidate SHA and executable hash; app/core and OS
-versions; provider/tenant kind; auth mode and granted scopes; isolated profile;
-initial folder/cache state; synthetic run/message IDs and attachment SHA256;
-expected result; observed result; timestamps and redacted evidence reference;
-cleanup outcome. Identify accounts by test aliases in retained evidence.
+Registreu per operació: SHA del candidat i hash de l'executable; versions de
+l'aplicació/el nucli i del sistema operatiu; tipus de proveïdor/arrendatari; mode
+d'autenticació i àmbits concedits; perfil aïllat; estat inicial de carpetes/memòria cau;
+ID sintètics d'execució/missatge i SHA256 dels adjunts; resultat esperat; resultat
+observat; marques de temps i referència d'evidència censurada; resultat de la neteja.
+Identifiqueu els comptes amb àlies de prova a l'evidència conservada.
 
-Use a dedicated folder containing synthetic plain text, Unicode/quoted-printable,
-HTML alternatives, inline images and a known attachment. Create enough messages
-to cross a provider page boundary and record that count. Repeat matching subjects
-across two accounts to expose scoping mistakes. Do not reuse real mail as fixtures.
+Feu servir una carpeta dedicada que contingui text pla sintètic, Unicode/quoted-printable,
+alternatives HTML, imatges inserides i un adjunt conegut. Creeu prou missatges per
+travessar un límit de pàgina del proveïdor i registreu-ne el nombre. Repetiu assumptes
+coincidents en dos comptes per posar en evidència errors d'abast. No reutilitzeu correu
+real com a fixtures.
 
-| Operation | Procedure and expected observation | Cleanup / failure boundary |
+| Operació | Procediment i observació esperada | Neteja / límit de fallada |
 | --- | --- | --- |
-| Read and paging | Read each fixture and cross the page boundary; compare counts, IDs, body and attachment hashes against server state | Remove only the run's fixtures; distinguish uncached from absent |
-| Send | Send one correlated message from test A to allowlisted test B; record submission result, independent receipt at B and server Sent copy as three separate observations | Do not blindly resend an uncertain outcome; preserve its correlation and inspect server state first |
-| Flags/moves | Change one fixture and observe it from an independent client; verify same-subject mail in the other account is untouched | Restore original folder/flags for the run's message IDs only |
-| Drafts/files | Save, restart and reopen; compare recipients, body and file hashes; exercise interrupted save | Keep uncertain draft state until reconciled; do not infer full-profile backup from remote-draft success |
-| Offline/reconnect | Disconnect only the test environment; read cached mail and observe honest failure for uncached data; reconnect and compare changes | Restore connectivity; check duplicates and unsent/uncertain messages before further actions |
-| Revocation | Revoke only the dedicated test grant, observe account error and reauthorize the same principal | Requires explicit grant-revocation authorization; preserve unrelated accounts |
-| Rate limit | Use a provider-approved test mechanism if available; record Retry-After and absence of retry storms | Never flood a live service to manufacture throttling; otherwise leave this row untested and reference fixture coverage |
+| Lectura i paginació | Llegiu cada fixture i travesseu el límit de pàgina; compareu recomptes, ID, cos i hashes dels adjunts amb l'estat del servidor | Elimineu només les fixtures de l'execució; distingiu el que no és a la memòria cau del que és absent |
+| Enviament | Envieu un missatge correlacionat de la prova A a la prova B permesa; registreu el resultat de l'enviament, la recepció independent a B i la còpia d'Enviats del servidor com a tres observacions separades | No reenvieu a cegues un resultat incert; conserveu-ne la correlació i inspeccioneu primer l'estat del servidor |
+| Marques/moviments | Canvieu una fixture i observeu-la des d'un client independent; verifiqueu que el correu amb el mateix assumpte a l'altre compte no s'ha tocat | Restaureu la carpeta/les marques originals només per als ID de missatge de l'execució |
+| Esborranys/fitxers | Deseu, reinicieu i torneu a obrir; compareu destinataris, cos i hashes dels fitxers; exerciu un desament interromput | Conserveu l'estat incert de l'esborrany fins que es concilii; no deduïu una còpia de seguretat del perfil complet de l'èxit d'un esborrany remot |
+| Fora de línia/reconnexió | Desconnecteu només l'entorn de prova; llegiu el correu de la memòria cau i observeu una fallada honesta per a les dades que no hi són; torneu a connectar i compareu els canvis | Restaureu la connectivitat; comproveu duplicats i missatges no enviats/incerts abans de fer més accions |
+| Revocació | Revoqueu només la concessió de prova dedicada, observeu l'error del compte i torneu a autoritzar el mateix principal | Requereix una autorització explícita de revocació de la concessió; preserveu els comptes no relacionats |
+| Límit de freqüència | Feu servir un mecanisme de prova aprovat pel proveïdor, si n'hi ha; registreu Retry-After i l'absència de tempestes de reintents | No satureu mai un servei real per provocar la limitació; altrament deixeu aquesta fila sense provar i feu referència a la cobertura amb fixtures |
 
-### Provider boundaries
+### Límits per proveïdor
 
-- **Generic IMAP/SMTP:** maddy proves the isolated protocol/store route, without
-  production TLS, OAuth or a particular host's quirks. Live rows require these
-  independent checks; protocol support is not universal provider acceptance.
-- **Gmail consumer and Google Workspace:** separate executions; record OAuth or
-  app-password mode and applicable policy. Reconcile Gmail labels with IMAP
-  folders, Sent and Trash in the authorized account. Consumer results cannot
-  certify Workspace tenant restrictions. Do not use Meron's bundled OAuth
-  client: run a `-tags distributable` build with an application-owned client
-  ([registrations](oauth-registrations.md)).
-- **Microsoft 365 Graph:** delegated access to the signed-in mailbox only
-  ([adapter](graph-mail-integration.md)). Reading is `Mail.Read`; message
-  changes (read state, flags, move, copy within the account, delete) need
-  `Mail.ReadWrite` and sending needs `Mail.Send`, each requested separately
-  when the person enables it (ADR-0004;
-  [changes](design/graph-message-actions.md),
-  [attachments](design/graph-attachments.md),
-  [sending](design/graph-sending.md)). A live row records the granted scopes
-  and pinned principal; activates Inbox, opens other folders, pages and reads
-  cached bodies and attachments; enables changes and checks each one against
-  Outlook on the web; sends to an authorized recipient and checks Sent Items;
-  then reconnects and checks invalidation. Rust loopback fixtures cover
-  rate-limit with Retry-After, revoked grants, scope, continuation,
-  cancellation, partial batch failure, uncertain sends and cache rollback; they
-  are not live runs. Remote drafts, sends over 4 MB, scheduled send,
-  calendars, contacts and shared mailboxes remain **unsupported**, not failed
-  or passed tests.
+- **IMAP/SMTP genèric:** maddy demostra la ruta aïllada de protocol/emmagatzematge, sense
+  TLS de producció, OAuth ni les particularitats d'un servidor concret. Les files reals
+  requereixen aquestes comprovacions independents; la compatibilitat amb el protocol no
+  és una acceptació universal de proveïdors.
+- **Gmail per a consumidors i Google Workspace:** execucions separades; registreu el mode
+  OAuth o de contrasenya d'aplicació i la política aplicable. Concilieu les etiquetes de
+  Gmail amb les carpetes IMAP, Enviats i Paperera al compte autoritzat. Els resultats de
+  consumidor no poden certificar les restriccions d'un arrendatari de Workspace. No feu
+  servir el client OAuth inclòs a Meron: executeu una compilació `-tags distributable`
+  amb un client propietat de l'aplicació
+  ([registres](oauth-registrations.md)).
+- **Microsoft 365 Graph:** accés delegat només a la bústia de la sessió iniciada
+  ([adaptador](graph-mail-integration.md)). La lectura és `Mail.Read`; els canvis de
+  missatges (estat de lectura, marques, moure, copiar dins del compte, suprimir) necessiten
+  `Mail.ReadWrite` i l'enviament necessita `Mail.Send`, cadascun sol·licitat per separat
+  quan la persona l'activa (ADR-0004;
+  [canvis](design/graph-message-actions.md),
+  [adjunts](design/graph-attachments.md),
+  [enviament](design/graph-sending.md)). Una fila real registra els àmbits concedits i el
+  principal fixat; activa la safata d'entrada, obre altres carpetes, pagina i llegeix
+  cossos i adjunts de la memòria cau; activa els canvis i comprova cadascun amb Outlook
+  on the web; envia a un destinatari autoritzat i comprova Elements enviats; després es torna
+  a connectar i comprova la invalidació. Les fixtures de bucle local de Rust cobreixen el
+  límit de freqüència amb Retry-After, les concessions revocades, l'àmbit, la continuació,
+  la cancel·lació, la fallada parcial d'un lot, els enviaments incerts i la reversió de la
+  memòria cau; no són execucions reals. Els esborranys remots, els enviaments de més de
+  4 MB, l'enviament programat, els calendaris, els contactes i les bústies compartides
+  continuen **no compatibles**, no són proves fallides ni superades.
 
-Gmail/Workspace/Graph
-live rows remain `not-tested` until authorized independent evidence exists.
-Native installation remains blocked locally by Application Control pending the
-separate signing process. Windows startup/zoom CI evidence does not certify mail
-workflows, full profile recovery or installation on the user's machine.
+Les files reals de Gmail/Workspace/Graph
+continuen `not-tested` fins que hi hagi evidència independent autoritzada.
+La instal·lació nativa continua bloquejada en local per Application Control fins al
+procés de signatura separat. L'evidència de la CI d'arrencada/zoom a Windows no certifica
+els fluxos de correu, la recuperació completa del perfil ni la instal·lació a la màquina
+de l'usuari.

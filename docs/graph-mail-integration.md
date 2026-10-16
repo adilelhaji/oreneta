@@ -1,108 +1,131 @@
-# Graph read integration (#128)
+# Integració de lectura de Graph (#128)
 
-Additive implementation of accepted ADR-0004, following #125/#127. Desktop
-global-service, signed-in mailbox only. No automatic IMAP/EWS conversion.
+Implementació additiva de l'ADR-0004 acceptat, a continuació de #125/#127. Servei global
+d'escriptori, només la bústia de la sessió iniciada. Cap conversió automàtica d'IMAP/EWS.
 
-## Activation and capabilities
+## Activació i capacitats
 
-- The account wizard offers an explicit **Microsoft Graph — read-only** choice;
-  domain discovery never chooses it implicitly. Existing Outlook setup keeps
-  IMAP/SMTP. Graph reconnection keeps the selected account and pinned principal.
-- After backend authorization, start a cancellable activation job. Read the
-  complete visible folder hierarchy and complete the initial Inbox delta round
-  before publishing a new `engine=mail`, `auth_type=graph_oauth` account. Report
-  progress/errors while waiting; authorization alone is not readiness.
-- An existing non-Graph account with the same normalized address is a collision,
-  not permission to convert it. Never overwrite its metadata, grants or cache.
-  Retrying Graph activation may resume its own durable staged read state.
-- Pending Graph profile metadata is separate from active accounts. Cancellation
-  or process exit does not publish it; a later explicit attempt can resume.
-  Cancellation/removal invalidates the generation before late work can commit.
-- Active Graph accounts support cached/offline folder, conversation and body
-  reads. Inbox readiness is not a claim that every other folder is synchronized;
-  opening/synchronizing a folder completes its own independent delta round.
-- Read state, flags, move, copy within the account and delete are available
-  once the reader allows changes and Microsoft grants `Mail.ReadWrite`; see
-  [design/graph-message-actions.md](design/graph-message-actions.md) (#141).
-  Attachments and inline images are read through MIME; see
+- L'assistent de comptes ofereix una opció explícita **Microsoft Graph — read-only**; la
+  detecció del domini mai no la tria implícitament. La configuració d'Outlook existent
+  manté IMAP/SMTP. La reconnexió de Graph manté el compte seleccionat i el principal
+  fixat.
+- Després de l'autorització al backend, inicieu un job d'activació cancel·lable. Llegiu
+  la jerarquia completa de carpetes visibles i completeu la ronda delta inicial de la
+  safata d'entrada abans de publicar un compte nou `engine=mail`,
+  `auth_type=graph_oauth`. Informeu del progrés/dels errors mentre s'espera; l'autorització
+  per si sola no vol dir que estigui a punt.
+- Un compte existent que no és de Graph amb la mateixa adreça normalitzada és una
+  col·lisió, no un permís per convertir-lo. No en sobreescriviu mai les metadades, les
+  concessions ni la memòria cau. Tornar a intentar l'activació de Graph pot reprendre el
+  seu propi estat de lectura per etapes durador.
+- Les metadades de perfil de Graph pendents són separades dels comptes actius. La
+  cancel·lació o la sortida del procés no les publica; un intent explícit posterior pot
+  reprendre-les. La cancel·lació/supressió invalida la generació abans que el treball
+  tardà pugui confirmar-se.
+- Els comptes de Graph actius admeten lectures de carpetes, converses i cossos de la
+  memòria cau/fora de línia. Que la safata d'entrada estigui a punt no vol dir que totes
+  les altres carpetes estiguin sincronitzades; obrir/sincronitzar una carpeta completa la
+  seva pròpia ronda delta independent.
+- L'estat de lectura, les marques, moure, copiar dins del compte i suprimir estan
+  disponibles un cop el lector permet els canvis i Microsoft concedeix `Mail.ReadWrite`;
+  vegeu [design/graph-message-actions.md](design/graph-message-actions.md) (#141).
+  Els adjunts i les imatges inserides es llegeixen mitjançant MIME; vegeu
   [design/graph-attachments.md](design/graph-attachments.md) (#142).
-  Sending is available once the reader allows it and Microsoft grants
-  `Mail.Send`; see [design/graph-sending.md](design/graph-sending.md) (#143).
-  Remote drafts, scheduled sending, folder management, calendars, contacts,
-  shared mailboxes and national clouds remain unsupported. Disable their UI
-  affordances and reject their backend commands before any mutation, SMTP,
-  IMAP or delegated fallback. Local labels and existing local drafts are
-  preserved; reading does not mark remote mail read. Local label assignments
-  remain available; remote label linking is blocked. This includes
-  keyboard/bulk paths, draft menus and folder creation; kanban dragging follows
-  the change permission. Failed wizard cancellation retains its handle for an
-  explicit retry.
+  L'enviament està disponible un cop el lector el permet i Microsoft concedeix
+  `Mail.Send`; vegeu [design/graph-sending.md](design/graph-sending.md) (#143).
+  Els esborranys remots, l'enviament programat, la gestió de carpetes, els calendaris,
+  els contactes, les bústies compartides i els núvols nacionals continuen sense ser
+  compatibles. Desactiveu-ne els elements de la interfície i rebutgeu-ne les ordres del
+  backend abans de qualsevol mutació, SMTP, IMAP o alternativa delegada. Es conserven les
+  etiquetes locals i els esborranys locals existents; la lectura no marca com a llegit el
+  correu remot. Les assignacions d'etiquetes locals continuen disponibles; la vinculació
+  d'etiquetes remotes està bloquejada. Això inclou els camins de teclat/en bloc, els menús
+  d'esborranys i la creació de carpetes; l'arrossegament al kanban segueix el permís de
+  canvis. Una cancel·lació fallida de l'assistent conserva el seu identificador per a un
+  reintent explícit.
 
-## Identity and folder projection
+## Identitat i projecció de carpetes
 
-- Graph folder/item IDs remain opaque, case-sensitive, account-qualified values.
-  Separate Graph tables map them to existing cache locators. Never parse/hash an
-  item ID into a UID or reuse the EWS mapping. Allocate durable local `u32`
-  surrogates monotonically per account; never reuse tombstoned mappings.
-- Resolve special-use folders through Graph's well-known aliases, not translated
-  display names. Inbox uses the existing `INBOX` cache alias; other folders use
-  a stable encoded ID locator. Display name and parent relationship are separate
-  metadata, so rename/reparent does not alter saved cache/kanban references.
-- Traverse root pages and every visible child's pages. Detect cycles, repeated
-  links, inconsistent parents and conflicting IDs. Limits bound work per page,
-  not the reported mailbox size: do not truncate and call it a complete tree.
-  Hidden/system-only folders are not requested in this slice.
-- Persist the full successful folder listing atomically. A failed traversal
-  leaves the previous listing intact. Only Graph-owned cache memberships may
-  be retired when their folder is absent from a complete replacement listing.
-- Message identity maps independently of its folder membership. Cross-folder
-  moves retain the local surrogate and Graph conversation key. Folder-scoped
-  tombstones remove only that membership, not unrelated copies/local labels.
-  Physical folders validate returned parent IDs; search-folder views may refer
-  to their underlying physical folder.
+- Els ID de carpeta/element de Graph continuen sent valors opacs, que distingeixen
+  majúscules i minúscules i qualificats pel compte. Taules de Graph separades els fan
+  correspondre als localitzadors de memòria cau existents. No analitzeu ni feu el hash
+  mai d'un ID d'element per convertir-lo en un UID ni reutilitzeu la correspondència
+  d'EWS. Assigneu substituts locals `u32` duradors de manera monòtona per compte; no
+  reutilitzeu mai les correspondències marcades com a eliminades (tombstone).
+- Resoleu les carpetes d'ús especial mitjançant els àlies coneguts de Graph, no pels noms
+  visibles traduïts. La safata d'entrada fa servir l'àlies de memòria cau `INBOX`
+  existent; les altres carpetes fan servir un localitzador d'ID codificat estable. El nom
+  visible i la relació amb el pare són metadades separades, de manera que reanomenar o
+  canviar de pare no altera les referències desades de la memòria cau/del kanban.
+- Recorreu les pàgines arrel i les pàgines de cada fill visible. Detecteu cicles, enllaços
+  repetits, pares incoherents i ID en conflicte. Els límits fiten el treball per pàgina,
+  no la mida de bústia informada: no el trunqueu per considerar-lo després un arbre complet. En aquesta
+  slice no se sol·liciten les carpetes ocultes/exclusives del sistema.
+- Persistiu de manera atòmica el llistat de carpetes complet i correcte. Un recorregut
+  fallit deixa intacte el llistat anterior. Només les pertinences de memòria cau
+  propietat de Graph es poden retirar quan la seva carpeta no apareix en un llistat de
+  substitució complet.
+- La identitat del missatge es fa correspondre independentment de la seva pertinença a
+  una carpeta. Els moviments entre carpetes conserven el substitut local i la clau de
+  conversa de Graph. Les marques d'eliminació (tombstones) d'abast de carpeta només
+  eliminen aquella pertinença, no les còpies/etiquetes locals no relacionades. Les
+  carpetes físiques validen els ID de pare retornats; les vistes de carpetes de cerca
+  poden fer referència a la seva carpeta física subjacent.
 
-## Delta durability and cache transactions
+## Durabilitat delta i transaccions de memòria cau
 
-- Keep active message data/checkpoint separate from a durable staged round.
-  Each accepted page and its validated continuation are journalled atomically.
-  A restart/retry resumes staging; it never promotes an incomplete round.
-- Staging merges sparse fields with their previous values. Missing fields are
-  unknown, not empty/false. For a previously unknown sparse item, fetch its full
-  representation before projection. Invalid items/pages fail the whole page.
-- Only a final delta checkpoint permits one transaction to update Graph item
-  records, memberships, existing message/body cache, sync state and checkpoint.
-  Refactor shared envelope upsert to accept a caller-owned transaction while
-  retaining its existing public transaction wrapper for IMAP/EWS callers.
-- The reader uses existing sanitization/CSP and thread formats. Graph
-  conversation IDs use an explicit encoded namespace, not subject heuristics.
-  Preserve user-owned JSON/local state when updating remote metadata; explicit
-  empty recipient arrays still clear stale remote recipients.
-- A 410/expired continuation discards only staging and starts an explicit full
-  resync state. Retain visible cache until that full round completes; then prune
-  only its missing Graph memberships. No old/new traversal mixing. Throttle and
-  authentication errors retain staging and return typed failure/retry delay;
-  no immediate blind retries or blocking retry sleeps.
-- Serialize per-account Graph work and check cancellation before persistence.
-  Bound each network operation; an async caller's timeout cannot authorize a
-  detached blocking task to publish a cancelled activation/account.
-- Account removal deletes Graph profiles/mappings/staging inside the existing
-  account-delete transaction after the #127 credential cleanup succeeds.
-  Ordinary IMAP/EWS accounts and grants use their existing paths unchanged.
+- Mantingueu les dades de missatges/el punt de control actius separats d'una ronda per
+  etapes duradora. Cada pàgina acceptada i la seva continuació validada es registren al
+  diari de manera atòmica. Un reinici/reintent reprèn les etapes; mai no promou una ronda
+  incompleta.
+- Les etapes fusionen els camps dispersos amb els seus valors anteriors. Els camps que
+  falten són desconeguts, no buits/falsos. Per a un element dispers abans desconegut,
+  recupereu-ne la representació completa abans de la projecció. Els elements/pàgines no
+  vàlids fan fallar tota la pàgina.
+- Només un punt de control delta final permet que una transacció actualitzi els registres
+  d'elements de Graph, les pertinences, la memòria cau de missatges/cossos existent,
+  l'estat de sincronització i el punt de control. Refactoritzeu l'upsert compartit de
+  sobres perquè accepti una transacció propietat del qui crida, tot conservant el seu
+  embolcall de transacció públic existent per als que criden des d'IMAP/EWS.
+- El lector fa servir el sanejament/CSP i els formats de fil existents. Els ID de conversa
+  de Graph fan servir un espai de noms codificat explícit, no heurístiques d'assumpte.
+  Conserveu el JSON/l'estat local propietat de l'usuari en actualitzar les metadades
+  remotes; les matrius de destinataris buides explícites continuen esborrant els
+  destinataris remots obsolets.
+- Una continuació 410/caducada només descarta les etapes i inicia un estat explícit de
+  resincronització completa. Conserveu la memòria cau visible fins que aquesta ronda
+  completa acabi; després elimineu només les seves pertinences de Graph que falten. No es
+  barregen recorreguts antics i nous. Els errors de limitació i d'autenticació conserven
+  les etapes i retornen una fallada tipada/un retard de reintent; cap reintent cec
+  immediat ni cap espera de reintent bloquejant.
+- Serialitzeu el treball de Graph per compte i comproveu la cancel·lació abans de la
+  persistència. Fiteu cada operació de xarxa; el temps d'espera d'un que crida asíncron no
+  pot autoritzar una tasca bloquejant separada a publicar una activació/un compte
+  cancel·lat.
+- La supressió del compte elimina els perfils/correspondències/etapes de Graph dins de la
+  transacció de supressió del compte existent, després que la neteja de credencials de
+  #127 tingui èxit. Els comptes i les concessions IMAP/EWS ordinaris fan servir els seus
+  camins existents sense canvis.
 
-## Validation gate
+## Porta de validació
 
-Provider/vault/SQLite fixtures: complete and interrupted hierarchy, duplicated
-names, rename/reparent, opaque IDs, pages/sparse deltas/tombstones, moves, atomic
-rollback, 410 recovery, restart/cancellation, account collision/isolation, local
-draft/label preservation, HTML sanitization and unsupported-operation guards.
-Production-entry frontend tests cover Graph choice, authorization/activation
-progress, error/retry/cancel, read-only account and legacy setup regression.
-Logic/business reviews and all seven exact-head CI jobs precede merge commit.
-Fixtures do not establish real-tenant or native Windows interoperability;
-those and installable exact-SHA artifacts remain separate acceptance evidence.
+Fixtures de proveïdor/magatzem/SQLite: jerarquia completa i interrompuda, noms duplicats,
+reanomenament/canvi de pare, ID opacs, pàgines/deltes dispersos/marques d'eliminació,
+moviments, reversió atòmica, recuperació de 410, reinici/cancel·lació, col·lisió/aïllament
+de comptes, conservació d'esborranys/etiquetes locals, sanejament d'HTML i proteccions
+d'operacions no compatibles.
+Les proves del frontend d'entrada de producció cobreixen l'opció de Graph, el progrés de
+l'autorització/l'activació, error/reintent/cancel·lació, el compte de només lectura i la
+regressió de la configuració antiga.
+Les revisions de lògica/de negoci i els set jobs de CI del head exacte precedeixen el
+commit de fusió.
+Les fixtures no estableixen la interoperabilitat amb un arrendatari real ni amb Windows
+natiu; aquestes i els artefactes instal·lables del SHA exacte continuen sent evidència
+d'acceptació separada.
 
-UI copy: English and Spanish; new Graph strings use English fallback in the
-other canonical catalogs. This is not complete localization parity.
+Textos de la interfície: anglès i castellà; les cadenes noves de Graph fan servir l'anglès
+com a alternativa en els altres catàlegs canònics. Això no és una paritat de localització
+completa.
 
-Sources checked 2026-09-09: [folders](https://learn.microsoft.com/en-us/graph/api/resources/mailfolder?view=graph-rest-1.0),
-[message delta](https://learn.microsoft.com/en-us/graph/delta-query-messages).
+Fonts consultades el 2026-09-09: [carpetes](https://learn.microsoft.com/en-us/graph/api/resources/mailfolder?view=graph-rest-1.0),
+[delta de missatges](https://learn.microsoft.com/en-us/graph/delta-query-messages).
