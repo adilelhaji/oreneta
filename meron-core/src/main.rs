@@ -760,7 +760,9 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         use super::*;
         let engine = Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
         let account = meron_core::archive::ACCOUNT;
-        let now = now_seconds();
+        // A fixed clock (2027-01-15 08:00 UTC); the zone is this machine's,
+        // as the watch's is, and nothing below depends on it.
+        let now = 1_800_000_000;
         let start = now - 3 * 3_600;
         {
             let db = engine.db.lock().unwrap();

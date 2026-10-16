@@ -5,12 +5,13 @@ import { useThreadListLoader } from './useThreadListLoader'
 import { invoke } from './lib/bridge'
 import { onTranslationEvent } from './states/translation'
 import { onCloudEvent } from './states/cloud'
-import { onChatEvent, openChatFromNotification } from './states/messaging'
+import { onChatEvent } from './states/messaging'
+import { onNotificationClicked } from './states/notificationClick'
 import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
-import { calendar$, loadCalendars, loadWindow, openCalendarFromNotification } from './states/calendar'
+import { calendar$, loadCalendars, loadWindow } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
 import {
   mail$,
@@ -21,7 +22,7 @@ import {
   refreshAccountFoldersCache,
   inboxUnread,
 } from './states/mail'
-import { flushComposeDrafts, openMailtoCompose, openThreadTabById, restoreLocalDrafts } from './states/compose'
+import { flushComposeDrafts, openMailtoCompose, restoreLocalDrafts } from './states/compose'
 import { accounts$, refreshAccountPictures } from './states/accounts'
 import { kanban$ } from './states/kanban'
 import { setSyncError, recordMailActivity, retainSyncAccounts } from './states/connectivity'
@@ -305,25 +306,8 @@ export function useAppEffects() {
   useEffect(() => {
     const eventsOn = (window as any).runtime?.EventsOn
     if (!eventsOn) return
-    const offNotification = eventsOn(
-      'notification-clicked',
-      (detail: { account?: string; threadId?: string; threadKey?: string }) => {
-        const threadId = detail?.threadId || detail?.threadKey
-        // A chat message (ADR-0055): its conversation, in the Chat view.
-        if (threadId?.startsWith('chat:')) {
-          void openChatFromNotification(detail.account ?? '', threadId.slice('chat:'.length))
-          return
-        }
-        // Missed reminders (#225): the calendar, on the first missed day.
-        if (threadId?.startsWith('calendar:')) {
-          openCalendarFromNotification(threadId.slice('calendar:'.length))
-          return
-        }
-        if (threadId) {
-          void openThreadTabById(threadId)
-        }
-      },
-    )
+    // A mail thread, a chat (ADR-0055) or missed reminders (#225).
+    const offNotification = eventsOn('notification-clicked', onNotificationClicked)
     return () => {
       if (typeof offNotification === 'function') offNotification()
     }

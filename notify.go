@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -44,6 +45,9 @@ func (a *App) currentNativeLabels() nativeLabels {
 }
 
 func (a *App) setNativeLabels(payload map[string]any) (any, error) {
+	// Last, with every lock here released: a missed-reminders notice held
+	// for the reader's language can go now (#225).
+	defer a.missedRemindersCanSpeak()
 	nativeLabelsMu.Lock()
 	set := func(field *string, key string) {
 		if value, ok := payload[key].(string); ok && value != "" {
@@ -358,8 +362,11 @@ func (a *App) notifyReminder(detail any) {
 	if !ok || notificationsSuppressed(quietReminder) {
 		return
 	}
+	// Subject and place are someone else's words (an invitation's): one line
+	// each, shown as text (plainBody), never read as markup.
 	subject, _ := m["subject"].(string)
 	location, _ := m["location"].(string)
+	subject, location = notificationLine(subject, notificationTextMax), notificationLine(location, notificationTextMax)
 	allDay, _ := m["all_day"].(bool)
 	account, _ := m["account"].(string)
 	started, _ := m["started"].(bool)
@@ -385,9 +392,10 @@ func (a *App) notifyReminder(detail any) {
 	}
 
 	dispatchNotification(a, notification{
-		title:   subject,
-		body:    body,
-		account: account,
+		title:     subject,
+		body:      body,
+		account:   account,
+		plainBody: true,
 	})
 }
 
@@ -412,56 +420,21 @@ func reminderWhen(m map[string]any) string {
 	return ""
 }
 
-// missedRemindersShown is how many missed reminders the notice lists; the
-// title says how many there were in all.
-const missedRemindersShown = 5
+// notificationTextMax is how many characters of a text someone else wrote
+// (an event's subject or place) a notification line shows.
+const notificationTextMax = 80
 
-// calendarNotificationPrefix marks a notification target as a day of the
-// calendar ("calendar:YYYY-MM-DD"); the frontend opens the calendar on it.
-const calendarNotificationPrefix = "calendar:"
-
-// notifyMissedReminders raises one OS notification for the reminders that
-// came due while nobody looked and whose events are over (#225): how many in
-// the title, then when and what, one a line. Clicking it opens the calendar
-// on the first missed day. Quiet hours hold it back as any reminder.
-func (a *App) notifyMissedReminders(detail any) {
-	m, ok := detail.(map[string]any)
-	if !ok || notificationsSuppressed(quietReminder) {
-		return
+// notificationLine fits a text someone else wrote to one line of a
+// notification: control characters and runs of white space become one
+// space, so a line break in a subject cannot fake further lines, and it is
+// cut to max characters.
+func notificationLine(s string, max int) string {
+	words := strings.FieldsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	runes := []rune(strings.Join(words, " "))
+	if len(runes) > max {
+		return string(runes[:max-1]) + "…"
 	}
-	reminders, _ := m["reminders"].([]any)
-	if len(reminders) == 0 {
-		return
-	}
-	labels := a.currentNativeLabels()
-	count := len(reminders)
-	if c, ok := m["count"].(float64); ok && int(c) > count {
-		count = int(c)
-	}
-	var lines []string
-	account := ""
-	for _, item := range reminders {
-		r, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		if account == "" {
-			account, _ = r["account"].(string)
-		}
-		if len(lines) == missedRemindersShown {
-			lines = append(lines, "…")
-			break
-		}
-		subject, _ := r["subject"].(string)
-		lines = append(lines, strings.TrimSpace(reminderWhen(r)+" "+firstNonEmpty(subject, labels.noSubject)))
-	}
-	day, _ := m["day"].(string)
-	dispatchNotification(a, notification{
-		title:    formatNativePlural(labels.missedReminders, count),
-		body:     strings.Join(lines, "\n"),
-		account:  account,
-		threadID: calendarNotificationPrefix + day,
-	})
+	return string(runes)
 }
 
 // notifyTaskReminder raises the OS notification for a task reminder

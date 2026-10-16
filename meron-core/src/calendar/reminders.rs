@@ -247,8 +247,12 @@ pub fn due<Tz: TimeZone>(
             then.is_some_and(|then| then.fire_at > previous.at)
         });
         if ahead || came_due_since {
-            // Over before anyone looked: missed, for the grouped notice.
+            // Over before anyone looked: missed, for the grouped notice. A
+            // meeting the reader declined is no loss to report.
             let missed = !ahead && now_timing.end <= now;
+            if missed && declined(&event) {
+                continue;
+            }
             due.push(Due { event, timing: now_timing, missed });
         }
     }
@@ -262,7 +266,7 @@ pub fn due<Tz: TimeZone>(
 fn candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Vec<Event>> {
     let mut stmt = conn.prepare(
         "SELECT e.calendar_id, e.event_id, e.subject, e.start_utc, e.end_utc,
-                e.all_day, e.location, e.reminder_minutes
+                e.all_day, e.location, e.reminder_minutes, e.my_response
          FROM calendar_events e
          JOIN calendars c
            ON c.account = e.account AND c.provider_id = e.calendar_id
@@ -288,11 +292,18 @@ fn candidates(conn: &Connection, account: &str, from: i64, to: i64) -> Result<Ve
                 all_day: row.get::<_, i64>(5)? != 0,
                 location: row.get(6)?,
                 reminder_minutes: row.get(7)?,
+                my_response: row.get::<_, Option<String>>(8)?.unwrap_or_default(),
                 ..Default::default()
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(events)
+}
+
+/// Whether the reader declined the meeting, as the providers that know say
+/// it: Exchange "decline", Google "declined".
+fn declined(event: &Event) -> bool {
+    matches!(event.my_response.to_ascii_lowercase().as_str(), "decline" | "declined")
 }
 
 #[cfg(test)]
@@ -587,6 +598,22 @@ mod tests {
         put(&conn, &[timed("early", at("2026-10-20T08:00:00Z"), 15)]);
         let previous = Some(Previous { at: at("2026-10-20T08:30:00Z"), offset: 0 });
         assert!(due(&conn, "acct", at("2026-10-20T10:00:00Z"), &Madrid, previous).unwrap().is_empty());
+    }
+
+    /// A meeting the reader declined (Exchange "decline", Google
+    /// "declined") is not reported as missed; one they accepted is.
+    #[test]
+    fn a_declined_meeting_is_not_missed() {
+        let conn = store();
+        let start = at("2026-10-20T09:00:00Z");
+        let answered = |id: &str, response: &str| Event { my_response: response.into(), ..timed(id, start, 15) };
+        put(
+            &conn,
+            &[answered("ews", "Decline"), answered("google", "declined"), answered("accepted", "accept")],
+        );
+        let previous = Some(Previous { at: at("2026-10-20T08:00:00Z"), offset: 0 });
+        let due = due(&conn, "acct", at("2026-10-20T11:00:00Z"), &Madrid, previous).unwrap();
+        assert_eq!((ids(&due), missed(&due)), (vec!["accepted"], vec![true]));
     }
 
     #[test]

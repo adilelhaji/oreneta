@@ -73,20 +73,30 @@ fn event_date<Tz: TimeZone>(event: &calendar::Event, zone: &Tz) -> Option<chrono
     }
 }
 
-/// The `calendar.missedReminders` detail (#225): the reminders a look found
-/// missed, as `calendar.reminder` details in the order their events start,
-/// how many, and the day to open the calendar on, the first one's
-/// ("YYYY-MM-DD" in `zone`). `None` when nothing was missed.
+/// How many missed reminders a notice details; `count` says how many in all.
+/// A host shows a few lines, so more is only weight on the wire.
+pub const MISSED_DETAILED: usize = 20;
+
+/// The `calendar.missedReminders` detail (#225): how many reminders a look
+/// found missed (`count`), the most recent [`MISSED_DETAILED`] of them as
+/// `calendar.reminder` details, newest first, since the latest missed meeting
+/// is the likeliest still to need something, and the days they span on the
+/// clock of `zone` ("YYYY-MM-DD"): `day`, the most recent, and `first_day`.
+/// `None` when nothing was missed.
 fn missed_notice<Tz: TimeZone>(mut missed: Vec<(i64, String, calendar::Event)>, zone: &Tz, now: i64) -> Option<Value>
 where
     Tz::Offset: std::fmt::Display,
 {
-    missed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)).then_with(|| a.2.id.cmp(&b.2.id)));
-    let (_, _, first) = missed.first()?;
-    let day = event_date(first, zone).map(|day| day.format("%Y-%m-%d").to_string());
-    let reminders: Vec<Value> =
-        missed.iter().map(|(_, account, event)| reminder_detail(account, event, zone, now)).collect();
-    Some(json!({ "count": reminders.len(), "day": day, "reminders": reminders }))
+    missed.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)).then_with(|| a.2.id.cmp(&b.2.id)));
+    let date = |event: &calendar::Event| event_date(event, zone).map(|day| day.format("%Y-%m-%d").to_string());
+    let day = date(&missed.first()?.2);
+    let first_day = date(&missed.last()?.2);
+    let reminders: Vec<Value> = missed
+        .iter()
+        .take(MISSED_DETAILED)
+        .map(|(_, account, event)| reminder_detail(account, event, zone, now))
+        .collect();
+    Some(json!({ "count": missed.len(), "day": day, "first_day": first_day, "reminders": reminders }))
 }
 
 /// An account whose floating calendars are to be read again after a change

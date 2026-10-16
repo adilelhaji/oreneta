@@ -962,7 +962,7 @@
   "notification.archivedTitle": "Αρχειοθετήθηκε",
   "notification.markReadFailed": "Αδυναμία σήμανσης ως αναγνωσμένο",
   "notification.undoFailed": "Αδυναμία αναίρεσης",
-  "notify.missedReminders": "{count, plural, one {1 υπενθύμιση που χάθηκε} other {{count} υπενθυμίσεις που χάθηκαν}}",
+  "notify.missedReminders": "{count, plural, one {1 υπενθύμιση που χάσατε} other {{count} υπενθυμίσεις που χάσατε}}",
   "notify.newMessage": "Νέο μήνυμα",
   "notify.newMessageCount": "{count, plural, one {1 νέο μήνυμα} other {{count} νέα μηνύματα}}",
   "notify.noSubject": "(χωρίς θέμα email)",

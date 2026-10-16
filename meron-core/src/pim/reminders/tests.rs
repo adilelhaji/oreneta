@@ -242,8 +242,8 @@ fn a_reminder_whose_event_ended_during_a_suspend_is_given_once_in_the_missed_not
 }
 
 /// A night asleep over several meetings, on two accounts and two days:
-/// exactly one notice, with all of them in the order they started, opening
-/// the calendar on the first missed day.
+/// exactly one notice, with all of them, newest first, and the days they
+/// span.
 #[test]
 fn several_missed_reminders_make_exactly_one_notice_with_all_of_them() {
     let engine = engine_with(&[
@@ -258,13 +258,63 @@ fn several_missed_reminders_make_exactly_one_notice_with_all_of_them() {
     let woke = at("2026-10-21T07:00:00Z");
     let first = look(&engine, &accounts, woke, &Madrid);
     assert!(first.reminders.is_empty());
-    assert_eq!(missed(&first), ["late", "holiday", "other", "early"]);
+    assert_eq!(missed(&first), ["early", "other", "holiday", "late"], "newest first");
     let notice = first.missed.unwrap();
     assert_eq!(notice["count"], 4);
-    assert_eq!(notice["day"], "2026-10-19", "the first missed day, on the reader's clock");
-    assert_eq!(notice["reminders"][2]["account"], "b");
-    assert_eq!(notice["reminders"][1]["local_date"], "2026-10-20");
+    assert_eq!(notice["day"], "2026-10-20", "the most recent missed day, on the reader's clock");
+    assert_eq!(notice["first_day"], "2026-10-19", "and the first");
+    assert_eq!(notice["reminders"][1]["account"], "b");
+    assert_eq!(notice["reminders"][2]["local_date"], "2026-10-20");
     assert_eq!(look(&engine, &accounts, woke + 60, &Madrid), Look::default(), "once");
+}
+
+/// A long absence: the notice says how many in all, details only the most
+/// recent few, and every one of them is recorded as given.
+#[test]
+fn a_notice_details_the_most_recent_missed_reminders_and_counts_them_all() {
+    let first = at("2026-10-20T06:00:00Z");
+    let events: Vec<_> = (0..25).map(|i| event(&format!("m{i:02}"), first + i * 3_600, Some(15))).collect();
+    let engine = engine_with(&events);
+    assert!(look(&engine, &a(), first - 7_200, &Madrid).missed.is_none());
+    let woke = look(&engine, &a(), first + 30 * 3_600, &Madrid);
+    let notice = woke.missed.clone().unwrap();
+    assert_eq!(notice["count"], 25);
+    assert_eq!(notice["reminders"].as_array().unwrap().len(), MISSED_DETAILED);
+    assert_eq!(missed(&woke)[0], "m24", "the most recent first");
+    assert_eq!(missed(&woke)[MISSED_DETAILED - 1], "m05");
+    assert_eq!(recorded(&engine), 25);
+    assert_eq!(look(&engine, &a(), first + 30 * 3_600 + 60, &Madrid), Look::default());
+}
+
+/// The look on waking runs before the calendars are read again, so a
+/// meeting that a sync during the gap brought in (or a calendar shown again)
+/// whose reminder rang and whose end passed in the gap is reported as missed
+/// too: what was in the store at the look is what it reports.
+#[test]
+fn an_event_synced_in_or_shown_again_during_the_gap_is_reported_as_missed() {
+    let engine = engine_with(&[]);
+    put_on(&engine, "b", calendar::CalendarKind::Local, &[event("shown", at("2026-10-20T09:30:00Z"), Some(15))]);
+    let hidden = |on: bool| {
+        let db = engine.db.lock().unwrap();
+        calendar::set_calendar_enabled(&db, "b", "local:home", !on).unwrap();
+    };
+    hidden(true);
+    let accounts = vec!["a".to_string(), "b".to_string()];
+    assert!(look(&engine, &accounts, at("2026-10-20T08:00:00Z"), &Madrid).missed.is_none());
+    // Asleep from 08:00 to 11:00. Meanwhile (before the look on waking) a
+    // sync brings in a 09:00 meeting, and the hidden calendar is shown again.
+    put(&engine, &[event("synced", at("2026-10-20T09:00:00Z"), Some(15))]);
+    hidden(false);
+    assert_eq!(missed(&look(&engine, &accounts, at("2026-10-20T11:00:00Z"), &Madrid)), ["shown", "synced"]);
+}
+
+fn recorded(engine: &Arc<Engine>) -> i64 {
+    engine
+        .db
+        .lock()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
+        .unwrap()
 }
 
 /// One look on waking: the meeting still on is given on its own, as since
@@ -313,8 +363,8 @@ fn a_paused_or_muted_account_shows_no_missed_reminders() {
 /// comes once, and neither a restart nor a resume brings it back.
 #[test]
 fn a_missed_reminder_is_not_given_twice_across_a_restart_followed_by_a_resume() {
-    let path = std::env::temp_dir().join(format!("oreneta-missed-{}.db", std::process::id()));
-    let _ = std::fs::remove_file(&path);
+    let file = TempDb::new("missed");
+    let path = file.0.clone();
     let events = [event("standup", at("2026-10-20T09:00:00Z"), Some(15))];
     {
         let engine = Arc::new(Engine::new(Box::new(FileHost(path.clone()))).unwrap());
@@ -332,9 +382,29 @@ fn a_missed_reminder_is_not_given_twice_across_a_restart_followed_by_a_resume() 
     assert_eq!(look(&engine, &a(), at("2026-10-20T12:00:00Z"), &Madrid), Look::default());
     put(&engine, &events);
     assert_eq!(look(&engine, &a(), at("2026-10-20T12:01:00Z"), &Madrid), Look::default());
-    drop(engine);
-    for suffix in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+}
+
+/// A store file for a restart test, removed with its WAL files when the test
+/// ends, passed or failed. Made before the engines, so dropped after them.
+struct TempDb(std::path::PathBuf);
+
+impl TempDb {
+    fn new(name: &str) -> TempDb {
+        let file = TempDb(std::env::temp_dir().join(format!("oreneta-{name}-{}.db", std::process::id())));
+        file.remove();
+        file
+    }
+
+    fn remove(&self) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", self.0.display()));
+        }
+    }
+}
+
+impl Drop for TempDb {
+    fn drop(&mut self) {
+        self.remove();
     }
 }
 
@@ -434,8 +504,8 @@ fn a_paused_accounts_missed_reminders_are_not_saved_up() {
 /// closed, then a sleep and a resume, then a resync: each once.
 #[test]
 fn no_reminder_fires_twice_across_a_restart_followed_by_a_resume() {
-    let path = std::env::temp_dir().join(format!("oreneta-reminders-{}.db", std::process::id()));
-    let _ = std::fs::remove_file(&path);
+    let file = TempDb::new("reminders");
+    let path = file.0.clone();
     let events = [
         event("standup", at("2026-10-20T09:00:00Z"), Some(15)),
         calendar::Event { end: at("2026-10-20T11:00:00Z"), ..event("review", at("2026-10-20T10:00:00Z"), Some(30)) },
@@ -461,10 +531,6 @@ fn no_reminder_fires_twice_across_a_restart_followed_by_a_resume() {
         .query_row("SELECT COUNT(*) FROM calendar_reminders_fired", [], |row| row.get(0))
         .unwrap();
     assert_eq!(given, 2);
-    drop(engine);
-    for suffix in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
-    }
 }
 
 // ---- Time zones (#209) ------------------------------------------------------

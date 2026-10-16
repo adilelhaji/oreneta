@@ -10,8 +10,9 @@ Fila SET-29 del [libro de paridad](../emclient-parity-acceptance.md).
 | `meron-core/src/calendar/reminders.rs` | Cuándo suena un aviso en una zona (`timing`), qué avisos da una mirada y cuáles son perdidos (`due`, `Due::missed`), la mirada anterior por cuenta (`previous_look`, `record_look`) y la relectura pendiente tras un cambio de zona (`mark_reread`, `reread_due`). |
 | `meron-core/src/pim/reminders.rs` | Una mirada sobre varias cuentas (`look`): marca cada aviso como dado, junta los perdidos en un aviso (`Look::missed`), anota la mirada si terminó bien y dice qué cuentas releer. Lo que dice cada aviso (`reminder_detail`). La usan el escritorio y el móvil (`take_due`, sin perdidos). |
 | `meron-core/src/main.rs` | El vigilante del escritorio: mira cada minuto y al recibir `system.resumed`; emite `calendar.reminder`, `calendar.missedReminders` y lanza las relecturas (`give_calendar_reminders`). |
-| `notify.go` | La notificación: título, cuándo (`local_date`, `local_time`, «Empezó a las…» si `started`) y lugar; la de perdidos (`notifyMissedReminders`), que al pulsarla abre el calendario en ese día. |
-| `frontend/src/states/calendar.ts` | `openCalendarFromNotification`: el clic en el aviso de perdidos. |
+| `notify.go` | La notificación: título, cuándo (`local_date`, `local_time`, «Empezó a las…» si `started`) y lugar, como texto de una línea (`notificationLine`). |
+| `notify_missed.go` | El aviso de perdidos: lo guarda hasta poder mostrarlo (idioma y plan de silencio al arrancar, fin de las horas de silencio), suma los que llegan entretanto y lo muestra (`showMissedReminders`). |
+| `frontend/src/states/notificationClick.ts`, `calendar.ts` | El clic en una notificación (`onNotificationClicked`); el de perdidos abre el calendario (`openCalendarFromNotification`). |
 
 ## Comportamiento
 
@@ -24,14 +25,23 @@ Fila SET-29 del [libro de paridad](../emclient-parity-acceptance.md).
   mirada anterior y el evento sigue en curso, se da en la primera mirada al
   volver, una vez, con `started: true`. Un hueco se mira como mucho 14 días
   hacia atrás; un reloj atrasado no abre hueco.
-- **Perdidos** (#225): si el evento ya terminó, el aviso es un perdido. Todos
-  los perdidos de una mirada, de todas las cuentas, salen en un solo
-  `calendar.missedReminders` (`count`, `day`, `reminders`), una sola
-  notificación: «N avisos perdidos» y, uno por línea, cuándo y qué (hasta 5,
-  luego «…»). Al pulsarla se abre el calendario en el primer día perdido.
-  Cada uno se anota como dado: no se repite tras otra mirada, un reinicio o
-  un despertar. Sin mirada anterior no hay perdidos. El móvil aún no los
-  muestra (los deja sin anotar, como antes).
+- **Perdidos** (#225): si el evento ya terminó, el aviso es un perdido (una
+  reunión rechazada, no). Todos los perdidos de una mirada, de todas las
+  cuentas, salen en un solo `calendar.missedReminders` (`count`, `day`,
+  `first_day`, los 20 más recientes en `reminders`), una sola notificación:
+  «N avisos perdidos» y, uno por línea y del más reciente al más antiguo,
+  cuándo y qué (hasta 5, luego «…»). Al pulsarla se abre el calendario en el
+  día más reciente, o en su semana si hay perdidos de más días. Go no lo
+  descarta nunca: lo guarda al arrancar hasta saber el idioma y el plan de
+  silencio (30 s como mucho) y durante las horas de silencio, sumando los que
+  lleguen. Cada uno se anota como dado: no se repite tras otra mirada, un
+  reinicio o un despertar. Sin mirada anterior no hay perdidos. El móvil aún
+  no los muestra (los deja sin anotar, como antes).
+- **Lo que hay al mirar**: al despertar se mira antes de releer los
+  calendarios, así que una reunión cancelada o movida mientras el equipo
+  dormía puede salir como perdida; y un evento pasado que llega en el hueco
+  (una sincronización, un calendario que se vuelve a mostrar) sale como
+  perdido si su aviso venció y su evento terminó dentro del hueco.
 - **Al empezar** (0 minutos): se da en la primera mirada desde el inicio. Un
   evento que empieza en el mismo segundo de la mirada aún no ha empezado, así
   que también lo da una primera mirada sin otra anterior. Un evento sin
@@ -95,6 +105,8 @@ esperas. CI pasa `calendar::` y `pim::reminders::` también con
     `a_paused_or_muted_account_shows_no_missed_reminders`,
     `a_missed_reminder_is_not_given_twice_across_a_restart_followed_by_a_resume`,
     `a_missed_reminder_that_could_not_be_recorded_is_in_the_next_notice`,
+    `a_notice_details_the_most_recent_missed_reminders_and_counts_them_all`,
+    `an_event_synced_in_or_shown_again_during_the_gap_is_reported_as_missed`,
     `the_phones_look_leaves_missed_reminders_as_before`.
 - `calendar::reminders::tests`: medianoche local de un día completo, día sin
   medianoche (Santiago de Chile), instante igual en toda zona, evento sin
@@ -102,15 +114,22 @@ esperas. CI pasa `calendar::` y `pim::reminders::` también con
   de horario entre dos miradas, mirada anotada ilegible, relectura pendiente,
   hueco y fin del evento (y cuándo un aviso pasa a perdido), reloj atrasado,
   límite de 14 días, cambio de zona al este y al oeste, sin perdidos en una
-  primera mirada ni de antes de la mirada anterior.
+  primera mirada ni de antes de la mirada anterior, ni reuniones rechazadas.
 - Binario: `system_resumed_wakes_the_reminder_watch_before_its_tick`,
   `a_zone_change_makes_the_reminder_watch_read_floating_calendars_again`,
   `the_reminder_watch_uses_the_shared_reminders`,
   `the_reminder_watch_gathers_missed_reminders_into_one_notice`.
-- Go: `TestReminderShowsTheCoresLocalTime`,
-  `TestMissedRemindersMakeOneNotificationThatOpensTheCalendar`.
-- Frontend: `calendarNotification.test.ts` (el clic abre el calendario en ese
-  día), `notifications.test.ts` (suena como un aviso).
+- Go: `TestReminderShowsTheCoresLocalTime`, y en `notify_missed_test.go`
+  `TestMissedRemindersMakeOneNotificationThatOpensTheCalendar`,
+  `TestMissedAndSingleRemindersShowSubjectsAsOneLineOfText`,
+  `TestMissedRemindersWaitForQuietHoursToEnd`,
+  `TestMissedRemindersWaitAtStartForTheLanguageAndTheQuietPlan`,
+  `TestMissedRemindersGoAfterThirtySecondsWithoutTheFrontend`,
+  `TestMissedRemindersTitleWithoutPluralForms`,
+  `TestMergedMissedNoticesKeepTheNewestTwentyAndSpanTheirDays`.
+- Frontend: `calendarNotification.test.ts` (el clic, por
+  `onNotificationClicked`, abre el día o la semana), `notifications.test.ts`
+  (suena cuando Go lo muestra).
 - Kotlin: `PimRefreshTest.theCoresLocalTimeIsKeptWhenItSaysOne`.
 
 ## Fuera de alcance
