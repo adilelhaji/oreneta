@@ -141,7 +141,7 @@ export default function App() {
         ) : showKanbanMessagePane ? (
           <div
             ref={kanbanPaneRef}
-            className="relative flex shrink-0 overflow-hidden border-l border-border bg-chat max-[600px]:w-full"
+            className="relative flex shrink-0 overflow-hidden border-s border-border bg-chat max-[600px]:w-full"
             style={{ width: `${kanbanPaneWidth}%`, minWidth: 320 }}
           >
             {/* The width is a percentage of the app shell, kept in settings. */}

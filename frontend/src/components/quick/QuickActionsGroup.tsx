@@ -61,9 +61,9 @@ export function QuickActionsGroup() {
         {actions.map((quick, index) => (
           <li key={quick.id} className="flex min-h-11 items-center justify-between gap-3 px-3.5 py-2">
             <span className="min-w-0 truncate text-xs text-primary">
-              <span className="mr-2 text-2xs text-secondary">Alt+{index + 1}</span>
+              <span className="me-2 text-2xs text-secondary">Alt+{index + 1}</span>
               {quick.name}
-              <span className="ml-2 text-2xs text-secondary">{quick.steps.map(label).join(' → ')}</span>
+              <span className="ms-2 text-2xs text-secondary">{quick.steps.map(label).join(' → ')}</span>
             </span>
             <span className="flex shrink-0 gap-1.5">
               <button

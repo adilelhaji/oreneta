@@ -193,7 +193,7 @@ export function AttachmentsView() {
                 >
                   <Icon size={20} className="shrink-0 text-secondary" />
                   <div className="min-w-0 flex-1 basis-56">
-                    <p className="truncate text-ui font-semibold text-primary">{name}</p>
+                    <p dir="auto" className="truncate text-ui font-semibold text-primary">{name}</p>
                     <p className="truncate text-caption text-secondary">
                       {[
                         formatFileSize(item.size),
@@ -242,7 +242,7 @@ export function AttachmentsView() {
                     </button>
                   </span>
                   {!item.key && (
-                    <p className="w-full pl-8 text-2xs text-secondary">
+                    <p className="w-full ps-8 text-2xs text-secondary">
                       {item.unavailable === 'link'
                         ? t('attachmentsView.isLink', {
                             defaultValue: 'A link to a file kept elsewhere; open the message to follow it.',

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { documentDirection, menuLeft } from '../../lib/direction'
 
 const noop = () => {}
 
@@ -41,9 +42,11 @@ export function FloatingContextMenu({
     if (!el) return
 
     const { width, height } = el.getBoundingClientRect()
-    const desiredLeft = x + offset
+    // `x` is where the menu's inline-start edge goes: it extends rightwards
+    // from it in left-to-right and leftwards in right-to-left (ADR-0061).
+    const direction = documentDirection()
+    const left = menuLeft(direction === 'rtl' ? x - offset : x + offset, width, window.innerWidth, margin, direction)
     const desiredTop = y + offset
-    const left = Math.max(margin, Math.min(desiredLeft, window.innerWidth - width - margin))
     const top = Math.max(margin, Math.min(desiredTop, window.innerHeight - height - margin))
 
     el.style.left = `${left}px`
