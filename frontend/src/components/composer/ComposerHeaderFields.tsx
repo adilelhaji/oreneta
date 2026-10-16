@@ -98,7 +98,8 @@ export function ComposerHeaderFields({
         <span className={labelClass}>{t('composer.fields.subject')}</span>
         <input
           value={draft.subject}
-          dir="auto"
+          // Empty, the field follows the interface; typed, its own text (ADR-0061).
+          dir={draft.subject ? 'auto' : undefined}
           onChange={(e) => update({ subject: e.target.value })}
           placeholder={t('composer.fields.subject')}
           spellCheck={spellCheck}

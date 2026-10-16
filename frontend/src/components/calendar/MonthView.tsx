@@ -167,7 +167,7 @@ export function MonthView({ onEventMenu }: { onEventMenu: (x: number, y: number,
                   {!event.all_day && (
                     <span className="shrink-0 tabular-nums text-secondary">{formatTime(event.start)}</span>
                   )}
-                  <span className="truncate">
+                  <span dir="auto" className="truncate">
                     {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
                   </span>
                 </button>

@@ -364,7 +364,7 @@ export function PeopleView() {
                         size={34}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-ui font-semibold text-primary">
+                        <span dir="auto" className="block truncate text-ui font-semibold text-primary">
                           {names.format(person)}
                         </span>
                         {/* On the selected row's tinted background the secondary
@@ -501,7 +501,9 @@ function PersonCard({
           size={72}
         />
         <div className="min-w-0 flex-1 basis-40">
-          <h2 className="wrap-anywhere text-heading font-bold text-primary">{displayName}</h2>
+          <h2 dir="auto" className="wrap-anywhere text-heading font-bold text-primary">
+            {displayName}
+          </h2>
           {person.organisation && (
             <p className="mt-1 flex items-start gap-1.5 wrap-anywhere text-ui text-secondary">
               <Building2 size={14} strokeWidth={1.75} /> {person.organisation}
@@ -635,7 +637,9 @@ function PersonCard({
       {person.note && (
         <section className="mt-6">
           <h2 className="mb-2 text-caption font-bold uppercase tracking-wide text-secondary">{t('people.note')}</h2>
-          <p className="whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary">{person.note}</p>
+          <p dir="auto" className="bidi-plaintext whitespace-pre-wrap wrap-anywhere text-ui leading-relaxed text-primary">
+            {person.note}
+          </p>
         </section>
       )}
     </div>

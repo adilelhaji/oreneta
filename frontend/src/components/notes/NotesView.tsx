@@ -8,6 +8,7 @@ import { Button } from '../button/Button'
 import { EmptyState } from '../empty-state/EmptyState'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { NoteEditor } from './NoteEditor'
+import { backArrow } from '../../lib/direction'
 
 /**
  * Notes that belong to no account and no message (#104, ADR-0015): a list
@@ -181,7 +182,7 @@ export function NotesView() {
                 onClick={() => notes$.selected.set(null)}
                 className="border-b border-border px-4 py-2 text-start text-caption text-secondary hover:bg-hover min-[900px]:hidden cursor-pointer"
               >
-                ← {t('notes.backToList', { defaultValue: 'All notes' })}
+                {backArrow()} {t('notes.backToList', { defaultValue: 'All notes' })}
               </button>
               <NoteEditor key={opened.key} initialId={opened.id} />
             </>

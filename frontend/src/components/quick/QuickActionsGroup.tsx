@@ -13,6 +13,7 @@ import {
 } from '../../states/quickActionModel'
 import { SettingsGroup } from '../dialog/AccountSettingsRows'
 import { useStepLabel } from './QuickActionDialog'
+import { forwardArrow } from '../../lib/direction'
 
 const KINDS: QuickStepKind[] = ['markRead', 'markUnread', 'star', 'unstar', 'archive', 'move']
 const action =
@@ -63,7 +64,7 @@ export function QuickActionsGroup() {
             <span className="min-w-0 truncate text-xs text-primary">
               <span className="me-2 text-2xs text-secondary">Alt+{index + 1}</span>
               {quick.name}
-              <span className="ms-2 text-2xs text-secondary">{quick.steps.map(label).join(' → ')}</span>
+              <span className="ms-2 text-2xs text-secondary">{quick.steps.map(label).join(` ${forwardArrow()} `)}</span>
             </span>
             <span className="flex shrink-0 gap-1.5">
               <button

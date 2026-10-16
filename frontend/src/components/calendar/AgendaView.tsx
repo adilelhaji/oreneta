@@ -3,6 +3,7 @@ import { useValue } from '@legendapp/state/react'
 import { MapPin, Repeat } from 'lucide-react'
 import i18n, { useTranslation } from '../../lib/i18n'
 import { calendar$, eventColor, openEvent, groupByDay, type CalendarEvent } from '../../states/calendar'
+import { forwardArrow } from '../../lib/direction'
 
 /// A list of what is coming, grouped by day.
 ///
@@ -101,7 +102,7 @@ function EventRow({
       </div>
       <div className="min-w-0 flex-1">
         <p className={`truncate text-ui font-medium text-primary ${event.is_cancelled ? 'line-through' : ''}`}>
-          {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
+          <bdi>{event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}</bdi>
           {continues && (
             <span className="ms-1.5 font-normal text-secondary">
               {t('calendar.continues', { defaultValue: '· continues' })}
@@ -139,7 +140,7 @@ function sameDay(event: CalendarEvent): boolean {
 
 /// The day an event ends on, short enough for the agenda's time column.
 function formatEndDay(event: CalendarEvent): string {
-  return `→ ${new Date(event.end * 1000).toLocaleDateString(i18n.language.replace('_', '-'), {
+  return `${forwardArrow()} ${new Date(event.end * 1000).toLocaleDateString(i18n.language.replace('_', '-'), {
     day: 'numeric',
     month: 'short',
   })}`

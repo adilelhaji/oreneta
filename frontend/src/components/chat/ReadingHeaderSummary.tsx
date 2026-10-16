@@ -1,5 +1,6 @@
 import { Fragment, type MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from '../../lib/i18n'
+import { nameSeparator } from '../../lib/direction'
 import { formatThreadDate } from '../../lib/date'
 import { clsx } from '../../lib/utils'
 import { Avatar } from '../avatar/Avatar'
@@ -39,7 +40,7 @@ export function ReadingHeaderSummary({
   onSenderMenu: (event: ReactMouseEvent<HTMLElement>) => void
   detailsOpen: boolean
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const shown = summary.participants.slice(0, NAMES)
   const hidden = summary.participants.length - shown.length
@@ -47,7 +48,7 @@ export function ReadingHeaderSummary({
   // its own order and does not drag the commas around (ADR-0061).
   const names = shown.map((person, index) => (
     <Fragment key={person.address}>
-      {index > 0 && ', '}
+      {index > 0 && nameSeparator(i18n.language)}
       <bdi>{person.self ? t('reading.you') : person.name}</bdi>
     </Fragment>
   ))

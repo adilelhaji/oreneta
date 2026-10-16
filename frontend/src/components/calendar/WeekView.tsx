@@ -154,7 +154,8 @@ export function WeekView({
                     mouse.preventDefault()
                     onEventMenu(mouse.clientX, mouse.clientY, event)
                   }}
-                  className="truncate rounded px-1.5 py-px text-start text-2xs font-medium text-white cursor-pointer hover:opacity-90"
+                  dir="auto"
+                  className="truncate rounded px-1.5 py-px text-2xs font-medium text-white cursor-pointer hover:opacity-90"
                   style={{ backgroundColor: colorOf(event) }}
                 >
                   {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
@@ -233,7 +234,7 @@ export function WeekView({
                       borderInlineStartColor: color,
                     }}
                   >
-                    <span className="block truncate font-medium text-primary">
+                    <span dir="auto" className="block truncate font-medium text-primary">
                       {event.subject || t('calendar.noSubject', { defaultValue: '(no subject)' })}
                     </span>
                     <span className="block truncate tabular-nums text-secondary">

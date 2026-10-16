@@ -200,7 +200,7 @@ export function RecipientInput({ value, onChange, accountId, placeholder, autoFo
           ref={inputRef}
           autoFocus={autoFocus}
           value={pending}
-          dir="auto"
+          dir={pending ? 'auto' : undefined}
           placeholder={committed.length === 0 ? placeholder : undefined}
           spellCheck={false}
           className={inputClass}

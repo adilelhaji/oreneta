@@ -244,7 +244,9 @@ export function MergeDialog() {
                         {m.problems.map(problemText).join(', ')}
                       </p>
                     )}
-                    <pre className="whitespace-pre-wrap font-sans text-secondary">{m.body}</pre>
+                    <pre dir="auto" className="bidi-plaintext whitespace-pre-wrap font-sans text-secondary">
+                      {m.body}
+                    </pre>
                   </li>
                 ))}
               </ol>

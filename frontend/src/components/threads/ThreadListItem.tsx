@@ -11,6 +11,7 @@ import { settings$ } from '../../states/settings'
 import { useSenderName } from '../../states/contactNames'
 import { densityStyle } from './listDensity'
 import { LabelChips } from './LabelChips'
+import { firstStrongDirection } from '../../lib/direction'
 
 /** What a row offers without being opened. */
 export type QuickRowAction = 'archive' | 'trash' | 'snooze' | 'read'
@@ -88,10 +89,11 @@ export function ThreadListItem({
   // Built once and placed by density: compact puts them on the sender's line,
   // the others on a line below. Two copies of this markup would be two things
   // to keep in step for no gain.
-  // The line takes the direction of the subject on it (ADR-0061): a Latin
-  // subject in the Arabic interface reads and truncates left to right.
+  // The line takes the direction of the subject on it, decided from the
+  // subject alone and not from the "Draft" marker before it (ADR-0061): a
+  // Latin subject in the Arabic interface reads and truncates left to right.
   const subjectLine = (
-    <p dir="auto" className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}>
+    <p dir={firstStrongDirection(threadTitle) ?? undefined} className={clsx('flex-1 truncate text-xs leading-snug', unread ? 'font-semibold' : 'font-normal')}>
       {/* Before the subject, where they read as what this conversation is
           rather than as an afterthought at the end of a line that truncates. */}
       {!!thread.labels?.length && (
@@ -100,7 +102,9 @@ export function ThreadListItem({
         </span>
       )}
       {hasDraft && <span className="me-1 font-normal text-danger">{t('chat.draft')}</span>}
-      <span className={clsx(unread ? 'text-primary' : 'text-primary/85')}>{threadTitle}</span>
+      <span dir="auto" className={clsx(unread ? 'text-primary' : 'text-primary/85')}>
+        {threadTitle}
+      </span>
       {/* The preview trails the subject unless it has been given its own line,
           where repeating it here would show it twice. */}
       {!!thread.preview && !density.previewOnOwnLine && (

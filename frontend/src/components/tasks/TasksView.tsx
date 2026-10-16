@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import {
   Bell,
   CalendarClock,
@@ -382,12 +382,18 @@ export function TasksView() {
                           aria-label={t('tasks.priorityHigh', { defaultValue: 'High' })}
                         />
                       )}
-                      {taskTitle(task)}
+                      <bdi>{taskTitle(task)}</bdi>
                     </span>
                     <span className="block wrap-anywhere text-caption text-secondary">
-                      {task.linked === false
-                        ? task.note
-                        : [task.from_name || task.from_addr, task.note].filter(Boolean).join(' · ')}
+                      {/* Each piece isolated: a Latin name beside an Arabic note keeps its place. */}
+                      {(task.linked === false ? [task.note] : [task.from_name || task.from_addr, task.note])
+                        .filter(Boolean)
+                        .map((piece, index) => (
+                          <Fragment key={index}>
+                            {index > 0 && ' · '}
+                            <bdi>{piece}</bdi>
+                          </Fragment>
+                        ))}
                     </span>
                     <span className="flex flex-wrap items-center gap-3">
                       {!done && task.due_at && <DueChip dueAt={task.due_at} />}

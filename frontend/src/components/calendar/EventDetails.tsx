@@ -21,6 +21,7 @@ import {
 import { ScopeAsk } from './ScopeAsk'
 import { isAnswerableInvitation } from '../../lib/calendarInvitation'
 import { accounts$ } from '../../states/accounts'
+import { forwardArrow } from '../../lib/direction'
 
 /// An event at full size, to read rather than to edit.
 ///
@@ -194,7 +195,9 @@ export function EventDetails() {
             <Row icon={<AlignLeft size={14} strokeWidth={1.75} />}>
               {/* Kept as the plain text it arrived as, with the author's own
                   line breaks: notes are read, not rendered. */}
-              <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-primary">{description}</p>
+              <p dir="auto" className="bidi-plaintext max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-primary">
+                {description}
+              </p>
             </Row>
           )}
 
@@ -337,12 +340,12 @@ function formatRange(event: CalendarEvent): string {
     const days = allDayLocalDays(event)
     const firstDay = new Date(days[0])
     const lastDay = new Date(days[days.length - 1])
-    return days.length === 1 ? day(firstDay) : `${day(firstDay)} → ${day(lastDay)}`
+    return days.length === 1 ? day(firstDay) : `${day(firstDay)} ${forwardArrow()} ${day(lastDay)}`
   }
   const sameDay = start.toDateString() === end.toDateString()
   return sameDay
     ? `${day(start)} · ${time(start)}–${time(end)}`
-    : `${day(start)} ${time(start)} → ${day(end)} ${time(end)}`
+    : `${day(start)} ${time(start)} ${forwardArrow()} ${day(end)} ${time(end)}`
 }
 
 /// One occurrence's date, short enough to sit on a line with other facts.

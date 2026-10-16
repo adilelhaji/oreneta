@@ -568,6 +568,7 @@ export function MessagingView() {
                 aria-activedescendant={suggestions.length > 0 ? `chat-mention-${active % suggestions.length}` : undefined}
                 value={draft}
                 rows={2}
+                dir={draft ? 'auto' : undefined}
                 onChange={(e) => {
                   setDraft(e.target.value)
                   setCaret(e.target.selectionStart ?? e.target.value.length)
@@ -597,7 +598,7 @@ export function MessagingView() {
                     void send()
                   }
                 }}
-                className={`${input} flex-1 resize-none`}
+                className={`${input} bidi-plaintext flex-1 resize-none`}
               />
               <button
                 type="button"
@@ -987,7 +988,8 @@ function Bubble({ message, room }: { message: ChatMessage; room?: string }) {
         <FileCard message={message} mine={mine} />
       ) : (
         <span
-          className={`whitespace-pre-wrap break-words rounded-panel px-3 py-1.5 text-sm ${
+          dir="auto"
+          className={`bidi-plaintext whitespace-pre-wrap break-words rounded-panel px-3 py-1.5 text-sm ${
             mine ? 'bg-accent text-on-accent' : 'bg-raised text-primary'
           } ${mention ? 'ring-2 ring-accent' : ''}`}
         >

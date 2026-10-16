@@ -323,6 +323,11 @@ export function messageSearchText(message: Message): string {
  * carry the same subject and the same text, so who received it is what tells
  * them apart. */
 export function formatRecipientSummary(...lists: (string | undefined | null)[]): string {
+  return recipientNames(...lists).join(', ')
+}
+
+/** The names behind formatRecipientSummary, each address once. */
+export function recipientNames(...lists: (string | undefined | null)[]): string[] {
   const seen = new Set<string>()
   const names: string[] = []
   for (const list of lists) {
@@ -333,7 +338,7 @@ export function formatRecipientSummary(...lists: (string | undefined | null)[]):
       names.push(item.name === item.email ? item.email.split('@')[0] : item.name)
     }
   }
-  return names.join(', ')
+  return names
 }
 
 export interface AddressItem {
