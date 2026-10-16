@@ -118,7 +118,7 @@ impl Session {
             Session::Local(session) => session.rename_folders(renames),
             Session::Graph(_) => crate::graph::mail::unsupported(),
             Session::Imap(session) => imap::rename_folder(session, from, to).await,
-            Session::Ews(session) => session.move_folder(from, to).await,
+            Session::Ews(session) => session.move_folder(from, to, renames).await,
         }
     }
 

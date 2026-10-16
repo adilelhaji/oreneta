@@ -140,7 +140,22 @@ pub fn sync(db: &Mutex<Connection>, client: &EwsClient, list_id: &str, now: i64)
     let _one = lock_of_list.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     binding(&lock(db), list_id)?.context("this list is not kept in an Exchange account")?;
     let result = push(db, client, list_id, now).and_then(|mut report| {
-        let tasks = client.read_tasks()?;
+        let mut tasks = client.read_tasks()?;
+        // Pages by offset can skip a task when another goes meanwhile; a
+        // task known here that the listing left out is asked for by its id
+        // before it counts as gone.
+        let missing: Vec<String> = {
+            let listed: HashSet<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
+            let conn = lock(db);
+            let mut stmt = conn.prepare(
+                "SELECT remote_href FROM tasks WHERE list_id = ?1 AND remote_href <> '' AND remote_href NOT LIKE 'new:%'",
+            )?;
+            let known = stmt.query_map(params![list_id], |row| row.get::<_, String>(0))?;
+            known.collect::<rusqlite::Result<Vec<_>>>()?.into_iter().filter(|href| !listed.contains(href.as_str())).collect()
+        };
+        if !missing.is_empty() {
+            tasks.extend(client.tasks_by_id(&missing)?);
+        }
         reconcile(&lock(db), list_id, &tasks, now, &mut report)?;
         Ok(report)
     });

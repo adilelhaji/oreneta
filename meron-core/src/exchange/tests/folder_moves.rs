@@ -241,7 +241,7 @@ async fn move_like_the_engine(
 ) -> anyhow::Result<crate::folder_move::FolderMovePlan> {
     let plan = crate::folder_move::plan_folder_move(&db.lock().unwrap(), "acct", source, parent, None)
         .map_err(anyhow::Error::msg)?;
-    session.move_folder(&plan.source, &plan.target).await?;
+    session.move_folder(&plan.source, &plan.target, &plan.renames).await?;
     crate::folder_move::reconcile_folder_move(&db.lock().unwrap(), "acct", &plan, parent)?;
     Ok(plan)
 }
@@ -348,6 +348,11 @@ async fn ews_folder_move_refusal_by_the_server_changes_nothing_here() {
 #[tokio::test]
 async fn ews_folder_move_with_a_lost_answer_is_not_repeated_and_the_next_listing_tells() {
     let db = synced_store().await;
+    {
+        let conn = db.lock().unwrap();
+        crate::store::set_folder_sync_state(&conn, "acct", "Work/2026", "kept").unwrap();
+        conn.execute("INSERT INTO snoozed_threads(account, thread_key, folder, until) VALUES('acct', 't', 'Work', 1)", []).unwrap();
+    }
     let mut after = mailbox();
     after[4] = folder("AAMkWORK=", "AAMkPROJ=", "Work", Some("IPF.Note"));
     after[5] = folder("AAMk2026=", "AAMkWORK=", "2026", Some("IPF.Note"));
@@ -365,6 +370,56 @@ async fn ews_folder_move_with_a_lost_answer_is_not_repeated_and_the_next_listing
     assert!(names(&folders).contains(&"Projects/Work/2026".to_string()), "{:?}", names(&folders));
     let requests = server.join().expect("server");
     assert_eq!(requests.iter().filter(|request| request.contains("<MoveFolder")).count(), 1, "never sent twice");
+    // The folder was found by its id at its new path: what was kept under
+    // the old names followed it, as after a move answered.
+    let conn = db.lock().unwrap();
+    assert!(!crate::store::folder_exists(&conn, "acct", "Work").unwrap(), "no stale row beside the new one");
+    assert_eq!(crate::store::get_folder_sync_state(&conn, "acct", "Projects/Work/2026").unwrap().as_deref(), Some("kept"));
+    let snoozed: String = conn.query_row("SELECT folder FROM snoozed_threads", [], |row| row.get(0)).unwrap();
+    assert_eq!(snoozed, "Projects/Work");
+    let mut renames = crate::folder_move::take_renames(&conn, "acct").unwrap();
+    renames.sort();
+    assert_eq!(
+        renames,
+        [
+            ("Work".to_string(), "Projects/Work".to_string()),
+            ("Work/2026".to_string(), "Projects/Work/2026".to_string())
+        ],
+        "the interface hears of them"
+    );
+    let pending: i64 = conn.query_row("SELECT COUNT(*) FROM ews_uncertain_moves", [], |row| row.get(0)).unwrap();
+    assert_eq!(pending, 0, "settled");
+}
+
+#[tokio::test]
+async fn ews_folder_move_with_a_lost_answer_that_did_nothing_changes_nothing() {
+    let db = synced_store().await;
+    let (url, server) = serve(vec![
+        Step::Reply(hierarchy(&mailbox())),
+        Step::Reply(distinguished_response()),
+        Step::Drop,
+        // The folder is still where it was: the move never happened.
+        Step::Reply(hierarchy(&mailbox())),
+        Step::Reply(distinguished_response()),
+    ]);
+    let mut session = session(url, db.clone(), "acct");
+    move_like_the_engine(&mut session, &db, "Work", Some("Projects")).await.expect_err("no answer");
+    session.list_folders().await.expect("next listing");
+    server.join().expect("server");
+    let conn = db.lock().unwrap();
+    assert!(crate::store::folder_exists(&conn, "acct", "Work").unwrap());
+    assert!(crate::folder_move::take_renames(&conn, "acct").unwrap().is_empty());
+    let pending: i64 = conn.query_row("SELECT COUNT(*) FROM ews_uncertain_moves", [], |row| row.get(0)).unwrap();
+    assert_eq!(pending, 0, "settled");
+}
+
+#[test]
+fn folder_names_with_slashes_and_backslashes_never_come_out_alike() {
+    assert_eq!(path_segment("A/B"), "A\u{2215}B", "a slash reads the same");
+    let names = ["A/B", "A\u{2215}B", "A\\\u{2215}B", "/\u{2215}", "\u{2215}/", "//", "\u{2215}\u{2215}", "\\/", "/\\", "\\"];
+    let segments: std::collections::HashSet<String> = names.iter().map(|name| path_segment(name)).collect();
+    assert_eq!(segments.len(), names.len(), "{segments:?}");
+    assert!(segments.iter().all(|segment| !segment.contains('/')));
 }
 
 #[tokio::test]

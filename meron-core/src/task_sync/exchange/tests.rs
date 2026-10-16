@@ -423,6 +423,32 @@ fn ews_task_change_exchange_cannot_take_is_set_aside_and_the_rest_goes_on() {
 }
 
 #[test]
+fn ews_task_left_out_of_a_listing_is_asked_for_before_it_counts_as_gone() {
+    let (db, list) = db();
+    let (url, server) = serve(read(&[("T1", plain("T1", "ck1", "Un")), ("T2", plain("T2", "ck2", "Dos"))]));
+    sync(&db, &client(url), &list, 10).expect("first read");
+    server.join().unwrap();
+
+    // A page shifted and T2 was skipped: asked for by its id, it is there.
+    let mut steps = read(&[("T1", plain("T1", "ck1", "Un"))]);
+    steps.push(Step::Reply(got(&[plain("T2", "ck2", "Dos")])));
+    let (url, server) = serve(steps);
+    let report = sync(&db, &client(url), &list, 20).expect("second read");
+    assert_eq!(report.removed, 0);
+    assert!(server.join().unwrap()[2].contains(r#"<t:ItemId Id="T2"/>"#));
+    assert_eq!(rows(&db).len(), 2, "T2 is kept");
+
+    // Now it is gone for real: the server says so, and it goes here too.
+    let mut steps = read(&[("T1", plain("T1", "ck1", "Un"))]);
+    steps.push(Step::Reply(error_response("GetItem", "ErrorItemNotFound", "The specified object was not found in the store.")));
+    let (url, server) = serve(steps);
+    let report = sync(&db, &client(url), &list, 30).expect("third read");
+    server.join().unwrap();
+    assert_eq!(report.removed, 1);
+    assert_eq!(rows(&db).iter().map(|row| row.1.as_str()).collect::<Vec<_>>(), ["T1"]);
+}
+
+#[test]
 fn ews_task_is_never_written_without_the_version_it_was_read_at() {
     // No server: nothing may reach it.
     let nowhere = client("http://127.0.0.1:1".into());

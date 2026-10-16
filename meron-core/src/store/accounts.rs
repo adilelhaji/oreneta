@@ -850,6 +850,8 @@ pub const REMOVED_WITH_ACCOUNT: &[(&str, &str)] = &[
     // whose folders are named by path already (ADR-0058).
     ("folder_renames", "account"),
     ("ews_folder_paths", "account"),
+    // Exchange folder moves whose answer was lost, until a listing settles them.
+    ("ews_uncertain_moves", "account"),
 ];
 
 /// What the person wrote, kept when the account is removed (ADR-0011): an

@@ -411,6 +411,11 @@ impl EwsClient {
         self.task_items(&ids)
     }
 
+    /// The tasks among `ids` the server still holds, read by id.
+    pub fn tasks_by_id(&self, ids: &[String]) -> Result<Vec<RemoteTask>> {
+        self.task_items(ids)
+    }
+
     /// One task as the server holds it now; `None` when it is gone.
     pub fn read_task(&self, id: &str) -> Result<Option<RemoteTask>> {
         Ok(self.task_items(&[id.to_string()])?.into_iter().next())

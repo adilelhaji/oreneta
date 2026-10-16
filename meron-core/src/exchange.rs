@@ -1049,6 +1049,9 @@ impl EwsSession {
                 role: String::new(),
             });
         }
+        let paths_by_id: std::collections::HashMap<String, String> =
+            self.folders.iter().map(|(path, (id, _))| (id.clone(), path.clone())).collect();
+        self.with_store(|conn, account| settle_uncertain_moves(conn, account, &paths_by_id))?;
         self.with_store(|conn, account| adopt_flat_folder_names(conn, account, &legacy))?;
         ews_debug(&format!(
             "listed {} folders in {}ms",
@@ -1337,7 +1340,7 @@ impl EwsSession {
     /// acting on a picture of the mailbox that is no longer true could put a
     /// folder somewhere nobody chose. Never repeated: if the answer is lost,
     /// the next listing says where the folder is.
-    pub async fn move_folder(&mut self, from: &str, to: &str) -> anyhow::Result<()> {
+    pub async fn move_folder(&mut self, from: &str, to: &str, renames: &[(String, String)]) -> anyhow::Result<()> {
         let (parent, leaf) = match to.rsplit_once(FOLDER_DELIMITER) {
             Some((parent, leaf)) => (Some(parent.to_string()), leaf),
             None => (None, to),
@@ -1359,11 +1362,24 @@ impl EwsSession {
             })?),
             None => None,
         };
+        // Kept before the move is sent: if the answer is lost, the next
+        // listing finds the folder by its id and settles what it did.
+        let folder_id = source.0.clone();
+        self.with_store(|conn, account| record_uncertain_move(conn, account, &folder_id, from, to, renames))?;
         let client = self.client.clone();
         let moved = tokio::task::spawn_blocking(move || client.move_folder(&source, destination.as_ref())).await?;
         // Whatever the answer, the names this session holds are stale now.
         self.listing = None;
         self.folders.clear();
+        match &moved {
+            // Done (the caller reconciles), or refused by the server: either
+            // way the outcome is known.
+            Ok(()) => self.with_store(|conn, account| forget_uncertain_move(conn, account, &folder_id))?,
+            Err(error) if refused_by_server(error) => {
+                self.with_store(|conn, account| forget_uncertain_move(conn, account, &folder_id))?
+            }
+            Err(_) => {}
+        }
         moved
     }
 
@@ -1792,6 +1808,67 @@ fn holds_mail(folder_class: Option<&String>) -> bool {
     }
 }
 
+/// Whether a failed write was the server's verdict (nothing was done)
+/// rather than a lost connection or answer (it may have been done).
+fn refused_by_server(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| cause.downcast_ref::<::ews::response::ResponseError>().is_some())
+}
+
+/// Keeps a folder move about to be sent, by the folder's id, with every
+/// rename it makes (ADR-0058).
+fn record_uncertain_move(
+    conn: &rusqlite::Connection,
+    account: &str,
+    folder_id: &str,
+    from: &str,
+    to: &str,
+    renames: &[(String, String)],
+) -> anyhow::Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO ews_uncertain_moves(account, folder_id, from_name, to_name, renames)
+         VALUES(?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![account, folder_id, from, to, serde_json::to_string(renames)?],
+    )?;
+    Ok(())
+}
+
+fn forget_uncertain_move(conn: &rusqlite::Connection, account: &str, folder_id: &str) -> anyhow::Result<()> {
+    conn.execute(
+        "DELETE FROM ews_uncertain_moves WHERE account = ?1 AND folder_id = ?2",
+        rusqlite::params![account, folder_id],
+    )?;
+    Ok(())
+}
+
+/// Settles folder moves whose answer was lost, now that a listing says
+/// where each folder is (`paths_by_id`). One found at its new path was
+/// moved: everything kept under the old names follows it, as after a move
+/// answered (ADR-0050), and the interface hears of the renames. One still at
+/// its old path was not moved; one elsewhere was moved by someone else, and
+/// the listing names it as any other folder. Either way the record goes.
+fn settle_uncertain_moves(
+    conn: &rusqlite::Connection,
+    account: &str,
+    paths_by_id: &std::collections::HashMap<String, String>,
+) -> anyhow::Result<()> {
+    let pending: Vec<(String, String, String)> = {
+        let mut stmt =
+            conn.prepare("SELECT folder_id, to_name, renames FROM ews_uncertain_moves WHERE account = ?1")?;
+        let rows = stmt.query_map(rusqlite::params![account], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        rows.collect::<rusqlite::Result<_>>()?
+    };
+    for (folder_id, to, renames) in pending {
+        let tx = conn.unchecked_transaction()?;
+        if paths_by_id.get(&folder_id) == Some(&to) {
+            let renames: Vec<(String, String)> = serde_json::from_str(&renames)?;
+            crate::folder_move::adopt_renames(&tx, account, &renames, FOLDER_DELIMITER)?;
+        }
+        forget_uncertain_move(&tx, account, &folder_id)?;
+        tx.commit()?;
+    }
+    Ok(())
+}
+
 /// Whether a sync failed because the server no longer accepts the state it
 /// was resumed from.
 fn invalid_sync_state(error: &anyhow::Error) -> bool {
@@ -1807,10 +1884,24 @@ fn invalid_sync_state(error: &anyhow::Error) -> bool {
 /// The separator of a folder's path, as IMAP accounts have one.
 const FOLDER_DELIMITER: &str = "/";
 
-/// What stands for a `/` inside one Exchange folder name. Exchange allows
-/// the character in a name; the path uses it between names, so inside a name
-/// it is written as the division slash, which reads the same.
-const SLASH_IN_NAME: &str = "\u{2215}";
+/// One Exchange folder name as a segment of a path. Exchange allows `/` in
+/// a name; the path uses it between names, so inside a name it is written
+/// as the division slash `∕`, which reads the same. So that two names can
+/// never come out alike (`A/B` and `A∕B`), a `∕` already in a name is
+/// written `\∕` and a backslash `\\`: every segment reads back as exactly
+/// one name.
+fn path_segment(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        match c {
+            '/' => out.push('\u{2215}'),
+            '\u{2215}' => out.push_str("\\\u{2215}"),
+            '\\' => out.push_str("\\\\"),
+            c => out.push(c),
+        }
+    }
+    out
+}
 
 /// One generic folder of a hierarchy round, as the paths need it.
 #[derive(Debug, Clone)]
@@ -1846,7 +1937,7 @@ fn folder_paths(folders: &[ListedFolder]) -> std::collections::HashMap<String, (
             if !seen.insert(step.id.id.as_str()) {
                 break;
             }
-            let name = step.name.replace(FOLDER_DELIMITER, SLASH_IN_NAME);
+            let name = path_segment(&step.name);
             wire.push(if step.role.as_deref() == Some("inbox") { "INBOX".to_string() } else { name.clone() });
             shown.push(name);
             current = step.parent.as_deref().and_then(|parent| by_id.get(parent).copied());

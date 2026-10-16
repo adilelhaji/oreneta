@@ -161,6 +161,9 @@ pub const NOT_MAIL_FOLDERS: &[(&str, &str)] = &[
     // Paths on this computer and on a cloud drive.
     ("backup_schedule", "folder"),
     ("cloud_accounts", "folder"),
+    // An Exchange move whose answer was lost, kept by the folder's id; its
+    // names are settled by the listing that finds it (ADR-0058).
+    ("ews_uncertain_moves", "folder_id"),
     // Microsoft Graph folders are kept by their opaque ids, never by name.
     ("graph_delta", "folder_id"),
     ("graph_folders", "search_folder"),
@@ -249,6 +252,14 @@ CREATE TABLE IF NOT EXISTS folder_renames (
 );
 CREATE TABLE IF NOT EXISTS ews_folder_paths (
   account TEXT PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS ews_uncertain_moves (
+  account   TEXT NOT NULL,
+  folder_id TEXT NOT NULL,
+  from_name TEXT NOT NULL,
+  to_name   TEXT NOT NULL,
+  renames   TEXT NOT NULL,
+  PRIMARY KEY (account, folder_id)
 );";
 
 /// Keeps renames for the interface to carry its favorites, colors, board

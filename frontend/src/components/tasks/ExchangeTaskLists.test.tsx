@@ -80,10 +80,26 @@ beforeEach(() => {
   ui$.tasksOpen.set(true)
   accounts$.set([exchange])
 })
+// Whatever a test started settles before the next file runs: a reload that
+// lands later would put this file's tasks into another file's view.
+const settled = () => new Promise((resolve) => setTimeout(resolve, 20))
+
 afterEach(() => {
   cleanup()
   delete (window as any).go
   accounts$.set([])
+  tasks$.set({
+    items: [],
+    loaded: false,
+    loading: false,
+    includeCompleted: false,
+    lists: [],
+    selectedList: 'all',
+    search: '',
+    syncing: false,
+  })
+  ui$.taskEditor.set(null)
+  ui$.tasksOpen.set(false)
 })
 
 describe('Exchange task lists (ADR-0058)', () => {
@@ -109,6 +125,7 @@ describe('Exchange task lists (ADR-0058)', () => {
     await waitFor(() => expect(view.getByText(/Kept on me@corp\.example/)).toBeTruthy())
     // Once it is a list, the offer goes.
     expect(view.queryByText(/Exchange tasks of/)).toBeNull()
+    await settled()
   })
 
   it('settles a conflict on an Exchange task like a CalDAV one', async () => {
@@ -123,5 +140,8 @@ describe('Exchange task lists (ADR-0058)', () => {
     fireEvent.click(view.getByRole('button', { name: 'Take the server’s' }))
     await waitFor(() => expect(calls.some((c) => c.command === 'tasks.resolveConflict')).toBe(true))
     expect(calls.find((c) => c.command === 'tasks.resolveConflict')!.payload).toEqual({ id: 7, keep: 'server' })
+    // The reload after settling has landed before the next test.
+    await waitFor(() => expect(calls.filter((c) => c.command === 'tasks.list').length).toBeGreaterThanOrEqual(2))
+    await settled()
   })
 })

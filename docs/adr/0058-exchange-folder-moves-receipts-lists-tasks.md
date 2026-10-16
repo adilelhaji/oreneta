@@ -37,7 +37,11 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   sí misma (error del servidor) se corta donde se repite.
 - **Una `/` dentro de un nombre de Exchange** se escribe como `∕` (barra de
   división, U+2215), que se lee igual: Exchange la admite en un nombre y la
-  ruta la usa entre nombres.
+  ruta la usa entre nombres. Para que dos nombres nunca den lo mismo (`A/B`
+  y `A∕B`), una `∕` que ya está en el nombre se escribe `\∕` y una barra
+  invertida `\\`: cada tramo se lee de vuelta como un solo nombre. Como
+  los nombres por ruta llegan con este mismo cambio, no hay nombres
+  guardados con otra forma que convertir.
 - **Todo lo guardado con el nombre antiguo sigue a su carpeta.** Al listar,
   lo que estaba guardado con el nombre de antes (sin ruta) de una carpeta
   que era la única con ese nombre, y cuya ruta aún no tiene nada, pasa a la
@@ -76,9 +80,14 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   nombre, no se mueve nada y se pide refrescar. Es la regla de ADR-0012
   aplicada a carpetas: nunca actuar sobre una imagen del buzón que ya no
   es cierta.
-- **Nunca se repite.** Si la respuesta se pierde, el resultado es incierto;
-  la sesión olvida su lista y la siguiente sincronización de carpetas dice
-  dónde está.
+- **Nunca se repite.** Antes de enviarlo se guarda el movimiento con el id
+  de la carpeta y todos sus cambios de nombre (`ews_uncertain_moves`). Si
+  el servidor contesta, el registro se borra (hecho, o rechazado: nada se
+  movió). Si la respuesta se pierde, la sesión olvida su lista y la
+  siguiente lectura de carpetas busca la carpeta por su id: si está en la
+  ruta nueva, todo lo guardado con los nombres viejos la sigue, como tras
+  un movimiento contestado, y la interfaz se entera; si sigue donde
+  estaba, no se movió; en ambos casos el registro se borra.
 - La interfaz deja mover carpetas en cuentas de Exchange; Graph sigue
   desactivado hasta #210.
 
@@ -191,7 +200,11 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   en una lista de Exchange.
 - **Lectura por páginas** en orden de creación; el desplazamiento cuenta
   todo lo que el servidor lista (la carpeta puede tener otras cosas) y una
-  tarea listada dos veces es una. Cada lista se sincroniza de una en una;
+  tarea listada dos veces es una. Como las páginas por desplazamiento
+  pueden saltarse una tarea si otra desaparece entre dos páginas, una
+  tarea conocida aquí que la lectura no trajo se pide por su id antes de
+  darla por borrada; solo se borra aquí si el servidor dice que no
+  existe. Cada lista se sincroniza de una en una;
   listas distintas no se esperan.
 - **Sin duplicados al reintentar:** antes de crear una tarea se guarda aquí
   un id nuestro (`remote_href = new:<uuid>`) y se escribe en la tarea como
@@ -229,7 +242,7 @@ tarea, y no se puede cambiar sin publicar una versión nueva del crate.
   elemento se informa con su código.
 - **Esquema 65** (el 64 es de #210, que entra antes):
   `contact_group_members.name` y `.addr`; `task_lists.ews_account`;
-  `folder_renames` y `ews_folder_paths`.
+  `folder_renames`, `ews_folder_paths` y `ews_uncertain_moves`.
 
 ## Alternativas descartadas
 

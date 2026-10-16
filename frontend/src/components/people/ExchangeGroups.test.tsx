@@ -88,10 +88,29 @@ beforeEach(() => {
     groupEditing: null,
   })
 })
+// Whatever a test started settles before the next file runs.
+const settled = () => new Promise((resolve) => setTimeout(resolve, 20))
+
 afterEach(() => {
   cleanup()
   delete (window as any).go
   accounts$.set([])
+  contactSources$.set({ sources: [], loaded: false })
+  people$.set({
+    people: [],
+    loaded: false,
+    loading: false,
+    query: '',
+    selectedId: '',
+    editing: null,
+    importing: null,
+    duplicates: [],
+    duplicatesOpen: false,
+    groups: [],
+    groupsLoaded: false,
+    groupFilter: '',
+    groupEditing: null,
+  })
 })
 
 describe('Exchange distribution lists (ADR-0058)', () => {
@@ -114,6 +133,7 @@ describe('Exchange distribution lists (ADR-0058)', () => {
       name: 'Board',
       members: [],
     })
+    await settled()
   })
 
   it('keeps a member who is no contact when adding somebody, from the version read', async () => {
@@ -131,6 +151,8 @@ describe('Exchange distribution lists (ADR-0058)', () => {
       name: 'Team',
       members: [team.members[0].id, team.members[1].id, ana.id],
     })
+    await waitFor(() => expect(calls.some((c) => c.command === 'people.groups')).toBe(true))
+    await settled()
   })
 
   it('offers to read the contacts of an Exchange account that has no book yet', async () => {
@@ -149,5 +171,7 @@ describe('Exchange distribution lists (ADR-0058)', () => {
       account: 'acc',
       name: 'me@corp.example',
     })
+    await waitFor(() => expect(calls.some((c) => c.command === 'carddav.list')).toBe(true))
+    await settled()
   })
 })
