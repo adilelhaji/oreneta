@@ -670,9 +670,9 @@
       "section": "Mail/Blacklist and whitelist",
       "outcome": "Repeat-safe correction and explainable block/allow rules",
       "status": "implemented-unverified",
-      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
+      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), undoing a junk or not-junk change reverting exactly the judgment it recorded and not a later one (known limits in ADR-0005), for one conversation or a selection (#254), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
       "code": "meron-core/src/spam",
-      "acceptance": "Repeated identical judgments do not inflate evidence; replacement retracts the prior sender/subject contribution; missing threads and account isolation are safe; normal MOVE transfers stable-identity judgments before source deletion; no automatic filing",
+      "acceptance": "Repeated identical judgments do not inflate evidence; replacement retracts the prior sender/subject contribution; missing threads and account isolation are safe; normal MOVE transfers stable-identity judgments before source deletion; undoing a junk or not-junk change restores the sender/subject counts to their prior state and keeps a later judgment of the same message or of another message from the same sender; no automatic filing",
       "platform": "Windows desktop",
       "provider": "Not certified by this row; owning domain must specify provider if applicable",
       "referenceSource": "https://www.emclient.com/webdocumentation/en/10.0/emclient/Content/Settings/Settings.htm",
@@ -695,6 +695,18 @@
           {
             "sha": "54628c360106a70b9bf88cea96ff341c278c8c57",
             "result": "frontend/src/components/dialog/SpamAndRuns.test.tsx"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "meron-core/src/store/tests.rs"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "spam_test.go"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "frontend/src/states/junkUndo.test.ts"
           }
         ],
         "native": [],

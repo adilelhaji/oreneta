@@ -58,6 +58,12 @@ l'entrada de producció en català esperen que acabin les transicions. Una prova
 recorre la pàgina amb Tab i Maj+Tab i comprova que el focus no s'atura mai a la regió
 oculta. Cap fila no canvia d'estat (SET-27, #37):
 l'evidència nativa de Windows continua pendent.
+El 2026-10-17 (#254, ADR-0005) desfer «Marca com a brossa» o «No és brossa», d'una
+conversa o d'una selecció, també desfà el que aquell judici havia ensenyat al filtre
+après: els comptadors del remitent i de les paraules de l'assumpte tornen a l'estat
+d'abans, i un judici posterior del mateix missatge o d'un altre missatge del mateix
+remitent es manté. SET-12 continua `implemented-unverified`: l'evidència nativa de
+Windows continua pendent.
 El 2026-10-17 (#256, ADR-0064) SET-21 va incorporar la llista de qui pot veure l'estat propi al xat
 (la llista del servidor, desconeguda fins que respon, amb «Deixa de compartir» després de
 confirmar-ho), el silenci d'una conversa directa, privada o de grup (sense avisos, ni tan sols
