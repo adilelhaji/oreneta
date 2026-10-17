@@ -236,7 +236,8 @@ fn marked(conn: &rusqlite::Connection, account: &str, path: &str) -> bool {
     .is_ok_and(|v| v == 1)
 }
 pub struct Keychain;
-fn vault_key(account: &str) -> String {
+/// The keychain name of an account's Graph record.
+pub(crate) fn vault_key(account: &str) -> String {
     let hash: String = Sha256::digest(account.as_bytes())
         .iter()
         .map(|b| format!("{b:02x}"))

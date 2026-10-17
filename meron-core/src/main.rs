@@ -2581,6 +2581,23 @@ async fn sync_contact_source(engine: &Arc<Engine>, id: &str) -> anyhow::Result<(
     pim::people::sync_source(engine, id).await
 }
 
+/// Moves the keychain entries this profile names from the inherited `meron`
+/// service to `oreneta` in the background, so entries no request reads still
+/// move (ADR-0063). Each entry read before the sweep reaches it is moved on
+/// that read instead; failures are logged and tried again on the next start.
+fn spawn_keychain_migration(engine: &Arc<Engine>) {
+    if secrets::keyring_off() {
+        return;
+    }
+    let names = meron_core::profile_purge::keychain_names(&engine.db.lock().unwrap());
+    match names {
+        Ok(names) => {
+            tokio::task::spawn_blocking(move || secrets::migrate_legacy(&names));
+        }
+        Err(err) => eprintln!("meron-core: could not list keychain entries to move: {err:#}"),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Tag panics consistently on stderr, which the desktop bridge copies into
@@ -2622,6 +2639,8 @@ async fn main() {
             return;
         }
     };
+
+    spawn_keychain_migration(&engine);
 
     // Resume IDLE for accounts whose credentials persisted across restarts.
     let known: Vec<String> = engine.accounts.lock().await.keys().cloned().collect();

@@ -51,6 +51,7 @@ pub mod rss;
 pub mod rules;
 pub mod search;
 pub mod secrets;
+mod secrets_migration;
 #[cfg(target_os = "linux")]
 mod secrets_portal;
 pub mod smtp;

@@ -29,8 +29,6 @@ use anyhow::{Context, Result, anyhow};
 
 use crate::log::Level;
 
-const SERVICE: &str = "meron";
-
 /// How long any single keyring operation may take before the backend counts as
 /// unavailable. Generous enough for a real portal round trip that shows an
 /// unlock prompt, short enough that a wedged portal doesn't look like a hang.
@@ -85,17 +83,22 @@ enum Backend {
     Local(oo7::file::UnlockedKeyring),
 }
 
+/// Every request names its keychain service: `oreneta`, or the inherited
+/// `meron` while its entries are moved (ADR-0063).
 enum Request {
     Store {
+        service: &'static str,
         account: String,
         value: String,
         reply: mpsc::Sender<Result<(), String>>,
     },
     Load {
+        service: &'static str,
         account: String,
         reply: mpsc::Sender<Result<Option<String>, String>>,
     },
     Delete {
+        service: &'static str,
         account: String,
         reply: mpsc::Sender<Result<(), String>>,
     },
@@ -158,13 +161,17 @@ fn worker(receiver: mpsc::Receiver<Request>) {
         }
         match request {
             Request::Store {
+                service,
                 account,
                 value,
                 reply,
             } => {
                 let active = backend.as_ref().expect("keyring backend initialized");
-                let mut result =
-                    block_with_timeout(&runtime, "store", store_async(active, &account, &value));
+                let mut result = block_with_timeout(
+                    &runtime,
+                    "store",
+                    store_async(active, service, &account, &value),
+                );
                 if result.is_err() && local_forced() && matches!(active, Backend::Portal(_)) {
                     match runtime.block_on(open_backend()) {
                         Ok(opened) => {
@@ -174,7 +181,7 @@ fn worker(receiver: mpsc::Receiver<Request>) {
                             result = block_with_timeout(
                                 &runtime,
                                 "store",
-                                store_async(active, &account, &value),
+                                store_async(active, service, &account, &value),
                             );
                         }
                         Err(error) => result = Err(format!("{error:#}")),
@@ -182,27 +189,39 @@ fn worker(receiver: mpsc::Receiver<Request>) {
                 }
                 let _ = reply.send(result);
             }
-            Request::Load { account, reply } => {
+            Request::Load {
+                service,
+                account,
+                reply,
+            } => {
                 let active = backend.as_ref().expect("keyring backend initialized");
-                let mut result = block_with_timeout(&runtime, "load", load_async(active, &account));
+                let mut result =
+                    block_with_timeout(&runtime, "load", load_async(active, service, &account));
                 if result.is_err() && local_forced() && matches!(active, Backend::Portal(_)) {
                     match runtime.block_on(open_backend()) {
                         Ok(opened) => {
                             backend = Some(opened);
                             let active =
                                 backend.as_ref().expect("local keyring backend initialized");
-                            result =
-                                block_with_timeout(&runtime, "load", load_async(active, &account));
+                            result = block_with_timeout(
+                                &runtime,
+                                "load",
+                                load_async(active, service, &account),
+                            );
                         }
                         Err(error) => result = Err(format!("{error:#}")),
                     }
                 }
                 let _ = reply.send(result);
             }
-            Request::Delete { account, reply } => {
+            Request::Delete {
+                service,
+                account,
+                reply,
+            } => {
                 let active = backend.as_ref().expect("keyring backend initialized");
                 let mut result =
-                    block_with_timeout(&runtime, "delete", delete_async(active, &account));
+                    block_with_timeout(&runtime, "delete", delete_async(active, service, &account));
                 if result.is_err() && local_forced() && matches!(active, Backend::Portal(_)) {
                     match runtime.block_on(open_backend()) {
                         Ok(opened) => {
@@ -212,7 +231,7 @@ fn worker(receiver: mpsc::Receiver<Request>) {
                             result = block_with_timeout(
                                 &runtime,
                                 "delete",
-                                delete_async(active, &account),
+                                delete_async(active, service, &account),
                             );
                         }
                         Err(error) => result = Err(format!("{error:#}")),
@@ -356,35 +375,37 @@ fn is_hex_key(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-fn attributes(account: &str) -> HashMap<&str, &str> {
-    HashMap::from([("service", SERVICE), ("username", account)])
+fn attributes<'a>(service: &'a str, account: &'a str) -> HashMap<&'a str, &'a str> {
+    HashMap::from([("service", service), ("username", account)])
 }
 
-async fn store_async(backend: &Backend, account: &str, value: &str) -> Result<()> {
-    let label = format!("{account}@{SERVICE}");
+async fn store_async(backend: &Backend, service: &str, account: &str, value: &str) -> Result<()> {
+    let label = format!("{account}@{service}");
+    let attributes = attributes(service, account);
     match backend {
         Backend::Portal(keyring) => keyring
-            .create_item(&label, &attributes(account), oo7::Secret::text(value), true)
+            .create_item(&label, &attributes, oo7::Secret::text(value), true)
             .await
             .map_err(Into::into),
         Backend::Local(keyring) => keyring
-            .create_item(&label, &attributes(account), oo7::Secret::text(value), true)
+            .create_item(&label, &attributes, oo7::Secret::text(value), true)
             .await
             .map(|_| ())
             .map_err(Into::into),
     }
 }
 
-async fn load_async(backend: &Backend, account: &str) -> Result<Option<String>> {
+async fn load_async(backend: &Backend, service: &str, account: &str) -> Result<Option<String>> {
+    let attributes = attributes(service, account);
     let bytes = match backend {
         Backend::Portal(keyring) => {
-            let Some(item) = keyring.search_items(&attributes(account)).await?.pop() else {
+            let Some(item) = keyring.search_items(&attributes).await?.pop() else {
                 return Ok(None);
             };
             item.secret().await?.as_bytes().to_vec()
         }
         Backend::Local(keyring) => {
-            let Some(item) = keyring.search_items(&attributes(account)).await?.pop() else {
+            let Some(item) = keyring.search_items(&attributes).await?.pop() else {
                 return Ok(None);
             };
             item.as_unlocked().secret().as_bytes().to_vec()
@@ -395,16 +416,11 @@ async fn load_async(backend: &Backend, account: &str) -> Result<Option<String>> 
         .context("keyring entry is not UTF-8")
 }
 
-async fn delete_async(backend: &Backend, account: &str) -> Result<()> {
+async fn delete_async(backend: &Backend, service: &str, account: &str) -> Result<()> {
+    let attributes = attributes(service, account);
     match backend {
-        Backend::Portal(keyring) => keyring
-            .delete(&attributes(account))
-            .await
-            .map_err(Into::into),
-        Backend::Local(keyring) => keyring
-            .delete(&attributes(account))
-            .await
-            .map_err(Into::into),
+        Backend::Portal(keyring) => keyring.delete(&attributes).await.map_err(Into::into),
+        Backend::Local(keyring) => keyring.delete(&attributes).await.map_err(Into::into),
     }
 }
 
@@ -426,11 +442,12 @@ fn response<T>(receiver: mpsc::Receiver<Result<T, String>>) -> Result<T> {
         .map_err(anyhow::Error::msg)
 }
 
-pub fn store(account: &str, value: &str) -> Result<()> {
+pub fn store(service: &'static str, account: &str, value: &str) -> Result<()> {
     let (reply, receiver) = mpsc::channel();
     portal_keyring()
         .requests
         .send(Request::Store {
+            service,
             account: account.to_owned(),
             value: value.to_owned(),
             reply,
@@ -439,11 +456,12 @@ pub fn store(account: &str, value: &str) -> Result<()> {
     response(receiver)
 }
 
-pub fn load(account: &str) -> Result<Option<String>> {
+pub fn load(service: &'static str, account: &str) -> Result<Option<String>> {
     let (reply, receiver) = mpsc::channel();
     portal_keyring()
         .requests
         .send(Request::Load {
+            service,
             account: account.to_owned(),
             reply,
         })
@@ -451,11 +469,12 @@ pub fn load(account: &str) -> Result<Option<String>> {
     response(receiver)
 }
 
-pub fn delete(account: &str) -> Result<()> {
+pub fn delete(service: &'static str, account: &str) -> Result<()> {
     let (reply, receiver) = mpsc::channel();
     portal_keyring()
         .requests
         .send(Request::Delete {
+            service,
             account: account.to_owned(),
             reply,
         })
@@ -469,9 +488,12 @@ mod tests {
 
     #[test]
     fn keyring_attributes_are_app_scoped() {
-        let attributes = attributes("account-1");
-        assert_eq!(attributes.get("service"), Some(&"meron"));
+        let attributes = attributes(crate::secrets_migration::SERVICE, "account-1");
+        assert_eq!(attributes.get("service"), Some(&"oreneta"));
         assert_eq!(attributes.get("username"), Some(&"account-1"));
+        // The inherited entries stay addressable while they are moved (ADR-0063).
+        let legacy = super::attributes(crate::secrets_migration::LEGACY_SERVICE, "account-1");
+        assert_eq!(legacy.get("service"), Some(&"meron"));
     }
 
     #[test]
