@@ -10,22 +10,15 @@ import {
   type Over,
 } from '@dnd-kit/core'
 import { useTranslation } from '../../lib/i18n'
-import {
-  daysBetween,
-  draggedTimes,
-  instantAtOffset,
-  movedToDay,
-  shiftedByDays,
-  type Times,
-} from '../../lib/calendarDrag'
+import { instantAtOffset, landingTimes, type DropTarget } from '../../lib/calendarDrag'
 import {
   cancelMove,
+  markDrop,
   move$,
   previewMove,
   settleMove,
   startMove,
   type CalendarDrag,
-  type CalendarDrop,
 } from '../../states/calendarMove'
 import { HOUR_PX } from './WeekView'
 
@@ -42,6 +35,8 @@ const DRAG_DISTANCE_PX = 4
 /// event, so a distance travelled since the press would put it at the wrong
 /// hour. Escape gives the drag up (the pointer sensor's own key) and nothing
 /// is written; a drop settles the move through `states/calendarMove`.
+/// The grid scrolls when a held event nears its top or bottom, within a
+/// narrow band, so a drag across the visible hours does not set it off.
 export function CalendarDnd({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE_PX } }))
@@ -71,7 +66,10 @@ export function CalendarDnd({ children }: { children: ReactNode }) {
     const current = held.current
     if (!current) return
     const event = current.drag.event
-    previewMove(landing(current, over?.data.current as CalendarDrop | undefined) ?? { start: event.start, end: event.end })
+    const target = over?.data.current as DropTarget | undefined
+    const to = target?.area === 'grid' ? gridInstant(target.day, current.y) : null
+    const held = { edge: current.drag.edge, event, day: current.drag.day, from: current.from }
+    previewMove(landingTimes(held, target, to) ?? { start: event.start, end: event.end })
   }
 
   const subjectOf = (data: unknown) =>
@@ -89,6 +87,7 @@ export function CalendarDnd({ children }: { children: ReactNode }) {
       sensors={sensors}
       collisionDetection={pointerWithin}
       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+      autoScroll={{ threshold: { x: 0, y: 0.08 } }}
       accessibility={{
         announcements,
         screenReaderInstructions: {
@@ -111,11 +110,14 @@ export function CalendarDnd({ children }: { children: ReactNode }) {
         update(over)
         const wasHeld = held.current !== null
         held.current = null
+        // Also after a refused drag: the click it leaves behind does not open the event.
+        markDrop()
         if (wasHeld && move$.moving.peek()?.via === 'pointer') void settleMove()
       }}
       onDragCancel={() => {
         const wasHeld = held.current !== null
         held.current = null
+        markDrop()
         if (wasHeld) cancelMove()
       }}
     >
@@ -125,30 +127,14 @@ export function CalendarDnd({ children }: { children: ReactNode }) {
 }
 
 /// The instant under the pointer in the hour-grid column of a day, read from
-/// where the column is on screen now. Null when the column is not shown.
+/// where the column is on screen now. Null when the column is not shown, or
+/// when the pointer is outside the visible part of the grid: the column is
+/// taller than its scrolled pane, and a drop on the headings above it is not a
+/// drop at midnight.
 function gridInstant(day: number, clientY: number): number | null {
   const column = document.querySelector(`[data-day-column="${day}"]`)
   if (!column) return null
+  const pane = column.closest('[data-hour-grid]')?.getBoundingClientRect()
+  if (pane && (clientY < pane.top || clientY > pane.bottom)) return null
   return instantAtOffset(new Date(day), clientY - column.getBoundingClientRect().top, HOUR_PX)
-}
-
-/// Where a held event would land on what is under the pointer, or null for
-/// where it already is.
-///
-/// - On a day of the mini calendar: that day, keeping its time.
-/// - On a column of the hour grid, picked up from the grid: the pointer's
-///   instant, on the grid line nearest the edge held (`draggedTimes`).
-/// - Elsewhere — the all-day strip, or a strip event over the grid — by whole
-///   days from the day it was picked up on. Only a move goes there; an edge
-///   held over anything but the grid stays where it was.
-function landing(held: { drag: CalendarDrag; from: number | null; y: number }, target: CalendarDrop | undefined): Times | null {
-  if (!target) return null
-  const { edge, event, day, origin } = held.drag
-  if (target.area === 'mini') return edge === 'move' ? movedToDay(event, new Date(target.day)) : null
-  if (target.area === 'grid' && origin === 'grid' && held.from !== null) {
-    const to = gridInstant(target.day, held.y)
-    return to === null ? null : draggedTimes(edge, event, held.from, to)
-  }
-  if (edge !== 'move') return null
-  return shiftedByDays(event, daysBetween(new Date(day), new Date(target.day)))
 }

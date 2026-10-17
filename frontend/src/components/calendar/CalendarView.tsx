@@ -180,7 +180,9 @@ export function CalendarView() {
         </div>
       )}
 
-      <MoveStatus />
+      <div className="relative shrink-0">
+        <MoveStatus />
+      </div>
       <MoveQuestions />
 
       {/* One drag and drop for the views and the mini calendar beside them, so

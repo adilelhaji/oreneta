@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. اضغط Enter لحفظ التغيير أو Esc لإلغائه.",
   "calendar.moveStatusPointer": "{subject}: {when}. أفلته لنقله إلى هنا، واضغط Esc للإلغاء.",
   "calendar.moveReadOnly": "التقويم {calendar} للقراءة فقط: لا يمكن نقل أحداثه أو تغييرها هنا.",
+  "calendar.moveExchange": "لا يمكن سحب أحداث تقويم Exchange {calendar} بعد: قد يؤدي حفظ النقل إلى الكتابة فوق تغييرات أُجريت في مكان آخر وإعادة كتابة ملاحظاته ومدعويه. افتح الحدث لتغييره.",
   "calendar.moveUnknownCalendar": "لم يُحمَّل تقويم هذا الحدث بعد، لذا لا يمكن تغييره. حاول مرة أخرى بعد لحظة.",
   "calendar.moveFailed": "لم يُنقل الحدث: {reason}",
   "calendar.moveDetailsUnreadable": "لم يُنقل الحدث: تعذّرت قراءة المدعوين والملاحظات، وحفظه بدونها سيزيلها.",

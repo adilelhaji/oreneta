@@ -102,6 +102,12 @@ export function cancelMove() {
   move$.moving.set(null)
 }
 
+/// A pointer drag ended, written or not: the click it leaves behind on the
+/// event is not a click to open it.
+export function markDrop() {
+  lastDropAt = Date.now()
+}
+
 /// Whether a click on an event is the one a drop just left behind.
 export function clickFollowsDrop(): boolean {
   return Date.now() - lastDropAt < 400
@@ -122,6 +128,23 @@ export async function settleMove() {
   }
   const mine = generation
   move$.moving.set({ ...current, settled: true })
+  try {
+    await askAbout(current, mine)
+  } catch (err) {
+    // A fault while preparing the questions: said, and the move given up,
+    // rather than left settled with nothing able to move again.
+    if (mine !== generation) return
+    showToast(t('calendar.moveFailed', { reason: errorText(err), defaultValue: 'The event was not moved: {reason}' }), 'error')
+    cancelMove()
+  }
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : String(err)
+}
+
+/// Completes a settled move and asks what it raises, or writes it.
+async function askAbout(current: EventMove, mine: number) {
   const complete = await completeForWrite(current.event)
   if (mine !== generation) return
   if (!complete) {
@@ -174,6 +197,10 @@ async function write(notify: boolean) {
   if (!job) return
   pending = null
   const mine = generation
-  await rescheduleEvent(job.draft, job.scope, notify)
-  if (mine === generation) move$.moving.set(null)
+  try {
+    await rescheduleEvent(job.draft, job.scope, notify)
+  } finally {
+    // Done either way: rescheduleEvent says a refusal itself.
+    if (mine === generation) move$.moving.set(null)
+  }
 }

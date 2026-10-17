@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Nospiediet Enter, lai saglabātu izmaiņas, vai Esc, lai tās atceltu.",
   "calendar.moveStatusPointer": "{subject}: {when}. Atlaidiet, lai to pārvietotu tur; nospiediet Esc, lai atceltu.",
   "calendar.moveReadOnly": "Kalendārs {calendar} ir tikai lasāms: tā notikumus šeit nevar pārvietot vai mainīt.",
+  "calendar.moveExchange": "Exchange kalendāra {calendar} notikumus vēl nevar vilkt: pārvietošanas saglabāšana varētu pārrakstīt citur veiktas izmaiņas un no jauna ierakstīt piezīmes un viesus. Atveriet notikumu, lai to mainītu.",
   "calendar.moveUnknownCalendar": "Šī notikuma kalendārs vēl nav ielādēts, tāpēc to nevar mainīt. Mēģiniet vēlreiz pēc brīža.",
   "calendar.moveFailed": "Notikums netika pārvietots: {reason}",
   "calendar.moveDetailsUnreadable": "Notikums netika pārvietots: neizdevās nolasīt tā viesus un piezīmes, un saglabāšana bez tiem tos noņemtu.",

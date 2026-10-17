@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Pressione Enter para salvar a alteração ou Esc para cancelá-la.",
   "calendar.moveStatusPointer": "{subject}: {when}. Solte para movê-lo para cá; pressione Esc para cancelar.",
   "calendar.moveReadOnly": "O calendário {calendar} é somente leitura: seus eventos não podem ser movidos nem alterados aqui.",
+  "calendar.moveExchange": "Os eventos do calendário Exchange {calendar} ainda não podem ser arrastados: salvar a mudança poderia sobrescrever alterações feitas em outro lugar e reescrever as notas e os convidados. Abra o evento para alterá-lo.",
   "calendar.moveUnknownCalendar": "O calendário deste evento ainda não foi carregado, então ele não pode ser alterado. Tente novamente em instantes.",
   "calendar.moveFailed": "O evento não foi movido: {reason}",
   "calendar.moveDetailsUnreadable": "O evento não foi movido: não foi possível ler os convidados e as notas, e salvá-lo sem eles os removeria.",

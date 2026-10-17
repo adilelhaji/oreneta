@@ -6,6 +6,7 @@ import {
   draggedTimes,
   firstDayOf,
   instantAtOffset,
+  landingTimes,
   movedToDay,
   nudgedTimes,
   selectedRange,
@@ -82,6 +83,45 @@ describe('dragging on the hour grid', () => {
     const moved = draggedTimes('move', saturday, at(2026, 9, 24, 9, 30), at(2026, 9, 25, 9, 30))!
     expect(clock(moved.start)).toEqual([2026, 9, 25, 9, 0])
     expect(moved.end - moved.start).toBe(HOUR)
+  })
+
+  it('keeps the wall clock when the clocks change between the event and the pointer', () => {
+    // An event at 01:00 on Sunday 25 October, before the change, held at
+    // 10:00 that day and dropped at 10:00 on Monday: Monday at 01:00.
+    const early = { start: at(2026, 9, 25, 1), end: at(2026, 9, 25, 2) }
+    const moved = draggedTimes('move', early, at(2026, 9, 25, 10), at(2026, 9, 26, 10))!
+    expect(clock(moved.start)).toEqual([2026, 9, 26, 1, 0])
+  })
+})
+
+describe('where a held event lands', () => {
+  const timed = { start: at(2026, 9, 13, 10), end: at(2026, 9, 13, 11), all_day: false }
+  const fromGrid = { edge: 'move' as const, event: timed, day: new Date(2026, 9, 13).getTime(), from: at(2026, 9, 13, 10, 30) }
+
+  it('follows the pointer on the hour grid, and nowhere when the pointer left the visible grid', () => {
+    const grid = { area: 'grid' as const, day: new Date(2026, 9, 14).getTime() }
+    expect(clock(landingTimes(fromGrid, grid, at(2026, 9, 14, 12, 30))!.start)).toEqual([2026, 9, 14, 12, 0])
+    expect(landingTimes(fromGrid, grid, null)).toBeNull()
+    expect(landingTimes(fromGrid, undefined, null)).toBeNull()
+  })
+
+  it('moves by whole days onto an all-day cell, keeping the time', () => {
+    const cell = { area: 'allDay' as const, day: new Date(2026, 9, 16).getTime() }
+    expect(clock(landingTimes(fromGrid, cell, null)!.start)).toEqual([2026, 9, 16, 10, 0])
+    const holiday = { ...allDayOn(new Date(2026, 9, 13)), all_day: true }
+    const chip = { edge: 'move' as const, event: holiday, day: new Date(2026, 9, 13).getTime(), from: null }
+    expect(landingTimes(chip, cell, null)!.start).toBe(Date.UTC(2026, 9, 16) / 1000)
+    // A strip event held over the grid moves by days too, not to the pointer's hour.
+    const grid = { area: 'grid' as const, day: new Date(2026, 9, 15).getTime() }
+    expect(landingTimes(chip, grid, at(2026, 9, 15, 18))!.start).toBe(Date.UTC(2026, 9, 15) / 1000)
+  })
+
+  it('moves to a mini-calendar day keeping the time, and never resizes there or on the strip', () => {
+    const mini = { area: 'mini' as const, day: new Date(2026, 10, 3).getTime() }
+    expect(clock(landingTimes(fromGrid, mini, null)!.start)).toEqual([2026, 10, 3, 10, 0])
+    const edge = { ...fromGrid, edge: 'end' as const }
+    expect(landingTimes(edge, mini, null)).toBeNull()
+    expect(landingTimes(edge, { area: 'allDay', day: new Date(2026, 9, 15).getTime() }, null)).toBeNull()
   })
 })
 

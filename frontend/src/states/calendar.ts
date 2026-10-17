@@ -886,10 +886,21 @@ async function writeEvent(
   if (to > from) await loadWindow(from, to, false)
 }
 
-/// Why an event cannot be changed here, or null when it can. A read-only
-/// calendar or a subscription belongs to whoever publishes it; a calendar
-/// that is not loaded is not known to be writable, so it is not assumed to be.
-export type ChangeRefusal = { reason: 'read_only'; calendar: string } | { reason: 'unknown_calendar' }
+/// Why an event cannot be moved or resized here, or null when it can. A
+/// read-only calendar or a subscription belongs to whoever publishes it; a
+/// calendar that is not loaded is not known to be writable, so it is not
+/// assumed to be.
+///
+/// An Exchange calendar is refused too, for now (#266): the core's Exchange
+/// update overwrites a newer change made on the server instead of refusing it
+/// (`AlwaysOverwrite`), and rewrites the notes as plain text and every guest
+/// as required. A gesture that rewrites all that to change an hour would
+/// degrade the event without a word, so moving it stays in the editor until
+/// the core writes only what changed and refuses a stale version.
+export type ChangeRefusal =
+  | { reason: 'read_only'; calendar: string }
+  | { reason: 'exchange'; calendar: string }
+  | { reason: 'unknown_calendar' }
 
 export function changeRefusal(
   event: Pick<CalendarEvent, 'calendar_id' | 'accountId'>,
@@ -898,6 +909,13 @@ export function changeRefusal(
   const calendar = calendars.find((c) => c.id === event.calendar_id && c.accountId === event.accountId)
   if (!calendar) return { reason: 'unknown_calendar' }
   if (calendar.read_only || calendar.kind === 'subscribed') return { reason: 'read_only', calendar: calendar.name }
+  // An account calendar is Google's only for a Google sign-in; any other
+  // account that keeps calendars is Exchange (accountSupportsCalendar).
+  if (calendar.kind === 'account') {
+    const account = accounts$.peek().find((candidate) => candidate.id === event.accountId)
+    if (!account) return { reason: 'unknown_calendar' }
+    if (account.auth_type !== 'gmail_oauth') return { reason: 'exchange', calendar: calendar.name }
+  }
   return null
 }
 
@@ -909,25 +927,28 @@ export function changeRefusalText(refusal: ChangeRefusal): string {
       calendar: refusal.calendar,
       defaultValue: 'The calendar {calendar} is read-only: its events cannot be moved or changed here.',
     })
+  if (refusal.reason === 'exchange')
+    return t('calendar.moveExchange', {
+      calendar: refusal.calendar,
+      defaultValue:
+        'Events of the Exchange calendar {calendar} cannot be dragged yet: saving the move could overwrite changes made elsewhere and rewrite its notes and guests. Open the event to change it.',
+    })
   return t('calendar.moveUnknownCalendar', {
     defaultValue: 'The calendar of this event is not loaded yet, so it cannot be changed. Try again in a moment.',
   })
 }
 
-/// The event as it is written back with new times: the window's copy,
-/// completed with its people and notes for an account calendar. Exchange's
-/// window carries neither, and its update writes both, so saving the window's
-/// copy would remove them (#266). Null when they cannot be read: the move is
-/// then refused rather than made without them.
+/// The event as it is written back with new times: the window's copy, with
+/// its people and notes read again for an account calendar, whose update
+/// writes both from what it is sent (#266). What is read is what is written:
+/// guests or notes removed on the server since the window was loaded are not
+/// put back. Null when they cannot be read: the move is then refused rather
+/// than made without them.
 export async function completeForWrite(event: CalendarEvent): Promise<CalendarEvent | null> {
   if (kindOf(event) !== 'account') return event
   const details = await loadEventDetails(event)
   if (!details) return null
-  return {
-    ...event,
-    attendees: details.attendees.length > 0 ? details.attendees : event.attendees,
-    description: details.description || event.description || '',
-  }
+  return { ...event, attendees: details.attendees ?? [], description: details.description ?? '' }
 }
 
 /// Writes an event moved or resized on the grid (#266), with the version it

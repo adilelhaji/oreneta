@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Değişikliği kaydetmek için Enter’a, iptal etmek için Esc’ye basın.",
   "calendar.moveStatusPointer": "{subject}: {when}. Oraya taşımak için bırakın; iptal etmek için Esc’ye basın.",
   "calendar.moveReadOnly": "{calendar} takvimi salt okunur: etkinlikleri burada taşınamaz veya değiştirilemez.",
+  "calendar.moveExchange": "{calendar} Exchange takviminin etkinlikleri henüz sürüklenemez: taşımayı kaydetmek başka yerde yapılan değişikliklerin üzerine yazabilir ve notlarla katılımcıları yeniden yazabilir. Değiştirmek için etkinliği açın.",
   "calendar.moveUnknownCalendar": "Bu etkinliğin takvimi henüz yüklenmedi, bu yüzden değiştirilemez. Birazdan yeniden deneyin.",
   "calendar.moveFailed": "Etkinlik taşınmadı: {reason}",
   "calendar.moveDetailsUnreadable": "Etkinlik taşınmadı: katılımcıları ve notları okunamadı; onlarsız kaydetmek bunları silerdi.",

@@ -74,14 +74,18 @@ també és pendent.
 El 2026-10-17 (#266, #267) les visualitzacions de dia, de setmana laboral i de setmana
 del calendari van incorporar aquestes accions: moure un esdeveniment arrossegant-lo
 (ajustat a quarts d'hora; Esc ho cancel·la); canviar-ne l'inici o el final per les vores;
-deixar-lo anar en un dia d'un calendari mensual petit nou; fer tot això amb el teclat
-(Alt+fletxes; Retorn desa), i crear esdeveniments arrossegant una franja, des del menú
-contextual d'una franja buida («Esdeveniment nou», «Esdeveniment nou de tot el dia») o
-des d'una franja horària que pot rebre el focus del teclat (Retorn). Les sèries pregunten
-com a l'editor, els calendaris només de lectura ho rebutgen amb el motiu, i l'escriptura
-conserva les regles de conflicte del nucli (`docs/design/calendar-drag-and-create.md`).
-Hi ha proves unitàries i arrossegaments reals a l'entrada de producció (Chromium). Cap
-fila no canvia d'estat (SET-18 es manté `partial`): falta l'evidència nativa de Windows.
+deixar-lo anar en un dia d'un calendari mensual petit nou; moure'l i canviar-ne el final
+amb el teclat (Alt+fletxes i Alt+Maj+fletxes; Retorn desa), i crear esdeveniments
+arrossegant una franja, des del menú contextual d'una franja buida («Esdeveniment nou»,
+«Esdeveniment nou de tot el dia») o des d'una franja horària que pot rebre el focus del
+teclat (Retorn). Les sèries pregunten com a l'editor, els calendaris només de lectura ho
+rebutgen amb el motiu, i l'escriptura conserva les regles de conflicte del nucli. Els
+calendaris d'Exchange també ho rebutgen, de moment: el nucli hi escriu amb
+`AlwaysOverwrite` i reescriu les notes i els convidats; el canvi queda pendent d'una decisió
+del propietari (`docs/design/calendar-drag-and-create.md`). Hi ha proves unitàries i
+arrossegaments reals a l'entrada de producció (Chromium). Cap fila no canvia d'estat:
+SET-18 es manté `partial` (el temps meteorològic continua absent) i l'evidència nativa
+de Windows és pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

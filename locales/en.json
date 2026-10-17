@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Press Enter to save the change or Escape to cancel it.",
   "calendar.moveStatusPointer": "{subject}: {when}. Release to move it there; press Escape to cancel.",
   "calendar.moveReadOnly": "The calendar {calendar} is read-only: its events cannot be moved or changed here.",
+  "calendar.moveExchange": "Events of the Exchange calendar {calendar} cannot be dragged yet: saving the move could overwrite changes made elsewhere and rewrite its notes and guests. Open the event to change it.",
   "calendar.moveUnknownCalendar": "The calendar of this event is not loaded yet, so it cannot be changed. Try again in a moment.",
   "calendar.moveFailed": "The event was not moved: {reason}",
   "calendar.moveDetailsUnreadable": "The event was not moved: its guests and notes could not be read, and saving it without them would remove them.",

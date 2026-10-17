@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Nhấn Enter để lưu thay đổi hoặc Esc để hủy.",
   "calendar.moveStatusPointer": "{subject}: {when}. Thả ra để di chuyển đến đó; nhấn Esc để hủy.",
   "calendar.moveReadOnly": "Lịch {calendar} chỉ đọc: không thể di chuyển hoặc thay đổi sự kiện của lịch này tại đây.",
+  "calendar.moveExchange": "Chưa thể kéo sự kiện của lịch Exchange {calendar}: lưu thao tác di chuyển có thể ghi đè thay đổi đã thực hiện ở nơi khác và ghi lại ghi chú cùng khách mời. Hãy mở sự kiện để thay đổi.",
   "calendar.moveUnknownCalendar": "Lịch của sự kiện này chưa được tải nên chưa thể thay đổi. Hãy thử lại sau giây lát.",
   "calendar.moveFailed": "Sự kiện chưa được di chuyển: {reason}",
   "calendar.moveDetailsUnreadable": "Sự kiện chưa được di chuyển: không đọc được khách mời và ghi chú của sự kiện, và lưu khi thiếu chúng sẽ xóa chúng.",

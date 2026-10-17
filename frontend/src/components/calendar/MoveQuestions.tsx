@@ -55,11 +55,15 @@ export function MoveStatus() {
             defaultValue: '{subject}: {when}. Release to move it there; press Escape to cancel.',
           })
   }
-  const bar = 'shrink-0 wrap-anywhere border-b border-accent/30 bg-accent/10 px-4 py-1.5 text-caption text-primary'
+  // Laid over the top of the views, never pushing them down: a drag measures
+  // the grid under the pointer, and a bar that moved it would land the event
+  // a line away from where it was dropped.
+  const bar =
+    'pointer-events-none absolute inset-x-0 top-0 z-20 wrap-anywhere border-b border-accent/30 bg-app/95 px-4 py-1.5 text-caption text-primary shadow-sm'
   const keyboard = moving?.via === 'keyboard'
   return (
     <>
-      <div role="status" className="shrink-0">
+      <div role="status">
         {text && keyboard && (
           <p data-move-status className={bar}>
             {text}

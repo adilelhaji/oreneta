@@ -2904,7 +2904,7 @@ test.describe('calendar drag, drop and create', () => {
         events: [
           { ...base, id: 'ev-1', calendar_id: 'local-team', change_key: 'v1', subject: 'Planning', start: at(10), end: at(11), is_recurring: false },
           { ...base, id: 'ev-rec', calendar_id: 'local-team', change_key: 'v2', subject: 'Stand-up', start: at(12), end: at(13), is_recurring: true, series_id: 'series-1' },
-          { ...base, id: 'ev-ro', calendar_id: 'holidays', change_key: 'v3', subject: 'Published', start: at(16), end: at(17), is_recurring: false },
+          { ...base, id: 'ev-ro', calendar_id: 'holidays', change_key: 'v3', subject: 'Published', start: at(8), end: at(9), is_recurring: false },
         ],
       }
       probe.replies['calendar.update'] = { ok: true }
@@ -2923,6 +2923,11 @@ test.describe('calendar drag, drop and create', () => {
     await page.getByRole('button', { name: 'Calendar', exact: true }).click()
     await page.getByRole('button', { name: 'Week', exact: true }).click()
     await expect(page.locator(`[data-calendar-event="${KEY}:ev-1"]`)).toBeVisible()
+    // 06:00 at the top, so every event held here sits well inside the grid,
+    // away from the bands where a held event scrolls it.
+    await page.locator('[data-hour-grid]').evaluate((grid) => {
+      grid.scrollTop = 6 * 52
+    })
     return errors
   }
 

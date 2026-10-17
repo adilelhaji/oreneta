@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject} : {when}. Appuyez sur Entrée pour enregistrer la modification ou sur Échap pour l’annuler.",
   "calendar.moveStatusPointer": "{subject} : {when}. Relâchez pour le déplacer ici ; appuyez sur Échap pour annuler.",
   "calendar.moveReadOnly": "Le calendrier {calendar} est en lecture seule : ses événements ne peuvent être ni déplacés ni modifiés ici.",
+  "calendar.moveExchange": "Les événements du calendrier Exchange {calendar} ne peuvent pas encore être glissés : l’enregistrement pourrait écraser des modifications faites ailleurs et réécrire leurs notes et leurs invités. Ouvrez l’événement pour le modifier.",
   "calendar.moveUnknownCalendar": "Le calendrier de cet événement n’est pas encore chargé ; il ne peut donc pas être modifié. Réessayez dans un instant.",
   "calendar.moveFailed": "L’événement n’a pas été déplacé : {reason}",
   "calendar.moveDetailsUnreadable": "L’événement n’a pas été déplacé : ses invités et ses notes n’ont pas pu être lus, et l’enregistrer sans eux les supprimerait.",

@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}。Enter で変更を保存、Esc で取り消します。",
   "calendar.moveStatusPointer": "{subject}: {when}。離すとここに移動します。Esc で取り消します。",
   "calendar.moveReadOnly": "カレンダー「{calendar}」は読み取り専用のため、予定をここで移動または変更できません。",
+  "calendar.moveExchange": "Exchange カレンダー「{calendar}」の予定はまだドラッグできません。移動を保存すると、他の場所で行われた変更を上書きし、メモと参加者を書き換えるおそれがあります。予定を開いて変更してください。",
   "calendar.moveUnknownCalendar": "この予定のカレンダーがまだ読み込まれていないため、変更できません。しばらくしてからもう一度お試しください。",
   "calendar.moveFailed": "予定は移動されませんでした: {reason}",
   "calendar.moveDetailsUnreadable": "予定は移動されませんでした: 参加者とメモを読み取れず、それらなしで保存すると削除されてしまいます。",

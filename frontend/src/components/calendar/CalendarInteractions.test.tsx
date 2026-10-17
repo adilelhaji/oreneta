@@ -57,7 +57,11 @@ beforeEach(() => {
   cancelMove()
   settings$.calendarWeekStart.set('monday')
   settings$.calendar.set(DEFAULT_CALENDAR_PREFS)
-  accounts$.set([{ id: 'a1', email: 'ana@example.com', auth_type: 'password', provider: 'imap' } as any])
+  accounts$.set([
+    { id: 'a1', email: 'ana@example.com', auth_type: 'password', provider: 'imap' } as any,
+    { id: 'g1', email: 'ana@gmail.com', auth_type: 'gmail_oauth', provider: 'gmail' } as any,
+    { id: 'x1', email: 'ana@corp.example', auth_type: 'password', provider: 'exchange' } as any,
+  ])
   calendar$.anchor.set(new Date(2020, 9, 13).getTime())
   calendar$.view.set('week')
   calendar$.from.set(0)
@@ -65,7 +69,8 @@ beforeEach(() => {
   calendar$.calendars.set([
     { id: 'local:home', name: 'Home', accountId: 'a1', kind: 'local', enabled: true, is_default: true } as any,
     { id: 'holidays', name: 'Holidays', accountId: 'a1', kind: 'subscribed', enabled: true, read_only: true } as any,
-    { id: 'primary', name: 'Work', accountId: 'a1', kind: 'account', enabled: true } as any,
+    { id: 'primary', name: 'Work', accountId: 'g1', kind: 'account', enabled: true } as any,
+    { id: 'ews-cal', name: 'Office', accountId: 'x1', kind: 'account', enabled: true } as any,
   ])
   calendar$.events.set([event()])
   ;(window as any).go = {
@@ -97,14 +102,14 @@ afterEach(() => {
   delete (window as any).go
 })
 
-const view = () =>
+const view = (days: 1 | 7 = 7) =>
   render(
     <>
       <MoveStatus />
       <MoveQuestions />
       <CalendarDnd>
         <MiniCalendar />
-        <WeekView days={7} onEventMenu={() => {}} />
+        <WeekView days={days} onEventMenu={() => {}} />
       </CalendarDnd>
     </>,
   )
@@ -225,11 +230,50 @@ describe('moving and resizing from the keyboard (#266)', () => {
     await waitFor(() => expect(move$.moving.peek()).toBeNull())
   })
 
-  it('completes an account event with its guests and notes before writing it, and asks to tell them', async () => {
-    details = { attendees: [{ name: 'Bo', addr: 'bo@example.com', response: '' }], description: 'Agenda' }
-    calendar$.events.set([event({ calendar_id: 'primary' })])
+  it('moves the same way in the day view and in the work week', async () => {
+    let screen = view(1)
+    await press(eventButton(screen), 'ArrowDown', { altKey: true })
+    await press(eventButton(screen), 'Enter')
+    await waitFor(() => expect(updates()).toHaveLength(1))
+    cleanup()
+    // Tuesday 13 is a working day; the week shows Monday to Friday.
+    settings$.calendar.set({ ...DEFAULT_CALENDAR_PREFS, workWeekOnly: true })
+    screen = view()
+    expect(screen.container.querySelectorAll('[data-day-column]')).toHaveLength(5)
+    await press(eventButton(screen), 'ArrowRight', { altKey: true })
+    await press(eventButton(screen), 'Enter')
+    await waitFor(() => expect(updates()).toHaveLength(2))
+    expect(clock(updates()[1].payload.event.start)).toBe('14 10:00')
+  })
+
+  it('refuses an Exchange event for now, and says why, writing nothing', async () => {
+    calendar$.events.set([event({ calendar_id: 'ews-cal', accountId: 'x1' })])
     const screen = view()
-    const button = eventButton(screen)
+    await press(eventButton(screen, 'x1:ev1'), 'ArrowDown', { altKey: true })
+    expect(move$.moving.peek()).toBeNull()
+    expect(ui$.toast.peek()).toContain('Events of the Exchange calendar Office cannot be dragged yet')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('does not start a move for Alt+Shift with a left or right arrow', async () => {
+    const screen = view()
+    await press(eventButton(screen), 'ArrowRight', { altKey: true, shiftKey: true })
+    expect(move$.moving.peek()).toBeNull()
+  })
+
+  it('writes a Google event with its guests and notes read again, and asks to tell them', async () => {
+    details = { attendees: [{ name: 'Bo', addr: 'bo@example.com', response: '' }], description: 'Agenda' }
+    calendar$.events.set([
+      event({
+        calendar_id: 'primary',
+        accountId: 'g1',
+        // What the window had; the server's copy since lost a guest.
+        attendees: [{ name: 'Cy', addr: 'cy@example.com', response: '' }],
+        description: 'Old notes',
+      }),
+    ])
+    const screen = view()
+    const button = eventButton(screen, 'g1:ev1')
     await press(button, 'ArrowDown', { altKey: true })
     await press(button, 'Enter')
     const ask = within(await screen.findByRole('alertdialog'))
@@ -246,9 +290,9 @@ describe('moving and resizing from the keyboard (#266)', () => {
 
   it('refuses to move an account event whose guests and notes cannot be read', async () => {
     detailsError = true
-    calendar$.events.set([event({ calendar_id: 'primary' })])
+    calendar$.events.set([event({ calendar_id: 'primary', accountId: 'g1' })])
     const screen = view()
-    const button = eventButton(screen)
+    const button = eventButton(screen, 'g1:ev1')
     await press(button, 'ArrowDown', { altKey: true })
     await press(button, 'Enter')
     await waitFor(() => expect(ui$.toast.peek()).toContain('its guests and notes could not be read'))

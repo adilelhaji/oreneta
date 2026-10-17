@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Tryck på Retur för att spara ändringen eller Esc för att avbryta den.",
   "calendar.moveStatusPointer": "{subject}: {when}. Släpp för att flytta den dit; tryck på Esc för att avbryta.",
   "calendar.moveReadOnly": "Kalendern {calendar} är skrivskyddad: dess händelser kan inte flyttas eller ändras här.",
+  "calendar.moveExchange": "Händelser i Exchange-kalendern {calendar} kan inte dras ännu: att spara flytten kunde skriva över ändringar som gjorts på annat håll och skriva om anteckningar och gäster. Öppna händelsen för att ändra den.",
   "calendar.moveUnknownCalendar": "Den här händelsens kalender har inte lästs in än, så den kan inte ändras. Försök igen om en stund.",
   "calendar.moveFailed": "Händelsen flyttades inte: {reason}",
   "calendar.moveDetailsUnreadable": "Händelsen flyttades inte: dess gäster och anteckningar kunde inte läsas, och att spara den utan dem skulle ta bort dem.",

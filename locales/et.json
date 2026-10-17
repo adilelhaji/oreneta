@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Muudatuse salvestamiseks vajuta Enter, tühistamiseks Esc.",
   "calendar.moveStatusPointer": "{subject}: {when}. Vabasta, et see sinna liigutada; tühistamiseks vajuta Esc.",
   "calendar.moveReadOnly": "Kalender {calendar} on kirjutuskaitstud: selle sündmusi ei saa siin liigutada ega muuta.",
+  "calendar.moveExchange": "Exchange'i kalendri {calendar} sündmusi ei saa veel lohistada: liigutuse salvestamine võib üle kirjutada mujal tehtud muudatused ning märkmed ja külalised uuesti kirjutada. Muutmiseks ava sündmus.",
   "calendar.moveUnknownCalendar": "Selle sündmuse kalendrit pole veel laaditud, seega ei saa seda muuta. Proovi hetke pärast uuesti.",
   "calendar.moveFailed": "Sündmust ei liigutatud: {reason}",
   "calendar.moveDetailsUnreadable": "Sündmust ei liigutatud: selle külalisi ja märkmeid ei õnnestunud lugeda ning ilma nendeta salvestamine eemaldaks need.",

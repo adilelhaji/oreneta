@@ -379,7 +379,7 @@ export function WeekView({
 
       {/* The hour grid. Every cell is placed by its column, so the keyboard
           slot can sit over any day without the days moving to make room. */}
-      <div ref={scroller} className="min-h-0 flex-1 select-none overflow-y-auto">
+      <div ref={scroller} data-hour-grid className="min-h-0 flex-1 select-none overflow-y-auto">
         <div className="grid" style={{ gridTemplateColumns: `3.5rem repeat(${columns.length}, 1fr)` }}>
           <div className="relative" style={{ height: 24 * HOUR_PX, gridColumn: 1, gridRow: 1 }}>
             {hours.map((hour) => (
@@ -408,6 +408,11 @@ export function WeekView({
                 onPointerMove={selectMove}
                 onPointerUp={selectUp(date)}
                 onPointerCancel={() => setSelection(null)}
+                onLostPointerCapture={() => {
+                  // A release outside the window, or the browser taking the
+                  // pointer back: the range is dropped, nothing is created.
+                  if (selecting.current) setSelection(null)
+                }}
                 onDoubleClick={(mouse) => {
                   if (onEvent(mouse.target)) return
                   const hour = Math.floor(minuteAt(mouse.currentTarget, mouse.clientY) / 60)
@@ -567,6 +572,7 @@ function DayColumn({
   onPointerMove: (pointer: PointerEvent<HTMLDivElement>) => void
   onPointerUp: (pointer: PointerEvent<HTMLDivElement>) => void
   onPointerCancel: () => void
+  onLostPointerCapture: () => void
   onDoubleClick: (mouse: React.MouseEvent<HTMLDivElement>) => void
   onContextMenu: (mouse: React.MouseEvent<HTMLDivElement>) => void
 }) {
@@ -632,18 +638,16 @@ function onEventKey(key: KeyboardEvent<HTMLElement>, event: CalendarEvent) {
   const vertical = key.key === 'ArrowUp' ? -1 : key.key === 'ArrowDown' ? 1 : 0
   const across = inlineArrowStep(key.key, elementDirection(key.currentTarget))
   if (vertical === 0 && across === 0) return
+  // Alt+Shift changes the end, which only the up and down arrows do.
+  if (key.shiftKey && vertical === 0) return
   key.preventDefault()
   key.stopPropagation()
   if (!mine && !startMove(event, 'keyboard')) return
   const current = move$.moving.peek()
   if (!current) return
-  let nudge: Nudge
-  if (key.shiftKey) {
-    if (vertical === 0) return
-    nudge = { edge: 'end', days: 0, steps: vertical }
-  } else {
-    nudge = { edge: 'move', days: across, steps: vertical }
-  }
+  const nudge: Nudge = key.shiftKey
+    ? { edge: 'end', days: 0, steps: vertical }
+    : { edge: 'move', days: across, steps: vertical }
   previewMove(nudgedTimes(event, current, nudge))
 }
 

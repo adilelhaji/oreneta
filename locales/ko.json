@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. 변경 사항을 저장하려면 Enter를, 취소하려면 Esc를 누르세요.",
   "calendar.moveStatusPointer": "{subject}: {when}. 놓으면 그곳으로 이동합니다. 취소하려면 Esc를 누르세요.",
   "calendar.moveReadOnly": "{calendar} 캘린더는 읽기 전용이라 여기서 일정을 옮기거나 바꿀 수 없습니다.",
+  "calendar.moveExchange": "Exchange 캘린더 {calendar}의 일정은 아직 끌어서 옮길 수 없습니다. 이동을 저장하면 다른 곳에서 한 변경을 덮어쓰고 메모와 참석자를 다시 쓸 수 있습니다. 일정을 열어 변경하세요.",
   "calendar.moveUnknownCalendar": "이 일정의 캘린더가 아직 로드되지 않아 변경할 수 없습니다. 잠시 후 다시 시도하세요.",
   "calendar.moveFailed": "일정을 옮기지 않았습니다: {reason}",
   "calendar.moveDetailsUnreadable": "일정을 옮기지 않았습니다: 참석자와 메모를 읽을 수 없었고, 이것 없이 저장하면 삭제됩니다.",

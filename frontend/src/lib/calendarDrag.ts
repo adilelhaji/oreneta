@@ -61,25 +61,36 @@ export function instantAtOffset(day: Date, offsetPx: number, hourPx: number): nu
  * it already is.
  *
  * `from` is the instant under the pointer when the drag began and `to` the one
- * under it now. The edge held keeps its distance from the pointer and lands on
- * the nearest grid line, so an event at 14:37 dragged an hour down starts at
- * 15:30, not at 15:37. A pointer that moved less than half a step changes
- * nothing: an event off the grid is not pulled onto it by a nudge. A resize
- * never makes an event shorter than one step.
+ * under it now. The pointer's travel is read on the wall clock — so many
+ * days, so many minutes — and the edge held moves by the same, then lands on
+ * the nearest grid line: an event at 14:37 dragged an hour down starts at
+ * 15:30, not at 15:37, and one dragged to the next day keeps its hour even
+ * when the clocks change in between. A pointer that moved less than half a
+ * step changes nothing: an event off the grid is not pulled onto it by a
+ * nudge. A resize never makes an event shorter than one step.
  */
 export function draggedTimes(edge: DragEdge, event: Times, from: number, to: number, step = SNAP_MINUTES): Times | null {
-  if (Math.abs(to - from) < step * 30) return null
+  const days = daysBetween(localDay(from), localDay(to))
+  const minutes = minuteOfDay(to) - minuteOfDay(from)
+  if (days === 0 && Math.abs(minutes) < step / 2) return null
+  const travelled = (edgeAt: number) => snapInstant(onClock(edgeAt, days, minutes), step)
   const shortest = step * 60
   let result: Times
   if (edge === 'move') {
-    const start = snapInstant(event.start + (to - from), step)
+    const start = travelled(event.start)
     result = { start, end: start + (event.end - event.start) }
   } else if (edge === 'start') {
-    result = { start: Math.min(snapInstant(event.start + (to - from), step), event.end - shortest), end: event.end }
+    result = { start: Math.min(travelled(event.start), event.end - shortest), end: event.end }
   } else {
-    result = { start: event.start, end: Math.max(snapInstant(event.end + (to - from), step), event.start + shortest) }
+    result = { start: event.start, end: Math.max(travelled(event.end), event.start + shortest) }
   }
   return result.start === event.start && result.end === event.end ? null : result
+}
+
+/** An instant moved on the wall clock: so many days later, then so many minutes. */
+function onClock(seconds: number, days: number, minutes: number): number {
+  const day = localDay(seconds)
+  return instantAtMinute(new Date(day.getFullYear(), day.getMonth(), day.getDate() + days), minuteOfDay(seconds) + minutes)
 }
 
 /** Calendar days from one local day to another, counted on dates: a clock change does not shift it. */
@@ -183,4 +194,38 @@ export function slotStart(day: Date, minutes: number, step = SNAP_MINUTES): numb
 export function allDayOn(day: Date): Times {
   const start = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 1000
   return { start, end: start + DAY_SECONDS }
+}
+
+/** What a pointer drag holds, as the drop arithmetic needs it. */
+export type HeldDrag = {
+  edge: DragEdge
+  event: TimedOrAllDay
+  /** The local day (local-midnight epoch ms) it was picked up on. */
+  day: number
+  /** The instant under the pointer when it was picked up from the hour grid; null from the all-day strip. */
+  from: number | null
+}
+
+/** What is under the pointer: an hour-grid column, an all-day cell or a mini-calendar day. */
+export type DropTarget = { area: 'grid' | 'allDay' | 'mini'; day: number }
+
+/**
+ * Where a held event would land, or null for where it already is.
+ *
+ * - On a day of the mini calendar: that day, keeping its time (a move only).
+ * - On a column of the hour grid, picked up from the grid: by the pointer's
+ *   travel (`draggedTimes`); `to` is the instant under the pointer, null when
+ *   the pointer is outside the visible part of the grid.
+ * - Anywhere else (the all-day strip, or a strip event over the grid): by
+ *   whole days from the day it was picked up on. An edge held over anything
+ *   but the grid stays where it was.
+ */
+export function landingTimes(held: HeldDrag, target: DropTarget | undefined, to: number | null): Times | null {
+  if (!target) return null
+  if (target.area === 'mini') return held.edge === 'move' ? movedToDay(held.event, new Date(target.day)) : null
+  if (target.area === 'grid' && held.from !== null) {
+    return to === null ? null : draggedTimes(held.edge, held.event, held.from, to)
+  }
+  if (held.edge !== 'move') return null
+  return shiftedByDays(held.event, daysBetween(new Date(held.day), new Date(target.day)))
 }

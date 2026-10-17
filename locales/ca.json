@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Prem Retorn per desar el canvi o Esc per cancel·lar-lo.",
   "calendar.moveStatusPointer": "{subject}: {when}. Deixa'l anar per moure'l aquí; prem Esc per cancel·lar-ho.",
   "calendar.moveReadOnly": "El calendari {calendar} és només de lectura: aquí no se'n poden moure ni canviar els esdeveniments.",
+  "calendar.moveExchange": "Els esdeveniments del calendari d'Exchange {calendar} encara no es poden arrossegar: desar el moviment podria sobreescriure canvis fets en altres llocs i reescriure'n les notes i els convidats. Obre l'esdeveniment per canviar-lo.",
   "calendar.moveUnknownCalendar": "Aquest esdeveniment encara no es pot canviar: el seu calendari no s'ha carregat. Torna-ho a provar d'aquí a un moment.",
   "calendar.moveFailed": "No s'ha pogut moure l'esdeveniment: {reason}",
   "calendar.moveDetailsUnreadable": "No s'ha pogut moure l'esdeveniment: no se n'han pogut llegir els convidats ni les notes, i desar-lo sense aquestes dades les eliminaria.",

@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}: {when}. Naciśnij Enter, aby zapisać zmianę, lub Esc, aby ją anulować.",
   "calendar.moveStatusPointer": "{subject}: {when}. Puść, aby je tam przenieść; naciśnij Esc, aby anulować.",
   "calendar.moveReadOnly": "Kalendarz {calendar} jest tylko do odczytu: jego wydarzeń nie można tu przenosić ani zmieniać.",
+  "calendar.moveExchange": "Wydarzeń z kalendarza Exchange {calendar} nie można jeszcze przeciągać: zapisanie przeniesienia mogłoby nadpisać zmiany wprowadzone gdzie indziej i przepisać notatki oraz gości. Otwórz wydarzenie, aby je zmienić.",
   "calendar.moveUnknownCalendar": "Kalendarz tego wydarzenia nie został jeszcze wczytany, więc nie można go zmienić. Spróbuj ponownie za chwilę.",
   "calendar.moveFailed": "Wydarzenie nie zostało przeniesione: {reason}",
   "calendar.moveDetailsUnreadable": "Wydarzenie nie zostało przeniesione: nie udało się odczytać jego gości ani notatek, a zapisanie go bez nich by je usunęło.",

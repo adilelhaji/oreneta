@@ -392,6 +392,7 @@
   "calendar.moveStatusKeyboard": "{subject}：{when}。按 Enter 保存更改，按 Esc 取消。",
   "calendar.moveStatusPointer": "{subject}：{when}。松开即可移到此处；按 Esc 取消。",
   "calendar.moveReadOnly": "日历 {calendar} 为只读：无法在此移动或更改其事件。",
+  "calendar.moveExchange": "Exchange 日历 {calendar} 的事件暂不支持拖动：保存移动可能会覆盖在其他地方所做的更改，并重写其备注和参与者。请打开事件进行更改。",
   "calendar.moveUnknownCalendar": "此事件的日历尚未加载，因此无法更改。请稍后再试。",
   "calendar.moveFailed": "事件未移动：{reason}",
   "calendar.moveDetailsUnreadable": "事件未移动：无法读取其参与者和备注，不带它们保存会将其删除。",
