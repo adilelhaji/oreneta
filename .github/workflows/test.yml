@@ -176,6 +176,8 @@ jobs:
         run: |
           TZ=America/Sao_Paulo bun test src/lib/agenda.test.ts src/components/chat/SidebarAgenda.test.tsx
           TZ=Australia/Sydney bun test src/lib/agenda.test.ts src/components/chat/SidebarAgenda.test.tsx
+          # Dragging events keeps the wall clock across a clock change (#266).
+          TZ=Europe/Madrid bun test src/lib/calendarDrag.test.ts
         working-directory: frontend
       - name: Upload frontend coverage
         if: always()

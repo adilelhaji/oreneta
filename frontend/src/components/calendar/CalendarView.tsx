@@ -31,6 +31,9 @@ import { WeekView } from './WeekView'
 import { EventEditor } from './EventEditor'
 import { EventDetails } from './EventDetails'
 import { CalendarList } from './CalendarList'
+import { CalendarDnd } from './CalendarDnd'
+import { MiniCalendar } from './MiniCalendar'
+import { MoveQuestions, MoveStatus } from './MoveQuestions'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 import { settings$ } from '../../states/settings'
@@ -177,13 +180,23 @@ export function CalendarView() {
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
-        <CalendarList />
-        {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
-        {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
-        {view === 'week' && <WeekView days={7} onEventMenu={onEventMenu} />}
-        {view === 'day' && <WeekView days={1} onEventMenu={onEventMenu} />}
-      </div>
+      <MoveStatus />
+      <MoveQuestions />
+
+      {/* One drag and drop for the views and the mini calendar beside them, so
+          an event held in the week can be dropped on a day of another month. */}
+      <CalendarDnd>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
+          <div className="flex shrink-0 flex-col border-border bg-raised min-[769px]:w-48 min-[769px]:border-e">
+            <MiniCalendar />
+            <CalendarList />
+          </div>
+          {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
+          {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
+          {view === 'week' && <WeekView days={7} onEventMenu={onEventMenu} />}
+          {view === 'day' && <WeekView days={1} onEventMenu={onEventMenu} />}
+        </div>
+      </CalendarDnd>
     </div>
   )
 }
