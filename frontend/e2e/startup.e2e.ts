@@ -2854,6 +2854,230 @@ test.describe('calendar week start', () => {
   })
 })
 
+// #266 and #267: events moved and resized by dragging them on the week grid,
+// dropped on the mini calendar, refused on a read-only calendar, asked about
+// when they repeat, and given up with Escape; a conflict with a newer server
+// change is said. Events are created by dragging a range, from the menu of an
+// empty slot and from the keyboard slot. Real pointer drags, so they run here
+// where there is a layout; the unit suite drives the same moves by keyboard.
+test.describe('calendar drag, drop and create', () => {
+  const KEY = 'synthetic-account'
+  const centre = async (locator: ReturnType<Page['locator']>) => {
+    const box = (await locator.boundingBox())!
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  const drag = async (page: Page, from: { x: number; y: number }, to: { x: number; y: number }) => {
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x, from.y + 6, { steps: 2 })
+    await page.mouse.move(to.x, to.y, { steps: 12 })
+    await page.mouse.up()
+  }
+  /** Local wall-clock instant, `days` from today. */
+  const at = (page: Page, days: number, hour: number, minute = 0) =>
+    page.evaluate(
+      ([d, h, m]) => {
+        const now = new Date()
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, m).getTime() / 1000
+      },
+      [days, hour, minute],
+    )
+  const updates = (page: Page) =>
+    page.evaluate(() =>
+      (window as any).startupProbe.requests
+        .filter((request: any) => request.command === 'calendar.update')
+        .map((request: any) => request.payload),
+    )
+
+  const open = async (page: Page) => {
+    const errors = await prepareStartup(page, true, { navigation: true })
+    await page.addInitScript(() => {
+      const probe = (window as any).startupProbe
+      const now = new Date()
+      const at = (h: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), h).getTime() / 1000
+      const base = { all_day: false, is_cancelled: false, free_busy: 'busy', my_response: '', organizer: null, attendees: [] }
+      probe.replies['calendar.list'] = {
+        calendars: [
+          { id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 },
+          { id: 'holidays', name: 'Holidays', is_default: false, enabled: true, kind: 'subscribed', read_only: true, synced_at: 0 },
+        ],
+      }
+      probe.replies['calendar.events'] = {
+        events: [
+          { ...base, id: 'ev-1', calendar_id: 'local-team', change_key: 'v1', subject: 'Planning', start: at(10), end: at(11), is_recurring: false },
+          { ...base, id: 'ev-rec', calendar_id: 'local-team', change_key: 'v2', subject: 'Stand-up', start: at(12), end: at(13), is_recurring: true, series_id: 'series-1' },
+          { ...base, id: 'ev-ro', calendar_id: 'holidays', change_key: 'v3', subject: 'Published', start: at(8), end: at(9), is_recurring: false },
+        ],
+      }
+      probe.replies['calendar.update'] = { ok: true }
+      // A conflict, when a test asks for one: the core refuses the write.
+      const answer = (window as any).go.main.App.Invoke
+      ;(window as any).go.main.App.Invoke = async (command: string, payload: Record<string, unknown>) => {
+        if (command === 'calendar.update' && probe.updateError) {
+          probe.requests.push({ command, payload: structuredClone(payload) })
+          throw new Error(probe.updateError)
+        }
+        return answer(command, payload)
+      }
+    })
+    await page.goto('/')
+    await expect(page.getByRole('textbox').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'Week', exact: true }).click()
+    await expect(page.locator(`[data-calendar-event="${KEY}:ev-1"]`)).toBeVisible()
+    // 06:00 at the top, so every event held here sits well inside the grid,
+    // away from the bands where a held event scrolls it.
+    await page.locator('[data-hour-grid]').evaluate((grid) => {
+      grid.scrollTop = 6 * 52
+    })
+    return errors
+  }
+
+  test('moves, resizes, cancels, refuses, asks and says a conflict', async ({ page }) => {
+    const errors = await open(page)
+    const planning = page.locator(`[data-calendar-event="${KEY}:ev-1"]`)
+
+    // Move an hour and a little down: it lands on the nearest quarter, keeps
+    // its hour of length, and is written with the version it was read at.
+    let from = await centre(planning)
+    await drag(page, from, { x: from.x, y: from.y + 60 })
+    await expect.poll(async () => (await updates(page)).length).toBe(1)
+    let sent = (await updates(page))[0]
+    expect(sent.event.start).toBe(await at(page, 0, 11, 15))
+    expect(sent.event.end - sent.event.start).toBe(3600)
+    expect(sent.event.change_key).toBe('v1')
+    expect(sent.scope).toBe('occurrence')
+
+    // Resize by the bottom edge, half an hour.
+    await expect(planning).toBeVisible()
+    from = await centre(planning.locator('[data-resize-edge="end"]'))
+    await drag(page, from, { x: from.x, y: from.y + 26 })
+    await expect.poll(async () => (await updates(page)).length).toBe(2)
+    sent = (await updates(page))[1]
+    expect(sent.event.start).toBe(await at(page, 0, 10))
+    expect(sent.event.end).toBe(await at(page, 0, 11, 30))
+
+    // And by the top edge, a quarter earlier.
+    from = await centre(planning.locator('[data-resize-edge="start"]'))
+    await drag(page, from, { x: from.x, y: from.y - 13 })
+    await expect.poll(async () => (await updates(page)).length).toBe(3)
+    sent = (await updates(page))[2]
+    expect(sent.event.start).toBe(await at(page, 0, 9, 45))
+    expect(sent.event.end).toBe(await at(page, 0, 11))
+
+    // Escape while held: nothing is written and nothing stays drawn.
+    from = await centre(planning)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x, from.y + 52, { steps: 8 })
+    await expect(page.locator('[data-move-ghost]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await page.mouse.move(from.x, from.y + 70, { steps: 2 })
+    await page.mouse.up()
+    await expect(page.locator('[data-move-ghost]')).toHaveCount(0)
+
+    // Dropped on a day of the mini calendar: that day, at its own time.
+    const target = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).getTime()
+    })
+    await drag(page, await centre(planning), await centre(page.locator(`[data-mini-day="${target}"]`)))
+    await expect.poll(async () => (await updates(page)).length).toBe(4)
+    sent = (await updates(page))[3]
+    expect(sent.event.start).toBe(await at(page, 2, 10))
+    expect(sent.event.end).toBe(await at(page, 2, 11))
+
+    // A read-only calendar refuses, and says why.
+    from = await centre(page.locator(`[data-calendar-event="${KEY}:ev-ro"]`))
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await expect(page.getByText('The calendar Holidays is read-only: its events cannot be moved or changed here.')).toBeVisible()
+    expect(await updates(page)).toHaveLength(4)
+
+    // A repeating event asks which occurrences, and writes the answer.
+    from = await centre(page.locator(`[data-calendar-event="${KEY}:ev-rec"]`))
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await page.getByRole('button', { name: 'This event only', exact: true }).click()
+    await expect.poll(async () => (await updates(page)).length).toBe(5)
+    sent = (await updates(page))[4]
+    expect(sent.scope).toBe('occurrence')
+    expect(sent.event.start).toBe(await at(page, 0, 13))
+
+    // A newer change on the server: refused, said, and the window read again.
+    await page.evaluate(() => {
+      ;(window as any).startupProbe.updateError = 'this event was changed or removed on the server; refresh it and try again'
+    })
+    const rereads = () =>
+      page.evaluate(
+        () =>
+          (window as any).startupProbe.requests.filter(
+            (request: any) => request.command === 'calendar.events' && request.payload.refresh === true,
+          ).length,
+      )
+    const before = await rereads()
+    from = await centre(planning)
+    await drag(page, from, { x: from.x, y: from.y + 52 })
+    await expect(page.getByText(/^The event was not moved: this event was changed or removed on the server/)).toBeVisible()
+    await expect.poll(rereads).toBeGreaterThan(before)
+    expect(await updates(page)).toHaveLength(6)
+    expect(errors).toEqual([])
+  })
+
+  test('creates events from a dragged range, the slot menu and the keyboard', async ({ page }) => {
+    const errors = await open(page)
+    const today = await page.evaluate(() => {
+      const now = new Date()
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    })
+    const column = page.locator(`[data-day-column="${today}"]`)
+    const box = (await column.boundingBox())!
+    const y = (hour: number, minute = 0) => box.y + (hour + minute / 60) * 52
+    const x = box.x + box.width / 2
+    const clockIs = async (hh: string[], mm: string[]) => {
+      await expect(page.getByLabel('hh')).toHaveCount(hh.length)
+      for (const [i, hour] of hh.entries()) await expect(page.getByLabel('hh').nth(i)).toHaveValue(hour)
+      for (const [i, minute] of mm.entries()) await expect(page.getByLabel('mm').nth(i)).toHaveValue(minute)
+    }
+    const cancel = () => page.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+    // A range dragged across the column, from line to line.
+    await drag(page, { x, y: y(14, 5) }, { x, y: y(15, 20) })
+    await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible()
+    await clockIs(['14', '15'], ['0', '30'])
+    await cancel()
+
+    // The menu of an empty slot: a timed event at its quarter, or an all-day one.
+    await page.mouse.click(x, y(14, 20), { button: 'right' })
+    await page.getByRole('button', { name: 'New event', exact: true }).last().click()
+    await clockIs(['14', '15'], ['15', '15'])
+    await cancel()
+    await page.mouse.click(x, y(14, 20), { button: 'right' })
+    await page.getByRole('button', { name: 'New all-day event', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'New event' })).toBeVisible()
+    await clockIs([], [])
+    await cancel()
+
+    // The keyboard slot: a quarter later, a quarter longer, then Enter.
+    const slot = page.locator('[data-time-slot]')
+    await slot.focus()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Shift+ArrowDown')
+    await page.keyboard.press('Enter')
+    await clockIs(['9', '10'], ['15', '30'])
+    await cancel()
+
+    // And the keyboard alternative to dragging: Alt+Down twice, then Enter.
+    const planning = page.locator(`[data-calendar-event="${KEY}:ev-1"]`)
+    await planning.focus()
+    await page.keyboard.press('Alt+ArrowDown')
+    await page.keyboard.press('Alt+ArrowDown')
+    await expect(page.locator('[data-move-status]')).toContainText('Press Enter to save the change')
+    await page.keyboard.press('Enter')
+    await expect.poll(async () => (await updates(page)).length).toBe(1)
+    expect((await updates(page))[0].event.start).toBe(await at(page, 0, 10, 30))
+    expect(errors).toEqual([])
+  })
+})
+
 // Folder favorites, colors and moves (ADR-0050, SET-07): a folder made a
 // favorite and colored from its menu, then moved with the keyboard path, all
 // under the production CSP; the favorite and its color survive a reload.

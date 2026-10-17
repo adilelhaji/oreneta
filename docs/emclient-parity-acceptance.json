@@ -921,7 +921,7 @@
       "section": "Calendar/General; Weather",
       "outcome": "Calendar configuration and weather availability/privacy policy",
       "status": "partial",
-      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; weather is absent pending an owner decision",
+      "present": "Agenda/week/month views, local/Google/Exchange/CalDAV calendars and .ics; first day of week from the region or chosen, week numbers, shaded work hours and days, work-week view and new-event defaults (ADR-0051) are tested; in the day, work-week and week views events are moved and resized by dragging (15-minute grid, Escape cancels) or from the keyboard, dropped on a new mini calendar, and created by a dragged range, a slot's menu or the keyboard slot, with series asked about, read-only calendars refused and the core's conflict rules kept (#266, #267; Exchange events refused for grid moves pending an owner decision on the core's AlwaysOverwrite), tested in unit and Chromium e2e; weather is absent pending an owner decision",
       "code": "meron-core/src/calendar/mod.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -950,6 +950,18 @@
           {
             "sha": "1467c1ac73f6238751ec82353b3c105ad643796e",
             "result": "frontend/src/components/calendar/WeekStart.test.tsx"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/src/lib/calendarDrag.test.ts"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/src/components/calendar/CalendarInteractions.test.tsx"
+          },
+          {
+            "sha": "809d3404f1d97f1fa57f3936c596aa547ba0a443",
+            "result": "frontend/e2e/startup.e2e.ts"
           }
         ],
         "native": [],
