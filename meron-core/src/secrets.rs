@@ -603,20 +603,23 @@ fn with_service_fallback<T>(
 ///
 /// The key is read like any entry, `oreneta` first and then `meron`, and is
 /// moved on that read (ADR-0063). A read error is returned, never taken for
-/// a missing key: minting one then would lock the store out.
+/// a missing key: minting one then would lock the store out. A malformed
+/// `oreneta` key never hides a good `meron` one. Missing (first run) or
+/// malformed everywhere: a fresh key is minted and persisted.
 pub fn db_key() -> Result<Option<String>> {
     if keyring_disabled() {
         return Ok(None);
     }
-    match vault_load(&scoped(DB_KEY_ACCOUNT)).context("read db key from keychain")? {
-        Some(key) if is_hex_key(&key) => Ok(Some(key)),
-        // Missing (first run) or a malformed entry: mint and persist a fresh key.
-        Some(_) | None => {
-            let key = generate_db_key();
-            vault_store(&scoped(DB_KEY_ACCOUNT), &key).context("store db key in keychain")?;
-            Ok(Some(key))
-        }
-    }
+    Migration::global()
+        .db_key(
+            &Platform,
+            &keyring_log,
+            &scoped(DB_KEY_ACCOUNT),
+            &is_hex_key,
+            &generate_db_key,
+        )
+        .context("read or create the db key in the keychain")
+        .map(Some)
 }
 
 /// 32 random bytes (two v4 UUIDs' worth) rendered as 64 lowercase hex chars.

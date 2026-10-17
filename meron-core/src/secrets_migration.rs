@@ -40,8 +40,14 @@ pub(crate) type Log<'a> = &'a dyn Fn(Level, &str);
 enum Legacy {
     /// There is none: never was, or it has been deleted.
     Gone,
-    /// A step failed this run; the entry is tried again on the next start.
+    /// A read-side step failed this run. The next store, which replaces the
+    /// value, still retires the legacy copy; otherwise the next start does.
     Deferred,
+    /// A store could not retire it either: nothing more this run.
+    Held,
+    /// A copy failed verification and could not be removed: the legacy entry
+    /// is served first for the rest of the run, so the copy never shadows it.
+    Unverified,
 }
 
 /// What one call did about the legacy copy, for the start-up summary.
@@ -53,13 +59,32 @@ pub(crate) enum Outcome {
     Deferred,
 }
 
-/// Counts from [`Migration::migrate_all`]. Never carries a value.
+/// Counts from [`Migration::migrate_all`]. Never carries a value. An entry
+/// already under `oreneta` whose identical legacy copy is deleted counts as
+/// checked, not moved.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Summary {
     pub checked: usize,
     pub moved: usize,
     pub deferred: usize,
     pub unreadable: usize,
+}
+
+/// Why a written entry did not verify.
+enum Mismatch {
+    /// It read back, with another value or none: the copy is damaged.
+    Damaged(&'static str),
+    /// It could not be read back: nothing is known about it.
+    Unreadable(String),
+}
+
+impl Mismatch {
+    fn reason(&self) -> String {
+        match self {
+            Mismatch::Damaged(why) => (*why).to_owned(),
+            Mismatch::Unreadable(error) => error.clone(),
+        }
+    }
 }
 
 /// Per-process migration state: what is known about each entry's legacy
@@ -113,18 +138,23 @@ impl Migration {
     ) -> Result<(Option<String>, Option<Outcome>)> {
         let lock = self.entry_lock(key);
         let _held = guard(&lock);
+        let known = self.legacy(key);
+        if known == Some(Legacy::Unverified) {
+            if let Some(blob) = keychain.read(LEGACY_SERVICE, key)? {
+                return Ok((Some(blob), None));
+            }
+        }
         if let Some(blob) = keychain.read(SERVICE, key)? {
-            let outcome = match self.legacy(key) {
+            let outcome = match known {
                 Some(_) => None,
                 None => {
                     let state = self.retire(keychain, log, key, &blob);
                     self.settle(key, state);
-                    (state == Legacy::Deferred).then_some(Outcome::Deferred)
+                    (state != Legacy::Gone).then_some(Outcome::Deferred)
                 }
             };
             return Ok((Some(blob), outcome));
         }
-        let known = self.legacy(key);
         if known == Some(Legacy::Gone) {
             return Ok((None, None));
         }
@@ -155,14 +185,15 @@ impl Migration {
         self.settle(key, state);
         let outcome = match state {
             Legacy::Gone => Outcome::Moved,
-            Legacy::Deferred => Outcome::Deferred,
+            _ => Outcome::Deferred,
         };
         Ok((Some(blob), Some(outcome)))
     }
 
     /// Write an entry under `oreneta`. While a legacy copy may still exist,
-    /// the write is read back and, once it matches, the legacy copy (whose
-    /// value this write replaces) is deleted.
+    /// the write is read back and, once it matches, the legacy copy is
+    /// deleted: this write replaces its value. A write that reads back
+    /// different is an error, and the legacy copy is kept.
     pub(crate) fn store(
         &self,
         keychain: &dyn CredentialStore,
@@ -173,14 +204,18 @@ impl Migration {
         let lock = self.entry_lock(key);
         let _held = guard(&lock);
         keychain.write(SERVICE, key, blob)?;
-        if self.legacy(key).is_some() {
+        if matches!(self.legacy(key), Some(Legacy::Gone | Legacy::Held)) {
             return Ok(());
         }
         let state = match keychain.read(LEGACY_SERVICE, key) {
             Ok(None) => Legacy::Gone,
             Ok(Some(_)) => match verified(keychain, key, blob) {
-                Ok(()) => self.delete_legacy(keychain, log, key),
-                Err(why) => {
+                Ok(()) => match self.delete_legacy(keychain, log, key) {
+                    Legacy::Gone => Legacy::Gone,
+                    _ => Legacy::Held,
+                },
+                Err(mismatch) => {
+                    let why = mismatch.reason();
                     log(
                         Level::Warn,
                         &format!(
@@ -188,7 +223,11 @@ impl Migration {
                              the {LEGACY_SERVICE} entry is kept until the next start"
                         ),
                     );
-                    Legacy::Deferred
+                    self.settle(key, Legacy::Held);
+                    if let Mismatch::Damaged(_) = mismatch {
+                        anyhow::bail!("the {SERVICE} entry {key} did not read back as written ({why})");
+                    }
+                    return Ok(());
                 }
             },
             Err(error) => {
@@ -199,7 +238,7 @@ impl Migration {
                          again on the next start: {error:#}"
                     ),
                 );
-                Legacy::Deferred
+                Legacy::Held
             }
         };
         self.settle(key, state);
@@ -219,6 +258,44 @@ impl Migration {
         keychain.delete(SERVICE, key)
     }
 
+    /// The SQLCipher key for the store, read like any entry. A read error is
+    /// returned, never taken for a missing key. A malformed key under
+    /// `oreneta` never hides a good one under `meron`: that one is used and
+    /// copied over it. A key is minted only when neither service holds a good
+    /// one.
+    pub(crate) fn db_key(
+        &self,
+        keychain: &dyn CredentialStore,
+        log: Log<'_>,
+        key: &str,
+        valid: &dyn Fn(&str) -> bool,
+        mint: &dyn Fn() -> String,
+    ) -> Result<String> {
+        let current = self.load(keychain, log, key)?;
+        if let Some(found) = current.as_deref().filter(|found| valid(*found)) {
+            return Ok(found.to_owned());
+        }
+        if current.is_some() {
+            let legacy = keychain
+                .read(LEGACY_SERVICE, key)
+                .with_context(|| format!("read the {LEGACY_SERVICE} entry {key}"))?;
+            if let Some(legacy) = legacy.filter(|legacy| valid(legacy.as_str())) {
+                log(
+                    Level::Warn,
+                    &format!(
+                        "the {SERVICE} entry {key} is malformed; the {LEGACY_SERVICE} one is \
+                         used and copied over it"
+                    ),
+                );
+                self.store(keychain, log, key, &legacy)?;
+                return Ok(legacy);
+            }
+        }
+        let fresh = mint();
+        self.store(keychain, log, key, &fresh)?;
+        Ok(fresh)
+    }
+
     /// Settle every named entry now rather than on its first read, so entries
     /// a session never reads still move. Returns counts only.
     pub(crate) fn migrate_all(
@@ -234,12 +311,16 @@ impl Migration {
                 Ok((_, Some(Outcome::Moved))) => summary.moved += 1,
                 Ok((_, Some(Outcome::Deferred))) => summary.deferred += 1,
                 Ok((_, None)) => {}
-                Err(_) => summary.unreadable += 1,
+                Err(error) => {
+                    log(Level::Warn, &format!("could not read the keychain entry {key}: {error:#}"));
+                    summary.unreadable += 1;
+                }
             }
         }
         if summary.moved + summary.deferred + summary.unreadable > 0 {
+            let level = if summary.deferred + summary.unreadable > 0 { Level::Warn } else { Level::Info };
             log(
-                Level::Warn,
+                level,
                 &format!(
                     "keychain entries checked: {}; moved from {LEGACY_SERVICE} to {SERVICE}: {}; \
                      kept under {LEGACY_SERVICE} until the next start: {}; unreadable: {}",
@@ -263,12 +344,13 @@ impl Migration {
             );
             return Legacy::Deferred;
         }
-        if let Err(why) = verified(keychain, key, blob) {
+        if let Err(mismatch) = verified(keychain, key, blob) {
             log(
                 Level::Warn,
                 &format!(
-                    "the {SERVICE} copy of {key} did not read back as written ({why}); \
-                     the {LEGACY_SERVICE} entry is kept and the move is tried again on the next start"
+                    "the {SERVICE} copy of {key} did not read back as written ({}); \
+                     the {LEGACY_SERVICE} entry is kept and the move is tried again on the next start",
+                    mismatch.reason()
                 ),
             );
             // The copy is read first from now on, so an unverified one must
@@ -276,8 +358,12 @@ impl Migration {
             if let Err(error) = keychain.delete(SERVICE, key) {
                 log(
                     Level::Error,
-                    &format!("could not remove the unverified {SERVICE} copy of {key}: {error:#}"),
+                    &format!(
+                        "could not remove the unverified {SERVICE} copy of {key}; the \
+                         {LEGACY_SERVICE} entry is served first for the rest of this run: {error:#}"
+                    ),
                 );
+                return Legacy::Unverified;
             }
             return Legacy::Deferred;
         }
@@ -338,13 +424,17 @@ impl Migration {
 }
 
 /// Read the `oreneta` entry back and compare it byte for byte with what was
-/// written. The error says why without quoting either value.
-fn verified(keychain: &dyn CredentialStore, key: &str, blob: &str) -> std::result::Result<(), String> {
+/// written. The reason never quotes either value.
+fn verified(
+    keychain: &dyn CredentialStore,
+    key: &str,
+    blob: &str,
+) -> std::result::Result<(), Mismatch> {
     match keychain.read(SERVICE, key) {
         Ok(Some(copy)) if copy == blob => Ok(()),
-        Ok(Some(_)) => Err("it holds a different value".to_owned()),
-        Ok(None) => Err("it is missing".to_owned()),
-        Err(error) => Err(format!("{error:#}")),
+        Ok(Some(_)) => Err(Mismatch::Damaged("it holds a different value")),
+        Ok(None) => Err(Mismatch::Damaged("it is missing")),
+        Err(error) => Err(Mismatch::Unreadable(format!("{error:#}"))),
     }
 }
 
@@ -457,8 +547,19 @@ mod tests {
     const KEY: &str = "ana@exemple.cat";
     const SECRET: &str = r#"{"password":"Contrasenya-Secreta-41","refresh_token":"rt-Secret-7777"}"#;
     const NEWER: &str = r#"{"password":"Contrasenya-Nova-42","refresh_token":"rt-Secret-8888"}"#;
+    const DB_KEY: &str = "__meron_db_key__";
+    const GOOD_DB_KEY: &str = "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00";
+    const MINTED_DB_KEY: &str = "badc0de0badc0de0badc0de0badc0de0badc0de0badc0de0badc0de0badc0de0";
     /// Fragments that must never appear in a log line or an error.
-    const NEEDLES: &[&str] = &["Contrasenya", "rt-Secret", "Secreta", "Nova-42"];
+    const NEEDLES: &[&str] = &["Contrasenya", "rt-Secret", "Secreta", "Nova-42", "c0ffee", "badc0de"];
+
+    fn hex_key(value: &str) -> bool {
+        value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
+    }
+
+    fn mint() -> String {
+        MINTED_DB_KEY.to_owned()
+    }
 
     #[derive(Default)]
     struct Logs(Mutex<Vec<(Level, String)>>);
@@ -494,6 +595,13 @@ mod tests {
 
     fn holds(store: &FakeStore, service: &'static str, value: &str) -> bool {
         store.get(service, KEY).as_deref() == Some(value)
+    }
+
+    fn load_error(migration: &Migration, store: &FakeStore, log: Log<'_>, key: &str) -> String {
+        match migration.load(store, log, key) {
+            Ok(_) => panic!("an unreadable keychain is an error, not an empty secret"),
+            Err(error) => format!("{error:#}"),
+        }
     }
 
     #[test]
@@ -535,6 +643,21 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_oreneta_read_is_an_error_and_touches_nothing() {
+        let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
+        store.fail(Op::Read, SERVICE, 0, 1);
+        let logs = Logs::default();
+        let migration = Migration::default();
+        let log = logs.sink();
+
+        let error = load_error(&migration, &store, &log, KEY);
+        assert!(holds(&store, LEGACY_SERVICE, SECRET));
+        assert_eq!(store.count(Op::Write, SERVICE), 0);
+        assert_eq!(store.count(Op::Delete, LEGACY_SERVICE), 0);
+        assert_clean(&logs, &[error]);
+    }
+
+    #[test]
     fn a_failed_legacy_read_loses_nothing_and_is_retried() {
         let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
         store.fail(Op::Read, LEGACY_SERVICE, 0, 1);
@@ -542,9 +665,7 @@ mod tests {
         let migration = Migration::default();
         let log = logs.sink();
 
-        let Err(error) = migration.load(&store, &log, KEY) else {
-            panic!("an unreadable keychain is an error, not an empty secret");
-        };
+        let error = load_error(&migration, &store, &log, KEY);
         assert!(holds(&store, LEGACY_SERVICE, SECRET));
         assert!(store.get(SERVICE, KEY).is_none());
         assert_eq!(logs.warnings(), 1);
@@ -557,7 +678,7 @@ mod tests {
         assert!(next_start.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET));
         assert!(holds(&store, SERVICE, SECRET));
         assert!(store.get(LEGACY_SERVICE, KEY).is_none());
-        assert_clean(&logs, &[format!("{error:#}")]);
+        assert_clean(&logs, &[error]);
     }
 
     #[test]
@@ -639,13 +760,23 @@ mod tests {
 
         assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET));
         assert!(logs.lines().iter().any(|(level, _)| *level == Level::Error));
+        // For the rest of the run the original is served, not the damaged copy.
+        assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET));
+        assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET));
 
-        // Next start: two different entries. Neither is deleted.
+        // Next start: two different entries. Neither is deleted (ADR-0063,
+        // accepted residual risk of this double failure).
         let next_start = Migration::default();
         next_start.load(&store, &log, KEY).unwrap();
         assert!(holds(&store, LEGACY_SERVICE, SECRET));
         assert!(store.get(SERVICE, KEY).is_some());
         assert_eq!(store.count(Op::Delete, LEGACY_SERVICE), 0);
+
+        // A store in that run writes a good value and retires the original.
+        store.heal();
+        next_start.store(&store, &log, KEY, NEWER).unwrap();
+        assert!(holds(&store, SERVICE, NEWER));
+        assert!(store.get(LEGACY_SERVICE, KEY).is_none());
         assert_clean(&logs, &[]);
     }
 
@@ -670,21 +801,42 @@ mod tests {
     }
 
     #[test]
-    fn a_partial_previous_move_with_different_values_keeps_both_and_uses_oreneta() {
+    fn a_failed_legacy_check_on_an_already_moved_entry_deletes_nothing() {
+        let store = FakeStore::with(&[(SERVICE, KEY, SECRET), (LEGACY_SERVICE, KEY, SECRET)]);
+        store.fail(Op::Read, LEGACY_SERVICE, 0, 1);
+        let logs = Logs::default();
+        let migration = Migration::default();
+        let log = logs.sink();
+
+        assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET));
+        assert!(holds(&store, LEGACY_SERVICE, SECRET));
+        assert_eq!(store.count(Op::Delete, LEGACY_SERVICE), 0);
+        assert_eq!(logs.warnings(), 1);
+
+        let next_start = Migration::default();
+        next_start.load(&store, &log, KEY).unwrap();
+        assert!(store.get(LEGACY_SERVICE, KEY).is_none());
+        assert_clean(&logs, &[]);
+    }
+
+    #[test]
+    fn a_partial_previous_move_with_different_values_keeps_both_until_a_store() {
         let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET), (SERVICE, KEY, NEWER)]);
         let logs = Logs::default();
         let migration = Migration::default();
         let log = logs.sink();
 
+        // The real order: the sweep (or a read) sees them first.
+        let summary = migration.migrate_all(&store, &log, &[KEY.to_string()]);
+        assert_eq!(summary.deferred, 1);
         assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(NEWER));
-        assert!(holds(&store, LEGACY_SERVICE, SECRET), "an entry that differs is never deleted");
+        assert!(holds(&store, LEGACY_SERVICE, SECRET), "an entry that differs is never deleted on a read");
         assert!(holds(&store, SERVICE, NEWER));
-        assert_eq!(logs.warnings(), 1);
 
-        // The next successful store replaces the value, so the old one goes.
-        let next_start = Migration::default();
-        next_start.store(&store, &log, KEY, NEWER).unwrap();
+        // A store replaces the value, so the superseded legacy one goes.
+        migration.store(&store, &log, KEY, NEWER).unwrap();
         assert!(store.get(LEGACY_SERVICE, KEY).is_none());
+        assert!(holds(&store, SERVICE, NEWER));
         assert_clean(&logs, &[]);
     }
 
@@ -703,6 +855,31 @@ mod tests {
     }
 
     #[test]
+    fn a_store_after_a_failed_legacy_delete_retires_it_once_per_run() {
+        let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
+        // The move's delete fails, then the store's delete fails too.
+        store.fail(Op::Delete, LEGACY_SERVICE, 0, 2);
+        let logs = Logs::default();
+        let migration = Migration::default();
+        let log = logs.sink();
+
+        migration.load(&store, &log, KEY).unwrap();
+        migration.store(&store, &log, KEY, NEWER).unwrap();
+        assert!(holds(&store, LEGACY_SERVICE, SECRET), "both deletes failed");
+        let deletes = store.count(Op::Delete, LEGACY_SERVICE);
+        migration.store(&store, &log, KEY, NEWER).unwrap();
+        assert_eq!(store.count(Op::Delete, LEGACY_SERVICE), deletes, "no retry loop within the run");
+
+        // Next start: the entries differ, so a read keeps both; the next store retires it.
+        let next_start = Migration::default();
+        assert!(next_start.load(&store, &log, KEY).unwrap().as_deref() == Some(NEWER));
+        assert!(holds(&store, LEGACY_SERVICE, SECRET));
+        next_start.store(&store, &log, KEY, NEWER).unwrap();
+        assert!(store.get(LEGACY_SERVICE, KEY).is_none());
+        assert_clean(&logs, &[]);
+    }
+
+    #[test]
     fn a_failed_store_leaves_the_legacy_entry_alone() {
         let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
         store.fail(Op::Write, SERVICE, 0, 1);
@@ -717,7 +894,7 @@ mod tests {
     }
 
     #[test]
-    fn a_store_that_does_not_read_back_keeps_the_legacy_entry() {
+    fn a_store_that_cannot_be_read_back_keeps_the_legacy_entry() {
         let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
         // The verify read after the write fails.
         store.fail(Op::Read, SERVICE, 0, 1);
@@ -729,6 +906,19 @@ mod tests {
         assert!(holds(&store, LEGACY_SERVICE, SECRET), "unverified, so nothing is deleted");
         assert_eq!(logs.warnings(), 1);
         assert_clean(&logs, &[]);
+    }
+
+    #[test]
+    fn a_store_that_reads_back_different_is_an_error_and_keeps_the_legacy_entry() {
+        let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
+        *guard(&store.corrupt_writes) = Some(SERVICE);
+        let logs = Logs::default();
+        let migration = Migration::default();
+        let log = logs.sink();
+
+        let error = migration.store(&store, &log, KEY, NEWER).expect_err("a damaged write is reported");
+        assert!(holds(&store, LEGACY_SERVICE, SECRET));
+        assert_clean(&logs, &[format!("{error:#}")]);
     }
 
     #[test]
@@ -747,6 +937,21 @@ mod tests {
         assert!(store.get(LEGACY_SERVICE, KEY).is_none());
         assert!(migration.load(&store, &log, KEY).unwrap().is_none(), "nothing comes back");
         assert_clean(&logs, &[format!("{error:#}")]);
+    }
+
+    #[test]
+    fn a_delete_whose_oreneta_step_fails_never_leaves_a_lone_legacy_copy() {
+        let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET), (SERVICE, KEY, SECRET)]);
+        store.fail(Op::Delete, SERVICE, 0, 1);
+        let migration = Migration::default();
+        let logs = Logs::default();
+        let log = logs.sink();
+
+        let error = migration.delete(&store, KEY).expect_err("the failure is reported");
+        assert!(store.get(LEGACY_SERVICE, KEY).is_none());
+        assert!(holds(&store, SERVICE, SECRET));
+        assert_clean(&logs, &[format!("{error:#}")]);
+        drop(log);
     }
 
     #[test]
@@ -770,13 +975,28 @@ mod tests {
         assert!(store.get(SERVICE, "b@x.cat").as_deref() == Some(NEWER));
         assert!(store.get(LEGACY_SERVICE, "d@x.cat").as_deref() == Some(SECRET), "the failed one is kept");
         assert!(store.get(SERVICE, "e@x.cat").is_none(), "no secret, nothing written");
-        let summary_line = logs.lines().into_iter().last().unwrap().1;
+        let (level, summary_line) = logs.lines().into_iter().last().unwrap();
+        assert_eq!(level, Level::Warn, "a deferred entry makes the summary a warning");
         assert!(summary_line.contains("moved from meron to oreneta: 2"), "{summary_line}");
 
         let next_start = Migration::default();
         let summary = next_start.migrate_all(&store, &log, &keys);
         assert_eq!(summary, Summary { checked: 5, moved: 1, deferred: 0, unreadable: 0 });
         assert!(store.get(LEGACY_SERVICE, "d@x.cat").is_none());
+        assert_eq!(logs.lines().into_iter().last().unwrap().0, Level::Info, "an all-good sweep is not a warning");
+        assert_clean(&logs, &[]);
+    }
+
+    #[test]
+    fn the_sweep_logs_and_counts_an_unreadable_entry() {
+        let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
+        store.fail(Op::Read, SERVICE, 0, 1);
+        let logs = Logs::default();
+        let log = logs.sink();
+        let summary = Migration::default().migrate_all(&store, &log, &[KEY.to_string()]);
+        assert_eq!(summary, Summary { checked: 1, moved: 0, deferred: 0, unreadable: 1 });
+        assert_eq!(logs.warnings(), 2, "the entry's error and the summary");
+        assert!(holds(&store, LEGACY_SERVICE, SECRET));
         assert_clean(&logs, &[]);
     }
 
@@ -788,6 +1008,57 @@ mod tests {
         let summary = Migration::default().migrate_all(&store, &log, &[KEY.to_string()]);
         assert_eq!(summary, Summary { checked: 1, moved: 0, deferred: 0, unreadable: 0 });
         assert!(logs.lines().is_empty());
+    }
+
+    #[test]
+    fn the_store_key_moves_and_is_never_minted_on_a_read_error() {
+        let logs = Logs::default();
+        let log = logs.sink();
+
+        // Moved like any entry.
+        let store = FakeStore::with(&[(LEGACY_SERVICE, DB_KEY, GOOD_DB_KEY)]);
+        let key = Migration::default().db_key(&store, &log, DB_KEY, &hex_key, &mint).unwrap();
+        assert!(key == GOOD_DB_KEY);
+        assert!(store.get(SERVICE, DB_KEY).as_deref() == Some(GOOD_DB_KEY));
+        assert!(store.get(LEGACY_SERVICE, DB_KEY).is_none());
+
+        // A read error on either service mints nothing and writes nothing.
+        for service in [SERVICE, LEGACY_SERVICE] {
+            let store = FakeStore::with(&[(LEGACY_SERVICE, DB_KEY, GOOD_DB_KEY)]);
+            store.fail(Op::Read, service, 0, 1);
+            let result = Migration::default().db_key(&store, &log, DB_KEY, &hex_key, &mint);
+            assert!(result.is_err(), "an unreadable {service} key is an error");
+            assert_eq!(store.count(Op::Write, SERVICE), 0);
+            assert!(store.get(LEGACY_SERVICE, DB_KEY).as_deref() == Some(GOOD_DB_KEY));
+        }
+
+        // Nothing anywhere: a key is minted, under oreneta only.
+        let store = FakeStore::default();
+        let key = Migration::default().db_key(&store, &log, DB_KEY, &hex_key, &mint).unwrap();
+        assert!(key == MINTED_DB_KEY);
+        assert!(store.get(SERVICE, DB_KEY).as_deref() == Some(MINTED_DB_KEY));
+        assert_eq!(store.count(Op::Write, LEGACY_SERVICE), 0);
+        assert_clean(&logs, &[]);
+    }
+
+    #[test]
+    fn a_malformed_oreneta_store_key_never_hides_the_good_legacy_one() {
+        let store = FakeStore::with(&[(SERVICE, DB_KEY, "not-a-key"), (LEGACY_SERVICE, DB_KEY, GOOD_DB_KEY)]);
+        let logs = Logs::default();
+        let log = logs.sink();
+        let migration = Migration::default();
+
+        let key = migration.db_key(&store, &log, DB_KEY, &hex_key, &mint).unwrap();
+        assert!(key == GOOD_DB_KEY, "the store keeps opening with its real key");
+        assert!(store.get(SERVICE, DB_KEY).as_deref() == Some(GOOD_DB_KEY), "and the copy is repaired");
+        assert!(store.get(LEGACY_SERVICE, DB_KEY).is_none());
+
+        // Both malformed: replaced, as before this change.
+        let store = FakeStore::with(&[(SERVICE, DB_KEY, "not-a-key"), (LEGACY_SERVICE, DB_KEY, "nor-this")]);
+        let key = Migration::default().db_key(&store, &log, DB_KEY, &hex_key, &mint).unwrap();
+        assert!(key == MINTED_DB_KEY);
+        assert!(store.get(LEGACY_SERVICE, DB_KEY).is_none());
+        assert_clean(&logs, &[]);
     }
 
     #[test]

@@ -2594,7 +2594,11 @@ fn spawn_keychain_migration(engine: &Arc<Engine>) {
         Ok(names) => {
             tokio::task::spawn_blocking(move || secrets::migrate_legacy(&names));
         }
-        Err(err) => eprintln!("meron-core: could not list keychain entries to move: {err:#}"),
+        Err(err) => meron_core::mlog!(
+            meron_core::log::Level::Warn,
+            "keyring",
+            "could not list the keychain entries to move; each is moved on its first read: {err:#}"
+        ),
     }
 }
 

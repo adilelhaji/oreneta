@@ -34,7 +34,8 @@ No existien perfils ni grups de comptes.
 ## Decisió
 
 - La instal·lació existent és el perfil `default` i conserva els seus camins i
-  noms de clauer: no hi ha migració.
+  noms de clauer: no hi ha migració. (El servei del clauer canvia a #248:
+  vegeu la nota posterior.)
 - Els altres perfils viuen a `profiles/<id>` dins de les carpetes de
   configuració i memòria cau. Les seves entrades de clauer s'anomenen
   `profile:<id>/<nombre>`, de manera que dos perfils amb el mateix compte no
@@ -63,4 +64,4 @@ No existien perfils ni grups de comptes.
 
 - 2026-10-17 (#248): el servei del clauer passa de `meron` a `oreneta`. Els
   noms de les entrades, `profile:<id>/<nom>` inclòs, no canvien; les entrades
-  que hi ha es mouen soles (ADR-0063).
+  que hi ha es mouen automàticament (ADR-0063).
