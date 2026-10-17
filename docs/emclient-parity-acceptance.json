@@ -492,19 +492,19 @@
             "result": "frontend/src/states/folderMove.test.ts"
           },
           {
-            "sha": "10ca769be13a14a7d91e21a28705ccd380b8e2f7",
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
             "result": "frontend/src/lib/folderHiding.test.ts"
           },
           {
-            "sha": "10ca769be13a14a7d91e21a28705ccd380b8e2f7",
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
             "result": "frontend/src/states/folderPrefs.test.ts"
           },
           {
-            "sha": "10ca769be13a14a7d91e21a28705ccd380b8e2f7",
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
             "result": "frontend/src/components/sidenav/MailNavigation.test.tsx"
           },
           {
-            "sha": "10ca769be13a14a7d91e21a28705ccd380b8e2f7",
+            "sha": "bbd6fbf15467ea31e62ee91b9e2f789f6ad830d8",
             "result": "frontend/src/components/threads/SearchBuilder.test.tsx"
           }
         ],
