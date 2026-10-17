@@ -3531,6 +3531,68 @@ fn concurrent_first_open_runs_migrations_once() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Opens of one file in one process wait for a migration that holds its
+/// write lock longer than the busy timeout, instead of failing with
+/// "database is locked" (#227).
+#[test]
+fn concurrent_opens_wait_for_a_migration_longer_than_the_busy_timeout() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    db::slow_migration::next_for(&path, std::time::Duration::from_secs(6));
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(6));
+    let handles = (0..6)
+        .map(|_| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                db::open_at(&path).map(|_| ())
+            })
+        })
+        .collect::<Vec<_>>();
+
+    for handle in handles {
+        handle.join().unwrap().unwrap();
+    }
+    assert!(db::slow_migration::spent(), "the migration held its lock");
+
+    let conn = Connection::open(&path).unwrap();
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(version, db::SCHEMA_VERSION);
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A store already current is opened without its write lock, so a writer
+/// elsewhere does not hold it up; one whose body cache is not current still
+/// gets it done (#227).
+#[test]
+fn a_current_store_opens_without_the_write_lock() {
+    let dir = std::env::temp_dir().join(format!("meron-store-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("meron.db");
+    drop(db::open_at(&path).unwrap());
+
+    let writer = Connection::open(&path).unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+    db::open_at(&path).expect("opened while another connection writes");
+    writer.execute_batch("ROLLBACK").unwrap();
+
+    writer.execute("DELETE FROM meta WHERE key = 'body_cache_version'", []).unwrap();
+    let conn = db::open_at(&path).unwrap();
+    let cache: Option<String> = conn
+        .query_row("SELECT value FROM meta WHERE key = 'body_cache_version'", [], |r| r.get(0))
+        .optional()
+        .unwrap();
+    assert!(cache.is_some(), "the body cache was brought up to date");
+    drop((conn, writer));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn upgrade_from_main_v30_preserves_label_links_and_adds_tasks_and_spam() {
     let conn = test_conn();
