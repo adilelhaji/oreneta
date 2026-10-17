@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Gruppen {name} raderas. Personerna i den finns kvar.",
   "people.deleteGroupTextServer": "Gruppen {name} raderas från adressboken på dess server. Personerna i den finns kvar.",
   "people.deleteText": "{name} raderas från adressboken på den här datorn.",
-  "people.deleteTextServer": "{name} raderas från adressboken på dess server, för alla appar som läser den."
+  "people.deleteTextServer": "{name} raderas från adressboken på dess server, för alla appar som läser den.",
+  "settings.signature.placement": "I svar och vidarebefordringar",
+  "settings.signature.placementHint": "Var signaturen hamnar i förhållande till det citerade originalet",
+  "settings.signature.placementWithText": "Med det jag skriver",
+  "settings.signature.placementAbove": "Ovanför citatet",
+  "settings.signature.placementBelow": "Under citatet"
 }

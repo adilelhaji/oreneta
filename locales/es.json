@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Se eliminará el grupo {name}. Las personas que contiene se quedan.",
   "people.deleteGroupTextServer": "Se eliminará el grupo {name} de la libreta de direcciones en su servidor. Las personas que contiene se quedan.",
   "people.deleteText": "{name} se eliminará de la libreta de direcciones de este ordenador.",
-  "people.deleteTextServer": "{name} se eliminará de la libreta de direcciones en su servidor, para todas las apps que la leen."
+  "people.deleteTextServer": "{name} se eliminará de la libreta de direcciones en su servidor, para todas las apps que la leen.",
+  "settings.signature.placement": "En respuestas y reenvíos",
+  "settings.signature.placementHint": "Dónde va la firma respecto al original citado",
+  "settings.signature.placementWithText": "Con lo que escribo",
+  "settings.signature.placementAbove": "Encima de la cita",
+  "settings.signature.placementBelow": "Debajo de la cita"
 }

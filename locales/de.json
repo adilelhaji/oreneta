@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Die Gruppe {name} wird gelöscht. Die Personen darin bleiben erhalten.",
   "people.deleteGroupTextServer": "Die Gruppe {name} wird aus dem Adressbuch auf seinem Server gelöscht. Die Personen darin bleiben erhalten.",
   "people.deleteText": "{name} wird aus dem Adressbuch auf diesem Computer gelöscht.",
-  "people.deleteTextServer": "{name} wird aus dem Adressbuch auf seinem Server gelöscht, für jede App, die es liest."
+  "people.deleteTextServer": "{name} wird aus dem Adressbuch auf seinem Server gelöscht, für jede App, die es liest.",
+  "settings.signature.placement": "In Antworten und Weiterleitungen",
+  "settings.signature.placementHint": "Wo die Signatur im Verhältnis zum zitierten Original steht",
+  "settings.signature.placementWithText": "Bei meinem Text",
+  "settings.signature.placementAbove": "Über dem Zitat",
+  "settings.signature.placementBelow": "Unter dem Zitat"
 }

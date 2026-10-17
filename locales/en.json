@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "The group {name} will be deleted. The people in it stay.",
   "people.deleteGroupTextServer": "The group {name} will be deleted from the address book on its server. The people in it stay.",
   "people.deleteText": "{name} will be deleted from the address book on this computer.",
-  "people.deleteTextServer": "{name} will be deleted from the address book on its server, for every app that reads it."
+  "people.deleteTextServer": "{name} will be deleted from the address book on its server, for every app that reads it.",
+  "settings.signature.placement": "In replies and forwards",
+  "settings.signature.placementHint": "Where the signature goes against the quoted original",
+  "settings.signature.placementWithText": "With what I write",
+  "settings.signature.placementAbove": "Above the quote",
+  "settings.signature.placementBelow": "Below the quote"
 }

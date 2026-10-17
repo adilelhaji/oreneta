@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Grupa {name} zostanie usunięta. Osoby w niej pozostaną.",
   "people.deleteGroupTextServer": "Grupa {name} zostanie usunięta z książki adresowej na jej serwerze. Osoby w niej pozostaną.",
   "people.deleteText": "Kontakt {name} zostanie usunięty z książki adresowej na tym komputerze.",
-  "people.deleteTextServer": "Kontakt {name} zostanie usunięty z książki adresowej na jej serwerze, dla każdej aplikacji, która ją czyta."
+  "people.deleteTextServer": "Kontakt {name} zostanie usunięty z książki adresowej na jej serwerze, dla każdej aplikacji, która ją czyta.",
+  "settings.signature.placement": "W odpowiedziach i przekazaniach",
+  "settings.signature.placementHint": "Gdzie umieścić podpis względem cytowanej wiadomości",
+  "settings.signature.placementWithText": "Przy moim tekście",
+  "settings.signature.placementAbove": "Nad cytatem",
+  "settings.signature.placementBelow": "Pod cytatem"
 }

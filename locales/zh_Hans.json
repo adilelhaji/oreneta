@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "将删除群组 {name}。其中的人员会保留。",
   "people.deleteGroupTextServer": "将从服务器上的通讯录中删除群组 {name}。其中的人员会保留。",
   "people.deleteText": "将从这台电脑上的通讯录中删除 {name}。",
-  "people.deleteTextServer": "将从服务器上的通讯录中删除 {name}，对读取该通讯录的所有应用都生效。"
+  "people.deleteTextServer": "将从服务器上的通讯录中删除 {name}，对读取该通讯录的所有应用都生效。",
+  "settings.signature.placement": "回复和转发中",
+  "settings.signature.placementHint": "签名相对于引用原文的位置",
+  "settings.signature.placementWithText": "跟随我写的内容",
+  "settings.signature.placementAbove": "引用内容上方",
+  "settings.signature.placementBelow": "引用内容下方"
 }

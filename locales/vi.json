@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Nhóm {name} sẽ bị xóa. Những người trong nhóm vẫn được giữ lại.",
   "people.deleteGroupTextServer": "Nhóm {name} sẽ bị xóa khỏi sổ địa chỉ trên máy chủ của nó. Những người trong nhóm vẫn được giữ lại.",
   "people.deleteText": "{name} sẽ bị xóa khỏi sổ địa chỉ trên máy tính này.",
-  "people.deleteTextServer": "{name} sẽ bị xóa khỏi sổ địa chỉ trên máy chủ của nó, với mọi ứng dụng đọc sổ này."
+  "people.deleteTextServer": "{name} sẽ bị xóa khỏi sổ địa chỉ trên máy chủ của nó, với mọi ứng dụng đọc sổ này.",
+  "settings.signature.placement": "Trong thư trả lời và chuyển tiếp",
+  "settings.signature.placementHint": "Vị trí chữ ký so với thư gốc được trích dẫn",
+  "settings.signature.placementWithText": "Cùng với nội dung tôi viết",
+  "settings.signature.placementAbove": "Phía trên phần trích dẫn",
+  "settings.signature.placementBelow": "Phía dưới phần trích dẫn"
 }
