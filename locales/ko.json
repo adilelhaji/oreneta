@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Google 연락처 읽기",
   "contacts.remove": "제거",
   "contacts.removeMessage": "“{name}”의 사람들이 이 앱에서 사라집니다. 서버에서는 아무것도 바뀌지 않습니다.",
+  "contacts.removeExchangeMessage": "“{name}” 및 그 연락처 폴더의 사람들이 이 앱에서 사라집니다. 서버에서는 아무것도 바뀌지 않습니다.",
   "contacts.removeTitle": "이 주소록을 제거할까요?",
   "contacts.serverPlaceholder": "서버, 이메일 주소 또는 URL",
   "contacts.syncNow": "지금 다시 읽기",

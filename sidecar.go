@@ -523,10 +523,18 @@ func sidecarCallTimeout(method string) time.Duration {
 	// (ADR-0058). Each request is bounded by the core.
 	case "people.groupSave", "people.groupDelete":
 		return 60 * time.Second
-	// An Exchange account's whole Contacts folder, in pages and batches
-	// (ADR-0058).
-	case "exchange.contacts.sync":
-		return 2 * time.Minute
+	// A person written to a server book: an Exchange contact is looked for,
+	// read, written and read again (ADR-0066), each EWS request bounded by
+	// the core at 2 min, so this outlasts a hung request and the recovery
+	// after it rather than answering while the core still writes.
+	case "people.save", "people.delete":
+		return 10 * time.Minute
+	// An Exchange account's whole Contacts folder and every contact folder
+	// under it, one after another, in pages and batches (ADR-0058,
+	// ADR-0066); re-reading a book from settings may be that same read. Its
+	// length is the mailbox's, not a fixed budget: only a stuck call ends here.
+	case "exchange.contacts.sync", "carddav.sync":
+		return 2 * time.Hour
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second
 	case "folders.list", "folders.create", "folders.archive", "messages.recent", "messages.sync", "rss.markRead", "rss.markAllRead", "watch.start", "watch.stop", "discard_draft", "account.addRss", "feed.add", "rss.importOpml":

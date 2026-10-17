@@ -142,7 +142,9 @@ export function PeopleView() {
     const confirmed = await confirmAction({
       title: t('people.deleteGroupTitle', { defaultValue: 'Delete group?' }),
       message:
-        group.source === 'carddav'
+        // A server book's group goes on the server: CardDAV, and an
+        // Exchange folder's distribution lists (ADR-0058, ADR-0066).
+        group.source === 'carddav' || group.source === 'exchange'
           ? t('people.deleteGroupTextServer', {
               name: group.name,
               defaultValue: 'The group {name} will be deleted from the address book on its server. The people in it stay.',
@@ -161,7 +163,7 @@ export function PeopleView() {
     const confirmed = await confirmAction({
       title: t('people.deleteTitle', { defaultValue: 'Delete contact?' }),
       message:
-        person.source === 'carddav'
+        person.source === 'carddav' || person.source === 'exchange'
           ? t('people.deleteTextServer', {
               name: person.name || person.emails[0]?.addr || '',
               defaultValue: '{name} will be deleted from the address book on its server, for every app that reads it.',
@@ -418,7 +420,8 @@ export function PeopleView() {
                 people$.editing.set({
                   id: selected.id,
                   version: selected.version,
-                  serverBook: selected.source === 'carddav' ? selected.book : undefined,
+                  serverBook:
+                    selected.source === 'carddav' || selected.source === 'exchange' ? selected.book : undefined,
                   draft: draftOf(selected),
                 })
               }

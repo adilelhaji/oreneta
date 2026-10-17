@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Llegeix els contactes de Google",
   "contacts.remove": "Elimina",
   "contacts.removeMessage": "Les persones de «{name}» desapareixeran d'aquesta aplicació. Al servidor no canvia res.",
+  "contacts.removeExchangeMessage": "Les persones de «{name}» i de les seves carpetes de contactes desapareixeran d'aquesta aplicació. Al servidor no canvia res.",
   "contacts.removeTitle": "Vols eliminar aquesta llibreta d'adreces?",
   "contacts.serverPlaceholder": "Servidor, adreça electrònica o URL",
   "contacts.syncNow": "Torna-la a llegir ara",

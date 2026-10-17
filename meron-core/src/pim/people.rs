@@ -1,5 +1,6 @@
 //! The address-book commands: `people.list`, `people.save` and
-//! `people.delete`, on the local book and on CardDAV books (ADR-0012).
+//! `people.delete`, on the local book, on CardDAV books (ADR-0012) and on an
+//! Exchange account's contact folders (ADR-0066).
 
 use std::sync::Arc;
 
@@ -43,10 +44,11 @@ pub fn list(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
                 "version": stored.version,
                 // Linked by the reader with the same person elsewhere.
                 "link": links.get(&stored.id),
-                // The local book, and CardDAV books the server has not
-                // said are read-only (ADR-0012). Google and Exchange
-                // stay read-only here.
+                // The local book, CardDAV books the server has not said
+                // are read-only (ADR-0012) and Exchange contact folders
+                // (ADR-0066). Google stays read-only here.
                 "editable": stored.origin.source == "local"
+                    || stored.origin.source == "exchange"
                     || (stored.origin.source == "carddav"
                         && writable.get(&stored.origin.book).copied().flatten() != Some(false)),
             }))
@@ -54,8 +56,8 @@ pub fn list(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
     }))
 }
 
-/// Creates a person in the local book (or, with `book`, a CardDAV one), or
-/// edits one from the version it was read at. A different version saves
+/// Creates a person in the local book (or, with `book`, a CardDAV book or an
+/// Exchange contact folder), or edits one from the version it was read at. A different version saves
 /// nothing and answers with the copy that is there now, for the reader to
 /// choose (ADR-0012).
 pub async fn save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
@@ -88,16 +90,20 @@ pub async fn save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
         (Some(stored), _) if stored.origin.source == "carddav" => {
             carddav_save(&engine, Some(stored), version.unwrap_or_default(), person).await
         }
+        (Some(stored), _) if stored.origin.source == "exchange" => {
+            exchange_save(engine, &stored.origin.book, Some(stored.clone()), version.unwrap_or_default(), person, None).await
+        }
         (Some(stored), _) if stored.origin.source != "local" => {
             anyhow::bail!("this address book is read-only here")
         }
         (None, Some(book)) if id.is_none() => {
             let source = store::contact_source(&engine.db.lock().unwrap(), book)?
                 .context("that address book is no longer set up")?;
-            if source.kind != "carddav" {
-                anyhow::bail!("this address book is read-only here");
+            match source.kind.as_str() {
+                "carddav" => carddav_create(&engine, &source, person).await,
+                "exchange" => exchange_save(engine, &source.id, None, "", person, creation_id(p)?).await,
+                _ => anyhow::bail!("this address book is read-only here"),
             }
-            carddav_create(&engine, &source, person).await
         }
         _ => {
             let write =
@@ -114,12 +120,60 @@ pub async fn delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
     let stored = store::synced_person(&engine.db.lock().unwrap(), &id)?;
     match stored {
         Some(stored) if stored.origin.source == "carddav" => carddav_delete(&engine, &id, &stored, &version).await,
+        Some(stored) if stored.origin.source == "exchange" => exchange_delete(engine, &id, stored, &version).await,
         Some(stored) if stored.origin.source != "local" => anyhow::bail!("this address book is read-only here"),
         _ => {
             let write = store::local_people::delete(&engine.db.lock().unwrap(), &id, &version)?;
             Ok(local_write_json(write))
         }
     }
+}
+
+/// The id an editor gives the person it creates, the same on every try
+/// while it is open (`marker`), so trying again never makes a second one on
+/// a server that can be searched for it (ADR-0066). `None` when it gave none.
+fn creation_id(p: &Value) -> Result<Option<String>> {
+    match p.get("marker").and_then(Value::as_str).filter(|marker| !marker.is_empty()) {
+        None => Ok(None),
+        Some(marker) if marker.len() <= 64 && marker.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') => {
+            Ok(Some(marker.to_string()))
+        }
+        Some(_) => anyhow::bail!("a new contact's id must be up to 64 letters, digits or hyphens"),
+    }
+}
+
+/// Creates a person in an Exchange contact folder, or edits one there from
+/// the version it was read at (ADR-0066).
+async fn exchange_save(
+    engine: &Arc<Engine>,
+    book: &str,
+    stored: Option<store::SyncedPerson>,
+    read_at: &str,
+    person: crate::contacts::person::Person,
+    marker: Option<String>,
+) -> Result<Value> {
+    let target = super::exchange_book::target(&engine.db.lock().unwrap(), book)?;
+    let client = super::exchange_book::client(engine, &target.origin.account).await?;
+    let id = stored.as_ref().map(|stored| target.origin.person_id(&stored.person.uid)).unwrap_or_default();
+    let (db, read_at) = (engine.db.clone(), read_at.to_string());
+    let written = tokio::task::spawn_blocking(move || {
+        super::exchange_book::save_person(&client, &db, &target, stored.as_ref(), &read_at, &person, marker.as_deref(), now_unix())
+    })
+    .await??;
+    Ok(written.to_json(&id))
+}
+
+/// Deletes a person from an Exchange contact folder, from the version it was
+/// read at (ADR-0066).
+async fn exchange_delete(engine: &Arc<Engine>, id: &str, stored: store::SyncedPerson, read_at: &str) -> Result<Value> {
+    let target = super::exchange_book::target(&engine.db.lock().unwrap(), &stored.origin.book)?;
+    let client = super::exchange_book::client(engine, &target.origin.account).await?;
+    let (db, read_at) = (engine.db.clone(), read_at.to_string());
+    let written = tokio::task::spawn_blocking(move || {
+        super::exchange_book::delete_person(&client, &db, &target, &stored, &read_at, now_unix())
+    })
+    .await??;
+    Ok(written.to_json(id))
 }
 
 /// The source a CardDAV contact belongs to, and a transport signed in to it.
@@ -363,6 +417,21 @@ pub async fn source_sync(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
     Ok(json!({ "ok": outcome.is_ok(), "error": outcome.err().map(|e| format!("{e:#}")) }))
 }
 
+/// `carddav.remove`: removes a book and its people from this app; nothing
+/// changes on its server. An Exchange account's book takes its contact
+/// folders with it (ADR-0066). Answers the ids removed, whose secrets the
+/// caller forgets.
+pub fn remove_source(conn: &rusqlite::Connection, id: &str) -> Result<Vec<String>> {
+    match store::contact_source(conn, id)? {
+        Some(source) if source.kind == "exchange" => super::exchange_book::remove_source(conn, &source),
+        Some(_) => {
+            store::delete_contact_source(conn, id)?;
+            Ok(vec![id.to_string()])
+        }
+        None => Ok(vec![id.to_string()]),
+    }
+}
+
 /// `carddav.list`: the books brought in, with when each was last read and
 /// what went wrong the last time, if anything.
 pub fn sources(engine: &Arc<Engine>) -> Result<Value> {
@@ -381,23 +450,11 @@ pub async fn sync_source(engine: &Arc<Engine>, id: &str) -> Result<()> {
     let source = store::contact_source(&engine.db.lock().unwrap(), id)?
         .with_context(|| format!("no such contact source: {id}"))?;
 
-    // An Exchange account's Contacts folder (ADR-0058): its people, and its
-    // distribution lists with the members who are no contact here.
+    // An Exchange account's contact folders (ADR-0058, ADR-0066): their
+    // people, and their distribution lists with the members who are no
+    // contact here. The account's own book brings the folders under it.
     if source.kind == "exchange" {
-        let fetched = super::exchange_book::fetch(engine, &source.account).await;
-        let now = chrono::Utc::now().timestamp();
-        let db = engine.db.lock().unwrap();
-        return match fetched {
-            Ok(book) => {
-                super::exchange_book::store_book(&db, &super::exchange_book::origin(&source.account), &book, now)?;
-                store::mark_contact_source_synced(&db, id, "", "", now)?;
-                Ok(())
-            }
-            Err(error) => {
-                store::mark_contact_source_synced(&db, id, "", &format!("{error:#}"), now)?;
-                Err(error)
-            }
-        };
+        return super::exchange_book::sync_source(engine, &source).await;
     }
 
     let fetched = match source.kind.as_str() {
@@ -679,22 +736,17 @@ pub async fn group_save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             };
             record_group_outcome(engine, &origin, outcome, id.as_deref())
         }
-        // An Exchange account's distribution lists (ADR-0058).
+        // An Exchange contact folder's distribution lists (ADR-0058,
+        // ADR-0066).
         "exchange" => {
-            let account = match (&stored, book) {
-                (Some(stored), _) => stored.origin.account.clone(),
-                (None, book) => {
-                    store::contact_source(&engine.db.lock().unwrap(), book.unwrap_or_default())?
-                        .context("that address book is no longer set up")?
-                        .account
-                }
-            };
-            let client = super::exchange_book::client(engine, &account).await?;
-            let origin = super::exchange_book::origin(&account);
+            let book_id =
+                stored.as_ref().map(|group| group.origin.book.clone()).or(book.map(str::to_string)).unwrap_or_default();
+            let target = super::exchange_book::target(&engine.db.lock().unwrap(), &book_id)?;
+            let client = super::exchange_book::client(engine, &target.origin.account).await?;
             let db = engine.db.clone();
             let read_at = version.clone().unwrap_or_default();
             let written = tokio::task::spawn_blocking(move || {
-                super::exchange_book::save_group(&client, &db, &origin, stored.as_ref(), &read_at, &name, &members, now_unix())
+                super::exchange_book::save_group(&client, &db, &target, stored.as_ref(), &read_at, &name, &members, now_unix())
             })
             .await??;
             Ok(written.to_json(id.as_deref().unwrap_or_default()))
@@ -731,14 +783,15 @@ pub async fn group_delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             .await??;
             record_group_outcome(engine, &stored.origin, outcome, Some(&id))
         }
-        // An Exchange account's distribution lists (ADR-0058).
+        // An Exchange contact folder's distribution lists (ADR-0058,
+        // ADR-0066).
         "exchange" => {
-            let client = super::exchange_book::client(engine, &stored.origin.account).await?;
-            let origin = super::exchange_book::origin(&stored.origin.account);
+            let target = super::exchange_book::target(&engine.db.lock().unwrap(), &stored.origin.book)?;
+            let client = super::exchange_book::client(engine, &target.origin.account).await?;
             let db = engine.db.clone();
             let stored = stored.clone();
             let written = tokio::task::spawn_blocking(move || {
-                super::exchange_book::delete_group(&client, &db, &origin, &stored, &version, now_unix())
+                super::exchange_book::delete_group(&client, &db, &target, &stored, &version, now_unix())
             })
             .await??;
             Ok(written.to_json(&id))

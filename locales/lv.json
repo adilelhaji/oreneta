@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Lasīt Google kontaktus",
   "contacts.remove": "Noņemt",
   "contacts.removeMessage": "Cilvēki no “{name}” pazudīs no šīs lietotnes. Serverī nekas nemainās.",
+  "contacts.removeExchangeMessage": "Cilvēki no “{name}” un tā kontaktu mapēm pazudīs no šīs lietotnes. Serverī nekas nemainās.",
   "contacts.removeTitle": "Noņemt šo adrešu grāmatu?",
   "contacts.serverPlaceholder": "Serveris, e-pasta adrese vai URL",
   "contacts.syncNow": "Lasīt vēlreiz tagad",
