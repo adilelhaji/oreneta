@@ -7,7 +7,7 @@ class BackupFileNameTest {
     @Test
     fun fileNameCarriesTheDate() {
         // 2026-08-10T00:00:00Z
-        assertEquals("meron-backup-2026-08-10.json", backupFileName(1_786_320_000_000L))
+        assertEquals("oreneta-backup-2026-08-10.json", backupFileName(1_786_320_000_000L))
     }
 
     @Test

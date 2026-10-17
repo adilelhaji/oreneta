@@ -1215,7 +1215,7 @@ internal fun MeronMobileState.exportOpmlForSelectedAccount() {
                 status = "No OPML content to export."
             } else {
                 pendingOpmlExport = opml
-                launchOpmlExport("meron-feeds.opml")
+                launchOpmlExport("oreneta-feeds.opml")
             }
         }.onFailure {
             status = "OPML export failed: ${it.message}"

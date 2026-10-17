@@ -75,7 +75,7 @@ pub fn export_opml(conn: &Connection, account: &str) -> Result<String> {
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <opml version=\"2.0\">\n  \
-         <head>\n    <title>Meron Feeds</title>\n  </head>\n  \
+         <head>\n    <title>Oreneta Feeds</title>\n  </head>\n  \
          <body>\n{body}  </body>\n</opml>\n"
     ))
 }

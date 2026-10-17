@@ -688,8 +688,9 @@ func TestIntegrationMailFlow(t *testing.T) {
 			t.Fatalf("quick reply fixture has empty thread_key: %v", original)
 		}
 
-		// Same Message-ID shape the frontend mints (newDraftMessageId): the
-		// store-side thread cleanup only targets oreneta-draft-*@oreneta ids.
+		// The core's draft Message-ID shape on its fallback domain: the
+		// store-side thread cleanup targets oreneta-draft-*@oreneta (and the
+		// legacy meron-draft-*@meron) ids.
 		draftID := fmt.Sprintf("oreneta-draft-%s-itest@oreneta", nonce)
 		draftSubject := "Re: " + quickSubject
 		if _, err := sidecar.Call("save_draft", map[string]any{

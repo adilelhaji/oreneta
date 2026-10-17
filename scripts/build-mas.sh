@@ -10,7 +10,7 @@
 #   * The sidecar ships inside the bundle instead of embedded in the Go binary.
 #     A sandboxed app may not exec something it wrote to its cache dir, and App
 #     Review rejects executable code delivered outside the bundle either way, so
-#     meron-core goes to Contents/MacOS/ and is signed as part of the app. The
+#     oreneta-core goes to Contents/MacOS/ and is signed as part of the app. The
 #     app finds it there via bundledSidecarPath() — no embed_sidecar tag.
 #   * Sandbox entitlements, and no disable-library-validation /
 #     allow-unsigned-executable-memory (both are App Store rejections).
@@ -163,15 +163,15 @@ for target in $rust_targets; do
 done
 
 mkdir -p build/sidecar
-sidecar_out="build/sidecar/meron-core-mas"
+sidecar_out="build/sidecar/oreneta-core-mas"
 # shellcheck disable=SC2086 # word splitting is how the target list is iterated
 set -- $rust_targets
 if [ $# -eq 2 ]; then
   lipo -create -output "$sidecar_out" \
-    "meron-core/target/$1/release/meron-core" \
-    "meron-core/target/$2/release/meron-core"
+    "meron-core/target/$1/release/oreneta-core" \
+    "meron-core/target/$2/release/oreneta-core"
 else
-  cp "meron-core/target/$1/release/meron-core" "$sidecar_out"
+  cp "meron-core/target/$1/release/oreneta-core" "$sidecar_out"
 fi
 lipo -info "$sidecar_out"
 
@@ -196,8 +196,8 @@ mkdir -p "$STAGE_DIR"
 ditto "$BUILT_APP" "$APP_PATH"
 
 echo "==> Staging the sidecar and provisioning profile into the bundle"
-cp "$sidecar_out" "$APP_PATH/Contents/MacOS/meron-core"
-chmod 0755 "$APP_PATH/Contents/MacOS/meron-core"
+cp "$sidecar_out" "$APP_PATH/Contents/MacOS/oreneta-core"
+chmod 0755 "$APP_PATH/Contents/MacOS/oreneta-core"
 cp "$MAS_PROVISION_PROFILE" "$APP_PATH/Contents/embedded.provisionprofile"
 # cp keeps the source mode, and a profile downloaded from the developer portal
 # is usually 0600. App Store validation rejects a package containing anything
@@ -236,7 +236,7 @@ echo "==> Signing"
 sign_awake codesign --force --timestamp \
   --entitlements build/darwin/EntitlementsMASHelper.plist \
   --sign "$APP_IDENTITY" \
-  "$APP_PATH/Contents/MacOS/meron-core"
+  "$APP_PATH/Contents/MacOS/oreneta-core"
 
 # Xcode injects the application identifier from the provisioning profile as it
 # signs; a hand-rolled codesign does not. A bundle whose signature lacks

@@ -202,11 +202,14 @@ fn discover_mobile_autoconfig(email: &str, domain: &str) -> Option<DiscoveredMai
     None
 }
 
+/// What autoconfig servers see, the same as the desktop's Go side sends.
+const AUTOCONFIG_USER_AGENT: &str = "Oreneta-Mail-Autoconfig";
+
 fn fetch_mobile_autoconfig(url: &str) -> Option<String> {
     let mut resp = crate::proxy::agent()
         .ok()?
         .get(url)
-        .header("User-Agent", "Meron-Mail-Autoconfig")
+        .header("User-Agent", AUTOCONFIG_USER_AGENT)
         .config()
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(6)))
@@ -462,6 +465,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn autoconfig_requests_identify_oreneta() {
+        assert_eq!(AUTOCONFIG_USER_AGENT, "Oreneta-Mail-Autoconfig");
+    }
+
+    #[test]
     fn mobile_autoconfig_parser_expands_username_and_socket_defaults() {
         let xml = r#"<?xml version="1.0"?>
 <clientConfig version="1.1">
@@ -585,7 +593,7 @@ pub(crate) fn set_mobile_account_chat_wallpaper(
                         .unwrap_or_default()
                         .trim();
                     if !url.starts_with("/media/wallpapers/") {
-                        return Err("custom wallpaper URL must be a Meron wallpaper".to_string());
+                        return Err("custom wallpaper URL must be an Oreneta wallpaper".to_string());
                     }
                     Some(json!({ "kind": "custom", "url": url }))
                 }

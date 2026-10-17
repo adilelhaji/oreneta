@@ -4,6 +4,7 @@ import {
   androidEscape,
   androidLocaleDir,
   androidName,
+  androidStringsXml,
   flattenObject,
   foldPlurals,
   iosLocale,
@@ -116,6 +117,15 @@ describe('the shipped catalogs', () => {
     const catalogs = readCanonicalCatalogs()
     expect(() => validateCatalogs(catalogs)).not.toThrow()
     expect(Object.keys(catalogs.ca).sort()).toEqual(Object.keys(catalogs.en).sort())
+  })
+
+  test('label the Android launcher Oreneta in every locale (#247)', () => {
+    const catalogs = readCanonicalCatalogs()
+    for (const locale of supportedLocales) {
+      const xml = androidStringsXml(catalogs[locale])
+      expect(xml).toContain('    <string name="app_name">Oreneta</string>\n')
+      expect(xml).not.toContain('<string name="app_name">Meron</string>')
+    }
   })
 })
 

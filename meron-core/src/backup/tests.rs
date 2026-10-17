@@ -380,7 +380,7 @@ fn non_backup_files_are_rejected() {
     for text in ["", "not json", "{}", r#"{"hello":"world"}"#, "[]"] {
         let err = parse_err(text, None);
         assert!(
-            err.contains("not a Meron backup file") || err.contains("no data"),
+            err.contains("not an Oreneta backup file") || err.contains("no data"),
             "{text:?} gave {err}"
         );
     }
@@ -390,7 +390,7 @@ fn non_backup_files_are_rejected() {
 fn a_newer_format_version_is_refused() {
     let text = json!({ "meron_backup": FORMAT_VERSION + 1, "encrypted": false, "data": {} });
     let err = parse_err(&text.to_string(), None);
-    assert!(err.contains("newer version of Meron"), "{err}");
+    assert!(err.contains("newer version of Oreneta"), "{err}");
 }
 
 /// The iteration count is read from the envelope before the passphrase can be

@@ -4266,7 +4266,7 @@ fn delete_draft_sibling_copies_drops_hidden_same_id_rows() {
 }
 
 #[test]
-fn delete_quick_reply_drafts_in_thread_removes_only_meron_drafts() {
+fn delete_quick_reply_drafts_in_thread_removes_only_app_drafts_old_and_new() {
     use crate::imap::MessageHeader;
     let conn = test_conn();
     let draft = |uid: u32, thread_key: &str, message_id: &str| MessageHeader {
@@ -4282,17 +4282,23 @@ fn delete_quick_reply_drafts_in_thread_removes_only_meron_drafts() {
         "acct",
         "Drafts",
         &[
+            // Minted before the rename: still the app's own, still cleaned up.
             draft(10, "root@mail.example", "meron-draft-old@meron"),
-            draft(11, "root@mail.example", "meron-draft-new@meron"),
+            draft(11, "root@mail.example", "oreneta-draft-new@oreneta"),
             draft(12, "root@mail.example", "manual-draft@example.com"),
             draft(13, "other@mail.example", "meron-draft-other@meron"),
+            draft(14, "root@mail.example", "Oreneta-Draft-Upper@Oreneta"),
+            // Only the fallback-domain form is matched, as before the rename.
+            draft(15, "root@mail.example", "oreneta-draft-foreign@example.com"),
+            // Another thread keeps its drafts.
+            draft(16, "other@mail.example", "oreneta-draft-other@oreneta"),
         ],
     )
     .unwrap();
 
     let deleted =
         delete_quick_reply_drafts_in_thread(&conn, "acct", "Drafts", "root@mail.example").unwrap();
-    assert_eq!(deleted, 2);
+    assert_eq!(deleted, 3);
     let uids: Vec<u32> = conn
         .prepare("SELECT uid FROM messages WHERE folder = 'Drafts' ORDER BY uid")
         .unwrap()
@@ -4300,7 +4306,7 @@ fn delete_quick_reply_drafts_in_thread_removes_only_meron_drafts() {
         .unwrap()
         .collect::<rusqlite::Result<_>>()
         .unwrap();
-    assert_eq!(uids, vec![12, 13]);
+    assert_eq!(uids, vec![12, 13, 15, 16]);
 }
 
 #[test]

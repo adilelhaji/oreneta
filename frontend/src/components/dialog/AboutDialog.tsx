@@ -1,4 +1,4 @@
-import { ExternalLink, Heart, Info, ScrollText } from 'lucide-react'
+import { ExternalLink, Info, ScrollText } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
 import { ui$ } from '../../states/ui'
@@ -8,12 +8,6 @@ import { UpdateSection } from './UpdateSection'
 import { Dialog } from './Dialog'
 import logo from '../../assets/logo.png'
 import wailsConfig from '../../../../wails.json'
-
-const DONATE_LINKS = [
-  { label: 'GitHub', url: 'https://github.com/sponsors/nonbili' },
-  { label: 'Liberapay', url: 'https://liberapay.com/rnons' },
-  { label: 'PayPal', url: 'https://paypal.me/nonbili' },
-]
 
 const SOURCE_URL = 'https://github.com/adilelhaji/oreneta'
 
@@ -60,27 +54,6 @@ export function AboutDialog() {
         </div>
 
         <UpdateSection />
-
-        <div className="mt-6 w-full rounded-panel border border-border/70 bg-raised/70 p-4">
-          <div className="flex items-center justify-center gap-2 text-xs font-bold text-primary">
-            <Heart size={14} className="text-accent" strokeWidth={1.75} />
-            <span>{t('about.supportDevelopment')}</span>
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {DONATE_LINKS.map((link) => (
-              <Button
-                key={link.url}
-                variant="secondary"
-                size="sm"
-                rightIcon={ExternalLink}
-                className="px-2 text-2xs"
-                onClick={() => openExternal(link.url)}
-              >
-                {link.label}
-              </Button>
-            ))}
-          </div>
-        </div>
       </div>
     </Dialog>
   )
