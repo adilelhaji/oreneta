@@ -2075,9 +2075,15 @@ export async function markThreadJunk(threadId: string, junk = true) {
  * does, and the same toast with one undo that puts every conversation back
  * where it came from.
  *
- * Conversations already where the gesture would send them are left alone —
- * marking a junk message as junk again would train the filter twice for one
- * decision.
+ * Conversations already where the gesture would send them are left alone:
+ * the judgment would be a repeat (ADR-0005 makes it a no-op) and the move a
+ * move into the same folder, which reports nothing moved and would stop the
+ * run. Drafts are never filed as junk.
+ *
+ * A run that stops part way says how far it got, like the other bulk actions,
+ * and offers no undo: the error is what the reader needs to see, and the
+ * conversations already filed are listed in the junk folder for the reader
+ * to take back with "Not junk".
  */
 export async function bulkMarkSelectedJunk(items: BulkSelectionItem[], junk = true) {
   if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
@@ -2095,6 +2101,9 @@ export async function bulkMarkSelectedJunk(items: BulkSelectionItem[], junk = tr
       })
       assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
       applyMutationFolderUnreads(res)
+      // A selection can span accounts: each one's folder list (the junk
+      // folder's count among them) follows, as for a bulk archive.
+      void refreshAccountFoldersCache(item.accountId, false)
       if (item.folderId) {
         moved.push({
           threadId: res.thread_id ?? threadIdInFolder(item.threadId, item.accountId, res.folder),
@@ -2125,6 +2134,7 @@ async function returnThreadsToFolders(moves: { threadId: string; folderId: strin
       const res = await invoke('mail.move', { thread_id: move.threadId, target_folder_id: move.folderId })
       assertMoveAffected(res)
       applyMutationFolderUnreads(res as MutationResult)
+      void refreshAccountFoldersCache(move.accountId, false)
       done++
     } catch (error) {
       failure = error

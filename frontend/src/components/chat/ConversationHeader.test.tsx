@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { createRef } from 'react'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { ConversationHeader } from './ConversationHeader'
 import { accounts$ } from '../../states/accounts'
 import { kanban$ } from '../../states/kanban'
@@ -8,6 +8,14 @@ import { mail$ } from '../../states/mail'
 import { thread$ } from '../../states/thread'
 import { runToastUndo, ui$ } from '../../states/ui'
 import type { Account, Message } from '../../types'
+
+// A junk folder known only by its role: the name fallback would not find it,
+// so these tests prove the role is what decides.
+const JUNK = 'INBOX.Pourriel'
+const FOLDERS = [
+  { id: 'INBOX', name: 'Inbox', account_id: 'acct', role: 'inbox' },
+  { id: JUNK, name: 'Pourriel', account_id: 'acct', role: 'junk' },
+] as any[]
 
 // The visible junk button of the reader (#245): the same core command, toast
 // and undo as the thread context menu, on the open conversation.
@@ -34,31 +42,39 @@ const conversation = (folder: string, over: Partial<Message> = {}): Message =>
 let calls: { command: string; payload: any }[] = []
 let previousGo: unknown
 let previousAccounts: Account[]
+let previousState: {
+  selectedAccount: string
+  selectedFolder: string
+  foldersByAccount: ReturnType<typeof mail$.foldersByAccount.peek>
+  folders: ReturnType<typeof mail$.folders.peek>
+}
 
 beforeEach(() => {
   previousGo = (window as any).go
   previousAccounts = accounts$.peek()
+  previousState = {
+    selectedAccount: ui$.selectedAccount.peek(),
+    selectedFolder: ui$.selectedFolder.peek(),
+    foldersByAccount: mail$.foldersByAccount.peek(),
+    folders: mail$.folders.peek(),
+  }
   calls = []
   ;(window as any).go = {
     main: {
       App: {
         Invoke: async (command: string, payload: any) => {
           calls.push({ command, payload })
-          if (command === 'mail.markJunk') return { ok: true, moved: 1, folder: payload.junk ? 'Junk' : 'INBOX' }
+          if (command === 'mail.markJunk') return { ok: true, moved: 1, folder: payload.junk ? JUNK : 'INBOX' }
           if (command === 'mail.move') return { ok: true, moved: 1 }
           if (command === 'mail.threadList') return { threads: [] }
+          if (command === 'mail.folderList') return { folders: FOLDERS }
           return {}
         },
       },
     },
   }
   accounts$.set([{ id: 'acct', email: 'me@example.com', auth_type: 'password', provider: 'imap' } as Account])
-  mail$.foldersByAccount.set({
-    acct: [
-      { id: 'INBOX', name: 'Inbox', account_id: 'acct', role: 'inbox' },
-      { id: 'Junk', name: 'Junk', account_id: 'acct', role: 'junk' },
-    ] as any,
-  })
+  mail$.foldersByAccount.set({ acct: structuredClone(FOLDERS) })
   mail$.folders.set([])
   mail$.messages.set([])
   kanban$.threads.set({})
@@ -77,6 +93,14 @@ afterEach(() => {
   mail$.threads.set([])
   ui$.selectedThread.set('')
   accounts$.set(previousAccounts)
+  ui$.selectedAccount.set(previousState.selectedAccount)
+  ui$.selectedFolder.set(previousState.selectedFolder)
+  mail$.foldersByAccount.set(previousState.foldersByAccount)
+  mail$.folders.set(previousState.folders)
+  // Pending toast timers compare the text: a cleared toast cannot cut short
+  // the next test's.
+  ui$.toast.set('')
+  ui$.toastUndo.set(null)
   ;(window as any).go = previousGo
 })
 
@@ -111,21 +135,23 @@ describe('the junk button of the reader (#245)', () => {
     expect(ui$.toastUndo.peek()).toBeTruthy()
 
     runToastUndo()
-    await waitFor(() => expect(sent('mail.move')).toEqual([{ thread_id: 'acct#Junk#k1', target_folder_id: 'INBOX' }]))
+    await waitFor(() => expect(sent('mail.move')).toEqual([{ thread_id: 'acct#INBOX.Pourriel#k1', target_folder_id: 'INBOX' }]))
   })
 
   it('reads "Not junk" in the junk folder and takes the conversation back out', async () => {
-    const view = renderHeader(conversation('Junk'))
+    const view = renderHeader(conversation('INBOX.Pourriel'))
 
     expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'Not junk' }))
 
     await waitFor(() => expect(ui$.toast.get()).toBe('Moved back to the inbox'))
-    expect(sent('mail.markJunk')).toEqual([{ thread_id: 'acct#Junk#k1', junk: false }])
+    expect(sent('mail.markJunk')).toEqual([{ thread_id: 'acct#INBOX.Pourriel#k1', junk: false }])
     expect(ui$.toastUndo.peek()).toBeTruthy()
   })
 
-  it('stays reachable from the actions menu when the header is too narrow for the button', async () => {
+  // happy-dom has no stylesheet, so the container query that hides the button
+  // in a narrow header is not exercised here; this proves the menu entry works.
+  it('also offers it in the actions menu', async () => {
     const view = renderHeader(conversation('INBOX'))
 
     fireEvent.click(view.getByRole('button', { name: 'More actions' }))
@@ -164,6 +190,30 @@ describe('the junk button of the reader (#245)', () => {
     expect(junk.disabled).toBe(true)
     fireEvent.click(junk)
     expect(sent('mail.markJunk')).toEqual([])
+  })
+
+  it('follows the folder list as it loads', () => {
+    mail$.foldersByAccount.set({})
+    const view = renderHeader(conversation('INBOX.Pourriel'))
+    // Before the folders are known the role cannot be read, and the name says
+    // nothing.
+    expect(view.getByRole('button', { name: 'Mark as junk' })).toBeTruthy()
+
+    act(() => mail$.foldersByAccount.set({ acct: structuredClone(FOLDERS) }))
+
+    expect(view.getByRole('button', { name: 'Not junk' })).toBeTruthy()
+    expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
+  })
+
+  it('is not offered for a draft, as in the selection bar', () => {
+    mail$.foldersByAccount.set({
+      acct: [...structuredClone(FOLDERS), { id: 'Drafts', name: 'Drafts', account_id: 'acct', role: 'drafts' }],
+    })
+    const view = renderHeader(conversation('Drafts'))
+
+    expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'More actions' }))
+    expect(view.queryByRole('button', { name: 'Mark as junk' })).toBeNull()
   })
 
   it('is not offered for a feed item', () => {

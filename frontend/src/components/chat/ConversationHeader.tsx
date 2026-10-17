@@ -29,6 +29,7 @@ import { showToast, ui$ } from '../../states/ui'
 import {
   archiveThread,
   deleteThread,
+  isDraftFolder,
   isJunkFolderId,
   mail$,
   markThreadJunk,
@@ -93,10 +94,13 @@ export function ConversationHeader({
   // the change permission (#141). Writing to the sender is sending.
   const changesBlocked = messageChangesBlocked(accounts, activeThread.account_id)
   const sendingBlocked = sendBlocked(accounts, activeThread.account_id)
-  // Read so the junk button below follows the folder list as it loads: in the
-  // junk folder the useful gesture is the opposite one (#245).
+  // Read so the junk button below follows the folder lists as they load: in
+  // the junk folder the useful gesture is the opposite one (#245). A draft is
+  // never junk, as in the selection bar.
   useValue(mail$.foldersByAccount)
+  useValue(mail$.folders)
   const inJunk = isJunkFolderId(activeThread.account_id, activeThread.folder_id)
+  const offersJunk = !isRSS && !isDraftFolder(activeThread.folder_id, activeThread.account_id)
   const junkLabel = inJunk ? t('threads.actions.markNotJunk') : t('threads.actions.markJunk')
   const toggleJunk = () => void markThreadJunk(activeThread.thread_id, !inJunk)
   const ownAddresses = accounts
@@ -327,16 +331,20 @@ export function ConversationHeader({
                     onClick={() => void archiveThread(activeThread.thread_id)}
                   />
                   {/* Junk is filed less often than it is archived, so it gives
-                      way before the others (#245); the menu below keeps it. Junk
-                      is mailbox management, which Graph does not offer at all
-                      (#141), hence the stricter test than the neighbours'. */}
-                  <IconButton
-                    icon={Ban}
-                    disabled={readOnly}
-                    label={junkLabel}
-                    className="hidden @min-[32rem]:flex"
-                    onClick={toggleJunk}
-                  />
+                      way before the others (#245); the menu below keeps it.
+                      30rem is where the whole row still fits beside the back
+                      button of the narrow layout. Junk is mailbox management,
+                      which Graph does not offer at all (#141), hence the
+                      stricter test than the neighbours'. */}
+                  {offersJunk && (
+                    <IconButton
+                      icon={Ban}
+                      disabled={readOnly}
+                      label={junkLabel}
+                      className="hidden @min-[30rem]:flex"
+                      onClick={toggleJunk}
+                    />
+                  )}
                   <IconButton
                     icon={Trash2}
                     disabled={changesBlocked}
@@ -425,17 +433,19 @@ export function ConversationHeader({
                     >
                       <Archive size={16} className="shrink-0" strokeWidth={1.75} /> {t('threads.actions.archiveThread')}
                     </button>
-                    <button
-                      type="button"
-                      disabled={readOnly}
-                      onClick={() => {
-                        toggleJunk()
-                        setActionsMenuOpen(false)
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Ban size={16} className="shrink-0" strokeWidth={1.75} /> {junkLabel}
-                    </button>
+                    {offersJunk && (
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => {
+                          toggleJunk()
+                          setActionsMenuOpen(false)
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-control-sm px-3 py-2 text-xs font-medium text-primary cursor-pointer enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Ban size={16} className="shrink-0" strokeWidth={1.75} /> {junkLabel}
+                      </button>
+                    )}
                     <button
                       disabled={changesBlocked}
                       onClick={() => {
