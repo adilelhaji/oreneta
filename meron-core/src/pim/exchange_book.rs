@@ -402,35 +402,52 @@ fn person_conflict(
 }
 
 /// Creates a person in the folder of `target` carrying our id `marker`.
-/// When the answer is lost, the contact is looked for by that id before
-/// anything is said, so trying again makes no second one.
+///
+/// The editor sends one id for as long as it is open, so trying again after
+/// a failure looks for the contact that id names first (`look_first`) and
+/// adopts it rather than making a second one. When the answer to the
+/// creation is lost, the contact is looked for the same way before anything
+/// is said.
 pub(crate) fn create_person(
     client: &EwsClient,
     db: &Mutex<Connection>,
     target: &Target,
     person: &Person,
     marker: &str,
+    look_first: bool,
     now: i64,
 ) -> Result<PersonWrite> {
-    let id = match client.create_contact(&target.folder, person, marker)? {
-        Created::Made { id, .. } => id,
-        Created::Unknown(error) => match client.find_marked_contact(&target.folder, marker) {
-            Ok(Some(found)) => found.person.uid,
-            Ok(None) => return Err(error.context("Exchange did not answer, and the contact was not created")),
-            Err(_) => {
-                return Err(error.context(
-                    "Exchange did not answer, so the contact may have been created; read the address book again before trying again",
-                ))
-            }
+    let earlier = if look_first { client.find_marked_contact(&target.folder, marker)? } else { None };
+    let id = match earlier {
+        Some(found) => found.person.uid,
+        None => match client.create_contact(&target.folder, person, marker)? {
+            Created::Made { id, .. } => id,
+            Created::Unknown(error) => match client.find_marked_contact(&target.folder, marker) {
+                Ok(Some(found)) => found.person.uid,
+                Ok(None) => return Err(error.context("Exchange did not answer, and the contact is not there")),
+                Err(_) => {
+                    return Err(error.context(
+                        "Exchange did not answer, so the contact may have been created; saving again will not make a second one",
+                    ))
+                }
+            },
         },
     };
-    let contact = client.read_contact(&id)?.context("Exchange did not keep the contact it created")?;
+    let contact = client
+        .read_contact(&id)
+        .and_then(|contact| contact.context("Exchange did not keep the contact it created"))
+        .context(READ_BACK)?;
     let id = record_contact(&lock(db), &target.origin, &contact, now)?;
     Ok(PersonWrite::Saved { id, version: contact.change_key })
 }
 
+/// Why a write that reached the server still answers an error.
+const READ_BACK: &str = "the change was saved on Exchange but could not be read back; read the address book again";
+
 /// Creates a person in the folder of `target` (`stored` absent), or edits
-/// one from the version it was read at.
+/// one from the version it was read at. A creation names the id the editor
+/// gave it (`marker`), or a new one when it gave none.
+#[allow(clippy::too_many_arguments)]
 pub fn save_person(
     client: &EwsClient,
     db: &Mutex<Connection>,
@@ -438,11 +455,15 @@ pub fn save_person(
     stored: Option<&store::SyncedPerson>,
     read_at: &str,
     person: &Person,
+    marker: Option<&str>,
     now: i64,
 ) -> Result<PersonWrite> {
     let person = tidy(person);
     let Some(stored) = stored else {
-        return create_person(client, db, target, &person, &uuid::Uuid::new_v4().to_string(), now);
+        return match marker {
+            Some(marker) => create_person(client, db, target, &person, marker, true, now),
+            None => create_person(client, db, target, &person, &uuid::Uuid::new_v4().to_string(), false, now),
+        };
     };
     let person_id = target.origin.person_id(&stored.person.uid);
     let Some(server) = client.read_contact(&stored.person.uid)? else {
@@ -457,7 +478,10 @@ pub fn save_person(
             person_conflict(db, &target.origin, &person_id, current, now)
         }
         ListWrite::Saved { .. } => {
-            let contact = client.read_contact(&stored.person.uid)?.context("the contact is gone from the server")?;
+            let contact = client
+                .read_contact(&stored.person.uid)
+                .and_then(|contact| contact.context("the contact is gone from the server"))
+                .context(READ_BACK)?;
             let id = record_contact(&lock(db), &target.origin, &contact, now)?;
             Ok(PersonWrite::Saved { id, version: contact.change_key })
         }

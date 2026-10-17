@@ -112,7 +112,9 @@ el directori i les respostes automàtiques, cobreix (ADR-0058):
   llistes de distribució són grups de contactes que es poden crear, canviar de nom,
   modificar i suprimir. Una persona o una llista modificada en un altre lloc des que es va
   llegir no se sobreescriu mai: no es desa res i es torna la còpia del servidor. Exchange
-  guarda tres adreces per contacte; un canvi que no hi cap no s'envia.
+  guarda tres adreces per contacte; un canvi que no hi cap no s'envia. Una nota amb format
+  HTML que es modifica aquí es desa com a text. Encara no s'ha verificat amb un servidor
+  Exchange real (N5).
 - **Tasques:** Tasks → "Exchange tasks of …" manté la carpeta de tasques del compte com a
   llista, sincronitzada com una de CalDAV, incloses les regles de repetició que EWS
   comparteix amb l'editor.

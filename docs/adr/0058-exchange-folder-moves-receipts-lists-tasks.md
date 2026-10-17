@@ -122,7 +122,7 @@ tasca, i no es pot canviar sense publicar una versió nova del crate.
   «Llegir els contactes d'Exchange» i es torna a llegir com les altres. Fa
   servir l'inici de sessió del compte; no desa cap contrasenya pròpia. Se'n
   va amb el compte.
-- **Persones:** els contactes de la carpeta Contactes (no les seves
+- **Persones** (ampliat per ADR-0064): els contactes de la carpeta Contactes (no les seves
   subcarpetes), de només lectura, com diu ADR-0012 per a Exchange. El nom,
   el nom de pila, el cognom, l'empresa, les adreces (sense prefix `SMTP:`; un
   identificador de directori `/O=…` no és una adreça) i els telèfons.

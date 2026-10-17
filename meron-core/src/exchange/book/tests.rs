@@ -416,7 +416,7 @@ fn ews_contact_update_names_the_version_read_and_never_overwrites() {
         request.contains(r#"ConflictResolution="NeverOverwrite""#) && request.contains(r#"<t:ItemId Id="C1" ChangeKey="ck-1"/>"#),
         "{request}"
     );
-    for code in ["ErrorIrresolvableConflict", "ErrorItemNotFound"] {
+    for code in ["ErrorIrresolvableConflict", "ErrorStaleObject", "ErrorItemNotFound"] {
         let (url, server) = serve(vec![Step::Reply(error_response("UpdateItem", code, "changed"))]);
         assert_eq!(client(url).update_contact(&before, &after).unwrap(), ListWrite::Conflict, "{code}");
         server.join().expect("server");
@@ -517,4 +517,77 @@ fn ews_contact_delete_checks_the_version_first() {
         requests[1]
     );
     assert_eq!(no_server().delete_contact("C1", "").unwrap(), ListWrite::Conflict);
+    // Already gone: there is nothing left to delete.
+    let (url, server) = serve(vec![Step::Reply(error_response("GetItem", "ErrorItemNotFound", "Gone."))]);
+    assert!(matches!(client(url).delete_contact("C1", "ck-1").unwrap(), ListWrite::Saved { .. }));
+    assert!(!server.join().expect("server").iter().any(|r| r.contains("DeleteItem")));
+}
+
+#[test]
+fn ews_contact_addresses_are_written_as_typed_and_must_be_smtp() {
+    let before = read_full("C1", "ck-1");
+    let mut after = before.person.clone();
+    after.emails.push(EmailAddress { addr: " smtp:Pere.Clave@Example.org ".into(), label: String::new() });
+    let changes = contact_changes(&before, &after).unwrap();
+    assert!(changes.contains(r#"<t:Entry Key="EmailAddress3">Pere.Clave@Example.org</t:Entry>"#), "{changes}");
+    for wrong in ["sip:pere@example.org", "pere@", "@example.org", "pere clave@example.org", "/O=X/CN=Y@Z"] {
+        let mut after = before.person.clone();
+        after.emails.push(EmailAddress { addr: wrong.into(), label: String::new() });
+        let error = contact_changes(&before, &after).unwrap_err();
+        assert!(error.to_string().contains("not an email address"), "{wrong}: {error}");
+    }
+}
+
+#[test]
+fn ews_contact_note_line_ends_are_no_change() {
+    let mut before = read_full("C1", "ck-1");
+    before.person.note = "Primera línia\r\nSegona línia".into();
+    let mut after = before.person.clone();
+    after.note = "Primera línia\nSegona línia".into();
+    assert_eq!(contact_changes(&before, &after).unwrap(), "");
+}
+
+#[test]
+fn ews_contact_with_no_display_name_keeps_its_filing() {
+    let mut before = read_full("C1", "ck-1");
+    // Shown by what it is filed as, for want of a display name.
+    before.display_name.clear();
+    before.person.name = before.file_as.clone();
+    assert_eq!(contact_changes(&before, &before.person).unwrap(), "", "nothing changed, nothing sent");
+    let mut after = before.person.clone();
+    after.name = "Ana Puig".into();
+    let changes = contact_changes(&before, &after).unwrap();
+    assert!(changes.contains("<t:DisplayName>Ana Puig</t:DisplayName>") && !changes.contains("FileAs"), "{changes}");
+}
+
+#[test]
+fn ews_contact_phone_relabelled_moves_to_a_slot_of_its_kind() {
+    let before = read_full("C1", "ck-1");
+    let mut after = before.person.clone();
+    after.phones[0].label = "work".into();
+    // The same number twice is one.
+    after.phones.push(after.phones[1].clone());
+    let changes = contact_changes(&before, &after).unwrap();
+    assert!(changes.contains(r#"<t:Entry Key="BusinessPhone2">+34 600 000 000</t:Entry>"#), "{changes}");
+    assert!(
+        changes.contains(r#"<t:DeleteItemField><t:IndexedFieldURI FieldURI="contacts:PhoneNumber" FieldIndex="MobilePhone"/></t:DeleteItemField>"#),
+        "{changes}"
+    );
+    assert!(!changes.contains(r#"FieldIndex="BusinessPhone""#), "the work number stays: {changes}");
+}
+
+#[test]
+fn ews_contact_create_answer_without_its_id_is_unknown() {
+    let person = Person { name: "Pere".into(), ..Default::default() };
+    let (url, server) = serve(vec![Step::Reply(ok("CreateItem", "<m:Items/>"))]);
+    assert!(matches!(client(url).create_contact("", &person, "m").unwrap(), Created::Unknown(_)));
+    server.join().expect("server");
+}
+
+#[test]
+fn ews_contact_folder_listing_that_stops_early_fails() {
+    let (url, server) = serve(vec![Step::Reply(found_folders(&[], false))]);
+    let error = client(url).contact_folders().unwrap_err();
+    assert!(error.to_string().contains("stopped giving folders"), "{error}");
+    server.join().expect("server");
 }

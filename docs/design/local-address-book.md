@@ -47,8 +47,9 @@
 Els contactes d'una llibreta CardDAV es poden editar i suprimir, i en crear un
 contacte es tria «Aquest equip» o una llibreta CardDAV editable. L'editor indica
 on es desa el canvi. En suprimir un contacte de servidor, l'avís recorda que
-desapareix per a totes les aplicacions que llegeixen aquella llibreta. Google i
-Exchange continuen sent de només lectura (ADR-0012).
+desapareix per a totes les aplicacions que llegeixen aquella llibreta. Google
+continua sent de només lectura (ADR-0012); les persones d'Exchange s'editen des
+d'ADR-0064.
 
 ### Què desa la sincronització
 
@@ -138,4 +139,4 @@ lloc de Docker. A la CI s'executa amb la imatge Docker de l'arnès.
 
 ## Següent
 
-Google i Exchange, quan se'n compleixin les condicions (ADR-0012).
+Google, quan se'n compleixin les condicions (ADR-0012, #144).

@@ -2,7 +2,8 @@
 
 - Estat: acceptada. Per a Exchange, el punt 3 queda substituït per ADR-0064
   (2026-10-17): les persones d'Exchange ja s'editen, amb la mateixa regla de
-  conflictes.
+  conflictes, sense l'evidència d'un servidor real que s'hi demanava, que
+  continua pendent (N5).
 - Data: 2026-10-11.
 - Abast: #41. La política de conflictes s'aplica també a les tasques (#103) i
   a qualsevol escriptura nova al calendari.

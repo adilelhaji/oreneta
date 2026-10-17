@@ -299,7 +299,7 @@ fn ews_contact_edit_success_sends_the_difference_and_records_the_server_copy() {
         Step::Reply(got(&[full_contact_xml("C1", "ck-2")])),
     ]);
     let edited = ana_edited(|person| person.organisation = "Nova".into());
-    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, 2).expect("save");
+    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, None, 2).expect("save");
     assert_eq!(written, PersonWrite::Saved { id: origin(A).person_id("C1"), version: "ck-2".into() });
     let requests = server.join().expect("server");
     let update = &requests[1];
@@ -316,7 +316,7 @@ fn ews_contact_stale_local_edit_never_overwrites_a_server_change() {
     let db = store();
     let (url, server) = serve(vec![Step::Reply(got(&[full_contact_xml("C1", "ck-outlook")]))]);
     let edited = ana_edited(|person| person.organisation = "Nova".into());
-    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, 2).expect("save");
+    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, None, 2).expect("save");
     let PersonWrite::Conflict { current: Some((current, version)) } = &written else { panic!("{written:?}") };
     assert_eq!((current.organisation.as_str(), version.as_str()), ("Consorci", "ck-outlook"));
     assert_eq!(server.join().expect("server").len(), 1, "nothing was written");
@@ -329,7 +329,7 @@ fn ews_contact_stale_local_edit_never_overwrites_a_server_change() {
 fn ews_contact_gone_from_the_server_is_a_conflict_that_drops_it_here() {
     let db = store();
     let (url, server) = serve(vec![Step::Reply(error_response("GetItem", "ErrorItemNotFound", "Not found."))]);
-    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &ana_edited(|_| {}), 2).expect("save");
+    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &ana_edited(|_| {}), None, 2).expect("save");
     assert_eq!(written, PersonWrite::Conflict { current: None });
     server.join().expect("server");
     assert!(ana(&db).is_none());
@@ -344,7 +344,7 @@ fn ews_contact_conflict_found_by_the_server_saves_nothing() {
         Step::Reply(got(&[full_contact_xml("C1", "ck-9")])),
     ]);
     let edited = ana_edited(|person| person.organisation = "Nova".into());
-    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, 2).expect("save");
+    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, None, 2).expect("save");
     assert!(matches!(written, PersonWrite::Conflict { current: Some((_, ref version)) } if version == "ck-9"), "{written:?}");
     server.join().expect("server");
 }
@@ -355,7 +355,7 @@ fn ews_contact_error_lost_answer_and_unwritable_change_change_nothing_here() {
         let db = store();
         let (url, server) = serve(vec![Step::Reply(got(&[full_contact_xml("C1", "ck-C1")])), last]);
         let edited = ana_edited(|person| person.organisation = "Nova".into());
-        save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, 2).expect_err("failed");
+        save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, None, 2).expect_err("failed");
         let requests = server.join().expect("server");
         assert_eq!(requests.iter().filter(|r| r.contains("UpdateItem")).count(), 1, "never sent twice");
         assert_eq!(ana(&db).unwrap().version, "ck-C1");
@@ -368,7 +368,7 @@ fn ews_contact_error_lost_answer_and_unwritable_change_change_nothing_here() {
             person.emails.push(EmailAddress { addr: addr.into(), label: String::new() });
         }
     });
-    let error = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, 2).expect_err("unwritable");
+    let error = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, None, 2).expect_err("unwritable");
     assert!(error.to_string().contains("at most three email addresses"), "{error}");
     assert!(!server.join().expect("server").iter().any(|r| r.contains("UpdateItem")));
 }
@@ -399,7 +399,7 @@ fn ews_contact_create_in_a_folder_is_kept_in_that_folders_book() {
         Step::Reply(ok("CreateItem", r#"<m:Items><t:Contact><t:ItemId Id="C9" ChangeKey="ck-9"/></t:Contact></m:Items>"#)),
         Step::Reply(got(&[full_contact_xml("C9", "ck-9")])),
     ]);
-    let written = save_person(&client(url), &db, &feina(), None, "", &pau(), 2).expect("create");
+    let written = save_person(&client(url), &db, &feina(), None, "", &pau(), None, 2).expect("create");
     assert_eq!(written, PersonWrite::Saved { id: feina().origin.person_id("C9"), version: "ck-9".into() });
     let requests = server.join().expect("server");
     assert!(requests[0].contains(r#"<t:FolderId Id="F1"/>"#), "{}", requests[0]);
@@ -417,7 +417,7 @@ fn ews_contact_create_whose_answer_is_lost_is_found_again_not_made_twice() {
         Step::Reply(got(&[marked_contact_xml("C9", "ck-9", "m-9")])),
         Step::Reply(got(&[marked_contact_xml("C9", "ck-9", "m-9")])),
     ]);
-    let written = create_person(&client(url), &db, &feina(), &pau(), "m-9", 2).expect("adopted");
+    let written = create_person(&client(url), &db, &feina(), &pau(), "m-9", false, 2).expect("adopted");
     assert_eq!(written, PersonWrite::Saved { id: feina().origin.person_id("C9"), version: "ck-9".into() });
     let requests = server.join().expect("server");
     assert_eq!(requests.iter().filter(|r| r.contains("CreateItem")).count(), 1, "created once");
@@ -425,12 +425,12 @@ fn ews_contact_create_whose_answer_is_lost_is_found_again_not_made_twice() {
 
     // Not there: it was not created, and nothing is kept.
     let (url, server) = serve(vec![Step::Drop, Step::Reply(found(&[], true))]);
-    let error = create_person(&client(url), &db, &feina(), &pau(), "m-10", 3).expect_err("not created");
-    assert!(format!("{error:#}").contains("was not created"), "{error:#}");
+    let error = create_person(&client(url), &db, &feina(), &pau(), "m-10", false, 3).expect_err("not created");
+    assert!(format!("{error:#}").contains("the contact is not there"), "{error:#}");
     server.join().expect("server");
     // The search failed too: it may be there, and the reader is told to look.
     let (url, server) = serve(vec![Step::Drop, Step::Reply(error_response("FindItem", "ErrorServerBusy", "Busy."))]);
-    let error = create_person(&client(url), &db, &feina(), &pau(), "m-11", 3).expect_err("unknown");
+    let error = create_person(&client(url), &db, &feina(), &pau(), "m-11", false, 3).expect_err("unknown");
     assert!(format!("{error:#}").contains("may have been created"), "{error:#}");
     server.join().expect("server");
     let in_feina: Vec<String> = store::find_people(&db.lock().unwrap(), "", 500)
@@ -581,4 +581,95 @@ fn ews_distribution_list_created_in_a_folder_goes_there() {
     let written = save_group(&client(url), &db, &feina(), None, "", "Nova", &[], 2).expect("create");
     assert_eq!(written, GroupWrite::Saved { id: contact_groups::group_id(&feina().origin, "D7"), version: "ck-7".into() });
     assert!(server.join().expect("server")[0].contains(r#"<m:SavedItemFolderId><t:FolderId Id="F1"/></m:SavedItemFolderId>"#));
+}
+
+#[test]
+fn ews_contact_saved_again_with_the_editors_id_adopts_the_first_copy() {
+    // The editor's id names a contact already there (an earlier try whose
+    // answer was lost): it is adopted and nothing is created.
+    let db = store();
+    let (url, server) = serve(vec![
+        Step::Reply(found(&[("Contact", "C9")], true)),
+        Step::Reply(got(&[marked_contact_xml("C9", "ck-9", "editor-1")])),
+        Step::Reply(got(&[marked_contact_xml("C9", "ck-9", "editor-1")])),
+    ]);
+    let written = save_person(&client(url), &db, &feina(), None, "", &pau(), Some("editor-1"), 2).expect("adopted");
+    assert_eq!(written, PersonWrite::Saved { id: feina().origin.person_id("C9"), version: "ck-9".into() });
+    let requests = server.join().expect("server");
+    assert!(!requests.iter().any(|r| r.contains("CreateItem")), "nothing created twice");
+    // Not there yet: it is created with that id.
+    let (url, server) = serve(vec![
+        Step::Reply(found(&[], true)),
+        Step::Reply(ok("CreateItem", r#"<m:Items><t:Contact><t:ItemId Id="C10" ChangeKey="ck-10"/></t:Contact></m:Items>"#)),
+        Step::Reply(got(&[marked_contact_xml("C10", "ck-10", "editor-2")])),
+    ]);
+    save_person(&client(url), &db, &feina(), None, "", &pau(), Some("editor-2"), 3).expect("created");
+    assert!(server.join().expect("server")[1].contains("<t:Value>editor-2</t:Value>"));
+    // The search failing first sends nothing.
+    let (url, server) = serve(vec![Step::Reply(error_response("FindItem", "ErrorServerBusy", "Busy."))]);
+    save_person(&client(url), &db, &feina(), None, "", &pau(), Some("editor-3"), 4).expect_err("not searched");
+    assert!(!server.join().expect("server").iter().any(|r| r.contains("CreateItem")));
+}
+
+#[test]
+fn ews_contact_written_but_not_read_back_says_it_was_saved() {
+    let db = store();
+    let (url, server) = serve(vec![
+        Step::Reply(ok("CreateItem", r#"<m:Items><t:Contact><t:ItemId Id="C9" ChangeKey="ck-9"/></t:Contact></m:Items>"#)),
+        Step::Reply(error_response("GetItem", "ErrorServerBusy", "Busy.")),
+    ]);
+    let error = create_person(&client(url), &db, &feina(), &pau(), "m-9", false, 2).expect_err("not read back");
+    assert!(format!("{error:#}").contains("saved on Exchange but could not be read back"), "{error:#}");
+    server.join().expect("server");
+    let (url, server) = serve(vec![
+        Step::Reply(got(&[full_contact_xml("C1", "ck-C1")])),
+        Step::Reply(ok("UpdateItem", r#"<m:Items><t:Contact><t:ItemId Id="C1" ChangeKey="ck-2"/></t:Contact></m:Items>"#)),
+        Step::Reply(error_response("GetItem", "ErrorItemNotFound", "Gone.")),
+    ]);
+    let edited = ana_edited(|person| person.organisation = "Nova".into());
+    let error = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "ck-C1", &edited, None, 3).expect_err("not read back");
+    assert!(format!("{error:#}").contains("saved on Exchange but could not be read back"), "{error:#}");
+    server.join().expect("server");
+}
+
+#[test]
+fn ews_contact_edit_without_the_version_read_is_a_conflict() {
+    let db = store();
+    let (url, server) = serve(vec![Step::Reply(got(&[full_contact_xml("C1", "ck-C1")]))]);
+    let written = save_person(&client(url), &db, &root(), ana(&db).as_ref(), "", &ana_edited(|_| {}), None, 2).expect("save");
+    assert!(matches!(written, PersonWrite::Conflict { current: Some(_) }), "{written:?}");
+    assert!(!server.join().expect("server").iter().any(|r| r.contains("UpdateItem")));
+}
+
+#[test]
+fn ews_contact_already_gone_counts_as_deleted() {
+    let db = store();
+    let (url, server) = serve(vec![Step::Reply(error_response("GetItem", "ErrorItemNotFound", "Gone."))]);
+    assert_eq!(delete_person(&client(url), &db, &root(), &ana(&db).unwrap(), "ck-C1", 2).unwrap(), PersonWrite::Deleted);
+    assert!(!server.join().expect("server").iter().any(|r| r.contains("DeleteItem")));
+    assert!(ana(&db).is_none());
+}
+
+#[test]
+fn removing_a_book_that_is_no_exchange_one_removes_it_alone() {
+    let db = store();
+    let carddav = store::ContactSource {
+        id: "cd-1".into(),
+        kind: "carddav".into(),
+        account: String::new(),
+        url: "https://dav.example/".into(),
+        username: "u".into(),
+        name: "Equip".into(),
+        enabled: true,
+        ctag: String::new(),
+        last_sync_at: 0,
+        last_error: String::new(),
+        writable: None,
+    };
+    store::upsert_contact_source(&db.lock().unwrap(), &carddav, 1).unwrap();
+    let conn = db.lock().unwrap();
+    assert_eq!(crate::pim::people::remove_source(&conn, "cd-1").unwrap(), ["cd-1"]);
+    assert_eq!(crate::pim::people::remove_source(&conn, "missing").unwrap(), ["missing"]);
+    assert_eq!(crate::pim::people::remove_source(&conn, &source_id(A)).unwrap(), [source_id(A)]);
+    assert!(store::contact_sources(&conn).unwrap().is_empty());
 }

@@ -4,6 +4,7 @@ import { PeopleView } from './PeopleView'
 import { ContactSourcesSettingsSection } from '../dialog/ContactSourcesSettingsSection'
 import { keepMine, people$ } from '../../states/people'
 import { contactSources$, isExchangeFolderBook, writableBooks, type ContactSource } from '../../states/contactSources'
+import { settleConfirm, ui$ } from '../../states/ui'
 import type { Person } from '../../types'
 
 // Exchange contacts edited, and the contact folders under Contacts as books
@@ -153,6 +154,33 @@ describe('Exchange contacts (ADR-0064)', () => {
     const save = calls.find((c) => c.command === 'people.save')!
     expect(save.payload.book).toBe('exchange-acc/F1')
     expect(save.payload.id).toBeUndefined()
+    await settled()
+  })
+
+  it('says an Exchange contact is deleted on its server', async () => {
+    stubBridge({})
+    people$.selectedId.set(ana.id)
+    const view = render(<PeopleView />)
+    fireEvent.click(view.getByLabelText('Delete'))
+    await waitFor(() => expect(ui$.confirm.get()?.message).toContain('on its server'))
+    settleConfirm(false)
+    await settled()
+  })
+
+  it('sends one id for a new contact on every try while the editor is open', async () => {
+    const calls = stubBridge({ 'people.save': () => Promise.reject(new Error('Exchange did not answer')) })
+    const view = render(<PeopleView />)
+    fireEvent.click(view.getByText('New contact'))
+    fireEvent.change(view.getByLabelText('Save to') as HTMLSelectElement, { target: { value: 'exchange-acc/F1' } })
+    fireEvent.change(view.getByLabelText('Name'), { target: { value: 'Pau Roca' } })
+    fireEvent.click(view.getByText('Save'))
+    await waitFor(() => expect(calls.filter((c) => c.command === 'people.save')).toHaveLength(1))
+    await waitFor(() => expect(view.getByText('Save')).toBeTruthy())
+    fireEvent.click(view.getByText('Save'))
+    await waitFor(() => expect(calls.filter((c) => c.command === 'people.save')).toHaveLength(2))
+    const [first, second] = calls.filter((c) => c.command === 'people.save')
+    expect(typeof first.payload.marker).toBe('string')
+    expect(second.payload.marker).toBe(first.payload.marker)
     await settled()
   })
 

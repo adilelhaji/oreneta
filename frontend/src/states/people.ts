@@ -172,6 +172,12 @@ export type PersonEditing = {
   serverBook?: string
   /** The version the draft was read at; absent for a new person. */
   version?: string
+  /**
+   * A new person's id for as long as the editor is open, sent with every
+   * try to a server book: one that can be searched for it (Exchange) never
+   * gets a second copy when an answer was lost (ADR-0064).
+   */
+  createId?: string
   draft: PersonDraft
   /**
    * Set when saving found the person changed elsewhere: nothing was saved,
@@ -209,10 +215,15 @@ type WriteAnswer = {
  * stays open showing both copies; the reader chooses (ADR-0012).
  */
 export async function savePerson(editing: PersonEditing): Promise<'saved' | 'conflict' | 'failed'> {
+  if (!editing.id && !editing.createId) {
+    editing = { ...editing, createId: crypto.randomUUID() }
+    // Kept with the open editor, so trying again sends the same id.
+    if (people$.editing.peek()) people$.editing.set(editing)
+  }
   try {
     const answer = await invoke<WriteAnswer>('people.save', {
       ...(editing.id ? { id: editing.id, version: editing.version ?? '' } : {}),
-      ...(!editing.id && editing.book ? { book: editing.book } : {}),
+      ...(!editing.id && editing.book ? { book: editing.book, marker: editing.createId } : {}),
       person: editing.draft,
     })
     if (answer?.conflict) {

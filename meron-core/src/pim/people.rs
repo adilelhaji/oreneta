@@ -91,7 +91,7 @@ pub async fn save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             carddav_save(&engine, Some(stored), version.unwrap_or_default(), person).await
         }
         (Some(stored), _) if stored.origin.source == "exchange" => {
-            exchange_save(engine, &stored.origin.book, Some(stored.clone()), version.unwrap_or_default(), person).await
+            exchange_save(engine, &stored.origin.book, Some(stored.clone()), version.unwrap_or_default(), person, None).await
         }
         (Some(stored), _) if stored.origin.source != "local" => {
             anyhow::bail!("this address book is read-only here")
@@ -101,7 +101,7 @@ pub async fn save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
                 .context("that address book is no longer set up")?;
             match source.kind.as_str() {
                 "carddav" => carddav_create(&engine, &source, person).await,
-                "exchange" => exchange_save(engine, &source.id, None, "", person).await,
+                "exchange" => exchange_save(engine, &source.id, None, "", person, creation_id(p)?).await,
                 _ => anyhow::bail!("this address book is read-only here"),
             }
         }
@@ -129,6 +129,19 @@ pub async fn delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
     }
 }
 
+/// The id an editor gives the person it creates, the same on every try
+/// while it is open (`marker`), so trying again never makes a second one on
+/// a server that can be searched for it (ADR-0064). `None` when it gave none.
+fn creation_id(p: &Value) -> Result<Option<String>> {
+    match p.get("marker").and_then(Value::as_str).filter(|marker| !marker.is_empty()) {
+        None => Ok(None),
+        Some(marker) if marker.len() <= 64 && marker.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') => {
+            Ok(Some(marker.to_string()))
+        }
+        Some(_) => anyhow::bail!("a new contact's id must be up to 64 letters, digits or hyphens"),
+    }
+}
+
 /// Creates a person in an Exchange contact folder, or edits one there from
 /// the version it was read at (ADR-0064).
 async fn exchange_save(
@@ -137,13 +150,14 @@ async fn exchange_save(
     stored: Option<store::SyncedPerson>,
     read_at: &str,
     person: crate::contacts::person::Person,
+    marker: Option<String>,
 ) -> Result<Value> {
     let target = super::exchange_book::target(&engine.db.lock().unwrap(), book)?;
     let client = super::exchange_book::client(engine, &target.origin.account).await?;
     let id = stored.as_ref().map(|stored| target.origin.person_id(&stored.person.uid)).unwrap_or_default();
     let (db, read_at) = (engine.db.clone(), read_at.to_string());
     let written = tokio::task::spawn_blocking(move || {
-        super::exchange_book::save_person(&client, &db, &target, stored.as_ref(), &read_at, &person, now_unix())
+        super::exchange_book::save_person(&client, &db, &target, stored.as_ref(), &read_at, &person, marker.as_deref(), now_unix())
     })
     .await??;
     Ok(written.to_json(&id))

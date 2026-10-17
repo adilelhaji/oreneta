@@ -160,6 +160,21 @@ fn address(raw: &str) -> String {
     }
 }
 
+/// An address as it is written to a contact: trimmed, without an `smtp:`
+/// prefix, with a local part and a domain and no other scheme (`sip:`) or
+/// space. `None` for anything else, which Exchange could not send mail to.
+fn writable_address(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    let raw = raw.get(..5).filter(|prefix| prefix.eq_ignore_ascii_case("smtp:")).map_or(raw, |_| &raw[5..]);
+    let (local, domain) = raw.rsplit_once('@')?;
+    let fine = !local.is_empty()
+        && !domain.is_empty()
+        && !local.contains(':')
+        && !raw.starts_with('/')
+        && !raw.chars().any(char::is_whitespace);
+    fine.then(|| raw.to_string())
+}
+
 fn phone_label(key: &str) -> String {
     match key {
         "MobilePhone" => "cell",
@@ -397,14 +412,17 @@ type SlotPlan = Vec<(String, Option<String>)>;
 /// nothing, when an address is not one Exchange can keep or there are more
 /// than the slots left.
 fn email_plan(slots: &[(String, String)], wanted: &[EmailAddress]) -> Result<SlotPlan> {
+    // Compared lower-cased, written as typed.
     let mut want: Vec<String> = Vec::new();
+    let mut typed: Vec<String> = Vec::new();
     for raw in wanted.iter().map(|email| email.addr.trim()).filter(|addr| !addr.is_empty()) {
-        let addr = address(raw);
-        if addr.is_empty() {
+        let Some(written) = writable_address(raw) else {
             bail!("“{raw}” is not an email address Exchange can keep");
-        }
+        };
+        let addr = written.to_lowercase();
         if !want.contains(&addr) {
             want.push(addr);
+            typed.push(written);
         }
     }
     let usable: Vec<(&str, String)> =
@@ -416,7 +434,14 @@ fn email_plan(slots: &[(String, String)], wanted: &[EmailAddress]) -> Result<Slo
     if new.len() > free.len() {
         bail!("Exchange keeps at most three email addresses for a contact, and this one has no room for {} more", new.len());
     }
-    let mut plan: SlotPlan = new.iter().zip(&free).map(|(addr, key)| (key.to_string(), Some((*addr).clone()))).collect();
+    let mut plan: SlotPlan = new
+        .iter()
+        .zip(&free)
+        .map(|(addr, key)| {
+            let at = want.iter().position(|known| known == *addr).expect("a wanted address");
+            (key.to_string(), Some(typed[at].clone()))
+        })
+        .collect();
     for key in freed {
         if !plan.iter().any(|(planned, _)| planned == key) {
             plan.push((key.to_string(), None));
@@ -427,19 +452,23 @@ fn email_plan(slots: &[(String, String)], wanted: &[EmailAddress]) -> Result<Slo
 
 /// Where the wanted numbers go, from the slots the server holds, by the same
 /// rule as [`email_plan`]: a number already in a slot of its kind stays
-/// there (or, failing that, in any slot it is in); a new one takes the first
-/// free slot of its kind, then any free voice slot.
+/// there (one with no label, in any slot it is in); a new or relabelled one
+/// takes the first free slot of its kind, then any free voice slot.
 fn phone_plan(slots: &[(String, String)], wanted: &[PhoneNumber]) -> Result<SlotPlan> {
-    let want: Vec<(&str, &str)> = wanted
-        .iter()
-        .map(|phone| (phone.number.trim(), phone.label.as_str()))
-        .filter(|(number, _)| !number.is_empty())
-        .collect();
+    let mut want: Vec<(&str, &str)> = Vec::new();
+    for phone in wanted {
+        let entry = (phone.number.trim(), phone.label.as_str());
+        if !entry.0.is_empty() && !want.iter().any(|(number, label)| *number == entry.0 && label_kind(label) == label_kind(entry.1)) {
+            want.push(entry);
+        }
+    }
     let mut kept = vec![false; slots.len()];
     let mut placed = vec![false; want.len()];
     for exact in [true, false] {
         for (i, (number, label)) in want.iter().enumerate() {
-            if placed[i] {
+            // A number with a label of its own is kept only in a slot of
+            // that kind: one relabelled moves to a slot of the new kind.
+            if placed[i] || (!exact && !label_kind(label).is_empty()) {
                 continue;
             }
             let found = slots.iter().enumerate().position(|(j, (key, held))| {
@@ -517,8 +546,10 @@ fn text_update(field: &str, element: &str, value: &str) -> String {
 
 fn differs(before: &str, after: &str) -> bool {
     // Compared as written: a character XML cannot carry is never sent, and
-    // must not look like a change.
-    escape(before.trim()) != escape(after.trim())
+    // must not look like a change; nor must the line ends Exchange gives a
+    // note (`\r\n`) against an editor's (`\n`).
+    let written = |text: &str| escape(text.trim()).replace("\r\n", "\n").replace('\r', "\n");
+    written(before) != written(after)
 }
 
 /// The changes that make the contact `before` (as the server holds it) into
@@ -533,12 +564,10 @@ pub fn contact_changes(before: &Contact, after: &Person) -> Result<String> {
     let mut out = String::new();
     if differs(&before.person.name, &after.name) {
         out.push_str(&text_update("contacts:DisplayName", "DisplayName", &after.name));
-        // What it is filed as follows the name when it was the name (or
-        // nothing); one filed otherwise on purpose stays.
-        if before.file_as.trim().is_empty()
-            || before.file_as.trim() == before.display_name.trim()
-            || before.file_as.trim() == before.person.name.trim()
-        {
+        // What it is filed as follows the name when it was the display name
+        // (or nothing); one filed otherwise on purpose stays, also when the
+        // name shown here came from it for want of a display name.
+        if before.file_as.trim().is_empty() || before.file_as.trim() == before.display_name.trim() {
             out.push_str(&text_update("contacts:FileAs", "FileAs", &after.name));
         }
     }
@@ -807,7 +836,13 @@ impl EwsClient {
             Ok(document) => document,
             Err(error) => return Ok(Created::Unknown(error)),
         };
-        let message = soap::single(&document, "CreateItem").context("CreateItem contact")?;
+        // The server's verdict on the item is a refusal: nothing was created.
+        // An answer that cannot be read as one says nothing either way.
+        let message = match soap::single(&document, "CreateItem") {
+            Ok(message) => message,
+            Err(error) if soap::error_code(&error).is_some() => return Err(error.context("CreateItem contact")),
+            Err(error) => return Ok(Created::Unknown(error)),
+        };
         match message.path(&["Items", "Contact", "ItemId"]).and_then(|id| id.attr("Id").map(|key| (key, id))) {
             Some((id, item)) => Ok(Created::Made {
                 id: id.to_string(),
