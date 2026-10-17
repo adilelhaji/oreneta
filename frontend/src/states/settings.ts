@@ -113,6 +113,11 @@ export type SavedSearch = {
 export type ListView = 'auto' | 'cards' | 'table'
 export const LIST_VIEWS: readonly ListView[] = ['auto', 'cards', 'table']
 
+/** Whether a stored value is a list view this version can draw. */
+export function isListView(value: unknown): value is ListView {
+  return (LIST_VIEWS as readonly unknown[]).includes(value)
+}
+
 /** What the list is ordered by, and which way. */
 export type SortKey = 'date' | 'sender' | 'subject'
 export type SortDir = 'asc' | 'desc'
@@ -1028,9 +1033,7 @@ export function hydrateSettings(prefs: Record<string, unknown>, { languageRead =
       const views = prefs[DB_KEY.mailboxViews]
       settings$.mailboxViews.set(views && typeof views === 'object' && !Array.isArray(views) ? views as Record<string, unknown> : null)
     }
-    if (LIST_VIEWS.includes(listView as ListView)) {
-      settings$.listView.set(listView as ListView)
-    }
+    if (isListView(listView)) settings$.listView.set(listView)
 
     const storedSort = prefs[DB_KEY.listSort]
     const sort = sanitizeListSort(storedSort)

@@ -74,8 +74,8 @@ import { ThreadTable, appliedListSort } from './ThreadTable'
 import { MailboxColumns } from './MailboxColumns'
 import { BulkActionBar } from './BulkActionBar'
 import { ThreadListResizer } from '../resizer/PaneResizers'
-import { useElementWidth } from '../resizer/useElementWidth'
-import { resolveListView } from './listView'
+import { useElementAtLeast } from '../resizer/useElementWidth'
+import { AUTO_TABLE_MIN_WIDTH, resolveListView } from './listView'
 import { accountGroups$ } from '../../states/accountGroups'
 import { endAlignedX } from '../../lib/direction'
 
@@ -103,9 +103,10 @@ export function ThreadList({ width, resizable }: ThreadListProps = {}) {
   const listView = useValue(settings$.listView)
   const storedWidth = useValue(settings$.threadListWidth)
   // The automatic view follows the width the list is drawn at, not the one
-  // remembered: a narrow window squeezes a wide list below it (#283).
-  const drawnWidth = useElementWidth(listRef)
-  const drawnView = resolveListView(listView, drawnWidth, width ?? storedWidth)
+  // remembered: a narrow window squeezes a wide list below it (#283). Only
+  // measured for that view, and only crossing the threshold re-renders.
+  const drawnWide = useElementAtLeast(listRef, AUTO_TABLE_MIN_WIDTH, listView === 'auto')
+  const drawnView = resolveListView(listView, drawnWide, width ?? storedWidth)
   const narrowAuto = listView === 'auto' && drawnView === 'cards'
   const listSort = useValue(settings$.listSort)
   const threadsPagination = useValue(mail$.threadsPagination)

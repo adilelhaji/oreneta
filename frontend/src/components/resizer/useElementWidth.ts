@@ -19,6 +19,32 @@ export function useElementWidth(ref: RefObject<Element | null>, ofParent = false
   return width
 }
 
+/**
+ * Whether an element is drawn at least `px` wide, followed as it is resized:
+ * null until measured, while it has no layout (hidden, or tests) or while
+ * `enabled` is false. Only crossing `px` re-renders the caller, so a drag
+ * across a long list does not repaint it on every pixel.
+ */
+export function useElementAtLeast(ref: RefObject<Element | null>, px: number, enabled = true): boolean | null {
+  const [atLeast, setAtLeast] = useState<boolean | null>(null)
+  useEffect(() => {
+    const element = ref.current
+    if (!enabled || !element || typeof ResizeObserver === 'undefined') {
+      setAtLeast(null)
+      return
+    }
+    const measure = () => {
+      const width = element.getBoundingClientRect().width
+      setAtLeast(width > 0 ? width >= px : null)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref, px, enabled])
+  return atLeast
+}
+
 /** Whether the window is at least `px` wide, followed as it is resized. */
 export function useWideWindow(px: number): boolean {
   const query = `(min-width: ${px}px)`

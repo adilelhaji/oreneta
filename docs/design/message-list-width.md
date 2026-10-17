@@ -29,6 +29,11 @@ columnes repartia aquella amplada entre remitent, assumpte i data.
 - **Contrast:** les files fan servir els tokens del tema sense opacitat (text
   secundari ple; fila oberta amb `bg-active`, com la taula), perquè el text
   secundari translúcid no arribava al contrast AA de 4,5:1.
+  Les targetes del tauler (kanban) comparteixen aquestes files i també en
+  canvien els colors, no la disposició.
+- **Mesura:** la llista només es mesura a la vista automàtica, i només es torna
+  a dibuixar quan la seva amplada travessa els 520 px; mentre està amagada (en
+  una finestra estreta, amb la conversa oberta) decideix l'amplada desada.
 
 ## Fora d'abast
 
@@ -37,6 +42,11 @@ columnes repartia aquella amplada entre remitent, assumpte i data.
   1280 px o més, amb l'amplada per defecte, no cedeix cap de les dues.
 - Un perfil que ja té desada una amplada estreta la conserva; a la vista
   automàtica la veu amb files de dues línies.
+- Un perfil que va triar explícitament la taula la conserva a qualsevol
+  amplada, també a 280 px.
+- Ordenar per remitent o per assumpte continua fent-se des de les capçaleres de
+  la taula; les files no tenen cap control d'ordenació (com ja passava amb les
+  targetes). Amb un ordre que no és per data, les files no s'agrupen.
 
 ## Verificació
 

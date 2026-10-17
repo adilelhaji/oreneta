@@ -1761,6 +1761,9 @@ test('the resized message list is kept across restarts and the automatic view fo
   })
   // Resizing is not choosing a view: the profile still has none stored.
   expect((await stored()).list_view).toBeUndefined()
+  // The rows open a conversation like the table does.
+  await list.getByTitle('Pilot checklist — synthetic conversation', { exact: true }).click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })
 

@@ -4,7 +4,7 @@ import { createFixture } from './fixtures'
 import { accounts$ } from '../src/states/accounts'
 import { compose$ } from '../src/states/compose'
 import { mail$, threadListViewKey } from '../src/states/mail'
-import { settings$, type ListDensity, type ListView } from '../src/states/settings'
+import { settings$, type ListDensity, type ListSort, type ListView } from '../src/states/settings'
 import { clearBulkSelection, ui$ } from '../src/states/ui'
 import { ThreadList } from '../src/components/threads/ThreadList'
 
@@ -16,12 +16,18 @@ import { ThreadList } from '../src/components/threads/ThreadList'
 let previousGo: unknown
 let previousView: ListView
 let previousDensity: ListDensity
+let previousSort: ListSort
+let previousPagination: string
+let previousLoadedKey: string
 const fixture = createFixture()
 
 beforeEach(() => {
   previousGo = (window as any).go
   previousView = settings$.listView.peek()
   previousDensity = settings$.listDensity.peek()
+  previousSort = settings$.listSort.peek()
+  previousPagination = mail$.threadsPagination.peek()
+  previousLoadedKey = mail$.threadsLoadedKey.peek()
   ;(window as any).go = { main: { App: { Invoke: async () => ({}) } } }
   accounts$.set([structuredClone(fixture.account)])
   settings$.listView.set('auto')
@@ -48,6 +54,10 @@ afterEach(() => {
   clearBulkSelection()
   settings$.listView.set(previousView)
   settings$.listDensity.set(previousDensity)
+  settings$.listSort.set(previousSort)
+  mail$.threadsPagination.set(previousPagination)
+  mail$.threadsLoadedKey.set(previousLoadedKey)
+  ui$.query.set('')
   ;(window as any).go = previousGo
 })
 
@@ -78,6 +88,14 @@ describe('automatic list view (#283)', () => {
       expect(lineOf(senders[i])).not.toBe(lineOf(subjects[i]))
     }
     expect(view.getByText('Budget review: Q4 planning')).toBeTruthy()
+  })
+
+  it('leaves the date groups out where the list is not in date order', () => {
+    // A search is ordered by relevance; headings by date would mean nothing.
+    ui$.query.set('review')
+    const view = render(<ThreadList width={360} />)
+    expect(view.container.querySelector('[data-thread-list]')!.getAttribute('data-list-view')).toBe('cards')
+    expect(view.container.querySelectorAll('[data-date-group]')).toHaveLength(0)
   })
 
   it('draws the table once the list is wide enough for its columns', () => {

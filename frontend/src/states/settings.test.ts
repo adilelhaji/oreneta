@@ -7,6 +7,7 @@ import {
   resolveThemeDef,
   selectTheme,
   deleteCustomTheme,
+  isListView,
   isProxyUsable,
   sanitizeKanbanBoards,
   sanitizeListSort,
@@ -291,6 +292,7 @@ describe('list view and ordering', () => {
       hydrateSettings({ list_view: view })
       expect(settings$.listView.get()).toBe(view)
     }
+    for (const value of ['mosaic', '', null, 1, { view: 'auto' }]) expect(isListView(value)).toBe(false)
   })
 
   it('writes an ordering the core can read', () => {

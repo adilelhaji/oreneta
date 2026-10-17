@@ -12,16 +12,31 @@ export const AUTO_TABLE_MIN_WIDTH = 520
 /** What is actually on screen: rows or the table. */
 export type DrawnListView = 'cards' | 'table'
 
+/** Whether a list this wide has room for the table's columns. */
+export function isWideList(width: number): boolean {
+  return width >= AUTO_TABLE_MIN_WIDTH
+}
+
 /**
- * The renderer for a chosen view at a list width.
+ * The renderer for a chosen view.
  *
- * `drawnWidth` is 0 while the list has not been measured (first paint, or no
- * layout at all); the stored width then stands in for it, because that is the
- * width the list is about to be drawn at unless the window squeezes it.
+ * `drawnWide` says whether the list as drawn is wide enough for the table
+ * (`isWideList`); it is null while the list has not been measured (first
+ * paint, hidden, or no layout at all). The stored width then stands in for
+ * it, because that is the width the list is about to be drawn at unless the
+ * window squeezes it.
  */
-export function resolveListView(view: ListView, drawnWidth: number, storedWidth: number): DrawnListView {
-  if (view === 'cards' || view === 'table') return view
-  if (view !== 'auto') throw new Error(`Unknown list view: ${String(view)}`)
-  const width = drawnWidth > 0 ? drawnWidth : storedWidth
-  return width >= AUTO_TABLE_MIN_WIDTH ? 'table' : 'cards'
+export function resolveListView(view: ListView, drawnWide: boolean | null, storedWidth: number): DrawnListView {
+  switch (view) {
+    case 'cards':
+    case 'table':
+      return view
+    case 'auto':
+      return (drawnWide ?? isWideList(storedWidth)) ? 'table' : 'cards'
+    default: {
+      // Hydration only lets known views through, so this is a programming error.
+      const unknown: never = view
+      throw new Error(`Unknown list view: ${String(unknown)}`)
+    }
+  }
 }
