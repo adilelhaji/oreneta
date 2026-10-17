@@ -377,7 +377,7 @@
   "calendar.staleWarning": "Neizdevās sasniegt serveri; redzamā informācija var būt novecojusi.",
   "calendar.syncFailedApiDisabled": "Google noraidīja konta {account} kalendārus: Google Cloud projektā, ar kuru pierakstās šī lietotnes versija, nav iespējota Google Calendar API. Konta atkārtota savienošana to nenovērš; API jāiespējo tam, kas pārvalda šo projektu.",
   "calendar.syncFailedNeedsConsent": "Konts {account} nav devis šai lietotnei piekļuvi saviem kalendāriem. Savienojiet to vēlreiz un atļaujiet piekļuvi kalendāram.",
-  "calendar.syncFailedNeedsReconnect": "Google vairs nepieņem konta {account} pierakstīšanos. Savienojiet to vēlreiz.",
+  "calendar.syncFailedNeedsReconnect": "Konta {account} pierakstīšanās vairs netiek pieņemta, tāpēc tā kalendārus nevar atjaunināt. Savienojiet to vēlreiz.",
   "calendar.syncFailedOther": "Neizdevās atjaunināt konta {account} kalendārus; redzamā informācija var būt novecojusi.",
   "calendar.starts": "Sākas",
   "calendar.subject": "Nosaukums",

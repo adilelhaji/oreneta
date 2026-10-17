@@ -377,7 +377,7 @@
   "calendar.staleWarning": "Não foi possível contactar o servidor; o que vê pode estar desatualizado.",
   "calendar.syncFailedApiDisabled": "A Google recusou os calendários da conta {account}: a Google Calendar API não está ativada no projeto Google Cloud com que esta versão da aplicação inicia sessão. Voltar a ligar a conta não resolve; quem gere esse projeto tem de ativar a API.",
   "calendar.syncFailedNeedsConsent": "A conta {account} não deu a esta aplicação acesso aos seus calendários. Volte a ligá-la e permita o acesso ao calendário.",
-  "calendar.syncFailedNeedsReconnect": "A Google já não aceita o início de sessão da conta {account}. Volte a ligá-la.",
+  "calendar.syncFailedNeedsReconnect": "O início de sessão da conta {account} já não é aceite, por isso os seus calendários não podem ser atualizados. Volte a ligá-la.",
   "calendar.syncFailedOther": "Não foi possível atualizar os calendários da conta {account}; o que vê pode estar desatualizado.",
   "calendar.starts": "Começa",
   "calendar.subject": "Título",

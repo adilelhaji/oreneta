@@ -377,7 +377,7 @@
   "calendar.staleWarning": "サーバーに接続できませんでした。表示内容が古い可能性があります。",
   "calendar.syncFailedApiDisabled": "Google が {account} のカレンダーを拒否しました。このバージョンのアプリがサインインに使う Google Cloud プロジェクトで Google Calendar API が有効になっていません。アカウントを再接続しても解決しません。そのプロジェクトの管理者が API を有効にする必要があります。",
   "calendar.syncFailedNeedsConsent": "アカウント {account} は、このアプリにカレンダーへのアクセスを許可していません。再接続して、カレンダーへのアクセスを許可してください。",
-  "calendar.syncFailedNeedsReconnect": "Google はアカウント {account} のサインインを受け付けなくなりました。再接続してください。",
+  "calendar.syncFailedNeedsReconnect": "アカウント {account} のサインインが受け付けられなくなったため、カレンダーを更新できません。再接続してください。",
   "calendar.syncFailedOther": "{account} のカレンダーを更新できませんでした。表示内容が古い可能性があります。",
   "calendar.starts": "開始",
   "calendar.subject": "タイトル",

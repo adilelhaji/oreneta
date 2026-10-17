@@ -377,7 +377,7 @@
   "calendar.staleWarning": "Serveur injoignable ; ce qui s'affiche peut être dépassé.",
   "calendar.syncFailedApiDisabled": "Google a refusé les agendas du compte {account} : l'API Google Calendar n'est pas activée dans le projet Google Cloud avec lequel cette version de l'application se connecte. Reconnecter le compte ne règle pas le problème ; le responsable de ce projet doit activer l'API.",
   "calendar.syncFailedNeedsConsent": "Le compte {account} n'a pas autorisé cette application à accéder à ses agendas. Reconnectez-le et autorisez l'accès à l'agenda.",
-  "calendar.syncFailedNeedsReconnect": "Google n'accepte plus la connexion du compte {account}. Reconnectez-le.",
+  "calendar.syncFailedNeedsReconnect": "La connexion du compte {account} n'est plus acceptée, ses agendas ne peuvent donc pas être actualisés. Reconnectez-le.",
   "calendar.syncFailedOther": "Impossible d'actualiser les agendas du compte {account} ; ce qui s'affiche peut être dépassé.",
   "calendar.starts": "Début",
   "calendar.subject": "Titre",

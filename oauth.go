@@ -30,7 +30,8 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 		return nil, errors.New("Google client secret missing")
 	}
 	// Whether Google granted the calendar permission, as far as its answer
-	// says: tokens handed in already exchanged carry no answer to read.
+	// says. The desktop wizard hands in tokens the OAuth callback already
+	// exchanged, and that callback logs the answer itself; here it is unknown.
 	calendarScope := "unknown"
 	if req.AccessToken == "" || req.RefreshToken == "" {
 		a.logf("account.addGmailOAuth: exchanging auth code")
@@ -380,7 +381,14 @@ func (a *App) serveOAuthRedirect(listener net.Listener) {
 		a.oauthMu.Lock()
 		a.oauthProfile = profile
 		a.oauthMu.Unlock()
-		a.logf("oauth callback exchanged profile for %s (provider=%s)", profile.Email, provider)
+		if provider == "outlook" {
+			a.logf("oauth callback exchanged profile for %s (provider=%s)", profile.Email, provider)
+		} else {
+			// Google's consent screen lets a person untick the calendar
+			// permission; whether it was granted is said here (#244), since
+			// the account is then added with these tokens already in hand.
+			a.logf("oauth callback exchanged profile for %s (provider=%s) calendar_scope=%s", profile.Email, provider, profile.calendarScope)
+		}
 	})
 	_ = server.Serve(listener)
 }
@@ -415,12 +423,13 @@ func exchangeOAuthCode(client *http.Client, provider, code, verifier, redirectUR
 			return nil, fmt.Errorf("Google userinfo failed: %w", err)
 		}
 		return &ExchangedProfile{
-			Email:        user.Email,
-			DisplayName:  user.Name,
-			AvatarURL:    user.Picture,
-			AccessToken:  tokens.AccessToken,
-			RefreshToken: tokens.RefreshToken,
-			ExpiresIn:    tokens.ExpiresIn,
+			Email:         user.Email,
+			DisplayName:   user.Name,
+			AvatarURL:     user.Picture,
+			AccessToken:   tokens.AccessToken,
+			RefreshToken:  tokens.RefreshToken,
+			ExpiresIn:     tokens.ExpiresIn,
+			calendarScope: calendarScopeGranted(tokens.Scope),
 		}, nil
 	}
 }

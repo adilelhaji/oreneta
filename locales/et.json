@@ -377,7 +377,7 @@
   "calendar.staleWarning": "Serveriga ei saadud ühendust; nähtav teave võib olla aegunud.",
   "calendar.syncFailedApiDisabled": "Google keeldus konto {account} kalendritest: Google Cloudi projektis, millega see rakenduse versioon sisse logib, ei ole Google Calendar API lubatud. Konto uuesti ühendamine seda ei paranda; API peab lubama see, kes projekti haldab.",
   "calendar.syncFailedNeedsConsent": "Konto {account} ei ole andnud sellele rakendusele juurdepääsu oma kalendritele. Ühenda see uuesti ja luba juurdepääs kalendrile.",
-  "calendar.syncFailedNeedsReconnect": "Google ei aktsepteeri enam konto {account} sisselogimist. Ühenda see uuesti.",
+  "calendar.syncFailedNeedsReconnect": "Konto {account} sisselogimist enam ei aktsepteerita, seega selle kalendreid ei saa värskendada. Ühenda see uuesti.",
   "calendar.syncFailedOther": "Konto {account} kalendreid ei õnnestunud värskendada; nähtav teave võib olla aegunud.",
   "calendar.starts": "Algab",
   "calendar.subject": "Pealkiri",

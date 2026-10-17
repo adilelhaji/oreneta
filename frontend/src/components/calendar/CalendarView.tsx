@@ -45,9 +45,10 @@ export function CalendarView() {
   const view = useValue(calendar$.view)
   const anchor = useValue(calendar$.anchor)
   const loading = useValue(calendar$.loading)
-  const syncErrors = Object.entries(useValue(calendar$.syncErrors))
-  // Re-read so the notice names an account by its address once it is known.
-  useValue(accounts$)
+  // Only for accounts still here: a removed account never syncs again to
+  // clear its notice. Re-read so a notice names its account by its address.
+  const accountIds = new Set(useValue(accounts$).map((account) => account.id))
+  const syncErrors = Object.entries(useValue(calendar$.syncErrors)).filter(([id]) => accountIds.has(id))
   // Read so the header follows a change of the week's first day or work week.
   useValue(settings$.calendarWeekStart)
   const calendarPrefs = useValue(settings$.calendar)

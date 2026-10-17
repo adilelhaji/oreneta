@@ -377,7 +377,7 @@
   "calendar.staleWarning": "無法連線至伺服器；你看到的內容可能已過時。",
   "calendar.syncFailedApiDisabled": "Google 拒絕了帳戶 {account} 的行事曆：此版本應用程式登入所用的 Google Cloud 專案未啟用 Google Calendar API。重新連線帳戶無法解決；需由該專案的管理者啟用此 API。",
   "calendar.syncFailedNeedsConsent": "帳戶 {account} 未授予此應用程式存取其行事曆的權限。請重新連線並允許存取行事曆。",
-  "calendar.syncFailedNeedsReconnect": "Google 不再接受帳戶 {account} 的登入。請重新連線。",
+  "calendar.syncFailedNeedsReconnect": "帳戶 {account} 的登入已不再被接受，因此無法重新整理其行事曆。請重新連線。",
   "calendar.syncFailedOther": "無法重新整理帳戶 {account} 的行事曆；你看到的內容可能已過時。",
   "calendar.starts": "開始",
   "calendar.subject": "標題",

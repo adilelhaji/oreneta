@@ -685,7 +685,8 @@ export function calendarSyncErrorText(error: CalendarSyncError, account: string)
     case 'needs_reconnect':
       return t('calendar.syncFailedNeedsReconnect', {
         account,
-        defaultValue: 'Google no longer accepts the sign-in of the account {account}. Reconnect it.',
+        defaultValue:
+          'The sign-in of the account {account} is no longer accepted, so its calendars cannot be refreshed. Reconnect it.',
       })
     default:
       return t('calendar.syncFailedOther', {

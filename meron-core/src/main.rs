@@ -1328,7 +1328,9 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         .await
         .unwrap_err();
 
-        let message = error.to_string();
+        // Callers report it with `{:#}`: the retry's error stays the typed
+        // source under the note about the first attempt (#244).
+        let message = format!("{error:#}");
         assert!(message.contains("network is unreachable"));
         assert!(message.contains("connection reset by peer"));
         assert_eq!(attempts.load(Ordering::SeqCst), 2);

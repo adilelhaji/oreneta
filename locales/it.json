@@ -377,7 +377,7 @@
   "calendar.staleWarning": "Server irraggiungibile; quello che vedi potrebbe non essere aggiornato.",
   "calendar.syncFailedApiDisabled": "Google ha rifiutato i calendari dell'account {account}: la Google Calendar API non è attivata nel progetto Google Cloud con cui accede questa versione dell'app. Ricollegare l'account non risolve il problema; chi gestisce quel progetto deve attivare l'API.",
   "calendar.syncFailedNeedsConsent": "L'account {account} non ha concesso a questa app l'accesso ai suoi calendari. Ricollegalo e consenti l'accesso al calendario.",
-  "calendar.syncFailedNeedsReconnect": "Google non accetta più l'accesso dell'account {account}. Ricollegalo.",
+  "calendar.syncFailedNeedsReconnect": "L'accesso dell'account {account} non è più accettato, quindi i suoi calendari non possono essere aggiornati. Ricollegalo.",
   "calendar.syncFailedOther": "Impossibile aggiornare i calendari dell'account {account}; quello che vedi potrebbe non essere aggiornato.",
   "calendar.starts": "Inizio",
   "calendar.subject": "Titolo",

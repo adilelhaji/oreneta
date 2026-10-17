@@ -381,6 +381,8 @@ impl RefusalKind {
 #[derive(Debug)]
 pub struct Refusal {
     pub kind: RefusalKind,
+    /// The HTTP status Google answered with.
+    pub status: u16,
     message: String,
 }
 
@@ -415,7 +417,6 @@ pub(crate) fn refusal(status: u16, body: &str) -> Refusal {
             ),
         )
     } else if (status == 403 && message.to_lowercase().contains("scope"))
-        || has("ACCESS_TOKEN_SCOPE_INSUFFICIENT")
         || body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT")
     {
         (
@@ -441,7 +442,12 @@ pub(crate) fn refusal(status: u16, body: &str) -> Refusal {
     } else {
         (RefusalKind::Other, format!("Google Calendar answered {status}: {message}"))
     };
-    Refusal { kind, message }
+    Refusal { kind, status, message }
+}
+
+/// The refusal an error carries, if Google refused the call.
+pub fn refusal_of(error: &anyhow::Error) -> Option<&Refusal> {
+    error.chain().find_map(|cause| cause.downcast_ref::<Refusal>())
 }
 
 /// The machine-readable reasons in a Google error envelope: the legacy
@@ -755,7 +761,7 @@ pub fn respond(
     // the version read: someone added in between is kept by reading again,
     // once, rather than dropped.
     match answer_once(token, proxy, &url, response) {
-        Err(err) if format!("{err:#}").contains("changed elsewhere") => {
+        Err(err) if refusal_of(&err).is_some_and(|refused| refused.kind == RefusalKind::Conflict) => {
             answer_once(token, proxy, &url, response)
         }
         other => other,
@@ -817,7 +823,9 @@ pub fn delete_event(
     // A delete of something already gone is what was asked for, not a failure.
     match call(token, proxy, "DELETE", &url, None) {
         Ok(_) => Ok(()),
-        Err(err) if format!("{err:#}").contains("410") => Ok(()),
+        // Read from the status, not the sentence: Google's own words can hold
+        // any number, a project's among them.
+        Err(err) if refusal_of(&err).is_some_and(|refused| refused.status == 410) => Ok(()),
         Err(err) => Err(err),
     }
 }
@@ -1908,11 +1916,9 @@ mod tests {
         let error = list_calendars("token", &ProxyChoice::Direct).unwrap_err();
         // The kind survives as the error itself, so the sync report can name
         // it without reading the sentence back.
-        let found = error
-            .chain()
-            .find_map(|cause| cause.downcast_ref::<Refusal>())
-            .expect("the refusal is in the chain");
+        let found = refusal_of(&error).expect("the refusal is in the chain");
         assert_eq!(found.kind, RefusalKind::ApiDisabled);
+        assert_eq!(found.status, 403);
     }
 
     #[test]

@@ -76,12 +76,25 @@ it("keeps one account's failure when another account's refresh lands", async () 
   expect(notices(view.container)).toEqual([])
 })
 
+it('drops the notice of an account that is gone, and a sync naming no account clears them all', async () => {
+  const view = render(<CalendarView />)
+  await act(async () => {
+    noteCalendarSyncError({ account: 'gmail', message: API_DISABLED, reason: 'api_disabled' })
+    noteCalendarSyncError({ account: 'work', message: 'x' })
+  })
+  await act(async () => accounts$.set([account('work', 'me@work.example', 'password')]))
+  expect(notices(view.container).map((notice) => notice.reason)).toEqual(['other'])
+  await act(async () => clearCalendarSyncError())
+  expect(calendar$.syncErrors.peek()).toEqual({})
+  expect(notices(view.container)).toEqual([])
+})
+
 it('says what to do for each cause, and falls back for one it does not know', async () => {
   const view = render(<CalendarView />)
   await act(async () => noteCalendarSyncError({ account: 'gmail', message: 'x', reason: 'needs_consent' }))
   expect(notices(view.container)[0].text).toContain('has not given this app access to its calendars')
   await act(async () => noteCalendarSyncError({ account: 'gmail', message: 'x', reason: 'needs_reconnect' }))
-  expect(notices(view.container)[0].text).toContain('no longer accepts the sign-in')
+  expect(notices(view.container)[0].text).toContain('is no longer accepted')
   // A reason this build has never heard of, or none from an older core.
   await act(async () => noteCalendarSyncError({ account: 'gmail', message: 'x', reason: 'something_new' }))
   expect(notices(view.container)[0].reason).toBe('other')

@@ -377,7 +377,7 @@
   "calendar.staleWarning": "Không kết nối được máy chủ; nội dung bạn thấy có thể đã cũ.",
   "calendar.syncFailedApiDisabled": "Google đã từ chối lịch của tài khoản {account}: Google Calendar API chưa được bật trong dự án Google Cloud mà phiên bản ứng dụng này dùng để đăng nhập. Kết nối lại tài khoản không khắc phục được; người quản lý dự án đó cần bật API.",
   "calendar.syncFailedNeedsConsent": "Tài khoản {account} chưa cấp cho ứng dụng này quyền truy cập lịch. Hãy kết nối lại và cho phép truy cập lịch.",
-  "calendar.syncFailedNeedsReconnect": "Google không còn chấp nhận đăng nhập của tài khoản {account}. Hãy kết nối lại.",
+  "calendar.syncFailedNeedsReconnect": "Đăng nhập của tài khoản {account} không còn được chấp nhận nên không thể làm mới lịch. Hãy kết nối lại.",
   "calendar.syncFailedOther": "Không làm mới được lịch của tài khoản {account}; nội dung bạn thấy có thể đã cũ.",
   "calendar.starts": "Bắt đầu",
   "calendar.subject": "Tiêu đề",

@@ -271,6 +271,9 @@ type ExchangedProfile struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int64  `json:"expires_in"`
 	AuthCode     string `json:"auth_code"`
+	// calendarScope is calendarScopeGranted's answer for a Google token
+	// (#244), for the log only; it does not travel to the interface.
+	calendarScope string
 }
 
 type TokenExchangeResult struct {
