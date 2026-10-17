@@ -18,6 +18,6 @@ internal actual fun writeLog(
     // Kotlin/Native's bridge for NSLog's C *object* varargs (%@) passes a bad
     // pointer and crashes (EXC_BAD_ACCESS in CFStringAppendFormat), so we avoid
     // varargs entirely. Escape '%' so the message can't be read as a format spec.
-    val line = "Meron.$tag [${level.name}] $message$detail".replace("%", "%%")
+    val line = "${platformLogTag(tag)} [${level.name}] $message$detail".replace("%", "%%")
     NSLog(line)
 }

@@ -168,7 +168,7 @@ class AndroidMobileHost(
     private val activity: ComponentActivity,
 ) : MobileHost {
     private companion object {
-        const val GOOGLE_AUTH_LOG_TAG = "Meron.GoogleAuth"
+        const val GOOGLE_AUTH_LOG_TAG = "Oreneta.GoogleAuth"
 
         fun isGoogleAuthCancelled(error: Throwable): Boolean = error is OperationCanceledException || error.cause is OperationCanceledException
     }

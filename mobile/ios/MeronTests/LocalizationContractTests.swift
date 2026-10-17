@@ -8,6 +8,9 @@ final class LocalizationContractTests: XCTestCase {
         let bundle = try XCTUnwrap(Bundle(identifier: "jp.nonbili.meron"))
 
         XCTAssertEqual(bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "Oreneta")
+        // The short bundle name is set in Info.plist, not from PRODUCT_NAME,
+        // so the target and product can keep Meron's name (#249).
+        XCTAssertEqual(bundle.object(forInfoDictionaryKey: "CFBundleName") as? String, "Oreneta")
     }
 
     func testGeneratedStringCatalogResolvesEnglishAndJapanese() throws {

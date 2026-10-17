@@ -32,3 +32,29 @@ Aquesta evidència necessita un Mac amb sessió d'usuari, la signatura i la
 notarització d'Apple i comptes de prova. Tot això depèn del propietari, igual
 que la verificació nativa de Windows. Linux continua sent una plataforma amb proves de regressió; el seu resultat no demostra res sobre la paritat a macOS
 o a Windows.
+
+## Identitats de signatura d'Apple (pendent de decisió, #249)
+
+Les identitats de signatura de macOS encara porten el nom de Nonbili Inc. No
+es canvien fins que el propietari decideixi quin compte de desenvolupador
+d'Apple signarà les versions. El nom d'una identitat és el del titular del
+compte que emet el certificat; per tant, no es pot triar lliurement.
+
+Llocs que caldria canviar:
+
+- `.github/workflows/release.yml`, pas `package macOS dmg`:
+  `Developer ID Application: Nonbili Inc. ($TEAM_ID)`, dues vegades (l'app i
+  el DMG).
+- `scripts/build-mas.sh`: els valors per defecte
+  `Apple Distribution: Nonbili Inc. ($TEAM_ID)` i
+  `3rd Party Mac Developer Installer: Nonbili Inc. ($TEAM_ID)`. Les variables
+  `MAS_APP_IDENTITY` i `MAS_INSTALLER_IDENTITY` ja els substitueixen sense
+  tocar el codi.
+
+Amb el compte també canvien els secrets que hi van lligats:
+
+- signatura: `CSC_LINK` i `CSC_KEY_PASSWORD` (el certificat que el flux de
+  treball importa al clauer) i `APPLE_TEAM_ID`;
+- notarització: `APPLE_ID` i `APPLE_APP_SPECIFIC_PASSWORD`;
+- App Store: `APP_STORE_DEVELOPMENT_TEAM` i el perfil de provisió
+  (`MAS_PROVISION_PROFILE`), que ha de ser del mateix equip.

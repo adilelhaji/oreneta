@@ -469,7 +469,11 @@ const val FORWARD_QUOTE_MARKER = "---------- Forwarded message ---------"
 // Wrapper the HTML quote block opens with. Matches the desktop composer's markup
 // so a forward looks the same whichever client wrote it, and lets a reopened
 // draft find where its quote begins.
-private const val FORWARD_HTML_OPEN = "<p><br></p><div class=\"meron-forwarded-message\">"
+private const val FORWARD_HTML_OPEN = "<p><br></p><div class=\"oreneta-forwarded-message\">"
+
+// The class drafts and forwards carried before the rename (#249). A reopened
+// draft written then still has it, so the quote lookup accepts both.
+private const val LEGACY_FORWARD_HTML_OPEN = "<p><br></p><div class=\"meron-forwarded-message\">"
 
 // `bodyHtml` is prepared for the reader by the core: it is wrapped in a complete
 // document and gets a CSP plus reader-only image styles injected into its head.
@@ -617,8 +621,12 @@ fun forwardHtmlForSend(
 // sending it keeps the rich original instead of silently downgrading to plain.
 fun forwardedHtmlQuote(bodyHtml: String): String {
     val source = forwardableHtmlSource(bodyHtml)
-    val start = source.indexOf(FORWARD_HTML_OPEN)
-    return if (start < 0) "" else source.substring(start)
+    val start =
+        listOf(FORWARD_HTML_OPEN, LEGACY_FORWARD_HTML_OPEN)
+            .map { source.indexOf(it) }
+            .filter { it >= 0 }
+            .minOrNull() ?: return ""
+    return source.substring(start)
 }
 
 fun forwardableAttachments(message: MessageBody): List<MessageAttachment> =
