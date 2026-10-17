@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Ler os contactos do Google",
   "contacts.remove": "Remover",
   "contacts.removeMessage": "As pessoas de “{name}” desaparecerão desta app. No servidor nada muda.",
+  "contacts.removeExchangeMessage": "As pessoas de “{name}” e das suas pastas de contactos desaparecerão desta app. No servidor nada muda.",
   "contacts.removeTitle": "Remover este livro?",
   "contacts.serverPlaceholder": "Servidor, endereço de correio ou URL",
   "contacts.syncNow": "Voltar a ler agora",

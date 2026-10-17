@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Läs Google-kontakter",
   "contacts.remove": "Ta bort",
   "contacts.removeMessage": "Personerna från ”{name}” försvinner från den här appen. Ingenting ändras på servern.",
+  "contacts.removeExchangeMessage": "Personerna från ”{name}” och från dess kontaktmappar försvinner från den här appen. Ingenting ändras på servern.",
   "contacts.removeTitle": "Ta bort den här adressboken?",
   "contacts.serverPlaceholder": "Server, e-postadress eller URL",
   "contacts.syncNow": "Läs igen nu",

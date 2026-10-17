@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Loe Google’i kontakte",
   "contacts.remove": "Eemalda",
   "contacts.removeMessage": "Inimesed raamatust „{name}“ kaovad sellest rakendusest. Serveris ei muutu midagi.",
+  "contacts.removeExchangeMessage": "Inimesed raamatust „{name}“ ja selle kontaktikaustadest kaovad sellest rakendusest. Serveris ei muutu midagi.",
   "contacts.removeTitle": "Eemaldada see aadressiraamat?",
   "contacts.serverPlaceholder": "Server, e-posti aadress või URL",
   "contacts.syncNow": "Loe uuesti kohe",

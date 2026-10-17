@@ -610,6 +610,7 @@
   "contacts.readGoogle": "Google-Kontakte lesen",
   "contacts.remove": "Entfernen",
   "contacts.removeMessage": "Die Personen aus „{name}“ verschwinden aus dieser App. Auf dem Server ändert sich nichts.",
+  "contacts.removeExchangeMessage": "Die Personen aus „{name}“ und aus seinen Kontaktordnern verschwinden aus dieser App. Auf dem Server ändert sich nichts.",
   "contacts.removeTitle": "Adressbuch entfernen?",
   "contacts.serverPlaceholder": "Server, E-Mail-Adresse oder URL",
   "contacts.syncNow": "Jetzt neu lesen",

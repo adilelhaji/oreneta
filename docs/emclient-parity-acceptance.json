@@ -962,7 +962,7 @@
       "section": "Contacts/General",
       "outcome": "Names, fields, groups, duplicates and provenance in contact preferences",
       "status": "partial",
-      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange (EWS) Contacts folder read only with its distribution lists read and edited as groups, never overwriting a remote change (ChangeKey, NeverOverwrite) and keeping members who are no contact (ADR-0058), tested on recorded SOAP; Graph contact groups, Exchange contact subfolders and editing Exchange people absent",
+      "present": "Local and CardDAV editing that never overwrites remote changes (ADR-0012), vCard import/export, reviewed duplicate links; first/last name display and sort preferences, local and CardDAV contact groups (vCard 4 and Apple forms), read-only Google labels and group expansion in the composer (ADR-0052), tested including Radicale; Exchange (EWS) Contacts folder with its distribution lists read and edited as groups, never overwriting a remote change (ChangeKey, NeverOverwrite) and keeping members who are no contact (ADR-0058), tested on recorded SOAP; Exchange contact folders under Contacts read as address books of their own, and Exchange people created, edited and deleted from the change key read, never overwriting a remote change, sending only what changed (ADR-0066), tested on recorded SOAP; Graph contacts and contact groups absent",
       "code": "meron-core/src/store/local_people.rs",
       "acceptance": "Owning issue must enumerate settings/options and add acceptance, error/recovery and native/provider evidence before verification",
       "platform": "Windows desktop",
@@ -1007,6 +1007,18 @@
           {
             "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
             "result": "frontend/src/components/people/ExchangeGroups.test.tsx"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "meron-core/src/exchange/book/tests.rs"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "meron-core/src/pim/exchange_book/tests.rs"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "frontend/src/components/people/ExchangeContacts.test.tsx"
           }
         ],
         "native": [],

@@ -610,6 +610,7 @@
   "contacts.readGoogle": "讀取 Google 聯絡人",
   "contacts.remove": "移除",
   "contacts.removeMessage": "「{name}」中的聯絡人將從此應用程式消失。伺服器上不會有任何改變。",
+  "contacts.removeExchangeMessage": "「{name}」及其聯絡人資料夾中的聯絡人將從此應用程式消失。伺服器上不會有任何改變。",
   "contacts.removeTitle": "移除此通訊錄？",
   "contacts.serverPlaceholder": "伺服器、電子郵件地址或 URL",
   "contacts.syncNow": "立即重新讀取",

@@ -610,6 +610,7 @@
   "contacts.readGoogle": "قراءة جهات اتصال Google",
   "contacts.remove": "إزالة",
   "contacts.removeMessage": "سيختفي الأشخاص من «{name}» من هذا التطبيق. لا يتغير شيء على الخادم.",
+  "contacts.removeExchangeMessage": "سيختفي الأشخاص من «{name}» ومن مجلدات جهات الاتصال التابعة له من هذا التطبيق. لا يتغير شيء على الخادم.",
   "contacts.removeTitle": "إزالة دفتر العناوين؟",
   "contacts.serverPlaceholder": "الخادم أو البريد الإلكتروني أو الرابط",
   "contacts.syncNow": "إعادة القراءة الآن",
