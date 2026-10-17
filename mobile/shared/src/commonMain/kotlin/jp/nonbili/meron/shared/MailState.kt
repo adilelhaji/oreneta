@@ -552,7 +552,7 @@ fun forwardInlineImages(message: MessageBody): List<ForwardInlineImage> =
     message.attachments
         .filter { it.key.trim().isNotBlank() && message.bodyHtml.contains("/media/${it.key.trim()}") }
         .mapIndexed { index, attachment ->
-            ForwardInlineImage(attachment, "meron-forward-$index@meron")
+            ForwardInlineImage(attachment, "oreneta-forward-$index@oreneta")
         }
 
 fun rewriteMediaRefsToCid(

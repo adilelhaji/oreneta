@@ -107,7 +107,7 @@ fn mobile_protocol_allocates_stable_format_message_identity() {
         Some(data_dir.to_str().unwrap()),
     );
     let id = value["result"]["message_id"].as_str().unwrap();
-    assert!(id.starts_with("meron-draft-"), "{value}");
+    assert!(id.starts_with("oreneta-draft-"), "{value}");
     assert!(id.ends_with("@example.com"), "{value}");
     let _ = std::fs::remove_dir_all(data_dir);
 }

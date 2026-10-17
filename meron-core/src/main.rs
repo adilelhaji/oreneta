@@ -8596,7 +8596,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                                 .unwrap_or_default()
                                 .trim();
                             if !url.starts_with("/media/wallpapers/") {
-                                anyhow::bail!("custom wallpaper URL must be a Meron wallpaper");
+                                anyhow::bail!("custom wallpaper URL must be an Oreneta wallpaper");
                             }
                             Some(json!({ "kind": "custom", "url": url }))
                         }

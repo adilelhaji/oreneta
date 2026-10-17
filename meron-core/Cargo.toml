@@ -5,7 +5,10 @@ edition = "2024"
 description = "Meron core engine sidecar (mail IMAP/SMTP/MIME, RSS, storage) driven over JSON-lines stdio"
 
 [[bin]]
-name = "meron-core"
+# The process users see (Task Manager, Activity Monitor, keychain prompts) is
+# named after the app. The package, its directory and the library keep Meron's
+# names so upstream changes keep merging cleanly.
+name = "oreneta-core"
 path = "src/main.rs"
 
 [lib]

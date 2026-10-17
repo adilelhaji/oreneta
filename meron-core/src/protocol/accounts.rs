@@ -206,7 +206,7 @@ fn fetch_mobile_autoconfig(url: &str) -> Option<String> {
     let mut resp = crate::proxy::agent()
         .ok()?
         .get(url)
-        .header("User-Agent", "Meron-Mail-Autoconfig")
+        .header("User-Agent", "Oreneta-Mail-Autoconfig")
         .config()
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(6)))
@@ -585,7 +585,7 @@ pub(crate) fn set_mobile_account_chat_wallpaper(
                         .unwrap_or_default()
                         .trim();
                     if !url.starts_with("/media/wallpapers/") {
-                        return Err("custom wallpaper URL must be a Meron wallpaper".to_string());
+                        return Err("custom wallpaper URL must be an Oreneta wallpaper".to_string());
                     }
                     Some(json!({ "kind": "custom", "url": url }))
                 }

@@ -2,6 +2,14 @@
 import XCTest
 
 final class LocalizationContractTests: XCTestCase {
+    // The home screen shows Oreneta, while the target, module and data
+    // directory keep Meron's name (#247).
+    func testHomeScreenNameIsOreneta() throws {
+        let bundle = try XCTUnwrap(Bundle(identifier: "jp.nonbili.meron"))
+
+        XCTAssertEqual(bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "Oreneta")
+    }
+
     func testGeneratedStringCatalogResolvesEnglishAndJapanese() throws {
         let bundle = try XCTUnwrap(Bundle(identifier: "jp.nonbili.meron"))
 

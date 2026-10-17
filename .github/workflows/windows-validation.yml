@@ -64,7 +64,7 @@ jobs:
           cargo build --locked --release --manifest-path meron-core/Cargo.toml --target x86_64-pc-windows-msvc
           if ($LASTEXITCODE -ne 0) { throw 'Sidecar build failed' }
           New-Item -ItemType Directory -Path build/sidecar -Force | Out-Null
-          Copy-Item -LiteralPath meron-core/target/x86_64-pc-windows-msvc/release/meron-core.exe -Destination build/sidecar/meron-core
+          Copy-Item -LiteralPath meron-core/target/x86_64-pc-windows-msvc/release/oreneta-core.exe -Destination build/sidecar/oreneta-core
       - name: Build executable and installer
         run: wails build -clean -platform windows/amd64 -tags embed_sidecar -nsis
       - name: Validate native startup and Graph choice

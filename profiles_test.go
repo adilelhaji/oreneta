@@ -350,9 +350,9 @@ func TestProfileArchiveNamesAndPassphraseGuard(t *testing.T) {
 // The real core's purge mode: it runs inside the named profile and refuses
 // the default one. Skipped when the core is not built.
 func TestTheCorePurgesOnlyANamedProfile(t *testing.T) {
-	core, _ := filepath.Abs(filepath.Join("meron-core", "target", "debug", "meron-core"+sidecarExeSuffix))
+	core, _ := filepath.Abs(debugSidecarPath())
 	if !fileExists(core) {
-		t.Skip("meron-core is not built")
+		t.Skip("the core (oreneta-core) is not built")
 	}
 	isolatedHome(t)
 	run := func(id string) (string, error) {

@@ -423,13 +423,19 @@ fn starred_folder_rank(role: &str) -> u8 {
     }
 }
 
+/// Mint the RFC Message-ID for an outgoing message or a draft:
+/// `oreneta-<uuid>@<account domain>` or `oreneta-draft-<uuid>@<account domain>`,
+/// with `oreneta` as the domain when the account id has none. Ids minted before
+/// the fork was renamed start with `meron-` (`@meron`); whatever recognises the
+/// app's own ids keeps accepting those too (see
+/// `store::delete_quick_reply_drafts_in_thread`).
 pub fn allocate_message_id(account_id: &str, draft: bool) -> String {
     let domain = account_id
         .split_once('@')
         .map(|(_, domain)| domain)
         .filter(|domain| !domain.is_empty())
-        .unwrap_or("meron");
-    let prefix = if draft { "meron-draft-" } else { "meron-" };
+        .unwrap_or("oreneta");
+    let prefix = if draft { "oreneta-draft-" } else { "oreneta-" };
     format!("{prefix}{}@{domain}", uuid::Uuid::new_v4().simple())
 }
 
@@ -566,12 +572,23 @@ mod tests {
     fn allocated_message_ids_use_account_domain_and_lifecycle_prefix() {
         let draft = allocate_message_id("me@example.com", true);
         let outgoing = allocate_message_id("me@example.com", false);
-        assert!(draft.starts_with("meron-draft-"));
-        assert!(outgoing.starts_with("meron-"));
-        assert!(!outgoing.starts_with("meron-draft-"));
+        assert!(draft.starts_with("oreneta-draft-"), "{draft}");
+        assert!(outgoing.starts_with("oreneta-"), "{outgoing}");
+        assert!(!outgoing.starts_with("oreneta-draft-"), "{outgoing}");
+        assert!(!draft.contains("meron") && !outgoing.contains("meron"));
         assert!(draft.ends_with("@example.com"));
         assert!(outgoing.ends_with("@example.com"));
         assert_ne!(draft, outgoing);
+    }
+
+    #[test]
+    fn allocated_message_ids_fall_back_to_the_oreneta_domain() {
+        for account in ["", "local-account", "nobody@"] {
+            let draft = allocate_message_id(account, true);
+            let outgoing = allocate_message_id(account, false);
+            assert!(draft.starts_with("oreneta-draft-") && draft.ends_with("@oreneta"), "{draft}");
+            assert!(outgoing.starts_with("oreneta-") && outgoing.ends_with("@oreneta"), "{outgoing}");
+        }
     }
 
     #[test]

@@ -125,7 +125,7 @@ private fun shareBytesViaFileProvider(
     mimeType: String,
 ) {
     val dir = File(activity.cacheDir, "attachments").apply { mkdirs() }
-    val file = File(dir, fileName.ifBlank { "meron-file" })
+    val file = File(dir, fileName.ifBlank { "oreneta-file" })
     file.writeBytes(bytes)
     val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
     val intent =
@@ -285,7 +285,7 @@ class AndroidMobileHost(
         val disclosure =
             "Account emails below are masked to only the first letter and domain (e.g. j***@gmail.com).\n" +
                 "Review before sharing.\n\n"
-        shareBytesViaFileProvider(activity, (disclosure + body).toByteArray(), "meron-sync-log.txt", "text/plain")
+        shareBytesViaFileProvider(activity, (disclosure + body).toByteArray(), "oreneta-sync-log.txt", "text/plain")
     }
 
     override fun pendingCrashReport(): String = AndroidCrashLog.pending(activity)

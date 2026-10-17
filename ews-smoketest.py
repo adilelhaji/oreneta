@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke-test the native EWS backend against a real Exchange server.
 
-Drives the meron-core sidecar over its JSON-lines stdio protocol: adds an
+Drives the oreneta-core sidecar over its JSON-lines stdio protocol: adds an
 Exchange account, lists folders, syncs a folder and reads one message —
 without any UI, and against a throwaway profile so nothing touches the
 installed app's data.
@@ -18,7 +18,7 @@ Usage:
 import argparse, getpass, json, os, shutil, subprocess, sys, tempfile, threading, time
 
 BIN = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "meron-core", "target", "release", "meron-core")
+                   "meron-core", "target", "release", "oreneta-core")
 
 
 class Sidecar:
@@ -124,7 +124,7 @@ def main():
     args = ap.parse_args()
 
     if not os.path.exists(BIN):
-        sys.exit(f"binary not found: {BIN}\nbuild it with: cargo build --release --bin meron-core")
+        sys.exit(f"binary not found: {BIN}\nbuild it with: cargo build --release --bin oreneta-core")
 
     password = os.environ.get("EWS_PASSWORD") or getpass.getpass("Exchange password: ")
     if not password:

@@ -1080,7 +1080,7 @@ class MobileCommandsTest {
         assertEquals(true, draft.html.contains("<strong>Date:</strong> Jul 27, 2026, 10:00"))
         assertEquals(true, draft.html.contains("<p>Original &amp; more</p>"))
         // The reader's local media path must not survive into the sent message.
-        assertEquals(true, draft.html.contains("""<img src="cid:meron-forward-0@meron">"""))
+        assertEquals(true, draft.html.contains("""<img src="cid:oreneta-forward-0@oreneta">"""))
         assertEquals(false, draft.html.contains("/media/"))
     }
 
