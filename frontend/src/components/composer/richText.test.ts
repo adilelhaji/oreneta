@@ -50,9 +50,12 @@ function chord(key: string, shift = false): KeyboardEvent {
   })
 }
 
+// Style attributes as written here: ProseMirror writes them through the DOM,
+// which ends each one with a semicolon.
+const plain = (markup: string) => markup.replace(/;"/g, '"')
 // The document as HTML, without the empty paragraph the starter kit keeps at
 // the end of a document that ends in a list, a heading or a table.
-const html = (editor: Editor) => editor.getHTML().replace(/<p><\/p>$/, '')
+const html = (editor: Editor) => plain(editor.getHTML()).replace(/<p><\/p>$/, '')
 
 const rowCount = (editor: Editor) => editor.view.dom.querySelectorAll('tr').length
 const columnCount = (editor: Editor) => editor.view.dom.querySelector('tr')!.children.length
@@ -159,7 +162,7 @@ describe('the formatting commands', () => {
     editor.chain().selectAll().setTextAlign('center').run()
     expect(html(editor)).toBe('<p style="text-align: center">One</p><h2 style="text-align: center">Two</h2>')
     editor.chain().selectAll().setTextAlign('justify').run()
-    expect(editor.getHTML()).toContain('<p style="text-align: justify">')
+    expect(html(editor)).toContain('<p style="text-align: justify">')
     editor.chain().selectAll().unsetTextAlign().run()
     expect(html(editor)).toBe('<p>One</p><h2>Two</h2>')
   })
@@ -249,7 +252,7 @@ describe('the formatting commands', () => {
     expect(td.getAttribute('colspan')).toBe(String(MAX_TABLE_SPAN))
     expect(td.getAttribute('rowspan')).toBe('1')
     expect(th.getAttribute('colspan')).toBe('1')
-    expect(Number(th.getAttribute('rowspan'))).toBeLessThanOrEqual(MAX_TABLE_SPAN)
+    expect(th.getAttribute('rowspan')).toBe(String(MAX_TABLE_SPAN))
     expect(clampSpan('3')).toBe(3)
     expect(clampSpan(2.7)).toBe(2)
     expect(clampSpan('x')).toBe(1)
@@ -343,7 +346,7 @@ describe('what is sent', () => {
 
   it('keeps only the styles that pass, and nothing that runs or fetches', () => {
     const editor = editorWith(hostile)
-    const sent = inlineRichStyles(editor.getHTML())
+    const sent = plain(inlineRichStyles(editor.getHTML()))
     for (const bad of ['onclick', 'onerror', '<script', 'url(', 'expression', 'var(', '\\', 'background-image']) {
       expect(sent).not.toContain(bad)
     }
@@ -373,7 +376,7 @@ describe('what is sent', () => {
       content: inlineRichStyles(editor.getHTML()),
       attachments: [],
     })
-    expect(payload.html).toContain('<span style="font-family: Georgia, serif; color: #2563eb">Hi Ana,</span>')
+    expect(plain(payload.html)).toContain('<span style="font-family: Georgia, serif; color: #2563eb">Hi Ana,</span>')
     expect(payload.html).toContain('<table class="oreneta-table" style="border-collapse: collapse;')
     const sent = new DOMParser().parseFromString(payload.html, 'text/html').body
     expect(sent.querySelector('td')!.getAttribute('style')).toBe(

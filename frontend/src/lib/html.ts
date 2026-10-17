@@ -125,11 +125,12 @@ function ownCells(row: HTMLElement): HTMLElement[] {
 }
 
 // A table of data: one made in the composer, or one that looks like a grid —
-// no table inside it and no cell holding more than one block. Anything else
-// is taken for layout, whose cells are passages of text, not values.
+// no table inside it and no cell holding more than one block or a line break
+// (a signature's "Name<br>Role<br>Phone"). Anything else is taken for layout,
+// whose cells are passages of text, not values.
 function isDataTable(table: HTMLElement): boolean {
   if (table.classList.contains(COMPOSER_TABLE_CLASS)) return true
-  if (table.querySelector('table')) return false
+  if (table.querySelector('table, br')) return false
   return ownRows(table).every((row) =>
     ownCells(row).every((cell) => Array.from(cell.children).filter((child) => blockTags.has(child.tagName)).length <= 1),
   )
@@ -155,4 +156,3 @@ function flatText(element: Element): string {
     .replace(/\s*\n+\s*/g, ' ')
     .trim()
 }
-

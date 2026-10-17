@@ -59,7 +59,7 @@ Mod és ⌘ al macOS i Ctrl a la resta.
     dreta a esquerra, i treu `data-indent`.
 - L'alternativa de text pla (`htmlToText`, `lib/html.ts`) escriu cada fila
   d'una taula de dades en una línia, amb les cel·les separades per ` | `. Una
-  taula de maquetació (amb taules a dins o cel·les de més d'un bloc, com les
+  taula de maquetació (amb taules a dins o cel·les de més d'un bloc o amb salts de línia, com les
   dels butlletins i les signatures citats) es llegeix com els paràgrafs que
   conté. Els colors, els tipus de lletra, les mides, l'alineació i el sagnat
   no hi passen.
@@ -70,7 +70,7 @@ Mod és ⌘ al macOS i Ctrl a la resta.
   graella a l'editor, les dreceres (també que Mod+Maj+R no arribi a la
   finestra des de l'editor i que hi arribi des d'un altre camp, i AltGr per als
   claudàtors), Tab a les taules i l'HTML i el text pla que s'envien.
-- `ComposerToolbar.test.tsx`: cada control de la barra contra l'editor.
+- `ComposerToolbar.test.tsx`: cada control de la barra amb l'editor.
 - `composerHelpers.test.ts` i `lib/html.test.ts`: els estils en línia i el text
   pla de les taules de dades i de maquetació.
 

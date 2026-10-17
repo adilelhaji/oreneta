@@ -7,6 +7,10 @@ import { BACKGROUND_COLORS, FONT_FAMILIES, richTextExtensions, TEXT_COLORS } fro
 
 // The toolbar's formatting controls (#274, ADR-0067), each against the editor.
 
+// Style attributes as written here: ProseMirror writes them through the DOM,
+// which ends each one with a semicolon.
+const html = (editor: Editor) => editor.getHTML().replace(/;"/g, '"')
+
 const editors: Editor[] = []
 afterEach(() => {
   cleanup()
@@ -32,7 +36,7 @@ describe('the composer toolbar', () => {
     act(() => {
       fireEvent.change(size, { target: { value: '18pt' } })
     })
-    expect(editor.getHTML()).toBe('<p><span style="font-family: Georgia, serif; font-size: 18pt">Hello</span></p>')
+    expect(html(editor)).toBe('<p><span style="font-family: Georgia, serif; font-size: 18pt">Hello</span></p>')
     expect(font.value).toBe(FONT_FAMILIES[2].value)
     expect(size.value).toBe('18pt')
     act(() => {
@@ -41,7 +45,7 @@ describe('the composer toolbar', () => {
     act(() => {
       fireEvent.change(size, { target: { value: '' } })
     })
-    expect(editor.getHTML()).toBe('<p>Hello</p>')
+    expect(html(editor)).toBe('<p>Hello</p>')
   })
 
   it('shows a font that came with pasted text as its own choice', () => {
@@ -65,7 +69,7 @@ describe('the composer toolbar', () => {
     act(() => {
       fireEvent.click(view.getByLabelText('Yellow'))
     })
-    expect(editor.getHTML()).toBe(
+    expect(html(editor)).toBe(
       `<p><span style="color: ${TEXT_COLORS.red}; background-color: ${BACKGROUND_COLORS.yellow}">Hello</span></p>`,
     )
     act(() => {
@@ -74,7 +78,7 @@ describe('the composer toolbar', () => {
     act(() => {
       fireEvent.click(view.getByLabelText('Remove color'))
     })
-    expect(editor.getHTML()).toBe(`<p><span style="background-color: ${BACKGROUND_COLORS.yellow}">Hello</span></p>`)
+    expect(html(editor)).toBe(`<p><span style="background-color: ${BACKGROUND_COLORS.yellow}">Hello</span></p>`)
   })
 
   it('aligns and indents', () => {
@@ -82,7 +86,7 @@ describe('the composer toolbar', () => {
     act(() => {
       fireEvent.click(view.getByTitle('Align right'))
     })
-    expect(editor.getHTML()).toBe('<p style="text-align: right">Hello</p>')
+    expect(html(editor)).toBe('<p style="text-align: right">Hello</p>')
     act(() => {
       fireEvent.click(view.getByTitle('Center'))
     })
@@ -95,7 +99,7 @@ describe('the composer toolbar', () => {
     act(() => {
       fireEvent.click(view.getByTitle('Decrease indent'))
     })
-    expect(editor.getHTML()).toBe('<p style="text-align: center" data-indent="1">Hello</p>')
+    expect(html(editor)).toBe('<p style="text-align: center" data-indent="1">Hello</p>')
   })
 
   it('offers the row and column commands only inside a table', () => {

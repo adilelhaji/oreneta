@@ -3,7 +3,7 @@
 - Estat: acceptada pel propietari el 2026-10-17 («sí, aprueba la A con esos
   atajos»): l'opció A i tres decisions de dreceres (punt 5): `Mod-Shift-r`
   alinea a la dreta dins de l'editor i fora continua sincronitzant la bústia;
-  `Mod-]` i `Mod-[` sagnen; Tab a l'última cel·la d'una taula hi afegeix una
+  `Mod-]` i `Mod-[` augmenten i redueixen el sagnat; Tab a l'última cel·la d'una taula hi afegeix una
   fila.
 - Afegit en implementar (#274), sense canviar la decisió: la classe
   `oreneta-table` (punt 3), el límit de les cel·les que ocupen més d'una
@@ -97,8 +97,8 @@ Tres extensions oficials de tiptap, del mateix monorepositori
   - L'amplada de columna es llegeix amb `parseInt`.
   - `colspan` i `rowspan` es llegeixen sense límit, i el codi de les taules
     recorre una cel·la columna per columna: `colspan="2000000000"` en un
-    missatge citat bloquejaria el redactor. Es llegeixen com a enters d'1 a
-    50 (`clampSpan`).
+    missatge citat bloquejaria el redactor. Oreneta els llegeix com a enters d'1 a 50
+    (`clampSpan`).
   - `Color`, `BackgroundColor`, `FontFamily` i `FontSize` llegeixen el valor
     en brut de l'atribut `style` (`getStyleProperty`, que talla per `;`) i el
     tornen a escriure tal com és. Un valor no pot obrir una declaració nova,
@@ -126,7 +126,7 @@ Tres extensions oficials de tiptap, del mateix monorepositori
 
 ### 3. Compatibilitat amb els clients
 
-- `inlineRichStyles` hi afegeix estils en línia:
+- `inlineRichStyles` afegeix a l'HTML que s'envia estils en línia:
   - a les taules, `border-collapse`, la vora i el farciment de `td` i `th`, i
     `margin: 0` als paràgrafs de les cel·les, com a l'editor;
   - al text amb color de fons i sense color propi, un color fosc, perquè un
@@ -191,7 +191,7 @@ Com s'aplica:
   entre els separadors; una fila sense cap text no s'escriu; el títol
   (`<caption>`) va a sobre.
 - Una taula de dades és una feta al redactor (classe `oreneta-table`) o una
-  sense cap taula a dins i sense cap cel·la amb més d'un bloc. Les altres són
+  sense cap taula a dins i sense cap cel·la amb més d'un bloc o amb salts de línia. Les altres són
   de maquetació (un butlletí o una signatura citats): les seves cel·les es
   llegeixen com a paràgrafs, perquè posar-les en una línia faria il·legible
   el missatge citat.
@@ -229,6 +229,5 @@ Com s'aplica:
 - Al redactor, el sagnat d'un paràgraf de dreta a esquerra es veu a
   l'esquerra quan la interfície és d'esquerra a dreta (`margin-inline-start`
   segueix la direcció de l'editor); el missatge enviat el porta a la dreta.
-- Una taula enganxada des d'un full de càlcul arriba sense graella i la barra
-  d'eines no en té cap ordre per posar-n'hi.
+- Una taula enganxada des d'un full de càlcul arriba sense graella i la barra d'eines no té cap ordre per posar-n'hi.
 - Noves cadenes d'interfície a tots els `locales/*.json`.

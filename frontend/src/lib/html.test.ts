@@ -63,6 +63,11 @@ describe('htmlToText with tables', () => {
     expect(htmlToText(html)).toBe('On Monday Ana wrote:\n\nDear reader,\n\nOur news this week.\n\nSidebar')
   })
 
+  it('keeps the lines of a quoted signature laid out in a table', () => {
+    const html = '<table><tbody><tr><td>Ana Puig<br>Sales<br>+34 600 000 000</td><td>logo</td></tr></tbody></table>'
+    expect(htmlToText(html)).toBe('Ana Puig\nSales\n+34 600 000 000\n\nlogo')
+  })
+
   it('reads a cell with several paragraphs as layout too', () => {
     const html = '<table><tbody><tr><td><p>First</p><p>Second</p></td></tr></tbody></table>'
     expect(htmlToText(html)).toBe('First\n\nSecond')

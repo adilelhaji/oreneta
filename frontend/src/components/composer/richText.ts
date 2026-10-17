@@ -317,4 +317,3 @@ export function richTextExtensions(): Extensions {
     FormattingShortcuts,
   ]
 }
-

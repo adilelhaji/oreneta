@@ -81,7 +81,7 @@ l'evidència nativa de Windows).
 El 2026-10-17 (#274, ADR-0067) el redactor va incorporar el tipus de lletra, la mida, el
 color del text i el de ressaltat, l'alineació, el sagnat i les taules (inserir i suprimir
 taules, i inserir i suprimir files i columnes), amb barra d'eines i dreceres. Els estils que
-arriben enganxats o citats es validen abans d'entrar a l'HTML enviat, i el text pla escriu
+arriben enganxats o citats es validen abans d'entrar a l'HTML enviat, i l'alternativa de text pla escriu
 cada fila d'una taula de dades en una línia. SET-10 es manté `implemented-unverified`: falten
 l'evidència nativa de Windows i la comprovació en clients de correu reals.
 
