@@ -40,10 +40,10 @@ sistema o una dependència, i deixar-ho decidit en un ADR.
 - Només s'anuncia «Absent», mai quant de temps fa que no s'usa l'ordinador
   (no s'envia XEP-0319, «Last User Interaction in Presence»).
 - Als grups hi ha gent que la persona no ha triat (ADR-0055). Es proposa que,
-  per defecte, l'absència automàtica no s'hi anunciï: els grups la continuen
-  veient amb l'estat triat. Una segona opció, també desactivada, la hi
+  per defecte, l'absència automàtica no s'hi anunciï: els grups continuen
+  veient l'estat triat per la persona. Una segona opció, també desactivada, la hi
   estendria.
-- La inactivitat es llegeix i es fa servir dins de l'aparell; no es desa ni
+- La inactivitat es llegeix i es fa servir dins de l'ordinador; no es desa ni
   surt enlloc més.
 
 ## Opcions

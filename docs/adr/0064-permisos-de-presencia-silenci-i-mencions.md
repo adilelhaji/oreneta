@@ -1,8 +1,9 @@
 # ADR-0064: Permisos de presència, silenci de converses i mencions sense llegir (XMPP)
 
-- Estat: acceptada per delegació (el propietari va aprovar el 2026-10-17 tancar
-  els buits de la fila SET-21 per completar l'aplicació d'escriptori); pendent
-  de revisió del propietari al final del pla.
+- Estat: **proposada**; pendent de l'aprovació del propietari (PR #263). El
+  2026-10-17 el propietari va aprovar treballar a tancar els buits de la fila
+  SET-21 per completar l'aplicació d'escriptori; aquest ADR no queda acceptat
+  fins que ell ho digui.
 - Data: 2026-10-17.
 - Abast: #256, filla de #111 (fila SET-21 del registre d'acceptació, «Xat →
   General» d'eM Client 10.4). Tanca tres dels quatre punts que l'ADR-0055 va
@@ -31,17 +32,17 @@
     l'adreça nua del compte); els d'un altre dispositiu o d'una altra persona
     no s'accepten. Cada avís vàlid es contesta amb un resultat buit, com
     demana la RFC. Les altres preguntes (iq) continuen sense resposta, com
-    abans; contestar-les amb un error és #262;
+    abans; contestar-les amb un error queda per a la incidència #262;
   - **deixar de compartir** l'estat amb algú envia `unsubscribed` (RFC 6121
-    §3.2), la mateixa resposta que «Denega» una petició
+    §3.2), la mateixa resposta que envia «Denega» davant d'una petició
     (`chat.answerSubscription` amb `allow: false`): no cal cap mètode nou. Per
     denegar, s'accepta qualsevol adreça nua vàlida, perquè el roster pot tenir
     passarel·les o servidors sense punt al nom. Només surt en prémer i després
     de confirmar-ho;
   - la llista canvia quan el servidor ho diu (amb l'avís del roster), no
     abans. Mentrestant la visualització mostra «S'està deixant de compartir…»;
-    si el servidor torna a dir la llista o passen 30 s sense resposta, torna a
-    oferir el botó;
+    si el servidor torna a enviar la llista o passen 30 s sense resposta, la
+    visualització torna a oferir el botó;
   - per tornar-lo a veure, aquella persona l'ha de tornar a demanar, i la
     persona usuària ho decideix (ADR-0055).
 - **Silenciar una conversa:**
@@ -75,7 +76,7 @@
     sense llegir, que mencionen la persona pel text, amb la mateixa regla que el
     ressaltat (ADR-0055) i amb el sobrenom que hi té ara. Es calcula en llistar
     els grups, sense columna nova; les comprovacions internes de si una sala
-    existeix fan servir el sobrenom i no el recalculen;
+    existeix fan servir el sobrenom i no tornen a comptar les mencions;
   - com a màxim es miren els 2000 missatges sense llegir més nous de cada grup.
     Si n'hi ha més, `mentions_capped` ho diu i la visualització mostra el nombre
     com a mínim («@N+», «N o més»), també quan és zero: mai no es presenta com a
@@ -115,10 +116,10 @@
 - La fila `chat_mute:<compte>`, com la `chat_presence:<compte>` de l'ADR-0055,
   entra a la còpia de seguretat de la configuració, que copia totes les files de
   configuració. Aquesta còpia no porta els comptes de xat, de manera que, en
-  restaurar-la, aquestes files queden sense compte. Excloure-les canvia l'abast
+  restaurar-la, aquestes files queden sense compte. Excloure-les canviaria l'abast
   de la còpia i és una decisió pendent: #261.
 - Les proves són unitàries i deterministes (stanzas enregistrades, magatzem en
   memòria i proves de la visualització). No s'afegeix cap prova contra Prosody:
-  les d'aquest servidor fallen de tant en tant a la CI (#220), i el cablejat de
+  les d'aquest servidor fallen de tant en tant a la CI (#220), i la integració a
   la sessió (demanar el roster, contestar els avisos) queda sense prova
-  automàtica fins que es puguin fer estables.
+  automàtica fins que les proves de Prosody siguin estables.

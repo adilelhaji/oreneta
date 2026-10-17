@@ -217,7 +217,7 @@ L'absència automàtica per inactivitat és la proposta de l'ADR-0065, sense cod
   - (ADR-0064) qui pot veure l'estat: desconegut, la llista que arriba amb
     `chat.permissions` (no la d'un altre compte), deixar de compartir només
     després de confirmar (cancel·lar no envia res), «S'està deixant de
-    compartir…» fins que el servidor torna a dir la llista, l'error, «ningú»,
+    compartir…» fins que el servidor torna a enviar la llista, l'error, «ningú»,
     «només els primers», una sessió nova, i res sense connexió; silenciar i
     tornar a activar des de la capçalera (directa, sense missatges encara,
     privada i grup), amb l'explicació per als lectors de pantalla, la llista ho
