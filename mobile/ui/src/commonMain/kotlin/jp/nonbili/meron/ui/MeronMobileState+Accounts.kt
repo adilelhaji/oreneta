@@ -1591,7 +1591,7 @@ internal fun MeronMobileState.exchangeOAuthCode() {
             tokenUrl = if (oauthProvider == "gmail") mobileHost.googleTokenUrl else "",
         )
     Log.i(
-        "Meron.OAuth",
+        "OAuth",
         "exchange start provider=${params.provider} emailPresent=${params.email.isNotBlank()} " +
             "clientIdPresent=${params.clientId.isNotBlank()} redirectUri=${params.redirectUri} " +
             "tokenUrlPresent=${params.tokenUrl.isNotBlank()} codeLength=${params.code.length} " +
@@ -1623,13 +1623,13 @@ internal fun MeronMobileState.exchangeOAuthCode() {
                 ?: if (params.email.isBlank()) "Connected account" else "Connected ${params.email}"
             val syncAccountId = connectedAccount?.id ?: selectedCoreAccountId
             Log.i(
-                "Meron.OAuth",
+                "OAuth",
                 "exchange success provider=${params.provider} selectedAccount=$syncAccountId " +
                     "connectedEmailPresent=${connectedAccount?.email?.isNotBlank() == true}",
             )
             syncCoreThreads(accountOverride = syncAccountId, folderOverride = INBOX_FOLDER, syncFirst = true)
         }.onFailure {
-            Log.w("Meron.OAuth", "exchange failed provider=${params.provider}: ${it.message}", it)
+            Log.w("OAuth", "exchange failed provider=${params.provider}: ${it.message}", it)
             oauthAuthorizationCode = ""
             errorBanner = it.message ?: "OAuth exchange failed"
             status = "OAuth exchange failed: ${it.message}"
@@ -1679,10 +1679,10 @@ internal fun MeronMobileState.launchOAuthFlow() {
 }
 
 internal fun MeronMobileState.handleOAuthCallback(rawUrl: String) {
-    Log.i("Meron.OAuth", "callback received length=${rawUrl.length}")
+    Log.i("OAuth", "callback received length=${rawUrl.length}")
     loadPendingOAuthFlow(prefs)?.let { pending ->
         Log.i(
-            "Meron.OAuth",
+            "OAuth",
             "pending flow provider=${pending.provider} redirectUri=${pending.redirectUri} emailPresent=${pending.email.isNotBlank()}",
         )
         oauthProvider = pending.provider
@@ -1699,7 +1699,7 @@ internal fun MeronMobileState.handleOAuthCallback(rawUrl: String) {
         )
     }.onSuccess { result ->
         if (result != null) {
-            Log.i("Meron.OAuth", "callback parsed provider=$oauthProvider codeLength=${result.code.length}")
+            Log.i("OAuth", "callback parsed provider=$oauthProvider codeLength=${result.code.length}")
             oauthAuthorizationCode = result.code
             addSection = 0
             passwordServerSettingsOpen = false
@@ -1708,11 +1708,11 @@ internal fun MeronMobileState.handleOAuthCallback(rawUrl: String) {
             clearPendingOAuthFlow(prefs)
             exchangeOAuthCode()
         } else {
-            Log.w("Meron.OAuth", "callback did not match redirectUri=$oauthRedirectUri")
+            Log.w("OAuth", "callback did not match redirectUri=$oauthRedirectUri")
             status = "OAuth callback did not match expected redirect URI."
         }
     }.onFailure {
-        Log.w("Meron.OAuth", "callback parse failed: ${it.message}", it)
+        Log.w("OAuth", "callback parse failed: ${it.message}", it)
         status = "OAuth callback failed: ${it.message}"
     }
 }

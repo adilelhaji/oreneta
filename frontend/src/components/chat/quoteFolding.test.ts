@@ -94,6 +94,19 @@ describe('HTML quote folding', () => {
     expect(fold(APPLE_FORWARD).count).toBe(0)
   })
 
+  it('leaves an Oreneta-composed forward open, whichever wrapper class it carries', () => {
+    // Oreneta writes `oreneta-forwarded-message`; forwards written before the
+    // rename (and by Meron) carry `meron-forwarded-message` (#249). The reader
+    // recognises a forward by its "Forwarded message" line, not by the class,
+    // so both stay open.
+    for (const cls of ['oreneta-forwarded-message', 'meron-forwarded-message']) {
+      const html = `<html><body><p>See below.</p><p><br></p><div class="${cls}"><p>---------- Forwarded message ---------</p><div><strong>From:</strong> Ben Ode</div><div><strong>Subject:</strong> Plans</div><br><p>The plans are attached.</p></div></body></html>`
+      const { count, visible } = fold(html)
+      expect(count).toBe(0)
+      expect(visible).toContain('The plans are attached.')
+    }
+  })
+
   it('folds Thunderbird history as one fold, attribution included, nested quotes inside', () => {
     const { folds, visible } = fold(THUNDERBIRD, QUOTES)
     expect(folds).toHaveLength(1)

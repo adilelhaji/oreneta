@@ -1079,6 +1079,9 @@ class MobileCommandsTest {
         assertEquals(true, draft.body.contains("Date: Jul 27, 2026, 10:00"))
         assertEquals(true, draft.html.contains("<strong>Date:</strong> Jul 27, 2026, 10:00"))
         assertEquals(true, draft.html.contains("<p>Original &amp; more</p>"))
+        // The quote block carries Oreneta's class, the same as the desktop composer (#249).
+        assertEquals(true, draft.html.startsWith("""<p><br></p><div class="oreneta-forwarded-message">"""))
+        assertEquals(false, draft.html.contains("meron-forwarded-message"))
         // The reader's local media path must not survive into the sent message.
         assertEquals(true, draft.html.contains("""<img src="cid:oreneta-forward-0@oreneta">"""))
         assertEquals(false, draft.html.contains("/media/"))
@@ -1136,7 +1139,7 @@ class MobileCommandsTest {
 
     @Test
     fun forwardHtmlForSendPrependsTypedTextAndDropsHtmlWithoutQuote() {
-        val quote = """<p><br></p><div class="meron-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Original</p></div>"""
+        val quote = """<p><br></p><div class="oreneta-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Original</p></div>"""
         val body = "See below.\n\n$FORWARD_QUOTE_MARKER\nFrom: Ada\n\nOriginal"
 
         assertEquals("<p>See below.</p>$quote", forwardHtmlForSend(body, quote))
@@ -1146,33 +1149,57 @@ class MobileCommandsTest {
         assertEquals("", forwardHtmlForSend(body, ""))
     }
 
+    // Oreneta writes `oreneta-forwarded-message`; drafts saved before the rename
+    // (#249), and forwards Meron wrote, carry `meron-forwarded-message`.
+    private val forwardClasses = listOf("oreneta-forwarded-message", "meron-forwarded-message")
+
     @Test
     fun savedForwardDraftKeepsItsQuoteOnReopen() {
-        val savedHtml =
-            """<p>My note</p><p><br></p><div class="meron-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Original</p></div>"""
+        for (cls in forwardClasses) {
+            val savedHtml =
+                """<p>My note</p><p><br></p><div class="$cls"><p>$FORWARD_QUOTE_MARKER</p><p>Original</p></div>"""
 
-        assertEquals(
-            """<p><br></p><div class="meron-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Original</p></div>""",
-            forwardedHtmlQuote(savedHtml),
-        )
+            assertEquals(
+                """<p><br></p><div class="$cls"><p>$FORWARD_QUOTE_MARKER</p><p>Original</p></div>""",
+                forwardedHtmlQuote(savedHtml),
+            )
+        }
         assertEquals("", forwardedHtmlQuote("<p>A plain draft</p>"))
+        assertEquals("", forwardedHtmlQuote("""<p><br></p><div class="other-forwarded-message"><p>Original</p></div>"""))
     }
 
     @Test
     fun savedForwardDraftExtractsQuoteFromReaderDocument() {
         val quote = """$FORWARD_QUOTE_MARKER</p><p>Original</p></div>"""
-        val savedHtml =
-            """<!doctype html><html><head><meta charset="utf-8">""" +
-                """<meta http-equiv="Content-Security-Policy" content="default-src 'none';">""" +
-                """<style>img,video{max-width:100%;height:auto}img{cursor:zoom-in}</style>""" +
-                """</head><body><p>My note</p><p><br></p><div class="meron-forwarded-message"><p>""" +
-                quote +
-                """</body></html>"""
+        for (cls in forwardClasses) {
+            val savedHtml =
+                """<!doctype html><html><head><meta charset="utf-8">""" +
+                    """<meta http-equiv="Content-Security-Policy" content="default-src 'none';">""" +
+                    """<style>img,video{max-width:100%;height:auto}img{cursor:zoom-in}</style>""" +
+                    """</head><body><p>My note</p><p><br></p><div class="$cls"><p>""" +
+                    quote +
+                    """</body></html>"""
 
-        assertEquals(
-            """<p><br></p><div class="meron-forwarded-message"><p>$quote""",
-            forwardedHtmlQuote(savedHtml),
-        )
+            assertEquals(
+                """<p><br></p><div class="$cls"><p>$quote""",
+                forwardedHtmlQuote(savedHtml),
+            )
+        }
+    }
+
+    @Test
+    fun forwardedHtmlQuoteStartsAtTheFirstQuoteBlockWhicheverClassItCarries() {
+        // A forward of a forward: the outer (first) block is the draft's quote,
+        // even when an inner block carries the other class.
+        val inner = """<p><br></p><div class="meron-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Older</p></div>"""
+        val outer =
+            """<p><br></p><div class="oreneta-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Newer</p>$inner</div>"""
+        assertEquals(outer, forwardedHtmlQuote("<p>My note</p>$outer"))
+
+        val legacyOuter =
+            """<p><br></p><div class="meron-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Newer</p>""" +
+                """<p><br></p><div class="oreneta-forwarded-message"><p>$FORWARD_QUOTE_MARKER</p><p>Older</p></div></div>"""
+        assertEquals(legacyOuter, forwardedHtmlQuote("<p>My note</p>$legacyOuter"))
     }
 
     @Test

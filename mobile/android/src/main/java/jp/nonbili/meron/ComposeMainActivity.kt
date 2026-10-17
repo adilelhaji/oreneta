@@ -507,7 +507,7 @@ class ComposeMainActivity : ComponentActivity() {
     fun currentOAuthCallbackUrlForTesting(): String? = incomingOAuthCallbackUrl
 
     private companion object {
-        const val FOREGROUND_ENGINE_TAG = "MeronForegroundEngine"
+        const val FOREGROUND_ENGINE_TAG = "Oreneta.FgEngine"
         const val FOREGROUND_TOKEN_REFRESH_CHECK_INTERVAL_MS = 5 * 60 * 1_000L
     }
 }

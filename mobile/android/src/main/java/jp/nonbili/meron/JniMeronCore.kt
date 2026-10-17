@@ -21,14 +21,14 @@ class JniMeronCore : MeronCore {
         ensureLoaded()
         // Log command names and errors only — never payloads/responses, which
         // carry passwords and OAuth tokens.
-        android.util.Log.i("MeronCore", "-> $command")
+        android.util.Log.i("Oreneta.Core", "-> $command")
         val startedAt = System.currentTimeMillis()
         val response = MeronCoreNative.invokeJson(CoreRequest(1, command, payloadJson).toJson())
         val error = coreErrorMessage(response)
         if (error != null) {
-            android.util.Log.w("MeronCore", "<- $command error after ${System.currentTimeMillis() - startedAt}ms: $error")
+            android.util.Log.w("Oreneta.Core", "<- $command error after ${System.currentTimeMillis() - startedAt}ms: $error")
         } else {
-            android.util.Log.i("MeronCore", "<- $command ok after ${System.currentTimeMillis() - startedAt}ms")
+            android.util.Log.i("Oreneta.Core", "<- $command ok after ${System.currentTimeMillis() - startedAt}ms")
         }
         return requireCoreOk(response)
     }

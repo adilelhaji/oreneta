@@ -17,6 +17,17 @@ jobs:
           node-version: '22'
       - run: node --test scripts/ci/*.test.cjs
       - run: python3 scripts/translation-models/test_mirror.py
+      # Until the owner picks the developer id (#249), the one warning allowed
+      # is developer-id-missing; it is still printed. Anything else fails.
+      - name: Validate Flatpak metainfo
+        run: |
+          sudo apt-get update && sudo apt-get install -y appstream
+          status=0
+          out="$(appstreamcli validate --explain metadata/flatpak/io.github.adilelhaji.oreneta.metainfo.xml 2>&1)" || status=$?
+          echo "$out"
+          [ "$status" -eq 0 ] && exit 0
+          echo "$out" | grep -q 'Validation failed: warnings: 1$' || exit 1
+          echo "$out" | grep -q ': developer-id-missing$' || exit 1
 
   go:
     runs-on: ubuntu-latest

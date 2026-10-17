@@ -4,6 +4,12 @@ enum class LogLevel { DEBUG, INFO, WARN, ERROR }
 
 internal expect val isDebugLogBuild: Boolean
 
+/** Prefix of every platform log tag (Logcat tag, NSLog line), so `Oreneta.*`
+ *  filters the app's lines. Callers pass the bare tag, e.g. "OAuth" (#249). */
+internal const val LOG_TAG_PREFIX = "Oreneta"
+
+internal fun platformLogTag(tag: String): String = "$LOG_TAG_PREFIX.$tag"
+
 private fun shouldWriteLog(level: LogLevel): Boolean = isDebugLogBuild || level == LogLevel.WARN || level == LogLevel.ERROR
 
 /**
