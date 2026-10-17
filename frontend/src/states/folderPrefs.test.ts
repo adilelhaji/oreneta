@@ -2,34 +2,44 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import {
   FOLDER_COLORS_KEY,
   FOLDER_FAVORITES_KEY,
+  FOLDER_HIDDEN_KEY,
+  FOLDER_PREF_KEYS,
   addFavorite,
   applyFolderRenames,
   folderPrefs$,
   forgetAccountFolderPrefs,
   forgetFolders,
+  hideFolder,
   hydrateFolderPrefs,
+  isHiddenFolder,
   moveFavorite,
   pruneMissingFolders,
   removeFavorite,
   reorderFavorite,
   setFolderColor,
   toggleFavorite,
+  unhideFolder,
 } from './folderPrefs'
 
 const writes: Array<{ key: string; value: unknown }> = []
+const commands: string[] = []
 const ids = () => folderPrefs$.favorites.get().map((ref) => `${ref.accountId}:${ref.folderId}`)
 
 beforeEach(() => {
   writes.length = 0
+  commands.length = 0
   ;(window as any).go = {
     main: {
       App: {
-        Invoke: async (command: string, payload: any) => (command === 'app.prefsSet' && writes.push(payload), {}),
+        Invoke: async (command: string, payload: any) => (
+          commands.push(command), command === 'app.prefsSet' && writes.push(payload), {}
+        ),
       },
     },
   }
   folderPrefs$.favorites.set([])
   folderPrefs$.colors.set([])
+  folderPrefs$.hidden.set([])
   folderPrefs$.dropped.set(0)
 })
 
@@ -130,5 +140,68 @@ describe('folder colors (ADR-0050)', () => {
     setFolderColor(ref, null)
     expect(folderPrefs$.colors.get()).toEqual([])
     expect(writes.map((write) => write.key)).toEqual([FOLDER_COLORS_KEY, FOLDER_COLORS_KEY, FOLDER_COLORS_KEY])
+  })
+})
+
+describe('hidden folders (#273)', () => {
+  const work = { accountId: 'acc', folderId: 'Work' }
+  const hiddenIds = () => folderPrefs$.hidden.get().map((ref) => `${ref.accountId}:${ref.folderId}`)
+
+  it('hides and shows a folder again, once each, saving only a local preference', () => {
+    hideFolder(work)
+    hideFolder(work)
+    hideFolder({ accountId: 'other', folderId: 'Work' })
+    expect(hiddenIds()).toEqual(['acc:Work', 'other:Work'])
+    expect(isHiddenFolder(work)).toBe(true)
+    unhideFolder(work)
+    unhideFolder(work)
+    expect(isHiddenFolder(work)).toBe(false)
+    expect(hiddenIds()).toEqual(['other:Work'])
+    expect(writes).toEqual([
+      { key: FOLDER_HIDDEN_KEY, value: [work] },
+      { key: FOLDER_HIDDEN_KEY, value: [work, { accountId: 'other', folderId: 'Work' }] },
+      { key: FOLDER_HIDDEN_KEY, value: [{ accountId: 'other', folderId: 'Work' }] },
+    ])
+    // Nothing reaches the server or the sync: the only call is the preference write.
+    expect(commands.every((command) => command === 'app.prefsSet')).toBe(true)
+  })
+
+  it('ignores a malformed folder reference', () => {
+    hideFolder({ accountId: '', folderId: 'Work' })
+    hideFolder({ accountId: 'acc', folderId: '' })
+    expect(hiddenIds()).toEqual([])
+    expect(writes).toEqual([])
+  })
+
+  it('is read back at startup, without what is malformed', () => {
+    expect(FOLDER_PREF_KEYS).toContain(FOLDER_HIDDEN_KEY)
+    hydrateFolderPrefs({
+      [FOLDER_HIDDEN_KEY]: JSON.stringify([work, { accountId: 'acc' }, 7, work, { accountId: 'acc', folderId: 'Old' }]),
+    })
+    expect(hiddenIds()).toEqual(['acc:Work', 'acc:Old'])
+    hydrateFolderPrefs({ [FOLDER_HIDDEN_KEY]: 'not json' })
+    expect(hiddenIds()).toEqual([])
+    hydrateFolderPrefs({})
+    expect(hiddenIds()).toEqual([])
+  })
+
+  it('follows a move, and goes with a deleted folder, a removed account or a folder gone elsewhere', () => {
+    hideFolder(work)
+    hideFolder({ accountId: 'acc', folderId: 'Old' })
+    hideFolder({ accountId: 'gone', folderId: 'Lists' })
+    applyFolderRenames('acc', [{ from: 'Work', to: 'Projects/Work' }])
+    expect(hiddenIds()).toEqual(['acc:Projects/Work', 'acc:Old', 'gone:Lists'])
+    forgetAccountFolderPrefs('gone')
+    expect(hiddenIds()).toEqual(['acc:Projects/Work', 'acc:Old'])
+    // A list before the first folder sync proves nothing.
+    expect(pruneMissingFolders('acc', ['INBOX'])).toBe(0)
+    expect(hiddenIds()).toEqual(['acc:Projects/Work', 'acc:Old'])
+    // A hidden mark is not a favorite: it goes without the favorites note.
+    expect(pruneMissingFolders('acc', ['INBOX', 'Projects/Work'])).toBe(0)
+    expect(hiddenIds()).toEqual(['acc:Projects/Work'])
+    expect(folderPrefs$.dropped.get()).toBe(0)
+    forgetFolders('acc', ['Projects/Work'])
+    expect(hiddenIds()).toEqual([])
+    expect(writes.at(-1)).toEqual({ key: FOLDER_HIDDEN_KEY, value: [] })
   })
 })
