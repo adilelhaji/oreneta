@@ -5,6 +5,7 @@ import {
   chatPresence$,
   loadPresence,
   messaging$,
+  mutedConversations$,
   onChatEvent,
   openChatFromNotification,
   statusPermissions$,
@@ -70,6 +71,7 @@ beforeEach(() => {
     occupants: [],
   })
   statusPermissions$.set({ allowed: null, more: false })
+  mutedConversations$.set({ account: '', list: [] })
   ui$.toast.set('')
   answers = {
     'chat.accounts': () => [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }],
@@ -774,6 +776,11 @@ it('who can see the status comes from the server, and sharing stops only on a co
     }),
   )
   await waitFor(() => expect(screen.getByText('Stopping…')).toBeTruthy())
+  // A list from the server that still has Eva: the button is offered again.
+  answers['chat.presence'] = presence(['eva@chat.test', 'joan@chat.test', 'pau@chat.test'])
+  await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
+  await waitFor(() => expect(screen.queryByText('Stopping…')).toBeNull())
+  expect(stopEva()).toBeTruthy()
   // The server's word: Eva is no longer on the list.
   answers['chat.presence'] = presence(['joan@chat.test'])
   await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
@@ -814,6 +821,7 @@ it('a conversation is muted from its header, listed as muted and still counted a
     muted = p.muted ? [...muted, p.conversation] : muted.filter((c) => c !== p.conversation)
     return { muted }
   }
+  answers['chat.muted'] = () => ({ muted })
   answers['chat.conversations'] = () => [
     {
       conversation: 'pau@chat.test',
@@ -884,7 +892,75 @@ it('a conversation is muted from its header, listed as muted and still counted a
   })
 })
 
+it('a conversation without messages yet, or a private one, shows its mute and can be unmuted', async () => {
+  let muted: string[] = []
+  answers['chat.mute'] = (p: any) => {
+    muted = p.muted ? [...muted, p.conversation] : muted.filter((c) => c !== p.conversation)
+    return { muted }
+  }
+  answers['chat.muted'] = () => ({ muted })
+  answers['chat.history'] = () => []
+  const screen = render(<MessagingView />)
+  await waitFor(() => expect(screen.getByText('1 new')).toBeTruthy())
+  // A new address, with nothing said yet: not in the conversation list.
+  fireEvent.change(screen.getByLabelText('Chat with (address)'), { target: { value: 'eva@chat.test' } })
+  await act(async () => {
+    fireEvent.submit(screen.getByLabelText('Chat with (address)').closest('form')!)
+  })
+  const toggle = () => screen.getByRole('button', { name: 'Mute notifications' })
+  await waitFor(() => expect(toggle()).toBeTruthy())
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('true'))
+  // What muting means is reachable without a mouse.
+  expect(toggle().getAttribute('aria-describedby')).toBe('chat-muted-hint')
+  expect(screen.getByText('No notifications from this conversation, not even mentions. New messages still count as unread.')).toBeTruthy()
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.filter((c) => c.command === 'chat.mute').at(-1)?.payload).toEqual({
+    account: 'c1',
+    conversation: 'eva@chat.test',
+    muted: false,
+  })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('false'))
+
+  // Privately in a group, the same; the list says so.
+  answers['chat.rooms'] = () => [room]
+  answers['chat.conversations'] = () => [
+    {
+      conversation: 'team@rooms.chat.test/Pau',
+      last_body: 'psst',
+      last_stamp: 1_760_000_300,
+      last_direction: 'in',
+      unread: 1,
+      kind: 'private',
+      room: 'team@rooms.chat.test',
+    },
+  ]
+  await act(async () => onChatEvent('chat.room', { account: 'c1', room: room.room }))
+  await act(async () => {
+    fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /Pau \(team@rooms.chat.test\)/ })))
+  })
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.filter((c) => c.command === 'chat.mute').at(-1)?.payload).toEqual({
+    account: 'c1',
+    conversation: 'team@rooms.chat.test/Pau',
+    muted: true,
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /Pau \(team@rooms.chat.test\)/ }).textContent).toContain('Muted'),
+  )
+  // Another account's list is not this one's.
+  mutedConversations$.set({ account: 'other', list: ['team@rooms.chat.test/Pau'] })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('false'))
+})
+
 it('each group shows its unread mentions, the account its total, and a lower bound says so', async () => {
+  answers['chat.muted'] = () => ({ muted: ['team@rooms.chat.test'] })
   answers['chat.rooms'] = () => [
     { ...room, unread_mentions: 2, muted: true },
     { ...room, room: 'club@rooms.chat.test', unread: 1, unread_mentions: 1 },

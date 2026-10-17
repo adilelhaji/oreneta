@@ -59,9 +59,11 @@ L'absència automàtica per inactivitat és la proposta de l'ADR-0065, sense cod
   - `chat/mod.rs`: `muted` a les converses i als grups, i `unread_mentions` i
     `mentions_capped` als grups (com a màxim els 2000 missatges sense llegir
     més nous);
-  - RPC `chat.mute`; `chat.presence` porta `allowed` i `allowed_more`; deixar
-    de compartir és `chat.answerSubscription` amb `allow: false`; esdeveniment
-    `chat.permissions`.
+  - RPC `chat.mute` i `chat.muted`; `chat.presence` porta `allowed` i
+    `allowed_more`; deixar de compartir és `chat.answerSubscription` amb
+    `allow: false` (qualsevol adreça nua vàlida); esdeveniment
+    `chat.permissions`; les comprovacions internes de si una sala existeix fan
+    servir `room_nick` (sense recalcular mencions).
 - **Aplicació:** la vista «Xat» a la barra lateral (configuració, converses
   amb no llegits, historial amb l'estat de cada enviament i «Torna a enviar»).
   Amb l'ADR-0044: «Uneix-te a un grup», els grups damunt de les converses
@@ -158,8 +160,8 @@ L'absència automàtica per inactivitat és la proposta de l'ADR-0065, sense cod
     dels privats; l'última treta no deixa fila; només converses, com a màxim
     1000 (la següent es rebutja); una fila malmesa; treure el compte;
   - les mencions sense llegir: la mateixa regla que el ressaltat, la lectura
-    les descompta, el sobrenom actual, un altre compte, i el límit de 2000 com
-    a mínim.
+    les descompta, el sobrenom actual, un altre compte a la mateixa sala (amb
+    les seves mencions i la seva lectura), i el límit de 2000 com a mínim.
 - **Pont Go:** la notificació del xat porta la conversa com a destinació i
   calla amb «No molestis» o hores de silenci encara que els recordatoris
   passin; un esdeveniment sense compte o sense conversa no avisa; el cos d'un
@@ -215,10 +217,12 @@ L'absència automàtica per inactivitat és la proposta de l'ADR-0065, sense cod
   - (ADR-0064) qui pot veure l'estat: desconegut, la llista que arriba amb
     `chat.permissions` (no la d'un altre compte), deixar de compartir només
     després de confirmar (cancel·lar no envia res), «S'està deixant de
-    compartir…» fins que el servidor ho diu, l'error, «ningú», «només els
-    primers», una sessió nova, i res sense connexió; silenciar i tornar a
-    activar des de la capçalera (directa i grup), la llista ho diu i continua
-    no llegida, i l'error; les mencions de cada grup, el total, el mínim (també
+    compartir…» fins que el servidor torna a dir la llista, l'error, «ningú»,
+    «només els primers», una sessió nova, i res sense connexió; silenciar i
+    tornar a activar des de la capçalera (directa, sense missatges encara,
+    privada i grup), amb l'explicació per als lectors de pantalla, la llista ho
+    diu i continua no llegida, la llista d'un altre compte no compta, i
+    l'error; les mencions de cada grup, el total, el mínim (també
     zero) i res quan no n'hi ha.
 - **Trobat en provar:** l'auditoria axe va detectar un element que no era `li`
   dins de la llista de missatges; corregit. Amb l'ADR-0044, el nucli acceptava

@@ -20,13 +20,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 use tokio_xmpp::parsers::{
     disco::DiscoInfoResult,
+    iq::Iq,
     jid::{BareJid, Jid},
     minidom::Element,
     muc::{
         MucUser,
         user::{Role, Status},
     },
-    iq::Iq,
     presence::{Presence, Show, Type as PresenceType},
     roster::{Roster, Subscription},
 };

@@ -42,6 +42,7 @@ import {
   sendChat,
   sendChatFile,
   refreshConversations,
+  mutedConversations$,
   setConversationMuted,
   statusPermissions$,
   stopSharingStatus,
@@ -80,6 +81,7 @@ export function MessagingView() {
   const invitations = useValue(messaging$.invitations)
   const uploads = useValue(messaging$.uploads)
   const contacts = useValue(chatPresence$.contacts)
+  const mutedList = useValue(mutedConversations$)
   const occupants = useValue(chatPresence$.occupants)
   const [joining, setJoining] = useState<{ room: string; nick: string; password: string } | null>(null)
   const [newChat, setNewChat] = useState('')
@@ -139,7 +141,9 @@ export function MessagingView() {
   // had more unread messages than the core looked at.
   const mentionTotal = rooms.reduce((sum, r) => sum + (r.unread_mentions ?? 0), 0)
   const mentionTotalCapped = rooms.some((r) => !!r.mentions_capped)
-  const muted = openRoom ? !!openRoom.muted : !!conversations.find((c) => c.conversation === conversation)?.muted
+  // From the core's own list, so a conversation without messages yet shows it too.
+  const isMuted = (c: string) => mutedList.account === account && mutedList.list.includes(c)
+  const muted = isMuted(conversation)
   const toggleMute = async () => {
     try {
       await setConversationMuted(conversation, !muted)
@@ -365,7 +369,7 @@ export function MessagingView() {
                       unread={r.unread}
                       mentions={r.unread_mentions}
                       mentionsCapped={r.mentions_capped}
-                      muted={r.muted}
+                      muted={isMuted(r.room)}
                       current={r.room === conversation}
                       group
                       onOpen={() => void openConversation(r.room)}
@@ -385,7 +389,7 @@ export function MessagingView() {
                     name={inRoom ? `${inRoom.nick} (${inRoom.room})` : c.conversation}
                     last={c.last_body}
                     unread={c.unread}
-                    muted={c.muted}
+                    muted={isMuted(c.conversation)}
                     current={c.conversation === conversation}
                     privateInRoom={!!inRoom}
                     show={seen?.show}
@@ -493,6 +497,7 @@ export function MessagingView() {
                 type="button"
                 aria-pressed={muted}
                 aria-label={t('messaging.mute', { defaultValue: 'Mute notifications' })}
+                aria-describedby={muted ? 'chat-muted-hint' : undefined}
                 onClick={() => void toggleMute()}
                 title={
                   muted
@@ -512,6 +517,14 @@ export function MessagingView() {
                   <Bell size={16} strokeWidth={1.75} aria-hidden="true" />
                 )}
               </button>
+              {muted && (
+                <span id="chat-muted-hint" className="sr-only">
+                  {t('messaging.mutedHint', {
+                    defaultValue:
+                      'No notifications from this conversation, not even mentions. New messages still count as unread.',
+                  })}
+                </span>
+              )}
             </header>
             {openRoom && showPeople && (
               <ul
@@ -854,8 +867,10 @@ function StatusPermissions() {
   const allowed = useValue(statusPermissions$.allowed)
   const more = useValue(statusPermissions$.more)
   const [open, setOpen] = useState(false)
-  // Asked to stop; the list changes when the server says so.
+  // Asked to stop; the list changes when the server says so. A new word
+  // from the server, or half a minute without one, offers the button again.
   const [stopping, setStopping] = useState<string[]>([])
+  useEffect(() => setStopping([]), [allowed])
   const title = t('messaging.permissions.title', { defaultValue: 'Who can see your status' })
   const stop = async (jid: string) => {
     const ok = await confirmAction({
@@ -870,6 +885,7 @@ function StatusPermissions() {
     setStopping((list) => [...list, jid])
     try {
       await stopSharingStatus(jid)
+      window.setTimeout(() => setStopping((list) => list.filter((j) => j !== jid)), STOP_WAIT_MS)
     } catch (error) {
       setStopping((list) => list.filter((j) => j !== jid))
       showToast(error instanceof Error ? error.message : String(error), 'error')
@@ -937,6 +953,9 @@ function StatusPermissions() {
     </div>
   )
 }
+
+/** How long "Stopping…" waits for the server before offering the button again. */
+const STOP_WAIT_MS = 30_000
 
 /** A group's or the account's unread mentions: `@N`, or `@N+` for a lower bound. */
 function MentionBadge({ count, capped, label }: { count: number; capped?: boolean; label: string }) {

@@ -1130,8 +1130,17 @@ fn a_room_counts_its_unread_mentions_until_read_and_says_when_it_stopped_looking
     say("team@rooms.chat.test", "g6", "in", "Anabel, ¿y tú?", 20);
     say("team@rooms.chat.test", "g7", "in", "Ana, ¿y tú?", 21);
     assert_eq!(counted("team@rooms.chat.test"), (2, 1, false));
-    // Another account sees none of it.
-    assert!(rooms(&c, "b").unwrap().is_empty());
+    // Another account in the same room, with the same nickname, counts its
+    // own messages and reading, and changes nothing of the first one's.
+    save_room(&c, "b", "team@rooms.chat.test", "Anabel", false, 1).unwrap();
+    let mut other = ChatMessage::chat("b", "team@rooms.chat.test", "b1", "in", "Pau", "@Anabel ¿vienes?", 30, "received");
+    other.kind = KIND_GROUP.into();
+    record(&c, &other).unwrap();
+    let theirs = super::room(&c, "b", "team@rooms.chat.test").unwrap().unwrap();
+    assert_eq!((theirs.unread, theirs.unread_mentions), (1, 1));
+    assert_eq!(counted("team@rooms.chat.test"), (2, 1, false));
+    mark_read(&c, "b", "team@rooms.chat.test", 30).unwrap();
+    assert_eq!(counted("team@rooms.chat.test"), (2, 1, false), "their reading is not ours");
     // Past the newest MAX_MENTION_SCAN unread, older ones are not looked at,
     // and the count says it is a lower bound.
     for n in 0..MAX_MENTION_SCAN + 5 {

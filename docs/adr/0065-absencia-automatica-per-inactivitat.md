@@ -26,10 +26,25 @@ sistema o una dependència, i deixar-ho decidit en un ADR.
 - L'estat automàtic **no substitueix el desat**: el nucli anuncia «Absent»
   mentre dura la inactivitat i torna a l'estat triat en tornar. No toca mai
   «Ocupat» ni «Invisible», ni un «Absent» triat per la persona.
-- Als grups només arriba la disponibilitat, com ara (ADR-0055).
+- Si s'anuncia als grups (vegeu «Privadesa»), només hi arriba la
+  disponibilitat, com ara (ADR-0055).
 - Si la plataforma no sap dir la inactivitat, l'opció es mostra desactivada amb
   el motiu: inactivitat **desconeguda** no és inactivitat, i mai no posa ningú
   absent per suposició.
+
+## Privadesa
+
+- L'absència automàtica diu als altres quan la persona no és a l'ordinador:
+  és un patró d'activitat. Per això l'opció ve desactivada i l'activa la
+  persona, per a cada compte.
+- Només s'anuncia «Absent», mai quant de temps fa que no s'usa l'ordinador
+  (no s'envia XEP-0319, «Last User Interaction in Presence»).
+- Als grups hi ha gent que la persona no ha triat (ADR-0055). Es proposa que,
+  per defecte, l'absència automàtica no s'hi anunciï: els grups la continuen
+  veient amb l'estat triat. Una segona opció, també desactivada, la hi
+  estendria.
+- La inactivitat es llegeix i es fa servir dins de l'aparell; no es desa ni
+  surt enlloc més.
 
 ## Opcions
 
@@ -39,15 +54,15 @@ sistema o una dependència, i deixar-ho decidit en un ADR.
     `golang.org/x/sys/windows` (cap dependència nova);
   - macOS: `CGEventSourceSecondsSinceLastEventType` (CoreGraphics) per cgo, com
     els fitxers `.m` que ja hi ha (`power_darwin.m`, `notify_darwin.m`); cal
-    enllaçar el marc CoreGraphics;
-  - Linux: per D-Bus de sessió, amb `godbus` (ja és dependència):
+    enllaçar el marc de treball CoreGraphics;
+  - Linux: per D-Bus de sessió, amb `godbus` (ja n'és una dependència):
     `org.gnome.Mutter.IdleMonitor.GetIdletime` a GNOME i
     `org.freedesktop.ScreenSaver.GetSessionIdleTime` a KDE; en altres escriptoris
     de Wayland no hi ha una interfície comuna, i allà l'opció quedaria
     desactivada amb el motiu;
   - el pont la consulta cada 30 s i envia al nucli `chat.idle` (segons, o
     «desconegut»); el nucli decideix i anuncia;
-  - cost: tres implementacions nadiues i la seva verificació nativa (N4 a
+  - cost: tres implementacions natives i la seva verificació nativa (N4 a
     Windows encara no existeix).
 - **B) Només l'activitat dins la finestra d'Oreneta** (teclat, ratolí i focus a
   la vista web):

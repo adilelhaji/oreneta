@@ -114,6 +114,20 @@ export const statusPermissions$ = observable({
   more: false,
 })
 
+/**
+ * The open account's muted conversations, as the core keeps them (ADR-0064),
+ * also those without any message yet, which the conversation list omits.
+ */
+export const mutedConversations$ = observable({ account: '', list: [] as string[] })
+
+function setMuted(account: string, answer: { muted?: unknown } | null | undefined) {
+  const list = answer?.muted
+  mutedConversations$.set({
+    account,
+    list: Array.isArray(list) ? list.filter((c): c is string => typeof c === 'string') : [],
+  })
+}
+
 /** A conversation as the core keeps it: the address in lower case, a nickname as it is. */
 export function normalizeConversation(conversation: string) {
   const trimmed = conversation.trim()
@@ -189,7 +203,9 @@ export async function stopSharingStatus(jid: string) {
 export async function setConversationMuted(conversation: string, muted: boolean) {
   const account = messaging$.account.peek()
   if (!account || !conversation) return
-  await invoke('chat.mute', { account, conversation, muted })
+  // What the core answers is what is muted now, a conversation without
+  // messages included.
+  setMuted(account, await invoke<{ muted?: unknown }>('chat.mute', { account, conversation, muted }))
   await refreshConversations()
 }
 
@@ -245,13 +261,16 @@ export async function refreshConversations() {
     messaging$.conversations.set([])
     messaging$.rooms.set([])
     messaging$.invitations.set([])
+    mutedConversations$.set({ account: '', list: [] })
     return
   }
-  const [conversations, rooms, invitations] = await Promise.all([
+  const [conversations, rooms, invitations, muted] = await Promise.all([
     invoke<ChatConversation[]>('chat.conversations', { account }),
     invoke<ChatRoom[]>('chat.rooms', { account }),
     invoke<ChatInvitation[]>('chat.invitations', { account }),
+    invoke<{ muted?: unknown }>('chat.muted', { account }),
   ])
+  setMuted(account, muted)
   messaging$.conversations.set(conversations ?? [])
   messaging$.rooms.set(Array.isArray(rooms) ? rooms : [])
   messaging$.invitations.set(Array.isArray(invitations) ? invitations : [])

@@ -626,7 +626,7 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		// Presence, mentions and private messages in rooms (ADR-0055).
 		"chat.presence", "chat.setPresence", "chat.subscribe", "chat.answerSubscription", "chat.occupants",
 		// Muting one conversation (ADR-0064).
-		"chat.mute":
+		"chat.mute", "chat.muted":
 		return a.tasksPassthrough(command, payload)
 	// Standalone notes (#104): local only; the core decides everything.
 	case "notes.list", "notes.get", "notes.create", "notes.update", "notes.pin", "notes.trash", "notes.restore", "notes.purge":

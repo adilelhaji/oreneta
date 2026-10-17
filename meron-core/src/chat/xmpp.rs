@@ -737,9 +737,9 @@ pub async fn run(
                     // left unanswered, as before.
                     Event::Stanza(Stanza::Iq(iq)) => {
                         if let Some((roster, id)) = presence::roster_push(&iq, &own) {
-                            let changed = live.lock().unwrap().apply_roster_push(&roster);
+                            let list_changed = live.lock().unwrap().apply_roster_push(&roster);
                             let _ = client.send_stanza(presence::roster_push_answer(id).into()).await;
-                            if changed {
+                            if list_changed {
                                 permissions_changed();
                             }
                         }
@@ -1248,7 +1248,10 @@ pub fn handle_message(
         // A conversation the person muted raises nothing (ADR-0064). Should
         // the setting not be readable, the notification is not held back:
         // a missed message is worse than an unwanted popup.
-        let muted = super::mute::is_muted(&conn, account, &recorded.conversation).unwrap_or(false);
+        let muted = super::mute::is_muted(&conn, account, &recorded.conversation).unwrap_or_else(|error| {
+            eprintln!("meron-core: chat account {account}: could not read the muted conversations: {error:#}");
+            false
+        });
         presence::should_notify(recorded, arrival, own_show, muted).then(|| recorded.clone())
     };
 
