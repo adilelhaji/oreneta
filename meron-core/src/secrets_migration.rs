@@ -40,8 +40,10 @@ pub(crate) type Log<'a> = &'a dyn Fn(Level, &str);
 enum Legacy {
     /// There is none: never was, or it has been deleted.
     Gone,
-    /// A read-side step failed this run. The next store, which replaces the
-    /// value, still retires the legacy copy; otherwise the next start does.
+    /// Not settled this run: a read, copy or delete step failed, or the two
+    /// entries differ. Reads do not retry it; the next store, which replaces
+    /// the value, still retires the legacy copy, and otherwise the next start
+    /// looks again.
     Deferred,
     /// A store could not retire it either: nothing more this run.
     Held,
@@ -55,7 +57,8 @@ enum Legacy {
 pub(crate) enum Outcome {
     /// The entry was copied, verified, and the legacy copy deleted.
     Moved,
-    /// A step failed; the legacy copy is kept for the next start.
+    /// The legacy copy is kept: a step failed or the entries differ. It is
+    /// looked at again on the next start.
     Deferred,
 }
 
@@ -140,7 +143,10 @@ impl Migration {
         let _held = guard(&lock);
         let known = self.legacy(key);
         if known == Some(Legacy::Unverified) {
-            if let Some(blob) = keychain.read(LEGACY_SERVICE, key)? {
+            let legacy = keychain
+                .read(LEGACY_SERVICE, key)
+                .with_context(|| format!("read the {LEGACY_SERVICE} entry {key}"))?;
+            if let Some(blob) = legacy {
                 return Ok((Some(blob), None));
             }
         }
@@ -223,11 +229,28 @@ impl Migration {
                              the {LEGACY_SERVICE} entry is kept until the next start"
                         ),
                     );
-                    self.settle(key, Legacy::Held);
-                    if let Mismatch::Damaged(_) = mismatch {
-                        anyhow::bail!("the {SERVICE} entry {key} did not read back as written ({why})");
-                    }
-                    return Ok(());
+                    let Mismatch::Damaged(_) = mismatch else {
+                        self.settle(key, Legacy::Held);
+                        return Ok(());
+                    };
+                    // As in a move: a damaged value must not stay in front of
+                    // the intact legacy one.
+                    let state = match keychain.delete(SERVICE, key) {
+                        Ok(()) => Legacy::Held,
+                        Err(error) => {
+                            log(
+                                Level::Error,
+                                &format!(
+                                    "could not remove the damaged {SERVICE} entry {key}; the \
+                                     {LEGACY_SERVICE} entry is served first for the rest of this \
+                                     run: {error:#}"
+                                ),
+                            );
+                            Legacy::Unverified
+                        }
+                    };
+                    self.settle(key, state);
+                    anyhow::bail!("the {SERVICE} entry {key} did not read back as written ({why})");
                 }
             },
             Err(error) => {
@@ -287,7 +310,17 @@ impl Migration {
                          used and copied over it"
                     ),
                 );
-                self.store(keychain, log, key, &legacy)?;
+                // The good key is in hand and still under meron: a failed
+                // repair must not keep the store from opening.
+                if let Err(error) = self.store(keychain, log, key, &legacy) {
+                    log(
+                        Level::Warn,
+                        &format!(
+                            "could not repair the {SERVICE} entry {key}; the {LEGACY_SERVICE} one \
+                             is kept and used: {error:#}"
+                        ),
+                    );
+                }
                 return Ok(legacy);
             }
         }
@@ -918,7 +951,31 @@ mod tests {
 
         let error = migration.store(&store, &log, KEY, NEWER).expect_err("a damaged write is reported");
         assert!(holds(&store, LEGACY_SERVICE, SECRET));
-        assert_clean(&logs, &[format!("{error:#}")]);
+        assert!(store.get(SERVICE, KEY).is_none(), "the damaged value is removed");
+        store.heal();
+        assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET), "the intact one is served");
+
+        // When the damaged value cannot be removed, the legacy one is still served first.
+        let store = FakeStore::with(&[(LEGACY_SERVICE, KEY, SECRET)]);
+        *guard(&store.corrupt_writes) = Some(SERVICE);
+        store.fail(Op::Delete, SERVICE, 0, usize::MAX);
+        let migration = Migration::default();
+        let second = migration.store(&store, &log, KEY, NEWER).expect_err("a damaged write is reported");
+        assert!(store.get(SERVICE, KEY).is_some());
+        assert!(migration.load(&store, &log, KEY).unwrap().as_deref() == Some(SECRET));
+        assert_clean(&logs, &[format!("{error:#}"), format!("{second:#}")]);
+    }
+
+    #[test]
+    fn a_failed_store_key_repair_still_opens_with_the_legacy_key() {
+        let store = FakeStore::with(&[(SERVICE, DB_KEY, "not-a-key"), (LEGACY_SERVICE, DB_KEY, GOOD_DB_KEY)]);
+        store.fail(Op::Write, SERVICE, 0, usize::MAX);
+        let logs = Logs::default();
+        let log = logs.sink();
+        let key = Migration::default().db_key(&store, &log, DB_KEY, &hex_key, &mint).unwrap();
+        assert!(key == GOOD_DB_KEY);
+        assert!(store.get(LEGACY_SERVICE, DB_KEY).as_deref() == Some(GOOD_DB_KEY), "kept");
+        assert_clean(&logs, &[]);
     }
 
     #[test]
@@ -945,13 +1002,11 @@ mod tests {
         store.fail(Op::Delete, SERVICE, 0, 1);
         let migration = Migration::default();
         let logs = Logs::default();
-        let log = logs.sink();
 
         let error = migration.delete(&store, KEY).expect_err("the failure is reported");
         assert!(store.get(LEGACY_SERVICE, KEY).is_none());
         assert!(holds(&store, SERVICE, SECRET));
         assert_clean(&logs, &[format!("{error:#}")]);
-        drop(log);
     }
 
     #[test]

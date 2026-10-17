@@ -34,7 +34,7 @@ No existien perfils ni grups de comptes.
 ## Decisió
 
 - La instal·lació existent és el perfil `default` i conserva els seus camins i
-  noms de clauer: no hi ha migració. (El servei del clauer canvia a #248:
+  noms de clauer: no hi ha migració. (El servei del clauer canvia amb #248:
   vegeu la nota posterior.)
 - Els altres perfils viuen a `profiles/<id>` dins de les carpetes de
   configuració i memòria cau. Les seves entrades de clauer s'anomenen
