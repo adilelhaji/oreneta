@@ -27,7 +27,7 @@ com per a les llistes, les proves es fan amb respostes SOAP enregistrades. El
 risc acceptat és que un servidor real rebutgi o interpreti d'una altra manera
 les escriptures de ranura o l'ordre de l'esquema. El limiten tres coses: cap
 escriptura no sobreescriu un canvi remot (`NeverOverwrite`), només s'envia la
-diferència i suprimir envia a Elements suprimits, d'on es pot recuperar.
+diferència i suprimir envia el contacte a Elements suprimits, d'on es pot recuperar.
 
 ## Decisió
 
@@ -83,9 +83,9 @@ diferència i suprimir envia a Elements suprimits, d'on es pot recuperar.
     també és un conflicte;
   - suprimir envia el contacte a Elements suprimits, després de comprovar la
     clau, perquè `DeleteItem` no la compara. Entre la comprovació i la
-    supressió queda un instant que no es pot tancar; Elements suprimits el
-    fa recuperable. Suprimir un contacte que ja no és al servidor compta com
-    a suprimit;
+    supressió queda un instant que no es pot tancar; si un altre client canvia
+    el contacte en aquell instant, el contacte es pot recuperar d'Elements
+    suprimits. Un contacte que ja no és al servidor es dona per suprimit;
   - no s'escriu mai sense la clau llegida.
 - Només s'envia el que ha canviat: el nom (`DisplayName`; «arxiva com a»,
   `FileAs`, el segueix només si era el nom que es mostrava o era buit), el nom
@@ -102,20 +102,20 @@ diferència i suprimir envia a Elements suprimits, d'on es pot recuperar.
   amb tipus, i aleshores es llegeix amb aquell tipus. Una ranura que guarda un
   identificador de directori continua ocupada, encara que aquí no es vegi.
   Una adreça nova s'escriu tal com es va escriure (sense `smtp:`) i es compara
-  sense distingir majúscules.
+  sense distingir majúscules i minúscules.
 - **Un canvi que Exchange no pot guardar** falla abans d'enviar res, amb el
   motiu: una quarta adreça, un telèfon sense ranura lliure, una adreça que no
-  és SMTP (sense part local o domini, amb un altre esquema com `sip:`, o amb
+  és SMTP (sense part local o sense domini, amb un altre esquema com `sip:`, o amb
   espais) o un contacte sense nom ni adreça.
 - **Crear sense duplicats.** L'editor dona a la persona nova un id que no
   canvia mentre és obert, i el contacte el porta com a propietat amb nom
   (`PublicStrings`, `OrenetaContactUid`). Abans de crear, se cerca aquest id a
-  la carpeta: si un intent anterior ja el va crear, s'adopta. Si la resposta
+  la carpeta: si un intent anterior ja va crear el contacte, s'adopta. Si la resposta
   a la creació es perd, se cerca de nou: si hi és, s'adopta; si no hi és, es
-  diu; si la cerca també falla, es diu que potser s'ha creat i que desar de
+  diu que no hi és; si la cerca també falla, es diu que potser s'ha creat i que desar de
   nou no en farà un segon.
   - **Límit acceptat:** un editor nou és un id nou. Si es tanca l'editor
-    després d'una fallada i se'n crea un altre per a la mateixa persona sense
+    després d'una fallada i se n'obre un altre per crear la mateixa persona sense
     tornar a llegir la llibreta, pot quedar un segon contacte.
 - Després d'escriure es torna a llegir el contacte i es desa tal com ha
   quedat. Si aquesta lectura falla, l'error diu que el canvi s'ha desat a
@@ -125,8 +125,8 @@ diferència i suprimir envia a Elements suprimits, d'on es pot recuperar.
 - Temps d'espera de les crides des de l'escriptori: `people.save` i
   `people.delete`, 10 min, i `carddav.sync` i `exchange.contacts.sync`,
   15 min. Cada petició EWS té un límit de 2 min al nucli, i la interfície no
-  ha de respondre mentre el nucli encara escriu. Els temps també valen per a
-  CardDAV i la llibreta local.
+  ha de deixar d'esperar mentre el nucli encara escriu. Els temps també valen
+  per a CardDAV i la llibreta local.
 
 ### 3. Interfície
 

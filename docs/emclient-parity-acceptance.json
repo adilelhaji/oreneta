@@ -995,6 +995,18 @@
           {
             "sha": "7020703501388a4263f89d3dda292f5562c4edd8",
             "result": "frontend/src/components/people/ExchangeGroups.test.tsx"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "meron-core/src/exchange/book/tests.rs"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "meron-core/src/pim/exchange_book/tests.rs"
+          },
+          {
+            "sha": "4a27ae2bf901015f9d8e73ed214153ef6d1fb99c",
+            "result": "frontend/src/components/people/ExchangeContacts.test.tsx"
           }
         ],
         "native": [],
