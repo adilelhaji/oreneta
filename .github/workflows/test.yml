@@ -206,13 +206,13 @@ jobs:
       - name: Verify production app startup and navigation
         run: bun run startup:verify
         working-directory: frontend
-      # TEMPORARY (#243): repeat the 1024 px composer audits 20 times for the
-      # PR evidence. Removed again before the PR is ready.
-      - name: Repeat the 1024 px composer audits 20 times (temporary, #243)
+      # TEMPORARY (#243): repeat the composer audits 20 times for the PR
+      # evidence. Removed again before the PR is ready.
+      - name: Repeat the composer audits 20 times (temporary, #243)
         run: >-
           bunx playwright test --config e2e/playwright.config.ts --repeat-each 20 --retries 0
-          --reporter list --output ../startup-repeat-results
-          --grep "Catalan interface stays inside the window and passes axe: oreneta-(light|dark), 1024px|has no keyboard stop: (en|ca), oreneta-(light|dark), 1024px"
+          --reporter list --output startup-repeat-results
+          --grep "Catalan interface stays inside the window and passes axe: oreneta-(light|dark), (1024|1440)px|has no keyboard stop: (en|ca), oreneta-(light|dark), 1024px"
         working-directory: frontend
       - name: Upload baseline evidence
         if: always()
@@ -224,6 +224,7 @@ jobs:
             frontend/playwright-report/
             frontend/startup-results/
             frontend/startup-report/
+            frontend/startup-repeat-results/
           if-no-files-found: error
 
   # The production desktop binary on Linux with WebKitGTK (#115): two launches

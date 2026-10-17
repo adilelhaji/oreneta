@@ -51,11 +51,12 @@ prova nativa nova ho aclareixi.
 El 2026-10-17 (#243) la conversa que queda oculta sota una pestanya de redacció o de
 lector oberta, a més d'invisible i `aria-hidden`, ara també és inerta (`inert`): mentre
 durava una transició (la del quadre de resposta ràpida), els seus controls continuaven
-visibles i enfocables, i l'auditoria axe hi trobava de tant en tant `aria-hidden-focus`
-a 1024 px. Les auditories axe de l'entrada de producció en català esperen que acabin les
-transicions. Una prova nova a 1024 px, en anglès i en català, en clar i en fosc, allarga
-les transicions de l'aplicació, recorre la pàgina amb Tab i Maj+Tab i comprova que el
-focus no s'atura mai a la regió oculta. Cap fila no canvia d'estat (SET-27, #37):
+visibles i podien rebre el focus, i l'auditoria axe hi trobava de tant en tant
+`aria-hidden-focus` a 1024 px (i un cop a 1440 px en fosc). Les auditories axe de
+l'entrada de producció en català esperen que acabin les transicions. Una prova nova a
+1024 px, en anglès i en català, en clar i en fosc, allarga les transicions de l'aplicació,
+recorre la pàgina amb Tab i Maj+Tab i comprova que el focus no s'atura mai a la regió
+oculta. Cap fila no canvia d'estat (SET-27, #37):
 l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |

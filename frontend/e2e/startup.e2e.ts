@@ -3236,6 +3236,9 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
 const caCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../locales/ca.json', import.meta.url)), 'utf8'),
 ) as Record<string, string>
+const enCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/en.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
 const esCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../locales/es.json', import.meta.url)), 'utf8'),
 ) as Record<string, string>
@@ -3401,12 +3404,16 @@ async function ltrInView(page: Page, where: string) {
 // audit reads the screen at rest and not one frame of a transition (#243).
 // Infinite animations (spinners) never end and are left out.
 async function settled(page: Page) {
-  await page.waitForFunction(() =>
-    document
-      .getAnimations()
-      .every(
-        (animation) => animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity,
-      ),
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .every(
+          (animation) =>
+            animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity,
+        ),
+    undefined,
+    { timeout: 5_000 },
   )
 }
 
@@ -3445,16 +3452,16 @@ for (const language of ['en', 'ca']) {
     test(`the conversation hidden under the composer has no keyboard stop: ${language}, ${theme}, 1024px (#243)`, async ({
       page,
     }, info) => {
+      // Two walks of up to 150 key presses each, on top of two audits.
+      test.setTimeout(60_000)
       await page.setViewportSize({ width: 1024, height: 1000 })
       const errors = await prepareStartup(page, true, { navigation: true, language, theme })
-      const label = (key: string, english: string) => (language === 'ca' ? caCatalog[key] : english)
+      const catalog = language === 'ca' ? caCatalog : enCatalog
       await page.goto('/')
       await expect(page.locator('html')).toHaveAttribute('lang', language)
       await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
       await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
-      const quickReply = page.getByPlaceholder(label('composer.placeholders.quickMessage', 'Write a message...'), {
-        exact: true,
-      })
+      const quickReply = page.getByPlaceholder(catalog['composer.placeholders.quickMessage'], { exact: true })
       await expect(quickReply).toBeVisible()
       await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
 
@@ -3480,12 +3487,15 @@ for (const language of ['en', 'ca']) {
         })
         return { visible: visible.length, focused: focused.map((control) => control.outerHTML.slice(0, 80)) }
       })
-      expect(insideRegion.visible).toBeGreaterThan(0)
+      expect(insideRegion.visible, 'the hidden region is still mid-transition').toBeGreaterThan(0)
       expect(insideRegion.focused).toEqual([])
       const frozen = await new AxeBuilder({ page }).withRules(['aria-hidden-focus']).analyze()
       expect(frozen.violations.map((violation) => violation.nodes.map((node) => node.target.join(' ')))).toEqual([])
 
-      // Tab and Shift+Tab from the message body, once round the page each way.
+      // Tab and Shift+Tab from the message body, round the page each way.
+      // Shift+Tab meets the hidden region first (it sits just before the
+      // composer in the document), and must pass it on to the tab strip.
+      const current = `button ${catalog['chat.currentConversation']}`
       const walks: Record<string, string[]> = {}
       const hiddenStops: string[] = []
       for (const key of ['Tab', 'Shift+Tab']) {
@@ -3504,6 +3514,7 @@ for (const language of ['en', 'ca']) {
         walks[key] = stops
         expect(new Set(stops).size, `${key} moves the focus`).toBeGreaterThan(3)
       }
+      expect(walks['Shift+Tab'], 'Shift+Tab passes the hidden region').toContain(current)
       await info.attach(`focus-walk-${language}-${theme}`, {
         body: JSON.stringify({ insideRegion, walks }, null, 2),
         contentType: 'application/json',
@@ -3516,7 +3527,8 @@ for (const language of ['en', 'ca']) {
       await slow.evaluate((element) => (element as Element).remove())
       await page.evaluate(() => {
         for (const animation of document.getAnimations()) {
-          if (animation.effect?.getComputedTiming().endTime !== Infinity) animation.finish()
+          const finite = animation.effect?.getComputedTiming().endTime !== Infinity
+          if (finite && animation.playbackRate !== 0) animation.finish()
         }
       })
       await settled(page)
@@ -3532,7 +3544,7 @@ for (const language of ['en', 'ca']) {
       expect(blocking).toEqual([])
 
       // Back on the conversation, its quick reply is reachable again.
-      await page.getByTitle(label('chat.currentConversation', 'Current conversation'), { exact: true }).click()
+      await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
       await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
       await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
       await quickReply.focus()
@@ -3609,8 +3621,8 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
 
       const blocking: string[] = []
       const check = async (screen: string) => {
-        await ltrInView(page, screen)
         await settled(page)
+        await ltrInView(page, screen)
         const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
         const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
         await info.attach(`axe-ca-${screen}-${theme}-${width}`, { body, contentType: 'application/json' })
