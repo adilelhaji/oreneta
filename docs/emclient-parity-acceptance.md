@@ -71,6 +71,13 @@ sobreescriure mai un canvi remot i sense enviar res més que el que ha canviat, 
 respostes SOAP enregistrades. Es manté `partial`: falten els grups i els contactes de Graph
 (#144) i l'evidència nativa de Windows; l'evidència amb un servidor Exchange real (N5)
 també és pendent.
+El 2026-10-17 (#256, ADR-0064) SET-21 va incorporar la llista de qui pot veure l'estat propi al xat
+(la llista del servidor, desconeguda fins que respon, amb «Deixa de compartir» després de
+confirmar-ho), el silenci d'una conversa directa, privada o de grup (sense avisos, ni tan sols
+de mencions, però comptada com a no llegida) i les mencions sense llegir de cada grup i del
+compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
+triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
+l'evidència nativa de Windows).
 El 2026-10-17 (#274, ADR-0067) el redactor va incorporar el tipus de lletra, la mida, el
 color del text i el de ressaltat, l'alineació, el sagnat i les taules (inserir i suprimir
 taules, i inserir i suprimir files i columnes), amb barra d'eines i dreceres. Els estils que

@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, expect, it } from 'bun:test'
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { MessagingView } from './MessagingView'
-import { chatPresence$, loadPresence, messaging$, onChatEvent, openChatFromNotification } from '../../states/messaging'
+import {
+  chatPresence$,
+  loadPresence,
+  messaging$,
+  mutedConversations$,
+  onChatEvent,
+  openChatFromNotification,
+  statusPermissions$,
+} from '../../states/messaging'
 import { settleConfirm, ui$ } from '../../states/ui'
 
 const calls: { command: string; payload: any }[] = []
@@ -62,6 +70,9 @@ beforeEach(() => {
     requests: [],
     occupants: [],
   })
+  statusPermissions$.set({ allowed: null, more: false })
+  mutedConversations$.set({ account: '', list: [] })
+  ui$.toast.set('')
   answers = {
     'chat.accounts': () => [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }],
     'chat.status': () => ({ c1: { account: 'c1', state: 'online' } }),
@@ -711,4 +722,273 @@ it('a new chat session clears what the old one showed, and contacts shown stay b
   expect(chatPresence$.contacts.peek()['c0@chat.test'].show).toBe('dnd')
   for (let n = 0; n < 210; n++) onChatEvent('chat.subscription', { account: 'c1', jid: `r${n}@chat.test` })
   expect(chatPresence$.requests.peek()).toHaveLength(200)
+})
+
+// ---- Who may see the status, muting and unread mentions (ADR-0064) --------------------
+
+it('who can see the status comes from the server, and sharing stops only on a confirmed click', async () => {
+  const presence = (allowed: string[] | null, more = false) => () => ({
+    own: {},
+    contacts: {},
+    requests: [],
+    allowed,
+    allowed_more: more,
+  })
+  answers['chat.presence'] = presence(null)
+  const screen = render(<MessagingView />)
+  const toggle = await waitFor(() => screen.getByRole('button', { name: /Who can see your status/ }))
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(toggle)
+  // Not known yet: never shown as "nobody".
+  expect(screen.getByText('Not known yet: the chat server has not said.')).toBeTruthy()
+  expect(screen.queryByText('Nobody can see your status.')).toBeNull()
+
+  // The server said: Eva and Joan.
+  answers['chat.presence'] = presence(['eva@chat.test', 'joan@chat.test'])
+  await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
+  const list = await waitFor(() => screen.getByRole('list', { name: 'Who can see your status' }))
+  expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+  expect(screen.getByRole('button', { name: /Who can see your status/ }).textContent).toContain('(2)')
+  // Another account's change is not read for this one.
+  calls.length = 0
+  await act(async () => onChatEvent('chat.permissions', { account: 'other' }))
+  expect(calls.some((c) => c.command === 'chat.presence')).toBe(false)
+
+  // Stopping asks first; cancelled, nothing is sent.
+  const stopEva = () => screen.getByRole('button', { name: 'Stop sharing your status with eva@chat.test' })
+  fireEvent.click(stopEva())
+  await waitFor(() => expect(ui$.confirm.peek()?.title).toBe('Stop sharing your status with eva@chat.test?'))
+  await act(async () => {
+    settleConfirm(false)
+  })
+  expect(calls.some((c) => c.command === 'chat.answerSubscription')).toBe(false)
+  // Confirmed: the same answer as denying a request, then it waits for the server.
+  fireEvent.click(stopEva())
+  await waitFor(() => expect(ui$.confirm.peek()?.title).toBe('Stop sharing your status with eva@chat.test?'))
+  await act(async () => {
+    settleConfirm(true)
+  })
+  await waitFor(() =>
+    expect(calls.find((c) => c.command === 'chat.answerSubscription')?.payload).toEqual({
+      account: 'c1',
+      jid: 'eva@chat.test',
+      allow: false,
+    }),
+  )
+  await waitFor(() => expect(screen.getByText('Stopping…')).toBeTruthy())
+  // A list from the server that still has Eva: the button is offered again.
+  answers['chat.presence'] = presence(['eva@chat.test', 'joan@chat.test', 'pau@chat.test'])
+  await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
+  await waitFor(() => expect(screen.queryByText('Stopping…')).toBeNull())
+  expect(stopEva()).toBeTruthy()
+  // The server's word: Eva is no longer on the list.
+  answers['chat.presence'] = presence(['joan@chat.test'])
+  await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
+  await waitFor(() => expect(screen.queryByText('eva@chat.test')).toBeNull())
+  expect(screen.getByText('joan@chat.test')).toBeTruthy()
+
+  // Refused by the core: said, and the address can be tried again.
+  answers['chat.answerSubscription'] = () => {
+    throw new Error('this chat account is not connected; nothing was sent')
+  }
+  fireEvent.click(screen.getByRole('button', { name: 'Stop sharing your status with joan@chat.test' }))
+  await waitFor(() => expect(ui$.confirm.peek()?.title).toBe('Stop sharing your status with joan@chat.test?'))
+  await act(async () => {
+    settleConfirm(true)
+  })
+  await waitFor(() => expect(ui$.toast.peek()).toBe('this chat account is not connected; nothing was sent'))
+  expect(screen.getByRole('button', { name: 'Stop sharing your status with joan@chat.test' })).toBeTruthy()
+
+  // Nobody, said as such; more than the core keeps, said too.
+  answers['chat.presence'] = presence([])
+  await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
+  await waitFor(() => expect(screen.getByText('Nobody can see your status.')).toBeTruthy())
+  answers['chat.presence'] = presence(['a@chat.test'], true)
+  await act(async () => onChatEvent('chat.permissions', { account: 'c1' }))
+  await waitFor(() => expect(screen.getByText('Only the first 1 are shown.')).toBeTruthy())
+  expect(screen.getByRole('button', { name: /Who can see your status/ }).textContent).toContain('(1+)')
+  // A new session: unknown again.
+  await act(async () => onChatEvent('chat.presence', { account: 'c1', reset: true }))
+  await waitFor(() => expect(screen.getByText('Not known yet: the chat server has not said.')).toBeTruthy())
+  // Not connected: not offered.
+  await act(async () => onChatEvent('chat.status', { account: 'c1', state: 'offline' }))
+  expect(screen.queryByRole('button', { name: /Who can see your status/ })).toBeNull()
+})
+
+it('a conversation is muted from its header, listed as muted and still counted as unread', async () => {
+  let muted: string[] = []
+  answers['chat.mute'] = (p: any) => {
+    muted = p.muted ? [...muted, p.conversation] : muted.filter((c) => c !== p.conversation)
+    return { muted }
+  }
+  answers['chat.muted'] = () => ({ muted })
+  answers['chat.conversations'] = () => [
+    {
+      conversation: 'pau@chat.test',
+      last_body: '¿Sigues ahí?',
+      last_stamp: 1_760_000_120,
+      last_direction: 'out',
+      unread: 1,
+      muted: muted.includes('pau@chat.test'),
+    },
+  ]
+  const screen = render(<MessagingView />)
+  await waitFor(() => expect(screen.getByText('1 new')).toBeTruthy())
+  expect(screen.getByRole('button', { name: /pau@chat.test/ }).textContent).not.toContain('Muted')
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /pau@chat.test/ }))
+  })
+  const toggle = () => screen.getByRole('button', { name: 'Mute notifications' })
+  expect(toggle().getAttribute('aria-pressed')).toBe('false')
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.find((c) => c.command === 'chat.mute')?.payload).toEqual({
+    account: 'c1',
+    conversation: 'pau@chat.test',
+    muted: true,
+  })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('true'))
+  expect(toggle().getAttribute('title')).toContain('New messages still count as unread')
+  const item = screen.getByRole('button', { name: /pau@chat.test/ })
+  expect(item.textContent).toContain('Muted')
+  expect(item.textContent).toContain('1 new')
+  // Unmuted again.
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.filter((c) => c.command === 'chat.mute').at(-1)?.payload).toEqual({
+    account: 'c1',
+    conversation: 'pau@chat.test',
+    muted: false,
+  })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('false'))
+  // Refused by the core: said, nothing changes.
+  answers['chat.mute'] = () => {
+    throw new Error('at most 1000 conversations can be muted; unmute one first')
+  }
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  await waitFor(() => expect(ui$.toast.peek()).toBe('at most 1000 conversations can be muted; unmute one first'))
+  expect(toggle().getAttribute('aria-pressed')).toBe('false')
+
+  // A group is muted the same way, from its header.
+  withRoom()
+  answers['chat.mute'] = (p: any) => ({ muted: [p.conversation] })
+  await act(async () => onChatEvent('chat.room', { account: 'c1', room: room.room }))
+  await waitFor(() => expect(screen.getByRole('list', { name: 'Groups' })).toBeTruthy())
+  await act(async () => {
+    fireEvent.click(within(screen.getByRole('list', { name: 'Groups' })).getByRole('button'))
+  })
+  await waitFor(() => expect(screen.getByText('Buenas')).toBeTruthy())
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.filter((c) => c.command === 'chat.mute').at(-1)?.payload).toEqual({
+    account: 'c1',
+    conversation: 'team@rooms.chat.test',
+    muted: true,
+  })
+})
+
+it('a conversation without messages yet, or a private one, shows its mute and can be unmuted', async () => {
+  let muted: string[] = []
+  answers['chat.mute'] = (p: any) => {
+    muted = p.muted ? [...muted, p.conversation] : muted.filter((c) => c !== p.conversation)
+    return { muted }
+  }
+  answers['chat.muted'] = () => ({ muted })
+  answers['chat.history'] = () => []
+  const screen = render(<MessagingView />)
+  await waitFor(() => expect(screen.getByText('1 new')).toBeTruthy())
+  // A new address, with nothing said yet: not in the conversation list.
+  fireEvent.change(screen.getByLabelText('Chat with (address)'), { target: { value: 'eva@chat.test' } })
+  await act(async () => {
+    fireEvent.submit(screen.getByLabelText('Chat with (address)').closest('form')!)
+  })
+  const toggle = () => screen.getByRole('button', { name: 'Mute notifications' })
+  await waitFor(() => expect(toggle()).toBeTruthy())
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('true'))
+  // What muting means is reachable without a mouse.
+  expect(toggle().getAttribute('aria-describedby')).toBe('chat-muted-hint')
+  expect(screen.getByText('No notifications from this conversation, not even mentions. New messages still count as unread.')).toBeTruthy()
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.filter((c) => c.command === 'chat.mute').at(-1)?.payload).toEqual({
+    account: 'c1',
+    conversation: 'eva@chat.test',
+    muted: false,
+  })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('false'))
+
+  // Privately in a group, the same; the list says so.
+  answers['chat.rooms'] = () => [room]
+  answers['chat.conversations'] = () => [
+    {
+      conversation: 'team@rooms.chat.test/Pau',
+      last_body: 'psst',
+      last_stamp: 1_760_000_300,
+      last_direction: 'in',
+      unread: 1,
+      kind: 'private',
+      room: 'team@rooms.chat.test',
+    },
+  ]
+  await act(async () => onChatEvent('chat.room', { account: 'c1', room: room.room }))
+  await act(async () => {
+    fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /Pau \(team@rooms.chat.test\)/ })))
+  })
+  await act(async () => {
+    fireEvent.click(toggle())
+  })
+  expect(calls.filter((c) => c.command === 'chat.mute').at(-1)?.payload).toEqual({
+    account: 'c1',
+    conversation: 'team@rooms.chat.test/Pau',
+    muted: true,
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /Pau \(team@rooms.chat.test\)/ }).textContent).toContain('Muted'),
+  )
+  // Another account's list is not this one's.
+  mutedConversations$.set({ account: 'other', list: ['team@rooms.chat.test/Pau'] })
+  await waitFor(() => expect(toggle().getAttribute('aria-pressed')).toBe('false'))
+})
+
+it('each group shows its unread mentions, the account its total, and a lower bound says so', async () => {
+  answers['chat.muted'] = () => ({ muted: ['team@rooms.chat.test'] })
+  answers['chat.rooms'] = () => [
+    { ...room, unread_mentions: 2, muted: true },
+    { ...room, room: 'club@rooms.chat.test', unread: 1, unread_mentions: 1 },
+  ]
+  const screen = render(<MessagingView />)
+  const groups = await waitFor(() => screen.getByRole('list', { name: 'Groups' }))
+  const team = within(groups).getByRole('button', { name: /team@rooms.chat.test/ })
+  expect(team.textContent).toContain('Unread mentions: 2')
+  expect(team.textContent).toContain('Muted')
+  expect(team.textContent).toContain('2 new')
+  expect(screen.getByText('Unread mentions in your groups: 3')).toBeTruthy()
+
+  // A group with more unread than the core looked at: a lower bound, even at zero found.
+  answers['chat.rooms'] = () => [
+    { ...room, unread_mentions: 2 },
+    { ...room, room: 'club@rooms.chat.test', unread: 2500, unread_mentions: 0, mentions_capped: true },
+  ]
+  await act(async () => onChatEvent('chat.room', { account: 'c1', room: 'club@rooms.chat.test' }))
+  await waitFor(() => expect(screen.getByText('Unread mentions in your groups: 2 or more')).toBeTruthy())
+  const club = within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: /club@rooms.chat.test/ })
+  expect(club.textContent).toContain('Unread mentions: 0 or more')
+  expect(club.textContent).toContain('0+')
+
+  // Nothing unread names the person: no badge at all.
+  answers['chat.rooms'] = () => [{ ...room, unread_mentions: 0 }]
+  await act(async () => onChatEvent('chat.room', { account: 'c1', room: room.room }))
+  await waitFor(() => expect(screen.queryByText(/Unread mentions in your groups/)).toBeNull())
+  expect(within(screen.getByRole('list', { name: 'Groups' })).getByRole('button').textContent).not.toContain(
+    'Unread mentions',
+  )
 })
