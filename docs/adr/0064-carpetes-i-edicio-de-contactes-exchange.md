@@ -123,10 +123,11 @@ diferència i suprimir envia el contacte a Elements suprimits, d'on es pot recup
 - La importació de vCard continua anant només a la llibreta local o a una de
   CardDAV.
 - Temps d'espera de les crides des de l'escriptori: `people.save` i
-  `people.delete`, 10 min, i `carddav.sync` i `exchange.contacts.sync`,
-  15 min. Cada petició EWS té un límit de 2 min al nucli, i la interfície no
-  ha de deixar d'esperar mentre el nucli encara escriu. Els temps també valen
-  per a CardDAV i la llibreta local.
+  `people.delete`, 10 min, i `carddav.sync` i `exchange.contacts.sync`, 2 h,
+  perquè una lectura dura el que dura la bústia (com l'exportació d'una
+  carpeta): només s'atura una crida encallada. Cada petició EWS té un límit
+  de 2 min al nucli, i la interfície no ha de deixar d'esperar mentre el nucli
+  encara escriu. Els temps també valen per a CardDAV i la llibreta local.
 
 ### 3. Interfície
 

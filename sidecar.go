@@ -531,9 +531,10 @@ func sidecarCallTimeout(method string) time.Duration {
 		return 10 * time.Minute
 	// An Exchange account's whole Contacts folder and every contact folder
 	// under it, one after another, in pages and batches (ADR-0058,
-	// ADR-0064); re-reading a book from settings may be that same read.
+	// ADR-0064); re-reading a book from settings may be that same read. Its
+	// length is the mailbox's, not a fixed budget: only a stuck call ends here.
 	case "exchange.contacts.sync", "carddav.sync":
-		return 15 * time.Minute
+		return 2 * time.Hour
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second
 	case "folders.list", "folders.create", "folders.archive", "messages.recent", "messages.sync", "rss.markRead", "rss.markAllRead", "watch.start", "watch.stop", "discard_draft", "account.addRss", "feed.add", "rss.importOpml":
