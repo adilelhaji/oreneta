@@ -27,6 +27,28 @@ test('the repository has no funding links to the upstream maintainers', () => {
   assert.equal(fs.existsSync(path.join(root, '.github/FUNDING.yml')), false)
 })
 
+function kotlinSources(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) return entry.name === 'build' ? [] : kotlinSources(full)
+    return entry.name.endsWith('.kt') ? [full] : []
+  })
+}
+
+test('mobile log tags are Oreneta.*, never Meron', () => {
+  const sources = kotlinSources(path.join(root, 'mobile'))
+  assert.ok(sources.length > 0)
+  const offenders = []
+  for (const file of sources) {
+    const source = fs.readFileSync(file, 'utf8')
+    // A Log call or a *TAG constant whose literal starts with Meron, or a
+    // platform prefix written as "Meron.$tag".
+    const pattern = /Log\.[diwe]\(\s*"Meron|TAG\s*=\s*"Meron|"Meron\.\$/g
+    if (pattern.test(source)) offenders.push(path.relative(root, file))
+  }
+  assert.deepEqual(offenders, [])
+})
+
 test('Android release APKs are named after Oreneta', () => {
   const workflow = read('.github/workflows/android-release.yml')
   const renamed = [...workflow.matchAll(/^\s*mv android-[\w-]+-release\.apk "([^"]+)"/gm)].map((match) => match[1])

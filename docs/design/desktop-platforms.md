@@ -38,13 +38,13 @@ o a Windows.
 Les identitats de signatura de macOS encara porten el nom de Nonbili Inc. No
 es canvien fins que el propietari decideixi quin compte de desenvolupador
 d'Apple signarà les versions. El nom d'una identitat és el del titular del
-compte que emet el certificat; per tant, no es pot triar lliurement.
+compte al qual s'emet el certificat; per tant, no es pot triar lliurement.
 
 Llocs que caldria canviar:
 
 - `.github/workflows/release.yml`, pas `package macOS dmg`:
-  `Developer ID Application: Nonbili Inc. ($TEAM_ID)`, dues vegades (l'app i
-  el DMG).
+  `Developer ID Application: Nonbili Inc. ($TEAM_ID)`, dues vegades (l'aplicació
+  i el DMG).
 - `scripts/build-mas.sh`: els valors per defecte
   `Apple Distribution: Nonbili Inc. ($TEAM_ID)` i
   `3rd Party Mac Developer Installer: Nonbili Inc. ($TEAM_ID)`. Les variables
