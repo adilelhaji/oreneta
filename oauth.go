@@ -29,6 +29,9 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 	if googleClientSecret() == "" {
 		return nil, errors.New("Google client secret missing")
 	}
+	// Whether Google granted the calendar permission, as far as its answer
+	// says: tokens handed in already exchanged carry no answer to read.
+	calendarScope := "unknown"
 	if req.AccessToken == "" || req.RefreshToken == "" {
 		a.logf("account.addGmailOAuth: exchanging auth code")
 		client, err := a.oauthHTTPClient()
@@ -42,6 +45,7 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 		req.AccessToken = tokens.AccessToken
 		req.RefreshToken = tokens.RefreshToken
 		req.ExpiresIn = tokens.ExpiresIn
+		calendarScope = calendarScopeGranted(tokens.Scope)
 	}
 	if req.Email == "" || req.AvatarURL == "" {
 		client, err := a.oauthHTTPClient()
@@ -80,7 +84,7 @@ func (a *App) accountAddGmailOAuth(payload map[string]any) (any, error) {
 		}
 	}
 	expiresAt := time.Now().Unix() + req.ExpiresIn
-	a.logf("account.addGmailOAuth: connecting account=%s email=%s token_present=%t refresh_present=%t", id, req.Email, req.AccessToken != "", req.RefreshToken != "")
+	a.logf("account.addGmailOAuth: connecting account=%s email=%s token_present=%t refresh_present=%t calendar_scope=%s", id, req.Email, req.AccessToken != "", req.RefreshToken != "", calendarScope)
 	if a.sidecar == nil || !a.sidecar.Started() {
 		return nil, a.engineUnavailable()
 	}

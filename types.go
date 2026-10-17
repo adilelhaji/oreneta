@@ -280,6 +280,10 @@ type TokenExchangeResult struct {
 	// IDToken is the OIDC id_token Microsoft returns; Google omits it. Used to
 	// read the account email/name without an extra userinfo call.
 	IDToken string `json:"id_token"`
+	// Scope is the space-separated list of scopes actually granted. Google's
+	// consent screen lets a person untick a permission, so this can be less
+	// than what was asked for (#244).
+	Scope string `json:"scope"`
 }
 
 type GoogleUserInfo struct {

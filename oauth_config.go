@@ -28,8 +28,29 @@ const (
 	// set up together, so they are consented to together. A token issued
 	// without the calendar scope cannot call the Calendar API, so an account
 	// added before this scope existed has to be reconnected once.
-	googleScopes = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/contacts.readonly"
+	googleScopes = "https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile " + googleCalendarScope + " https://www.googleapis.com/auth/contacts.readonly"
+
+	// The Google permission the Calendar API needs.
+	googleCalendarScope = "https://www.googleapis.com/auth/calendar"
 )
+
+// calendarScopeGranted says whether a Google token answer granted the
+// calendar permission: "yes", "no", or "unknown" when the answer lists no
+// scopes at all, which is not taken to mean none were granted. Logged when a
+// Gmail account is added (#244): a token without this permission is refused
+// by the Calendar API, and the log is where a field failure is diagnosed.
+func calendarScopeGranted(granted string) string {
+	scopes := strings.Fields(granted)
+	if len(scopes) == 0 {
+		return "unknown"
+	}
+	for _, scope := range scopes {
+		if scope == googleCalendarScope {
+			return "yes"
+		}
+	}
+	return "no"
+}
 
 // The environment wins over the compiled credentials, so a build can be run
 // against a different Google Cloud project — one with other APIs enabled, or

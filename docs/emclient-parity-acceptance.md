@@ -32,6 +32,17 @@ El 2026-10-16 (#226, ADR-0061) SET-27 va incorporar la disposició de dreta a es
 per a l'àrab, amb comprovacions d'entrada de producció en àrab per a la bústia, el lector
 i l'editor de missatges i per a persones, tasques, notes, calendari, xat i configuració;
 es manté `partial`, perquè falten l'evidència nativa de l'IME i la nativa de Windows.
+El 2026-10-17 (#244) CAL-02 va registrar una fallada de la prova nativa de Windows del
+2026-10-16 (compilació `81ec18fb`, de desenvolupament intern, amb els registres OAuth
+heretats): un compte de Gmail afegit amb l'inici de sessió de Google no mostrava cap
+calendari, i el registre no en deia el motiu. Ara cada error de sincronització del
+calendari s'escriu al registre amb el compte i el motiu; `calendar.syncError` porta un
+`reason` (`api_disabled`, `needs_consent`, `needs_reconnect` o `other`), i la interfície
+mostra l'error de cada compte, amb la causa quan Google la diu. Afegir un compte de Gmail
+també registra si Google va concedir el permís del calendari. La causa d'aquella fallada
+no s'ha confirmat: la hipòtesi és que l'API de Google Calendar no està activada al projecte
+de Google Cloud heretat (#144). La fila es manté `implemented-unverified` fins que una
+prova nativa nova ho aclareixi.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

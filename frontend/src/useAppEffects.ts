@@ -11,7 +11,7 @@ import { onBackupScheduled } from './states/backupSchedule'
 import { onAutoArchiveRan } from './states/autoArchive'
 import { accountGroups$ } from './states/accountGroups'
 import { ui$, showToast } from './states/ui'
-import { calendar$, loadCalendars, loadWindow } from './states/calendar'
+import { calendar$, clearCalendarSyncError, loadCalendars, loadWindow, noteCalendarSyncError } from './states/calendar'
 import { flushQueuedSends } from './states/sendQueue'
 import {
   mail$,
@@ -499,15 +499,21 @@ export function useAppEffects() {
     // A calendar refresh that failed. Nothing consumed this before, so the
     // agenda simply went stale in silence — the worst way for it to be wrong,
     // since it still looks current.
-    const offCalendarError = eventsOn('calendar.syncError', (detail: { message?: string }) => {
-      calendar$.syncError.set(detail?.message || 'calendar sync failed')
-    })
+    // Kept per account (#244): one account's good refresh must not hide
+    // another's failure, and the reason decides what the reader is told.
+    const offCalendarError = eventsOn(
+      'calendar.syncError',
+      (detail: { account?: string; message?: string; reason?: string }) => noteCalendarSyncError(detail),
+    )
 
     // A calendar window is fetched from the cache and refreshed behind the
     // request, so the agenda renders whatever was already stored and needs
     // telling when the server's answer lands — on a first open the cache is
     // empty, and without this the view would simply stay that way.
-    const offCalendarSynced = eventsOn('calendar.synced', (detail: { from?: number; to?: number }) => {
+    const offCalendarSynced = eventsOn('calendar.synced', (detail: { account?: string; from?: number; to?: number }) => {
+      // A sync that landed clears what that account's last failure said,
+      // and only that account's: the server answered it.
+      clearCalendarSyncError(detail?.account)
       // The list of calendars refreshes too: a sync is how a freshly added
       // account's calendars are first discovered, and the settings rail
       // would otherwise not show them until the dialog was reopened.
@@ -520,8 +526,6 @@ export function useAppEffects() {
       if (detail?.from !== undefined && detail?.to !== undefined) {
         if (detail.to <= from || detail.from >= to) return
       }
-      // A sync that landed clears whatever the last failure said.
-      calendar$.syncError.set('')
       void loadWindow(from, to, false)
     })
 

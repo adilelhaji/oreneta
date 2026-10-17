@@ -51,11 +51,37 @@ pub fn emit(level: Level, tag: &str, message: &str) {
     if !enabled(level) {
         return;
     }
+    #[cfg(test)]
+    CAPTURED.with(|captured| {
+        if let Some(records) = captured.borrow_mut().as_mut() {
+            records.push(format!("[{}] {tag}: {message}", level.as_str()));
+        }
+    });
     if let Some(sink) = SINK.read().unwrap().as_ref() {
         sink(level, tag, message);
     } else {
         eprintln!("meron-core [{}] {tag}: {message}", level.as_str());
     }
+}
+
+// Tests read back what this thread logged, without installing a process-wide
+// sink that tests running in parallel would share.
+#[cfg(test)]
+thread_local! {
+    static CAPTURED: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Tests: keep this thread's records from now on.
+#[cfg(test)]
+pub fn capture() {
+    CAPTURED.with(|captured| *captured.borrow_mut() = Some(Vec::new()));
+}
+
+/// Tests: the records this thread kept since [`capture`], as
+/// `[LEVEL] tag: message`; keeping stops.
+#[cfg(test)]
+pub fn captured() -> Vec<String> {
+    CAPTURED.with(|captured| captured.borrow_mut().take().unwrap_or_default())
 }
 
 /// `mlog!(Level::Warn, "tag", "text {}", value)` — formats lazily and routes

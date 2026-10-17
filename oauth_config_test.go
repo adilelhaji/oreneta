@@ -57,3 +57,26 @@ func TestOAuthRejectsMalformedClientValues(t *testing.T) {
 		t.Fatal("outlookOAuthConfigured = false with a well-formed id")
 	}
 }
+
+// Google's consent screen lets a person untick a permission, and a token
+// without the calendar one is refused by the Calendar API (#244). What the
+// token answer says is logged as it is; an answer that lists nothing is not
+// read as a refusal.
+func TestCalendarScopeGrantedReadsTheTokenAnswer(t *testing.T) {
+	if !strings.Contains(" "+googleScopes+" ", " "+googleCalendarScope+" ") {
+		t.Fatalf("sign-in must ask for the calendar scope: %q", googleScopes)
+	}
+	for granted, want := range map[string]string{
+		"https://mail.google.com/ " + googleCalendarScope + " openid": "yes",
+		googleCalendarScope: "yes",
+		"https://mail.google.com/ https://www.googleapis.com/auth/userinfo.email": "no",
+		// Read-only calendar access is not what the client asked for or uses.
+		"https://www.googleapis.com/auth/calendar.readonly": "no",
+		"":    "unknown",
+		"   ": "unknown",
+	} {
+		if got := calendarScopeGranted(granted); got != want {
+			t.Errorf("calendarScopeGranted(%q) = %q, want %q", granted, got, want)
+		}
+	}
+}

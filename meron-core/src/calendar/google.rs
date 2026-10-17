@@ -312,7 +312,7 @@ fn call_with(
         .read_to_string()
         .with_context(|| format!("read {method} {url}"))?;
     if !status.is_success() {
-        anyhow::bail!("{}", explain(status.as_u16(), &text));
+        return Err(anyhow::Error::new(refusal(status.as_u16(), &text)));
     }
     Ok(text)
 }
@@ -344,27 +344,120 @@ fn test_base(url: &str) -> String {
     url.to_string()
 }
 
-/// What to tell the user about a refused call.
+/// Which kind of refusal Google gave, for the ones the reader can be told
+/// something specific about (#244).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefusalKind {
+    /// The Google Cloud project this build signs in with has the Calendar API
+    /// switched off. No account of this build can reach its calendar, and
+    /// nothing the reader does about the account fixes it (#144).
+    ApiDisabled,
+    /// The token was issued without the calendar permission.
+    NeedsConsent,
+    /// The token itself was not accepted.
+    SignInRefused,
+    /// A write against a version changed elsewhere.
+    Conflict,
+    /// Anything else, reported as what it was.
+    Other,
+}
+
+impl RefusalKind {
+    /// The name a `calendar.syncError` event gives it as its `reason`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RefusalKind::ApiDisabled => "api_disabled",
+            RefusalKind::NeedsConsent => "needs_consent",
+            RefusalKind::SignInRefused => "needs_reconnect",
+            RefusalKind::Conflict => "conflict",
+            RefusalKind::Other => "other",
+        }
+    }
+}
+
+/// A call Google refused: its kind, and what to tell the user. Carried as the
+/// error itself, so whoever reports the failure can name the kind without
+/// reading the sentence back.
+#[derive(Debug)]
+pub struct Refusal {
+    pub kind: RefusalKind,
+    message: String,
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for Refusal {}
+
+/// What a refused call was, and what to tell the user about it.
 ///
-/// The one refusal worth naming is a token that predates the calendar
-/// permission: the account works, the calendar does not, and nothing the user
-/// can see says why. Reconnecting is the fix, so the message says so instead
-/// of repeating Google's wording about scopes.
-fn explain(status: u16, body: &str) -> String {
+/// Two refusals look the same to the reader — the account works, the
+/// calendar does not — and need different fixes. A token that predates the
+/// calendar permission is fixed by reconnecting, so the message says so
+/// instead of repeating Google's wording about scopes. A Calendar API that is
+/// not enabled in the Google Cloud project behind this build's sign-in is
+/// fixed by nobody but whoever owns that project, so the message says that,
+/// and keeps Google's own sentence, which names the project.
+pub(crate) fn refusal(status: u16, body: &str) -> Refusal {
     let message = brief(body);
-    let needs_consent = status == 403 && message.to_lowercase().contains("scope")
-        || body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT");
-    if needs_consent {
-        return "this account has not granted calendar access yet — reconnect it \
-                to sign in again and allow the calendar"
-            .to_string();
-    }
-    if status == 412 {
-        return "this event was changed elsewhere since it was opened; nothing was \
-                saved — open it again to see the latest version"
-            .to_string();
-    }
-    format!("Google Calendar answered {status}: {message}")
+    let reasons = reasons(body);
+    let has = |wanted: &str| reasons.iter().any(|reason| reason == wanted);
+    let (kind, message) = if has("accessNotConfigured") || has("SERVICE_DISABLED") {
+        (
+            RefusalKind::ApiDisabled,
+            format!(
+                "Google refused the calendar: the Google Calendar API is not enabled in the Google \
+                 Cloud project this build signs in with, so no account can read its calendar until \
+                 it is (Google said: {message})"
+            ),
+        )
+    } else if (status == 403 && message.to_lowercase().contains("scope"))
+        || has("ACCESS_TOKEN_SCOPE_INSUFFICIENT")
+        || body.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT")
+    {
+        (
+            RefusalKind::NeedsConsent,
+            "this account has not granted calendar access yet — reconnect it \
+             to sign in again and allow the calendar"
+                .to_string(),
+        )
+    } else if status == 401 {
+        (
+            RefusalKind::SignInRefused,
+            "Google did not accept this account's sign-in for the calendar — reconnect it to \
+             sign in again"
+                .to_string(),
+        )
+    } else if status == 412 {
+        (
+            RefusalKind::Conflict,
+            "this event was changed elsewhere since it was opened; nothing was \
+             saved — open it again to see the latest version"
+                .to_string(),
+        )
+    } else {
+        (RefusalKind::Other, format!("Google Calendar answered {status}: {message}"))
+    };
+    Refusal { kind, message }
+}
+
+/// The machine-readable reasons in a Google error envelope: the legacy
+/// `errors[].reason` (`accessNotConfigured`) and the newer
+/// `details[].reason` (`SERVICE_DISABLED`, `ACCESS_TOKEN_SCOPE_INSUFFICIENT`).
+fn reasons(body: &str) -> Vec<String> {
+    let Ok(envelope) = serde_json::from_str::<serde_json::Value>(body) else {
+        return Vec::new();
+    };
+    let error = &envelope["error"];
+    ["errors", "details"]
+        .iter()
+        .filter_map(|list| error[*list].as_array())
+        .flatten()
+        .filter_map(|entry| entry["reason"].as_str().map(str::to_string))
+        .collect()
 }
 
 /// The human part of an API error, when there is one. Google answers with a
@@ -1748,13 +1841,78 @@ mod tests {
         // see explains that, so the message names the fix rather than the
         // protocol.
         let body = r#"{"error":{"code":403,"message":"Request had insufficient authentication scopes."}}"#;
-        let told = explain(403, body);
+        let told = refusal(403, body);
+        assert_eq!(told.kind, RefusalKind::NeedsConsent);
+        let told = told.to_string();
         assert!(told.contains("reconnect"), "got: {told}");
         assert!(!told.contains("403"), "the status code is not the point");
+        // The phone matches these words to show its own sentence; they stay.
+        assert!(told.contains("has not granted calendar access"));
+
+        // The newer envelope names it only in its details.
+        let detailed = r#"{"error":{"code":403,"message":"Permission denied.","status":"PERMISSION_DENIED",
+            "details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"ACCESS_TOKEN_SCOPE_INSUFFICIENT"}]}}"#;
+        assert_eq!(refusal(403, detailed).kind, RefusalKind::NeedsConsent);
 
         // Anything else is reported as what it was.
-        let other = explain(404, r#"{"error":{"code":404,"message":"Not Found"}}"#);
+        let other = refusal(404, r#"{"error":{"code":404,"message":"Not Found"}}"#);
+        assert_eq!(other.kind, RefusalKind::Other);
+        let other = other.to_string();
         assert!(other.contains("404") && other.contains("Not Found"));
+    }
+
+    /// What Google answers when the Calendar API is switched off in the
+    /// project behind the client (#244): the legacy reason and the newer
+    /// one, in the shape Google documents for SERVICE_DISABLED.
+    const API_DISABLED: &str = r#"{"error":{"code":403,
+        "message":"Google Calendar API has not been used in project 123456 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=123456 then retry.",
+        "errors":[{"message":"Google Calendar API has not been used in project 123456 before or it is disabled.","domain":"usageLimits","reason":"accessNotConfigured","extendedHelp":"https://console.developers.google.com"}],
+        "status":"PERMISSION_DENIED",
+        "details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"service":"calendar-json.googleapis.com","consumer":"projects/123456"}}]}}"#;
+
+    #[test]
+    fn a_calendar_api_switched_off_in_the_project_is_named_as_such() {
+        let told = refusal(403, API_DISABLED);
+        assert_eq!(told.kind, RefusalKind::ApiDisabled);
+        assert_eq!(told.kind.as_str(), "api_disabled");
+        let text = told.to_string();
+        assert!(text.contains("Google Calendar API is not enabled"), "got: {text}");
+        assert!(!text.contains("reconnect"), "reconnecting does not fix a project setting");
+        // Google's own sentence names the project, which is what its owner
+        // needs to switch the API on.
+        assert!(text.contains("project 123456"), "got: {text}");
+
+        // Either reason alone is enough.
+        let legacy = r#"{"error":{"code":403,"message":"Access Not Configured.","errors":[{"reason":"accessNotConfigured"}]}}"#;
+        assert_eq!(refusal(403, legacy).kind, RefusalKind::ApiDisabled);
+        let newer = r#"{"error":{"code":403,"message":"Permission denied.","details":[{"reason":"SERVICE_DISABLED"}]}}"#;
+        assert_eq!(refusal(403, newer).kind, RefusalKind::ApiDisabled);
+    }
+
+    #[test]
+    fn a_token_google_no_longer_accepts_asks_for_a_reconnect() {
+        let body = r#"{"error":{"code":401,"message":"Request had invalid authentication credentials.","status":"UNAUTHENTICATED"}}"#;
+        let told = refusal(401, body);
+        assert_eq!(told.kind, RefusalKind::SignInRefused);
+        assert_eq!(told.kind.as_str(), "needs_reconnect");
+        assert!(told.to_string().contains("reconnect"));
+        // A body that is not JSON has no reasons, and is still classified by
+        // its status alone.
+        assert_eq!(refusal(503, "<html>busy</html>").kind, RefusalKind::Other);
+        assert_eq!(refusal(412, "").kind, RefusalKind::Conflict);
+    }
+
+    #[test]
+    fn listing_calendars_in_a_project_without_the_api_fails_with_the_refusal_itself() {
+        let _seen = serve(vec![(403, API_DISABLED.to_string())]);
+        let error = list_calendars("token", &ProxyChoice::Direct).unwrap_err();
+        // The kind survives as the error itself, so the sync report can name
+        // it without reading the sentence back.
+        let found = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<Refusal>())
+            .expect("the refusal is in the chain");
+        assert_eq!(found.kind, RefusalKind::ApiDisabled);
     }
 
     #[test]

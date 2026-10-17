@@ -5,6 +5,7 @@ import {
   accountColor,
   accountSupportsCalendar,
   calendar$,
+  calendarSyncErrorText,
   createCalendar,
   importAccountCalendars,
   isGoogleAccount,
@@ -525,6 +526,9 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
   const calendars = useValue(calendar$.calendars).filter(
     (calendar) => calendar.accountId === account.id && calendar.kind === 'account',
   )
+  // Why this account's last refresh failed, if it did: without it, a
+  // refused calendar read as one still waiting for its first sync (#244).
+  const syncError = useValue(calendar$.syncErrors)[account.id]
   const supports = accountSupportsCalendar(account)
   const isGoogle = isGoogleAccount(account)
   // An account that cannot keep calendars gets no empty section — except a
@@ -568,7 +572,17 @@ function AccountCalendarsGroup({ account }: { account: Account }) {
   return (
     <>
       <SettingsGroup title={t('calendar.title', { defaultValue: 'Calendar' })}>
-        {calendars.length === 0 && (
+        {syncError && (
+          <p
+            role="status"
+            data-sync-error={syncError.reason}
+            title={syncError.message}
+            className="px-4 py-3.5 wrap-anywhere text-caption text-warning"
+          >
+            {calendarSyncErrorText(syncError, account.email || account.id)}
+          </p>
+        )}
+        {calendars.length === 0 && !syncError && (
           <p className="px-4 py-3.5 text-caption text-secondary">
             {t('calendar.calendarsAppearOnSync', {
               defaultValue: "The account's calendars appear here once its first sync finishes.",
