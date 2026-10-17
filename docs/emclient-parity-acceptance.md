@@ -78,6 +78,14 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
+comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
+(remitent i data; assumpte i previsualització), agrupades per data, mentre la llista fa
+menys de 520 px, i la taula a partir d'aquesta amplada. L'amplada redimensionada es
+conserva entre reinicis, i una vista desada (taula o targetes) es respecta. Proves de
+l'entrada de producció a 1280, 1456 i 1920 px, en català, anglès i àrab, en clar i en
+fosc. S01-03 i S01-06 no canvien d'estat: l'evidència nativa de Windows continua
+pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

@@ -19,6 +19,10 @@ restableixen Xat, Targetes o una altra densitat. Això no restableix el tema,
 l'ordenació, els comptes, l'amplada de lectura, la política de marcar com a llegit,
 els esborranys ni les signatures. La taula ja té files compactes; la densitat
 controla la llista alternativa de targetes.
+Des de #283, el valor per defecte de `list_view` és `auto`: files de dues línies
+mentre la llista fa menys de 520 px i la taula a partir d'aquesta amplada; la
+llista comença a 360 px ([amplada i files de la llista](message-list-width.md)).
+Un `table` o un `cards` desats es continuen respectant.
 El [lliurament de la selecció a la taula](table-selection.md) (#154) afegeix a
 aquesta taula per defecte caselles de selecció i controls d'obertura separats;
 l'acceptació més àmplia de #34 continua oberta.

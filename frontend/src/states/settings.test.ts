@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'bun:test'
+import { clampPaneSize, THREAD_LIST_DEFAULT_WIDTH, THREAD_LIST_WIDTH } from '../lib/paneResize'
 import {
   EMPTY_PROXY,
   hydrateSettings,
@@ -275,13 +276,21 @@ describe('saved searches', () => {
 
 describe('list view and ordering', () => {
   afterEach(() => {
-    settings$.listView.set('table')
+    settings$.listView.set('auto')
     settings$.listSort.set({ key: 'date', dir: 'desc' })
   })
 
-  it('starts with a conventional table, newest first', () => {
-    expect(settings$.listView.get()).toBe('table')
+  it('starts with the automatic view, newest first (#283)', () => {
+    // Rows while the list is narrow, the table once it is wide.
+    expect(settings$.listView.get()).toBe('auto')
     expect(settings$.listSort.get()).toEqual({ key: 'date', dir: 'desc' })
+  })
+
+  it('hydrates every view it can draw, the automatic one included', () => {
+    for (const view of ['table', 'cards', 'auto'] as const) {
+      hydrateSettings({ list_view: view })
+      expect(settings$.listView.get()).toBe(view)
+    }
   })
 
   it('writes an ordering the core can read', () => {
@@ -316,7 +325,7 @@ describe('list view and ordering', () => {
 describe('conventional mail defaults', () => {
   afterEach(() => {
     settings$.conversationLayout.set('traditional')
-    settings$.listView.set('table')
+    settings$.listView.set('auto')
     settings$.listDensity.set('compact')
   })
 
@@ -326,7 +335,7 @@ describe('conventional mail defaults', () => {
 
   it('preserves every explicit combination across missing and invalid preference hydration', () => {
     for (const layout of ['chat', 'traditional'] as const) {
-      for (const view of ['cards', 'table'] as const) {
+      for (const view of ['auto', 'cards', 'table'] as const) {
         for (const density of ['compact', 'cosy', 'relaxed'] as const) {
           hydrateSettings({ conversation_layout: layout, list_view: view, list_density: density })
           hydrateSettings({})
@@ -342,9 +351,19 @@ describe('conventional mail defaults', () => {
 
 describe('pane sizes (#212)', () => {
   afterEach(() => {
-    settings$.threadListWidth.set(350)
+    settings$.threadListWidth.set(360)
     settings$.kanbanPaneWidth.set(33)
     settings$.detailsPanelWidth.set(340)
+  })
+
+  it('gives a profile that never resized the list 360 px of it (#283)', () => {
+    expect(settings$.threadListWidth.get()).toBe(THREAD_LIST_DEFAULT_WIDTH)
+    expect(THREAD_LIST_DEFAULT_WIDTH).toBe(360)
+    expect(clampPaneSize(THREAD_LIST_DEFAULT_WIDTH, THREAD_LIST_WIDTH)).toBe(THREAD_LIST_DEFAULT_WIDTH)
+    // An absent or unreadable width leaves the default alone.
+    hydrateSettings({})
+    hydrateSettings({ thread_list_width: 'wide' })
+    expect(settings$.threadListWidth.get()).toBe(THREAD_LIST_DEFAULT_WIDTH)
   })
 
   it('restores every remembered pane size within its limits', () => {

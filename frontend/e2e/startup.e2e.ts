@@ -22,6 +22,12 @@ type SetupOptions = {
    * profile, which starts in Catalan (#231, ADR-0062).
    */
   language?: string | null
+  /**
+   * The stored list view. The table unless given, so the checks written
+   * against the table keep reading it; null leaves the row out, as on a
+   * profile that never chose, which gets the automatic view (#283).
+   */
+  listView?: 'auto' | 'cards' | 'table' | null
   existingEmail?: string
   navigation?: boolean
   theme?: string
@@ -1253,6 +1259,7 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
           prefs: {
             auto_update_check: false,
             ...(options.language === null ? {} : { language: options.language ?? 'en' }),
+            ...(options.listView === null ? {} : { list_view: options.listView ?? 'table' }),
             ...(options.navigation
               ? {
                   session_account: template.id,
@@ -1622,6 +1629,165 @@ for (const width of [769, 1024, 1025, 1440]) {
     expect(errors).toEqual([])
   })
 }
+
+// #283: the message list at the sizes a window is kept maximised at. A
+// profile that never resized the list gets 360 px of it and the automatic
+// view, which draws two-line rows (sender and date over subject and preview)
+// under date groups while the list is narrow. The sender and the subject of an
+// ordinary conversation read whole, in Catalan, English and Arabic, light and
+// dark, without touching the separator.
+const READABLE_SUBJECTS = [
+  'Budget review: Q4 planning',
+  'Meeting notes and next steps',
+  'Invoice with an attachment',
+  'Welcome to the internal demo',
+]
+
+/** Whether a two-line row shows its sender and subject whole, and how tall it is. */
+async function rowReading(list: ReturnType<Page['locator']>, subject: string) {
+  const row = list.getByTitle(subject, { exact: true })
+  await expect(row).toBeVisible()
+  return row.evaluate((button) => {
+    const sender = button.querySelector('[data-thread-sender]') as HTMLElement
+    const title = button.querySelector('[data-thread-subject]') as HTMLElement
+    const line = title.closest('p') as HTMLElement
+    const senderBox = sender.getBoundingClientRect()
+    const titleBox = title.getBoundingClientRect()
+    const lineBox = line.getBoundingClientRect()
+    return {
+      senderWhole: sender.scrollWidth <= sender.clientWidth + 1,
+      // The subject's own box inside its line: a cut subject runs past the
+      // end of the line, on the right or (Arabic) on the left.
+      subjectWhole: titleBox.left >= lineBox.left - 1 && titleBox.right <= lineBox.right + 1,
+      subjectBelowSender: titleBox.top >= senderBox.bottom - 1,
+      height: Math.round(button.getBoundingClientRect().height),
+    }
+  })
+}
+
+for (const language of ['ca', 'en', 'ar'] as const) {
+  for (const theme of ['oreneta-light', 'oreneta-dark']) {
+    for (const width of [1280, 1456, 1920]) {
+      test(`the message list reads sender and subject without resizing: ${language}, ${theme}, ${width}px (#283)`, async ({
+        page,
+      }, info) => {
+        await page.setViewportSize({ width, height: 900 })
+        const errors = await prepareStartup(page, true, { navigation: true, language, theme, listView: null })
+        await page.goto('/')
+        const html = page.locator('html')
+        await expect(html).toHaveAttribute('lang', language)
+        await expect(html).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr')
+        const list = page.locator('[data-thread-list]')
+        const reader = page.locator('[data-message-pane]')
+        await expect(list).toHaveAttribute('data-list-view', 'cards')
+        await expect(list.getByRole('table')).toHaveCount(0)
+        await expect(list.locator('[data-date-group]').first()).toBeVisible()
+
+        const listBox = (await list.boundingBox())!
+        const readerBox = (await reader.boundingBox())!
+        expect(Math.round(listBox.width)).toBe(360)
+        expect(readerBox.width).toBeGreaterThanOrEqual(360 - 1)
+        expect(readerBox.x + readerBox.width).toBeLessThanOrEqual(width + 1)
+        // Arabic mirrors the shell: the list sits to the right of the reader.
+        if (language === 'ar') expect(listBox.x).toBeGreaterThan(readerBox.x)
+        else expect(listBox.x).toBeLessThan(readerBox.x)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+        for (const subject of READABLE_SUBJECTS) {
+          const { height, ...whole } = await rowReading(list, subject)
+          expect(whole, subject).toEqual({ senderWhole: true, subjectWhole: true, subjectBelowSender: true })
+          // Compact two-line rows: about 56 px.
+          expect(height, subject).toBeGreaterThanOrEqual(50)
+          expect(height, subject).toBeLessThanOrEqual(64)
+        }
+
+        await settled(page)
+        const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+        const body = JSON.stringify({ language, theme, width, violations: results.violations }, null, 2)
+        await info.attach(`axe-message-list-${language}-${theme}-${width}`, { body, contentType: 'application/json' })
+        const blocking = results.violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map(
+            (violation) =>
+              `${violation.id} (${violation.impact}) on ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`,
+          )
+        await info.attach(`message-list-${language}-${theme}-${width}`, {
+          body: await page.screenshot({ path: info.outputPath('message-list.png'), animations: 'disabled' }),
+          contentType: 'image/png',
+        })
+        expect(blocking).toEqual([])
+        expect(errors).toEqual([])
+      })
+    }
+  }
+}
+
+test('the resized message list is kept across restarts and the automatic view follows it (#283)', async ({ page }) => {
+  await page.setViewportSize({ width: 1456, height: 900 })
+  const errors = await prepareStartup(page, true, { navigation: true, theme: 'oreneta-light', listView: null })
+  await page.goto('/')
+  const list = page.locator('[data-thread-list]')
+  const handle = page.getByRole('separator', { name: 'Resize thread list' })
+  const stored = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}'))
+  await expect(handle).toHaveAttribute('aria-valuenow', '360')
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+
+  // Wide enough for columns: the automatic view turns into the table.
+  await handle.focus()
+  await page.keyboard.press('End')
+  await expect(handle).toHaveAttribute('aria-valuenow', '560')
+  await expect(list).toHaveAttribute('data-list-view', 'table')
+  await expect(list.getByRole('table')).toBeVisible()
+  await expect.poll(async () => (await stored()).thread_list_width).toBe(560)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '560')
+  expect(Math.round((await list.boundingBox())!.width)).toBe(560)
+  await expect(list.getByRole('table')).toBeVisible()
+
+  // Narrower than the default: two-line rows that still read whole.
+  await handle.focus()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '296')
+  await expect.poll(async () => (await stored()).thread_list_width).toBe(296)
+  await page.reload()
+  await expect(handle).toHaveAttribute('aria-valuenow', '296')
+  expect(Math.round((await list.boundingBox())!.width)).toBe(296)
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+  expect(await rowReading(list, 'Budget review: Q4 planning')).toMatchObject({
+    senderWhole: true,
+    subjectWhole: true,
+    subjectBelowSender: true,
+  })
+  // Resizing is not choosing a view: the profile still has none stored.
+  expect((await stored()).list_view).toBeUndefined()
+  expect(errors).toEqual([])
+})
+
+test('a remembered wide list squeezed by the window draws two-line rows (#283)', async ({ page }) => {
+  // 60 + 220 + 560 + 360 does not fit in 1024 px: the list gives way, too
+  // narrow for columns, and the automatic view follows the drawn width.
+  await page.setViewportSize({ width: 1024, height: 900 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    theme: 'oreneta-dark',
+    listView: null,
+    preferences: { thread_list_width: 560 },
+  })
+  await page.goto('/')
+  const list = page.locator('[data-thread-list]')
+  await expect(list).toHaveAttribute('data-list-view', 'cards')
+  const drawn = Math.round((await list.boundingBox())!.width)
+  expect(drawn).toBeGreaterThanOrEqual(280)
+  expect(drawn).toBeLessThan(520)
+  expect((await page.locator('[data-message-pane]').boundingBox())!.width).toBeGreaterThanOrEqual(360 - 1)
+  expect(await rowReading(list, 'Budget review: Q4 planning')).toMatchObject({
+    senderWhole: true,
+    subjectWhole: true,
+    subjectBelowSender: true,
+  })
+  expect(errors).toEqual([])
+})
 
 test('mail layout at 200-percent desktop zoom equivalent (1440 physical / 720 CSS pixels)', async ({ browser }) => {
   const context = await browser.newContext({

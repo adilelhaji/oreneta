@@ -66,7 +66,7 @@
       "section": "Appearance/Lists; Mail/Conversations",
       "outcome": "New profiles open conventional list and reader; explicit old modes remain",
       "status": "implemented-unverified",
-      "present": "#84 uses table/compact/traditional when preferences are absent; preserves explicit saved values; native certification pending",
+      "present": "#84 uses table/compact/traditional when preferences are absent; since #283 an absent list view is automatic (two-line rows below 520 px of list, the table above) and the list starts at 360 px; preserves explicit saved values; native certification pending",
       "code": "frontend/src/states/settings.ts",
       "acceptance": "Test missing vs saved preferences and production read/reply/select workflow",
       "platform": "Windows desktop",

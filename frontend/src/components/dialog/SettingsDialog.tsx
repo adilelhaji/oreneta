@@ -918,6 +918,7 @@ function GeneralSection() {
           hint={t('settings.reading.listViewHint')}
           value={listView}
           options={[
+            { value: 'auto' as const, label: t('settings.reading.listView.auto') },
             { value: 'cards' as const, label: t('settings.reading.listView.cards') },
             { value: 'table' as const, label: t('settings.reading.listView.table') },
           ]}
