@@ -172,10 +172,12 @@ export const calendar$ = observable({
   /// The event being read, or null. Separate from `editing`: opening an event
   /// asks "what is this", and only then "change this".
   viewing: null as CalendarEvent | null,
-  /// Why the last refresh from a server failed, if it did. Separate from
-  /// `error`, which belongs to something the reader just did: this one is
-  /// about the agenda on screen being older than it looks.
-  syncError: '',
+  /// Why the last refresh of each account's calendars failed, by account id.
+  /// Separate from `error`, which belongs to something the reader just did:
+  /// these are about the agenda on screen being older than it looks. Kept per
+  /// account so one account's good refresh does not hide another's failure
+  /// (#244).
+  syncErrors: {} as Record<string, CalendarSyncError>,
   view: 'agenda' as CalendarViewMode,
   /// The day the current view is anchored on, as local-midnight epoch ms.
   anchor: startOfDay(new Date()).getTime(),
@@ -623,9 +625,80 @@ export async function respondToInvitation(event: CalendarEvent, response: Meetin
 /// what it last knew, and this is how a reader asks for another attempt
 /// without hunting through settings.
 export async function retrySync() {
-  calendar$.syncError.set('')
+  calendar$.syncErrors.set({})
   const { from, to } = calendar$.peek()
   if (to > from) await loadWindow(from, to, true)
+}
+
+/// Why the core says an account's calendars could not be refreshed, as the
+/// `reason` of `calendar.syncError` (#244). Anything it does not name, or an
+/// older core that names nothing, is `other`.
+export type CalendarSyncReason = 'api_disabled' | 'needs_consent' | 'needs_reconnect' | 'other'
+
+export type CalendarSyncError = {
+  reason: CalendarSyncReason
+  /// The core's own sentence, in English: for the log and a tooltip, not
+  /// the line the reader is shown.
+  message: string
+}
+
+const SYNC_REASONS: CalendarSyncReason[] = ['api_disabled', 'needs_consent', 'needs_reconnect', 'other']
+
+/// Records a `calendar.syncError` against its account.
+export function noteCalendarSyncError(detail?: { account?: string; message?: string; reason?: string }) {
+  const reason = SYNC_REASONS.find((known) => known === detail?.reason) ?? 'other'
+  calendar$.syncErrors.set({
+    ...calendar$.syncErrors.peek(),
+    [detail?.account ?? '']: { reason, message: detail?.message || 'calendar sync failed' },
+  })
+}
+
+/// A `calendar.synced` for an account clears that account's failure only;
+/// one that names no account clears them all.
+export function clearCalendarSyncError(account?: string) {
+  const errors = calendar$.syncErrors.peek()
+  if (!account) {
+    if (Object.keys(errors).length > 0) calendar$.syncErrors.set({})
+    return
+  }
+  if (!(account in errors)) return
+  calendar$.syncErrors.set(Object.fromEntries(Object.entries(errors).filter(([id]) => id !== account)))
+}
+
+/// What the reader is told about one account's failed refresh. A refusal
+/// with a known cause says what it is and who can fix it; anything else says
+/// the calendar may be out of date.
+export function calendarSyncErrorText(error: CalendarSyncError, account: string): string {
+  switch (error.reason) {
+    case 'api_disabled':
+      return t('calendar.syncFailedApiDisabled', {
+        account,
+        defaultValue:
+          'Google refused the calendars of {account}: the Google Calendar API is not enabled in the Google Cloud project this version of the app signs in with. Reconnecting the account does not fix it; whoever runs that project has to enable the API.',
+      })
+    case 'needs_consent':
+      return t('calendar.syncFailedNeedsConsent', {
+        account,
+        defaultValue:
+          'The account {account} has not given this app access to its calendars. Reconnect it and allow access to the calendar.',
+      })
+    case 'needs_reconnect':
+      return t('calendar.syncFailedNeedsReconnect', {
+        account,
+        defaultValue:
+          'The sign-in of the account {account} is no longer accepted, so its calendars cannot be refreshed. Reconnect it.',
+      })
+    default:
+      return t('calendar.syncFailedOther', {
+        account,
+        defaultValue: 'The calendars of {account} could not be refreshed; what you see may be out of date.',
+      })
+  }
+}
+
+/// The name an account goes by in a calendar notice: its address.
+export function calendarAccountLabel(accountId: string): string {
+  return accounts$.peek().find((account) => account.id === accountId)?.email || accountId
 }
 
 /// People matching what has been typed, for choosing who to invite.

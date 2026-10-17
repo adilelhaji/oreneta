@@ -37,6 +37,17 @@ contextual de la conversa, es va oferir també com a botó visible a la capçale
 i a la barra de selecció múltiple («Marca com a brossa»; a la carpeta de brossa, «No és
 brossa»), amb el mateix avís i la mateixa opció de desfer. Cap fila no canvia d'estat
 (SET-07, S01-06): l'evidència nativa de Windows continua pendent.
+El 2026-10-17 (#244) CAL-02 va registrar una fallada de la prova nativa de Windows del
+2026-10-16 (compilació `81ec18fb`, de desenvolupament intern, amb els registres OAuth
+heretats): un compte de Gmail afegit amb l'inici de sessió de Google no mostrava cap
+calendari, i el registre no en deia el motiu. Ara cada error de sincronització del
+calendari s'escriu al registre amb el compte i el motiu; `calendar.syncError` porta un
+`reason` (`api_disabled`, `needs_consent`, `needs_reconnect` o `other`), i la interfície
+mostra l'error de cada compte, amb la causa quan Google la diu. Afegir un compte de Gmail
+també registra si Google va concedir el permís del calendari. La causa d'aquella fallada
+no s'ha confirmat: la hipòtesi és que l'API de Google Calendar no està activada al projecte
+de Google Cloud heretat (#144). La fila es manté `implemented-unverified` fins que una
+prova nativa nova ho aclareixi.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

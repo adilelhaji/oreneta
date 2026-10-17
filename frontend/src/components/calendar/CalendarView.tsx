@@ -12,6 +12,8 @@ import {
 import i18n, { useTranslation } from '../../lib/i18n'
 import {
   calendar$,
+  calendarAccountLabel,
+  calendarSyncErrorText,
   loadCalendars,
   loadCurrentView,
   navigateCalendar,
@@ -32,6 +34,7 @@ import { CalendarList } from './CalendarList'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 import { settings$ } from '../../states/settings'
+import { accounts$ } from '../../states/accounts'
 import { isoWeekday } from '../../lib/calendarWeek'
 
 /// The calendar surface: one header — period, navigation, view switcher — over
@@ -42,7 +45,10 @@ export function CalendarView() {
   const view = useValue(calendar$.view)
   const anchor = useValue(calendar$.anchor)
   const loading = useValue(calendar$.loading)
-  const syncError = useValue(calendar$.syncError)
+  // Only for accounts still here: a removed account never syncs again to
+  // clear its notice. Re-read so a notice names its account by its address.
+  const accountIds = new Set(useValue(accounts$).map((account) => account.id))
+  const syncErrors = Object.entries(useValue(calendar$.syncErrors)).filter(([id]) => accountIds.has(id))
   // Read so the header follows a change of the week's first day or work week.
   useValue(settings$.calendarWeekStart)
   const calendarPrefs = useValue(settings$.calendar)
@@ -141,18 +147,26 @@ export function CalendarView() {
 
       {/* A refresh that failed. Said where the agenda is, because what is
           wrong is the agenda: it still shows what it last knew, which looks
-          exactly like being current. */}
-      {syncError && (
+          exactly like being current. One line per account, naming it and,
+          when the core knows it, the cause (#244). */}
+      {syncErrors.length > 0 && (
         <div
           role="status"
           className="flex shrink-0 flex-wrap items-center gap-2 border-b border-warning/30 bg-warning-soft px-4 py-2"
         >
           <TriangleAlert size={14} className="shrink-0 text-warning" strokeWidth={1.75} />
-          <p className="min-w-0 flex-1 basis-40 wrap-anywhere text-caption text-warning">
-            {t('calendar.staleWarning', {
-              defaultValue: 'Could not reach the server; what you see may be out of date.',
-            })}
-          </p>
+          <div className="min-w-0 flex-1 basis-40">
+            {syncErrors.map(([accountId, error]) => (
+              <p
+                key={accountId}
+                data-sync-error={error.reason}
+                title={error.message}
+                className="wrap-anywhere text-caption text-warning"
+              >
+                {calendarSyncErrorText(error, calendarAccountLabel(accountId))}
+              </p>
+            ))}
+          </div>
           <button
             type="button"
             onClick={() => void retrySync()}
