@@ -315,8 +315,14 @@ export function MessagePane() {
       <ConversationTabs />
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <section className="relative flex flex-1 flex-col overflow-hidden bg-chat">
+          {/* Under an open reader or compose tab the conversation stays mounted,
+              hidden, so it is made inert as well as invisible: `visibility`
+              alone lets a child with `transition-all` stay visible, and
+              focusable, while the transition runs, and Tab could land inside
+              an aria-hidden region (#243). */}
           <div
             aria-hidden={!!activeDocumentTab}
+            inert={!!activeDocumentTab}
             className={`relative flex min-h-0 flex-1 flex-col ${
               activeDocumentTab ? 'pointer-events-none invisible' : ''
             }`}
