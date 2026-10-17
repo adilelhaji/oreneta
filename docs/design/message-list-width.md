@@ -29,7 +29,7 @@ columnes repartia aquella amplada entre remitent, assumpte i data.
 - **Contrast:** les files fan servir els tokens del tema sense opacitat (text
   secundari ple; fila oberta amb `bg-active`, com la taula), perquè el text
   secundari translúcid no arribava al contrast AA de 4,5:1.
-  Les targetes del tauler (kanban) comparteixen aquestes files i també en
+  Les targetes del tauler (kanban) comparteixen aquestes files, i també hi
   canvien els colors, no la disposició.
 - **Mesura:** la llista només es mesura a la vista automàtica, i només es torna
   a dibuixar quan la seva amplada travessa els 520 px; mentre està amagada (en
