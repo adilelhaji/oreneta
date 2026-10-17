@@ -595,12 +595,16 @@
             "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
           },
           {
-            "sha": "734c44813ef16c7956acfef0b4a062d99717100b",
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
             "result": "frontend/src/states/replyForwardCompose.test.ts"
           },
           {
-            "sha": "734c44813ef16c7956acfef0b4a062d99717100b",
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
             "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "cdf054e2fd7f2d0720c6e7d0603c2ad3b47774e8",
+            "result": "frontend/src/components/composer/Composer.test.tsx"
           }
         ],
         "native": [],
