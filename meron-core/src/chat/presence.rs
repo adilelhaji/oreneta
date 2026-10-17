@@ -6,6 +6,10 @@
 //! it only to contacts the person allowed to see it; rooms hear only whether
 //! they are away or busy, never the text. Seeing someone else's status, or
 //! letting them see ours, is always the person's choice.
+//!
+//! Who may see it now comes from the server's own contact list (the roster,
+//! RFC 6121), asked once per session and followed through its pushes; it is
+//! kept only in memory, and is unknown until the server answers (ADR-0064).
 
 use super::ChatMessage;
 use anyhow::{Result, ensure};
@@ -16,6 +20,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex};
 use tokio_xmpp::parsers::{
     disco::DiscoInfoResult,
+    iq::Iq,
     jid::{BareJid, Jid},
     minidom::Element,
     muc::{
@@ -23,6 +28,7 @@ use tokio_xmpp::parsers::{
         user::{Role, Status},
     },
     presence::{Presence, Show, Type as PresenceType},
+    roster::{Roster, Subscription},
 };
 
 /// What the person can choose for themselves.
@@ -36,6 +42,9 @@ pub const MAX_STATUS: usize = 200;
 pub const MAX_CONTACTS: usize = 1000;
 pub const MAX_DEVICES: usize = 50;
 pub const MAX_REQUESTS: usize = 200;
+/// At most this many addresses allowed to see the person's status are kept
+/// from the roster; when the server lists more, the app says so.
+pub const MAX_ALLOWED: usize = 5000;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct OwnPresence {
@@ -381,11 +390,44 @@ pub fn own_nick_in(presence: &Presence, nick: &str) -> Option<String> {
     (given != nick).then_some(given)
 }
 
-/// Asking to see someone's status, or answering their request.
+/// Asking to see someone's status, or answering their request. Answering
+/// `unsubscribed` also withdraws a permission given before (RFC 6121 §3.2).
 pub fn subscription(to: &BareJid, kind: PresenceType) -> Presence {
     let mut presence = Presence::new(kind);
     presence.to = Some(Jid::from(to.clone()));
     presence
+}
+
+// ---- Who may see the person's status (ADR-0064) ----------------------------------------------
+
+/// The question for the whole roster, asked once per session.
+pub fn roster_query() -> Element {
+    Roster { ver: None, items: Vec::new() }.into()
+}
+
+/// Whether a roster entry lets that contact see the person's status.
+fn lets_see(subscription: &Subscription) -> bool {
+    matches!(subscription, Subscription::From | Subscription::Both)
+}
+
+/// A roster push (RFC 6121 §2.1.6): a roster in an IQ set from the person's
+/// own server, which writes without an address or with the account's bare
+/// one. Anyone else's is not a push and is not taken. Returns the roster and
+/// the id to answer.
+pub fn roster_push(iq: &Iq, own: &BareJid) -> Option<(Roster, String)> {
+    let Iq::Set { from, id, payload, .. } = iq else { return None };
+    if let Some(from) = from {
+        if from.resource().is_some() || from.to_bare() != *own {
+            return None;
+        }
+    }
+    let roster = Roster::try_from(payload.clone()).ok()?;
+    Some((roster, id.clone()))
+}
+
+/// The answer a roster push needs: an empty result, to the person's server.
+pub fn roster_push_answer(id: String) -> Iq {
+    Iq::Result { from: None, to: None, id, payload: None }
 }
 
 // ---- What a session knows now ---------------------------------------------------------------
@@ -401,6 +443,11 @@ pub struct Live {
     /// People asking to see the person's status, waiting for their answer.
     pub requests: BTreeSet<String>,
     pub occupants: Occupants,
+    /// Who may see the person's status (roster entries `from` or `both`):
+    /// unknown (`None`) until the server answers on this session.
+    pub allowed: Option<BTreeSet<String>>,
+    /// The server listed more than `MAX_ALLOWED`: only those are kept.
+    pub allowed_more: bool,
 }
 
 impl Default for Live {
@@ -412,6 +459,8 @@ impl Default for Live {
             contacts: Contacts::default(),
             requests: BTreeSet::new(),
             occupants: Occupants::default(),
+            allowed: None,
+            allowed_more: false,
         }
     }
 }
@@ -445,6 +494,43 @@ impl Live {
         }
     }
 
+    /// The server's whole roster: who may see the person's status now.
+    pub fn set_roster(&mut self, roster: &Roster) {
+        let mut allowed = BTreeSet::new();
+        let mut more = false;
+        for item in roster.items.iter().filter(|item| lets_see(&item.subscription)) {
+            if allowed.len() >= MAX_ALLOWED {
+                more = true;
+                break;
+            }
+            allowed.insert(item.jid.to_string());
+        }
+        self.allowed = Some(allowed);
+        self.allowed_more = more;
+    }
+
+    /// A roster push: some entries changed. Returns whether the list did.
+    /// Before the whole roster is known, a push does not make it known.
+    pub fn apply_roster_push(&mut self, roster: &Roster) -> bool {
+        let Some(allowed) = self.allowed.as_mut() else { return false };
+        let mut changed = false;
+        for item in &roster.items {
+            let jid = item.jid.to_string();
+            if !lets_see(&item.subscription) {
+                changed |= allowed.remove(&jid);
+            } else if !allowed.contains(&jid) {
+                if allowed.len() >= MAX_ALLOWED {
+                    changed |= !self.allowed_more;
+                    self.allowed_more = true;
+                } else {
+                    allowed.insert(jid);
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+
     /// The person's side, as the app shows it.
     pub fn own_detail(&self) -> Value {
         json!({
@@ -461,6 +547,8 @@ impl Live {
             "own": self.own_detail(),
             "contacts": self.contacts.all(),
             "requests": self.requests,
+            "allowed": self.allowed,
+            "allowed_more": self.allowed_more,
         })
     }
 
@@ -471,6 +559,8 @@ impl Live {
         self.contacts.clear();
         self.requests.clear();
         self.occupants.clear();
+        self.allowed = None;
+        self.allowed_more = false;
     }
 }
 
@@ -490,10 +580,11 @@ pub enum Arrival {
 /// Whether a message kept for the first time raises a system notification:
 /// only one someone else just sent (or a copy of one another device got),
 /// never what is caught up on; direct and private ones always, in a room
-/// only a mention; never while the person's own status is busy. Do not
+/// only a mention; never while the person's own status is busy, nor from a
+/// conversation the person muted, mentions included (ADR-0064). Do not
 /// disturb and quiet hours are the bridge's to apply on top (ADR-0049).
-pub fn should_notify(message: &ChatMessage, arrival: Arrival, own_show: &str) -> bool {
-    if arrival == Arrival::Backfill || message.direction != "in" || own_show == "dnd" {
+pub fn should_notify(message: &ChatMessage, arrival: Arrival, own_show: &str, muted: bool) -> bool {
+    if muted || arrival == Arrival::Backfill || message.direction != "in" || own_show == "dnd" {
         return false;
     }
     if message.kind == super::KIND_GROUP {

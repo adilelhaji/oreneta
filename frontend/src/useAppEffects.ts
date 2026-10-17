@@ -446,6 +446,8 @@ export function useAppEffects() {
       'chat.presence',
       'chat.subscription',
       'chat.occupants',
+      // Who may see the person's status (ADR-0064).
+      'chat.permissions',
     ].map((name) =>
       eventsOn(name, (detail: { account?: string }) => onChatEvent(name, detail)),
     )
