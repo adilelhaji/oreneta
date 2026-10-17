@@ -56,6 +56,24 @@ describe('the direction of outgoing mail', () => {
     expect(none.hasAttribute('style')).toBe(false)
   })
 
+  it('sends the indent as a margin only, without the editor’s own attribute', () => {
+    const body = parse(inlineRichStyles('<p data-indent="1">one</p><p data-indent="0">two</p>'))
+    expect(body.querySelectorAll('[data-indent]').length).toBe(0)
+    expect(body.querySelector('p')!.getAttribute('style')).toBe('margin-left: 40px;')
+  })
+
+  it('keeps text on a background colour dark, unless it has a colour of its own', () => {
+    const body = parse(
+      inlineRichStyles(
+        '<p><span style="background-color: #fef08a">a</span><span style="color: #dc2626; background-color: #fef08a">b</span><span style="color: #2563eb">c</span></p>',
+      ),
+    )
+    const [onBackground, ownColour, noBackground] = body.querySelectorAll('span')
+    expect(onBackground.getAttribute('style')).toBe('color: #111827; background-color: #fef08a')
+    expect(ownColour.getAttribute('style')).toBe('color: #dc2626; background-color: #fef08a')
+    expect(noBackground.getAttribute('style')).toBe('color: #2563eb')
+  })
+
   it('caps an indent level that came in too high', () => {
     const body = parse(inlineRichStyles('<p data-indent="40">deep</p>'))
     expect(body.querySelector('p')!.getAttribute('style')).toBe('margin-left: 320px;')
@@ -75,6 +93,10 @@ describe('the direction of outgoing mail', () => {
     expect(made.querySelector('td')!.getAttribute('style')).toBe(
       'border: 1px solid #d1d5db; padding: 4px 8px; vertical-align: top;',
     )
+    // Cell paragraphs flush, as in the editor, not with a client's 1em margin.
+    expect(made.querySelector('td > p')!.getAttribute('style')).toBe('margin: 0;')
+    expect(made.querySelector('th > p')!.getAttribute('style')).toBe('margin: 0;')
+    expect(quoted.querySelector('p')!.hasAttribute('style')).toBe(false)
     expect(quoted.hasAttribute('style')).toBe(false)
     expect(quoted.querySelector('td')!.hasAttribute('style')).toBe(false)
   })

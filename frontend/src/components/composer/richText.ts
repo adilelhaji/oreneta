@@ -2,7 +2,8 @@ import { Extension, getStyleProperty, type Editor, type Extensions } from '@tipt
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { BackgroundColor, Color, FontFamily, FontSize, TextStyle } from '@tiptap/extension-text-style'
 import { TextAlign } from '@tiptap/extension-text-align'
-import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
+import { Table, TableCell, TableHeader, TableRow, TableView } from '@tiptap/extension-table'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { isMac } from '../../lib/shortcuts'
 import { INDENTABLE_TYPES, ParagraphIndent } from './indentExtension'
 
@@ -178,6 +179,22 @@ export const SafeFontSize = FontSize.extend({
  */
 export const GRID_TABLE_CLASS = 'oreneta-table'
 
+// The editor draws a table through this view, not through renderHTML, so the
+// class has to be put on its <table> here too for the grid to show while
+// writing.
+class GridTableView extends TableView {
+  constructor(node: ProseMirrorNode, cellMinWidth: number) {
+    super(node, cellMinWidth)
+    this.table.classList.toggle(GRID_TABLE_CLASS, Boolean(node.attrs.grid))
+  }
+
+  update(node: ProseMirrorNode) {
+    if (!super.update(node)) return false
+    this.table.classList.toggle(GRID_TABLE_CLASS, Boolean(node.attrs.grid))
+    return true
+  }
+}
+
 export const GridTable = Table.extend({
   addAttributes() {
     return {
@@ -192,23 +209,65 @@ export const GridTable = Table.extend({
 })
 
 /**
+ * The most columns or rows one cell may span. Quoted mail is untrusted, and the
+ * table code walks a cell's span one column at a time: `colspan="2000000000"`
+ * would hang the composer when the reply opens.
+ */
+export const MAX_TABLE_SPAN = 50
+
+/** A span as a whole number within 1..MAX_TABLE_SPAN; 1 for anything else. */
+export function clampSpan(raw: unknown): number {
+  const span = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10)
+  if (!Number.isFinite(span) || span < 1) return 1
+  return Math.min(MAX_TABLE_SPAN, Math.floor(span))
+}
+
+function boundedSpans() {
+  return {
+    colspan: { default: 1, parseHTML: (element: HTMLElement) => clampSpan(element.getAttribute('colspan')) },
+    rowspan: { default: 1, parseHTML: (element: HTMLElement) => clampSpan(element.getAttribute('rowspan')) },
+  }
+}
+
+export const BoundedTableCell = TableCell.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...boundedSpans() }
+  },
+})
+
+export const BoundedTableHeader = TableHeader.extend({
+  addAttributes() {
+    return { ...this.parent?.(), ...boundedSpans() }
+  },
+})
+
+const ALIGN_KEYS = new Map<string, Alignment>([
+  ['l', 'left'],
+  ['e', 'center'],
+  ['r', 'right'],
+  ['j', 'justify'],
+])
+
+/**
  * The formatting command a keydown asks for, or null. Mod is ⌘ on macOS and
  * Ctrl elsewhere: Mod+Shift+L/E/R/J align left, centre, right and justify;
- * Mod+] and Mod+[ increase and decrease the indent.
+ * Mod+] and Mod+[ increase and decrease the indent. The brackets also take Alt
+ * held: on Catalan, Spanish, French or German keyboards `[` and `]` are typed
+ * with AltGr, which arrives as Ctrl+Alt.
  */
 export function formattingCommandFor(event: KeyboardEvent): ((editor: Editor) => boolean) | null {
   const mod = isMac ? event.metaKey : event.ctrlKey
   const otherMod = isMac ? event.ctrlKey : event.metaKey
-  if (!mod || otherMod || event.altKey) return null
-  const key = event.key.toLowerCase()
-  if (event.shiftKey) {
-    const align: Record<string, Alignment> = { l: 'left', e: 'center', r: 'right', j: 'justify' }
-    const to = align[key]
-    return to ? (editor) => editor.chain().focus().setTextAlign(to).run() : null
+  if (!mod || otherMod) return null
+  // The key as typed, whatever it took to type it (AltGr, Option or Shift).
+  if (event.key === ']' || event.key === '[') {
+    return event.key === ']'
+      ? (editor) => editor.chain().focus().increaseIndent().run()
+      : (editor) => editor.chain().focus().decreaseIndent().run()
   }
-  if (key === ']') return (editor) => editor.chain().focus().increaseIndent().run()
-  if (key === '[') return (editor) => editor.chain().focus().decreaseIndent().run()
-  return null
+  if (event.altKey || !event.shiftKey) return null
+  const to = ALIGN_KEYS.get(event.key.toLowerCase())
+  return to ? (editor) => editor.chain().focus().setTextAlign(to).run() : null
 }
 
 /**
@@ -250,11 +309,12 @@ export function richTextExtensions(): Extensions {
     SafeBackgroundColor,
     TextAlign.configure({ types: [...INDENTABLE_TYPES], alignments: [...ALIGNMENTS] }),
     // No column resizing: the sent table carries no fixed widths.
-    GridTable.configure({ resizable: false }),
+    GridTable.configure({ resizable: false, View: GridTableView }),
     TableRow,
-    TableHeader,
-    TableCell,
+    BoundedTableHeader,
+    BoundedTableCell,
     ParagraphIndent,
     FormattingShortcuts,
   ]
 }
+

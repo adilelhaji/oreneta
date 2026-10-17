@@ -35,7 +35,13 @@ const RICH_INLINE_STYLES: Record<string, string> = {
   'table.oreneta-table > tbody > tr > th':
     'border: 1px solid #d1d5db; padding: 4px 8px; vertical-align: top; background: #f3f4f6; font-weight: bold;',
   'table.oreneta-table > tbody > tr > td': 'border: 1px solid #d1d5db; padding: 4px 8px; vertical-align: top;',
+  // The editor sets cell paragraphs flush; mail clients would give them 1em.
+  'table.oreneta-table > tbody > tr > th > p': 'margin: 0;',
+  'table.oreneta-table > tbody > tr > td > p': 'margin: 0;',
 }
+// Text on a background colour stays dark, as the editor shows it: a client in
+// dark mode would otherwise turn it light on the pale background.
+const ON_BACKGROUND_TEXT = 'color: #111827;'
 const RTL_BLOCKQUOTE_STYLE = 'border-right: 3px solid #d1d5db; padding-right: 0.9em; margin: 0.6em 0; color: #6b7280;'
 
 export function inlineRichStyles(html: string): string {
@@ -54,10 +60,18 @@ export function inlineRichStyles(html: string): string {
       el.setAttribute('style', existing ? `${own} ${existing}` : own)
     }
   }
+  for (const el of Array.from(doc.querySelectorAll('span[style]'))) {
+    const style = el.getAttribute('style') ?? ''
+    if (!/(^|;)\s*background-color\s*:/i.test(style) || /(^|;)\s*color\s*:/i.test(style)) continue
+    el.setAttribute('style', `${ON_BACKGROUND_TEXT} ${style}`)
+  }
   // Paragraph indent (#274): a margin per level on the side the paragraph
-  // starts from, physical for the same reason as the quote bar.
+  // starts from, physical for the same reason as the quote bar. The editor's
+  // own data-indent stays home: the margin is all a reader needs, and all the
+  // editor reads back from a draft reopened from the server.
   for (const el of Array.from(doc.querySelectorAll('[data-indent]'))) {
     const level = clampIndent(Number(el.getAttribute('data-indent')))
+    el.removeAttribute('data-indent')
     if (!level) continue
     const side = el.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'margin-right' : 'margin-left'
     const own = `${side}: ${level * INDENT_STEP_PX}px;`

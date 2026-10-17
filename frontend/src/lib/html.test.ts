@@ -47,10 +47,32 @@ describe('htmlToText with tables', () => {
     expect(htmlToText(html)).toBe('Total\nb | c')
   })
 
-  it('keeps a cell with two paragraphs, or a table of its own, on its row', () => {
+  it('keeps a cell of a table made in the composer on its row, whatever it holds', () => {
     const html =
-      '<table><tbody><tr><td><p>one</p><p>two</p></td><td><table><tbody><tr><td>x</td><td>y</td></tr></tbody></table></td></tr></tbody></table>'
+      '<table class="oreneta-table"><tbody><tr><td><p>one</p><p>two</p></td><td><table><tbody><tr><td>x</td><td>y</td></tr></tbody></table></td></tr></tbody></table>'
     expect(htmlToText(html)).toBe('one two | x | y')
+  })
+
+  // A layout table in quoted mail (a newsletter, a signature) is passages of
+  // text, not values: it keeps its paragraphs instead of becoming one line.
+  it('reads a quoted layout table as the paragraphs it lays out', () => {
+    const html =
+      '<p>On Monday Ana wrote:</p><blockquote><table><tbody><tr><td>' +
+      '<table><tbody><tr><td><p>Dear reader,</p><p>Our news this week.</p></td></tr></tbody></table>' +
+      '</td><td><p>Sidebar</p></td></tr></tbody></table></blockquote>'
+    expect(htmlToText(html)).toBe('On Monday Ana wrote:\n\nDear reader,\n\nOur news this week.\n\nSidebar')
+  })
+
+  it('reads a cell with several paragraphs as layout too', () => {
+    const html = '<table><tbody><tr><td><p>First</p><p>Second</p></td></tr></tbody></table>'
+    expect(htmlToText(html)).toBe('First\n\nSecond')
+  })
+
+  it('puts the caption above the rows and leaves out rows with no text', () => {
+    const html =
+      '<table><caption>Prices</caption><tbody><tr><td>Tea</td><td>2</td></tr><tr><td></td><td></td></tr></tbody></table>'
+    expect(htmlToText(html)).toBe('Prices\nTea | 2')
+    expect(htmlToText('<table class="oreneta-table"><tbody><tr><td><p></p></td></tr></tbody></table>')).toBe('')
   })
 
   it('writes a table inside a quote', () => {

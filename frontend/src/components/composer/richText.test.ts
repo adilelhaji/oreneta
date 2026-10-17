@@ -7,7 +7,9 @@ import { composedPayload } from '../../states/compose'
 import { inlineRichStyles } from './composerHelpers'
 import {
   BACKGROUND_COLORS,
+  clampSpan,
   FONT_FAMILIES,
+  MAX_TABLE_SPAN,
   formattingCommandFor,
   richTextExtensions,
   safeCssColor,
@@ -47,6 +49,10 @@ function chord(key: string, shift = false): KeyboardEvent {
     cancelable: true,
   })
 }
+
+// The document as HTML, without the empty paragraph the starter kit keeps at
+// the end of a document that ends in a list, a heading or a table.
+const html = (editor: Editor) => editor.getHTML().replace(/<p><\/p>$/, '')
 
 const rowCount = (editor: Editor) => editor.view.dom.querySelectorAll('tr').length
 const columnCount = (editor: Editor) => editor.view.dom.querySelector('tr')!.children.length
@@ -126,19 +132,19 @@ describe('the formatting commands', () => {
   it('sets and removes the font and the size', () => {
     const editor = editorWith('<p>Hello</p>')
     editor.chain().selectAll().setFontFamily(FONT_FAMILIES[0].value).setFontSize('14pt').run()
-    expect(editor.getHTML()).toBe(
+    expect(html(editor)).toBe(
       '<p><span style="font-family: Arial, Helvetica, sans-serif; font-size: 14pt">Hello</span></p>',
     )
     editor.chain().selectAll().unsetFontFamily().unsetFontSize().run()
-    expect(editor.getHTML()).toBe('<p>Hello</p>')
+    expect(html(editor)).toBe('<p>Hello</p>')
   })
 
   it('sets and removes the text and background colours', () => {
     const editor = editorWith('<p>Hello</p>')
     editor.chain().selectAll().setColor(TEXT_COLORS.red).setBackgroundColor(BACKGROUND_COLORS.yellow).run()
-    expect(editor.getHTML()).toBe('<p><span style="color: #dc2626; background-color: #fef08a">Hello</span></p>')
+    expect(html(editor)).toBe('<p><span style="color: #dc2626; background-color: #fef08a">Hello</span></p>')
     editor.chain().selectAll().unsetColor().unsetBackgroundColor().run()
-    expect(editor.getHTML()).toBe('<p>Hello</p>')
+    expect(html(editor)).toBe('<p>Hello</p>')
   })
 
   it('never writes a value that does not pass, even one set by a command', () => {
@@ -151,11 +157,11 @@ describe('the formatting commands', () => {
   it('aligns paragraphs and headings', () => {
     const editor = editorWith('<p>One</p><h2>Two</h2>')
     editor.chain().selectAll().setTextAlign('center').run()
-    expect(editor.getHTML()).toBe('<p style="text-align: center">One</p><h2 style="text-align: center">Two</h2>')
+    expect(html(editor)).toBe('<p style="text-align: center">One</p><h2 style="text-align: center">Two</h2>')
     editor.chain().selectAll().setTextAlign('justify').run()
     expect(editor.getHTML()).toContain('<p style="text-align: justify">')
     editor.chain().selectAll().unsetTextAlign().run()
-    expect(editor.getHTML()).toBe('<p>One</p><h2>Two</h2>')
+    expect(html(editor)).toBe('<p>One</p><h2>Two</h2>')
   })
 
   it('indents and outdents paragraphs within 0 and the maximum', () => {
@@ -163,11 +169,11 @@ describe('the formatting commands', () => {
     expect(editor.commands.decreaseIndent()).toBe(false)
     editor.commands.increaseIndent()
     editor.commands.increaseIndent()
-    expect(editor.getHTML()).toBe('<p data-indent="2">One</p>')
+    expect(html(editor)).toBe('<p data-indent="2">One</p>')
     editor.commands.decreaseIndent()
-    expect(editor.getHTML()).toBe('<p data-indent="1">One</p>')
+    expect(html(editor)).toBe('<p data-indent="1">One</p>')
     for (let i = 0; i < MAX_INDENT + 3; i++) editor.commands.increaseIndent()
-    expect(editor.getHTML()).toBe(`<p data-indent="${MAX_INDENT}">One</p>`)
+    expect(html(editor)).toBe(`<p data-indent="${MAX_INDENT}">One</p>`)
     expect(editor.commands.increaseIndent()).toBe(false)
   })
 
@@ -175,10 +181,10 @@ describe('the formatting commands', () => {
     const editor = editorWith('<ul><li><p>a</p></li><li><p>b</p></li></ul>')
     editor.commands.setTextSelection(editor.state.doc.content.size - 3)
     editor.commands.increaseIndent()
-    expect(editor.getHTML()).toBe('<ul><li><p>a</p><ul><li><p>b</p></li></ul></li></ul>')
+    expect(html(editor)).toBe('<ul><li><p>a</p><ul><li><p>b</p></li></ul></li></ul>')
     expect(editor.getHTML()).not.toContain('data-indent')
     editor.commands.decreaseIndent()
-    expect(editor.getHTML()).toBe('<ul><li><p>a</p></li><li><p>b</p></li></ul>')
+    expect(html(editor)).toBe('<ul><li><p>a</p></li><li><p>b</p></li></ul>')
   })
 
   it('reads the indent back from data-indent, or from the margin that was sent', () => {
@@ -194,7 +200,7 @@ describe('the formatting commands', () => {
     expect(parseIndent(el('<p style="margin-left: 0.5in;">x</p>'))).toBe(0)
     expect(parseIndent(el('<p data-indent="x">x</p>'))).toBe(0)
     const editor = editorWith('<p style="margin-left: 120px;">x</p>')
-    expect(editor.getHTML()).toBe('<p data-indent="3">x</p>')
+    expect(html(editor)).toBe('<p data-indent="3">x</p>')
   })
 
   it('inserts a table, adds and deletes rows and columns, and deletes it', () => {
@@ -202,6 +208,8 @@ describe('the formatting commands', () => {
     editor.commands.focus('end')
     editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: true })
     expect(editor.getHTML()).toContain('<table class="oreneta-table"')
+    // The editor draws it with the same grid it is sent with.
+    expect(editor.view.dom.querySelector('table.oreneta-table')).not.toBeNull()
     expect(editor.view.dom.querySelectorAll('th').length).toBe(2)
     expect(rowCount(editor)).toBe(2)
 
@@ -228,6 +236,24 @@ describe('the formatting commands', () => {
     const editor = editorWith('<table><tbody><tr><td>layout</td></tr></tbody></table>')
     expect(editor.getHTML()).toContain('<table style=')
     expect(editor.getHTML()).not.toContain('oreneta-table')
+    expect(editor.view.dom.querySelector('table')).not.toBeNull()
+    expect(editor.view.dom.querySelector('table.oreneta-table')).toBeNull()
+  })
+
+  // Quoted mail is untrusted, and a cell's span is walked column by column.
+  it('bounds the span of a cell that came in with mail', () => {
+    const editor = editorWith(
+      '<table><tbody><tr><td colspan="2000000000" rowspan="abc">a</td></tr><tr><th colspan="-3" rowspan="1000">b</th></tr></tbody></table>',
+    )
+    const [td, th] = Array.from(editor.view.dom.querySelectorAll('td, th'))
+    expect(td.getAttribute('colspan')).toBe(String(MAX_TABLE_SPAN))
+    expect(td.getAttribute('rowspan')).toBe('1')
+    expect(th.getAttribute('colspan')).toBe('1')
+    expect(Number(th.getAttribute('rowspan'))).toBeLessThanOrEqual(MAX_TABLE_SPAN)
+    expect(clampSpan('3')).toBe(3)
+    expect(clampSpan(2.7)).toBe(2)
+    expect(clampSpan('x')).toBe(1)
+    expect(clampSpan(null)).toBe(1)
   })
 })
 
@@ -239,7 +265,11 @@ describe('the formatting shortcuts', () => {
     expect(formattingCommandFor(chord('r'))).toBeNull()
     expect(formattingCommandFor(chord('x', true))).toBeNull()
     expect(formattingCommandFor(new KeyboardEvent('keydown', { key: 'R', shiftKey: true }))).toBeNull()
-    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: ']', altKey: true, ctrlKey: !isMac, metaKey: isMac }))).toBeNull()
+    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: 'R', shiftKey: true, altKey: true, ctrlKey: !isMac, metaKey: isMac }))).toBeNull()
+    // Catalan, Spanish, French and German keyboards type the brackets with
+    // AltGr, which arrives as Ctrl+Alt.
+    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: ']', altKey: true, ctrlKey: !isMac, metaKey: isMac }))).not.toBeNull()
+    expect(formattingCommandFor(new KeyboardEvent('keydown', { key: '[', altKey: true, ctrlKey: !isMac, metaKey: isMac }))).not.toBeNull()
   })
 
   it('aligns with Mod+Shift+L, E, R and J', () => {
@@ -247,16 +277,16 @@ describe('the formatting shortcuts', () => {
     const expected: Record<string, string> = { L: 'left', E: 'center', R: 'right', J: 'justify' }
     for (const [key, align] of Object.entries(expected)) {
       editor.view.dom.dispatchEvent(chord(key, true))
-      expect(editor.getHTML()).toBe(`<p style="text-align: ${align}">Hello</p>`)
+      expect(html(editor)).toBe(`<p style="text-align: ${align}">Hello</p>`)
     }
   })
 
   it('indents with Mod+] and outdents with Mod+[', () => {
     const editor = editorWith('<p>Hello</p>')
     editor.view.dom.dispatchEvent(chord(']'))
-    expect(editor.getHTML()).toBe('<p data-indent="1">Hello</p>')
+    expect(html(editor)).toBe('<p data-indent="1">Hello</p>')
     editor.view.dom.dispatchEvent(chord('['))
-    expect(editor.getHTML()).toBe('<p>Hello</p>')
+    expect(html(editor)).toBe('<p>Hello</p>')
   })
 
   // Owner, 2026-10-17: inside the editor Mod+Shift+R aligns right; outside it
@@ -269,7 +299,7 @@ describe('the formatting shortcuts', () => {
     try {
       const inEditor = chord('R', true)
       editor.view.dom.dispatchEvent(inEditor)
-      expect(editor.getHTML()).toBe('<p style="text-align: right">Hello</p>')
+      expect(html(editor)).toBe('<p style="text-align: right">Hello</p>')
       expect(inEditor.defaultPrevented).toBe(true)
       expect(reached).toEqual([])
 

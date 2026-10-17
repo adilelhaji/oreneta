@@ -17,8 +17,9 @@ export function resolveInlineCids(
 
 /**
  * Derive a plaintext fallback from rich-text HTML while preserving visible line
- * breaks. A table becomes one line per row, its cells joined by ` | ` (#274,
- * ADR-0067), set apart like a paragraph.
+ * breaks. A table of data becomes one line per row, its cells joined by ` | `
+ * (#274, ADR-0067), set apart like a paragraph; a layout table (quoted mail,
+ * a signature) reads as the blocks it lays out.
  */
 export function htmlToText(html: string): string {
   const div = document.createElement('div')
@@ -26,7 +27,9 @@ export function htmlToText(html: string): string {
   return blockText(Array.from(div.childNodes))
 }
 
-export const TABLE_CELL_SEPARATOR = ' | '
+const TABLE_CELL_SEPARATOR = ' | '
+/** The class of a table made in the composer (see GRID_TABLE_CLASS). */
+const COMPOSER_TABLE_CLASS = 'oreneta-table'
 
 const paragraphTags = new Set([
   'ADDRESS',
@@ -51,8 +54,14 @@ const paragraphTags = new Set([
   'P',
   'PRE',
   'SECTION',
+  // Only met in layout tables: a data table is read row by row instead.
+  'TABLE',
+  'TD',
+  'TH',
+  'CAPTION',
 ])
 const lineBreakTags = new Set(['LI', 'OL', 'TR', 'UL'])
+const blockTags = new Set([...paragraphTags, 'OL', 'UL'])
 
 function blockText(nodes: Node[]): string {
   let out = ''
@@ -86,10 +95,13 @@ function blockText(nodes: Node[]): string {
       }
       return
     }
-    if (node.tagName === 'TABLE') {
-      appendNewlines(2)
-      out += tableText(node)
-      appendNewlines(2)
+    if (node.tagName === 'TABLE' && isDataTable(node)) {
+      const text = tableText(node)
+      if (text) {
+        appendNewlines(2)
+        out += text
+        appendNewlines(2)
+      }
       return
     }
 
@@ -102,21 +114,45 @@ function blockText(nodes: Node[]): string {
   return out.replace(/\n+$/g, '').trimStart()
 }
 
-// The rows of this table (not those of a table nested in a cell), one line
-// each. A cell is read as text with its own line breaks folded into spaces, so
-// a cell with two paragraphs, or with a table of its own, stays on its row.
-function tableText(table: HTMLElement): string {
-  return Array.from(table.querySelectorAll('tr'))
-    .filter((row) => row.closest('table') === table)
-    .map((row) =>
-      Array.from(row.children)
-        .filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH')
-        .map((cell) =>
-          blockText(Array.from(cell.childNodes))
-            .replace(/\s*\n+\s*/g, ' ')
-            .trim(),
-        )
-        .join(TABLE_CELL_SEPARATOR),
-    )
-    .join('\n')
+// This table's own rows and cells, not those of a table nested in a cell.
+function ownRows(table: HTMLElement): HTMLElement[] {
+  return Array.from(table.querySelectorAll('tr')).filter((row) => row.closest('table') === table)
 }
+function ownCells(row: HTMLElement): HTMLElement[] {
+  return Array.from(row.children).filter(
+    (cell): cell is HTMLElement => cell instanceof HTMLElement && (cell.tagName === 'TD' || cell.tagName === 'TH'),
+  )
+}
+
+// A table of data: one made in the composer, or one that looks like a grid —
+// no table inside it and no cell holding more than one block. Anything else
+// is taken for layout, whose cells are passages of text, not values.
+function isDataTable(table: HTMLElement): boolean {
+  if (table.classList.contains(COMPOSER_TABLE_CLASS)) return true
+  if (table.querySelector('table')) return false
+  return ownRows(table).every((row) =>
+    ownCells(row).every((cell) => Array.from(cell.children).filter((child) => blockTags.has(child.tagName)).length <= 1),
+  )
+}
+
+// One line per row, cells joined by the separator, each cell's own line breaks
+// folded into spaces; the caption, if any, above. Rows with no text at all are
+// left out, so an empty table adds nothing.
+function tableText(table: HTMLElement): string {
+  const lines: string[] = []
+  const caption = Array.from(table.children).find((child) => child.tagName === 'CAPTION')
+  const captionText = caption ? flatText(caption) : ''
+  if (captionText) lines.push(captionText)
+  for (const row of ownRows(table)) {
+    const cells = ownCells(row).map(flatText)
+    if (cells.some((cell) => cell !== '')) lines.push(cells.join(TABLE_CELL_SEPARATOR))
+  }
+  return lines.join('\n')
+}
+
+function flatText(element: Element): string {
+  return blockText(Array.from(element.childNodes))
+    .replace(/\s*\n+\s*/g, ' ')
+    .trim()
+}
+
