@@ -1,8 +1,8 @@
 # ADR-0063: Els secrets passen del servei de clauer `meron` a `oreneta`
 
-- Estat: proposada; els objectius i els criteris d'acceptació de #248 són
-  del propietari (2026-10-17). Aquest disseny es revisa a la PR i passa a
-  acceptada quan el propietari l'aprovi.
+- Estat: acceptada pel propietari el 2026-10-17 («Acepto el diseño»), revisat
+  a la PR #253. Els objectius i els criteris d'acceptació de #248 també són
+  del propietari (2026-10-17).
 - Data: 2026-10-17.
 - Abast: #248, només el nom del servei del clauer i la migració de les
   entrades que ja hi ha.
@@ -214,11 +214,11 @@ credencials fals, i les dels mòduls que el fan servir:
 | Una fallada a qualsevol pas no perd res i es torna a provar | Llegir: `a_failed_oreneta_read_is_an_error_and_touches_nothing`, `a_failed_legacy_read_loses_nothing_and_is_retried`, `a_failed_legacy_check_on_an_already_moved_entry_deletes_nothing`, `the_sweep_logs_and_counts_an_unreadable_entry`. Escriure: `a_failed_write_keeps_the_legacy_entry_serving_and_is_retried_next_start`, `a_failed_store_leaves_the_legacy_entry_alone`. Verificar: `a_copy_that_reads_back_different_is_removed_and_the_original_kept`, `a_copy_that_cannot_be_read_back_is_removed_and_the_original_kept`, `a_damaged_copy_that_cannot_be_removed_never_costs_the_original`, `a_store_that_cannot_be_read_back_keeps_the_legacy_entry`, `a_store_that_reads_back_different_is_an_error_and_keeps_the_legacy_entry`. Esborrar: `a_failed_legacy_delete_is_finished_on_the_next_start`, `a_store_after_a_failed_legacy_delete_retires_it_once_per_run`, `a_delete_removes_both_and_a_failed_legacy_delete_leaves_nothing_to_resurrect`, `a_delete_whose_oreneta_step_fails_never_leaves_a_lone_legacy_copy`. Migració anterior parcial: `a_partial_previous_move_with_different_values_keeps_both_until_a_store`. Clau de la base: `a_malformed_oreneta_store_key_never_hides_the_good_legacy_one`, `a_failed_store_key_repair_still_opens_with_the_legacy_key`. Concurrència: `a_store_during_a_move_is_never_overwritten_by_the_old_value` |
 | Cap valor secret al registre ni a la sortida de les proves | `assert_clean` a cada prova, sobre el registre i el text dels errors (els del magatzem fals imiten els reals: nom, sense valor). Els valors es comparen amb `assert!`, que no els imprimeix si falla |
 
-Pendent, abans d'acceptar l'ADR:
+Pendent:
 - **Compilació de Windows.** La CI de la PR compila i prova Rust a Linux i
   compila per a macOS (`test.yml`), però no compila el codi propi de Windows. El
   flux `windows-validation.yml` només s'executa a mà, després de la CI de
-  `main`. Cal compilar-lo a Windows abans de fusionar.
+  `main`: el propietari n'ha demanat una execució després de fusionar.
 - **Verificació nativa (N4):**
   - Windows: un perfil amb comptes, inclòs un d'Outlook (blob repartit en
     trossos), passa a `.oreneta` sense tornar a connectar.
