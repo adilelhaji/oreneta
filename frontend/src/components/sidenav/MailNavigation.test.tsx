@@ -165,6 +165,7 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     moves.length = 0
     folderPrefs$.favorites.set([])
     folderPrefs$.colors.set([])
+    folderPrefs$.hidden.set([])
     folderPrefs$.dropped.set(0)
     ;(window as any).go = { main: { App: { Invoke: async () => ({}) } } }
   })
@@ -294,6 +295,84 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     const allowed = exchange.getByRole('button', { name: /Move folder to…/ })
     expect(allowed.hasAttribute('disabled')).toBe(false)
     expect(exchange.getByRole('button', { name: 'Work 4' }).getAttribute('draggable')).toBe('true')
+  })
+
+  it('hides a folder and its subfolders from the tree, shows them on request and shows one again (#273)', () => {
+    const commands: Array<{ command: string; payload: any }> = []
+    ;(window as any).go = {
+      main: { App: { Invoke: async (command: string, payload: any) => (commands.push({ command, payload }), {}) } },
+    }
+    const screen = view()
+    expect(screen.queryByRole('button', { name: /Show hidden folders/ })).toBeNull()
+    menuFor(screen, 'Work 4')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide folder' }))
+    // The folder and its subfolder leave the tree; the rest stays.
+    expect(screen.queryByRole('button', { name: 'Work 4' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '2026' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Projects' })).toBeTruthy()
+    expect(folderPrefs$.hidden.get()).toEqual([{ accountId: account.id, folderId: 'Work' }])
+    // Only a local preference is written: nothing goes to a server, sync is untouched.
+    expect(commands).toEqual([
+      { command: 'app.prefsSet', payload: { key: 'folder_hidden', value: [{ accountId: account.id, folderId: 'Work' }] } },
+    ])
+    expect(screen.getByText('Work hidden')).toBeTruthy()
+    // The focus does not fall out of the page with the row: it lands on the switch.
+    const toggle = screen.getByRole('button', { name: 'Show hidden folders (2)' })
+    expect(document.activeElement).toBe(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    const work = screen.getByRole('button', { name: 'Work Hidden 4' })
+    expect(work.hasAttribute('data-folder-hidden')).toBe(true)
+    expect(screen.getByRole('button', { name: '2026 Hidden' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Projects' }).hasAttribute('data-folder-hidden')).toBe(false)
+
+    // A subfolder hidden with its parent says so instead of hiding twice.
+    menuFor(screen, '2026 Hidden')
+    const hideChild = screen.getByRole('button', { name: /Hide folder/ })
+    expect(hideChild.hasAttribute('disabled')).toBe(true)
+    expect(hideChild.getAttribute('title')).toBe('Hidden because the folder that holds it is hidden')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    cleanup()
+
+    const again = view()
+    fireEvent.click(again.getByRole('button', { name: 'Show hidden folders (2)' }))
+    menuFor(again, 'Work Hidden 4')
+    fireEvent.click(again.getByRole('button', { name: 'Show folder again' }))
+    expect(folderPrefs$.hidden.get()).toEqual([])
+    expect(again.getByRole('button', { name: 'Work 4' }).hasAttribute('data-folder-hidden')).toBe(false)
+    expect(again.getByRole('button', { name: '2026' })).toBeTruthy()
+    expect(again.queryByRole('button', { name: /Show hidden folders/ })).toBeNull()
+    expect(again.getByText('Work shown again')).toBeTruthy()
+    expect(commands.at(-1)).toEqual({ command: 'app.prefsSet', payload: { key: 'folder_hidden', value: [] } })
+  })
+
+  it('hides again by default once nothing is hidden, and keeps what was saved across a restart (#273)', () => {
+    folderPrefs$.hidden.set([{ accountId: account.id, folderId: 'Projects' }])
+    const screen = view()
+    // Saved marks apply as soon as the tree draws: nothing is shown until asked.
+    expect(screen.queryByRole('button', { name: 'Projects' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden folders (1)' }))
+    menuFor(screen, 'Projects Hidden')
+    fireEvent.click(screen.getByRole('button', { name: 'Show folder again' }))
+    menuFor(screen, 'Projects')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide folder' }))
+    // With nothing left hidden in between, the switch was off again.
+    expect(screen.queryByRole('button', { name: 'Projects' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show hidden folders (1)' }).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('never hides the inbox, and keeps a hidden favorite in Favorites (#273)', () => {
+    folderPrefs$.favorites.set([{ accountId: account.id, folderId: 'Work' }])
+    folderPrefs$.hidden.set([{ accountId: account.id, folderId: 'Work' }])
+    const screen = view()
+    const favorites = screen.getByRole('region', { name: 'Favorites' })
+    expect(within(favorites).getByRole('button', { name: 'Work 4' })).toBeTruthy()
+    menuFor(screen, 'Inbox 3')
+    const hide = screen.getByRole('button', { name: /Hide folder/ })
+    expect(hide.hasAttribute('disabled')).toBe(true)
+    expect(hide.getAttribute('title')).toBe('The inbox cannot be hidden')
   })
 
   it('says when stale favorites were dropped, and lets the note go', () => {

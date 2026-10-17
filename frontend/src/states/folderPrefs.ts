@@ -1,5 +1,6 @@
-// Folder favorites and colors (ADR-0050, ledger SET-07): local preferences
-// only, never written to a server. Both are keyed by account id + folder id
+// Folder favorites, colors (ADR-0050, ledger SET-07) and hidden folders (#273):
+// local preferences only, never written to a server. All three are keyed by
+// account id + folder id
 // (the folder's full path on its server), so they work the same for IMAP,
 // Exchange, Graph and the local archive. A move reported by the core carries
 // them to the folder's new path; a folder or account that goes away takes its
@@ -16,12 +17,18 @@ export type FolderRename = { from: string; to: string }
 
 export const FOLDER_FAVORITES_KEY = 'folder_favorites'
 export const FOLDER_COLORS_KEY = 'folder_colors'
-export const FOLDER_PREF_KEYS = [FOLDER_FAVORITES_KEY, FOLDER_COLORS_KEY]
+export const FOLDER_HIDDEN_KEY = 'folder_hidden'
+export const FOLDER_PREF_KEYS = [FOLDER_FAVORITES_KEY, FOLDER_COLORS_KEY, FOLDER_HIDDEN_KEY]
 
 export const folderPrefs$ = observable({
   /** Favorite folders, in the order the person arranged them. */
   favorites: [] as FolderRef[],
   colors: [] as FolderColorEntry[],
+  /**
+   * Folders hidden from the folder tree (#273). Only the tree reads this:
+   * the core never learns of it, so a hidden folder keeps syncing.
+   */
+  hidden: [] as FolderRef[],
   /** How many stale favorites were last dropped, for the visible note. */
   dropped: 0,
 })
@@ -52,11 +59,14 @@ function unique<T extends FolderRef>(list: T[]): T[] {
   return out
 }
 
-export function parseFavorites(value: unknown): FolderRef[] {
+/** A saved list of folder references (favorites, hidden folders); malformed entries are left out. */
+export function parseFolderRefs(value: unknown): FolderRef[] {
   const list = safeParse(value)
   if (!Array.isArray(list)) return []
   return unique(list.filter(isRef).map(({ accountId, folderId }) => ({ accountId, folderId })))
 }
+
+export const parseFavorites = parseFolderRefs
 
 export function parseColors(value: unknown): FolderColorEntry[] {
   const list = safeParse(value)
@@ -71,6 +81,7 @@ export function parseColors(value: unknown): FolderColorEntry[] {
 export function hydrateFolderPrefs(prefs: Record<string, unknown>) {
   folderPrefs$.favorites.set(parseFavorites(prefs[FOLDER_FAVORITES_KEY]))
   folderPrefs$.colors.set(parseColors(prefs[FOLDER_COLORS_KEY]))
+  folderPrefs$.hidden.set(parseFolderRefs(prefs[FOLDER_HIDDEN_KEY]))
 }
 
 function persistFavorites() {
@@ -79,6 +90,10 @@ function persistFavorites() {
 
 function persistColors() {
   void invoke('app.prefsSet', { key: FOLDER_COLORS_KEY, value: folderPrefs$.colors.peek() }).catch(() => {})
+}
+
+function persistHidden() {
+  void invoke('app.prefsSet', { key: FOLDER_HIDDEN_KEY, value: folderPrefs$.hidden.peek() }).catch(() => {})
 }
 
 export function isFavorite(ref: FolderRef): boolean {
@@ -133,11 +148,32 @@ export function setFolderColor(ref: FolderRef, color: FolderColorId | null) {
   persistColors()
 }
 
+/** Whether the folder itself was hidden (a subfolder of a hidden one is hidden with it, see lib/folderHiding). */
+export function isHiddenFolder(ref: FolderRef): boolean {
+  return folderPrefs$.hidden.get().some((item) => same(item, ref))
+}
+
+/** Hide a folder from the folder tree. Nothing is asked of the server. */
+export function hideFolder(ref: FolderRef) {
+  if (!isRef(ref) || folderPrefs$.hidden.peek().some((item) => same(item, ref))) return
+  folderPrefs$.hidden.set([...folderPrefs$.hidden.peek(), { accountId: ref.accountId, folderId: ref.folderId }])
+  persistHidden()
+}
+
+export function unhideFolder(ref: FolderRef) {
+  const hidden = folderPrefs$.hidden.peek()
+  if (!hidden.some((item) => same(item, ref))) return
+  folderPrefs$.hidden.set(hidden.filter((item) => !same(item, ref)))
+  persistHidden()
+}
+
 function rewrite(update: (list: FolderRef[]) => FolderRef[]) {
   const favorites = folderPrefs$.favorites.peek()
   const nextFavorites = unique(update(favorites))
   const colors = folderPrefs$.colors.peek()
   const nextColors = unique(update(colors) as FolderColorEntry[])
+  const hidden = folderPrefs$.hidden.peek()
+  const nextHidden = unique(update(hidden))
   if (JSON.stringify(nextFavorites) !== JSON.stringify(favorites)) {
     folderPrefs$.favorites.set(nextFavorites)
     persistFavorites()
@@ -146,9 +182,13 @@ function rewrite(update: (list: FolderRef[]) => FolderRef[]) {
     folderPrefs$.colors.set(nextColors)
     persistColors()
   }
+  if (JSON.stringify(nextHidden) !== JSON.stringify(hidden)) {
+    folderPrefs$.hidden.set(nextHidden)
+    persistHidden()
+  }
 }
 
-/** A folder move the core reported: favorites and colors follow every renamed path. */
+/** A folder move the core reported: favorites, colors and hidden folders follow every renamed path. */
 export function applyFolderRenames(accountId: string, renames: FolderRename[]) {
   if (!renames.length) return
   const to = new Map(renames.map((rename) => [rename.from, rename.to]))
@@ -165,7 +205,7 @@ export function forgetFolders(accountId: string, folderIds: string[]) {
   rewrite((list) => list.filter((item) => item.accountId !== accountId || !folderIds.includes(item.folderId)))
 }
 
-/** A removed account takes its favorites and colors with it. */
+/** A removed account takes its favorites, colors and hidden folders with it. */
 export function forgetAccountFolderPrefs(accountId: string) {
   rewrite((list) => list.filter((item) => item.accountId !== accountId))
 }
@@ -173,7 +213,8 @@ export function forgetAccountFolderPrefs(accountId: string) {
 /**
  * Drop entries for folders an account's full folder list no longer has (a
  * folder renamed or deleted elsewhere), and remember how many favorites went
- * so the navigation can say so. An empty or inbox-only list is not trusted:
+ * so the navigation can say so. Colors and hidden marks of a vanished folder
+ * go too: there is nothing left for them to apply to. An empty or inbox-only list is not trusted:
  * it is what an account shows before its first folder sync.
  */
 export function pruneMissingFolders(accountId: string, folderIds: string[]): number {
@@ -181,7 +222,7 @@ export function pruneMissingFolders(accountId: string, folderIds: string[]): num
   if (known.size < 2) return 0
   const stale = (item: FolderRef) => item.accountId === accountId && !known.has(item.folderId)
   const dropped = folderPrefs$.favorites.peek().filter(stale).length
-  if (!dropped && !folderPrefs$.colors.peek().some(stale)) return 0
+  if (!dropped && !folderPrefs$.colors.peek().some(stale) && !folderPrefs$.hidden.peek().some(stale)) return 0
   rewrite((list) => list.filter((item) => !stale(item)))
   if (dropped) folderPrefs$.dropped.set(folderPrefs$.dropped.peek() + dropped)
   return dropped

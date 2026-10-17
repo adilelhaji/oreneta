@@ -71,6 +71,12 @@ sobreescriure mai un canvi remot i sense enviar res més que el que ha canviat, 
 respostes SOAP enregistrades. Es manté `partial`: falten els grups i els contactes de Graph
 (#144) i l'evidència nativa de Windows; l'evidència amb un servidor Exchange real (N5)
 també és pendent.
+El 2026-10-17 (#273) SET-07 va incorporar amagar carpetes de l'arbre de carpetes i tornar-les
+a mostrar («Amaga la carpeta», «Mostra les carpetes amagades», «Torna a mostrar la carpeta»),
+amb les subcarpetes incloses, com a preferència local (`folder_hidden`) que no arriba mai al
+servidor: les carpetes amagades es continuen sincronitzant, i «Opcions de cerca» diu si la
+cerca les inclou. La Safata d'entrada no es pot amagar. Cap fila no canvia d'estat: SET-07
+es manté `partial` i l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

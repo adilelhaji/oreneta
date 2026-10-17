@@ -2798,5 +2798,18 @@
   "people.deleteGroupText": "Die Gruppe {name} wird gelöscht. Die Personen darin bleiben erhalten.",
   "people.deleteGroupTextServer": "Die Gruppe {name} wird aus dem Adressbuch auf seinem Server gelöscht. Die Personen darin bleiben erhalten.",
   "people.deleteText": "{name} wird aus dem Adressbuch auf diesem Computer gelöscht.",
-  "people.deleteTextServer": "{name} wird aus dem Adressbuch auf seinem Server gelöscht, für jede App, die es liest."
+  "people.deleteTextServer": "{name} wird aus dem Adressbuch auf seinem Server gelöscht, für jede App, die es liest.",
+  "folders.hide.action": "Ordner ausblenden",
+  "folders.hide.show": "Ordner wieder anzeigen",
+  "folders.hide.mark": "Ausgeblendet",
+  "folders.hide.toggle": "Ausgeblendete Ordner anzeigen ({count})",
+  "folders.hide.hidden": "{folder} ausgeblendet",
+  "folders.hide.shown": "{folder} wird wieder angezeigt",
+  "folders.hide.blocked.inbox": "Der Posteingang kann nicht ausgeblendet werden",
+  "folders.hide.blocked.containsInbox": "Dieser Ordner enthält den Posteingang und kann nicht ausgeblendet werden",
+  "folders.hide.blocked.parentHidden": "Ausgeblendet, weil der übergeordnete Ordner ausgeblendet ist",
+  "search.scope.starred": "Durchsucht markierte Nachrichten in allen Ordnern aller Konten, ausgeblendete Ordner eingeschlossen.",
+  "search.scope.unified": "Durchsucht „{folder}“ in allen angezeigten Konten, ausgeblendete Ordner eingeschlossen.",
+  "search.scope.folder": "Durchsucht nur „{folder}“. Ausgeblendete Ordner sind nicht enthalten.",
+  "search.scope.hiddenFolder": "Durchsucht nur „{folder}“, einen ausgeblendeten Ordner."
 }

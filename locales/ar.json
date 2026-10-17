@@ -2798,5 +2798,18 @@
   "people.deleteGroupText": "ستُحذف المجموعة {name}. يبقى الأشخاص الذين فيها.",
   "people.deleteGroupTextServer": "ستُحذف المجموعة {name} من دفتر العناوين على خادمه. يبقى الأشخاص الذين فيها.",
   "people.deleteText": "سيُحذف {name} من دفتر العناوين على هذا الحاسوب.",
-  "people.deleteTextServer": "سيُحذف {name} من دفتر العناوين على خادمه، لكل التطبيقات التي تقرؤه."
+  "people.deleteTextServer": "سيُحذف {name} من دفتر العناوين على خادمه، لكل التطبيقات التي تقرؤه.",
+  "folders.hide.action": "إخفاء المجلد",
+  "folders.hide.show": "إظهار المجلد مجددًا",
+  "folders.hide.mark": "مخفي",
+  "folders.hide.toggle": "إظهار المجلدات المخفية ({count})",
+  "folders.hide.hidden": "تم إخفاء {folder}",
+  "folders.hide.shown": "تم إظهار {folder} مجددًا",
+  "folders.hide.blocked.inbox": "لا يمكن إخفاء البريد الوارد",
+  "folders.hide.blocked.containsInbox": "يحتوي هذا المجلد على البريد الوارد ولا يمكن إخفاؤه",
+  "folders.hide.blocked.parentHidden": "مخفي لأن المجلد الذي يحتويه مخفي",
+  "search.scope.starred": "يبحث في الرسائل المميزة بنجمة في كل مجلدات كل الحسابات، بما فيها المجلدات المخفية.",
+  "search.scope.unified": "يبحث في «{folder}» عبر الحسابات المعروضة، بما فيها المجلدات المخفية.",
+  "search.scope.folder": "يبحث في «{folder}» فقط. لا تُضمَّن المجلدات المخفية.",
+  "search.scope.hiddenFolder": "يبحث في «{folder}» فقط، وهو مجلد مخفي."
 }

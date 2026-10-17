@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
+import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
+import { SEARCH_SCOPE_TEXT, searchScopeKind } from '../../lib/folderHiding'
+import { UNIFIED_ACCOUNT, unifiedFolderLabel } from '../../lib/unifiedFolders'
+import { folderPrefs$ } from '../../states/folderPrefs'
+import { mail$ } from '../../states/mail'
 import {
   EMPTY_QUERY,
   dayToSeconds,
@@ -30,6 +35,18 @@ export function SearchBuilder({ query }: { query: string }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<SearchQuery>(EMPTY_QUERY)
   const [error, setError] = useState('')
+  const accountId = useValue(ui$.selectedAccount)
+  const folderId = useValue(ui$.selectedFolder)
+  const folders = useValue(mail$.foldersByAccount[accountId]) ?? []
+  const hidden = useValue(folderPrefs$.hidden)
+  const scope = SEARCH_SCOPE_TEXT[searchScopeKind(accountId, folderId, folders, hidden)]
+  const openFolder = folders.find((folder) => folder.id === folderId)
+  const scopeFolder =
+    accountId === UNIFIED_ACCOUNT
+      ? unifiedFolderLabel(folderId, t)
+      : openFolder?.role === 'inbox' || folderId.toLowerCase() === 'inbox'
+        ? t('folders.roles.inbox', { defaultValue: 'Inbox' })
+        : openFolder?.name || folderId
 
   useEffect(() => {
     if (!open) return
@@ -95,6 +112,10 @@ export function SearchBuilder({ query }: { query: string }) {
             </>
           }
         >
+          {/* Where this search looks, and whether hidden folders are in it (#273). */}
+          <p className="text-caption text-secondary">
+            {t(scope.key, { folder: scopeFolder, defaultValue: scope.text })}
+          </p>
           <div className="grid gap-3 min-[520px]:grid-cols-2">
             {field('sb-text', t('search.fieldWords', { defaultValue: 'Words' }), draft.text, (text) =>
               setDraft((d) => ({ ...d, text })),

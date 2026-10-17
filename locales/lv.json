@@ -2798,5 +2798,18 @@
   "people.deleteGroupText": "Grupa {name} tiks dzēsta. Cilvēki tajā paliek.",
   "people.deleteGroupTextServer": "Grupa {name} tiks dzēsta no adrešu grāmatas tās serverī. Cilvēki tajā paliek.",
   "people.deleteText": "{name} tiks dzēsts no adrešu grāmatas šajā datorā.",
-  "people.deleteTextServer": "{name} tiks dzēsts no adrešu grāmatas tās serverī, visām lietotnēm, kas to lasa."
+  "people.deleteTextServer": "{name} tiks dzēsts no adrešu grāmatas tās serverī, visām lietotnēm, kas to lasa.",
+  "folders.hide.action": "Paslēpt mapi",
+  "folders.hide.show": "Atkal rādīt mapi",
+  "folders.hide.mark": "Paslēpta",
+  "folders.hide.toggle": "Rādīt paslēptās mapes ({count})",
+  "folders.hide.hidden": "{folder} paslēpta",
+  "folders.hide.shown": "{folder} atkal tiek rādīta",
+  "folders.hide.blocked.inbox": "Iesūtni nevar paslēpt",
+  "folders.hide.blocked.containsInbox": "Šajā mapē ir iesūtne, tāpēc to nevar paslēpt",
+  "folders.hide.blocked.parentHidden": "Paslēpta, jo ir paslēpta mape, kurā tā atrodas",
+  "search.scope.starred": "Meklē ar zvaigznīti atzīmētos ziņojumos visās visu kontu mapēs, ieskaitot paslēptās.",
+  "search.scope.unified": "Meklē mapē “{folder}” visos skatā redzamajos kontos, ieskaitot paslēptās mapes.",
+  "search.scope.folder": "Meklē tikai mapē “{folder}”. Paslēptās mapes netiek iekļautas.",
+  "search.scope.hiddenFolder": "Meklē tikai mapē “{folder}”, kas ir paslēpta."
 }

@@ -2798,5 +2798,18 @@
   "people.deleteGroupText": "{name} 그룹이 삭제됩니다. 그룹에 있던 사람들은 그대로 남습니다.",
   "people.deleteGroupTextServer": "{name} 그룹이 서버의 주소록에서 삭제됩니다. 그룹에 있던 사람들은 그대로 남습니다.",
   "people.deleteText": "{name}이(가) 이 컴퓨터의 주소록에서 삭제됩니다.",
-  "people.deleteTextServer": "{name}이(가) 서버의 주소록에서 삭제되며, 이 주소록을 읽는 모든 앱에 적용됩니다."
+  "people.deleteTextServer": "{name}이(가) 서버의 주소록에서 삭제되며, 이 주소록을 읽는 모든 앱에 적용됩니다.",
+  "folders.hide.action": "폴더 숨기기",
+  "folders.hide.show": "폴더 다시 표시",
+  "folders.hide.mark": "숨김",
+  "folders.hide.toggle": "숨긴 폴더 표시 ({count})",
+  "folders.hide.hidden": "{folder}을(를) 숨겼습니다",
+  "folders.hide.shown": "{folder}을(를) 다시 표시합니다",
+  "folders.hide.blocked.inbox": "받은편지함은 숨길 수 없습니다",
+  "folders.hide.blocked.containsInbox": "이 폴더에는 받은편지함이 있어 숨길 수 없습니다",
+  "folders.hide.blocked.parentHidden": "상위 폴더가 숨겨져 있어 숨김 상태입니다",
+  "search.scope.starred": "모든 계정의 모든 폴더에서 별표 메일을 검색합니다. 숨긴 폴더도 포함됩니다.",
+  "search.scope.unified": "보기에 있는 계정의 “{folder}”에서 검색합니다. 숨긴 폴더도 포함됩니다.",
+  "search.scope.folder": "“{folder}”에서만 검색합니다. 숨긴 폴더는 포함되지 않습니다.",
+  "search.scope.hiddenFolder": "숨긴 폴더인 “{folder}”에서만 검색합니다."
 }

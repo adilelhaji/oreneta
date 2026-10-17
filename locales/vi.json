@@ -2798,5 +2798,18 @@
   "people.deleteGroupText": "Nhóm {name} sẽ bị xóa. Những người trong nhóm vẫn được giữ lại.",
   "people.deleteGroupTextServer": "Nhóm {name} sẽ bị xóa khỏi sổ địa chỉ trên máy chủ của nó. Những người trong nhóm vẫn được giữ lại.",
   "people.deleteText": "{name} sẽ bị xóa khỏi sổ địa chỉ trên máy tính này.",
-  "people.deleteTextServer": "{name} sẽ bị xóa khỏi sổ địa chỉ trên máy chủ của nó, với mọi ứng dụng đọc sổ này."
+  "people.deleteTextServer": "{name} sẽ bị xóa khỏi sổ địa chỉ trên máy chủ của nó, với mọi ứng dụng đọc sổ này.",
+  "folders.hide.action": "Ẩn thư mục",
+  "folders.hide.show": "Hiện lại thư mục",
+  "folders.hide.mark": "Đã ẩn",
+  "folders.hide.toggle": "Hiện các thư mục đã ẩn ({count})",
+  "folders.hide.hidden": "Đã ẩn {folder}",
+  "folders.hide.shown": "Đã hiện lại {folder}",
+  "folders.hide.blocked.inbox": "Không thể ẩn hộp thư đến",
+  "folders.hide.blocked.containsInbox": "Thư mục này chứa hộp thư đến nên không thể ẩn",
+  "folders.hide.blocked.parentHidden": "Đã ẩn vì thư mục chứa nó đang bị ẩn",
+  "search.scope.starred": "Tìm trong các thư có gắn sao ở mọi thư mục của mọi tài khoản, kể cả thư mục đã ẩn.",
+  "search.scope.unified": "Tìm trong “{folder}” ở các tài khoản đang xem, kể cả thư mục đã ẩn.",
+  "search.scope.folder": "Chỉ tìm trong “{folder}”. Không bao gồm các thư mục đã ẩn.",
+  "search.scope.hiddenFolder": "Chỉ tìm trong “{folder}”, một thư mục đã ẩn."
 }
