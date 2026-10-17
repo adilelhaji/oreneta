@@ -4,7 +4,12 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { StarterKit } from '@tiptap/starter-kit'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { setSignaturePlacement, settings$, type SignaturePlacementChoice } from '../../states/settings'
+import {
+  setSignaturePlacement,
+  settings$,
+  signaturePlacementFor,
+  type SignaturePlacementChoice,
+} from '../../states/settings'
 import { accounts$, setAccountSignature } from '../../states/accounts'
 import { accountSignaturePayload, isBlankSignature } from '../../lib/signature'
 import type { Account, AccountSignature } from '../../types'
@@ -143,7 +148,7 @@ export function AccountSignatureCard({ account }: { account: Account }) {
     setState(signatureState(account))
   }
   const { mode, html } = state
-  const placement = useValue(() => settings$.signaturePlacement.get()[account.id] ?? 'withText')
+  const placement = useValue(() => signaturePlacementFor(account.id, settings$.signaturePlacement.get()))
 
   const save = async (nextMode: AccountSignature['mode'], nextHtml: string) => {
     setState({ mode: nextMode, html: nextHtml })

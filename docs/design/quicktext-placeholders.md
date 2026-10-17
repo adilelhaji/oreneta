@@ -47,7 +47,8 @@
     canvia de compte a De, la signatura nova substitueix l'anterior al mateix
     lloc;
   - proves: `replyForwardCompose.test.ts` (respondre, respondre a tots i
-    reenviar, amb les dues posicions, en text pla i en HTML) i
+    reenviar, amb les dues posicions, en text pla i en HTML, el canvi de
+    compte, els missatges nous i les respostes sense l'original) i
     `SignatureSettingsCard.test.tsx` (l'opció per compte).
 - **Pendent:**
   - signatura per àlies;

@@ -923,15 +923,19 @@ function safeJson(raw: string): unknown {
   }
 }
 
-export function signaturePlacementFor(accountId: string | undefined): SignaturePlacementChoice {
-  return (accountId && settings$.signaturePlacement.peek()[accountId]) || 'withText'
+/** An account's choice; pass `placements` (from `.get()`) to read it reactively. */
+export function signaturePlacementFor(
+  accountId: string | undefined,
+  placements: Record<string, SignatureQuotePlacement> = settings$.signaturePlacement.peek(),
+): SignaturePlacementChoice {
+  return accountId && Object.hasOwn(placements, accountId) ? placements[accountId] : 'withText'
 }
 
 /** Set one account's placement; 'withText' removes its entry, so it follows the default again. */
 export function setSignaturePlacement(accountId: string, choice: SignaturePlacementChoice) {
   if (!accountId) return
   const current = settings$.signaturePlacement.peek()
-  if ((current[accountId] ?? 'withText') === choice) return
+  if ((Object.hasOwn(current, accountId) ? current[accountId] : 'withText') === choice) return
   const next = { ...current }
   if (choice === 'withText') delete next[accountId]
   else if (isSignatureQuotePlacement(choice)) next[accountId] = choice
@@ -1101,7 +1105,11 @@ export function hydrateSettings(prefs: Record<string, unknown>, { languageRead =
 
     const replyForward = sanitizeReplyForwardPrefs(prefs[DB_KEY.replyForward])
     if (replyForward) settings$.replyForward.set(replyForward)
-    settings$.signaturePlacement.set(sanitizeSignaturePlacements(prefs[DB_KEY.signaturePlacement]))
+    // Only a row that was read replaces what is held: a failed read must not
+    // wipe the other accounts' choices before the next write saves the rest.
+    if (Object.hasOwn(prefs, DB_KEY.signaturePlacement)) {
+      settings$.signaturePlacement.set(sanitizeSignaturePlacements(prefs[DB_KEY.signaturePlacement]))
+    }
     const print = sanitizePrintOptions(prefs[DB_KEY.print])
     if (print) settings$.print.set(print)
 
