@@ -4,8 +4,9 @@
   disseny de #211 i va demanar l'opció més prudent); pendent de revisió del
   propietari al final del pla. ADR-0066 (2026-10-17) amplia el punt 3: les
   carpetes de contactes sota Contactes i l'edició de les persones. ADR-0070
-  (proposada el 2026-10-17, encara no acceptada) esmenaria el punt 4: la llista
-  de tasques arribaria amb el compte, sense afegir-la a mà.
+  (proposada el 2026-10-17, encara no acceptada) esmenaria el primer punt del
+  §4: la llista de tasques arribaria amb el compte, sense que calgués afegir-la a
+  mà.
 - Data: 2026-10-15.
 - Abast: #211, la part d'Exchange (EWS) de quatre files de la paritat
   amb eM Client 10.4: SET-07 (#87, moure carpetes), SET-11 (#107,
