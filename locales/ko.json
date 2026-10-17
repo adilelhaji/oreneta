@@ -142,7 +142,6 @@
   "about.paypal": "PayPal",
   "about.protocolVersions": "핵심 프로토콜 %1$d · 공유 프로토콜 %2$d",
   "about.sourceCode": "소스 코드",
-  "about.supportDevelopment": "개발 후원하기",
   "about.title": "Oreneta 정보",
   "about.version": "버전 {version}",
   "about.versionPackage": "버전 %1$s · 패키지 %2$s",

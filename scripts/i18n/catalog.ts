@@ -164,23 +164,33 @@ export const messages: Record<SupportedI18nLanguage, Record<string, string>> = $
   fs.writeFileSync(desktopOutput, body)
 }
 
+// The launcher label (`@string/app_name` in the manifest). The same in every
+// locale: it is the product's name.
+const androidAppName = 'Oreneta'
+
+// One locale's strings.xml: the app name, then every message without an ICU
+// placeholder (those go to the generated Kotlin helper instead).
+function androidStringsXml(catalog: Catalog): string {
+  const simple = Object.entries(catalog).filter(([, value]) => !hasIcuPlaceholder(value))
+  const lines = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<resources>',
+    `    <string name="app_name">${androidEscape(androidAppName)}</string>`,
+  ]
+  for (const [key, value] of simple) {
+    lines.push(`    <string name="${androidName(key)}">${androidEscape(value)}</string>`)
+  }
+  lines.push('</resources>', '')
+  return lines.join('\n')
+}
+
 function generateAndroid(catalogs: Catalogs) {
   const helperMessages = {} as Catalogs
   for (const [locale, catalog] of Object.entries(catalogs)) {
     const supportedLocale = locale as SupportedLocale
     const valuesDir = path.join(androidResDir, androidLocaleDir(supportedLocale))
     ensureDir(valuesDir)
-    const simple = Object.entries(catalog).filter(([, value]) => !hasIcuPlaceholder(value))
-    const lines = [
-      '<?xml version="1.0" encoding="utf-8"?>',
-      '<resources>',
-      '    <string name="app_name">Meron</string>',
-    ]
-    for (const [key, value] of simple) {
-      lines.push(`    <string name="${androidName(key)}">${androidEscape(value)}</string>`)
-    }
-    lines.push('</resources>', '')
-    fs.writeFileSync(path.join(valuesDir, 'strings.xml'), lines.join('\n'))
+    fs.writeFileSync(path.join(valuesDir, 'strings.xml'), androidStringsXml(catalog))
 
     helperMessages[supportedLocale] = Object.fromEntries(
       Object.entries(catalog).filter(([, value]) => hasIcuPlaceholder(value)),
@@ -468,6 +478,7 @@ export {
   androidEscape,
   androidLocaleDir,
   androidName,
+  androidStringsXml,
   flattenObject,
   foldPlurals,
   iosLocale,

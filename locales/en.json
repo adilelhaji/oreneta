@@ -142,7 +142,6 @@
   "about.paypal": "PayPal",
   "about.protocolVersions": "Core protocol %1$d · Shared protocol %2$d",
   "about.sourceCode": "Source code",
-  "about.supportDevelopment": "Support development",
   "about.title": "About Oreneta",
   "about.version": "Version {version}",
   "about.versionPackage": "Version %1$s · Package %2$s",

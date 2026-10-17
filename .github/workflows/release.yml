@@ -104,14 +104,14 @@ jobs:
           set -euo pipefail
           cargo build --release --manifest-path meron-core/Cargo.toml --target ${{ matrix.target }}
           mkdir -p build/sidecar
-          SRC="meron-core/target/${{ matrix.target }}/release/meron-core"
+          SRC="meron-core/target/${{ matrix.target }}/release/oreneta-core"
           if [ -f "$SRC.exe" ]; then SRC="$SRC.exe"; fi
           if [[ "${{ matrix.os }}" == ubuntu* ]]; then
             strip --strip-unneeded "$SRC"
           fi
-          # The go:embed directive expects build/sidecar/meron-core (no extension)
+          # The go:embed directive expects build/sidecar/oreneta-core (no extension)
           # on every platform; extension handling is the app's concern at runtime.
-          cp "$SRC" build/sidecar/meron-core
+          cp "$SRC" build/sidecar/oreneta-core
 
       # ---------------------------------------------------------------- macOS
       - name: import mac signing cert

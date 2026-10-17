@@ -4975,9 +4975,13 @@ pub fn delete_draft_copies(
 }
 
 /// Remove locally cached quick-reply draft rows in a thread. This repairs stale
-/// duplicates left by older autosave code that minted multiple `meron-draft-*`
-/// Message-IDs for the same quick reply; the server discard still targets the
-/// one draft Message-ID the client knows about.
+/// duplicates left by older autosave code that minted multiple draft
+/// Message-IDs on the fallback domain for the same quick reply; the server
+/// discard still targets the one draft Message-ID the client knows about. The
+/// match is the fallback-domain form, `oreneta-draft-*@oreneta`, and the same
+/// form minted before the fork was renamed, `meron-draft-*@meron`, which stays
+/// in existing caches. Ids on the account's own domain are not matched here,
+/// as before the rename.
 pub fn delete_quick_reply_drafts_in_thread(
     conn: &Connection,
     account: &str,
@@ -4991,7 +4995,8 @@ pub fn delete_quick_reply_drafts_in_thread(
         "DELETE FROM messages
          WHERE account = ?1 AND folder = ?2
            AND COALESCE(NULLIF(thread_key, ''), 'uid:' || uid) = ?3
-           AND lower(COALESCE(json_extract(json, '$.message_id'), '')) LIKE 'meron-draft-%@meron'",
+           AND (lower(COALESCE(json_extract(json, '$.message_id'), '')) LIKE 'oreneta-draft-%@oreneta'
+                OR lower(COALESCE(json_extract(json, '$.message_id'), '')) LIKE 'meron-draft-%@meron')",
         params![account, folder, thread_key],
     )?;
     Ok(deleted)

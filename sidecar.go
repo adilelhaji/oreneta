@@ -299,7 +299,7 @@ func (s *Sidecar) readLoop(ctx context.Context, stdout io.Reader, cancel context
 // once and caching the result. Resolution order:
 //
 //  1. MERON_CORE_SERVER env var (explicit override; used in dev and custom installs)
-//  2. a meron-core sitting beside the running executable (App Store builds, which
+//  2. an oreneta-core sitting beside the running executable (App Store builds, which
 //     ship it inside the bundle because a sandboxed app may not exec a binary it
 //     wrote outside its own bundle)
 //  3. the embedded sidecar, extracted to the cache dir (release builds)
@@ -331,9 +331,14 @@ var sidecarExeSuffix = func() string {
 	return ""
 }()
 
+// sidecarBaseName is the engine binary's name, the one users see in Task
+// Manager or Activity Monitor: Cargo builds it as `oreneta-core` (the [[bin]]
+// in meron-core/Cargo.toml), while the crate keeps Meron's name.
+const sidecarBaseName = "oreneta-core"
+
 // sidecarBinaryName is what the sidecar is called when it ships beside the
-// executable rather than embedded.
-var sidecarBinaryName = "meron-core" + sidecarExeSuffix
+// executable rather than embedded, and what `cargo build` writes.
+var sidecarBinaryName = sidecarBaseName + sidecarExeSuffix
 
 func resolveMailServerPath() string {
 	if value := os.Getenv("MERON_CORE_SERVER"); value != "" {
@@ -349,12 +354,18 @@ func resolveMailServerPath() string {
 			fmt.Fprintf(os.Stderr, "oreneta: failed to extract embedded sidecar: %v\n", err)
 		}
 	}
+	return debugSidecarPath()
+}
+
+// debugSidecarPath is where `cargo build` leaves the engine in a checkout: the
+// crate directory keeps Meron's name, the binary is Oreneta's.
+func debugSidecarPath() string {
 	return filepath.Join("meron-core", "target", "debug", sidecarBinaryName)
 }
 
 // bundledSidecarPath returns the sidecar shipped next to the running executable,
 // or "" when there isn't one. The App Store build puts it at
-// Meron.app/Contents/MacOS/meron-core and signs it as part of the bundle: a
+// Oreneta.app/Contents/MacOS/oreneta-core and signs it as part of the bundle: a
 // sandboxed app is not allowed to exec a binary it extracted to its cache dir,
 // and App Review rejects executable code delivered outside the bundle anyway.
 func bundledSidecarPath() string {
@@ -385,8 +396,7 @@ func bundledSidecarPathIn(dir string) string {
 // build lands in a new file without clobbering a running one. The write is
 // atomic (temp file + rename) to survive concurrent or interrupted launches.
 func extractEmbeddedSidecar() (string, error) {
-	sum := sha256.Sum256(embeddedSidecar)
-	name := "meron-core-" + hex.EncodeToString(sum[:8]) + sidecarExeSuffix
+	name := extractedSidecarName(embeddedSidecar)
 	dir := filepath.Join(rootCacheDir(), "bin")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
@@ -419,6 +429,14 @@ func extractEmbeddedSidecar() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// extractedSidecarName is the file the embedded sidecar is written to:
+// oreneta-core-<first 8 bytes of its SHA-256 in hex>, plus .exe on Windows.
+// The process runs under this name, so it is what Task Manager shows.
+func extractedSidecarName(content []byte) string {
+	sum := sha256.Sum256(content)
+	return sidecarBaseName + "-" + hex.EncodeToString(sum[:8]) + sidecarExeSuffix
 }
 
 func sidecarErrorMessage(value any) string {

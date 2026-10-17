@@ -235,6 +235,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
+// The product name the drawer header and the About dialog show. The Kotlin
+// packages and modules keep Meron's name; what people read is Oreneta (#247).
+internal const val APP_DISPLAY_NAME = "Oreneta"
+
 @Composable
 internal fun MailDrawer(
     accounts: List<AccountSummary>,
@@ -270,7 +274,7 @@ internal fun MailDrawer(
         ) {
             item {
                 Text(
-                    "Meron",
+                    APP_DISPLAY_NAME,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = chat.onSidebar,
@@ -438,7 +442,7 @@ internal fun AboutDialog(
         title = { Text(tr("about.title")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Meron", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(APP_DISPLAY_NAME, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     tr("about.version", mapOf("version" to appVersion)),
                     style = MaterialTheme.typography.bodyMedium,

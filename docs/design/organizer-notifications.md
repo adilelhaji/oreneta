@@ -89,7 +89,7 @@
   afegit; esdeveniment local amb UID, SEQUENCE, escapament i plegat; ocurrència
   importada) i `ics/tests.rs` (persones en crear, afegir i treure només el que
   s'ha tret, SEQUENCE d'una excepció).
-- Distribuïdor (`cargo test --bin meron-core the_organizer_of_a_local`):
+- Distribuïdor (`cargo test --bin oreneta-core the_organizer_of_a_local`):
   invitació i actualitzacions amb SEQUENCE creixent, rebuig de qui no
   s'ha mostrat i de qui no organitza, cancel·lació abans d'eliminar,
   calendari de compte rebutjat.

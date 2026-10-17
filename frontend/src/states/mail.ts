@@ -2038,6 +2038,17 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
  * after mis-filing something is to put it back — and a message in the junk
  * folder is a message they will not go looking for.
  */
+/**
+ * What `mail.markJunk` answers: the core's own move result, which names the
+ * destination as `target_folder` (`folder` is kept for older answers).
+ */
+type JunkResult = { folder?: string; target_folder?: string; thread_id?: string } & MutationResult
+
+/** The conversation's id in the folder the junk change filed it into, for its undo. */
+function junkDestinationThreadId(threadId: string, accountId: string | undefined, res: JunkResult): string {
+  return res.thread_id ?? threadIdInFolder(threadId, accountId, res.target_folder ?? res.folder)
+}
+
 export async function markThreadJunk(threadId: string, junk = true) {
   if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
@@ -2045,13 +2056,13 @@ export async function markThreadJunk(threadId: string, junk = true) {
   const sourceFolder = sourceThread?.folder_id ?? ''
   const { rollback } = removeThreadLocally(threadId)
   try {
-    const res = await invoke<{ folder?: string; thread_id?: string } & MutationResult>('mail.markJunk', {
+    const res = await invoke<JunkResult>('mail.markJunk', {
       thread_id: threadId,
       junk,
     })
     assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
     applyMutationFolderUnreads(res)
-    const movedThreadId = res.thread_id ?? threadIdInFolder(threadId, sourceThread?.account_id, res.folder)
+    const movedThreadId = junkDestinationThreadId(threadId, sourceThread?.account_id, res)
     await refreshThreadLocation(sourceThread?.account_id, true)
     if (sourceFolder) {
       showUndoToast(
@@ -2067,6 +2078,83 @@ export async function markThreadJunk(threadId: string, junk = true) {
     rollback()
     showToast(error instanceof Error ? error.message : t('mail.toast.junkFailed'), 'error')
   }
+}
+
+/**
+ * `markThreadJunk` for a selection (#245): the same core command per
+ * conversation, so each one teaches the filter exactly as the context menu
+ * does, and the same toast with one undo that puts every conversation back
+ * where it came from.
+ *
+ * Conversations already where the gesture would send them are left alone:
+ * the judgment would be a repeat (ADR-0005 makes it a no-op) and the move a
+ * move into the same folder, which reports nothing moved and would stop the
+ * run. Drafts are never filed as junk.
+ *
+ * A run that stops part way says how far it got, like the other bulk actions,
+ * and offers no undo: the error is what the reader needs to see, and the
+ * conversations already filed are listed in the junk folder for the reader
+ * to take back with "Not junk".
+ */
+export async function bulkMarkSelectedJunk(items: BulkSelectionItem[], junk = true) {
+  if (items.some((item) => readOnlyTarget(accounts$.peek(), item.accountId))) return
+  const targets = uniqueThreadItems(items).filter(
+    (item) => !item.draft && isJunkFolderId(item.accountId, item.folderId) !== junk,
+  )
+  if (targets.length === 0) return
+  const moved: { threadId: string; folderId: string; accountId: string }[] = []
+  const { done, error } = await runBulk(
+    targets,
+    async (item) => {
+      const res = await invoke<JunkResult>('mail.markJunk', {
+        thread_id: item.threadId,
+        junk,
+      })
+      assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
+      applyMutationFolderUnreads(res)
+      // A selection can span accounts: each one's folder list (the junk
+      // folder's count among them) follows, as for a bulk archive.
+      void refreshAccountFoldersCache(item.accountId, false)
+      if (item.folderId) {
+        moved.push({
+          threadId: junkDestinationThreadId(item.threadId, item.accountId, res),
+          folderId: item.folderId,
+          accountId: item.accountId,
+        })
+      }
+    },
+    { removesLocally: true },
+  )
+  if (!error) await refreshThreadLocation(undefined, true)
+  clearBulkSelection()
+  if (error) {
+    showToast(bulkFailure(done, targets.length, error, t('mail.toast.junkFailed')), 'error')
+    return
+  }
+  const message = t(junk ? 'mail.toast.markedJunk' : 'mail.toast.markedNotJunk')
+  if (moved.length === targets.length) showUndoToast(message, () => void returnThreadsToFolders(moved))
+  else showToast(message)
+}
+
+/** The undo of a bulk junk change: each conversation back to its own folder. */
+async function returnThreadsToFolders(moves: { threadId: string; folderId: string; accountId: string }[]) {
+  let done = 0
+  let failure: unknown
+  for (const move of moves) {
+    try {
+      const res = await invoke('mail.move', { thread_id: move.threadId, target_folder_id: move.folderId })
+      assertMoveAffected(res)
+      applyMutationFolderUnreads(res as MutationResult)
+      void refreshAccountFoldersCache(move.accountId, false)
+      done++
+    } catch (error) {
+      failure = error
+      break
+    }
+  }
+  await refreshThreadLocation(moves[0]?.accountId, true)
+  if (failure) showToast(bulkFailure(done, moves.length, failure, t('mail.toast.moveFailed')), 'error')
+  else showToast(t('mail.toast.movedCount', { count: done }))
 }
 
 export async function archiveThread(threadId: string) {

@@ -808,6 +808,10 @@ fn export_opml_round_trips_through_import() {
         "title must be XML-escaped: {opml}"
     );
     assert!(opml.contains("xmlUrl=\"https://a.example/feed.xml\""));
+    assert!(
+        opml.contains("<title>Oreneta Feeds</title>") && !opml.contains("Meron"),
+        "the document is titled after Oreneta: {opml}"
+    );
 
     // Import into a *separate* database — the `url` column is globally UNIQUE,
     // so re-importing the same feeds into the same DB is (correctly) a no-op.

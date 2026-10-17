@@ -34,8 +34,8 @@ delivery target, not a claim that Oreneta has already reached parity.
 ## Building
 
 ```sh
-cargo build --release --bin meron-core   # the Rust engine
-wails build -tags webkit2_41             # the desktop app
+cargo build --manifest-path meron-core/Cargo.toml --bin oreneta-core  # the Rust engine
+wails build -tags webkit2_41                                         # the desktop app
 ```
 
 ## Google sign-in: use your own credentials
@@ -87,4 +87,5 @@ Oreneta is licensed under the
 is built on. Copyright (C) 2026 Nonbili Inc. for the original work;
 Copyright (C) 2026 Adil El Haji for the fork's changes. Internal module and
 crate names keep Meron's naming on purpose, so upstream fixes keep merging
-cleanly.
+cleanly; what users see, such as the engine process `oreneta-core`, is named
+after Oreneta.

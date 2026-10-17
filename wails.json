@@ -11,6 +11,7 @@
     "productName": "Oreneta",
     "productVersion": "0.1.0",
     "comments": "Mail and calendar, at home with Exchange",
+    "copyright": "Copyright (C) 2026 Adil El Haji",
     "protocols": [
       {
         "scheme": "mailto",
@@ -20,7 +21,6 @@
     ]
   },
   "author": {
-    "name": "Nonbili Inc.",
-    "email": "dev@meron.im"
+    "name": "Adil El Haji"
   }
 }

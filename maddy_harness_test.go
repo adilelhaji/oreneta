@@ -179,7 +179,7 @@ func restartMaddy(t *testing.T, server *maddyServer) {
 // server — a cold store whose contents can only have come from IMAP.
 func startSidecar(t *testing.T) (*Sidecar, *eventLog) {
 	t.Helper()
-	bin := "meron-core/target/debug/meron-core"
+	bin := debugSidecarPath()
 	if _, err := os.Stat(bin); err != nil {
 		t.Fatalf("sidecar binary missing at %s — run `cargo build --manifest-path meron-core/Cargo.toml` first", bin)
 	}

@@ -25,9 +25,9 @@ cargo build --release --manifest-path meron-core/Cargo.toml --target "$TARGET"
 
 echo "==> Staging sidecar for embedding"
 mkdir -p build/sidecar
-# go:embed expects build/sidecar/meron-core with no extension on every platform;
+# go:embed expects build/sidecar/oreneta-core with no extension on every platform;
 # the app appends .exe when it extracts on Windows.
-cp "meron-core/target/$TARGET/release/meron-core.exe" build/sidecar/meron-core
+cp "meron-core/target/$TARGET/release/oreneta-core.exe" build/sidecar/oreneta-core
 
 echo "==> Building Wails app for windows/amd64"
 CGO_ENABLED=0 wails build -clean -platform windows/amd64 -tags embed_sidecar
