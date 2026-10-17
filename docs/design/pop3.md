@@ -12,8 +12,9 @@ Registre de la implementació de l'ADR-0035.
   - `Creds::is_pop3` i `is_local_store` fan que el compte es llegeixi com
     l'arxiu;
   - `sync_messages` baixa el correu quan es demana la safata d'entrada;
-  - `account.connect` valida iniciant la sessió i crea la safata d'entrada i la
-    paperera;
+  - `account.connect` valida iniciant la sessió (tret que la persona triï «Desa
+    igualment», #269, que no valida però continua exigint la contrasenya) i crea la
+    safata d'entrada i la paperera;
   - RPC `pop3.retention`.
 - **Go:** `incoming: "pop3"` en l'alta, amb el port 995 per defecte i sense
   vigilant IMAP.

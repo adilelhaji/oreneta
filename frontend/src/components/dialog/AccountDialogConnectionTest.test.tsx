@@ -170,13 +170,81 @@ it('a failed step says what to fix, and a fix changes only the form', async () =
 })
 
 it('a refused sign-in offers the other form of the user name', async () => {
-  nextReport = report(side('imap', 993, 'tls', { step: 'auth', kind: 'rejected' }), side('smtp', 465, 'tls'))
+  nextReport = report(
+    side('imap', 993, 'tls', { step: 'auth', kind: 'rejected' }),
+    side('smtp', 465, 'tls', { step: 'auth', kind: 'rejected' }),
+  )
   const screen = render(<Harness />)
   await fillForm(screen)
   await click(screen, 'Test connection')
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Use the user name ana' })).toBeTruthy())
-  await click(screen, 'Use the user name ana')
+  // One per server: both share the user name, and both refused it.
+  await waitFor(() => expect(screen.getAllByRole('button', { name: 'Use the user name ana' })).toHaveLength(2))
+  await act(async () => {
+    fireEvent.click(screen.getAllByRole('button', { name: 'Use the user name ana' })[0])
+  })
   expect((screen.getByLabelText('Username') as HTMLInputElement).value).toBe('ana')
+})
+
+it('the user name is not offered for change when the other server accepted it', async () => {
+  nextReport = report(side('imap', 993, 'tls'), side('smtp', 465, 'tls', { step: 'auth', kind: 'rejected' }))
+  const screen = render(<Harness />)
+  await fillForm(screen)
+  await click(screen, 'Test connection')
+  await waitFor(() => expect(screen.getByRole('status').textContent).toContain('did not pass'))
+  expect(screen.queryAllByRole('button', { name: /Use the user name/ })).toHaveLength(0)
+})
+
+it('a test closed over by another account neither saves nor shows its result', async () => {
+  let finish: (value: ConnectionReport) => void = () => {}
+  ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
+    calls.push({ command, payload })
+    if (command === 'account.testConnection') return new Promise<ConnectionReport>((resolve) => (finish = resolve))
+    return {}
+  }
+  const screen = render(<Harness />)
+  await fillForm(screen)
+  await click(screen, 'Harness save')
+  await waitFor(() => expect(of('account.testConnection')).toHaveLength(1))
+  screen.unmount()
+  await act(async () => {
+    finish(passing())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect(of('account.addPassword')).toEqual([])
+})
+
+it('editing tests the stored password without sending one', async () => {
+  const { accounts$ } = await import('../../states/accounts')
+  const previous = accounts$.peek()
+  accounts$.set([
+    {
+      ...(previous[0] ?? {}),
+      id: 'ana@example.org',
+      email: 'ana@example.org',
+      auth_type: 'password',
+      imap_host: 'imap.example.org',
+      imap_port: 993,
+      smtp_host: 'smtp.example.org',
+      smtp_port: 465,
+      tls: true,
+      starttls: false,
+      smtp_tls: true,
+      smtp_starttls: false,
+      username: 'ana@example.org',
+      needs_reconnect: false,
+    } as any,
+  ])
+  ui$.reconnectAccountId.set('ana@example.org')
+  try {
+    const screen = render(<Harness />)
+    await click(screen, 'Test connection')
+    await waitFor(() => expect(of('account.testConnection')).toHaveLength(1))
+    expect(of('account.testConnection')[0].payload).not.toHaveProperty('password')
+    expect(of('account.testConnection')[0].payload).toMatchObject({ imap_host: 'imap.example.org' })
+  } finally {
+    ui$.reconnectAccountId.set('')
+    accounts$.set(previous)
+  }
 })
 
 it('Save tests first and stores nothing when the test fails', async () => {

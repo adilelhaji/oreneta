@@ -22,7 +22,7 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite, BufReader};
 use tokio::net::TcpStream;
 
-use crate::proxy::{ProxyChoice, ProxyConfig, UnusableProxy};
+use crate::proxy::{ProxyChoice, ProxyConfig};
 use crate::tls::{Stream, UntrustedCertificate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -103,10 +103,15 @@ pub enum Kind {
     /// The server sent no greeting of the protocol being tested: the port is
     /// usually another protocol's, or expects TLS from the first byte.
     NoGreeting,
-    /// POP3 never sends a password over a connection without TLS.
+    /// POP3 never sends a password over a connection without TLS, and this
+    /// server offers no STLS to upgrade the plaintext connection with.
     PlaintextRefused,
     /// The server refused the user name and password.
     Rejected,
+    /// The server refused to sign in over a connection without encryption
+    /// (SMTP 530/538 "must issue STARTTLS", IMAP `PRIVACYREQUIRED`): the
+    /// credentials themselves were never judged.
+    EncryptionRequired,
     /// DNS is left to the proxy, which resolves the name itself.
     ViaProxy,
     /// The connection is not encrypted, as chosen.
@@ -370,8 +375,11 @@ async fn reach(server: &Server, route: Route<'_>, limits: Limits, steps: &mut Ve
                     Some(tcp)
                 }
                 Ok(Err(err)) => {
-                    let kind = if UnusableProxy::find(&err).is_some() { Kind::Proxy } else { tcp_kind(&err) };
-                    steps.push(StepReport::failed(Step::Tcp, kind, format!("{err:#}")));
+                    // Whether the proxy itself was unreachable or it could
+                    // not reach the mail server, the I/O errors seen here are
+                    // the proxy's: blaming the mail port would send the person
+                    // changing the wrong settings.
+                    steps.push(StepReport::failed(Step::Tcp, Kind::Proxy, format!("{err:#}")));
                     None
                 }
                 Err(_) => {
@@ -458,15 +466,6 @@ fn io_kind(err: &std::io::Error) -> Kind {
     }
 }
 
-/// A proxied connection's failure: the proxy's own answers are text, so only
-/// a typed I/O error says more than "the proxy could not connect".
-fn tcp_kind(err: &anyhow::Error) -> Kind {
-    err.chain()
-        .find_map(|cause| cause.downcast_ref::<std::io::Error>())
-        .map(io_kind)
-        .unwrap_or(Kind::Proxy)
-}
-
 // ---- TLS --------------------------------------------------------------------------------
 
 /// The connection after the TLS step, and whether the protocol's greeting has
@@ -478,11 +477,13 @@ struct Secured {
 
 async fn secure(server: &Server, tcp: TcpStream, limits: Limits) -> std::result::Result<(Secured, StepReport), StepReport> {
     match server.security {
-        Security::None if server.protocol == Protocol::Pop3 => Err(StepReport::failed(
-            Step::Tls,
-            Kind::PlaintextRefused,
-            "the POP3 password is only sent over TLS",
-        )),
+        // As `pop3::connect` does: POP3 without TLS chosen still upgrades
+        // with STLS, and the password is never sent without it.
+        Security::None if server.protocol == Protocol::Pop3 => {
+            let tcp = pop3_starttls(tcp, limits, true).await?;
+            let tls = handshake(server, tcp, limits).await?;
+            Ok((Secured { stream: tls, greeted: true }, StepReport::ok(Step::Tls, "STLS")))
+        }
         Security::None => Ok((
             Secured { stream: Stream::Plain(tcp), greeted: false },
             StepReport::skipped(Step::Tls, Kind::NoEncryption),
@@ -494,7 +495,7 @@ async fn secure(server: &Server, tcp: TcpStream, limits: Limits) -> std::result:
         Security::Starttls => {
             let tcp = match server.protocol {
                 Protocol::Imap => imap_starttls(tcp, limits).await?,
-                Protocol::Pop3 => pop3_starttls(tcp, limits).await?,
+                Protocol::Pop3 => pop3_starttls(tcp, limits, false).await?,
                 Protocol::Smtp => smtp_starttls(tcp, limits).await?,
             };
             let tls = handshake(server, tcp, limits).await?;
@@ -568,7 +569,9 @@ async fn imap_starttls(tcp: TcpStream, limits: Limits) -> std::result::Result<Tc
     }
 }
 
-async fn pop3_starttls(tcp: TcpStream, limits: Limits) -> std::result::Result<TcpStream, StepReport> {
+/// `plaintext_chosen`: no TLS was asked for, so a server without STLS is one
+/// the password cannot be sent to at all, not one that refused STARTTLS.
+async fn pop3_starttls(tcp: TcpStream, limits: Limits, plaintext_chosen: bool) -> std::result::Result<TcpStream, StepReport> {
     let mut plain = tokio::time::timeout(limits.command, crate::pop3::Client::open(Stream::Plain(tcp)))
         .await
         .map_err(|_| no_greeting("the server sent no POP3 greeting in time"))?
@@ -577,6 +580,13 @@ async fn pop3_starttls(tcp: TcpStream, limits: Limits) -> std::result::Result<Tc
         .await
         .map_err(|_| starttls_refused("the server did not list its capabilities in time"))?
         .map_err(|err| starttls_refused(format!("{err:#}")))?;
+    if !caps.stls && plaintext_chosen {
+        return Err(StepReport::failed(
+            Step::Tls,
+            Kind::PlaintextRefused,
+            "the POP3 server offers no TLS, and the password is only sent over TLS",
+        ));
+    }
     if !caps.stls {
         return Err(starttls_refused("the POP3 server does not offer STLS"));
     }
@@ -632,7 +642,15 @@ async fn imap_sign_in(secured: Secured, login: &Login, limits: Limits) -> StepRe
     match tokio::time::timeout(limits.command, client.login(&login.user, &login.password)).await {
         Err(_) => StepReport::failed(Step::Auth, Kind::Timeout, "the server did not answer the sign-in in time"),
         Ok(Err((err, _))) => {
-            let kind = if matches!(err, async_imap::error::Error::No(_)) { Kind::Rejected } else { Kind::Other };
+            let kind = match &err {
+                // RFC 3501 §7.1: refused for want of encryption, whatever the
+                // credentials were.
+                async_imap::error::Error::No(text) if text.to_ascii_uppercase().contains("PRIVACYREQUIRED") => {
+                    Kind::EncryptionRequired
+                }
+                async_imap::error::Error::No(_) => Kind::Rejected,
+                _ => Kind::Other,
+            };
             StepReport::failed(Step::Auth, kind, err.to_string())
         }
         Ok(Ok(mut session)) => {
@@ -676,6 +694,7 @@ where
 }
 
 async fn smtp_sign_in(secured: Secured, login: &Login, limits: Limits) -> StepReport {
+    let plain = matches!(secured.stream, Stream::Plain(_));
     // After STARTTLS there is no second greeting, but EHLO is said again.
     let client = if secured.greeted { SmtpClient::new().without_greeting() } else { SmtpClient::new() };
     let mut transport =
@@ -688,8 +707,10 @@ async fn smtp_sign_in(secured: Secured, login: &Login, limits: Limits) -> StepRe
     // The same order and the same reading of a refusal as a real send (see
     // `smtp::transport`): 502/503/504 to every mechanism is a server that does
     // not take AUTH at all, which a send goes on without.
+    // The first real refusal is the one reported: a second mechanism tried
+    // after it often fails for its own reasons and would hide the first.
     let mut not_offered = true;
-    let mut last = String::new();
+    let mut refusal: Option<(Kind, String)> = None;
     for mechanism in [Mechanism::Plain, Mechanism::Login] {
         match tokio::time::timeout(limits.command, transport.auth(mechanism, &credentials)).await {
             Err(_) => {
@@ -702,16 +723,30 @@ async fn smtp_sign_in(secured: Secured, login: &Login, limits: Limits) -> StepRe
             Ok(Err(err)) => {
                 if !command_not_offered(&err) {
                     not_offered = false;
+                    if refusal.is_none() {
+                        refusal = Some((smtp_refusal_kind(&err, plain), err.to_string()));
+                    }
                 }
-                last = err.to_string();
             }
         }
     }
     let _ = tokio::time::timeout(Duration::from_secs(5), transport.quit()).await;
-    if not_offered {
-        return StepReport::skipped(Step::Auth, Kind::AuthNotOffered);
+    match refusal {
+        None if not_offered => StepReport::skipped(Step::Auth, Kind::AuthNotOffered),
+        None => StepReport::failed(Step::Auth, Kind::Other, "the server refused the sign-in"),
+        Some((kind, detail)) => StepReport::failed(Step::Auth, kind, detail),
     }
-    StepReport::failed(Step::Auth, if last.is_empty() { Kind::Other } else { Kind::Rejected }, last)
+}
+
+/// Only a permanent answer judges the credentials; 530/538 over plaintext
+/// asks for encryption first (RFC 3207 §4, RFC 4954 §6), and a transient
+/// answer or a broken connection says nothing about the password.
+fn smtp_refusal_kind(err: &SmtpError, plain: bool) -> Kind {
+    match err {
+        SmtpError::Permanent(resp) if plain && (resp.has_code(530) || resp.has_code(538)) => Kind::EncryptionRequired,
+        SmtpError::Permanent(_) => Kind::Rejected,
+        _ => Kind::Other,
+    }
 }
 
 fn command_not_offered(err: &SmtpError) -> bool {

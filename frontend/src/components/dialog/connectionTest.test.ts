@@ -103,6 +103,24 @@ describe('connectionFixes', () => {
     ).toEqual([{ kind: 'username', username: 'ana@example.test' }])
   })
 
+  it('does not offer to change a user name the other server accepted', () => {
+    const other = server('imap', 993, 'tls')
+    expect(connectionFixes(server('smtp', 465, 'tls', { step: 'auth', kind: 'rejected' }), form, other)).toEqual([])
+    const refusedToo = server('imap', 993, 'tls', { step: 'auth', kind: 'rejected' })
+    expect(connectionFixes(server('smtp', 465, 'tls', { step: 'auth', kind: 'rejected' }), form, refusedToo)).toEqual([
+      { kind: 'username', username: 'ana' },
+    ])
+  })
+
+  it('offers STARTTLS on the same port when the server wants encryption before the sign-in', () => {
+    expect(
+      connectionFixes(server('smtp', 587, 'none', { step: 'auth', kind: 'encryption_required' }), form),
+    ).toEqual([
+      { kind: 'server', port: 587, security: 'starttls' },
+      { kind: 'server', port: 465, security: 'tls' },
+    ])
+  })
+
   it('offers nothing it cannot back for a proxy or an unclassified failure', () => {
     expect(connectionFixes(server('imap', 993, 'tls', { step: 'tcp', kind: 'proxy' }), form)).toEqual([])
     expect(connectionFixes(server('imap', 993, 'tls', { step: 'auth', kind: 'other' }), form)).toEqual([])

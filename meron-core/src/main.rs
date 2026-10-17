@@ -1097,6 +1097,12 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         anyway["password"]=json!("");
         let error=dispatch(&engine,&request("account.connect",anyway),&writer).await.unwrap_err();
         assert!(error.to_string().contains("password required"),"{error}");
+        // Nor does a validated save of a new account without one: a server
+        // that took an empty password must not end up holding the account.
+        let mut validated=params.clone();
+        validated.as_object_mut().unwrap().remove("password");
+        let error=dispatch(&engine,&request("account.connect",validated),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("password required"),"{error}");
         assert!(store::load_account(&engine.db.lock().unwrap(),account).unwrap().is_none());
     }
     /// ADR-0050: `folders.move` end to end on the local archive, which is its
@@ -6169,11 +6175,13 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // can be slow or network-dependent, and later sync/watch calls will
             // surface any mailbox access failure.
             let validate = p.get("validate").and_then(Value::as_bool).unwrap_or(true);
-            // Saving a password account without a connection test is the
-            // person's explicit "save anyway" (#269); it still needs a password
-            // to save, typed now or already held for this account.
+            // A password or POP3 account needs a password, typed now or
+            // already held for this account — whether it is validated or saved
+            // through the person's explicit "Save anyway" (#269). The Go bridge
+            // leaves this to the core, which alone knows what is held; an empty
+            // one must not reach a server that would accept it.
             anyhow::ensure!(
-                validate || !(creds.auth_type == "password" || creds.is_pop3()) || !creds.password.is_empty() || !creds.ews_url.is_empty(),
+                !(creds.auth_type == "password" || creds.is_pop3()) || !creds.password.is_empty() || !creds.ews_url.is_empty(),
                 "password required"
             );
             if validate {

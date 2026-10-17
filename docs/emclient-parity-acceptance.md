@@ -78,8 +78,10 @@ probable (parells de port i seguretat, forma del nom d'usuari, inspecció del ce
 sense desar res. «Desa el compte» fa la prova primer, i la contrasenya no es desa abans
 d'una prova satisfactòria tret que la persona triï «Desa igualment». Vegeu
 [account-setup.md](account-setup.md). Cap fila no canvia d'estat: no hi ha cap fila per a
-la configuració manual de comptes, i l'evidència nativa de Windows (N4) i amb proveïdors
-reals (N5) continua pendent; les proves amb servidors falsos i amb maddy són sintètiques.
+la configuració manual de comptes (S15-01, de POP3, tracta la baixada del correu i es
+manté `implemented-unverified`), i l'evidència nativa de Windows (N4) i amb proveïdors
+reals (N5) continua pendent; les proves amb servidors falsos i amb maddy (MAIL-17 del
+paquet d'acceptació de proveïdors) són sintètiques.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

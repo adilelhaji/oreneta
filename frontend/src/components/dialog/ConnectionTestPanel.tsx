@@ -44,7 +44,7 @@ export function ConnectionTestPanel({
           key={side}
           side={side}
           server={report[side]}
-          fixes={stale ? [] : connectionFixes(report[side], form)}
+          fixes={stale ? [] : connectionFixes(report[side], form, report[side === 'incoming' ? 'outgoing' : 'incoming'])}
           busy={busy}
           onFix={(fix) => onFix(side, fix)}
         />
@@ -81,12 +81,12 @@ function ServerResult({
       : t('accounts.connectionTest.outgoing')
   return (
     <div className="flex flex-col gap-1.5">
-      <h4 className="font-semibold text-primary">
+      <p className="font-semibold text-primary">
         {heading}{' '}
         <span className="font-normal text-secondary">
           {server.host}:{server.port}
         </span>
-      </h4>
+      </p>
       <ul className="flex flex-col gap-1">
         {server.steps.map((step) => (
           <StepRow key={step.step} step={step} server={server} />
@@ -143,7 +143,7 @@ function StepRow({ step, server }: { step: StepReport; server: ServerReport }) {
         </span>
         {note && <span className="text-secondary leading-relaxed">{note}</span>}
         {step.status === 'failed' && step.detail && (
-          <span className="text-secondary/80 break-words">
+          <span className="text-secondary break-words">
             {t('accounts.connectionTest.serverSaid', { detail: step.detail })}
           </span>
         )}

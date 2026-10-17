@@ -117,6 +117,17 @@ export function useAccountDialog() {
   // Whether the test in flight was asked for by Save, so accepting a
   // certificate it stopped on carries on to the save.
   const testIntent = useRef<'test' | 'save'>('test')
+  // Bumped when the dialog closes, switches mode or opens another account: a
+  // test still running then must not save, or show its result, for it.
+  const testGenerationRef = useRef(0)
+  // A certificate accepted in this dialog belongs to the server it was shown
+  // for: another host or port drops it rather than carry it to the new one.
+  useEffect(() => {
+    pins.current = { ...pins.current, imap: undefined }
+  }, [form.imap_host, form.imap_port])
+  useEffect(() => {
+    pins.current = { ...pins.current, smtp: undefined }
+  }, [form.smtp_host, form.smtp_port])
   const autoBeginOAuthKeyRef = useRef('')
   const rssAutoNameRef = useRef('')
   const discoveryGenerationRef = useRef(0)
@@ -141,6 +152,7 @@ export function useAccountDialog() {
   useEffect(() => {
     return () => {
       oauthGenerationRef.current++
+      testGenerationRef.current++
       if (oauthIntervalRef.current) clearInterval(oauthIntervalRef.current)
     }
   }, [])
@@ -192,6 +204,9 @@ export function useAccountDialog() {
       ews_url: reconnectAccount.ews_url || '',
     })
     setError('')
+    // Another account: no test, pin or result of the previous one carries over.
+    testGenerationRef.current++
+    pins.current = {}
     setConnectionReport(null)
     setTestedKey('')
     setExchangedTokens(null)
@@ -227,6 +242,7 @@ export function useAccountDialog() {
     setError('')
     setCertPrompt(null)
     pins.current = {}
+    testGenerationRef.current++
     setConnectionReport(null)
     setTestedKey('')
     setExchangedTokens(null)
@@ -485,12 +501,12 @@ export function useAccountDialog() {
       email: form.email,
       display_name: form.display_name,
       sender_name: form.sender_name,
-      imap_host: form.imap_host,
+      imap_host: form.imap_host.trim(),
       imap_port: Number(form.imap_port),
       incoming: form.incoming,
-      smtp_host: form.smtp_host,
+      smtp_host: form.smtp_host.trim(),
       smtp_port: Number(form.smtp_port),
-      username: form.username || form.email,
+      username: form.username.trim() || form.email.trim(),
       // Omitting the key entirely tells the core to keep (or, for a test, to
       // use) the stored password; sending "" would blank it. Only an explicitly
       // typed password replaces what the keychain already holds.
@@ -510,6 +526,7 @@ export function useAccountDialog() {
   // the result is shown with what to change, and changes are the person's.
   async function testConnection(intent: 'test' | 'save' = 'test'): Promise<ConnectionReport | null> {
     testIntent.current = intent
+    const generation = ++testGenerationRef.current
     const key = connectionTestKey(formRef.current)
     setError('')
     setCertPrompt(null)
@@ -521,17 +538,23 @@ export function useAccountDialog() {
         // app-wide proxy, as for the certificate probe.
         proxy: reconnectAccount?.proxy ?? null,
       })
+      if (generation !== testGenerationRef.current) return null
       // A result for settings changed while it ran says nothing about them.
-      if (connectionTestKey(formRef.current) !== key) return null
+      if (connectionTestKey(formRef.current) !== key) {
+        setError(translate('accounts.connectionTest.changedWhileTesting'))
+        return null
+      }
       setConnectionReport(report)
       setTestedKey(key)
       if (!report.ok) setAdvancedOpen(true)
       return report
     } catch (err) {
-      setError(errorMessage(err, translate('accounts.connectionTest.couldNotTest')))
+      if (generation === testGenerationRef.current) {
+        setError(errorMessage(err, translate('accounts.connectionTest.couldNotTest')))
+      }
       return null
     } finally {
-      setTesting(false)
+      if (generation === testGenerationRef.current) setTesting(false)
     }
   }
 

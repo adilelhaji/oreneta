@@ -20,6 +20,7 @@ export type StepKind =
   | 'no_greeting'
   | 'plaintext_refused'
   | 'rejected'
+  | 'encryption_required'
   | 'via_proxy'
   | 'no_encryption'
   | 'auth_not_offered'
@@ -69,17 +70,20 @@ export function failedStep(server: ServerReport): StepReport | undefined {
 // What to offer for a server's failed step. A connection or security failure
 // offers the protocol's usual port and security pairs (the same port with the
 // other security first, when that is the likely mistake); a refused sign-in
-// offers the other usual form of the user name; an untrusted certificate
-// offers to inspect it. A name that does not resolve has no guess: only the
-// person knows the right server.
+// offers the other usual form of the user name — unless the other server
+// accepted the same one, which both share; an untrusted certificate offers to
+// inspect it. A name that does not resolve has no guess: only the person knows
+// the right server.
 export function connectionFixes(
   server: ServerReport,
   form: Pick<AccountForm, 'username' | 'email'>,
+  other?: ServerReport,
 ): ConnectionFix[] {
   const failed = failedStep(server)
   if (!failed?.kind) return []
   if (failed.kind === 'certificate') return [{ kind: 'certificate' }]
   if (failed.kind === 'rejected') {
+    if (other?.steps.some((step) => step.step === 'auth' && step.status === 'ok')) return []
     const username = alternativeUsername(form.username, form.email)
     return username ? [{ kind: 'username', username }] : []
   }
@@ -91,10 +95,11 @@ export function connectionFixes(
     'no_greeting',
     'starttls_unsupported',
     'plaintext_refused',
+    'encryption_required',
   ]
   if (failed.step === 'dns' || !connectionKinds.includes(failed.kind)) return []
   const candidates: { port: number; security: 'tls' | 'starttls' }[] = []
-  if (failed.kind === 'not_tls' || failed.kind === 'plaintext_refused') {
+  if (failed.kind === 'not_tls' || failed.kind === 'plaintext_refused' || failed.kind === 'encryption_required') {
     candidates.push({ port: server.port, security: 'starttls' })
   } else if (failed.kind === 'no_greeting' && server.security === 'starttls') {
     candidates.push({ port: server.port, security: 'tls' })

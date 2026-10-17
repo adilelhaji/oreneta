@@ -202,7 +202,6 @@ func connectionTestSummary(res any) string {
 	return strings.Join(parts, " ")
 }
 
-
 // accountAddEWS sets up an Exchange account against its EWS endpoint. The
 // sidecar validates with a live EWS round trip before storing, the same
 // contract accountAddPassword gets from IMAP validation.

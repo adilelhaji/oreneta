@@ -12,7 +12,7 @@ fn short() -> Limits {
         lookup: Duration::from_secs(5),
         connect_attempt: Duration::from_secs(2),
         connect: Duration::from_secs(3),
-        command: Duration::from_millis(500),
+        command: Duration::from_secs(2),
         total: Duration::from_secs(10),
     }
 }
@@ -178,8 +178,9 @@ async fn both_servers_pass_and_each_step_is_reported() {
 async fn a_wrong_password_fails_the_sign_in_of_each_server() {
     let (imap, _) = imap_server("NO no").await;
     let (smtp, _) = smtp_server(true).await;
+    let wrong = "wr0ng-secret";
     let report = run_with_limits(
-        &request(server(Protocol::Imap, imap, Security::None), server(Protocol::Smtp, smtp, Security::None), "wrong"),
+        &request(server(Protocol::Imap, imap, Security::None), server(Protocol::Smtp, smtp, Security::None), wrong),
         short(),
     )
     .await;
@@ -188,6 +189,78 @@ async fn a_wrong_password_fails_the_sign_in_of_each_server() {
         let auth = &side.steps[3];
         assert_eq!((auth.status, auth.kind), (Status::Failed, Some(Kind::Rejected)), "{side:?}");
         assert!(!side.ok);
+    }
+    // The first refusal is the one shown, not the second mechanism's.
+    assert!(report.outgoing.steps[3].detail.contains("bad credentials"), "{:?}", report.outgoing);
+    // A failed report carries the servers' words, never the password, plain
+    // or as the AUTH PLAIN blob.
+    let text = serde_json::to_string(&report).unwrap();
+    let blob = base64::engine::general_purpose::STANDARD.encode(format!("\0pau@example.test\0{wrong}"));
+    assert!(!text.contains(wrong) && !text.contains(&blob), "{text}");
+}
+
+/// A submission server that takes AUTH only after STARTTLS.
+async fn smtp_server_requiring_tls() -> (u16, Log) {
+    line_server(Some("220 smtp.example.test ESMTP\r\n"), |line| {
+        let upper = line.to_ascii_uppercase();
+        Some(if upper.starts_with("EHLO") {
+            "250-smtp.example.test\r\n250 STARTTLS\r\n".into()
+        } else if upper.starts_with("AUTH") {
+            "530 5.7.0 Must issue a STARTTLS command first\r\n".into()
+        } else if upper.starts_with("QUIT") {
+            "221 bye\r\n".into()
+        } else {
+            "500 unknown\r\n".into()
+        })
+    })
+    .await
+}
+
+#[tokio::test]
+async fn a_server_that_wants_encryption_first_is_not_a_wrong_password() {
+    let (imap, _) = line_server(Some("* OK IMAP ready\r\n"), |line| {
+        let tag = line.split_whitespace().next().unwrap_or("*").to_string();
+        Some(if line.to_ascii_uppercase().contains("LOGIN") {
+            format!("{tag} NO [PRIVACYREQUIRED] Use STARTTLS first\r\n")
+        } else {
+            format!("{tag} OK\r\n")
+        })
+    })
+    .await;
+    let (smtp, _) = smtp_server_requiring_tls().await;
+    let report = run_with_limits(
+        &request(server(Protocol::Imap, imap, Security::None), server(Protocol::Smtp, smtp, Security::None), PASSWORD),
+        short(),
+    )
+    .await;
+    for side in [&report.incoming, &report.outgoing] {
+        let auth = &side.steps[3];
+        assert_eq!((auth.status, auth.kind), (Status::Failed, Some(Kind::EncryptionRequired)), "{side:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_proxy_that_cannot_be_reached_is_blamed_not_the_mail_port() {
+    let closed = closed_port().await;
+    let (imap, _) = imap_server("NO no").await;
+    let mut req = request(
+        server(Protocol::Imap, imap, Security::None),
+        server(Protocol::Smtp, imap, Security::None),
+        PASSWORD,
+    );
+    req.proxy = ProxyChoice::from_json(&json!({ "mode": "socks5", "host": "127.0.0.1", "port": closed }));
+    assert!(matches!(req.proxy, ProxyChoice::Custom(_)), "{:?}", req.proxy);
+    let report = run_with_limits(&req, short()).await;
+    for side in [&report.incoming, &report.outgoing] {
+        assert_eq!(
+            statuses(side),
+            vec![
+                (Step::Dns, Status::Skipped, Some(Kind::ViaProxy)),
+                (Step::Tcp, Status::Failed, Some(Kind::Proxy)),
+                (Step::Tls, Status::NotRun, None),
+                (Step::Auth, Status::NotRun, None),
+            ]
+        );
     }
 }
 
@@ -308,6 +381,29 @@ async fn pop3_never_sends_the_password_without_tls() {
     let tls = &report.incoming.steps[2];
     assert_eq!((tls.status, tls.kind), (Status::Failed, Some(Kind::StarttlsUnsupported)), "{tls:?}");
     assert!(!log.lock().unwrap().iter().any(|l| l.starts_with("USER") || l.starts_with("PASS")));
+}
+
+/// As `pop3::connect` does, "no encryption" on POP3 still upgrades with STLS
+/// when the server offers it; here the upgrade never completes, and nothing
+/// of the sign-in is sent.
+#[tokio::test]
+async fn pop3_without_tls_chosen_still_upgrades_with_stls() {
+    let (pop3, log) = line_server(Some("+OK ready\r\n"), |line| {
+        Some(if line.eq_ignore_ascii_case("CAPA") { "+OK\r\nSTLS\r\nUSER\r\n.\r\n".into() } else { "+OK\r\n".into() })
+    })
+    .await;
+    let (smtp, _) = smtp_server(true).await;
+    let report = run_with_limits(
+        &request(server(Protocol::Pop3, pop3, Security::None), server(Protocol::Smtp, smtp, Security::None), PASSWORD),
+        short(),
+    )
+    .await;
+    let tls = &report.incoming.steps[2];
+    assert_eq!(tls.status, Status::Failed, "{tls:?}");
+    assert_ne!(tls.kind, Some(Kind::PlaintextRefused));
+    let log = log.lock().unwrap().clone();
+    assert!(log.iter().any(|l| l.eq_ignore_ascii_case("STLS")), "{log:?}");
+    assert!(!log.iter().any(|l| l.starts_with("USER") || l.starts_with("PASS")), "{log:?}");
 }
 
 /// POP3 signs in only over TLS, so its sign-in is checked on its own here, on a
