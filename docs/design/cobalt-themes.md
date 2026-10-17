@@ -8,7 +8,7 @@ explícita: els canvis posteriors del sistema operatiu no la sobreescriuen. Aque
 part no introdueix el seguiment continu del sistema.
 
 Els 14 identificadors de tema anteriors i els colors de les seves paletes continuen
-disponibles. Les entrades verdes `light`/`dark` es mostren com a Legacy Green/Legacy
+disponibles, amb els ajustos de #287 descrits més avall. Les entrades verdes `light`/`dark` es mostren com a Legacy Green/Legacy
 Green Dark per no confondre-les amb els nous valors per defecte de cobalt. Les
 preferències existents a la base de dades continuen tenint prioritat sobre la
 memòria cau d'arrencada; no es fa cap reescriptura massiva de preferències. Els
@@ -46,3 +46,18 @@ operatiu. Les captures de pantalla a 1440/1024/600 fan servir dades sintètiques
 del pont, no una certificació nativa ni del proveïdor. Els valors per defecte
 del lector i de la llista i el defecte conegut del lector a 600 px continuen
 sent #84/#85.
+
+## Tons de marc i contingut (#287)
+
+El [sistema de disseny](design-system.md) defineix dos tons de superfície per a tots els
+temes: el marc (finestra, capçaleres, barres i panell de carpetes) i el contingut
+(llistes i lector). Oreneta Light i Dark prenen els valors aprovats el 2026-10-17: el
+marc `#e3eaf4`/`#0c1526`, la selecció `#d6e3fb`/`#243a5e`, els camps blancs en clar i
+la barra de mòduls `#08111f` en fosc. Els altres 14 temes donen a la capçalera el color de
+fons de la finestra i set enfosqueixen el text secundari fins a 4,5:1; cap accent no canvia.
+Tots els temes, i els personalitzats derivats o desats, tenen el token nou
+`--me-border-input` per a la vora dels camps (3:1). L'anell de focus és l'accent sòlid
+i els radis passen a 4/6/8/12 px. La llavor de l'editor de temes personalitzats segueix
+els valors nous d'Oreneta. Vuit temes integrats tenen l'accent per sota de 4,5:1 com a
+text des d'abans d'aquest canvi; corregir-ho canviaria el seu accent i espera la
+decisió del propietari.

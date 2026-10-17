@@ -78,6 +78,14 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-17 (#287) l'aparença (S01-01, S01-02) va incorporar la primera peça del
+redisseny aprovat pel propietari: dos tons de superfície a tots els temes (el marc per a
+la finestra, les capçaleres i el panell de carpetes; el contingut per a les llistes i el
+lector), el token `--me-border-input` per a la vora dels camps (3:1), l'anell de focus
+d'accent sòlid i els radis de 4/6/8/12 px. Els temes personalitzats desats conserven els
+seus colors i s'hi afegeix la vora de camp derivada. Vuit temes integrats mantenen l'accent per
+sota de 4,5:1 com a text, com abans; corregir-ho espera la decisió del propietari. Cap
+fila no canvia d'estat: l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

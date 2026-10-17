@@ -9,7 +9,9 @@ modes convencionals existents de llista i lector mitjançant els
 de la disposició continua a part. El
 [lliurament dels controls compartits](shared-controls.md) (#152) aplica aquesta
 direcció als controls i a les respostes comunes; #33 continua obert per a la
-resta de pantalles.
+resta de pantalles. El [sistema de disseny](design-system.md) (#287) hi afegeix els
+dos tons de superfície (marc i contingut), la vora dels camps, l'anell de focus sòlid
+i els radis gairebé rectes.
 
 Una referència escrita i comprovable de com ha de ser la interfície: la direcció
 sobre la qual es construeix cada incidència de disseny posterior a aquesta, en
