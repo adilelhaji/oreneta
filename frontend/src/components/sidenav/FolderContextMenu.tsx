@@ -56,8 +56,13 @@ export function FolderContextMenu({
   const hidden = useValue(folderPrefs$.hidden)
   const hiddenHere = hidden.some((item) => item.accountId === ref.accountId && item.folderId === ref.folderId)
   const hideBlock = hiddenHere ? null : folderHideBlock(folder, folders, hidden)
-  const hideReason = hideBlock
-    ? t(FOLDER_HIDE_BLOCK_TEXT[hideBlock].key, { defaultValue: FOLDER_HIDE_BLOCK_TEXT[hideBlock].text })
+  // Hidden itself and under a hidden parent too: its own mark can go, but the
+  // folder stays out of the tree, and the row says so.
+  const others = hidden.filter((item) => item.accountId !== ref.accountId || item.folderId !== ref.folderId)
+  const staysHidden = hiddenHere && folderHideBlock(folder, folders, others) === 'parentHidden'
+  const hideNote = hideBlock ?? (staysHidden ? 'parentHidden' : null)
+  const hideReason = hideNote
+    ? t(FOLDER_HIDE_BLOCK_TEXT[hideNote].key, { defaultValue: FOLDER_HIDE_BLOCK_TEXT[hideNote].text })
     : ''
   const block = folderMoveSourceBlock(folder, folders, account)
   const reason = block ? t(FOLDER_MOVE_BLOCK_TEXT[block].key, { defaultValue: FOLDER_MOVE_BLOCK_TEXT[block].text }) : ''
@@ -146,7 +151,8 @@ export function FolderContextMenu({
           onClick={close(() => {
             if (hiddenHere) unhideFolder(ref)
             else hideFolder(ref)
-            onHiddenChange(folder, !hiddenHere)
+            // Still hidden through its parent: nothing to announce as shown.
+            if (!staysHidden) onHiddenChange(folder, !hiddenHere)
           })}
         />
         <div

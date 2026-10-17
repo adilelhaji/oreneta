@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { SEARCH_SCOPE_TEXT, searchScopeKind } from '../../lib/folderHiding'
+import { SEARCH_SCOPE_TEXT, isInbox, searchScopeKind } from '../../lib/folderHiding'
 import { UNIFIED_ACCOUNT, unifiedFolderLabel } from '../../lib/unifiedFolders'
 import { folderPrefs$ } from '../../states/folderPrefs'
 import { mail$ } from '../../states/mail'
@@ -44,7 +44,7 @@ export function SearchBuilder({ query }: { query: string }) {
   const scopeFolder =
     accountId === UNIFIED_ACCOUNT
       ? unifiedFolderLabel(folderId, t)
-      : openFolder?.role === 'inbox' || folderId.toLowerCase() === 'inbox'
+      : isInbox(openFolder ?? { id: folderId, role: '' })
         ? t('folders.roles.inbox', { defaultValue: 'Inbox' })
         : openFolder?.name || folderId
 

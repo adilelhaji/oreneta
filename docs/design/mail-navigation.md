@@ -47,40 +47,45 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
   de menú) ofereix «Amaga la carpeta». La carpeta i totes les seves
   subcarpetes surten de l'arbre, tant si la jerarquia és una ruta (IMAP,
   arxiu local, POP3) com si són enllaços al pare (Microsoft Graph, Exchange).
+  La carpeta oberta en aquell moment es queda a l'arbre, marcada com a
+  amagada, fins que se n'obre una altra.
 - **Com es tornen a veure:** quan el compte obert té carpetes amagades,
   sota el quadre de filtre apareix «Mostra les carpetes amagades (N)», un
-  botó commutador (`aria-pressed`). Activat, les carpetes amagades tornen a
-  l'arbre amb una icona d'ull barrat i el text «Amagada» per al lector de
-  pantalla, i el seu menú ofereix «Torna a mostrar la carpeta». Mostrar-les
-  dura mentre el compte és obert: en canviar de compte, en reiniciar o quan
-  ja no en queda cap d'amagada, torna a estar desactivat.
+  botó de commutació (`aria-pressed`). Quan està activat, les carpetes
+  amagades tornen a l'arbre amb una icona d'ull barrat i el text «Amagada»
+  per al lector de pantalla, i el seu menú ofereix «Torna a mostrar la
+  carpeta». El botó només queda activat mentre el compte és obert: en canviar
+  de compte, en reiniciar l'aplicació o quan ja no queda cap carpeta amagada,
+  torna a estar desactivat.
 - **Només una preferència local:** les marques es desen a la preferència
   `folder_hidden` (compte + ruta de la carpeta al servidor), com les
-  preferides i els colors (ADR-0050), i segueixen els mateixos casos: un
-  moviment de carpeta les porta a la ruta nova, suprimir la carpeta o treure
-  el compte se les emporta, i una carpeta desapareguda per un altre camí les
-  perd sense avís (com els colors; l'avís és només per a les preferides). Cap
-  servidor no se n'assabenta i el nucli no les llegeix: una carpeta amagada
-  es continua sincronitzant exactament igual, i amagar o mostrar no envia
-  res més que l'escriptura de la preferència.
-- **Què no es pot amagar:** la Safata d'entrada, ni una carpeta que la
+  preferides i els colors (ADR-0050), i es comporten igual en els mateixos
+  casos: un moviment de carpeta les porta a la ruta nova, suprimir la carpeta
+  o treure el compte se les emporta, i una carpeta desapareguda per un altre
+  camí les perd sense avís (com els colors; l'avís és només per a les
+  preferides). Cap servidor no se n'assabenta i el nucli no les llegeix: una
+  carpeta amagada es continua sincronitzant exactament igual, i amagar o
+  mostrar no envia res més que l'escriptura de la preferència.
+- **Què no es pot amagar:** la safata d'entrada, ni una carpeta que la
   contingui (és on s'obre cada compte). Una subcarpeta que ja queda amagada
   per la seva carpeta pare no s'amaga per separat; el menú ho diu.
-- **On continuen visibles:** a Preferides, si la persona l'hi ha posat
-  expressament; als selectors de destinació (moure missatges, moure
-  carpetes, columnes del tauler, regles) i al selector de carpeta de la
-  capçalera de la llista, que serveixen per triar una carpeta concreta.
+- **On continuen visibles:** a Preferides, si la persona les hi ha posades
+  expressament; als selectors de destinació (per moure missatges o carpetes,
+  per a les columnes del tauler o per a les regles) i al selector de carpeta
+  de la capçalera de la llista, que serveixen per triar una carpeta concreta.
 - **Avisos i focus:** amagar o tornar a mostrar es diu per una regió
-  `aria-live` («S'ha amagat Feina»). Si la fila amagada tenia el focus, el
-  focus passa al commutador «Mostra les carpetes amagades».
+  `aria-live` («S'ha amagat Feina»). Quan una carpeta s'amaga des del seu menú
+  a l'arbre i en surt, el focus passa al botó «Mostra les carpetes amagades».
 - **Cerca:** la cerca busca a la carpeta oberta. «Opcions de cerca» diu
   on busca i si hi entren les carpetes amagades: amb una carpeta oberta, no
-  (o que la mateixa carpeta oberta és amagada); a les carpetes unificades i a
-  Destacats, que el nucli respon per a tots els comptes i carpetes, sí.
-- **Fora d'abast:** l'aplicació mòbil, i desar les marques al servidor.
+  (o bé que la mateixa carpeta oberta és amagada); a les carpetes unificades i
+  a Destacats, que el nucli calcula per a tots els comptes i totes les
+  carpetes, sí.
+- **Fora d'abast:** l'aplicació mòbil i desar les marques al servidor.
 - **Proves:** `frontend/src/lib/folderHiding.test.ts` (què surt de l'arbre
   per ruta i per pare, què no es pot amagar, l'àmbit de la cerca),
   `frontend/src/states/folderPrefs.test.ts` (amagar, mostrar, desar, llegir
   en engegar i seguir moviments i supressions) i
-  `frontend/src/components/sidenav/MailNavigation.test.tsx` (el menú, el
-  commutador, el focus, la Safata d'entrada i Preferides).
+  `frontend/src/components/sidenav/MailNavigation.test.tsx` (el menú, el botó
+  de commutació, el focus, la carpeta oberta, la safata d'entrada i
+  Preferides).

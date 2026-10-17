@@ -49,6 +49,9 @@ describe('hidden folders in the tree (#273)', () => {
     expect(hiddenFolderIds(paths, [ref('Work', 'other')])).toEqual(new Set())
     // An older or hand-edited preference cannot take the inbox away.
     expect([...hiddenFolderIds(paths, [ref('INBOX')])]).toEqual(['INBOX/Lists'])
+    // Nor when a hand-edited mark sits on a folder that holds it.
+    const holder = [folder('Mail'), folder('Mail/INBOX', { role: 'inbox' }), folder('Mail/Old')]
+    expect([...hiddenFolderIds(holder, [ref('Mail')])].sort()).toEqual(['Mail', 'Mail/Old'])
   })
 
   it('refuses to hide the inbox, a folder holding it, or one already hidden with its parent', () => {

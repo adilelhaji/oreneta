@@ -75,7 +75,7 @@ El 2026-10-17 (#273) SET-07 va incorporar amagar carpetes de l'arbre de carpetes
 a mostrar («Amaga la carpeta», «Mostra les carpetes amagades», «Torna a mostrar la carpeta»),
 amb les subcarpetes incloses, com a preferència local (`folder_hidden`) que no arriba mai al
 servidor: les carpetes amagades es continuen sincronitzant, i «Opcions de cerca» diu si la
-cerca les inclou. La Safata d'entrada no es pot amagar. Cap fila no canvia d'estat: SET-07
+cerca les inclou. La safata d'entrada no es pot amagar. Cap fila no canvia d'estat: SET-07
 es manté `partial` i l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |

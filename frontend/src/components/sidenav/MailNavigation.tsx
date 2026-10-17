@@ -34,7 +34,7 @@ export const FAVORITE_DRAG_TYPE = 'application/x-oreneta-favorite'
 /** What the folder rows need from the navigation around them (ADR-0050). */
 type FolderRowActions = {
   colorOf: (folder: Folder) => FolderColorId | undefined
-  /** Hidden from the tree (#273); only asked while hidden folders are shown. */
+  /** Hidden from the tree (#273): such a row is only drawn while hidden folders are shown, or while it is open. */
   isHidden: (folder: Folder) => boolean
   openMenu: (folder: Folder, at: { x: number; y: number }, trigger: HTMLElement | null, inFavorites?: boolean) => void
   /** Why the folder being dragged cannot land on `target`; null when it can, undefined when nothing is dragged. */
@@ -448,17 +448,22 @@ export function MailNavigationView({
   const hiddenIds = hiddenFolderIds(folders, hiddenRefs)
   const showHidden = showHiddenAsked && hiddenIds.size > 0
   const needle = query.trim().toLocaleLowerCase()
+  // The open folder stays in the tree even when hidden, so the navigation
+  // still shows where the list is; it leaves once another folder opens.
+  const isOpen = (folder: Folder) => folder.id === selectedFolder
   const tree = buildFolderTree(
     folders.filter(
       (folder) =>
-        (showHidden || !hiddenIds.has(folder.id)) && (!needle || folder.name.toLocaleLowerCase().includes(needle)),
+        (showHidden || !hiddenIds.has(folder.id) || isOpen(folder)) &&
+        (!needle || folder.name.toLocaleLowerCase().includes(needle)),
     ),
   )
 
   // Nothing hidden any more: the next folder hidden goes out of sight again.
+  // An empty list is a cache being reloaded, not the hidden folders going.
   useEffect(() => {
-    if (!hiddenIds.size) setShowHidden(false)
-  }, [hiddenIds.size])
+    if (!hiddenIds.size && folders.length) setShowHidden(false)
+  }, [hiddenIds.size, folders.length])
 
   // A folder hidden from its own menu leaves the tree, and the focus with it:
   // it lands on the switch that brings hidden folders back.
@@ -682,7 +687,13 @@ export function MailNavigationView({
                 : t('folders.hide.shown', { folder: folder.name, defaultValue: '{folder} shown again' }),
             )
             // Out of sight now: its row is about to go, so the focus may not go back to it.
-            if (hidden && !showHidden && folder.account_id === selectedAccount && !menu?.inFavorites) {
+            if (
+              hidden &&
+              !showHidden &&
+              folder.account_id === selectedAccount &&
+              !isOpen(folder) &&
+              !menu?.inFavorites
+            ) {
               menuTrigger.current = null
               focusToggle.current = true
             }

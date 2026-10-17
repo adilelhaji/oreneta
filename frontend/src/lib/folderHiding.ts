@@ -6,6 +6,7 @@
 
 import type { Folder } from '../types'
 import { buildFolderTree, type TreeNode } from './folderTree'
+import { UNIFIED_ACCOUNT } from './unifiedFolders'
 import type { FolderRef } from '../states/folderPrefs'
 
 export type FolderHideBlock = 'inbox' | 'containsInbox' | 'parentHidden'
@@ -23,7 +24,8 @@ export const FOLDER_HIDE_BLOCK_TEXT: Record<FolderHideBlock, { key: string; text
   },
 }
 
-function isInbox(folder: Folder): boolean {
+/** The inbox, by role or by its IMAP name. */
+export function isInbox(folder: Pick<Folder, 'id' | 'role'>): boolean {
   return folder.role === 'inbox' || folder.id.toLowerCase() === 'inbox'
 }
 
@@ -94,6 +96,6 @@ export function searchScopeKind(
   folders: Folder[],
   hidden: FolderRef[],
 ): SearchScopeKind {
-  if (accountId === 'unified') return folderId === 'starred' ? 'starred' : 'unified'
+  if (accountId === UNIFIED_ACCOUNT) return folderId === 'starred' ? 'starred' : 'unified'
   return hiddenFolderIds(folders, hidden).has(folderId) ? 'hiddenFolder' : 'folder'
 }

@@ -363,6 +363,54 @@ describe('folder favorites, colors and moves (ADR-0050)', () => {
     expect(screen.getByRole('button', { name: 'Show hidden folders (1)' }).getAttribute('aria-pressed')).toBe('false')
   })
 
+  it('keeps the open folder in the tree when it is hidden, and the focus on it (#273)', () => {
+    const screen = view({ selectedFolder: 'Work' })
+    const work = screen.getByRole('button', { name: 'Work 4' })
+    work.focus()
+    fireEvent.keyDown(work, { key: 'F10', shiftKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Hide folder' }))
+    const open = screen.getByRole('button', { name: 'Work Hidden 4' })
+    expect(open.getAttribute('aria-current')).toBe('page')
+    expect(document.activeElement).toBe(open)
+    // Its subfolder is not open, so it goes.
+    expect(screen.queryByRole('button', { name: /^2026/ })).toBeNull()
+  })
+
+  it('hides with hidden folders already shown, or from Favorites, without moving the focus away (#273)', () => {
+    folderPrefs$.favorites.set([{ accountId: account.id, folderId: 'Work' }])
+    folderPrefs$.hidden.set([{ accountId: account.id, folderId: 'Sent' }])
+    const screen = view()
+    const favorites = () => screen.getByRole('region', { name: 'Favorites' })
+    const favorite = within(favorites()).getByRole('button', { name: 'Work 4' })
+    fireEvent.contextMenu(favorite)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide folder' }))
+    expect(document.activeElement).toBe(favorite)
+    expect(within(favorites()).getByRole('button', { name: 'Work 4' })).toBe(favorite)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden folders (3)' }))
+    menuFor(screen, 'Projects')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide folder' }))
+    const projects = screen.getByRole('button', { name: 'Projects Hidden' })
+    expect(document.activeElement).toBe(projects)
+  })
+
+  it('says a folder stays hidden through its parent when its own mark goes (#273)', () => {
+    folderPrefs$.hidden.set([
+      { accountId: account.id, folderId: 'Work' },
+      { accountId: account.id, folderId: 'Work/2026' },
+    ])
+    const screen = view()
+    fireEvent.click(screen.getByRole('button', { name: 'Show hidden folders (2)' }))
+    menuFor(screen, '2026 Hidden')
+    const show = screen.getByRole('button', { name: /Show folder again/ })
+    expect(show.hasAttribute('disabled')).toBe(false)
+    expect(show.getAttribute('title')).toBe('Hidden because the folder that holds it is hidden')
+    fireEvent.click(show)
+    expect(folderPrefs$.hidden.get()).toEqual([{ accountId: account.id, folderId: 'Work' }])
+    expect(screen.getByRole('button', { name: '2026 Hidden' })).toBeTruthy()
+    expect(screen.queryByText('Work/2026 shown again')).toBeNull()
+  })
+
   it('never hides the inbox, and keeps a hidden favorite in Favorites (#273)', () => {
     folderPrefs$.favorites.set([{ accountId: account.id, folderId: 'Work' }])
     folderPrefs$.hidden.set([{ accountId: account.id, folderId: 'Work' }])
