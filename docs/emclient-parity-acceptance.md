@@ -83,7 +83,7 @@ comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de du
 (remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
 data, mentre la llista fa menys de 520 px, i la taula a partir d'aquesta amplada.
 L'amplada redimensionada es conserva entre reinicis, i una vista desada (taula o
-targetes) es respecta. Proves sintètiques de l'entrada de producció a 1280, 1456 i
+targetes) es respecta. Proves sintètiques del punt d'entrada de producció a 1280, 1456 i
 1920 px, en català, anglès i àrab, en clar i en fosc, i del recorregut d'obrir,
 respondre, seleccionar i navegar sobre les files. S01-03 (valors per defecte) i S01-06
 (colors d'estat de les files: la fila oberta passa a `bg-active`) no canvien d'estat:

@@ -23,7 +23,7 @@ entre la casella, el remitent, l'assumpte i la data.
   amplada. Segueix l'amplada dibuixada, no la desada: una llista ampla que la
   finestra estreny passa a files. Mentre la llista no s'ha mesurat, decideix
   l'amplada desada.
-- **Configuració:** Configuració > General, Vista de la llista, ofereix
+- **Configuració:** a Configuració > General, Vista de la llista ofereix
   «Automàtica» al costat de «Targetes» i «Taula»; triar-la desa `auto`.
 - **Files de dues línies:** a la vista automàtica estreta, la densitat
   «Compacta» fa dues línies d'uns 56 px: remitent i data a la primera, assumpte i
@@ -75,9 +75,9 @@ entre la casella, el remitent, l'assumpte i la data.
     (axe comprova la llista en repòs, sense cap fila oberta ni seleccionada);
   - redimensionar la llista amb el teclat i recarregar: l'amplada es conserva, i
     la vista automàtica canvia a taula a 560 px i torna a files a 296 px;
-  - una llista desada de 560 px que la finestra estreny a 1024 px passa a files
+  - una llista desada de 560 px que s'estreny en una finestra de 1024 px passa a files
     (segueix l'amplada dibuixada);
-  - obrir, esborrany de resposta, selecció i navegació sobre les files per
+  - obrir, respondre, seleccionar i navegar sobre les files per
     defecte, en clar i en fosc;
   - triar «Automatic» a la configuració desa `auto`.
 - L'evidència nativa de Windows continua pendent.

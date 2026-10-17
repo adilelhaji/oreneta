@@ -79,6 +79,14 @@
           {
             "sha": "d5a8f977513fe8f412fb60cefc41a27f95fa8f75",
             "result": "https://github.com/adilelhaji/oreneta/actions/runs/34327478903"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/e2e/startup.e2e.ts"
+          },
+          {
+            "sha": "d70e518eafce9e7afd4ff2ee87af74db2578ab56",
+            "result": "frontend/baseline/autoListView.test.tsx"
           }
         ],
         "native": [],
