@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "Thư mục này chứa hộp thư đến nên không thể ẩn",
   "folders.hide.blocked.parentHidden": "Đã ẩn vì thư mục chứa nó đang bị ẩn",
   "search.scope.starred": "Tìm trong các thư có gắn sao ở mọi thư mục của mọi tài khoản, kể cả thư mục đã ẩn.",
-  "search.scope.unified": "Tìm trong “{folder}” ở các tài khoản đang xem, kể cả thư mục đã ẩn.",
+  "search.scope.unified": "Tìm trong “{folder}”: thư mục đó ở mỗi tài khoản đang xem, kể cả khi nó đã bị ẩn.",
   "search.scope.folder": "Chỉ tìm trong “{folder}”. Không bao gồm các thư mục đã ẩn.",
-  "search.scope.hiddenFolder": "Chỉ tìm trong “{folder}”, một thư mục đã ẩn."
+  "search.scope.hiddenFolder": "Chỉ tìm trong “{folder}”, một thư mục đã ẩn.",
+  "search.scope.unifiedInbox": "Tìm trong “{folder}”: hộp thư đến của mỗi tài khoản đang xem."
 }

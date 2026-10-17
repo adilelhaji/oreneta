@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "Esta pasta contém a caixa de entrada e não pode ser ocultada",
   "folders.hide.blocked.parentHidden": "Oculta porque a pasta que a contém está oculta",
   "search.scope.starred": "Procura nas mensagens com estrela de todas as pastas de todas as contas, incluindo as ocultas.",
-  "search.scope.unified": "Procura em «{folder}» nas contas apresentadas, incluindo as pastas ocultas.",
+  "search.scope.unified": "Procura em «{folder}»: essa pasta em cada conta apresentada, mesmo que esteja oculta.",
   "search.scope.folder": "Procura apenas em «{folder}». As pastas ocultas não são incluídas.",
-  "search.scope.hiddenFolder": "Procura apenas em «{folder}», uma pasta oculta."
+  "search.scope.hiddenFolder": "Procura apenas em «{folder}», uma pasta oculta.",
+  "search.scope.unifiedInbox": "Procura em «{folder}»: a caixa de entrada de cada conta apresentada."
 }

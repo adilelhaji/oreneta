@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "이 폴더에는 받은편지함이 있어 숨길 수 없습니다",
   "folders.hide.blocked.parentHidden": "상위 폴더가 숨겨져 있어 숨김 상태입니다",
   "search.scope.starred": "모든 계정의 모든 폴더에서 별표 메일을 검색합니다. 숨긴 폴더도 포함됩니다.",
-  "search.scope.unified": "보기에 있는 계정의 “{folder}”에서 검색합니다. 숨긴 폴더도 포함됩니다.",
+  "search.scope.unified": "“{folder}”에서 검색합니다: 보기에 있는 각 계정의 해당 폴더이며, 숨긴 경우에도 포함됩니다.",
   "search.scope.folder": "“{folder}”에서만 검색합니다. 숨긴 폴더는 포함되지 않습니다.",
-  "search.scope.hiddenFolder": "숨긴 폴더인 “{folder}”에서만 검색합니다."
+  "search.scope.hiddenFolder": "숨긴 폴더인 “{folder}”에서만 검색합니다.",
+  "search.scope.unifiedInbox": "“{folder}”에서 검색합니다: 보기에 있는 각 계정의 받은편지함입니다."
 }

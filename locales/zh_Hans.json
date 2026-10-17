@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "此文件夹包含收件箱，无法隐藏",
   "folders.hide.blocked.parentHidden": "因其上级文件夹已隐藏而隐藏",
   "search.scope.starred": "在所有账户的所有文件夹中搜索已加星标的邮件，包括隐藏的文件夹。",
-  "search.scope.unified": "在视图中各账户的“{folder}”中搜索，包括隐藏的文件夹。",
+  "search.scope.unified": "在“{folder}”中搜索：视图中每个账户的该文件夹，即使已隐藏。",
   "search.scope.folder": "仅在“{folder}”中搜索。不包括隐藏的文件夹。",
-  "search.scope.hiddenFolder": "仅在隐藏的文件夹“{folder}”中搜索。"
+  "search.scope.hiddenFolder": "仅在隐藏的文件夹“{folder}”中搜索。",
+  "search.scope.unifiedInbox": "在“{folder}”中搜索：视图中每个账户的收件箱。"
 }

@@ -71,6 +71,9 @@ describe('search scope and hidden folders (#273)', () => {
   it('says hidden folders are in a search that spans folders, and out of one that does not', () => {
     expect(searchScopeKind('unified', 'starred', [], [])).toBe('starred')
     expect(searchScopeKind('unified', 'sent', [], [])).toBe('unified')
+    expect(searchScopeKind('unified', 'inbox', [], [])).toBe('unifiedInbox')
+    // A bare or unknown selection is the unified inbox, as the list loads it.
+    expect(searchScopeKind('unified', '', [], [])).toBe('unifiedInbox')
     expect(searchScopeKind('acc', 'Work', paths, [])).toBe('folder')
     expect(searchScopeKind('acc', 'Work/2026', paths, [ref('Work')])).toBe('hiddenFolder')
     expect(searchScopeKind('acc', 'Sent', paths, [ref('Work')])).toBe('folder')

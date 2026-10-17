@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "Ce dossier contient la boîte de réception et ne peut pas être masqué",
   "folders.hide.blocked.parentHidden": "Masqué, car le dossier qui le contient est masqué",
   "search.scope.starred": "Recherche dans les messages suivis de tous les dossiers de tous les comptes, dossiers masqués compris.",
-  "search.scope.unified": "Recherche dans « {folder} » pour les comptes affichés, dossiers masqués compris.",
+  "search.scope.unified": "Recherche dans « {folder} » : ce dossier dans chaque compte affiché, même s’il est masqué.",
   "search.scope.folder": "Recherche uniquement dans « {folder} ». Les dossiers masqués ne sont pas inclus.",
-  "search.scope.hiddenFolder": "Recherche uniquement dans « {folder} », un dossier masqué."
+  "search.scope.hiddenFolder": "Recherche uniquement dans « {folder} », un dossier masqué.",
+  "search.scope.unifiedInbox": "Recherche dans « {folder} » : la boîte de réception de chaque compte affiché."
 }

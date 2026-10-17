@@ -6,7 +6,7 @@
 
 import type { Folder } from '../types'
 import { buildFolderTree, type TreeNode } from './folderTree'
-import { UNIFIED_ACCOUNT } from './unifiedFolders'
+import { UNIFIED_ACCOUNT, unifiedFolderRole } from './unifiedFolders'
 import type { FolderRef } from '../states/folderPrefs'
 
 export type FolderHideBlock = 'inbox' | 'containsInbox' | 'parentHidden'
@@ -69,7 +69,7 @@ export function folderHideBlock(folder: Folder, folders: Folder[], hidden: Folde
   return underHidden ? 'parentHidden' : null
 }
 
-export type SearchScopeKind = 'starred' | 'unified' | 'folder' | 'hiddenFolder'
+export type SearchScopeKind = 'starred' | 'unified' | 'unifiedInbox' | 'folder' | 'hiddenFolder'
 
 /** i18n key and English text saying where a search looks, and whether hidden folders are in it. */
 export const SEARCH_SCOPE_TEXT: Record<SearchScopeKind, { key: string; text: string }> = {
@@ -79,16 +79,19 @@ export const SEARCH_SCOPE_TEXT: Record<SearchScopeKind, { key: string; text: str
   },
   unified: {
     key: 'search.scope.unified',
-    text: 'Searches “{folder}” across the accounts in view, hidden folders included.',
+    text: 'Searches “{folder}”: that folder in each account in view, even where it is hidden.',
   },
+  // An inbox is never hidden, so there is nothing to say about hidden folders.
+  unifiedInbox: { key: 'search.scope.unifiedInbox', text: 'Searches “{folder}”: the inbox of each account in view.' },
   folder: { key: 'search.scope.folder', text: 'Searches only “{folder}”. Hidden folders are not included.' },
   hiddenFolder: { key: 'search.scope.hiddenFolder', text: 'Searches only “{folder}”, a hidden folder.' },
 }
 
 /**
- * Where the search box looks (#273). A search runs in the open folder; the
- * unified folders and Starred span accounts and folders in the core, which
- * knows nothing of hidden folders, so those include them.
+ * Where the search box looks (#273). A search runs in the open folder. A
+ * unified folder is that role's folder in each account in view, and Starred
+ * spans every folder; the core answers both and knows nothing of hidden
+ * folders, so a hidden one is searched there.
  */
 export function searchScopeKind(
   accountId: string,
@@ -96,6 +99,9 @@ export function searchScopeKind(
   folders: Folder[],
   hidden: FolderRef[],
 ): SearchScopeKind {
-  if (accountId === UNIFIED_ACCOUNT) return folderId === 'starred' ? 'starred' : 'unified'
+  if (accountId === UNIFIED_ACCOUNT) {
+    const role = unifiedFolderRole(folderId)
+    return role === 'starred' ? 'starred' : role === 'inbox' ? 'unifiedInbox' : 'unified'
+  }
   return hiddenFolderIds(folders, hidden).has(folderId) ? 'hiddenFolder' : 'folder'
 }

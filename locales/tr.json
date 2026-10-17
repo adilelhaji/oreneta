@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "Bu klasör gelen kutusunu içerdiği için gizlenemez",
   "folders.hide.blocked.parentHidden": "İçinde bulunduğu klasör gizli olduğu için gizli",
   "search.scope.starred": "Tüm hesapların tüm klasörlerindeki yıldızlı iletilerde arar, gizli klasörler dahil.",
-  "search.scope.unified": "Görünümdeki hesaplarda “{folder}” içinde arar, gizli klasörler dahil.",
+  "search.scope.unified": "“{folder}” içinde arar: görünümdeki her hesabın bu klasörü, gizli olsa bile.",
   "search.scope.folder": "Yalnızca “{folder}” içinde arar. Gizli klasörler dahil değildir.",
-  "search.scope.hiddenFolder": "Yalnızca gizli bir klasör olan “{folder}” içinde arar."
+  "search.scope.hiddenFolder": "Yalnızca gizli bir klasör olan “{folder}” içinde arar.",
+  "search.scope.unifiedInbox": "“{folder}” içinde arar: görünümdeki her hesabın gelen kutusu."
 }

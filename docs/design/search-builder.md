@@ -17,8 +17,9 @@ Una cerca desada recorda on es va desar i, en obrir-la, es torna a
 aquell compte i aquella carpeta.
 
 A dalt de tot, una línia diu on busca la cerca i si hi entren les carpetes
-amagades (#273): amb una carpeta oberta, només aquella; a les carpetes
-unificades i a Destacats, totes, les amagades incloses.
+amagades (#273): amb una carpeta oberta, només aquella; a una carpeta
+unificada, la d'aquell tipus de cada compte de la vista, encara que sigui
+amagada; a Destacats, totes les carpetes, les amagades incloses.
 
 ## Proves
 

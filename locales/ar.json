@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "يحتوي هذا المجلد على البريد الوارد ولا يمكن إخفاؤه",
   "folders.hide.blocked.parentHidden": "مخفي لأن المجلد الذي يحتويه مخفي",
   "search.scope.starred": "يبحث في الرسائل المميزة بنجمة في كل مجلدات كل الحسابات، بما فيها المجلدات المخفية.",
-  "search.scope.unified": "يبحث في «{folder}» عبر الحسابات المعروضة، بما فيها المجلدات المخفية.",
+  "search.scope.unified": "يبحث في «{folder}»: هذا المجلد في كل حساب معروض، حتى إن كان مخفيًا.",
   "search.scope.folder": "يبحث في «{folder}» فقط. لا تُضمَّن المجلدات المخفية.",
-  "search.scope.hiddenFolder": "يبحث في «{folder}» فقط، وهو مجلد مخفي."
+  "search.scope.hiddenFolder": "يبحث في «{folder}» فقط، وهو مجلد مخفي.",
+  "search.scope.unifiedInbox": "يبحث في «{folder}»: البريد الوارد لكل حساب معروض."
 }

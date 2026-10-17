@@ -2809,7 +2809,8 @@
   "folders.hide.blocked.containsInbox": "Den här mappen innehåller inkorgen och kan inte döljas",
   "folders.hide.blocked.parentHidden": "Dold eftersom mappen den ligger i är dold",
   "search.scope.starred": "Söker bland stjärnmärkta meddelanden i alla mappar för alla konton, även dolda mappar.",
-  "search.scope.unified": "Söker i ”{folder}” för kontona i vyn, även dolda mappar.",
+  "search.scope.unified": "Söker i ”{folder}”: den mappen i varje konto i vyn, även där den är dold.",
   "search.scope.folder": "Söker bara i ”{folder}”. Dolda mappar ingår inte.",
-  "search.scope.hiddenFolder": "Söker bara i ”{folder}”, en dold mapp."
+  "search.scope.hiddenFolder": "Söker bara i ”{folder}”, en dold mapp.",
+  "search.scope.unifiedInbox": "Söker i ”{folder}”: inkorgen i varje konto i vyn."
 }

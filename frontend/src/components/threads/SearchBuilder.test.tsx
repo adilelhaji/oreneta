@@ -119,7 +119,9 @@ it('says where the search looks and whether hidden folders are in it (#273)', as
     expect(await scopeOf()).toBe('Searches only “Lists”, a hidden folder.')
     ui$.selectedAccount.set('unified')
     ui$.selectedFolder.set('sent')
-    expect(await scopeOf()).toBe('Searches “Unified sent” across the accounts in view, hidden folders included.')
+    expect(await scopeOf()).toBe('Searches “Unified sent”: that folder in each account in view, even where it is hidden.')
+    ui$.selectedFolder.set('inbox')
+    expect(await scopeOf()).toBe('Searches “Unified inbox”: the inbox of each account in view.')
     ui$.selectedFolder.set('starred')
     expect(await scopeOf()).toBe(
       'Searches starred messages in every folder of every account, hidden folders included.',
