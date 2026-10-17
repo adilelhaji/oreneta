@@ -4975,11 +4975,13 @@ pub fn delete_draft_copies(
 }
 
 /// Remove locally cached quick-reply draft rows in a thread. This repairs stale
-/// duplicates left by older autosave code that minted multiple app-owned draft
-/// Message-IDs for the same quick reply; the server discard still targets the
-/// one draft Message-ID the client knows about. App-owned means Oreneta's
-/// `oreneta-draft-*@oreneta` and the `meron-draft-*@meron` ids minted before the
-/// fork was renamed, which stay in existing caches and Drafts folders.
+/// duplicates left by older autosave code that minted multiple draft
+/// Message-IDs on the fallback domain for the same quick reply; the server
+/// discard still targets the one draft Message-ID the client knows about. The
+/// match is the fallback-domain form, `oreneta-draft-*@oreneta`, and the same
+/// form minted before the fork was renamed, `meron-draft-*@meron`, which stays
+/// in existing caches. Ids on the account's own domain are not matched here,
+/// as before the rename.
 pub fn delete_quick_reply_drafts_in_thread(
     conn: &Connection,
     account: &str,

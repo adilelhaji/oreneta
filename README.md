@@ -34,8 +34,8 @@ delivery target, not a claim that Oreneta has already reached parity.
 ## Building
 
 ```sh
-cargo build --release --bin oreneta-core # the Rust engine (crate meron-core)
-wails build -tags webkit2_41             # the desktop app
+cargo build --manifest-path meron-core/Cargo.toml --bin oreneta-core  # the Rust engine
+wails build -tags webkit2_41                                         # the desktop app
 ```
 
 ## Google sign-in: use your own credentials

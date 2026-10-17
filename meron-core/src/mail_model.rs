@@ -426,9 +426,9 @@ fn starred_folder_rank(role: &str) -> u8 {
 /// Mint the RFC Message-ID for an outgoing message or a draft:
 /// `oreneta-<uuid>@<account domain>` or `oreneta-draft-<uuid>@<account domain>`,
 /// with `oreneta` as the domain when the account id has none. Ids minted before
-/// the fork was renamed start with `meron-` (`@meron`); whatever recognises the
-/// app's own ids keeps accepting those too (see
-/// `store::delete_quick_reply_drafts_in_thread`).
+/// the fork was renamed start with `meron-` instead; the one place that matches
+/// ids by prefix, `store::delete_quick_reply_drafts_in_thread`, accepts the
+/// fallback-domain form of both (`oreneta-draft-*@oreneta`, `meron-draft-*@meron`).
 pub fn allocate_message_id(account_id: &str, draft: bool) -> String {
     let domain = account_id
         .split_once('@')
@@ -586,8 +586,14 @@ mod tests {
         for account in ["", "local-account", "nobody@"] {
             let draft = allocate_message_id(account, true);
             let outgoing = allocate_message_id(account, false);
-            assert!(draft.starts_with("oreneta-draft-") && draft.ends_with("@oreneta"), "{draft}");
-            assert!(outgoing.starts_with("oreneta-") && outgoing.ends_with("@oreneta"), "{outgoing}");
+            assert!(
+                draft.starts_with("oreneta-draft-") && draft.ends_with("@oreneta"),
+                "{draft}"
+            );
+            assert!(
+                outgoing.starts_with("oreneta-") && outgoing.ends_with("@oreneta"),
+                "{outgoing}"
+            );
         }
     }
 

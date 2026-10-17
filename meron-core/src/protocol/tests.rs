@@ -235,6 +235,33 @@ fn mobile_protocol_only_overrides_inference_with_unambiguous_security_modes() {
 }
 
 #[test]
+fn mobile_protocol_refuses_a_custom_wallpaper_from_outside_the_app() {
+    let data_dir = unique_data_dir("foreign-wallpaper");
+    let unique = unique_test_suffix();
+    let email = format!("wallpaper+{unique}@example.com");
+    let data_dir_str = data_dir.to_str().unwrap();
+    let add_request = format!(
+        r#"{{"id":60,"method":"account.addPassword","params":{{"email":"{email}","display_name":"Old","sender_name":"Old Sender","imap_host":"imap.example.com","smtp_host":"smtp.example.com","username":"{email}","password":"secret"}}}}"#
+    );
+    assert!(
+        invoke_mobile_protocol_json(&add_request, Some(data_dir_str))
+            .get("error")
+            .is_none()
+    );
+
+    let request = format!(
+        r#"{{"id":61,"method":"account.setChatWallpaper","params":{{"id":"{email}","wallpaper":{{"kind":"custom","url":"https://elsewhere.example/w.png"}}}}}}"#
+    );
+    let refused = invoke_mobile_protocol_json(&request, Some(data_dir_str));
+    assert_eq!(
+        refused["error"]["message"], "custom wallpaper URL must be an Oreneta wallpaper",
+        "{refused}"
+    );
+
+    let _ = std::fs::remove_dir_all(data_dir);
+}
+
+#[test]
 fn mobile_protocol_updates_account_settings_and_aliases() {
     let data_dir = unique_data_dir("account-settings");
     let unique = unique_test_suffix();

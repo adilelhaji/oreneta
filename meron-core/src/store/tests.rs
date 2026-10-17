@@ -4288,7 +4288,7 @@ fn delete_quick_reply_drafts_in_thread_removes_only_app_drafts_old_and_new() {
             draft(12, "root@mail.example", "manual-draft@example.com"),
             draft(13, "other@mail.example", "meron-draft-other@meron"),
             draft(14, "root@mail.example", "Oreneta-Draft-Upper@Oreneta"),
-            // The prefix alone does not make a draft the app's own.
+            // Only the fallback-domain form is matched, as before the rename.
             draft(15, "root@mail.example", "oreneta-draft-foreign@example.com"),
             // Another thread keeps its drafts.
             draft(16, "other@mail.example", "oreneta-draft-other@oreneta"),

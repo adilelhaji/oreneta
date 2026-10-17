@@ -202,11 +202,14 @@ fn discover_mobile_autoconfig(email: &str, domain: &str) -> Option<DiscoveredMai
     None
 }
 
+/// What autoconfig servers see, the same as the desktop's Go side sends.
+const AUTOCONFIG_USER_AGENT: &str = "Oreneta-Mail-Autoconfig";
+
 fn fetch_mobile_autoconfig(url: &str) -> Option<String> {
     let mut resp = crate::proxy::agent()
         .ok()?
         .get(url)
-        .header("User-Agent", "Oreneta-Mail-Autoconfig")
+        .header("User-Agent", AUTOCONFIG_USER_AGENT)
         .config()
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(6)))
@@ -460,6 +463,11 @@ pub(crate) fn reorder_mobile_accounts(data_dir: &str, params: &Value) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn autoconfig_requests_identify_oreneta() {
+        assert_eq!(AUTOCONFIG_USER_AGENT, "Oreneta-Mail-Autoconfig");
+    }
 
     #[test]
     fn mobile_autoconfig_parser_expands_username_and_socket_defaults() {
