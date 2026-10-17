@@ -68,8 +68,8 @@ export function CalendarDnd({ children }: { children: ReactNode }) {
     const event = current.drag.event
     const target = over?.data.current as DropTarget | undefined
     const to = target?.area === 'grid' ? gridInstant(target.day, current.y) : null
-    const held = { edge: current.drag.edge, event, day: current.drag.day, from: current.from }
-    previewMove(landingTimes(held, target, to) ?? { start: event.start, end: event.end })
+    const drag = { edge: current.drag.edge, event, day: current.drag.day, from: current.from }
+    previewMove(landingTimes(drag, target, to) ?? { start: event.start, end: event.end })
   }
 
   const subjectOf = (data: unknown) =>
