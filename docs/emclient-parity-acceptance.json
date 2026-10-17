@@ -695,6 +695,18 @@
           {
             "sha": "54628c360106a70b9bf88cea96ff341c278c8c57",
             "result": "frontend/src/components/dialog/SpamAndRuns.test.tsx"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "meron-core/src/store/tests.rs"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "spam_test.go"
+          },
+          {
+            "sha": "bdda62af54326dbf8f6af44f9470c3322ebfadde",
+            "result": "frontend/src/states/junkUndo.test.ts"
           }
         ],
         "native": [],
