@@ -149,7 +149,7 @@
       "section": "Appearance/Lists",
       "outcome": "Unread, open, focused and multi-selected rows have distinct meaning",
       "status": "implemented-unverified",
-      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); card-list polish and native evidence pending",
+      "present": "Table rows keep opened edge, unread dot/bold, checkbox tint and focus outline as separate signals; arrivals never join a bulk selection; keyboard/pointer production-entry cases in both cobalt themes (#154, #186); since #283 the default narrow list draws two-line rows (open row bg-active + 3 px start edge and aria-current; unread and selection tints unchanged), with open/select production-entry cases; card-list polish and native evidence pending",
       "code": "frontend/src/components/threads/ThreadTable.tsx",
       "acceptance": "Production-entry keyboard/pointer scenarios in both themes; reviewed selection excludes new arrivals",
       "platform": "Windows desktop",

@@ -2273,7 +2273,7 @@ async function verifyMailBoundary(page: Page, width: number) {
 }
 
 for (const theme of ['oreneta-light', 'oreneta-dark']) {
-  test(`conventional mail defaults support open, reply draft, selection and navigation (${theme})`, async ({
+  test(`a stored table supports open, reply draft, selection and navigation (${theme})`, async ({
     page,
   }, info) => {
     const errors = await prepareStartup(page, true, { navigation: true, theme })
@@ -2315,6 +2315,58 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     await expect(table).toHaveCount(0)
     await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
     await expect(table).toBeVisible()
+    expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
+    expect(errors).toEqual([])
+  })
+}
+
+// The same workflow on what a profile that never chose a view gets (#283):
+// the automatic view's two-line rows at the default 360 px.
+for (const theme of ['oreneta-light', 'oreneta-dark']) {
+  test(`the default rows support open, reply draft, selection and navigation (${theme}, #283)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1456, height: 900 })
+    const errors = await prepareStartup(page, true, { navigation: true, theme, listView: null })
+    await page.goto('/')
+    const list = page.locator('[data-thread-list]')
+    await expect(list).toHaveAttribute('data-list-view', 'cards')
+    const first = list.getByTitle('Pilot checklist — synthetic conversation', { exact: true })
+    await first.focus()
+    await page.keyboard.press('Enter')
+    await expect(first).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    const reply = page.getByPlaceholder('Write a message...')
+    await reply.fill('Synthetic reply draft — do not send')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as any).startupProbe.requests.filter((r: any) => r.command === 'mail.saveDraft').at(-1)?.payload,
+        ),
+      )
+      .toMatchObject({
+        account_id: 'synthetic-account',
+        to: 'morgan@example.test',
+        body: 'Synthetic reply draft — do not send',
+      })
+    const budget = list.getByTitle('Budget review: Q4 planning', { exact: true })
+    await budget.click()
+    await expect(budget).toHaveAttribute('aria-current', 'true')
+    await expect(first).not.toHaveAttribute('aria-current', 'true')
+    await expect(reply).toHaveValue('')
+
+    // Selecting without opening: Ctrl+click starts a selection, Close ends it.
+    await list.getByTitle('Meeting notes and next steps', { exact: true }).click({ modifiers: ['Control'] })
+    await expect(list.getByText('1 selected', { exact: true })).toBeVisible()
+    await expect(budget).toHaveAttribute('aria-current', 'true')
+    await list.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(list.getByText('1 selected', { exact: true })).toHaveCount(0)
+
+    const nav = page.getByRole('navigation', { name: 'Accounts and folders' })
+    await nav.getByRole('button', { name: 'Sent', exact: true }).click()
+    await expect(budget).toHaveCount(0)
+    await nav.getByRole('button', { name: 'Inbox 3', exact: true }).click()
+    await expect(budget).toBeVisible()
+    await expect(list).toHaveAttribute('data-list-view', 'cards')
     expect(await page.evaluate(() => (window as any).startupProbe.calls.includes('mail.send'))).toBe(false)
     expect(errors).toEqual([])
   })
@@ -2396,6 +2448,15 @@ test('legacy cards/chat stay selected until explicit layout controls change them
     .getByRole('button', { name: /Pilot checklist/ })
     .click()
   await expect(page.getByTitle('Collapse message', { exact: true })).toHaveCount(2)
+  // Back to the automatic view (#283): stored as a choice, drawn as rows at 360 px.
+  await page.keyboard.press('Control+,')
+  await page.getByRole('button', { name: 'Automatic', exact: true }).click()
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('synthetic-prefs') ?? '{}').list_view))
+    .toBe('auto')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-thread-list]')).toHaveAttribute('data-list-view', 'cards')
+  await expect(page.getByRole('table')).toHaveCount(0)
   expect(errors).toEqual([])
 })
 

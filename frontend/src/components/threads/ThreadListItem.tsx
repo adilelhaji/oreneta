@@ -157,6 +157,8 @@ export function ThreadListItem({
         onClick={onSelect}
         onContextMenu={onContextMenu}
         title={threadTitle}
+        // The open conversation, as the table's subject button says it (#283).
+        aria-current={isActive ? 'true' : undefined}
       >
         {!bulkSelectable && isActive && (
           <span aria-hidden="true" className="absolute inset-y-0 start-0 w-[3px] bg-accent" />
