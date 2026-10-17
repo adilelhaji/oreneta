@@ -905,14 +905,16 @@ type ComposeSeed = Partial<ComposeDraft> & {
  * reply written below it. An account can put it above or below the quoted
  * original instead, in replies and forwards alike (#277). The draft keeps the
  * placement it opened with; a later change of account swaps the signature in
- * that same place.
+ * that same place. When the signature is moved away from the person's text,
+ * `caret` says on which side of the quote they write, for the editor to open
+ * there rather than next to the signature.
  */
 function signedBody(
   seeded: ComposeBody,
   signature: Signature | undefined,
   seed: ComposeSeed | undefined,
   accountId: string,
-): { body: ComposeBody; placement: SignaturePlacement } {
+): { body: ComposeBody; placement: SignaturePlacement; caret?: 'start' | 'end' } {
   const seededPlacement = seed?.signaturePlacement ?? 'belowText'
   const quote = seed?.quote
   // Only a reply or forward carries a quote; anything else is signed as before.
@@ -928,14 +930,15 @@ function signedBody(
     const joined = joinReplyBody(seeded, quote, quote.position)
     // Below the quote, at the very end; or above it, at the very start.
     return wanted === 'below'
-      ? { body: sign(joined, 'belowText'), placement: 'belowText' }
-      : { body: sign(joined, 'aboveQuote'), placement: 'aboveQuote' }
+      ? { body: sign(joined, 'belowText'), placement: 'belowText', caret: 'start' }
+      : { body: sign(joined, 'aboveQuote'), placement: 'aboveQuote', caret: 'end' }
   }
   // The seeded body is the quote itself (a forward, or a reply above an
   // untouched quote): the signature goes before it, or after it when asked.
-  const placement: SignaturePlacement =
-    seededPlacement === 'aboveQuote' && choice === 'below' ? 'belowText' : seededPlacement
-  return { body: sign(seeded, placement), placement }
+  if (seededPlacement === 'aboveQuote' && choice === 'below') {
+    return { body: sign(seeded, 'belowText'), placement: 'belowText', caret: 'start' }
+  }
+  return { body: sign(seeded, seededPlacement), placement: seededPlacement }
 }
 
 export function openComposeTab(seed?: ComposeSeed): string | undefined {
@@ -959,7 +962,7 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
   // A body this app did not compose (a saved draft, "Edit as New Message") may
   // already carry a signature, so it stays unmanaged: `undefined`, not `null`.
   const signature = seed?.noSignature ? undefined : resolveSignatureFor(account)
-  const { body, placement } = signedBody(seeded, signature, seed, accountId)
+  const { body, placement, caret } = signedBody(seeded, signature, seed, accountId)
   // The placement is recorded even when the account sends no signature, so a
   // forward that later moves to an account with one still puts it above the
   // quote rather than after it.
@@ -984,6 +987,7 @@ export function openComposeTab(seed?: ComposeSeed): string | undefined {
     references: seed?.references ?? '',
     draftMessageId: seed?.draftMessageId ?? newDraftMessageId(),
     signature: tracking,
+    ...(caret ? { caret } : {}),
     sourceDraft: seed?.sourceDraft,
     attachments: seed?.attachments ?? [],
     pgpSign: false,

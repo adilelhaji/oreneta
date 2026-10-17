@@ -50,14 +50,18 @@
   - si la persona ha editat la signatura a la resposta ràpida, la resposta
     s'obre amb aquell text com a seu i sense cap signatura nova, de manera que
     l'opció no hi intervé;
+  - quan la signatura queda lluny del text propi, l'editor s'obre amb el
+    cursor on s'escriu: a dalt en una resposta escrita damunt de la citació
+    (o en un reenviament) amb la signatura a sota, i al final en una
+    resposta escrita sota la citació amb la signatura a dalt;
   - l'esborrany es queda amb la posició amb què es va obrir: si després es
     canvia de compte a De, la signatura nova substitueix l'anterior al mateix
     lloc;
   - proves: `replyForwardCompose.test.ts` (respondre, respondre a tots i
     reenviar, amb les dues posicions, en text pla, i en HTML per a la
     resposta i el reenviament; el canvi de compte, els missatges nous i les
-    respostes sense l'original) i
-    `SignatureSettingsCard.test.tsx` (l'opció per compte).
+    respostes sense l'original), `SignatureSettingsCard.test.tsx` (l'opció
+    per compte) i `Composer.test.tsx` (on queda el cursor).
 - **Pendent:**
   - signatura per àlies;
   - sincronitzar les signatures amb Gmail i Exchange: necessita proves amb un
@@ -73,3 +77,4 @@
 | N2 `Composer.test.tsx` | Fragment inserit amb els marcadors emplenats, cursor retirat i avís del que no s'ha pogut emplenar |
 | N1 `replyForwardCompose.test.ts` | On va la signatura (#277) a la resposta, la resposta a tots i el reenviament; el canvi de compte; la lectura i el sanejament de `signature_placement` |
 | N2 `SignatureSettingsCard.test.tsx` | L'opció per compte, amagada amb «Cap» signatura |
+| N2 `Composer.test.tsx` | L'editor s'obre amb el cursor on s'escriu quan la signatura queda lluny del text propi (#277) |

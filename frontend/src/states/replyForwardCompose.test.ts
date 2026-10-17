@@ -280,6 +280,7 @@ describe('signature placement against the quote', () => {
       openReplyInFullEditor()
       expect(draft()?.text).toMatch(re(`^\n\nMe\n\n${ATTRIBUTION}$`))
       expect(draft()?.signature).toEqual({ html: '<p>Me</p>', text: 'Me', placement: 'aboveQuote' })
+      expect(draft()?.caret).toBeUndefined()
     }
   })
 
@@ -289,6 +290,8 @@ describe('signature placement against the quote', () => {
     openReplyInFullEditor()
     expect(draft()?.text).toMatch(re(`^\n\n${ATTRIBUTION}\n\nMe$`))
     expect(draft()?.signature).toEqual({ html: '<p>Me</p>', text: 'Me', placement: 'belowText' })
+    // The person still writes above the quote, so the editor opens there.
+    expect(draft()?.caret).toBe('start')
   })
 
   it('places it above or below the quote in a reply all, with text carried over', () => {
