@@ -2,7 +2,9 @@
 
 - Estat: acceptada per delegació (el propietari va delegar les decisions de
   disseny de #212 en l'opció més prudent); pendent de revisió del
-  propietari al final del pla.
+  propietari al final del pla. ADR-0069 (proposada el 2026-10-17, encara no
+  acceptada) substituiria «On és l'agenda», «Secció recordada», la regla de al
+  costat o a sobre i «Capa sobre la capçalera».
 - Data: 2026-10-15.
 - Abast: #212 (fila SET-23 del registre d'acceptació, «Widgets» d'eM Client
   10.4), sobre la barra lateral contextual de #86.

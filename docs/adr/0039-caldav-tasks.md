@@ -1,7 +1,9 @@
 # ADR-0039: Llistes de tasques en un servidor CalDAV
 
 - Estat: acceptada; presa per delegació i revisada pel propietari
-  el 2026-10-12.
+  el 2026-10-12. ADR-0070 (proposada el 2026-10-17, encara no acceptada)
+  esmenaria l'apartat «Enllaç» amb l'enllaç automàtic de les col·leccions d'un
+  compte que declaren `VTODO`.
 - Data: 2026-10-12.
 - Abast: #103, pas «CalDAV VTODO primer», sobre l'ADR-0013, l'ADR-0012 i
   l'ADR-0018.
