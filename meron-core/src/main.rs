@@ -1067,6 +1067,38 @@ ATTENDEE;RSVP=TRUE:mailto:bo@example.com\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         assert_eq!(list["accounts"][0]["needs_reconnect"],true);
         assert!(!list.to_string().contains("access_token"));
     }
+    /// #269: the connection test reports each step and stores nothing, and it
+    /// needs a password — typed, or the one already held for the account.
+    #[tokio::test]
+    async fn connection_test_stores_nothing_and_needs_a_password() {
+        use super::*;
+        let engine=Arc::new(Engine::new(Box::new(GraphTestHost)).unwrap());
+        let writer=Arc::new(Mutex::new(tokio::io::stdout()));
+        let request=|method:&str,params:Value|Request{id:1,method:method.into(),params};
+        let closed=std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let account="tested@example.test";
+        let params=json!({"account":account,"host":"127.0.0.1","port":closed,"tls":true,"smtp_host":"127.0.0.1","smtp_port":closed,"smtp_tls":true,"user":account,"password":"typed-secret","proxy":{"mode":"direct"}});
+        let report=dispatch(&engine,&request("account.testConnection",params.clone()),&writer).await.unwrap();
+        assert_eq!(report["ok"],false);
+        assert_eq!(report["incoming"]["steps"][1]["kind"],"refused");
+        assert_eq!(report["outgoing"]["steps"][1]["kind"],"refused");
+        assert!(!report.to_string().contains("typed-secret"));
+        assert!(store::load_account(&engine.db.lock().unwrap(),account).unwrap().is_none());
+        assert!(engine.accounts.lock().await.is_empty());
+
+        let mut without=params.clone();
+        without.as_object_mut().unwrap().remove("password");
+        let error=dispatch(&engine,&request("account.testConnection",without),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("password required"),"{error}");
+
+        // "Save anyway" skips the test, never the password.
+        let mut anyway=params.clone();
+        anyway["validate"]=json!(false);
+        anyway["password"]=json!("");
+        let error=dispatch(&engine,&request("account.connect",anyway),&writer).await.unwrap_err();
+        assert!(error.to_string().contains("password required"),"{error}");
+        assert!(store::load_account(&engine.db.lock().unwrap(),account).unwrap().is_none());
+    }
     /// ADR-0050: `folders.move` end to end on the local archive, which is its
     /// own server, and refused on Exchange, which does not manage folders here.
     #[tokio::test]
@@ -6136,7 +6168,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             // created directly after Google's token exchange; IMAP validation
             // can be slow or network-dependent, and later sync/watch calls will
             // surface any mailbox access failure.
-            if p.get("validate").and_then(Value::as_bool).unwrap_or(true) {
+            let validate = p.get("validate").and_then(Value::as_bool).unwrap_or(true);
+            // Saving a password account without a connection test is the
+            // person's explicit "save anyway" (#269); it still needs a password
+            // to save, typed now or already held for this account.
+            anyhow::ensure!(
+                validate || !(creds.auth_type == "password" || creds.is_pop3()) || !creds.password.is_empty() || !creds.ews_url.is_empty(),
+                "password required"
+            );
+            if validate {
                 if creds.is_pop3() {
                     // Signs in over TLS and leaves at once; nothing is
                     // downloaded or deleted until the first sync.
@@ -8438,6 +8478,32 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 None,
                 true,
             )
+        }
+
+        // Test a manually configured account's two servers step by step (#269):
+        // name lookup, TCP, TLS and sign-in, each reported. Nothing is stored —
+        // no account row, no secret, no pin — whatever the outcome. Editing an
+        // account without retyping its password tests the stored one, which
+        // stays in the core: the report never carries it.
+        "account.testConnection" => {
+            let mut request = meron_core::connection_test::TestRequest::from_params(p)?;
+            if request.login.password.is_empty() {
+                let id = req_str(p, "account").or_else(|_| req_str(p, "id")).unwrap_or_default();
+                let stored = if id.is_empty() {
+                    None
+                } else {
+                    let db = engine.db.lock().unwrap();
+                    store::load_account(&db, &id)?
+                };
+                if let Some(mut stored) = stored {
+                    let db = engine.db.lock().unwrap();
+                    engine.host.apply_secret(&db, &id, &mut stored);
+                    request.login.password = std::mem::take(&mut stored.password);
+                }
+            }
+            anyhow::ensure!(!request.login.password.is_empty(), "password required");
+            let report = meron_core::connection_test::run(&request).await;
+            Ok(serde_json::to_value(report)?)
         }
 
         // Fetch the certificate a mail server presents, so the account dialog

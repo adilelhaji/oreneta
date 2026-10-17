@@ -225,6 +225,8 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 		return a.accountAddPassword(payload)
 	case "account.autodiscover":
 		return a.autodiscover(payload)
+	case "account.testConnection":
+		return a.accountTestConnection(payload)
 	case "account.probeCert":
 		return a.accountProbeCert(payload)
 	case "account.setCertPin":

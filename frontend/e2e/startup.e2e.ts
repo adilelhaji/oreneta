@@ -1456,6 +1456,23 @@ async function prepareStartup(page: Page, withAccount = false, options: SetupOpt
                   prefs[String(payload.key)] = structuredClone(payload.value)
                   sessionStorage.setItem('synthetic-prefs', JSON.stringify(prefs))
                 }
+                // The manual setup tests both servers before saving (#269);
+                // the synthetic core passes every step.
+                if (command === 'account.testConnection') {
+                  const server = (protocol: string, host: unknown, port: unknown) => ({
+                    protocol,
+                    host,
+                    port,
+                    security: 'tls',
+                    ok: true,
+                    steps: ['dns', 'tcp', 'tls', 'auth'].map((step) => ({ step, status: 'ok' })),
+                  })
+                  return {
+                    ok: true,
+                    incoming: server(payload.incoming === 'pop3' ? 'pop3' : 'imap', payload.imap_host, payload.imap_port),
+                    outgoing: server('smtp', payload.smtp_host, payload.smtp_port),
+                  }
+                }
                 if (command === 'account.autodiscover') {
                   if (options.discovery === 'failure') throw new Error('Synthetic discovery outage')
                   return {

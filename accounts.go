@@ -3,37 +3,46 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 )
 
-func (a *App) accountAddPassword(payload map[string]any) (any, error) {
-	var req AddPasswordAccountRequest
-	if err := decode(payload, &req); err != nil {
-		return nil, err
-	}
+// passwordConnection is the manual IMAP/POP3/SMTP form resolved into what
+// account.connect takes: default ports, each server's TLS mode and the
+// accepted certificate pins. Saving and the connection test (#269) both build
+// it here, so the test checks exactly what a save would store.
+type passwordConnection struct {
+	id                                           string
+	pop3                                         bool
+	imapPort, smtpPort                           uint16
+	imapTLS, imapStartTLS, smtpTLS, smtpStartTLS bool
+	params                                       map[string]any
+}
+
+func resolvePasswordConnection(req AddPasswordAccountRequest) (passwordConnection, error) {
 	if !strings.Contains(req.Email, "@") {
-		return nil, errors.New("invalid email")
+		return passwordConnection{}, errors.New("invalid email")
 	}
 	if req.IMAPHost == "" || req.SMTPHost == "" {
-		return nil, errors.New("server required")
+		return passwordConnection{}, errors.New("server required")
 	}
-	if req.Username == "" || req.Password == "" {
-		return nil, errors.New("credentials required")
+	if req.Username == "" {
+		return passwordConnection{}, errors.New("credentials required")
 	}
-	pop3 := req.Incoming == "pop3"
-	if req.IMAPPort == 0 {
-		req.IMAPPort = 993
-		if pop3 {
-			req.IMAPPort = 995
+	c := passwordConnection{
+		id:       accountID(req.Email),
+		pop3:     req.Incoming == "pop3",
+		imapPort: req.IMAPPort,
+		smtpPort: req.SMTPPort,
+	}
+	if c.imapPort == 0 {
+		c.imapPort = 993
+		if c.pop3 {
+			c.imapPort = 995
 		}
 	}
-	if req.SMTPPort == 0 {
-		req.SMTPPort = 465
-	}
-	id := accountID(req.Email)
-	a.logf("account.addPassword: connecting account=%s imap=%s:%d smtp=%s:%d", id, req.IMAPHost, req.IMAPPort, req.SMTPHost, req.SMTPPort)
-	if a.sidecar == nil || !a.sidecar.Started() {
-		return nil, a.engineUnavailable()
+	if c.smtpPort == 0 {
+		c.smtpPort = 465
 	}
 	legacyTLS := true
 	if req.TLS != nil {
@@ -43,46 +52,77 @@ func (a *App) accountAddPassword(payload map[string]any) (any, error) {
 	if req.StartTLS != nil {
 		imapExplicitTLS = req.TLS
 	}
-	imapTLS, imapStartTLS := selectedTLSMode(legacyTLS, imapExplicitTLS, req.StartTLS, req.IMAPPort)
-	smtpTLS, smtpStartTLS := selectedTLSMode(legacyTLS, req.SMTPTLS, req.SMTPStartTLS, req.SMTPPort)
-	connect := map[string]any{
-		"id":            id,
+	c.imapTLS, c.imapStartTLS = selectedTLSMode(legacyTLS, imapExplicitTLS, req.StartTLS, c.imapPort)
+	c.smtpTLS, c.smtpStartTLS = selectedTLSMode(legacyTLS, req.SMTPTLS, req.SMTPStartTLS, c.smtpPort)
+	c.params = map[string]any{
+		"id":            c.id,
 		"host":          req.IMAPHost,
-		"port":          req.IMAPPort,
+		"port":          c.imapPort,
 		"user":          req.Username,
-		"password":      req.Password,
-		"tls":           imapTLS,
-		"starttls":      imapStartTLS,
+		"tls":           c.imapTLS,
+		"starttls":      c.imapStartTLS,
 		"smtp_host":     req.SMTPHost,
-		"smtp_port":     req.SMTPPort,
-		"smtp_tls":      smtpTLS,
-		"smtp_starttls": smtpStartTLS,
-		"email":         req.Email,
-		"display_name":  req.DisplayName,
-		"sender_name":   req.SenderName,
-		"provider":      "custom",
+		"smtp_port":     c.smtpPort,
+		"smtp_tls":      c.smtpTLS,
+		"smtp_starttls": c.smtpStartTLS,
 	}
-	authType := "password"
-	if pop3 {
+	// No password at all tells the core to use the one it already holds for
+	// this account — editing server settings without retyping it; "" would
+	// blank it. Whether one is held is for the core to say: an account it
+	// does not have fails its validation without a password, and is not saved.
+	if req.Password != "" {
+		c.params["password"] = req.Password
+	}
+	if c.pop3 {
 		// POP3 mail is downloaded into the app; there is no IMAP to watch.
-		authType = "pop3"
-		connect["auth_type"] = authType
+		c.params["auth_type"] = "pop3"
 	}
 	if pin := strings.TrimSpace(req.CertPin); pin != "" {
-		connect["cert_pin"] = pin
+		c.params["cert_pin"] = pin
 	}
 	if pin := strings.TrimSpace(req.SMTPCertPin); pin != "" {
-		connect["smtp_cert_pin"] = pin
+		c.params["smtp_cert_pin"] = pin
+	}
+	return c, nil
+}
+
+func (a *App) accountAddPassword(payload map[string]any) (any, error) {
+	var req AddPasswordAccountRequest
+	if err := decode(payload, &req); err != nil {
+		return nil, err
+	}
+	c, err := resolvePasswordConnection(req)
+	if err != nil {
+		return nil, err
+	}
+	a.logf("account.addPassword: connecting account=%s imap=%s:%d smtp=%s:%d", c.id, req.IMAPHost, c.imapPort, req.SMTPHost, c.smtpPort)
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	connect := c.params
+	connect["email"] = req.Email
+	connect["display_name"] = req.DisplayName
+	connect["sender_name"] = req.SenderName
+	connect["provider"] = "custom"
+	if req.SkipValidation {
+		// The person chose "Save anyway" after a connection test that did not
+		// pass (#269). The core still refuses to save without a password.
+		connect["validate"] = false
+		a.logf("account.addPassword: account=%s saved without a passing connection test, as the user chose", c.id)
 	}
 	if _, err := a.sidecar.Call("account.connect", connect); err != nil {
 		return nil, err
 	}
-	if !pop3 {
-		_, _ = a.sidecar.Call("watch.start", map[string]any{"account": id})
+	if !c.pop3 {
+		_, _ = a.sidecar.Call("watch.start", map[string]any{"account": c.id})
 	}
 
+	authType := "password"
+	if c.pop3 {
+		authType = "pop3"
+	}
 	account := Account{
-		ID:                id,
+		ID:                c.id,
 		Email:             req.Email,
 		DisplayName:       req.DisplayName,
 		SenderName:        req.SenderName,
@@ -90,16 +130,78 @@ func (a *App) accountAddPassword(payload map[string]any) (any, error) {
 		AuthType:          authType,
 		IncludedInUnified: true,
 		IMAPHost:          req.IMAPHost,
-		IMAPPort:          req.IMAPPort,
+		IMAPPort:          c.imapPort,
 		SMTPHost:          req.SMTPHost,
-		SMTPPort:          req.SMTPPort,
-		TLS:               imapTLS,
-		StartTLS:          imapStartTLS,
-		SMTPTLS:           smtpTLS,
-		SMTPStartTLS:      smtpStartTLS,
+		SMTPPort:          c.smtpPort,
+		TLS:               c.imapTLS,
+		StartTLS:          c.imapStartTLS,
+		SMTPTLS:           c.smtpTLS,
+		SMTPStartTLS:      c.smtpStartTLS,
 	}
 	return map[string]any{"account": account}, nil
 }
+
+// accountTestConnection checks the manual setup's incoming and outgoing
+// servers step by step — DNS, TCP, TLS, sign-in — and stores nothing (#269).
+// The report names the step that failed on each server; the password is
+// neither logged nor returned.
+func (a *App) accountTestConnection(payload map[string]any) (any, error) {
+	var req AddPasswordAccountRequest
+	if err := decode(payload, &req); err != nil {
+		return nil, err
+	}
+	c, err := resolvePasswordConnection(req)
+	if err != nil {
+		return nil, err
+	}
+	params := c.params
+	// The stored password, when none is typed, is looked up by account.
+	params["account"] = c.id
+	delete(params, "id")
+	// The account's proxy choice, as for the certificate probe: absent
+	// follows the app-wide proxy.
+	if proxy, ok := payload["proxy"]; ok && proxy != nil {
+		params["proxy"] = proxy
+	}
+	if a.sidecar == nil || !a.sidecar.Started() {
+		return nil, a.engineUnavailable()
+	}
+	a.logf("account.testConnection: account=%s imap=%s:%d smtp=%s:%d", c.id, req.IMAPHost, c.imapPort, req.SMTPHost, c.smtpPort)
+	res, err := a.sidecar.Call("account.testConnection", params)
+	if err != nil {
+		return nil, err
+	}
+	a.logf("account.testConnection: account=%s %s", c.id, connectionTestSummary(res))
+	return res, nil
+}
+
+// connectionTestSummary is the log line of a connection test: each server's
+// verdict and the first step that failed. Not the servers' own words, which
+// can name the user, and never the password.
+func connectionTestSummary(res any) string {
+	report, _ := res.(map[string]any)
+	parts := make([]string, 0, 2)
+	for _, side := range []string{"incoming", "outgoing"} {
+		server, _ := report[side].(map[string]any)
+		verdict := "unknown"
+		if ok, known := server["ok"].(bool); known && ok {
+			verdict = "ok"
+		} else if known {
+			verdict = "failed"
+		}
+		steps, _ := server["steps"].([]any)
+		for _, raw := range steps {
+			step, _ := raw.(map[string]any)
+			if step["status"] == "failed" {
+				verdict = fmt.Sprintf("failed at %v (%v)", step["step"], step["kind"])
+				break
+			}
+		}
+		parts = append(parts, side+"="+verdict)
+	}
+	return strings.Join(parts, " ")
+}
+
 
 // accountAddEWS sets up an Exchange account against its EWS endpoint. The
 // sidecar validates with a live EWS round trip before storing, the same

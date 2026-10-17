@@ -277,7 +277,7 @@ pub async fn connect(creds: &crate::imap::Creds) -> Result<Client<crate::tls::St
 
 impl<S: AsyncRead + AsyncWrite + Unpin> Client<S> {
     /// After STLS there is no new greeting.
-    fn open_after_tls(stream: S) -> Self {
+    pub(crate) fn open_after_tls(stream: S) -> Self {
         Client { io: BufReader::new(stream) }
     }
 }

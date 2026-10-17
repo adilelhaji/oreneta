@@ -18,7 +18,8 @@
     { "id": "MAIL-13", "outcome": "Sweep acts on the reviewed set only, once, with an item-by-item outcome", "tests": ["sweep_moves_only_the_reviewed_messages_and_only_once"] },
     { "id": "MAIL-14", "outcome": "Answer a read receipt only on request and once; say when delivery receipts are not offered", "tests": ["read_and_delivery_receipts"] },
     { "id": "MAIL-15", "outcome": "Move a folder with its subfolders and cached mail under another folder; refuse special-use folders and moves into its own subtree", "tests": ["folder_move_renames_the_subtree_on_the_server"] },
-    { "id": "MAIL-16", "outcome": "Archive old mail by age only after a confirmed preview; copy, verify, then remove from the server; never twice", "tests": ["automatic_archiving_moves_only_old_read_mail_and_only_once"] }
+    { "id": "MAIL-16", "outcome": "Archive old mail by age only after a confirmed preview; copy, verify, then remove from the server; never twice", "tests": ["automatic_archiving_moves_only_old_read_mail_and_only_once"] },
+    { "id": "MAIL-17", "outcome": "Test the incoming and outgoing servers step by step without storing anything; fail both sign-ins on a wrong password", "tests": ["connection_test_reports_each_step_and_stores_nothing"] }
   ],
   "liveProviders": [
     { "id": "generic-imap-smtp", "status": "not-tested", "reason": "Dedicated external accounts, TLS/auth and recipient authorization required; maddy is not provider certification." },

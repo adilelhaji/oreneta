@@ -71,6 +71,15 @@ sobreescriure mai un canvi remot i sense enviar res més que el que ha canviat, 
 respostes SOAP enregistrades. Es manté `partial`: falten els grups i els contactes de Graph
 (#144) i l'evidència nativa de Windows; l'evidència amb un servidor Exchange real (N5)
 també és pendent.
+El 2026-10-17 (#269) la configuració manual IMAP/POP3/SMTP va incorporar «Prova la
+connexió»: comprova el servidor d'entrada i el de sortida per separat, pas a pas (DNS, TCP,
+TLS i inici de sessió), diu què cal corregir en cada error i n'ofereix la correcció
+probable (parells de port i seguretat, forma del nom d'usuari, inspecció del certificat)
+sense desar res. «Desa el compte» fa la prova primer, i la contrasenya no es desa abans
+d'una prova satisfactòria tret que la persona triï «Desa igualment». Vegeu
+[account-setup.md](account-setup.md). Cap fila no canvia d'estat: no hi ha cap fila per a
+la configuració manual de comptes, i l'evidència nativa de Windows (N4) i amb proveïdors
+reals (N5) continua pendent; les proves amb servidors falsos i amb maddy són sintètiques.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
