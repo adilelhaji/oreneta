@@ -3236,6 +3236,9 @@ test('details sidebar agenda at 200-percent desktop zoom equivalent (1440 physic
 const caCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../locales/ca.json', import.meta.url)), 'utf8'),
 ) as Record<string, string>
+const enCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/en.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
 const esCatalog = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../locales/es.json', import.meta.url)), 'utf8'),
 ) as Record<string, string>
@@ -3397,6 +3400,160 @@ async function ltrInView(page: Page, where: string) {
   expect(outside, where).toEqual([])
 }
 
+// Waits until no CSS transition or finite animation is still running, so an
+// audit reads the screen at rest and not one frame of a transition (#243).
+// Infinite animations (spinners) never end and are left out.
+async function settled(page: Page) {
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .every(
+          (animation) =>
+            animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity,
+        ),
+    undefined,
+    { timeout: 5_000 },
+  )
+}
+
+// Where the keyboard focus is: inside a hidden region (aria-hidden, inert or
+// not visible) or not, and a short name for the report.
+async function focusStop(page: Page) {
+  return page.evaluate(() => {
+    const element = document.activeElement as HTMLElement | null
+    const start = (window as any).__focusWalkStart as Element | undefined
+    if (!element || element === document.body) return { name: 'body', hidden: false, atStart: false }
+    const hidden =
+      element.closest('[aria-hidden="true"], [inert]') !== null || getComputedStyle(element).visibility !== 'visible'
+    const name =
+      element.getAttribute('aria-label') ??
+      element.getAttribute('title') ??
+      element.getAttribute('placeholder') ??
+      element.textContent?.trim().slice(0, 40) ??
+      ''
+    return { name: `${element.tagName.toLowerCase()} ${name}`, hidden, atStart: element === start }
+  })
+}
+
+// The conversation under an open compose tab stays mounted, hidden (#243).
+// axe once caught it at 1024 px holding focusable controls: a child with
+// `transition-all` (the quick-reply box) stays visible, and focusable, until
+// its transition ends. The app's own transitions are stretched to 30 s here so
+// that moment holds still, and the hidden region must still be out of reach:
+// inert, nothing in it takes focus, and Tab and Shift+Tab never stop in it.
+// Only elements that declare a transition are stretched: an element without
+// one has `transition-property: all` by default and would start new ones.
+const SLOW_TRANSITIONS =
+  "[class*='transition'] { transition-duration: 30s !important; transition-delay: 0s !important; }"
+
+for (const language of ['en', 'ca']) {
+  for (const theme of ['oreneta-light', 'oreneta-dark']) {
+    test(`the conversation hidden under the composer has no keyboard stop: ${language}, ${theme}, 1024px (#243)`, async ({
+      page,
+    }, info) => {
+      // Two walks of up to 150 key presses each, on top of two audits.
+      test.setTimeout(60_000)
+      await page.setViewportSize({ width: 1024, height: 1000 })
+      const errors = await prepareStartup(page, true, { navigation: true, language, theme })
+      const catalog = language === 'ca' ? caCatalog : enCatalog
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('lang', language)
+      await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+      await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+      const quickReply = page.getByPlaceholder(catalog['composer.placeholders.quickMessage'], { exact: true })
+      await expect(quickReply).toBeVisible()
+      await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
+
+      const slow = await page.addStyleTag({ content: SLOW_TRANSITIONS })
+      const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+      await page.keyboard.press(`${mod}+KeyN`)
+      const editor = page.locator('.tiptap[contenteditable="true"]')
+      await expect(editor).toBeVisible()
+      const region = page.locator('[aria-hidden="true"]', { has: quickReply })
+      await expect(region).toHaveCount(1)
+      await expect(region).toHaveAttribute('inert', '')
+
+      // The transition is still running: controls in the hidden region are
+      // visible to the layout, which is the state axe caught. None of them
+      // may take the focus.
+      const insideRegion = await region.evaluate((element) => {
+        const selector = 'button, a[href], input, select, textarea, [tabindex]'
+        const controls = [...element.querySelectorAll<HTMLElement>(selector)]
+        const visible = controls.filter((control) => getComputedStyle(control).visibility === 'visible')
+        const focused = visible.filter((control) => {
+          control.focus()
+          return document.activeElement === control
+        })
+        return { visible: visible.length, focused: focused.map((control) => control.outerHTML.slice(0, 80)) }
+      })
+      expect(insideRegion.visible, 'the hidden region is still mid-transition').toBeGreaterThan(0)
+      expect(insideRegion.focused).toEqual([])
+      const frozen = await new AxeBuilder({ page }).withRules(['aria-hidden-focus']).analyze()
+      expect(frozen.violations.map((violation) => violation.nodes.map((node) => node.target.join(' ')))).toEqual([])
+
+      // Tab and Shift+Tab from the message body, round the page each way.
+      // Shift+Tab meets the hidden region first (it sits just before the
+      // composer in the document), and must pass it on to the tab strip.
+      const current = `button ${catalog['chat.currentConversation']}`
+      const walks: Record<string, string[]> = {}
+      const hiddenStops: string[] = []
+      for (const key of ['Tab', 'Shift+Tab']) {
+        await editor.focus()
+        await page.evaluate(() => {
+          ;(window as any).__focusWalkStart = document.activeElement
+        })
+        const stops: string[] = []
+        for (let step = 0; step < 150; step++) {
+          await page.keyboard.press(key)
+          const stop = await focusStop(page)
+          if (stop.atStart) break
+          stops.push(stop.name)
+          if (stop.hidden) hiddenStops.push(`${key}: ${stop.name}`)
+        }
+        walks[key] = stops
+        expect(new Set(stops).size, `${key} moves the focus`).toBeGreaterThan(3)
+      }
+      expect(walks['Shift+Tab'], 'Shift+Tab passes the hidden region').toContain(current)
+      await info.attach(`focus-walk-${language}-${theme}`, {
+        body: JSON.stringify({ insideRegion, walks }, null, 2),
+        contentType: 'application/json',
+      })
+      expect(hiddenStops).toEqual([])
+      // The walks ran with the composer open and the conversation hidden.
+      await expect(region).toHaveAttribute('inert', '')
+
+      // At rest, the composer passes axe as a whole.
+      await slow.evaluate((element) => (element as Element).remove())
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) {
+          const finite = animation.effect?.getComputedTiming().endTime !== Infinity
+          if (finite && animation.playbackRate !== 0) animation.finish()
+        }
+      })
+      await settled(page)
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
+      const body = JSON.stringify({ screen: 'composer', language, theme, violations: results.violations }, null, 2)
+      await info.attach(`axe-composer-${language}-${theme}-1024`, { body, contentType: 'application/json' })
+      const blocking = results.violations
+        .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+        .map((violation) => {
+          const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+          return `${violation.id} (${violation.impact}) on ${targets}`
+        })
+      expect(blocking).toEqual([])
+
+      // Back on the conversation, its quick reply is reachable again.
+      await page.getByTitle(catalog['chat.currentConversation'], { exact: true }).click()
+      await expect(page.locator('[inert]', { has: quickReply })).toHaveCount(0)
+      await expect(page.locator('[aria-hidden="true"]', { has: quickReply })).toHaveCount(0)
+      await quickReply.focus()
+      await expect(quickReply).toBeFocused()
+      expect(errors).toEqual([])
+    })
+  }
+}
+
 // The production entry in Catalan, whose strings run longer than English:
 // every main screen stays inside the window at 100% and 200%, and axe finds
 // nothing critical or serious (#231).
@@ -3464,6 +3621,7 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
 
       const blocking: string[] = []
       const check = async (screen: string) => {
+        await settled(page)
         await ltrInView(page, screen)
         const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()
         const body = JSON.stringify({ screen, theme, width, violations: results.violations }, null, 2)
