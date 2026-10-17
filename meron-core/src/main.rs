@@ -3968,14 +3968,35 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let parsed = meron_core::protocol::mail::parse_thread_id(&thread_id)
                 .context("invalid thread_id")?;
             let db = engine.db.lock().unwrap();
-            let sender = store::record_spam_judgment(
+            let recorded = store::record_spam_judgment_change(
                 &db,
                 &parsed.account,
                 &parsed.folder,
                 &parsed.thread_key,
                 is_spam,
             )?;
-            Ok(json!({ "ok": true, "sender": sender }))
+            // `judgment` is what an undo hands back to
+            // `mail.revertSpamJudgment` (#254); null when there was no
+            // conversation to judge, so there is nothing to take back.
+            let (sender, judgment) = match recorded {
+                Some(recorded) => (Some(recorded.sender), Some(recorded.change)),
+                None => (None, None),
+            };
+            Ok(json!({ "ok": true, "sender": sender, "judgment": judgment }))
+        }
+
+        // Takes back one judgment change, given as `mail.recordSpamJudgment`
+        // answered it (#254, ADR-0005): the learned counts end as they were
+        // before it. `reverted` is false, and nothing changes, when a later
+        // judgment of the same message replaced it; `judgment` is then null,
+        // and otherwise the change this made, which reverts it in turn.
+        "mail.revertSpamJudgment" => {
+            let change: store::SpamJudgmentChange = serde_json::from_value(
+                p.get("judgment").cloned().context("missing judgment")?,
+            )
+            .context("invalid judgment")?;
+            let reverted = store::revert_spam_judgment(&engine.db.lock().unwrap(), &change)?;
+            Ok(json!({ "ok": true, "reverted": reverted.is_some(), "judgment": reverted }))
         }
 
         // Every local to-do, across every account and folder — message-tied

@@ -2319,6 +2319,113 @@ pub fn thread_spam_signals(
     Ok(Some((from_addr, signals)))
 }
 
+/// One explicit judgment as `spam_judgments` holds it: the decision and the
+/// sender/subject snapshot it contributed to the learned counts.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpamJudgmentState {
+    pub spam: bool,
+    pub from_addr: String,
+    pub subject: String,
+}
+
+/// What one change to a message's explicit judgment did, so it can be taken
+/// back exactly (#254, ADR-0005): the judgment row before the change and
+/// after it, `None` meaning there was no row. Reverting it puts `before`
+/// back only while the row still holds `after`; anything else means a later
+/// judgment replaced it, and that later one is left alone.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpamJudgmentChange {
+    pub account: String,
+    pub message_id: i64,
+    pub before: Option<SpamJudgmentState>,
+    pub after: Option<SpamJudgmentState>,
+}
+
+impl SpamJudgmentChange {
+    /// The change that undoes this one.
+    pub fn inverse(&self) -> Self {
+        Self {
+            account: self.account.clone(),
+            message_id: self.message_id,
+            before: self.after.clone(),
+            after: self.before.clone(),
+        }
+    }
+}
+
+/// What recording a judgment answers: the sender it was made about, and the
+/// change it made, for an undo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordedSpamJudgment {
+    pub sender: String,
+    pub change: SpamJudgmentChange,
+}
+
+fn spam_judgment_state(
+    conn: &Connection,
+    account: &str,
+    message_id: i64,
+) -> Result<Option<SpamJudgmentState>> {
+    conn.query_row(
+        "SELECT spam, from_addr, subject
+           FROM spam_judgments
+          WHERE account = ?1 AND message_id = ?2",
+        params![account, message_id],
+        |row| {
+            Ok(SpamJudgmentState {
+                spam: row.get::<_, i64>(0)? != 0,
+                from_addr: row.get(1)?,
+                subject: row.get(2)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+/// Replaces one message's judgment row with `next`, moving the learned
+/// counts from what `current` contributed to what `next` does. The caller
+/// holds the transaction and has read `current` inside it.
+fn write_spam_judgment(
+    conn: &Connection,
+    account: &str,
+    message_id: i64,
+    current: Option<&SpamJudgmentState>,
+    next: Option<&SpamJudgmentState>,
+) -> Result<()> {
+    if current == next {
+        return Ok(());
+    }
+    if let Some(current) = current {
+        adjust_sender_spam(conn, account, &current.from_addr, current.spam, -1)?;
+        adjust_spam_trigger_words(conn, account, &current.subject, current.spam, -1)?;
+    }
+    match next {
+        Some(next) => {
+            conn.execute(
+                "INSERT INTO spam_judgments(account, message_id, spam, from_addr, subject)
+                 VALUES(?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(account, message_id) DO UPDATE SET
+                   spam = excluded.spam,
+                   from_addr = excluded.from_addr,
+                   subject = excluded.subject",
+                params![account, message_id, next.spam as i64, next.from_addr, next.subject],
+            )?;
+            adjust_sender_spam(conn, account, &next.from_addr, next.spam, 1)?;
+            adjust_spam_trigger_words(conn, account, &next.subject, next.spam, 1)?;
+        }
+        None => {
+            conn.execute(
+                "DELETE FROM spam_judgments WHERE account = ?1 AND message_id = ?2",
+                params![account, message_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Records the reader's judgement of one conversation's newest message.
 ///
 /// The explicit decision is stored once per message. Repeating it is a no-op;
@@ -2333,6 +2440,19 @@ pub fn record_spam_judgment(
     thread_key: &str,
     is_spam: bool,
 ) -> Result<Option<String>> {
+    Ok(record_spam_judgment_change(conn, account, folder, thread_key, is_spam)?.map(|recorded| recorded.sender))
+}
+
+/// `record_spam_judgment`, also answering the change it made so an undo can
+/// take exactly that back (`revert_spam_judgment`). A repeated judgment
+/// changes nothing, and says so: its `before` and `after` are the same.
+pub fn record_spam_judgment_change(
+    conn: &Connection,
+    account: &str,
+    folder: &str,
+    thread_key: &str,
+    is_spam: bool,
+) -> Result<Option<RecordedSpamJudgment>> {
     let Some((message_id, from_addr, subject)) = newest_message_for_spam_judgment(
         conn,
         account,
@@ -2343,48 +2463,52 @@ pub fn record_spam_judgment(
     };
 
     let tx = conn.unchecked_transaction()?;
-    let previous = tx
-        .query_row(
-            "SELECT spam, from_addr, subject
-               FROM spam_judgments
-              WHERE account = ?1 AND message_id = ?2",
-            params![account, message_id],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)? != 0,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                ))
-            },
-        )
-        .optional()?;
-
-    if let Some((previous_spam, previous_from, previous_subject)) = previous {
-        if previous_spam == is_spam {
-            tx.commit()?;
-            rejudge_spam(conn, account, false)?;
-            return Ok(Some(from_addr));
-        }
-        adjust_sender_spam(&tx, account, &previous_from, previous_spam, -1)?;
-        adjust_spam_trigger_words(&tx, account, &previous_subject, previous_spam, -1)?;
-        tx.execute(
-            "UPDATE spam_judgments
-                SET spam = ?3, from_addr = ?4, subject = ?5
-              WHERE account = ?1 AND message_id = ?2",
-            params![account, message_id, is_spam as i64, from_addr, subject],
-        )?;
-    } else {
-        tx.execute(
-            "INSERT INTO spam_judgments(account, message_id, spam, from_addr, subject)
-             VALUES(?1, ?2, ?3, ?4, ?5)",
-            params![account, message_id, is_spam as i64, from_addr, subject],
-        )?;
-    }
-    adjust_sender_spam(&tx, account, &from_addr, is_spam, 1)?;
-    adjust_spam_trigger_words(&tx, account, &subject, is_spam, 1)?;
+    let before = spam_judgment_state(&tx, account, message_id)?;
+    let after = match &before {
+        // The same decision again keeps the row, snapshots included.
+        Some(previous) if previous.spam == is_spam => before.clone(),
+        _ => Some(SpamJudgmentState { spam: is_spam, from_addr: from_addr.clone(), subject }),
+    };
+    write_spam_judgment(&tx, account, message_id, before.as_ref(), after.as_ref())?;
+    rejudge_spam_rows(&tx, account, false)?;
     tx.commit()?;
-    rejudge_spam(conn, account, false)?;
-    Ok(Some(from_addr))
+    Ok(Some(RecordedSpamJudgment {
+        sender: from_addr,
+        change: SpamJudgmentChange { account: account.to_string(), message_id, before, after },
+    }))
+}
+
+/// Takes back one change `record_spam_judgment_change` made (or one this
+/// made), so the learned counts end as they were before it (#254).
+///
+/// Only while the judgment row still holds exactly what the change left: a
+/// later judgment of the same message, or the message gone from the cache,
+/// answers `None` and changes nothing, because erasing a decision the reader
+/// made afterwards would be worse than keeping one they took back. Other
+/// messages, the same sender's included, are never touched: their
+/// contributions are their own rows. `Some` carries the change this made,
+/// whose revert puts the original change back.
+pub fn revert_spam_judgment(conn: &Connection, change: &SpamJudgmentChange) -> Result<Option<SpamJudgmentChange>> {
+    let tx = conn.unchecked_transaction()?;
+    let current = spam_judgment_state(&tx, &change.account, change.message_id)?;
+    if current != change.after {
+        return Ok(None);
+    }
+    if current.is_none() && change.before.is_some() {
+        // Putting a judgment back needs its message still cached here.
+        let cached: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM messages WHERE id = ?1 AND account = ?2)",
+            params![change.message_id, change.account],
+            |row| row.get(0),
+        )?;
+        if !cached {
+            return Ok(None);
+        }
+    }
+    write_spam_judgment(&tx, &change.account, change.message_id, current.as_ref(), change.before.as_ref())?;
+    rejudge_spam_rows(&tx, &change.account, false)?;
+    tx.commit()?;
+    Ok(Some(change.inverse()))
 }
 
 /// Judges every message of an account that has not been judged yet — the
@@ -2392,6 +2516,15 @@ pub fn record_spam_judgment(
 /// cached before this existed gets a verdict in one pass rather than being
 /// quietly treated as "not spam", which is a claim nobody checked.
 pub fn rejudge_spam(conn: &Connection, account: &str, only_unjudged: bool) -> Result<usize> {
+    let tx = conn.unchecked_transaction()?;
+    let judged = rejudge_spam_rows(&tx, account, only_unjudged)?;
+    tx.commit()?;
+    Ok(judged)
+}
+
+/// `rejudge_spam` inside a transaction the caller holds, so a judgment and
+/// the verdicts it changes commit together.
+fn rejudge_spam_rows(conn: &Connection, account: &str, only_unjudged: bool) -> Result<usize> {
     let where_clause = if only_unjudged { "AND spam IS NULL" } else { "" };
     let rows: Vec<(i64, String, String)> = {
         let sql = format!(
@@ -2409,22 +2542,18 @@ pub fn rejudge_spam(conn: &Connection, account: &str, only_unjudged: bool) -> Re
         mapped.filter_map(Result::ok).collect()
     };
 
-    let tx = conn.unchecked_transaction()?;
     let mut judged = 0;
-    {
-        let mut stmt = tx.prepare("UPDATE messages SET spam = ?2 WHERE id = ?1")?;
-        for (id, from_addr, subject) in rows {
-            let signals = spam_signals(&tx, account, &from_addr, &subject);
-            let verdict = crate::spam::verdict(&signals);
-            stmt.execute(params![id, verdict.spam as i64])?;
-            judged += 1;
-        }
+    let mut stmt = conn.prepare("UPDATE messages SET spam = ?2 WHERE id = ?1")?;
+    for (id, from_addr, subject) in rows {
+        let signals = spam_signals(conn, account, &from_addr, &subject);
+        let verdict = crate::spam::verdict(&signals);
+        stmt.execute(params![id, verdict.spam as i64])?;
+        judged += 1;
     }
-    tx.commit()?;
     Ok(judged)
 }
 
-// ---- Tasks (local, message-tied to-dos) ------------------------------------
+/ ---- Tasks (local, message-tied to-dos) ------------------------------------
 
 /// One task as the Tasks view shows it: its own fields plus enough of the
 /// conversation it hangs off to render without a second round trip.

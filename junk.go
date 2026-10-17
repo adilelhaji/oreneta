@@ -67,9 +67,27 @@ func (a *App) mailMarkJunk(payload map[string]any) (any, error) {
 	// a reported failure. Record against the destination row: the cache refresh
 	// replaces the source row during a server MOVE, so the original folder key
 	// no longer names a message that can be judged.
-	_, _ = a.sidecar.Call("mail.recordSpamJudgment", map[string]any{
+	recorded, err := a.sidecar.Call("mail.recordSpamJudgment", map[string]any{
 		"thread_id": formatParsedImapThreadIDInFolder(ids, target),
 		"spam":      junk,
 	})
+	// The change the judgment made goes back with the move as
+	// `spam_judgment`, so the undo can take exactly that back (#254). Absent
+	// when nothing was recorded: then there is no learning to revert.
+	if err == nil {
+		if judgment := spamJudgmentOf(recorded); judgment != nil {
+			if moved, ok := result.(map[string]any); ok {
+				moved["spam_judgment"] = judgment
+			}
+		}
+	}
 	return result, nil
+}
+
+// spamJudgmentOf is the `judgment` that `mail.recordSpamJudgment` answered,
+// or nil when it answered none.
+func spamJudgmentOf(recorded any) map[string]any {
+	obj, _ := recorded.(map[string]any)
+	judgment, _ := obj["judgment"].(map[string]any)
+	return judgment
 }

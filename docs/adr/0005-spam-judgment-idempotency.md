@@ -38,3 +38,40 @@ servidor/Sieve ni comportament nou del proveïdor.
 - La implementació ha d'actualitzar els agregats de manera transaccional i
   provar els casos de duplicat, substitució, missatge inexistent i aïllament
   entre comptes.
+
+## Ampliació del 2026-10-17: desfer un judici (#254)
+
+Desfer «Marca com a brossa» o «No és brossa» des de l'avís (d'una conversa o
+d'una selecció) també desfà el que aquell judici havia ensenyat al filtre
+après. No cal cap canvi d'esquema: el judici per missatge ja és el registre que
+permet retirar-ne la contribució exacta.
+
+- `mail.recordSpamJudgment` també respon `judgment`, el canvi que ha fet a la
+  fila del missatge a `spam_judgments`: l'estat d'abans i el de després
+  (`before`, `after`, amb la decisió i les instantànies del remitent i de
+  l'assumpte; `null` vol dir que no hi havia fila). Un judici repetit respon
+  `before` igual a `after`. `mail.markJunk` el torna a la interfície com a
+  `spam_judgment`, i no el torna si no s'ha registrat res.
+- L'ordre nova `mail.revertSpamJudgment` rep aquest canvi i torna la fila a
+  `before` amb el mateix mecanisme de retirar i aplicar de les substitucions,
+  dins d'una sola transacció que també recalcula els veredictes. Només ho fa si
+  la fila encara conté exactament `after`. Si un judici posterior del mateix
+  missatge l'ha substituït, o si el missatge ja no és a la memòria cau, no
+  canvia res i respon `reverted: false`. Els judicis d'altres missatges, també
+  els del mateix remitent, no es toquen mai, perquè cada contribució és la seva
+  pròpia fila. Quan reverteix el judici, respon el canvi invers, que al seu torn
+  desfà la reversió.
+- La interfície reverteix el judici abans de tornar a moure la conversa, mentre
+  encara és a la carpeta on es va registrar. Si el trasllat de tornada falla,
+  aplica el canvi invers: cada conversa es desfà sencera o no es desfà gens. Si
+  la reversió falla, no mou res i ho diu. En una selecció, es desfà conversa per
+  conversa i s'atura a la primera fallada; només queden desfetes les anteriors.
+- Límit conegut: les files no tenen número de revisió. Si, després del judici,
+  la mateixa fila canviés dues vegades i tornés exactament a l'estat que el
+  judici havia deixat (brossa, no brossa i brossa de nou, sense moure el
+  missatge), la reversió no ho distingiria i desfaria el judici. La interfície
+  no ofereix aquest camí: l'únic judici sense trasllat és «No és brossa» des de
+  l'avís, i marcar com a brossa sempre trasllada el missatge, cosa que li dona
+  una fila nova. Repetir la mateixa decisió no compta com un judici nou, perquè
+  aquest ADR ja la deixa sense efecte. Afegir el número de revisió seria un canvi
+  d'esquema i demanaria una decisió pròpia.

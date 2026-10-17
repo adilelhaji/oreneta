@@ -48,6 +48,12 @@ també registra si Google va concedir el permís del calendari. La causa d'aquel
 no s'ha confirmat: la hipòtesi és que l'API de Google Calendar no està activada al projecte
 de Google Cloud heretat (#144). La fila es manté `implemented-unverified` fins que una
 prova nativa nova ho aclareixi.
+El 2026-10-17 (#254, ADR-0005) desfer «Marca com a brossa» o «No és brossa», d'una
+conversa o d'una selecció, també desfà el que aquell judici havia ensenyat al filtre
+après: els comptadors del remitent i de les paraules de l'assumpte tornen a l'estat
+d'abans, i un judici posterior del mateix missatge o d'un altre missatge del mateix
+remitent es manté. SET-12 continua `implemented-unverified`: l'evidència nativa de
+Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

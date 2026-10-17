@@ -670,7 +670,7 @@
       "section": "Mail/Blacklist and whitelist",
       "outcome": "Repeat-safe correction and explainable block/allow rules",
       "status": "implemented-unverified",
-      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
+      "present": "Idempotent per-message spam judgments preserved across moves (ADR-0005), undoing a junk or not-junk change reverting exactly the judgment it recorded and never a later one, for one conversation or a selection (#254), sender block/allow lists and rules run exactly as previewed with no automatic filing (ADR-0028) are tested; native evidence pending",
       "code": "meron-core/src/spam",
       "acceptance": "Repeated identical judgments do not inflate evidence; replacement retracts the prior sender/subject contribution; missing threads and account isolation are safe; normal MOVE transfers stable-identity judgments before source deletion; no automatic filing",
       "platform": "Windows desktop",

@@ -19,6 +19,34 @@ export type SpamVerdict = {
   sender: string
 }
 
+/** One explicit judgment as the core keeps it, with what it taught the filter. */
+export type SpamJudgmentState = { spam: boolean; from_addr: string; subject: string }
+
+/**
+ * What one judgment change did (#254), as `mail.markJunk` returns it in
+ * `spam_judgment`: the message's judgment before and after, `null` for none.
+ * Opaque here: it only goes back to the core, which reverts it.
+ */
+export type SpamJudgmentChange = {
+  account: string
+  message_id: number
+  before: SpamJudgmentState | null
+  after: SpamJudgmentState | null
+}
+
+/**
+ * Takes back what one judgment change taught the filter, for an undo (#254).
+ * Answers the change this made, which reverts it in turn, or `null` when a
+ * later judgment of the same message replaced it and was left alone. Throws
+ * when the core could not do it: the caller decides what that stops.
+ */
+export async function revertSpamJudgment(judgment: SpamJudgmentChange): Promise<SpamJudgmentChange | null> {
+  const res = await invoke<{ reverted?: boolean; judgment?: SpamJudgmentChange | null }>('mail.revertSpamJudgment', {
+    judgment,
+  })
+  return res.reverted && res.judgment ? res.judgment : null
+}
+
 /** Why one conversation is flagged as spam, or isn't. */
 export async function spamReason(threadId: string): Promise<SpamVerdict | null> {
   try {
