@@ -593,6 +593,14 @@
           {
             "sha": "fe72de7c777718b2649969d18d40be84b96bfd0c",
             "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
+          },
+          {
+            "sha": "734c44813ef16c7956acfef0b4a062d99717100b",
+            "result": "frontend/src/states/replyForwardCompose.test.ts"
+          },
+          {
+            "sha": "734c44813ef16c7956acfef0b4a062d99717100b",
+            "result": "frontend/src/components/dialog/SignatureSettingsCard.test.tsx"
           }
         ],
         "native": [],
