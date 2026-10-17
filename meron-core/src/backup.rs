@@ -437,14 +437,14 @@ pub fn export(
 /// against an encrypted file reports [`needs_passphrase`]-style failure so the
 /// caller can prompt and retry.
 pub fn parse(text: &str, passphrase: Option<&str>) -> Result<BackupData> {
-    let envelope: Value = serde_json::from_str(text).context("not a Meron backup file")?;
+    let envelope: Value = serde_json::from_str(text).context("not an Oreneta backup file")?;
     let version = envelope
         .get("meron_backup")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("not a Meron backup file"))?;
+        .ok_or_else(|| anyhow!("not an Oreneta backup file"))?;
     if version > FORMAT_VERSION as u64 {
         return Err(anyhow!(
-            "this backup was written by a newer version of Meron (format {version})"
+            "this backup was written by a newer version of Oreneta (format {version})"
         ));
     }
 

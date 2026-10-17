@@ -241,7 +241,7 @@ jobs:
       - name: Start natively twice
         run: bash scripts/test-desktop-startup.sh build/bin/oreneta native-startup-linux
         env:
-          MERON_CORE_SERVER: ${{ github.workspace }}/meron-core/target/debug/meron-core
+          MERON_CORE_SERVER: ${{ github.workspace }}/meron-core/target/debug/oreneta-core
       - name: Upload native Linux startup evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -283,7 +283,7 @@ jobs:
       - name: Start natively twice
         run: bash scripts/test-desktop-startup.sh build/bin/oreneta native-startup-macos
         env:
-          MERON_CORE_SERVER: ${{ github.workspace }}/meron-core/target/debug/meron-core
+          MERON_CORE_SERVER: ${{ github.workspace }}/meron-core/target/debug/oreneta-core
       - name: Upload native macOS startup evidence
         if: always()
         uses: actions/upload-artifact@v4

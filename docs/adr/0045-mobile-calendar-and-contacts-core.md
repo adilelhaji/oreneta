@@ -138,7 +138,7 @@
   s'ha donat queda registrat on mira el mòbil.
 - Kotlin: `PimRefreshTest` (resposta, paràmetres, regles de xarxa i de tic,
   avisos) i `PimSyncModelTest` (errors per compte o llibreta, avís).
-- Escriptori: les proves del distribuïdor (`cargo test --bin meron-core`)
+- Escriptori: les proves del distribuïdor (`cargo test --bin oreneta-core`)
   sense canvis, incloses les de reintent de fons, calendari local i
   llibreta local.
 - `cargo test --lib`, i `calendar::` amb `TZ=Asia/Tokyo` i
