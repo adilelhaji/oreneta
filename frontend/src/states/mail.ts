@@ -2074,7 +2074,8 @@ async function revertJunkLearning(change: JunkUndo): Promise<SpamJudgmentChange 
 /**
  * A move back that failed leaves the conversation where the mark filed it, so
  * the learning goes back to what the mark left too: each conversation is
- * either undone whole or not at all.
+ * either undone whole or not at all. If even that fails, the reader is told
+ * about the move and the rest goes to the log (ADR-0005, #254).
  */
 async function restoreJunkLearning(restore: SpamJudgmentChange | null) {
   if (!restore) return
@@ -2088,6 +2089,8 @@ async function restoreJunkLearning(restore: SpamJudgmentChange | null) {
 
 /** The undo of one conversation's junk change: its learning, then the move back. */
 async function undoThreadJunk(change: JunkUndo) {
+  // The move back would be refused: nothing is taken back either.
+  if (changesBlocked(accounts$.peek(), change.threadId)) return
   let restore: SpamJudgmentChange | null = null
   try {
     restore = await revertJunkLearning(change)

@@ -2339,8 +2339,22 @@ pub struct SpamJudgmentState {
 pub struct SpamJudgmentChange {
     pub account: String,
     pub message_id: i64,
+    // Required keys, even though `null` is a value: a change that leaves one
+    // out is malformed, and reading it as "no row" would delete a judgment.
+    #[serde(deserialize_with = "required_judgment_state")]
     pub before: Option<SpamJudgmentState>,
+    #[serde(deserialize_with = "required_judgment_state")]
     pub after: Option<SpamJudgmentState>,
+}
+
+/// Deserializes `before`/`after` with the key required. Serde fills a missing
+/// `Option` field with `None` by default, but not one read through
+/// `deserialize_with`, so a change missing either key is an error.
+fn required_judgment_state<'de, D>(deserializer: D) -> std::result::Result<Option<SpamJudgmentState>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    <Option<SpamJudgmentState> as serde::Deserialize>::deserialize(deserializer)
 }
 
 impl SpamJudgmentChange {
@@ -2553,7 +2567,7 @@ fn rejudge_spam_rows(conn: &Connection, account: &str, only_unjudged: bool) -> R
     Ok(judged)
 }
 
-/ ---- Tasks (local, message-tied to-dos) ------------------------------------
+// ---- Tasks (local, message-tied to-dos) ------------------------------------
 
 /// One task as the Tasks view shows it: its own fields plus enough of the
 /// conversation it hangs off to render without a second round trip.

@@ -1087,6 +1087,19 @@ fn reverting_keeps_a_later_judgment_of_another_message_from_the_same_sender() {
 
     assert!(revert_spam_judgment(&conn, &first.change).unwrap().is_some());
 
+    // Everything the filter knows is what the later judgment alone taught
+    // it, the subject word both share ("prize") included.
+    let only_later = spam_undo_conn();
+    record_spam_judgment(&only_later, "acct", "INBOX", "t-2", true).unwrap();
+    assert_eq!(spam_learning(&conn, "acct"), spam_learning(&only_later, "acct"));
+    let prize: (i64, i64) = conn
+        .query_row(
+            "SELECT spam_count, ham_count FROM spam_triggers WHERE account = 'acct' AND word = 'prize'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(prize, (1, 0));
     assert_eq!(sender_spam_counts(&conn, "acct", "spammer@example.com"), (1, 0));
     let judged: Vec<String> = conn
         .prepare(
@@ -1239,6 +1252,16 @@ fn a_spam_judgment_change_round_trips_as_json_and_rejects_unknown_fields() {
     }))
     .is_err());
     assert!(serde_json::from_value::<SpamJudgmentChange>(json!({ "account": "acct" })).is_err());
+    // `null` is a value, a missing key is a malformed change: read as "no
+    // row", it would delete the judgment the row holds.
+    assert!(serde_json::from_value::<SpamJudgmentChange>(json!({
+        "account": "acct", "message_id": 7, "after": null,
+    }))
+    .is_err());
+    assert!(serde_json::from_value::<SpamJudgmentChange>(json!({
+        "account": "acct", "message_id": 7, "before": null,
+    }))
+    .is_err());
 }
 
 #[test]
