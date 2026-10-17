@@ -70,7 +70,12 @@ function stubBridge() {
       App: {
         Invoke: async (command: string, payload: any) => {
           calls.push({ command, payload })
-          if (command === 'mail.markJunk') return { ok: true, moved: 1, folder: payload.junk ? JUNK : 'INBOX' }
+          // The core's own answer: its move result, naming the destination
+          // as target_folder.
+          if (command === 'mail.markJunk') {
+            const [, source] = payload.thread_id.split('#')
+            return { ok: true, moved: 1, source_folder: source, target_folder: payload.junk ? JUNK : 'INBOX' }
+          }
           if (command === 'mail.move') return { ok: true, moved: 1 }
           if (command === 'mail.threadList') return { threads: [] }
           if (command === 'mail.folderList') return { folders: FOLDERS }
@@ -186,7 +191,7 @@ describe('the junk button of the selection bar (#245)', () => {
     let markJunkCalls = 0
     ;(window as any).go.main.App.Invoke = async (command: string, payload: any) => {
       calls.push({ command, payload })
-      if (command === 'mail.markJunk') return { ok: true, moved: markJunkCalls++ === 0 ? 1 : 0, folder: 'Junk' }
+      if (command === 'mail.markJunk') return { ok: true, moved: markJunkCalls++ === 0 ? 1 : 0, target_folder: JUNK }
       return {}
     }
     const view = render(<BulkActionBar items={[item(first), item(second)]} />)

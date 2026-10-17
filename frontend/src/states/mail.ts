@@ -2038,6 +2038,17 @@ export async function bulkDeleteSelected(items: BulkSelectionItem[]) {
  * after mis-filing something is to put it back — and a message in the junk
  * folder is a message they will not go looking for.
  */
+/**
+ * What `mail.markJunk` answers: the core's own move result, which names the
+ * destination as `target_folder` (`folder` is kept for older answers).
+ */
+type JunkResult = { folder?: string; target_folder?: string; thread_id?: string } & MutationResult
+
+/** The conversation's id in the folder the junk change filed it into, for its undo. */
+function junkDestinationThreadId(threadId: string, accountId: string | undefined, res: JunkResult): string {
+  return res.thread_id ?? threadIdInFolder(threadId, accountId, res.target_folder ?? res.folder)
+}
+
 export async function markThreadJunk(threadId: string, junk = true) {
   if (readOnlyTarget(accounts$.peek(), threadId)) return
   if (!threadId) return
@@ -2045,13 +2056,13 @@ export async function markThreadJunk(threadId: string, junk = true) {
   const sourceFolder = sourceThread?.folder_id ?? ''
   const { rollback } = removeThreadLocally(threadId)
   try {
-    const res = await invoke<{ folder?: string; thread_id?: string } & MutationResult>('mail.markJunk', {
+    const res = await invoke<JunkResult>('mail.markJunk', {
       thread_id: threadId,
       junk,
     })
     assertMoveAffected(res, junk ? 'Junk' : 'Not junk')
     applyMutationFolderUnreads(res)
-    const movedThreadId = res.thread_id ?? threadIdInFolder(threadId, sourceThread?.account_id, res.folder)
+    const movedThreadId = junkDestinationThreadId(threadId, sourceThread?.account_id, res)
     await refreshThreadLocation(sourceThread?.account_id, true)
     if (sourceFolder) {
       showUndoToast(
@@ -2095,7 +2106,7 @@ export async function bulkMarkSelectedJunk(items: BulkSelectionItem[], junk = tr
   const { done, error } = await runBulk(
     targets,
     async (item) => {
-      const res = await invoke<{ folder?: string; thread_id?: string } & MutationResult>('mail.markJunk', {
+      const res = await invoke<JunkResult>('mail.markJunk', {
         thread_id: item.threadId,
         junk,
       })
@@ -2106,7 +2117,7 @@ export async function bulkMarkSelectedJunk(items: BulkSelectionItem[], junk = tr
       void refreshAccountFoldersCache(item.accountId, false)
       if (item.folderId) {
         moved.push({
-          threadId: res.thread_id ?? threadIdInFolder(item.threadId, item.accountId, res.folder),
+          threadId: junkDestinationThreadId(item.threadId, item.accountId, res),
           folderId: item.folderId,
           accountId: item.accountId,
         })
