@@ -352,6 +352,12 @@ describe('signature placement against the quote', () => {
     expect(draft()?.signature?.placement).toBe('aboveQuote')
 
     reset()
+    setSignaturePlacement('acc-1', 'above')
+    await forwardMessage(original())
+    expect(draft()?.text).toStartWith('\n\nMe\n\n')
+    expect(draft()?.signature?.placement).toBe('aboveQuote')
+
+    reset()
     setSignaturePlacement('acc-1', 'below')
     await forwardMessage(original())
     expect(draft()?.text).toEndWith('Line two\n\nMe')
