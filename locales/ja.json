@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "このフォルダーには受信トレイが含まれているため、非表示にできません",
   "folders.hide.blocked.parentHidden": "親フォルダーが非表示のため非表示です",
   "search.scope.starred": "すべてのアカウントのすべてのフォルダーにあるスター付きメールを検索します (非表示のフォルダーを含む)。",
-  "search.scope.unified": "「{folder}」を検索します: 表示中の各アカウントのそのフォルダー (非表示でも含む)。",
+  "search.scope.unified": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントのそのフォルダー (非表示でも含む)。",
   "search.scope.folder": "「{folder}」のみを検索します。非表示のフォルダーは含まれません。",
   "search.scope.hiddenFolder": "非表示のフォルダー「{folder}」のみを検索します。",
-  "search.scope.unifiedInbox": "「{folder}」を検索します: 表示中の各アカウントの受信トレイ。"
+  "search.scope.unifiedInbox": "「{folder}」を検索します: 統合フォルダーに含まれる各アカウントの受信トレイ。"
 }

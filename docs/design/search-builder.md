@@ -18,8 +18,8 @@ aquell compte i aquella carpeta.
 
 A dalt de tot, una línia diu on busca la cerca i si hi entren les carpetes
 amagades (#273): amb una carpeta oberta, només aquella; a una carpeta
-unificada, la d'aquell tipus de cada compte de la vista, encara que sigui
-amagada; a Destacats, totes les carpetes, les amagades incloses.
+unificada, la d'aquell tipus de cada compte inclòs a les carpetes unificades,
+encara que sigui amagada; a Destacats, totes les carpetes, les amagades incloses.
 
 ## Proves
 

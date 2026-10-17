@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "Dieser Ordner enthält den Posteingang und kann nicht ausgeblendet werden",
   "folders.hide.blocked.parentHidden": "Ausgeblendet, weil der übergeordnete Ordner ausgeblendet ist",
   "search.scope.starred": "Durchsucht markierte Nachrichten in allen Ordnern aller Konten, ausgeblendete Ordner eingeschlossen.",
-  "search.scope.unified": "Durchsucht „{folder}“: diesen Ordner in jedem angezeigten Konto, auch wenn er ausgeblendet ist.",
+  "search.scope.unified": "Durchsucht „{folder}“: diesen Ordner in jedem Konto der vereinheitlichten Ordner, auch wenn er ausgeblendet ist.",
   "search.scope.folder": "Durchsucht nur „{folder}“. Ausgeblendete Ordner sind nicht enthalten.",
   "search.scope.hiddenFolder": "Durchsucht nur „{folder}“, einen ausgeblendeten Ordner.",
-  "search.scope.unifiedInbox": "Durchsucht „{folder}“: den Posteingang jedes angezeigten Kontos."
+  "search.scope.unifiedInbox": "Durchsucht „{folder}“: den Posteingang jedes Kontos der vereinheitlichten Ordner."
 }

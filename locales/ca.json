@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "Aquesta carpeta conté la safata d'entrada i no es pot amagar",
   "folders.hide.blocked.parentHidden": "És amagada perquè ho és la carpeta que la conté",
   "search.scope.starred": "Cerca als missatges destacats de totes les carpetes de tots els comptes, incloses les amagades.",
-  "search.scope.unified": "Cerca a «{folder}»: aquesta carpeta de cada compte de la vista, encara que sigui amagada.",
+  "search.scope.unified": "Cerca a «{folder}»: aquesta carpeta de cada compte inclòs a les carpetes unificades, encara que sigui amagada.",
   "search.scope.folder": "Cerca només a «{folder}». Les carpetes amagades no s'hi inclouen.",
   "search.scope.hiddenFolder": "Cerca només a «{folder}», que és una carpeta amagada.",
-  "search.scope.unifiedInbox": "Cerca a «{folder}»: la safata d'entrada de cada compte de la vista."
+  "search.scope.unifiedInbox": "Cerca a «{folder}»: la safata d'entrada de cada compte inclòs a les carpetes unificades."
 }

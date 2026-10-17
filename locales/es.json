@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "Esta carpeta contiene la bandeja de entrada y no se puede ocultar",
   "folders.hide.blocked.parentHidden": "Oculta porque la carpeta que la contiene está oculta",
   "search.scope.starred": "Busca en los mensajes destacados de todas las carpetas de todas las cuentas, incluidas las ocultas.",
-  "search.scope.unified": "Busca en «{folder}»: esa carpeta de cada cuenta de la vista, aunque esté oculta.",
+  "search.scope.unified": "Busca en «{folder}»: esa carpeta de cada cuenta incluida en las carpetas unificadas, aunque esté oculta.",
   "search.scope.folder": "Busca solo en «{folder}». Las carpetas ocultas no se incluyen.",
   "search.scope.hiddenFolder": "Busca solo en «{folder}», una carpeta oculta.",
-  "search.scope.unifiedInbox": "Busca en «{folder}»: la bandeja de entrada de cada cuenta de la vista."
+  "search.scope.unifiedInbox": "Busca en «{folder}»: la bandeja de entrada de cada cuenta incluida en las carpetas unificadas."
 }

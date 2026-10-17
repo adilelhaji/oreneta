@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "This folder holds the inbox and cannot be hidden",
   "folders.hide.blocked.parentHidden": "Hidden because the folder that holds it is hidden",
   "search.scope.starred": "Searches starred messages in every folder of every account, hidden folders included.",
-  "search.scope.unified": "Searches “{folder}”: that folder in each account in view, even where it is hidden.",
+  "search.scope.unified": "Searches “{folder}”: that folder in each account included in the unified folders, even where it is hidden.",
   "search.scope.folder": "Searches only “{folder}”. Hidden folders are not included.",
   "search.scope.hiddenFolder": "Searches only “{folder}”, a hidden folder.",
-  "search.scope.unifiedInbox": "Searches “{folder}”: the inbox of each account in view."
+  "search.scope.unifiedInbox": "Searches “{folder}”: the inbox of each account included in the unified folders."
 }

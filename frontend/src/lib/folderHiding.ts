@@ -5,7 +5,6 @@
 // several folders.
 
 import type { Folder } from '../types'
-import { buildFolderTree, type TreeNode } from './folderTree'
 import { UNIFIED_ACCOUNT, unifiedFolderRole } from './unifiedFolders'
 import type { FolderRef } from '../states/folderPrefs'
 
@@ -33,16 +32,34 @@ function marked(folder: Folder, hidden: FolderRef[]): boolean {
   return hidden.some((ref) => ref.accountId === folder.account_id && ref.folderId === folder.id)
 }
 
-/** Every real folder of the tree, with whether a folder above it is in `hidden`. */
-function walk(folders: Folder[], hidden: FolderRef[]): Array<{ folder: Folder; underHidden: boolean }> {
-  const out: Array<{ folder: Folder; underHidden: boolean }> = []
-  const step = (node: TreeNode, underHidden: boolean) => {
-    if (node.folder) out.push({ folder: node.folder, underHidden })
-    const hides = underHidden || (!!node.folder && marked(node.folder, hidden))
-    for (const child of node.children) step(child, hides)
+/**
+ * The ids above `folder`, nearest first. Graph and Exchange folders name their
+ * parent; IMAP and local folders are paths split by the folder's own
+ * delimiter. A folder without one (an IMAP server that reports NIL) has no
+ * hierarchy at all, so nothing is above it, whatever its name looks like.
+ */
+function ancestorIds(folder: Folder, folders: Folder[]): string[] {
+  if (folders.some((item) => item.parent_id !== undefined)) {
+    const byId = new Map(folders.map((item) => [item.id, item]))
+    const out: string[] = []
+    let parent = folder.parent_id
+    while (parent && parent !== folder.id && !out.includes(parent)) {
+      out.push(parent)
+      parent = byId.get(parent)?.parent_id
+    }
+    return out
   }
-  for (const root of buildFolderTree(folders)) step(root, false)
+  const delimiter = folder.delimiter
+  if (!delimiter) return []
+  const parts = folder.id.split(delimiter)
+  const out: string[] = []
+  for (let end = parts.length - 1; end > 0; end -= 1) out.push(parts.slice(0, end).join(delimiter))
   return out
+}
+
+function underMarked(folder: Folder, folders: Folder[], hidden: FolderRef[]): boolean {
+  const marks = new Set(hidden.filter((ref) => ref.accountId === folder.account_id).map((ref) => ref.folderId))
+  return ancestorIds(folder, folders).some((id) => marks.has(id))
 }
 
 /**
@@ -54,8 +71,8 @@ function walk(folders: Folder[], hidden: FolderRef[]): Array<{ folder: Folder; u
 export function hiddenFolderIds(folders: Folder[], hidden: FolderRef[]): Set<string> {
   const ids = new Set<string>()
   if (!hidden.length) return ids
-  for (const { folder, underHidden } of walk(folders, hidden)) {
-    if (!isInbox(folder) && (underHidden || marked(folder, hidden))) ids.add(folder.id)
+  for (const folder of folders) {
+    if (!isInbox(folder) && (marked(folder, hidden) || underMarked(folder, folders, hidden))) ids.add(folder.id)
   }
   return ids
 }
@@ -63,10 +80,8 @@ export function hiddenFolderIds(folders: Folder[], hidden: FolderRef[]): Set<str
 /** Why `folder` cannot be hidden, or null when it can. */
 export function folderHideBlock(folder: Folder, folders: Folder[], hidden: FolderRef[]): FolderHideBlock | null {
   if (isInbox(folder)) return 'inbox'
-  const self: FolderRef[] = [{ accountId: folder.account_id, folderId: folder.id }]
-  if (walk(folders, self).some((item) => item.underHidden && isInbox(item.folder))) return 'containsInbox'
-  const underHidden = walk(folders, hidden).some((item) => item.folder.id === folder.id && item.underHidden)
-  return underHidden ? 'parentHidden' : null
+  if (folders.some((item) => isInbox(item) && ancestorIds(item, folders).includes(folder.id))) return 'containsInbox'
+  return underMarked(folder, folders, hidden) ? 'parentHidden' : null
 }
 
 export type SearchScopeKind = 'starred' | 'unified' | 'unifiedInbox' | 'folder' | 'hiddenFolder'
@@ -79,17 +94,21 @@ export const SEARCH_SCOPE_TEXT: Record<SearchScopeKind, { key: string; text: str
   },
   unified: {
     key: 'search.scope.unified',
-    text: 'Searches “{folder}”: that folder in each account in view, even where it is hidden.',
+    text: 'Searches “{folder}”: that folder in each account included in the unified folders, even where it is hidden.',
   },
   // An inbox is never hidden, so there is nothing to say about hidden folders.
-  unifiedInbox: { key: 'search.scope.unifiedInbox', text: 'Searches “{folder}”: the inbox of each account in view.' },
+  unifiedInbox: {
+    key: 'search.scope.unifiedInbox',
+    text: 'Searches “{folder}”: the inbox of each account included in the unified folders.',
+  },
   folder: { key: 'search.scope.folder', text: 'Searches only “{folder}”. Hidden folders are not included.' },
   hiddenFolder: { key: 'search.scope.hiddenFolder', text: 'Searches only “{folder}”, a hidden folder.' },
 }
 
 /**
  * Where the search box looks (#273). A search runs in the open folder. A
- * unified folder is that role's folder in each account in view, and Starred
+ * unified folder is that role's folder in each account included in the
+ * unified folders (the core is not told about an account group), and Starred
  * spans every folder; the core answers both and knows nothing of hidden
  * folders, so a hidden one is searched there.
  */

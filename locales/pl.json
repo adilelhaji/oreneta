@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "Ten folder zawiera skrzynkę odbiorczą i nie można go ukryć",
   "folders.hide.blocked.parentHidden": "Ukryty, ponieważ zawierający go folder jest ukryty",
   "search.scope.starred": "Przeszukuje wiadomości oznaczone gwiazdką we wszystkich folderach wszystkich kont, także w ukrytych.",
-  "search.scope.unified": "Przeszukuje „{folder}”: ten folder na każdym widocznym koncie, nawet jeśli jest ukryty.",
+  "search.scope.unified": "Przeszukuje „{folder}”: ten folder na każdym koncie uwzględnionym w folderach zbiorczych, nawet jeśli jest ukryty.",
   "search.scope.folder": "Przeszukuje tylko „{folder}”. Ukryte foldery nie są uwzględniane.",
   "search.scope.hiddenFolder": "Przeszukuje tylko „{folder}”, który jest ukrytym folderem.",
-  "search.scope.unifiedInbox": "Przeszukuje „{folder}”: skrzynkę odbiorczą każdego widocznego konta."
+  "search.scope.unifiedInbox": "Przeszukuje „{folder}”: skrzynkę odbiorczą każdego konta uwzględnionego w folderach zbiorczych."
 }

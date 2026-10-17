@@ -46,7 +46,10 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
 - **Què fa:** el menú contextual d'una carpeta (clic dret, Maj+F10 o la tecla
   de menú) ofereix «Amaga la carpeta». La carpeta i totes les seves
   subcarpetes surten de l'arbre, tant si la jerarquia és una ruta (IMAP,
-  arxiu local, POP3) com si són enllaços al pare (Microsoft Graph, Exchange).
+  arxiu local, POP3, Exchange) com si són enllaços al pare (Microsoft Graph).
+  Les subcarpetes es deriven del delimitador de cada carpeta o del seu pare:
+  en un servidor IMAP que no anuncia delimitador (NIL), les carpetes no tenen
+  jerarquia i amagar-ne una no n'amaga cap altra.
   La carpeta oberta en aquell moment es queda a l'arbre, marcada com a
   amagada, fins que se n'obre una altra.
 - **Com es tornen a veure:** quan el compte obert té carpetes amagades,
@@ -87,11 +90,12 @@ Data: 2026-10-17. Fila SET-07 (#87) de la paritat amb eM Client 10.4.
   a l'arbre i en surt, el focus passa al botó «Mostra les carpetes amagades».
 - **Cerca:** la cerca busca a la carpeta oberta. «Opcions de cerca» diu
   on busca i si hi entren les carpetes amagades: amb una carpeta oberta, no
-  (o bé que la mateixa carpeta oberta és amagada); a una carpeta unificada,
-  sí: el nucli hi busca la carpeta d'aquell tipus de cada compte de la vista,
-  encara que aquesta carpeta sigui amagada (la safata d'entrada mai no ho
-  és); a Destacats, que inclou totes les carpetes, també. La línia és dins
-  d'«Opcions de cerca», no al costat del quadre de cerca.
+  (o bé que la mateixa carpeta oberta és amagada); en una carpeta unificada,
+  sí: el nucli hi busca la carpeta d'aquell tipus de cada compte inclòs a les
+  carpetes unificades, encara que aquesta carpeta sigui amagada (la safata
+  d'entrada mai no ho és); a Destacats, que inclou totes les carpetes, també.
+  La línia d'àmbit és dins d'«Opcions de cerca», no al costat del quadre de
+  cerca.
 - **Fora d'abast:** l'aplicació mòbil i desar les marques al servidor.
 - **Proves:** `frontend/src/lib/folderHiding.test.ts` (què surt de l'arbre
   per ruta i per pare, què no es pot amagar, l'àmbit de la cerca),

@@ -2825,8 +2825,8 @@
   "folders.hide.blocked.containsInbox": "See kaust sisaldab sisendkausta ja seda ei saa peita",
   "folders.hide.blocked.parentHidden": "Peidetud, sest seda sisaldav kaust on peidetud",
   "search.scope.starred": "Otsib tärniga sõnumitest kõigis kõigi kontode kaustades, ka peidetud kaustades.",
-  "search.scope.unified": "Otsib kaustast „{folder}“: see kaust igal kuvatud kontol, ka siis, kui see on peidetud.",
+  "search.scope.unified": "Otsib kaustast „{folder}“: see kaust igal ühendatud kaustadesse kaasatud kontol, ka siis, kui see on peidetud.",
   "search.scope.folder": "Otsib ainult kaustast „{folder}“. Peidetud kaustu ei otsita.",
   "search.scope.hiddenFolder": "Otsib ainult kaustast „{folder}“, mis on peidetud.",
-  "search.scope.unifiedInbox": "Otsib kaustast „{folder}“: iga kuvatud konto sisendkaust."
+  "search.scope.unifiedInbox": "Otsib kaustast „{folder}“: iga ühendatud kaustadesse kaasatud konto sisendkaust."
 }

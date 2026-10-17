@@ -41,6 +41,16 @@ describe('hidden folders in the tree (#273)', () => {
     expect(hiddenFolderIds(paths, [])).toEqual(new Set())
   })
 
+  it('does not guess a hierarchy where the server reports none (NIL delimiter)', () => {
+    const flat = [
+      folder('INBOX', { role: 'inbox', delimiter: undefined }),
+      folder('Work', { delimiter: undefined }),
+      folder('Work/Reports', { delimiter: '' }),
+    ]
+    expect([...hiddenFolderIds(flat, [ref('Work')])]).toEqual(['Work'])
+    expect(folderHideBlock(flat[2], flat, [ref('Work')])).toBeNull()
+  })
+
   it('leaves out a hidden folder and everything under it, by parent link', () => {
     expect([...hiddenFolderIds(linked, [ref('id-work')])].sort()).toEqual(['id-2026', 'id-work'])
   })
