@@ -555,3 +555,20 @@ fn incomplete_parameters_are_refused() {
         assert!(TestRequest::from_params(&params).is_err(), "{params}");
     }
 }
+
+/// The certificate class, without a certificate of our own to serve: the TLS
+/// layer's typed rejection is what the step reads.
+#[test]
+fn a_rejected_certificate_is_told_apart_from_a_port_without_tls() {
+    let rejected = UntrustedCertificate::from_io(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer),
+    ));
+    assert_eq!(handshake_kind(&rejected), Kind::Certificate);
+    let plaintext = UntrustedCertificate::from_io(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        rustls::Error::InvalidMessage(rustls::InvalidMessage::InvalidContentType),
+    ));
+    assert_eq!(handshake_kind(&plaintext), Kind::NotTls);
+    assert_eq!(handshake_kind(&anyhow!("timed out").context("tls handshake")), Kind::Timeout);
+}
