@@ -20,6 +20,11 @@
 //! ADR-0055: the person's status lives in a settings row, contacts' and
 //! occupants' only in the session, a mention is worked out from the text,
 //! and a private message is its own conversation, `room@service/nick`.
+//!
+//! Who may see the person's status, muting a conversation and the count of
+//! unread mentions follow ADR-0064: the first comes from the server's roster
+//! and lives only in the session, a mute is a settings row, and the count is
+//! worked out from the text when read, like the highlight.
 
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -27,6 +32,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod files;
 pub mod mentions;
+pub mod mute;
 pub mod presence;
 pub mod xmpp;
 
@@ -170,6 +176,7 @@ pub fn remove_account(conn: &Connection, id: &str) -> Result<()> {
     tx.execute("DELETE FROM chat_rooms WHERE chat_account = ?1", [id])?;
     tx.execute("DELETE FROM chat_invitations WHERE chat_account = ?1", [id])?;
     presence::forget_own(&tx, id)?;
+    mute::forget(&tx, id)?;
     tx.execute("DELETE FROM chat_accounts WHERE id = ?1", [id])?;
     tx.commit()?;
     Ok(())
@@ -409,6 +416,8 @@ pub struct Conversation {
     pub kind: String,
     /// For a private one, the room it goes through.
     pub room: Option<String>,
+    /// Muted by the person: no system notification from it (ADR-0064).
+    pub muted: bool,
 }
 
 pub fn conversations(conn: &Connection, account: &str) -> Result<Vec<Conversation>> {
@@ -436,9 +445,15 @@ pub fn conversations(conn: &Connection, account: &str) -> Result<Vec<Conversatio
             last_direction: r.get(3)?,
             unread: r.get(4)?,
             kind,
+            muted: false,
         })
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut list: Vec<Conversation> = rows.collect::<rusqlite::Result<_>>()?;
+    let muted = mute::muted(conn, account)?;
+    for conversation in &mut list {
+        conversation.muted = muted.contains(&conversation.conversation);
+    }
+    Ok(list)
 }
 
 /// One conversation, oldest first, at most `limit` of the newest messages.
@@ -530,6 +545,40 @@ pub struct Room {
     pub last_body: String,
     pub last_stamp: i64,
     pub unread: i64,
+    /// Muted by the person: no system notification from it, mentions
+    /// included (ADR-0064).
+    pub muted: bool,
+    /// Unread messages from others that mention the person, by the same rule
+    /// as the highlight (ADR-0055), with the nickname they have there now.
+    pub unread_mentions: i64,
+    /// More unread messages than `MAX_MENTION_SCAN`: only the newest were
+    /// looked at, so `unread_mentions` is a lower bound.
+    pub mentions_capped: bool,
+}
+
+/// At most this many of a room's newest unread messages are looked at for
+/// mentions each time the rooms are listed; beyond them the count is said to
+/// be a lower bound, never passed off as exact.
+pub const MAX_MENTION_SCAN: i64 = 2000;
+
+/// How many of a room's unread messages from others mention this nickname,
+/// among the newest `MAX_MENTION_SCAN`.
+fn unread_mentions(conn: &Connection, account: &str, room: &str, nick: &str) -> Result<i64> {
+    let mut stmt = conn.prepare(
+        "SELECT body FROM chat_messages
+          WHERE chat_account = ?1 AND conversation = ?2 AND direction = 'in' AND kind = 'groupchat'
+            AND stamp > COALESCE((SELECT read_at FROM chat_reads r
+                                   WHERE r.chat_account = ?1 AND r.conversation = ?2), 0)
+          ORDER BY stamp DESC, rowid DESC LIMIT ?3",
+    )?;
+    let bodies = stmt.query_map(params![account, room, MAX_MENTION_SCAN], |r| r.get::<_, String>(0))?;
+    let mut count = 0;
+    for body in bodies {
+        if mentions::mentions_nick(&body?, nick) {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 /// A room address looks like a person's: `name@service.example`.
@@ -588,9 +637,21 @@ pub fn rooms(conn: &Connection, account: &str) -> Result<Vec<Room>> {
             last_body: r.get(4)?,
             last_stamp: r.get(5)?,
             unread: r.get(6)?,
+            muted: false,
+            unread_mentions: 0,
+            mentions_capped: false,
         })
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut list: Vec<Room> = rows.collect::<rusqlite::Result<_>>()?;
+    let muted = mute::muted(conn, account)?;
+    for room in &mut list {
+        room.muted = muted.contains(&room.room);
+        if room.unread > 0 {
+            room.unread_mentions = unread_mentions(conn, account, &room.room, &room.nick)?;
+            room.mentions_capped = room.unread > MAX_MENTION_SCAN;
+        }
+    }
+    Ok(list)
 }
 
 pub fn room(conn: &Connection, account: &str, room: &str) -> Result<Option<Room>> {
@@ -641,6 +702,7 @@ pub fn leave_room(conn: &Connection, account: &str, room: &str) -> Result<()> {
     tx.execute("DELETE FROM chat_rooms WHERE chat_account = ?1 AND room = ?2", params![account, room])?;
     tx.execute("DELETE FROM chat_messages WHERE chat_account = ?1 AND conversation = ?2", params![account, room])?;
     tx.execute("DELETE FROM chat_reads WHERE chat_account = ?1 AND conversation = ?2", params![account, room])?;
+    mute::forget_conversation(&tx, account, room)?;
     tx.commit()?;
     Ok(())
 }

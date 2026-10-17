@@ -701,25 +701,25 @@ fn group_in(body: &str, mention: bool) -> ChatMessage {
 fn only_a_new_message_from_someone_else_just_sent_notifies() {
     use presence::{Arrival, should_notify};
     let direct = incoming("d1", None, "Hola", 1);
-    assert!(should_notify(&direct, Arrival::Live, "available"));
-    assert!(should_notify(&direct, Arrival::Live, "away"));
-    assert!(should_notify(&direct, Arrival::Carbon, "available"), "got by another device: still new here");
-    assert!(!should_notify(&direct, Arrival::Backfill, "available"), "caught up: shown as unread, no popup");
-    assert!(!should_notify(&direct, Arrival::Live, "dnd"), "busy holds them back");
+    assert!(should_notify(&direct, Arrival::Live, "available", false));
+    assert!(should_notify(&direct, Arrival::Live, "away", false));
+    assert!(should_notify(&direct, Arrival::Carbon, "available", false), "got by another device: still new here");
+    assert!(!should_notify(&direct, Arrival::Backfill, "available", false), "caught up: shown as unread, no popup");
+    assert!(!should_notify(&direct, Arrival::Live, "dnd", false), "busy holds them back");
     let mut mine = direct.clone();
     mine.direction = "out".into();
-    assert!(!should_notify(&mine, Arrival::Carbon, "available"), "our own, from another device");
+    assert!(!should_notify(&mine, Arrival::Carbon, "available", false), "our own, from another device");
     // In a room, only a mention.
-    assert!(!should_notify(&group_in("hola a todos", false), Arrival::Live, "available"));
-    assert!(should_notify(&group_in("@Ana hola", true), Arrival::Live, "available"));
-    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Backfill, "available"), "room history on joining");
-    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Live, "dnd"));
+    assert!(!should_notify(&group_in("hola a todos", false), Arrival::Live, "available", false));
+    assert!(should_notify(&group_in("@Ana hola", true), Arrival::Live, "available", false));
+    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Backfill, "available", false), "room history on joining");
+    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Live, "dnd", false));
     // Privately through a room: like a direct one.
     let mut private = incoming("p1", None, "psst", 1);
     private.conversation = "team@rooms.chat.test/Pau".into();
     private.sender = "Pau".into();
     private.kind = KIND_PRIVATE.into();
-    assert!(should_notify(&private, Arrival::Live, "available"));
+    assert!(should_notify(&private, Arrival::Live, "available", false));
 
     // What the bridge is told: who, where, and the text cut short.
     let mut long = group_in(&"a".repeat(400), true);
@@ -935,6 +935,219 @@ fn requests_and_contacts_are_bounded_and_allowing_answers_only_who_asked() {
     }
     live.contacts.update("c0@chat.test", "r", "offline", "", 0);
     assert_eq!(live.contacts.seen("c0@chat.test").show, "away", "the devices kept still count");
+}
+
+// ---- Who may see the status, muting and unread mentions (ADR-0064) ---------------------
+
+#[test]
+fn who_may_see_the_status_comes_from_the_roster_and_only_our_server_changes_it() {
+    use tokio_xmpp::parsers::iq::Iq;
+    use tokio_xmpp::parsers::roster::Roster;
+    let own = BareJid::from_str("ana@chat.test").unwrap();
+    assert!(presence::roster_query().is("query", "jabber:iq:roster"), "the whole roster, asked plainly");
+    let push = |xml: &str| -> Option<(Roster, String)> { presence::roster_push(&stanza::<Iq>(xml), &own) };
+
+    // Before the server answers it is unknown, never "nobody", and a push
+    // alone does not make it known.
+    let mut live = presence::Live::default();
+    assert_eq!(live.snapshot()["allowed"], serde_json::Value::Null);
+    let (early, _) = push(
+        "<iq xmlns='jabber:client' type='set' id='p0'><query xmlns='jabber:iq:roster'>\
+         <item jid='eva@chat.test' subscription='from'/></query></iq>",
+    )
+    .unwrap();
+    assert!(!live.apply_roster_push(&early));
+    assert!(live.allowed.is_none());
+
+    // Only `from` and `both` let someone see the person's status.
+    let roster: Roster = stanza(
+        "<query xmlns='jabber:iq:roster'>\
+         <item jid='eva@chat.test' subscription='from'/>\
+         <item jid='pau@chat.test' subscription='both'/>\
+         <item jid='joan@chat.test' subscription='to'/>\
+         <item jid='marta@chat.test' subscription='none' ask='subscribe'/>\
+         <item jid='rita@chat.test'/>\
+         </query>",
+    );
+    live.set_roster(&roster);
+    assert_eq!(live.snapshot()["allowed"], serde_json::json!(["eva@chat.test", "pau@chat.test"]));
+    assert_eq!(live.snapshot()["allowed_more"], false);
+
+    // A push from our own server (no address, or our bare one) changes it.
+    let (changes, id) = push(
+        "<iq xmlns='jabber:client' type='set' id='push1'><query xmlns='jabber:iq:roster'>\
+         <item jid='eva@chat.test' subscription='none'/><item jid='joan@chat.test' subscription='both'/></query></iq>",
+    )
+    .unwrap();
+    assert_eq!(id, "push1");
+    assert!(live.apply_roster_push(&changes));
+    assert_eq!(live.snapshot()["allowed"], serde_json::json!(["joan@chat.test", "pau@chat.test"]));
+    assert!(!live.apply_roster_push(&changes), "the same again changes nothing");
+    let (removed, _) = push(
+        "<iq xmlns='jabber:client' type='set' id='push2' from='ana@chat.test'><query xmlns='jabber:iq:roster'>\
+         <item jid='pau@chat.test' subscription='remove'/></query></iq>",
+    )
+    .unwrap();
+    assert!(live.apply_roster_push(&removed));
+    assert_eq!(live.snapshot()["allowed"], serde_json::json!(["joan@chat.test"]));
+    // It is answered with an empty result, to our own server.
+    assert_eq!(
+        presence::roster_push_answer(id),
+        Iq::Result { from: None, to: None, id: "push1".into(), payload: None }
+    );
+
+    // Anyone else's is not a push: another device, a stranger, a question, another payload.
+    for xml in [
+        "<iq xmlns='jabber:client' type='set' id='x1' from='ana@chat.test/phone'><query xmlns='jabber:iq:roster'>\
+         <item jid='evil@chat.test' subscription='from'/></query></iq>",
+        "<iq xmlns='jabber:client' type='set' id='x2' from='evil@chat.test'><query xmlns='jabber:iq:roster'>\
+         <item jid='evil@chat.test' subscription='from'/></query></iq>",
+        "<iq xmlns='jabber:client' type='get' id='x3'><query xmlns='jabber:iq:roster'/></iq>",
+        "<iq xmlns='jabber:client' type='set' id='x4'><query xmlns='http://jabber.org/protocol/disco#info'/></iq>",
+    ] {
+        assert!(push(xml).is_none(), "{xml}");
+    }
+
+    // Bounded: beyond the bound nothing more is kept, and the app is told.
+    let items = |n: usize| -> String { (0..n).map(|i| format!("<item jid='c{i}@chat.test' subscription='from'/>")).collect() };
+    let mut full = presence::Live::default();
+    full.set_roster(&stanza(&format!("<query xmlns='jabber:iq:roster'>{}</query>", items(presence::MAX_ALLOWED))));
+    assert_eq!((full.allowed.as_ref().unwrap().len(), full.allowed_more), (presence::MAX_ALLOWED, false));
+    let (late, _) = push(
+        "<iq xmlns='jabber:client' type='set' id='p9'><query xmlns='jabber:iq:roster'>\
+         <item jid='late@chat.test' subscription='both'/></query></iq>",
+    )
+    .unwrap();
+    assert!(full.apply_roster_push(&late), "the app learns there are more");
+    assert!(full.allowed_more && !full.allowed.as_ref().unwrap().contains("late@chat.test"));
+    let mut over = presence::Live::default();
+    over.set_roster(&stanza(&format!("<query xmlns='jabber:iq:roster'>{}</query>", items(presence::MAX_ALLOWED + 3))));
+    assert_eq!((over.allowed.as_ref().unwrap().len(), over.allowed_more), (presence::MAX_ALLOWED, true));
+
+    // A new session knows nothing of the old one's list.
+    live.fresh_session();
+    assert!(live.allowed.is_none() && !live.allowed_more);
+}
+
+#[test]
+fn a_muted_conversation_raises_nothing_but_still_counts_as_unread() {
+    use presence::{Arrival, should_notify};
+    // Muted holds everything back, a mention too.
+    assert!(!should_notify(&incoming("d1", None, "Hola", 1), Arrival::Live, "available", true));
+    assert!(!should_notify(&group_in("@Ana hola", true), Arrival::Live, "available", true));
+
+    let db = Arc::new(std::sync::Mutex::new(conn()));
+    save_room(&db.lock().unwrap(), "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
+    // Kept as the core spells a conversation: the address in lower case, a nickname as it is.
+    let list = mute::set_muted(&db.lock().unwrap(), "a", " Pau@Chat.Test ", true).unwrap();
+    assert_eq!(list.into_iter().collect::<Vec<_>>(), ["pau@chat.test"]);
+    mute::set_muted(&db.lock().unwrap(), "a", "team@rooms.chat.test", true).unwrap();
+    mute::set_muted(&db.lock().unwrap(), "a", "team@rooms.chat.test/Pau", true).unwrap();
+    assert!(mute::is_muted(&db.lock().unwrap(), "a", "team@rooms.chat.test/Pau").unwrap());
+    assert!(!mute::is_muted(&db.lock().unwrap(), "a", "team@rooms.chat.test/pau").unwrap(), "pau is someone else");
+    assert!(!mute::is_muted(&db.lock().unwrap(), "b", "pau@chat.test").unwrap(), "per account");
+
+    let direct = "<message xmlns='jabber:client' type='chat' from='pau@chat.test/phone' to='ana@chat.test/desk' id='m1'><body>Hola</body></message>";
+    assert!(handle(&db, direct, "available").notify.is_none(), "muted: no popup");
+    let mention = "<message xmlns='jabber:client' type='groupchat' from='team@rooms.chat.test/Pau' to='ana@chat.test/desk' id='g1'><body>@Ana mira</body></message>";
+    assert!(handle(&db, mention, "available").notify.is_none(), "not even a mention");
+    let private = "<message xmlns='jabber:client' type='chat' from='team@rooms.chat.test/Pau' to='ana@chat.test/desk' id='p1'>\
+                   <body>psst</body><x xmlns='http://jabber.org/protocol/muc#user'/></message>";
+    assert!(handle(&db, private, "available").notify.is_none());
+    {
+        // Kept and unread all the same, and listed as muted.
+        let c = db.lock().unwrap();
+        let listed = conversations(&c, "a").unwrap();
+        assert_eq!(listed.len(), 2);
+        assert!(listed.iter().all(|one| one.muted && one.unread == 1), "{listed:?}");
+        let groups = rooms(&c, "a").unwrap();
+        assert_eq!((groups[0].muted, groups[0].unread, groups[0].unread_mentions), (true, 1, 1));
+    }
+    // Unmuted, it notifies again.
+    mute::set_muted(&db.lock().unwrap(), "a", "pau@chat.test", false).unwrap();
+    let next = "<message xmlns='jabber:client' type='chat' from='pau@chat.test/phone' to='ana@chat.test/desk' id='m2'><body>¿Estás?</body></message>";
+    assert!(handle(&db, next, "available").notify.is_some());
+    assert!(!conversations(&db.lock().unwrap(), "a").unwrap().iter().any(|one| one.conversation == "pau@chat.test" && one.muted));
+
+    // Leaving the room forgets its mute; its private conversation stays, muted.
+    leave_room(&db.lock().unwrap(), "a", "team@rooms.chat.test").unwrap();
+    assert_eq!(mute::muted(&db.lock().unwrap(), "a").unwrap().into_iter().collect::<Vec<_>>(), ["team@rooms.chat.test/Pau"]);
+    // The last one unmuted leaves no row behind.
+    let c = db.lock().unwrap();
+    assert!(mute::set_muted(&c, "a", "team@rooms.chat.test/Pau", false).unwrap().is_empty());
+    assert!(crate::store::settings_get(&c, &["chat_mute:a".to_string()]).unwrap().get("chat_mute:a").is_none());
+
+    // Only a conversation can be muted, and only so many.
+    assert!(mute::set_muted(&c, "a", "   ", true).is_err());
+    assert!(mute::set_muted(&c, "a", "pau\u{7}@chat.test", true).is_err());
+    for n in 0..mute::MAX_MUTED {
+        mute::set_muted(&c, "b", &format!("p{n}@chat.test"), true).unwrap();
+    }
+    assert!(mute::set_muted(&c, "b", "late@chat.test", true).is_err(), "refused, never dropped");
+    assert!(mute::set_muted(&c, "b", "p1@chat.test", true).is_ok(), "already muted");
+    assert_eq!(mute::muted(&c, "b").unwrap().len(), mute::MAX_MUTED);
+    // A damaged row: what is not a conversation is skipped, the rest stays.
+    crate::store::setting_set(&c, "chat_mute:c", &serde_json::json!(["eva@chat.test", 7, "", null])).unwrap();
+    assert_eq!(mute::muted(&c, "c").unwrap().into_iter().collect::<Vec<_>>(), ["eva@chat.test"]);
+    crate::store::setting_set(&c, "chat_mute:c", &serde_json::json!({ "eva@chat.test": true })).unwrap();
+    assert!(mute::muted(&c, "c").unwrap().is_empty());
+    // Removing the account forgets its mutes.
+    save_account(&c, &ChatAccount { id: "b".into(), jid: "bea@chat.test".into(), host: String::new(), port: 5222 }, 1).unwrap();
+    remove_account(&c, "b").unwrap();
+    assert!(mute::muted(&c, "b").unwrap().is_empty());
+}
+
+#[test]
+fn a_room_counts_its_unread_mentions_until_read_and_says_when_it_stopped_looking() {
+    let c = conn();
+    save_room(&c, "a", "team@rooms.chat.test", "Ana", false, 1).unwrap();
+    save_room(&c, "a", "club@rooms.chat.test", "Ana", false, 1).unwrap();
+    let say = |room: &str, id: &str, direction: &str, body: &str, stamp: i64| {
+        let sender = if direction == "in" { "Pau" } else { "Ana" };
+        let mut m = ChatMessage::chat("a", room, id, direction, sender, body, stamp, "received");
+        m.kind = KIND_GROUP.into();
+        record(&c, &m).unwrap();
+    };
+    let counted = |room: &str| {
+        let r = super::room(&c, "a", room).unwrap().unwrap();
+        (r.unread, r.unread_mentions, r.mentions_capped)
+    };
+    say("team@rooms.chat.test", "g1", "in", "@Ana ¿vienes?", 10);
+    say("team@rooms.chat.test", "g2", "in", "hola a todos", 11);
+    say("team@rooms.chat.test", "g3", "in", "ana, mira esto", 12);
+    say("team@rooms.chat.test", "g4", "out", "Ana aquí", 13);
+    say("team@rooms.chat.test", "g5", "in", "Anabel viene", 14);
+    // Two of four unread name the person; our own and "Anabel" do not.
+    assert_eq!(counted("team@rooms.chat.test"), (4, 2, false));
+    assert_eq!(counted("club@rooms.chat.test"), (0, 0, false));
+    // Reading counts them down.
+    mark_read(&c, "a", "team@rooms.chat.test", 10).unwrap();
+    assert_eq!(counted("team@rooms.chat.test"), (3, 1, false));
+    mark_read(&c, "a", "team@rooms.chat.test", 14).unwrap();
+    assert_eq!(counted("team@rooms.chat.test"), (0, 0, false));
+    // With the nickname the person has there now.
+    set_room_nick(&c, "a", "team@rooms.chat.test", "Anabel").unwrap();
+    say("team@rooms.chat.test", "g6", "in", "Anabel, ¿y tú?", 20);
+    say("team@rooms.chat.test", "g7", "in", "Ana, ¿y tú?", 21);
+    assert_eq!(counted("team@rooms.chat.test"), (2, 1, false));
+    // Another account in the same room, with the same nickname, counts its
+    // own messages and reading, and changes nothing of the first one's.
+    save_room(&c, "b", "team@rooms.chat.test", "Anabel", false, 1).unwrap();
+    let mut other = ChatMessage::chat("b", "team@rooms.chat.test", "b1", "in", "Pau", "@Anabel ¿vienes?", 30, "received");
+    other.kind = KIND_GROUP.into();
+    record(&c, &other).unwrap();
+    let theirs = super::room(&c, "b", "team@rooms.chat.test").unwrap().unwrap();
+    assert_eq!((theirs.unread, theirs.unread_mentions), (1, 1));
+    assert_eq!(counted("team@rooms.chat.test"), (2, 1, false));
+    mark_read(&c, "b", "team@rooms.chat.test", 30).unwrap();
+    assert_eq!(counted("team@rooms.chat.test"), (2, 1, false), "their reading is not ours");
+    // Past the newest MAX_MENTION_SCAN unread, older ones are not looked at,
+    // and the count says it is a lower bound.
+    for n in 0..MAX_MENTION_SCAN + 5 {
+        let body = if n < 5 { "@Ana" } else { "nada" };
+        say("club@rooms.chat.test", &format!("c{n}"), "in", body, 100 + n);
+    }
+    assert_eq!(counted("club@rooms.chat.test"), (MAX_MENTION_SCAN + 5, 0, true));
 }
 
 /// Against a real Prosody (tests/prosody-xmpp.sh): ORENETA_PROSODY is its

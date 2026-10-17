@@ -171,6 +171,11 @@
 
 ## Pendent (#111 continua oberta)
 
+Nota (2026-10-17, #256): l'ADR-0064 resol la gestió de qui pot veure l'estat
+propi (llegint el roster, que l'alternativa descartada de més amunt deixava per
+a després), el silenci d'una conversa i el comptador de mencions sense llegir;
+l'absència per inactivitat la decideix l'ADR-0065 (opció A) i s'implementa a #265.
+
 - Absent per inactivitat i silenciar una conversa concreta.
 - Gestionar qui pot veure l'estat propi (retirar un permís donat).
 - Un comptador de mencions sense llegir.

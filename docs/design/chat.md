@@ -1,7 +1,10 @@
 # Xat (#110, #111)
 
-Registre de la implementació de l'ADR-0036, l'ADR-0044 (grups i fitxers) i
-l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
+Registre de la implementació de l'ADR-0036, l'ADR-0044 (grups i fitxers),
+l'ADR-0055 (presència, mencions, avisos i privats en grups, #208) i l'ADR-0064
+(qui pot veure l'estat, silenciar una conversa i mencions sense llegir, #256).
+L'absència automàtica per inactivitat la decideix l'ADR-0065 (opció A); encara
+no està implementada (#265).
 
 ## Peces
 
@@ -47,6 +50,21 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
   - a Go, `chat.notify` surt com a notificació del sistema excepte amb «No
     molestis» o hores de silenci (com el correu); en prémer-la
     (`chat:<conversa>`) s'obre a la vista «Xat».
+- **Qui pot veure l'estat, silenci i mencions (ADR-0064, sense esquema nou):**
+  - `chat/presence.rs`: `roster_query` a cada sessió nova, `roster_push` (només
+    del servidor propi) i la seva resposta, i a `Live` la llista `allowed`
+    (`null` fins que el servidor respon, com a màxim 5000, `allowed_more`);
+  - `chat/mute.rs`: la fila `chat_mute:<compte>` (com a màxim 1000 converses),
+    oblidada en treure el compte i, per a un grup, en sortir-ne;
+    `should_notify` rep `muted`;
+  - `chat/mod.rs`: `muted` a les converses i als grups, i `unread_mentions` i
+    `mentions_capped` als grups (com a màxim els 2000 missatges sense llegir
+    més nous);
+  - RPC `chat.mute` i `chat.muted`; `chat.presence` porta `allowed` i
+    `allowed_more`; deixar de compartir és `chat.answerSubscription` amb
+    `allow: false` (qualsevol adreça nua vàlida); esdeveniment
+    `chat.permissions`; les comprovacions internes de si una sala existeix fan
+    servir `room_nick` (sense recalcular mencions).
 - **Aplicació:** la vista «Xat» a la barra lateral (configuració, converses
   amb no llegits, historial amb l'estat de cada enviament i «Torna a enviar»).
   Amb l'ADR-0044: «Uneix-te a un grup», els grups damunt de les converses
@@ -60,7 +78,11 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
   parla per escriure-li en privat, els suggeriments en escriure `@` (llista
   accessible: fletxes, Retorn o Tab, Escapada) i «Et menciona» ressaltat; els
   privats com a «sobrenom (grup)» (`lib/chatMentions.ts` decideix el
-  suggeriment).
+  suggeriment). Amb l'ADR-0064: «Qui pot veure el teu estat» (desconegut fins
+  que el servidor ho diu) amb «Deixa de compartir» i confirmació, el botó de la
+  campana a la capçalera de cada conversa per silenciar-la, la campana barrada
+  a la llista, i les mencions sense llegir de cada grup i el total del compte
+  («@N», o «@N+» quan és un mínim).
 
 ## Proves
 
@@ -127,6 +149,20 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
     dispositiu, error retornat, majúscules del sobrenom), no demana rebut i el
     seu id d'arxiu compta per posar-se al dia; sortir d'un grup esborra el que
     és del grup i en deixa els privats per llegir-los.
+- **Qui pot veure l'estat, silenci i mencions (ADR-0064):**
+  - el roster: només `from` i `both`; desconegut abans de la resposta, i un
+    avís sol no el fa conegut; els avisos del servidor propi (sense adreça o
+    amb l'adreça nua) el canvien i es contesten amb un resultat buit; els d'un
+    altre dispositiu, d'un altre, una pregunta o una altra càrrega no compten;
+    el límit i `allowed_more`; una sessió nova el torna desconegut;
+  - silenciada, cap avís (tampoc de menció) d'una conversa directa, privada o
+    d'un grup, però desat i no llegit; per compte i amb majúscules del
+    sobrenom; tornar a activar-los; sortir del grup n'oblida el silenci i no el
+    dels privats; l'última treta no deixa fila; només converses, com a màxim
+    1000 (la següent es rebutja); una fila malmesa; treure el compte;
+  - les mencions sense llegir: la mateixa regla que el ressaltat, la lectura
+    les descompta, el sobrenom actual, un altre compte a la mateixa sala (amb
+    les seves mencions i la seva lectura), i el límit de 2000 com a mínim.
 - **Pont Go:** la notificació del xat porta la conversa com a destinació i
   calla amb «No molestis» o hores de silenci encara que els recordatoris
   passin; un esdeveniment sense compte o sense conversa no avisa; el cos d'un
@@ -178,7 +214,17 @@ l'ADR-0055 (presència, mencions, avisos i privats en grups, #208).
     Retorn, Escapada, no després d'una adreça), les mencions enviades, «Et
     menciona» només on correspon i qui hi ha; un privat llistat i obert, amb
     el sobrenom en majúscules, i obert des d'un nom del grup; prémer una
-    notificació n'obre la conversa a «Xat».
+    notificació n'obre la conversa a «Xat»;
+  - (ADR-0064) qui pot veure l'estat: desconegut, la llista que arriba amb
+    `chat.permissions` (no la d'un altre compte), deixar de compartir només
+    després de confirmar (cancel·lar no envia res), «S'està deixant de
+    compartir…» fins que el servidor torna a enviar la llista, l'error, «ningú»,
+    «només els primers», una sessió nova, i res sense connexió; silenciar i
+    tornar a activar des de la capçalera (directa, sense missatges encara,
+    privada i grup), amb l'explicació per als lectors de pantalla, la llista ho
+    diu i continua no llegida, la llista d'un altre compte no compta, i
+    l'error; les mencions de cada grup, el total, el mínim (també
+    zero) i res quan no n'hi ha.
 - **Trobat en provar:** l'auditoria axe va detectar un element que no era `li`
   dins de la llista de missatges; corregit. Amb l'ADR-0044, el nucli acceptava
   còpies de carbons i resultats d'arxiu de qualsevol remitent; ara només del

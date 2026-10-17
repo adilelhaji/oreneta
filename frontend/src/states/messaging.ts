@@ -5,6 +5,8 @@
 // Presence, mentions and private messages in rooms (ADR-0055): the person's
 // own status, what the session knows of contacts and of who is in each room,
 // and private conversations `room@service/nick`.
+// Who may see the person's status, muting a conversation and the count of
+// unread mentions (ADR-0064).
 
 import { observable } from '@legendapp/state'
 import { invoke } from '../lib/bridge'
@@ -20,6 +22,8 @@ export type ChatConversation = {
   /** `private`: with someone in a room, through that room. */
   kind?: 'chat' | 'private'
   room?: string | null
+  /** Muted by the person: no system notification from it. */
+  muted?: boolean
 }
 export type ChatMessage = {
   account: string
@@ -47,6 +51,12 @@ export type ChatRoom = {
   last_body: string
   last_stamp: number
   unread: number
+  /** Muted by the person: no system notification from it, mentions included. */
+  muted?: boolean
+  /** Unread messages that mention the person. */
+  unread_mentions?: number
+  /** Only the newest unread were looked at: `unread_mentions` is a lower bound. */
+  mentions_capped?: boolean
   state: 'offline' | 'joining' | 'joined' | 'out' | 'error'
   detail?: { condition?: string; message?: string } | null
 }
@@ -94,6 +104,30 @@ export const chatPresence$ = observable({
   occupants: [] as ChatOccupant[],
 })
 
+/**
+ * Who may see the person's status, from the server's contact list (ADR-0064):
+ * `null` until the server has said, never shown as "nobody".
+ */
+export const statusPermissions$ = observable({
+  allowed: null as string[] | null,
+  /** The server listed more than the core keeps. */
+  more: false,
+})
+
+/**
+ * The open account's muted conversations, as the core keeps them (ADR-0064),
+ * also those without any message yet, which the conversation list omits.
+ */
+export const mutedConversations$ = observable({ account: '', list: [] as string[] })
+
+function setMuted(account: string, answer: { muted?: unknown } | null | undefined) {
+  const list = answer?.muted
+  mutedConversations$.set({
+    account,
+    list: Array.isArray(list) ? list.filter((c): c is string => typeof c === 'string') : [],
+  })
+}
+
 /** A conversation as the core keeps it: the address in lower case, a nickname as it is. */
 export function normalizeConversation(conversation: string) {
   const trimmed = conversation.trim()
@@ -137,12 +171,15 @@ export async function loadPresence() {
   const account = messaging$.account.peek()
   if (!account) {
     chatPresence$.set({ own: { ...DEFAULT_OWN_PRESENCE }, contacts: {}, requests: [], occupants: [] })
+    statusPermissions$.set({ allowed: null, more: false })
     return
   }
   const known = await invoke<{
     own?: OwnPresence
     contacts?: Record<string, { show: ContactShow; status: string }>
     requests?: string[]
+    allowed?: string[] | null
+    allowed_more?: boolean
   }>('chat.presence', { account })
   // Another account was picked meanwhile: this answer is not for the screen.
   if (messaging$.account.peek() !== account) return
@@ -150,6 +187,26 @@ export async function loadPresence() {
   chatPresence$.contacts.set(known?.contacts ?? {})
   const requests = known?.requests
   chatPresence$.requests.set(Array.isArray(requests) ? requests : [])
+  const allowed = known?.allowed
+  statusPermissions$.set({ allowed: Array.isArray(allowed) ? allowed : null, more: known?.allowed_more === true })
+}
+
+/**
+ * Stops letting someone see the person's status: the same answer as denying
+ * a request (`unsubscribed`). The list changes when the server says so.
+ */
+export async function stopSharingStatus(jid: string) {
+  await invoke('chat.answerSubscription', { account: messaging$.account.peek(), jid, allow: false })
+}
+
+/** Mutes or unmutes a conversation: no system notification from it, still unread. */
+export async function setConversationMuted(conversation: string, muted: boolean) {
+  const account = messaging$.account.peek()
+  if (!account || !conversation) return
+  // What the core answers is what is muted now, a conversation without
+  // messages included.
+  setMuted(account, await invoke<{ muted?: unknown }>('chat.mute', { account, conversation, muted }))
+  await refreshConversations()
 }
 
 /** Sets the person's status; the core says it to contacts allowed to see it. */
@@ -204,13 +261,16 @@ export async function refreshConversations() {
     messaging$.conversations.set([])
     messaging$.rooms.set([])
     messaging$.invitations.set([])
+    mutedConversations$.set({ account: '', list: [] })
     return
   }
-  const [conversations, rooms, invitations] = await Promise.all([
+  const [conversations, rooms, invitations, muted] = await Promise.all([
     invoke<ChatConversation[]>('chat.conversations', { account }),
     invoke<ChatRoom[]>('chat.rooms', { account }),
     invoke<ChatInvitation[]>('chat.invitations', { account }),
+    invoke<{ muted?: unknown }>('chat.muted', { account }),
   ])
+  setMuted(account, muted)
   messaging$.conversations.set(conversations ?? [])
   messaging$.rooms.set(Array.isArray(rooms) ? rooms : [])
   messaging$.invitations.set(Array.isArray(invitations) ? invitations : [])
@@ -362,7 +422,8 @@ const MAX_SHOWN_REQUESTS = 200
 /**
  * Called for the core's `chat.changed`, `chat.status`, `chat.room`,
  * `chat.invitation`, `chat.progress` and `chat.uploaded`; and (ADR-0055)
- * `chat.own`, `chat.presence`, `chat.subscription` and `chat.occupants`.
+ * `chat.own`, `chat.presence`, `chat.subscription` and `chat.occupants`;
+ * and (ADR-0064) `chat.permissions`.
  */
 export function onChatEvent(name: string, detail: ChatEventDetail) {
   const current = detail.account === messaging$.account.peek()
@@ -382,6 +443,11 @@ export function onChatEvent(name: string, detail: ChatEventDetail) {
     chatPresence$.contacts.set({})
     chatPresence$.requests.set([])
     chatPresence$.occupants.set([])
+    statusPermissions$.set({ allowed: null, more: false })
+  }
+  // Who may see the status became known or changed: read it again.
+  if (name === 'chat.permissions' && current) {
+    void loadPresence().catch(() => {})
   }
   if (name === 'chat.presence' && current && detail.jid) {
     const known = chatPresence$.contacts.peek()
