@@ -145,7 +145,7 @@ export function ContactSourcesSettingsSection() {
                   <RefreshCw size={14} strokeWidth={1.75} />
                 </button>
                 {/* A contact folder under an Exchange account's Contacts
-                    folder comes and goes with the account's book (ADR-0064). */}
+                    folder comes and goes with the account's book (ADR-0066). */}
                 {!isExchangeFolderBook(source) && (
                   <button
                     type="button"

@@ -2,7 +2,7 @@
 
 - Estat: acceptada per delegació (el propietari va delegar les decisions de
   disseny de #211 i va demanar l'opció més prudent); pendent de revisió del
-  propietari al final del pla. ADR-0064 (2026-10-17) amplia el punt 3: les
+  propietari al final del pla. ADR-0066 (2026-10-17) amplia el punt 3: les
   carpetes de contactes sota Contactes i l'edició de les persones.
 - Data: 2026-10-15.
 - Abast: #211, la part d'Exchange (EWS) de quatre files de la paritat
@@ -122,7 +122,7 @@ tasca, i no es pot canviar sense publicar una versió nova del crate.
   «Llegir els contactes d'Exchange» i es torna a llegir com les altres. Fa
   servir l'inici de sessió del compte; no desa cap contrasenya pròpia. Se'n
   va amb el compte.
-- **Persones** (ampliat per ADR-0064): els contactes de la carpeta Contactes (no les seves
+- **Persones** (ampliat per ADR-0066): els contactes de la carpeta Contactes (no les seves
   subcarpetes), de només lectura, com diu ADR-0012 per a Exchange. El nom,
   el nom de pila, el cognom, l'empresa, les adreces (sense prefix `SMTP:`; un
   identificador de directori `/O=…` no és una adreça) i els telèfons.
@@ -283,8 +283,8 @@ tasca, i no es pot canviar sense publicar una versió nova del crate.
   amb zona horària negativa.
 - Altres carpetes de tasques de la bústia; bústies compartides més enllà de
   la principal del compte. (Les carpetes de contactes sota Contactes van
-  arribar amb ADR-0064.)
-- Editar els contactes d'Exchange: fet a ADR-0064.
+  arribar amb ADR-0066.)
+- Editar els contactes d'Exchange: fet a ADR-0066.
 - Afegir a una llista d'Exchange algú d'una altra llibreta (com a adreça
   solta).
 - Les tasques i llistes d'Exchange al mòbil.

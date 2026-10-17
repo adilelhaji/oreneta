@@ -143,7 +143,7 @@ export function PeopleView() {
       title: t('people.deleteGroupTitle', { defaultValue: 'Delete group?' }),
       message:
         // A server book's group goes on the server: CardDAV, and an
-        // Exchange folder's distribution lists (ADR-0058, ADR-0064).
+        // Exchange folder's distribution lists (ADR-0058, ADR-0066).
         group.source === 'carddav' || group.source === 'exchange'
           ? t('people.deleteGroupTextServer', {
               name: group.name,

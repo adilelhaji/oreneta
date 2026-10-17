@@ -108,7 +108,7 @@ el directori i les respostes automàtiques, cobreix (ADR-0058):
   del MIME.
 - **Contactes i llistes de distribució:** Settings → People → "Read Exchange contacts"
   incorpora la carpeta de contactes i, com a llibretes pròpies, les carpetes de contactes
-  que té a sota (ADR-0064). Les persones de totes es poden crear, editar i suprimir; les
+  que té a sota (ADR-0066). Les persones de totes es poden crear, editar i suprimir; les
   llistes de distribució són grups de contactes que es poden crear, canviar de nom,
   modificar i suprimir. Una persona o una llista modificada en un altre lloc des que es va
   llegir no se sobreescriu mai: no es desa res i es torna la còpia del servidor. Exchange

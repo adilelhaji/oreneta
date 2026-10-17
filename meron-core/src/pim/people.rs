@@ -1,6 +1,6 @@
 //! The address-book commands: `people.list`, `people.save` and
 //! `people.delete`, on the local book, on CardDAV books (ADR-0012) and on an
-//! Exchange account's contact folders (ADR-0064).
+//! Exchange account's contact folders (ADR-0066).
 
 use std::sync::Arc;
 
@@ -46,7 +46,7 @@ pub fn list(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
                 "link": links.get(&stored.id),
                 // The local book, CardDAV books the server has not said
                 // are read-only (ADR-0012) and Exchange contact folders
-                // (ADR-0064). Google stays read-only here.
+                // (ADR-0066). Google stays read-only here.
                 "editable": stored.origin.source == "local"
                     || stored.origin.source == "exchange"
                     || (stored.origin.source == "carddav"
@@ -131,7 +131,7 @@ pub async fn delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
 
 /// The id an editor gives the person it creates, the same on every try
 /// while it is open (`marker`), so trying again never makes a second one on
-/// a server that can be searched for it (ADR-0064). `None` when it gave none.
+/// a server that can be searched for it (ADR-0066). `None` when it gave none.
 fn creation_id(p: &Value) -> Result<Option<String>> {
     match p.get("marker").and_then(Value::as_str).filter(|marker| !marker.is_empty()) {
         None => Ok(None),
@@ -143,7 +143,7 @@ fn creation_id(p: &Value) -> Result<Option<String>> {
 }
 
 /// Creates a person in an Exchange contact folder, or edits one there from
-/// the version it was read at (ADR-0064).
+/// the version it was read at (ADR-0066).
 async fn exchange_save(
     engine: &Arc<Engine>,
     book: &str,
@@ -164,7 +164,7 @@ async fn exchange_save(
 }
 
 /// Deletes a person from an Exchange contact folder, from the version it was
-/// read at (ADR-0064).
+/// read at (ADR-0066).
 async fn exchange_delete(engine: &Arc<Engine>, id: &str, stored: store::SyncedPerson, read_at: &str) -> Result<Value> {
     let target = super::exchange_book::target(&engine.db.lock().unwrap(), &stored.origin.book)?;
     let client = super::exchange_book::client(engine, &target.origin.account).await?;
@@ -419,7 +419,7 @@ pub async fn source_sync(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
 
 /// `carddav.remove`: removes a book and its people from this app; nothing
 /// changes on its server. An Exchange account's book takes its contact
-/// folders with it (ADR-0064). Answers the ids removed, whose secrets the
+/// folders with it (ADR-0066). Answers the ids removed, whose secrets the
 /// caller forgets.
 pub fn remove_source(conn: &rusqlite::Connection, id: &str) -> Result<Vec<String>> {
     match store::contact_source(conn, id)? {
@@ -450,7 +450,7 @@ pub async fn sync_source(engine: &Arc<Engine>, id: &str) -> Result<()> {
     let source = store::contact_source(&engine.db.lock().unwrap(), id)?
         .with_context(|| format!("no such contact source: {id}"))?;
 
-    // An Exchange account's contact folders (ADR-0058, ADR-0064): their
+    // An Exchange account's contact folders (ADR-0058, ADR-0066): their
     // people, and their distribution lists with the members who are no
     // contact here. The account's own book brings the folders under it.
     if source.kind == "exchange" {
@@ -737,7 +737,7 @@ pub async fn group_save(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             record_group_outcome(engine, &origin, outcome, id.as_deref())
         }
         // An Exchange contact folder's distribution lists (ADR-0058,
-        // ADR-0064).
+        // ADR-0066).
         "exchange" => {
             let book_id =
                 stored.as_ref().map(|group| group.origin.book.clone()).or(book.map(str::to_string)).unwrap_or_default();
@@ -784,7 +784,7 @@ pub async fn group_delete(engine: &Arc<Engine>, p: &Value) -> Result<Value> {
             record_group_outcome(engine, &stored.origin, outcome, Some(&id))
         }
         // An Exchange contact folder's distribution lists (ADR-0058,
-        // ADR-0064).
+        // ADR-0066).
         "exchange" => {
             let target = super::exchange_book::target(&engine.db.lock().unwrap(), &stored.origin.book)?;
             let client = super::exchange_book::client(engine, &target.origin.account).await?;

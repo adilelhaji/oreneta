@@ -1,4 +1,4 @@
-//! An Exchange account's address books (ADR-0058, ADR-0064): one for its
+//! An Exchange account's address books (ADR-0058, ADR-0066): one for its
 //! Contacts folder and one for each contact folder under it, each with its
 //! people and its distribution lists as contact groups (ADR-0052), all read
 //! and written.

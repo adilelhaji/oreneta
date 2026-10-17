@@ -175,7 +175,7 @@ export type PersonEditing = {
   /**
    * A new person's id for as long as the editor is open, sent with every
    * try to a server book: one that can be searched for it (Exchange) never
-   * gets a second copy when an answer was lost (ADR-0064).
+   * gets a second copy when an answer was lost (ADR-0066).
    */
   createId?: string
   draft: PersonDraft

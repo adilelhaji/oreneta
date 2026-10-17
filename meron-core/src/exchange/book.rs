@@ -1,6 +1,6 @@
 //! The mailbox's contact folders: the Contacts folder and the contact folders
 //! under it, each with its people and its distribution lists, all read and
-//! written (ADR-0058, ADR-0064).
+//! written (ADR-0058, ADR-0066).
 //!
 //! A distribution list is Exchange's contact group. It names its members as
 //! mailboxes: a contact of the same folder (by item id), an address typed in

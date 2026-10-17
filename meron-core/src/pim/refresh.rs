@@ -152,7 +152,7 @@ pub async fn run(engine: &Arc<Engine>, emit: &Emit, accounts: &[(String, Creds)]
                 continue;
             }
             // An Exchange contact folder is read with its account's book,
-            // which lists the folders first (ADR-0064).
+            // which lists the folders first (ADR-0066).
             if super::exchange_book::is_folder_book(&source) {
                 continue;
             }

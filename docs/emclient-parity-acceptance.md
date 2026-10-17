@@ -64,7 +64,7 @@ après: els comptadors del remitent i de les paraules de l'assumpte tornen a l'e
 d'abans, i un judici posterior del mateix missatge o d'un altre missatge del mateix
 remitent es manté. SET-12 continua `implemented-unverified`: l'evidència nativa de
 Windows continua pendent.
-El 2026-10-17 (#257, ADR-0064) SET-19 va incorporar, als comptes d'Exchange (EWS), les
+El 2026-10-17 (#257, ADR-0066) SET-19 va incorporar, als comptes d'Exchange (EWS), les
 carpetes de contactes que hi ha sota Contactes, cada una com a llibreta pròpia, i l'edició
 de les persones (crear-les, editar-les i suprimir-les) amb la clau de canvis llegida, sense
 sobreescriure mai un canvi remot i sense enviar res més que el que ha canviat, provades amb

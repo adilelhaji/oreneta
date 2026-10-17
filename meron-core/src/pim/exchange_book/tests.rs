@@ -1,4 +1,4 @@
-//! An Exchange account's address books (ADR-0058, ADR-0064), on recorded
+//! An Exchange account's address books (ADR-0058, ADR-0066), on recorded
 //! SOAP: distribution lists as contact groups, people written with their
 //! change keys, and the contact folders under Contacts as books of their own.
 
@@ -281,7 +281,7 @@ fn ews_distribution_lists_of_two_accounts_stay_apart() {
     assert!(!server.join().expect("server").iter().any(|r| r.contains("UpdateItem")));
 }
 
-// ---- People (ADR-0064) ---------------------------------------------------------
+// ---- People (ADR-0066) ---------------------------------------------------------
 
 /// Ana as the editor sends her: the server's copy with one change.
 fn ana_edited(change: impl FnOnce(&mut Person)) -> Person {
@@ -457,7 +457,7 @@ fn ews_contact_delete_from_the_version_read() {
     assert!(ana(&db).is_none());
 }
 
-// ---- Contact folders as books (ADR-0064) ---------------------------------------
+// ---- Contact folders as books (ADR-0066) ---------------------------------------
 
 fn root_source(db: &Mutex<Connection>) -> store::ContactSource {
     store::contact_source(&db.lock().unwrap(), &source_id(A)).unwrap().unwrap()

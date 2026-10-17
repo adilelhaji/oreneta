@@ -153,7 +153,7 @@ fn a_soap_fault_fails_the_whole_answer() {
     assert!(error.to_string().contains("ErrorSchemaValidation"), "{error}");
 }
 
-// ---- Contact folders and contacts (ADR-0064) ---------------------------------
+// ---- Contact folders and contacts (ADR-0066) ---------------------------------
 
 /// A contact as Exchange gives it with its slots, its notes and what it is
 /// filed as.

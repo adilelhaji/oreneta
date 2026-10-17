@@ -8,7 +8,7 @@ import { settleConfirm, ui$ } from '../../states/ui'
 import type { Person } from '../../types'
 
 // Exchange contacts edited, and the contact folders under Contacts as books
-// of their own (ADR-0064).
+// of their own (ADR-0066).
 
 const book: ContactSource = {
   id: 'exchange-acc',
@@ -91,7 +91,7 @@ afterEach(() => {
   people$.groupsLoaded.set(false)
 })
 
-describe('Exchange contacts (ADR-0064)', () => {
+describe('Exchange contacts (ADR-0066)', () => {
   it('offers every Exchange folder as a place for a new contact', () => {
     const others: ContactSource[] = [
       { ...book, id: 'g', kind: 'google' },

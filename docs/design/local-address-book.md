@@ -49,7 +49,7 @@ contacte es tria «Aquest equip» o una llibreta CardDAV editable. L'editor indi
 on es desa el canvi. En suprimir un contacte de servidor, l'avís recorda que
 desapareix per a totes les aplicacions que llegeixen aquella llibreta. Google
 continua sent de només lectura (ADR-0012); les persones d'Exchange s'editen des
-d'ADR-0064.
+d'ADR-0066.
 
 ### Què desa la sincronització
 

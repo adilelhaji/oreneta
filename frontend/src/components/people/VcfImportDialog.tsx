@@ -19,7 +19,7 @@ export function VcfImportDialog() {
   }, [Boolean(pending), loaded])
   if (!pending) return null
   // A file goes to the local book or a CardDAV one; importing into an
-  // Exchange folder is not offered (ADR-0064).
+  // Exchange folder is not offered (ADR-0066).
   const books = writableBooks(sources).filter((book) => book.kind === 'carddav')
   const close = () => people$.importing.set(null)
   const shown = pending.people.slice(0, 8)

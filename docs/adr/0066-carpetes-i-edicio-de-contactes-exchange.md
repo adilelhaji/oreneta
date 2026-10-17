@@ -1,9 +1,10 @@
-# ADR-0064: Exchange (EWS): carpetes de contactes i edició de les persones
+# ADR-0066: Exchange (EWS): carpetes de contactes i edició de les persones
 
-- Estat: acceptada per delegació. El propietari va aprovar el 2026-10-17
-  tancar les mancances de SET-19 com a part de completar l'aplicació
-  d'escriptori; aquí es tria l'opció més prudent. Pendent de la revisió del
-  propietari abans de fusionar, perquè afegeix un ADR.
+- Estat: acceptada pel propietari el 2026-10-17 («Sigue tus
+  recomendaciones»): l'opció recomanada, una llibreta per carpeta de
+  contactes d'Exchange i l'edició amb `ChangeKey` i `NeverOverwrite`, tal com
+  és escrita aquí. Abans, el 2026-10-17, havia aprovat tancar les mancances
+  de SET-19 com a part de completar l'aplicació d'escriptori (PR #264).
 - Data: 2026-10-17.
 - Abast: #257 (fila SET-19, #41). Sobre ADR-0012, ADR-0039, ADR-0052 i
   ADR-0058; per a Exchange, substitueix el punt 3 d'ADR-0012 i amplia el

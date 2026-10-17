@@ -25,7 +25,7 @@ export type ContactSource = {
 /**
  * The books a new contact can be saved to on a server: writable CardDAV
  * books (ADR-0012), and an Exchange account's Contacts folder and the
- * contact folders under it (ADR-0064).
+ * contact folders under it (ADR-0066).
  */
 export function writableBooks(sources: ContactSource[]): ContactSource[] {
   return sources.filter(
@@ -35,7 +35,7 @@ export function writableBooks(sources: ContactSource[]): ContactSource[] {
 
 /**
  * A contact folder under an Exchange account's Contacts folder: read with
- * the account's book, and removed with it rather than on its own (ADR-0064).
+ * the account's book, and removed with it rather than on its own (ADR-0066).
  */
 export function isExchangeFolderBook(source: ContactSource): boolean {
   return source.kind === 'exchange' && source.url !== ''
@@ -123,7 +123,7 @@ export async function syncGoogleContacts(accountId: string, name: string): Promi
 /**
  * Read an Exchange account's Contacts folder and its distribution lists
  * (ADR-0058) with the account's own sign-in, and each contact folder under
- * it as a book of its own (ADR-0064). Returns why it failed, or null.
+ * it as a book of its own (ADR-0066). Returns why it failed, or null.
  */
 export async function syncExchangeContacts(accountId: string, name: string): Promise<string | null> {
   const res = await invoke<{ ok: boolean; error: string | null }>('exchange.contacts.sync', {

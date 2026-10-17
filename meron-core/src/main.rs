@@ -4544,7 +4544,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         // An Exchange account's Contacts folder and its distribution lists
         // (ADR-0058), read with the account's own sign-in, and the contact
-        // folders under it, a book each (ADR-0064).
+        // folders under it, a book each (ADR-0066).
         "exchange.contacts.sync" => pim::exchange_book::sync(engine, p).await,
 
         "carddav.sync" => pim::people::source_sync(engine, p).await,
@@ -4555,7 +4555,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         // somebody else's book, and a copy with no origin can never be
         // refreshed or told apart from a contact the reader typed. An
         // Exchange account's book takes its contact folders with it
-        // (ADR-0064).
+        // (ADR-0066).
         "carddav.remove" => {
             let id = req_str(p, "id")?;
             let removed = pim::people::remove_source(&engine.db.lock().unwrap(), &id)?;
