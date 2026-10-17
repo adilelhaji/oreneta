@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Grupa {name} tiks dzēsta. Cilvēki tajā paliek.",
   "people.deleteGroupTextServer": "Grupa {name} tiks dzēsta no adrešu grāmatas tās serverī. Cilvēki tajā paliek.",
   "people.deleteText": "{name} tiks dzēsts no adrešu grāmatas šajā datorā.",
-  "people.deleteTextServer": "{name} tiks dzēsts no adrešu grāmatas tās serverī, visām lietotnēm, kas to lasa."
+  "people.deleteTextServer": "{name} tiks dzēsts no adrešu grāmatas tās serverī, visām lietotnēm, kas to lasa.",
+  "settings.signature.placement": "Atbildēs un pārsūtījumos",
+  "settings.signature.placementHint": "Kur paraksts atrodas attiecībā pret citēto oriģinālu",
+  "settings.signature.placementWithText": "Kopā ar manu tekstu",
+  "settings.signature.placementAbove": "Virs citāta",
+  "settings.signature.placementBelow": "Zem citāta"
 }

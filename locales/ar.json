@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "ستُحذف المجموعة {name}. يبقى الأشخاص الذين فيها.",
   "people.deleteGroupTextServer": "ستُحذف المجموعة {name} من دفتر العناوين على خادمه. يبقى الأشخاص الذين فيها.",
   "people.deleteText": "سيُحذف {name} من دفتر العناوين على هذا الحاسوب.",
-  "people.deleteTextServer": "سيُحذف {name} من دفتر العناوين على خادمه، لكل التطبيقات التي تقرؤه."
+  "people.deleteTextServer": "سيُحذف {name} من دفتر العناوين على خادمه، لكل التطبيقات التي تقرؤه.",
+  "settings.signature.placement": "في الردود وإعادة التوجيه",
+  "settings.signature.placementHint": "موضع التوقيع بالنسبة إلى الرسالة الأصلية المقتبسة",
+  "settings.signature.placementWithText": "مع ما أكتبه",
+  "settings.signature.placementAbove": "فوق الاقتباس",
+  "settings.signature.placementBelow": "تحت الاقتباس"
 }

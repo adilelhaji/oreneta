@@ -78,6 +78,10 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-17 (#277) SET-10 va incorporar, per a cada compte, l'opció de triar on va la
+signatura a les respostes i els reenviaments: amb el text propi (com fins ara), damunt de la citació o sota la
+citació, com a preferència local (`signature_placement`). Cap fila no canvia d'estat: SET-10
+es manté `implemented-unverified` i l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

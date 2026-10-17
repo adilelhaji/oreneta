@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Se suprimirà el grup {name}. Les persones del grup es conserven.",
   "people.deleteGroupTextServer": "Se suprimirà el grup {name} de la llibreta d'adreces del seu servidor. Les persones del grup es conserven.",
   "people.deleteText": "{name} se suprimirà de la llibreta d'adreces d'aquest ordinador.",
-  "people.deleteTextServer": "{name} se suprimirà de la llibreta d'adreces del seu servidor, per a totes les aplicacions que la llegeixen."
+  "people.deleteTextServer": "{name} se suprimirà de la llibreta d'adreces del seu servidor, per a totes les aplicacions que la llegeixen.",
+  "settings.signature.placement": "A les respostes i els reenviaments",
+  "settings.signature.placementHint": "On va la signatura respecte de la citació",
+  "settings.signature.placementWithText": "Amb el que escric",
+  "settings.signature.placementAbove": "Damunt de la citació",
+  "settings.signature.placementBelow": "Sota la citació"
 }

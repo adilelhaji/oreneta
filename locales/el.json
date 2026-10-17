@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Η ομάδα {name} θα διαγραφεί. Τα άτομα που περιέχει παραμένουν.",
   "people.deleteGroupTextServer": "Η ομάδα {name} θα διαγραφεί από το βιβλίο διευθύνσεων στον διακομιστή του. Τα άτομα που περιέχει παραμένουν.",
   "people.deleteText": "Η επαφή {name} θα διαγραφεί από το βιβλίο διευθύνσεων σε αυτόν τον υπολογιστή.",
-  "people.deleteTextServer": "Η επαφή {name} θα διαγραφεί από το βιβλίο διευθύνσεων στον διακομιστή του, για κάθε εφαρμογή που το διαβάζει."
+  "people.deleteTextServer": "Η επαφή {name} θα διαγραφεί από το βιβλίο διευθύνσεων στον διακομιστή του, για κάθε εφαρμογή που το διαβάζει.",
+  "settings.signature.placement": "Σε απαντήσεις και προωθήσεις",
+  "settings.signature.placementHint": "Πού μπαίνει η υπογραφή σε σχέση με το παράθεμα του αρχικού",
+  "settings.signature.placementWithText": "Μαζί με όσα γράφω",
+  "settings.signature.placementAbove": "Πάνω από το παράθεμα",
+  "settings.signature.placementBelow": "Κάτω από το παράθεμα"
 }

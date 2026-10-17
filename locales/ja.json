@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "グループ {name} が削除されます。グループ内の人はそのまま残ります。",
   "people.deleteGroupTextServer": "グループ {name} がサーバー上のアドレス帳から削除されます。グループ内の人はそのまま残ります。",
   "people.deleteText": "{name} がこのコンピューター上のアドレス帳から削除されます。",
-  "people.deleteTextServer": "{name} がサーバー上のアドレス帳から削除されます。そのアドレス帳を読むすべてのアプリに反映されます。"
+  "people.deleteTextServer": "{name} がサーバー上のアドレス帳から削除されます。そのアドレス帳を読むすべてのアプリに反映されます。",
+  "settings.signature.placement": "返信と転送",
+  "settings.signature.placementHint": "引用した元のメールに対する署名の位置",
+  "settings.signature.placementWithText": "自分の文章と一緒に",
+  "settings.signature.placementAbove": "引用の上",
+  "settings.signature.placementBelow": "引用の下"
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type { Editor } from '@tiptap/react'
 import * as tiptapReact from '@tiptap/react'
 import { accounts$ } from '../../states/accounts'
@@ -45,6 +45,7 @@ describe('AccountSignatureCard', () => {
     calls = []
     editors = []
     settings$.signature.set('')
+    settings$.signaturePlacement.set({})
     // 'c' follows the app-wide signature: switching to it is what tells a
     // flush filed under the *current* mode apart from one filed under the mode
     // its own account had.
@@ -158,5 +159,27 @@ describe('AccountSignatureCard', () => {
       id: 'a',
       signature: { mode: 'custom', html: '<p>A, edited</p>' },
     })
+  })
+
+  it('sets where the signature goes in replies and forwards, per account (#277)', async () => {
+    const view = render(<AccountSignatureCard account={accounts$.peek()[0]} />)
+    const placement = view.getByRole('combobox', { name: 'In replies and forwards' }) as HTMLSelectElement
+    expect(placement.value).toBe('withText')
+    expect(Array.from(placement.options).map((option) => option.textContent)).toEqual([
+      'With what I write',
+      'Above the quote',
+      'Below the quote',
+    ])
+    fireEvent.change(placement, { target: { value: 'below' } })
+    expect(settings$.signaturePlacement.get()).toEqual({ a: 'below' })
+    expect(placement.value).toBe('below')
+    fireEvent.change(placement, { target: { value: 'withText' } })
+    expect(settings$.signaturePlacement.get()).toEqual({})
+
+    // An account that sends no signature has nothing to place.
+    await act(async () => {
+      view.rerender(<AccountSignatureCard account={{ ...accounts$.peek()[1], signature: { mode: 'none', html: '' } }} />)
+    })
+    expect(view.queryByRole('combobox', { name: 'In replies and forwards' })).toBeNull()
   })
 })

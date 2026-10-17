@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { PenLine } from 'lucide-react'
+import { PenLine, Quote } from 'lucide-react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { StarterKit } from '@tiptap/starter-kit'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
-import { settings$ } from '../../states/settings'
+import { setSignaturePlacement, settings$, type SignaturePlacementChoice } from '../../states/settings'
 import { accounts$, setAccountSignature } from '../../states/accounts'
 import { accountSignaturePayload, isBlankSignature } from '../../lib/signature'
 import type { Account, AccountSignature } from '../../types'
@@ -126,7 +126,9 @@ export function SignatureSettingsSection() {
 /**
  * Per-account override: follow the app-wide signature, send none, or write one
  * just for this account. The custom text is kept when the mode changes, so
- * flipping away and back doesn't lose it.
+ * flipping away and back doesn't lose it. Also where the signature goes in
+ * replies and forwards: with the person's text, or above or below the quoted
+ * original (#277).
  */
 export function AccountSignatureCard({ account }: { account: Account }) {
   const { t } = useTranslation()
@@ -141,6 +143,7 @@ export function AccountSignatureCard({ account }: { account: Account }) {
     setState(signatureState(account))
   }
   const { mode, html } = state
+  const placement = useValue(() => settings$.signaturePlacement.get()[account.id] ?? 'withText')
 
   const save = async (nextMode: AccountSignature['mode'], nextHtml: string) => {
     setState({ mode: nextMode, html: nextHtml })
@@ -190,6 +193,25 @@ export function AccountSignatureCard({ account }: { account: Account }) {
       />
       {mode === 'custom' && (
         <SignatureEditor key={account.id} owner={account.id} value={html} onChange={saveEditorHtml} />
+      )}
+      {mode !== 'none' && (
+        <SelectRow
+          icon={<Quote size={16} strokeWidth={1.75} />}
+          title={t('settings.signature.placement', { defaultValue: 'In replies and forwards' })}
+          hint={t('settings.signature.placementHint', {
+            defaultValue: 'Where the signature goes against the quoted original',
+          })}
+          value={placement}
+          options={[
+            {
+              value: 'withText',
+              label: t('settings.signature.placementWithText', { defaultValue: 'With what I write' }),
+            },
+            { value: 'above', label: t('settings.signature.placementAbove', { defaultValue: 'Above the quote' }) },
+            { value: 'below', label: t('settings.signature.placementBelow', { defaultValue: 'Below the quote' }) },
+          ]}
+          onChange={(next) => setSignaturePlacement(account.id, next as SignaturePlacementChoice)}
+        />
       )}
     </SettingsGroup>
   )

@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Il gruppo {name} verrà eliminato. Le persone al suo interno restano.",
   "people.deleteGroupTextServer": "Il gruppo {name} verrà eliminato dalla rubrica sul suo server. Le persone al suo interno restano.",
   "people.deleteText": "{name} verrà eliminato dalla rubrica su questo computer.",
-  "people.deleteTextServer": "{name} verrà eliminato dalla rubrica sul suo server, per tutte le app che la leggono."
+  "people.deleteTextServer": "{name} verrà eliminato dalla rubrica sul suo server, per tutte le app che la leggono.",
+  "settings.signature.placement": "Nelle risposte e negli inoltri",
+  "settings.signature.placementHint": "Dove va la firma rispetto al messaggio citato",
+  "settings.signature.placementWithText": "Con ciò che scrivo",
+  "settings.signature.placementAbove": "Sopra la citazione",
+  "settings.signature.placementBelow": "Sotto la citazione"
 }

@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "Le groupe {name} sera supprimé. Les personnes qu’il contient restent.",
   "people.deleteGroupTextServer": "Le groupe {name} sera supprimé du carnet d’adresses sur son serveur. Les personnes qu’il contient restent.",
   "people.deleteText": "{name} sera supprimé du carnet d’adresses de cet ordinateur.",
-  "people.deleteTextServer": "{name} sera supprimé du carnet d’adresses sur son serveur, pour toutes les apps qui le lisent."
+  "people.deleteTextServer": "{name} sera supprimé du carnet d’adresses sur son serveur, pour toutes les apps qui le lisent.",
+  "settings.signature.placement": "Dans les réponses et les transferts",
+  "settings.signature.placementHint": "Où placer la signature par rapport au message cité",
+  "settings.signature.placementWithText": "Avec ce que j’écris",
+  "settings.signature.placementAbove": "Au-dessus de la citation",
+  "settings.signature.placementBelow": "Sous la citation"
 }

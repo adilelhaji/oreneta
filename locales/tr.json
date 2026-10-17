@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "{name} grubu silinecek. İçindeki kişiler kalır.",
   "people.deleteGroupTextServer": "{name} grubu, sunucusundaki adres defterinden silinecek. İçindeki kişiler kalır.",
   "people.deleteText": "{name}, bu bilgisayardaki adres defterinden silinecek.",
-  "people.deleteTextServer": "{name}, sunucusundaki adres defterinden, onu okuyan tüm uygulamalar için silinecek."
+  "people.deleteTextServer": "{name}, sunucusundaki adres defterinden, onu okuyan tüm uygulamalar için silinecek.",
+  "settings.signature.placement": "Yanıtlarda ve iletmelerde",
+  "settings.signature.placementHint": "İmzanın alıntılanan özgün iletiye göre yeri",
+  "settings.signature.placementWithText": "Yazdığımla birlikte",
+  "settings.signature.placementAbove": "Alıntının üstünde",
+  "settings.signature.placementBelow": "Alıntının altında"
 }

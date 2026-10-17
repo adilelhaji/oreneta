@@ -2814,5 +2814,10 @@
   "people.deleteGroupText": "{name} 그룹이 삭제됩니다. 그룹에 있던 사람들은 그대로 남습니다.",
   "people.deleteGroupTextServer": "{name} 그룹이 서버의 주소록에서 삭제됩니다. 그룹에 있던 사람들은 그대로 남습니다.",
   "people.deleteText": "{name}이(가) 이 컴퓨터의 주소록에서 삭제됩니다.",
-  "people.deleteTextServer": "{name}이(가) 서버의 주소록에서 삭제되며, 이 주소록을 읽는 모든 앱에 적용됩니다."
+  "people.deleteTextServer": "{name}이(가) 서버의 주소록에서 삭제되며, 이 주소록을 읽는 모든 앱에 적용됩니다.",
+  "settings.signature.placement": "답장 및 전달",
+  "settings.signature.placementHint": "인용한 원본에 대한 서명 위치",
+  "settings.signature.placementWithText": "내가 쓴 내용과 함께",
+  "settings.signature.placementAbove": "인용 위",
+  "settings.signature.placementBelow": "인용 아래"
 }
