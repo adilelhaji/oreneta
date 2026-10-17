@@ -3470,6 +3470,18 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let list = live.map(|live| live.lock().unwrap().occupants.list(&room)).unwrap_or_default();
             Ok(serde_json::to_value(list)?)
         }
+        // Muting one conversation (ADR-0064): no system notification from
+        // it, while it still counts as unread. Who may see the person's
+        // status comes with `chat.presence` (`allowed`), and withdrawing a
+        // permission is `chat.answerSubscription` with `allow: false`.
+        "chat.mute" => {
+            let account = req_str(p, "account")?;
+            let conversation = req_str(p, "conversation")?;
+            let muted = p.get("muted").and_then(Value::as_bool).context("missing muted")?;
+            meron_core::chat::account(&engine.db.lock().unwrap(), &account)?;
+            let list = meron_core::chat::mute::set_muted(&engine.db.lock().unwrap(), &account, &conversation, muted)?;
+            Ok(json!({ "muted": list }))
+        }
         // Group chats (ADR-0044): joined by the person, joined again on each
         // connection, left by the person.
         "chat.rooms" => {
