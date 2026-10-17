@@ -3,7 +3,8 @@
 Registre de la implementació de l'ADR-0036, l'ADR-0044 (grups i fitxers),
 l'ADR-0055 (presència, mencions, avisos i privats en grups, #208) i l'ADR-0064
 (qui pot veure l'estat, silenciar una conversa i mencions sense llegir, #256).
-L'absència automàtica per inactivitat és la proposta de l'ADR-0065, sense codi.
+L'absència automàtica per inactivitat la decideix l'ADR-0065 (opció A); encara
+no està implementada (#265).
 
 ## Peces
 

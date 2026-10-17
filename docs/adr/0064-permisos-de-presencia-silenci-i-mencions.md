@@ -1,14 +1,13 @@
 # ADR-0064: Permisos de presència, silenci de converses i mencions sense llegir (XMPP)
 
-- Estat: **proposada**; pendent de l'aprovació del propietari (PR #263). El
-  2026-10-17 el propietari va aprovar treballar a tancar els buits de la fila
-  SET-21 per completar l'aplicació d'escriptori; aquest ADR no queda acceptat
-  fins que ell ho digui.
+- Estat: **acceptada** el 2026-10-17 pel propietari, tal com és escrita
+  («Sigue tus recomendaciones»).
 - Data: 2026-10-17.
 - Abast: #256, filla de #111 (fila SET-21 del registre d'acceptació, «Xat →
   General» d'eM Client 10.4). Tanca tres dels quatre punts que l'ADR-0055 va
   deixar pendents. El quart, l'absència automàtica per inactivitat, necessita
-  una API nova del sistema i és la proposta de l'ADR-0065.
+  una API nova del sistema: l'ADR-0065 en fixa el disseny i la implementació és
+  la incidència #265.
 
 ## Decisió
 
@@ -116,8 +115,9 @@
 - La fila `chat_mute:<compte>`, com la `chat_presence:<compte>` de l'ADR-0055,
   entra a la còpia de seguretat de la configuració, que copia totes les files de
   configuració. Aquesta còpia no porta els comptes de xat, de manera que, en
-  restaurar-la, aquestes files queden sense compte. Excloure-les canviaria l'abast
-  de la còpia i és una decisió pendent: #261.
+  restaurar-la, aquestes files queden sense compte. El propietari va decidir el
+  2026-10-17 excloure-les de la còpia i de la restauració («Sigue tus
+  recomendaciones»); es fa a la incidència #261, fora d'aquest canvi.
 - Les proves són unitàries i deterministes (stanzas enregistrades, magatzem en
   memòria i proves de la visualització). No s'afegeix cap prova contra Prosody:
   les d'aquest servidor fallen de tant en tant a la CI (#220), i la integració a

@@ -1,7 +1,8 @@
 # ADR-0065: Absència automàtica per inactivitat al xat
 
-- Estat: **proposada**; espera la decisió del propietari. No hi ha codi
-  d'aquesta part fins que es decideixi.
+- Estat: **acceptada** el 2026-10-17 pel propietari («Sigue tus
+  recomendaciones»): l'opció A. Encara no està implementada; la implementació
+  és la incidència #265.
 - Data: 2026-10-17.
 - Abast: #256, filla de #111 (fila SET-21, «Xat → General» d'eM Client 10.4).
   És l'últim punt pendent de l'ADR-0055 («Absent per inactivitat»); els altres
@@ -81,4 +82,14 @@ als contactes un estat que no és cert.
 
 ## Decisió
 
-Pendent del propietari.
+L'opció A, amb la recomanació i la secció «Privadesa» tal com són escrites
+(propietari, 2026-10-17: «Sigue tus recomendaciones»):
+
+- el pont Go llegeix la inactivitat del sistema, primer a Windows amb
+  `GetLastInputInfo`;
+- l'opció ve desactivada;
+- l'absència automàtica no s'anuncia als grups;
+- no s'envia mai el temps d'inactivitat (XEP-0319);
+- una inactivitat desconeguda desactiva l'opció.
+
+Encara no està implementada: és la incidència #265.

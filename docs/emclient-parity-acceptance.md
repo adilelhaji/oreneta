@@ -68,8 +68,8 @@ El 2026-10-17 (#256, ADR-0064) SET-21 va incorporar la llista de qui pot veure l
 (la llista del servidor, desconeguda fins que respon, amb «Deixa de compartir» després de
 confirmar-ho), el silenci d'una conversa directa, privada o de grup (sense avisos, ni tan sols
 de mencions, però comptada com a no llegida) i les mencions sense llegir de cada grup i del
-compte. L'absència automàtica per inactivitat necessita una API nova del sistema i és la
-proposta de l'ADR-0065, pendent de decisió. La fila es manté `partial` (hi falten aquest punt i
+compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
+triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
 
 | Row | Issue | Section | Status | N | P |
