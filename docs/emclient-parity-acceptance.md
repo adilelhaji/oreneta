@@ -32,6 +32,11 @@ El 2026-10-16 (#226, ADR-0061) SET-27 va incorporar la disposició de dreta a es
 per a l'àrab, amb comprovacions d'entrada de producció en àrab per a la bústia, el lector
 i l'editor de missatges i per a persones, tasques, notes, calendari, xat i configuració;
 es manté `partial`, perquè falten l'evidència nativa de l'IME i la nativa de Windows.
+El 2026-10-17 (#245) l'acció de marcar com a brossa, que fins llavors només era al menú
+contextual de la conversa, es va oferir també com a botó visible a la capçalera del lector
+i a la barra de selecció múltiple («Marca com a brossa»; a la carpeta de brossa, «No és
+brossa»), amb el mateix avís i la mateixa opció de desfer. Cap fila no canvia d'estat
+(SET-07, S01-06): l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
