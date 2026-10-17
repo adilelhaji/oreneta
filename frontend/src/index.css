@@ -1242,6 +1242,67 @@ textarea,
   padding: 0.1em 0.3em;
   font-size: 0.9em;
 }
+/* Paragraph indent (#274, ADR-0067): 40 px a level, as inlineRichStyles sends it. */
+.tiptap-body [data-indent='1'] {
+  margin-inline-start: 40px;
+}
+.tiptap-body [data-indent='2'] {
+  margin-inline-start: 80px;
+}
+.tiptap-body [data-indent='3'] {
+  margin-inline-start: 120px;
+}
+.tiptap-body [data-indent='4'] {
+  margin-inline-start: 160px;
+}
+.tiptap-body [data-indent='5'] {
+  margin-inline-start: 200px;
+}
+.tiptap-body [data-indent='6'] {
+  margin-inline-start: 240px;
+}
+.tiptap-body [data-indent='7'] {
+  margin-inline-start: 280px;
+}
+.tiptap-body [data-indent='8'] {
+  margin-inline-start: 320px;
+}
+/* Text on a background colour stays dark, as on the white page it is sent on;
+   its own colour, when it has one, is inline and wins. */
+.tiptap-body span[style*='background-color'] {
+  color: #111827;
+}
+/* Tables (#274): the grid of one made here matches the one sent; a table that
+   came with quoted mail keeps a faint outline so its cells can be found. */
+.tiptap-body table {
+  border-collapse: collapse;
+  margin: 0;
+}
+.tiptap-body :is(td, th) {
+  padding: 4px 8px;
+  vertical-align: top;
+  min-width: 2em;
+  position: relative;
+  outline: 1px dashed var(--me-border);
+}
+.tiptap-body table.oreneta-table :is(td, th) {
+  border: 1px solid var(--me-border);
+  outline: none;
+}
+.tiptap-body th {
+  background: rgba(127, 127, 127, 0.1);
+  font-weight: 600;
+}
+.tiptap-body :is(td, th) > p {
+  margin: 0;
+}
+.tiptap-body .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(37, 99, 235, 0.15);
+  pointer-events: none;
+}
 .tiptap-body p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--me-text-secondary);

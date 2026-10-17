@@ -1,7 +1,8 @@
 # ADR-0067: Format de text enriquit i taules al redactor
 
-- Estat: proposada. Cal la decisió del propietari abans d'escriure codi: afegeix
-  dependències noves.
+- Estat: acceptada pel propietari el 2026-10-17 («sí, aprueba la A con esos
+  atajos»): l'opció A i les tres decisions de dreceres del punt 5, tal com
+  són escrites aquí.
 - Data: 2026-10-17.
 - Abast: #274 (fila SET-10, pare #88). Només el redactor de l'aplicació
   d'escriptori. En queden fora l'editor de signatures, l'editor de notes, el
@@ -110,6 +111,11 @@ Tres extensions oficials de tiptap, del mateix monorepositori
   (`border-collapse`, i vora i farciment a `td` i `th`) i el marge del
   sagnat, amb costats físics: `margin-left` en text d'esquerra a dreta i
   `margin-right` en text de dreta a esquerra, com les citacions (ADR-0061).
+- Només porten graella les taules fetes al redactor, que es marquen amb la
+  classe `oreneta-table`. Una taula que arriba amb un missatge citat o
+  enganxat sol ser de maquetació i no en porta. És una classe, i no un
+  atribut `data-*`, perquè ammonia conserva `class`: un esborrany reobert des
+  del servidor conserva la graella.
 - Les taules es fan sense redimensionar columnes (`resizable: false`):
   l'HTML queda més senzill i sense amplades fixes.
 - La comprovació en clients reals (Outlook, Gmail, Apple Mail) és evidència
@@ -128,15 +134,21 @@ Tres extensions oficials de tiptap, del mateix monorepositori
 
 ### 5. Dreceres
 
-- `TextAlign` porta `Mod-Shift-l`, `Mod-Shift-e`, `Mod-Shift-r` i
-  `Mod-Shift-j`. `Mod-Shift-r` xoca amb `mail.sync` (`lib/shortcuts.ts`). La
-  proposta és que dins de l'editor guanyi l'alineació i que la PR ho
-  comprovi amb una prova.
-- Sagnat: `Mod-]` i `Mod-[`, que avui no fa servir cap drecera
-  de `lib/shortcuts.ts`.
+Decidit pel propietari el 2026-10-17:
+
+- Alineació: `Mod-Shift-l`, `Mod-Shift-e`, `Mod-Shift-r` i `Mod-Shift-j`.
+  `Mod-Shift-r` també és `mail.sync` (`lib/shortcuts.ts`): dins de l'editor
+  alinea a la dreta i fora continua sincronitzant. L'editor atura la
+  pulsació (`stopPropagation`) perquè el gestor de dreceres de la finestra no
+  la vegi.
+- Sagnat: `Mod-]` i `Mod-[`, que no fa servir cap drecera de
+  `lib/shortcuts.ts`.
 - A les taules, Tab i Maj+Tab passen d'una cel·la a l'altra i Tab a l'última
   cel·la afegeix una fila (comportament de l'extensió). Les fletxes en
   surten.
+- Una extensió pròpia (`FormattingShortcuts`, prioritat 1000) atén aquestes
+  combinacions abans que cap altra assignació de tecles, també la de
+  `TextAlign`.
 
 ### 6. Alternativa de text pla
 
@@ -151,7 +163,7 @@ Tres extensions oficials de tiptap, del mateix monorepositori
 
 ## Opcions considerades
 
-- **A. Extensions oficials (recomanada).** Tres paquets MIT del mateix
+- **A. Extensions oficials (acceptada).** Tres paquets MIT del mateix
   projecte i versió, sense dependències transitives noves, amb la validació
   del punt 2.
 - **B. Tot fet al repositori.** Marques i atributs propis sobre `@tiptap/core`,
@@ -166,7 +178,11 @@ Tres extensions oficials de tiptap, del mateix monorepositori
 ## Conseqüències
 
 - Més formatació del contingut reenviat o enganxat sobreviu al redactor: els
-  cinc estils validats de `<span>` i l'alineació. Abans es perdien tots.
+  quatre estils validats de `<span>`, l'alineació, el sagnat en píxels i les
+  taules, que abans es desfeien en paràgrafs. Abans es perdien tots.
+- Al redactor, el sagnat d'un paràgraf de dreta a esquerra es veu a
+  l'esquerra (`margin-inline-start` segueix la direcció de l'editor); el
+  missatge enviat el porta a la dreta.
 - Noves cadenes d'interfície a tots els `locales/*.json`.
 - La PR d'implementació també afegeix proves de cada ordre i de l'HTML
   enviat, actualitza la documentació i afegeix una nota al registre

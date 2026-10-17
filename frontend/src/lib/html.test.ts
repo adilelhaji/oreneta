@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { resolveInlineCids } from './html'
+import { htmlToText, resolveInlineCids } from './html'
 
 describe('resolveInlineCids', () => {
   it('rewrites cid refs to data URLs from the matching attachments', () => {
@@ -21,5 +21,45 @@ describe('resolveInlineCids', () => {
       { inlineId: 'known@oreneta', mime: 'image/png', data: 'DDDD' },
     ])
     expect(out).toBe('<img src="data:image/png;base64,DDDD"><img src="cid:unknown@oreneta">')
+  })
+})
+
+// The plain-text alternative of a message with a table (#274, ADR-0067): one
+// line per row, cells joined by " | ", the table set apart like a paragraph.
+describe('htmlToText with tables', () => {
+  it('writes a table with a header row as one line per row', () => {
+    const html =
+      '<p>Prices:</p><table class="oreneta-table"><tbody>' +
+      '<tr><th><p>Item</p></th><th><p>Cost</p></th></tr>' +
+      '<tr><td><p>Tea</p></td><td><p>2 €</p></td></tr>' +
+      '</tbody></table><p>Thanks</p>'
+    expect(htmlToText(html)).toBe('Prices:\n\nItem | Cost\nTea | 2 €\n\nThanks')
+  })
+
+  it('keeps an empty cell empty between the separators', () => {
+    const html = '<table><tbody><tr><td><p>a</p></td><td><p></p></td><td><p>c</p></td></tr></tbody></table>'
+    expect(htmlToText(html)).toBe('a |  | c')
+  })
+
+  it('writes a spanning cell once', () => {
+    const html =
+      '<table><tbody><tr><td colspan="2"><p>Total</p></td></tr><tr><td><p>b</p></td><td><p>c</p></td></tr></tbody></table>'
+    expect(htmlToText(html)).toBe('Total\nb | c')
+  })
+
+  it('keeps a cell with two paragraphs, or a table of its own, on its row', () => {
+    const html =
+      '<table><tbody><tr><td><p>one</p><p>two</p></td><td><table><tbody><tr><td>x</td><td>y</td></tr></tbody></table></td></tr></tbody></table>'
+    expect(htmlToText(html)).toBe('one two | x | y')
+  })
+
+  it('writes a table inside a quote', () => {
+    const html =
+      '<p>On Monday Ana wrote:</p><blockquote><table><tbody><tr><td><p>a</p></td><td><p>b</p></td></tr></tbody></table></blockquote>'
+    expect(htmlToText(html)).toBe('On Monday Ana wrote:\n\na | b')
+  })
+
+  it('leaves the words of an indented paragraph as they are', () => {
+    expect(htmlToText('<p data-indent="2" style="margin-left: 80px;">Indented</p><p>Next</p>')).toBe('Indented\n\nNext')
   })
 })

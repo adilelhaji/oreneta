@@ -71,6 +71,12 @@ sobreescriure mai un canvi remot i sense enviar res més que el que ha canviat, 
 respostes SOAP enregistrades. Es manté `partial`: falten els grups i els contactes de Graph
 (#144) i l'evidència nativa de Windows; l'evidència amb un servidor Exchange real (N5)
 també és pendent.
+El 2026-10-17 (#274, ADR-0067) el redactor va incorporar el tipus de lletra, la mida, el
+color del text i el de ressaltat, l'alineació, el sagnat i les taules (inserir-ne, afegir
+i suprimir files i columnes, suprimir-les), amb barra d'eines i dreceres. Els estils que
+arriben enganxats o citats es validen abans d'entrar a l'HTML enviat, i el text pla escriu
+cada fila d'una taula en una línia. SET-10 es manté `implemented-unverified`: falten
+l'evidència nativa de Windows i la comprovació en clients de correu reals.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

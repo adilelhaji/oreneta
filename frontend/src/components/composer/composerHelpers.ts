@@ -1,6 +1,7 @@
 import type { ComposerAttachment } from '../../types'
 import { invoke } from '../../lib/bridge'
 import { markRightToLeftBlocks } from '../../lib/direction'
+import { clampIndent, INDENT_STEP_PX } from './indentExtension'
 
 export function textToHtml(text: string): string {
   if (!text.trim()) return ''
@@ -28,6 +29,12 @@ const RICH_INLINE_STYLES: Record<string, string> = {
   blockquote: 'border-left: 3px solid #d1d5db; padding-left: 0.9em; margin: 0.6em 0; color: #6b7280;',
   a: 'color: #2563eb; text-decoration: underline;',
   code: 'background: rgba(127, 127, 127, 0.16); border-radius: 4px; padding: 0.1em 0.3em; font-size: 0.9em;',
+  // Tables made here (#274): the editor draws the grid with its stylesheet;
+  // the mail carries it on every cell. Quoted layout tables get none.
+  'table.oreneta-table': 'border-collapse: collapse;',
+  'table.oreneta-table > tbody > tr > th':
+    'border: 1px solid #d1d5db; padding: 4px 8px; vertical-align: top; background: #f3f4f6; font-weight: bold;',
+  'table.oreneta-table > tbody > tr > td': 'border: 1px solid #d1d5db; padding: 4px 8px; vertical-align: top;',
 }
 const RTL_BLOCKQUOTE_STYLE = 'border-right: 3px solid #d1d5db; padding-right: 0.9em; margin: 0.6em 0; color: #6b7280;'
 
@@ -46,6 +53,16 @@ export function inlineRichStyles(html: string): string {
       const existing = el.getAttribute('style')
       el.setAttribute('style', existing ? `${own} ${existing}` : own)
     }
+  }
+  // Paragraph indent (#274): a margin per level on the side the paragraph
+  // starts from, physical for the same reason as the quote bar.
+  for (const el of Array.from(doc.querySelectorAll('[data-indent]'))) {
+    const level = clampIndent(Number(el.getAttribute('data-indent')))
+    if (!level) continue
+    const side = el.closest('[dir]')?.getAttribute('dir') === 'rtl' ? 'margin-right' : 'margin-left'
+    const own = `${side}: ${level * INDENT_STEP_PX}px;`
+    const existing = el.getAttribute('style')
+    el.setAttribute('style', existing ? `${own} ${existing}` : own)
   }
   return doc.body.innerHTML
 }
