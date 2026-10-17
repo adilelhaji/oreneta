@@ -58,3 +58,9 @@ No existien perfils ni grups de comptes.
 - Grups de comptes i inclusió explícita a les carpetes globals.
 - Verificació nativa (N4) a Windows: dos perfils oberts alhora, el
   clauer de Windows amb noms de perfil i la finestra correcta al davant.
+
+## Nota posterior
+
+- 2026-10-17 (#248): el servei del clauer passa de `meron` a `oreneta`. Els
+  noms de les entrades, `profile:<id>/<nom>` inclòs, no canvien; les entrades
+  que hi ha es mouen soles (ADR-0063).
