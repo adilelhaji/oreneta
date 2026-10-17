@@ -107,10 +107,12 @@ el directori i les respostes automàtiques, cobreix (ADR-0058):
   activat. Encara no s'ha verificat que un servidor Exchange real ho respecti al costat
   del MIME.
 - **Contactes i llistes de distribució:** Settings → People → "Read Exchange contacts"
-  incorpora la carpeta de contactes. Les persones que conté són només de lectura; les
-  seves llistes de distribució són grups de contactes que es poden crear, canviar de nom,
-  modificar i suprimir. Una llista modificada en un altre lloc des que es va llegir no se
-  sobreescriu mai.
+  incorpora la carpeta de contactes i, com a llibretes pròpies, les carpetes de contactes
+  que té a sota (ADR-0064). Les persones de totes es poden crear, editar i suprimir; les
+  llistes de distribució són grups de contactes que es poden crear, canviar de nom,
+  modificar i suprimir. Una persona o una llista modificada en un altre lloc des que es va
+  llegir no se sobreescriu mai: no es desa res i es torna la còpia del servidor. Exchange
+  guarda tres adreces per contacte; un canvi que no hi cap no s'envia.
 - **Tasques:** Tasks → "Exchange tasks of …" manté la carpeta de tasques del compte com a
   llista, sincronitzada com una de CalDAV, incloses les regles de repetició que EWS
   comparteix amb l'editor.

@@ -4522,8 +4522,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
         "google.contacts.sync" => pim::people::google_sync(engine, p).await,
 
         // An Exchange account's Contacts folder and its distribution lists
-        // (ADR-0058), read with the account's own sign-in. One book per
-        // account, like Google's.
+        // (ADR-0058), read with the account's own sign-in, and the contact
+        // folders under it, a book each (ADR-0064).
         "exchange.contacts.sync" => pim::exchange_book::sync(engine, p).await,
 
         "carddav.sync" => pim::people::source_sync(engine, p).await,
@@ -4532,11 +4532,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
 
         // Removing a source takes its people with it: they were a copy of
         // somebody else's book, and a copy with no origin can never be
-        // refreshed or told apart from a contact the reader typed.
+        // refreshed or told apart from a contact the reader typed. An
+        // Exchange account's book takes its contact folders with it
+        // (ADR-0064).
         "carddav.remove" => {
             let id = req_str(p, "id")?;
-            store::delete_contact_source(&engine.db.lock().unwrap(), &id)?;
-            let _ = meron_core::secrets::delete(&id);
+            let removed = pim::people::remove_source(&engine.db.lock().unwrap(), &id)?;
+            for id in removed {
+                let _ = meron_core::secrets::delete(&id);
+            }
             Ok(json!({ "ok": true }))
         }
 

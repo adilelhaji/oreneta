@@ -1,6 +1,8 @@
 # ADR-0012: Edició de contactes i conflictes d'escriptura
 
-- Estat: acceptada.
+- Estat: acceptada. Per a Exchange, el punt 3 queda substituït per ADR-0064
+  (2026-10-17): les persones d'Exchange ja s'editen, amb la mateixa regla de
+  conflictes.
 - Data: 2026-10-11.
 - Abast: #41. La política de conflictes s'aplica també a les tasques (#103) i
   a qualsevol escriptura nova al calendari.

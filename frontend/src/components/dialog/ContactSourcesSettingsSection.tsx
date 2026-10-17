@@ -8,6 +8,7 @@ import {
   addBook,
   contactSources$,
   discoverBooks,
+  isExchangeFolderBook,
   loadContactSources,
   removeSource,
   syncExchangeContacts,
@@ -143,26 +144,34 @@ export function ContactSourcesSettingsSection() {
                 >
                   <RefreshCw size={14} strokeWidth={1.75} />
                 </button>
-                <button
-                  type="button"
-                  title={t('contacts.remove')}
-                  aria-label={t('contacts.remove')}
-                  disabled={busy}
-                  onClick={() => {
-                    void confirmAction({
-                      title: t('contacts.removeTitle'),
-                      message: t('contacts.removeMessage', { name: source.name || source.url }),
-                      confirmLabel: t('contacts.remove'),
-                      cancelLabel: t('buttons.cancel'),
-                      tone: 'danger',
-                    }).then((yes) => {
-                      if (yes) void removeSource(source.id)
-                    })
-                  }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer disabled:opacity-40"
-                >
-                  <Trash2 size={14} strokeWidth={1.75} />
-                </button>
+                {/* A contact folder under an Exchange account's Contacts
+                    folder comes and goes with the account's book (ADR-0064). */}
+                {!isExchangeFolderBook(source) && (
+                  <button
+                    type="button"
+                    title={t('contacts.remove')}
+                    aria-label={t('contacts.remove')}
+                    disabled={busy}
+                    onClick={() => {
+                      void confirmAction({
+                        title: t('contacts.removeTitle'),
+                        message:
+                          source.kind === 'exchange' &&
+                          sources.some((other) => isExchangeFolderBook(other) && other.account === source.account)
+                            ? t('contacts.removeExchangeMessage', { name: source.name || source.url })
+                            : t('contacts.removeMessage', { name: source.name || source.url }),
+                        confirmLabel: t('contacts.remove'),
+                        cancelLabel: t('buttons.cancel'),
+                        tone: 'danger',
+                      }).then((yes) => {
+                        if (yes) void removeSource(source.id)
+                      })
+                    }}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control-sm text-secondary transition-colors hover:bg-danger-soft hover:text-danger cursor-pointer disabled:opacity-40"
+                  >
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

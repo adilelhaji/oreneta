@@ -1,0 +1,153 @@
+# ADR-0064: Exchange (EWS): carpetes de contactes i edició de les persones
+
+- Estat: acceptada per delegació. El propietari va aprovar el 2026-10-17
+  tancar aquestes mancances de SET-19 com a part de completar l'aplicació
+  d'escriptori; aquí es tria l'opció més prudent. Pendent de la revisió del
+  propietari abans de fusionar, perquè afegeix un ADR.
+- Data: 2026-10-17.
+- Abast: #257 (fila SET-19, #41). Sobre ADR-0012, ADR-0039, ADR-0052 i
+  ADR-0058; per a Exchange, substitueix el punt 3 d'ADR-0012. En queden fora
+  els grups i els contactes de Microsoft Graph (#144), les bústies compartides
+  o delegades més enllà de la del compte, les carpetes públiques, el mòbil i
+  l'evidència amb un servidor real (N5) o nativa de Windows (N4).
+
+## Context
+
+ADR-0058 llegeix només la carpeta Contactes d'un compte d'Exchange. Les
+persones hi són de només lectura i les llistes de distribució es llegeixen i
+s'escriuen com a grups. ADR-0012 deixava les persones d'Exchange sense
+edició fins a tenir evidència d'un servidor real. Faltaven dues coses:
+les carpetes de contactes que hi ha sota Contactes, i editar les persones. El
+propietari ha demanat tancar-les. L'evidència real continua pendent (N5) i,
+com per a les llistes, les proves es fan amb respostes SOAP enregistrades.
+
+## Decisió
+
+### 1. Una llibreta per carpeta de contactes
+
+- La llibreta del compte (`exchange-<compte>`) continua sent la carpeta
+  Contactes. Quan es llegeix, es llisten les carpetes que té a sota, a
+  qualsevol profunditat (`FindFolder` amb `Traversal="Deep"`), i cada una és
+  una llibreta pròpia del compte: `exchange-<compte>/<id de carpeta>`, amb
+  l'id de la carpeta a `url` i el nom «<compte> / <ruta>» (la ruta, amb `/`
+  entre els noms).
+- Només hi entren carpetes de contactes de debò: les de classe exactament
+  `IPF.Contact` que no són amagades (`PR_ATTR_HIDDEN`) ni són dins d'una
+  d'amagada. Les del sistema (`IPF.Contact.*`: Recipient Cache, GAL
+  Contacts, Quick Contacts, Companies…) no es llisten.
+- Una carpeta reanomenada o moguda dins de Contactes conserva la seva
+  llibreta (l'id no canvia) i en pren el nom nou. Una carpeta que el llistat
+  complet ja no porta (suprimida, o moguda fora de Contactes) se'n va amb les
+  seves persones i les seves llistes. Un llistat que falla no treu res: una
+  carpeta que no s'ha llistat no és una carpeta que ja no hi és. Una cadena de
+  pares que torna sobre si mateixa es talla on es repeteix, com a ADR-0058.
+- Una carpeta que no es pot llegir conserva el que tenia i en diu el motiu.
+  La llibreta del compte també ho diu i la lectura falla: una lectura
+  incompleta no es pren mai per completa.
+- Les llibretes de carpeta es llegeixen amb la del compte: l'actualització
+  periòdica no les llegeix per separat. «Torna-la a llegir ara» en una de carpeta
+  llegeix només aquella.
+- Arriben i se'n van amb la llibreta del compte. Eliminar-la les elimina
+  totes; una de carpeta no es pot eliminar sola (la lectura següent la
+  tornaria a portar), i la configuració no hi mostra el botó.
+- No cal cap migració: la llibreta de Contactes conserva l'id i les dades, i
+  l'esquema continua sent el 65.
+- Les llistes d'una carpeta són els grups de la seva llibreta (ADR-0052,
+  ADR-0058). Tot membre amb adreça porta el nom i l'adreça que va donar el
+  servidor, de manera que un contacte d'una altra carpeta es mostra per la
+  seva adreça. Un grup només pot rebre persones de la mateixa llibreta.
+
+### 2. Editar les persones d'Exchange
+
+- Les persones de totes les llibretes d'Exchange es poden crear (a la carpeta
+  triada), editar i suprimir. «Desa a» ofereix la carpeta Contactes i les que
+  té a sota.
+- Amb la regla d'ADR-0012:
+  - es llegeix el contacte del servidor; si la seva clau de canvis
+    (`ChangeKey`) no és la que va llegir l'editor, no s'escriu res i es
+    retorna la còpia d'allà, que queda desada aquí; si ja no hi és, és un
+    conflicte i se'n va d'aquí;
+  - l'escriptura porta la clau llegida i
+    `ConflictResolution="NeverOverwrite"`; un rebuig del servidor
+    (`ErrorIrresolvableConflict`, `ErrorStaleObject`, `ErrorItemNotFound`)
+    també és un conflicte;
+  - suprimir envia el contacte a Elements suprimits, després de comprovar la
+    clau, perquè `DeleteItem` no la compara;
+  - no s'escriu mai sense la clau llegida.
+- Només s'envia el que ha canviat: el nom (`DisplayName`; «arxiva com a»,
+  `FileAs`, el segueix només si era el nom o era buit), el nom de pila, el
+  cognom, l'empresa, la nota (el cos, en text), les adreces i els telèfons. El
+  que aquí no es veu (adreces postals, aniversari, càrrec, categories…) no es
+  toca. Una nota canviada s'escriu com a text: un cos amb format HTML el
+  perd.
+- **Ranures.** Exchange guarda tres adreces (`EmailAddress1`–`3`) i els
+  telèfons per tipus. Una adreça o un número que no canvien es queden on són;
+  un que es treu es buida; un de nou va a una ranura lliure. Un telèfon nou va
+  primer a les del seu tipus (mòbil, feina, casa, fax) i després a una de veu;
+  un fax només va a les de fax. Una ranura que guarda un identificador de
+  directori continua ocupada, encara que aquí no es vegi.
+- **Un canvi que Exchange no pot guardar** falla abans d'enviar res, amb el
+  motiu: una quarta adreça, un telèfon sense ranura lliure, una adreça que no
+  és SMTP o un contacte sense nom ni adreça.
+- **Crear sense duplicats.** S'hi escriu un id nostre com a propietat amb nom
+  (`PublicStrings`, `OrenetaContactUid`), com les tasques d'ADR-0058. Si la
+  resposta es perd, es cerca aquest id a la carpeta: si hi és, s'adopta i no
+  se'n crea cap altre; si no hi és, no s'ha creat; si la cerca també falla, es
+  diu que potser s'ha creat i que cal tornar a llegir la llibreta abans de
+  tornar-ho a provar.
+- Després d'escriure es torna a llegir el contacte i es desa tal com ha
+  quedat.
+- La importació de vCard continua anant només a la llibreta local o a una de
+  CardDAV.
+- Temps de les crides des de l'escriptori: `people.save` i `people.delete`,
+  60 s; `carddav.sync`, 2 min, perquè pot ser la lectura d'un compte
+  d'Exchange amb les seves carpetes.
+
+### 3. Interfície
+
+- La configuració mostra les llibretes de carpeta amb «Torna-la a llegir ara» i
+  sense «Elimina». Eliminar la del compte avisa que també se'n van les
+  carpetes (`contacts.removeExchangeMessage`). L'editor diu on es desa la
+  persona.
+
+## Alternatives descartades
+
+- **Totes les carpetes en una sola llibreta del compte:** és més simple, però
+  no es pot triar on es crea un contacte ni es veu a quina carpeta és, que és
+  com ho mostra eM Client.
+- **Llegir també les carpetes `IPF.Contact.*` del sistema:** omplirien la
+  llibreta de gent que el lector no ha desat mai.
+- **Eliminar les llibretes de carpeta una per una:** tornarien amb la lectura
+  següent, si no es desés una llista de carpetes excloses (dades noves).
+- **Escriure el contacte sencer o `ConflictResolution="AutoResolve"`:**
+  sobreescriuria la feina d'un altre client (ADR-0012).
+- **Crear sense id propi i acceptar un duplicat si es perd la resposta:**
+  contradiu ADR-0039.
+
+## Pendent
+
+- Evidència amb un servidor Exchange real (N5) i nativa de Windows (N4): que
+  el servidor accepta les escriptures de ranura i l'ordre de l'esquema tal
+  com es descriuen, i que el llistat de carpetes deixa fora les del sistema.
+- Grups i contactes de Microsoft Graph (#144).
+- Bústies compartides o delegades i carpetes públiques; importar vCard a
+  Exchange; adreces postals i els altres camps d'un contacte.
+
+## Proves
+
+Totes amb respostes SOAP enregistrades, sense servidor real:
+
+- `exchange/book/tests.rs`: lectura de les ranures, la nota, «arxiva com a»
+  i l'id nostre; carpetes (classe, amagades, bucle, ruta), llistat per
+  pàgines que falla sencer, lectura d'una carpeta per id; només la diferència,
+  «arxiva com a», ranures d'adreça i de telèfon, canvis que no hi caben,
+  actualització amb la clau i conflictes, creació (ordre de l'esquema,
+  resposta perduda, rebuig), cerca per l'id nostre i supressió.
+- `pim/exchange_book/tests.rs`: edició, còpia local obsoleta, contacte
+  suprimit al servidor, conflicte del servidor, error i resposta perduda,
+  canvi que no hi cap, creació en una carpeta, resposta perduda sense
+  duplicat, supressió; llibretes de carpeta (crear-les, reanomenar-les,
+  treure-les, llistat que falla, carpeta que falla, membres d'una altra
+  carpeta), eliminar-les amb la del compte i llistes creades en una carpeta.
+- `app_helpers_test.go` (temps de les crides) i, a la interfície,
+  `ExchangeContacts.test.tsx`.

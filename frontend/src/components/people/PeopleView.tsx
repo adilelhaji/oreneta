@@ -418,7 +418,8 @@ export function PeopleView() {
                 people$.editing.set({
                   id: selected.id,
                   version: selected.version,
-                  serverBook: selected.source === 'carddav' ? selected.book : undefined,
+                  serverBook:
+                    selected.source === 'carddav' || selected.source === 'exchange' ? selected.book : undefined,
                   draft: draftOf(selected),
                 })
               }

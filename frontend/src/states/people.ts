@@ -164,8 +164,8 @@ export type PersonEditing = {
   /** Absent for a new person. */
   id?: string
   /**
-   * Where a new person is saved: a CardDAV source's id, or absent for the
-   * local book. An existing person stays in the book it is in.
+   * Where a new person is saved: a CardDAV or Exchange source's id, or
+   * absent for the local book. An existing person stays in the book it is in.
    */
   book?: string
   /** For an existing person in a server book: that book's source id. */
@@ -235,11 +235,11 @@ export async function savePerson(editing: PersonEditing): Promise<'saved' | 'con
 /** Keeps this window's copy over the one saved elsewhere: saved from that version now. */
 export function keepMine(editing: PersonEditing) {
   const current = editing.conflict?.current
-  // Deleted elsewhere: keeping mine creates it again.
+  // Deleted elsewhere: keeping mine creates it again, in the book it was in.
   return savePerson(
     current
       ? { ...editing, version: current.version, conflict: undefined }
-      : { draft: editing.draft, book: editing.book },
+      : { draft: editing.draft, book: editing.book ?? editing.serverBook },
   )
 }
 

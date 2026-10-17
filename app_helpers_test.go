@@ -151,6 +151,10 @@ func TestSidecarCallTimeouts(t *testing.T) {
 		"exchange.contacts.sync": 2 * time.Minute,
 		"people.groupSave":       60 * time.Second,
 		"people.groupDelete":     60 * time.Second,
+		// Exchange contact folders and people (ADR-0064).
+		"carddav.sync":  2 * time.Minute,
+		"people.save":   60 * time.Second,
+		"people.delete": 60 * time.Second,
 		// Automatic archiving (ADR-0054): a preview searches the chosen
 		// folders; a run copies or moves every old message.
 		"autoArchive.preview": 10 * time.Minute,

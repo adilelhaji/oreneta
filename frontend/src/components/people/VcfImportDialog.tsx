@@ -18,7 +18,9 @@ export function VcfImportDialog() {
     if (pending && !loaded) void loadContactSources()
   }, [Boolean(pending), loaded])
   if (!pending) return null
-  const books = writableBooks(sources)
+  // A file goes to the local book or a CardDAV one; importing into an
+  // Exchange folder is not offered (ADR-0064).
+  const books = writableBooks(sources).filter((book) => book.kind === 'carddav')
   const close = () => people$.importing.set(null)
   const shown = pending.people.slice(0, 8)
 

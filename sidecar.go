@@ -523,9 +523,15 @@ func sidecarCallTimeout(method string) time.Duration {
 	// (ADR-0058). Each request is bounded by the core.
 	case "people.groupSave", "people.groupDelete":
 		return 60 * time.Second
-	// An Exchange account's whole Contacts folder, in pages and batches
-	// (ADR-0058).
-	case "exchange.contacts.sync":
+	// A person written to a server book: an Exchange contact is read, written
+	// and read again (ADR-0064), and a creation whose answer was lost is
+	// looked for before answering. Each request is bounded by the core.
+	case "people.save", "people.delete":
+		return 60 * time.Second
+	// An Exchange account's whole Contacts folder and the contact folders
+	// under it, in pages and batches (ADR-0058, ADR-0064); re-reading a book
+	// from settings may be that same read.
+	case "exchange.contacts.sync", "carddav.sync":
 		return 2 * time.Minute
 	case "calendar.list", "calendar.setEnabled", "calendar.setColor":
 		return 5 * time.Second

@@ -151,6 +151,11 @@ pub async fn run(engine: &Arc<Engine>, emit: &Emit, accounts: &[(String, Creds)]
             if !source.enabled || (!source.account.is_empty() && engine.is_paused(&source.account)) {
                 continue;
             }
+            // An Exchange contact folder is read with its account's book,
+            // which lists the folders first (ADR-0064).
+            if super::exchange_book::is_folder_book(&source) {
+                continue;
+            }
             if !try_attempt(&format!("book:{}", source.id), source.last_sync_at, BOOKS_EVERY, now, options.force) {
                 continue;
             }

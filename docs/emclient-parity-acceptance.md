@@ -48,6 +48,12 @@ també registra si Google va concedir el permís del calendari. La causa d'aquel
 no s'ha confirmat: la hipòtesi és que l'API de Google Calendar no està activada al projecte
 de Google Cloud heretat (#144). La fila es manté `implemented-unverified` fins que una
 prova nativa nova ho aclareixi.
+El 2026-10-17 (#257, ADR-0064) SET-19 va incorporar, als comptes d'Exchange (EWS), les
+carpetes de contactes que hi ha sota Contactes, cada una com a llibreta pròpia, i l'edició
+de les persones (crear-les, editar-les i suprimir-les) amb la clau de canvis llegida, sense
+sobreescriure mai un canvi remot i enviant només el que ha canviat, provades amb respostes
+SOAP enregistrades. Es manté `partial`: falten els grups de contactes de Graph (#144) i
+l'evidència nativa de Windows.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|
