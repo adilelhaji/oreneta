@@ -72,7 +72,7 @@ export function CalendarView() {
   ]
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <EventEditor />
       <EventDetails />
       {menu && <EventContextMenu state={menu} onClose={() => setMenu(null)} />}
@@ -189,7 +189,10 @@ export function CalendarView() {
           an event held in the week can be dropped on a day of another month. */}
       <CalendarDnd>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
-          <div className="flex shrink-0 flex-col border-border bg-raised min-[769px]:w-48 min-[769px]:border-e">
+          <div
+            data-region="folders"
+            className="flex shrink-0 flex-col border-border bg-raised min-[769px]:w-48 min-[769px]:border-e"
+          >
             <MiniCalendar />
             <CalendarList />
           </div>

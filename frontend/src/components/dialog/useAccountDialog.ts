@@ -19,8 +19,21 @@ import {
   type CertificateProtocol,
   type CertificatePrompt,
 } from '../../lib/certificateTrust'
+import {
+  applyConnectionFix as fixedForm,
+  connectionTestKey,
+  type ConnectionFix,
+  type ConnectionReport,
+  type ServerSide,
+} from './connectionTest'
 
 type AddAccountResult = { account?: { id?: string } }
+
+// The modes whose save goes through account.addPassword: manual IMAP or POP3
+// with SMTP, the ones the connection test (#269) covers.
+function isPasswordMode(mode: SetupMode) {
+  return mode !== 'gmail' && mode !== 'outlook' && mode !== 'graph' && mode !== 'ews' && mode !== 'rss'
+}
 
 // All of the account-setup dialog's state and backend flows: provider OAuth
 // (begin + poll), IMAP/SMTP autodiscovery, and the final save. Returned to the
@@ -96,6 +109,25 @@ export function useAccountDialog() {
   // Pins accepted during the save in flight. A bridge can refuse on IMAP and
   // then again on submission, and the second prompt must not drop the first.
   const pins = useRef<{ imap?: string; smtp?: string }>({})
+  // The last connection test (#269) and the settings it was run on: a result
+  // for settings changed since is shown as stale and is not a pass.
+  const [connectionReport, setConnectionReport] = useState<ConnectionReport | null>(null)
+  const [testedKey, setTestedKey] = useState('')
+  const [testing, setTesting] = useState(false)
+  // Whether the test in flight was asked for by Save, so accepting a
+  // certificate it stopped on carries on to the save.
+  const testIntent = useRef<'test' | 'save'>('test')
+  // Bumped when the dialog closes, switches mode or opens another account: a
+  // test still running then must not save, or show its result, for it.
+  const testGenerationRef = useRef(0)
+  // A certificate accepted in this dialog belongs to the server it was shown
+  // for: another host or port drops it rather than carry it to the new one.
+  useEffect(() => {
+    pins.current = { ...pins.current, imap: undefined }
+  }, [form.imap_host, form.imap_port])
+  useEffect(() => {
+    pins.current = { ...pins.current, smtp: undefined }
+  }, [form.smtp_host, form.smtp_port])
   const autoBeginOAuthKeyRef = useRef('')
   const rssAutoNameRef = useRef('')
   const discoveryGenerationRef = useRef(0)
@@ -120,6 +152,7 @@ export function useAccountDialog() {
   useEffect(() => {
     return () => {
       oauthGenerationRef.current++
+      testGenerationRef.current++
       if (oauthIntervalRef.current) clearInterval(oauthIntervalRef.current)
     }
   }, [])
@@ -171,6 +204,11 @@ export function useAccountDialog() {
       ews_url: reconnectAccount.ews_url || '',
     })
     setError('')
+    // Another account: no test, pin or result of the previous one carries over.
+    testGenerationRef.current++
+    pins.current = {}
+    setConnectionReport(null)
+    setTestedKey('')
     setExchangedTokens(null)
     setAppPasswordHint(null)
     setDiscoverNote('')
@@ -204,6 +242,9 @@ export function useAccountDialog() {
     setError('')
     setCertPrompt(null)
     pins.current = {}
+    testGenerationRef.current++
+    setConnectionReport(null)
+    setTestedKey('')
     setExchangedTokens(null)
     ui$.reconnectAccountId.set('')
     ui$.setupMode.set(newMode)
@@ -408,7 +449,9 @@ export function useAccountDialog() {
       : {
           host: form.imap_host.trim(),
           port: Number(form.imap_port) || 993,
-          starttls: form.imap_security === 'starttls',
+          // POP3 without TLS chosen still upgrades with STLS (#269).
+          starttls:
+            form.imap_security === 'starttls' || (form.incoming === 'pop3' && form.imap_security === 'none'),
         }
   }
 
@@ -417,11 +460,14 @@ export function useAccountDialog() {
   // the probe cannot reach the server — then the original error stands.
   async function probeCertificate(protocol: CertificateProtocol): Promise<CertificatePrompt | null> {
     const target = serverTarget(protocol)
+    // The incoming server's pin slot is "imap" whatever it speaks, but the
+    // probe has to speak its protocol: STLS for POP3, not IMAP's STARTTLS.
+    const wire = protocol === 'imap' && form.incoming === 'pop3' ? 'pop3' : protocol
     try {
-      const res = await invoke<{ certificate: CertificateInfo }>(
-        'account.probeCert',
-        certificateProbePayload({ ...target, protocol }, reconnectAccount?.proxy),
-      )
+      const res = await invoke<{ certificate: CertificateInfo }>('account.probeCert', {
+        ...certificateProbePayload({ ...target, protocol }, reconnectAccount?.proxy),
+        protocol: wire,
+      })
       if (!res?.certificate?.fingerprint) return null
       return { host: target.host, port: target.port, protocol, certificate: res.certificate }
     } catch {
@@ -429,28 +475,124 @@ export function useAccountDialog() {
     }
   }
 
-  // Pin the certificate the user just accepted and retry the save with it. The
-  // other server's pin, if one was accepted earlier in this same save, rides
-  // along — a bridge can present a certificate on each port.
+  // Pin the certificate the user just accepted and retry with it. The other
+  // server's pin, if one was accepted earlier, rides along — a bridge can
+  // present a certificate on each port. A manual account is tested again with
+  // the pin (and saved if the test passes and Save asked for it); the others
+  // retry their save.
   async function trustCertificate() {
     const accepted = certPrompt
     setCertPrompt(null)
     if (!accepted) return
-    await submit(
-      accepted.protocol === 'imap' ? accepted.certificate.fingerprint : pins.current.imap,
-      accepted.protocol === 'smtp' ? accepted.certificate.fingerprint : pins.current.smtp,
-    )
+    const imap = accepted.protocol === 'imap' ? accepted.certificate.fingerprint : pins.current.imap
+    const smtp = accepted.protocol === 'smtp' ? accepted.certificate.fingerprint : pins.current.smtp
+    if (isPasswordMode(mode)) {
+      pins.current = { imap, smtp }
+      const intent = testIntent.current
+      const report = await testConnection(intent)
+      if (report?.ok && intent === 'save') await submit(pins.current.imap, pins.current.smtp)
+      return
+    }
+    await submit(imap, smtp)
   }
 
   function dismissCertPrompt() {
     setCertPrompt(null)
   }
 
+  // The form as account.addPassword (and account.testConnection) take it.
+  function passwordAccountPayload(certPin?: string, smtpCertPin?: string) {
+    return {
+      email: form.email,
+      display_name: form.display_name,
+      sender_name: form.sender_name,
+      imap_host: form.imap_host.trim(),
+      imap_port: Number(form.imap_port),
+      incoming: form.incoming,
+      smtp_host: form.smtp_host.trim(),
+      smtp_port: Number(form.smtp_port),
+      username: form.username.trim() || form.email.trim(),
+      // Omitting the key entirely tells the core to keep (or, for a test, to
+      // use) the stored password; sending "" would blank it. Only an explicitly
+      // typed password replaces what the keychain already holds.
+      ...(editing && !form.password ? {} : { password: form.password }),
+      tls: form.imap_security === 'tls',
+      starttls: form.imap_security === 'starttls',
+      smtp_tls: form.smtp_security === 'tls',
+      smtp_starttls: form.smtp_security === 'starttls',
+      // A reconnect keeps the pins the account already carries unless the
+      // user has just accepted a new certificate.
+      cert_pin: certPin ?? reconnectAccount?.cert_pin ?? '',
+      smtp_cert_pin: smtpCertPin ?? reconnectAccount?.smtp_cert_pin ?? '',
+    }
+  }
+
+  // Test both servers of the manual setup step by step (#269). Saves nothing:
+  // the result is shown with what to change, and changes are the person's.
+  async function testConnection(intent: 'test' | 'save' = 'test'): Promise<ConnectionReport | null> {
+    testIntent.current = intent
+    const generation = ++testGenerationRef.current
+    const key = connectionTestKey(formRef.current)
+    setError('')
+    setCertPrompt(null)
+    setTesting(true)
+    try {
+      const report = await invoke<ConnectionReport>('account.testConnection', {
+        ...passwordAccountPayload(pins.current.imap, pins.current.smtp),
+        // The same route as the account's connections; absent follows the
+        // app-wide proxy, as for the certificate probe.
+        proxy: reconnectAccount?.proxy ?? null,
+      })
+      if (generation !== testGenerationRef.current) return null
+      // A result for settings changed while it ran says nothing about them.
+      if (connectionTestKey(formRef.current) !== key) {
+        setError(translate('accounts.connectionTest.changedWhileTesting'))
+        return null
+      }
+      setConnectionReport(report)
+      setTestedKey(key)
+      if (!report.ok) setAdvancedOpen(true)
+      return report
+    } catch (err) {
+      if (generation === testGenerationRef.current) {
+        setError(errorMessage(err, translate('accounts.connectionTest.couldNotTest')))
+      }
+      return null
+    } finally {
+      if (generation === testGenerationRef.current) setTesting(false)
+    }
+  }
+
+  // A correction offered by the test changes the form only. An untrusted
+  // certificate is shown first, and pinned only if the person accepts it.
+  async function applyConnectionFix(side: ServerSide, fix: ConnectionFix) {
+    if (fix.kind === 'certificate') {
+      const prompt = await probeCertificate(side === 'incoming' ? 'imap' : 'smtp')
+      if (prompt) setCertPrompt(prompt)
+      else setError(translate('accounts.connectionTest.certificateUnavailable'))
+      return
+    }
+    setForm((f) => fixedForm(f, side, fix))
+  }
+
+  // A manual account is tested before it is saved, so its password is not
+  // stored until both servers pass; "Save anyway" is the explicit way past a
+  // failed test.
   async function save() {
+    if (isPasswordMode(mode)) {
+      const report = await testConnection('save')
+      if (!report?.ok) return
+      await submit(pins.current.imap, pins.current.smtp)
+      return
+    }
     await submit()
   }
 
-  async function submit(certPin?: string, smtpCertPin?: string) {
+  async function saveAnyway() {
+    await submit(pins.current.imap, pins.current.smtp, true)
+  }
+
+  async function submit(certPin?: string, smtpCertPin?: string, skipValidation = false) {
     pins.current = { imap: certPin, smtp: smtpCertPin }
     try {
       setError('')
@@ -491,27 +633,10 @@ export function useAccountDialog() {
         createdId = added.account?.id ?? ''
       } else {
         const added = await invoke<AddAccountResult>('account.addPassword', {
-          email: form.email,
-          display_name: form.display_name,
-          sender_name: form.sender_name,
-          imap_host: form.imap_host,
-          imap_port: Number(form.imap_port),
-          incoming: form.incoming,
-          smtp_host: form.smtp_host,
-          smtp_port: Number(form.smtp_port),
-          username: form.username || form.email,
-          // Omitting the key entirely tells the core to keep the stored
-          // password; sending "" would blank it. Only an explicitly typed
-          // password replaces what the keychain already holds.
-          ...(editing && !form.password ? {} : { password: form.password }),
-          tls: form.imap_security === 'tls',
-          starttls: form.imap_security === 'starttls',
-          smtp_tls: form.smtp_security === 'tls',
-          smtp_starttls: form.smtp_security === 'starttls',
-          // A reconnect keeps the pins the account already carries unless the
-          // user has just accepted a new certificate.
-          cert_pin: certPin ?? reconnectAccount?.cert_pin ?? '',
-          smtp_cert_pin: smtpCertPin ?? reconnectAccount?.smtp_cert_pin ?? '',
+          ...passwordAccountPayload(certPin, smtpCertPin),
+          // Only the person's explicit "Save anyway" after a test that did
+          // not pass stores the account without validating it (#269).
+          ...(skipValidation ? { skip_validation: true } : {}),
         })
         createdId = added.account?.id ?? ''
       }
@@ -554,6 +679,7 @@ export function useAccountDialog() {
 
   const saveDisabled =
     loading ||
+    testing ||
     discovering ||
     (mode === 'gmail' || mode === 'outlook'
       ? !exchangedTokens && !form.auth_code
@@ -592,6 +718,13 @@ export function useAccountDialog() {
     saveDisabled,
     reconnectAccount,
     editing,
+    testing,
+    testConnection,
+    connectionReport,
+    // A result for settings changed since the test is not a pass.
+    connectionReportStale: !!connectionReport && testedKey !== connectionTestKey(form),
+    applyConnectionFix,
+    saveAnyway,
   }
 }
 

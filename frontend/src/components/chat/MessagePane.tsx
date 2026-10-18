@@ -308,6 +308,7 @@ export function MessagePane() {
   return (
     <div
       data-message-pane
+      data-region="reader"
       className={`relative flex min-w-0 flex-1 flex-col overflow-hidden min-[769px]:min-w-[360px] ${
         mobilePane === 'conversation' ? 'max-[769px]:flex' : 'max-[769px]:hidden'
       }`}
@@ -366,7 +367,7 @@ export function MessagePane() {
             onOpenEvent={(start) => {
               calendar$.anchor.set(startOfDay(new Date(start * 1000)).getTime())
               calendar$.view.set('day')
-              ui$.calendarOpen.set(true)
+              ui$.module.set('calendar')
             }}
           />
         )}

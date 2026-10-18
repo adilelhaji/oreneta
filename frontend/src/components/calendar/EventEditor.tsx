@@ -22,6 +22,7 @@ import { ScopeAsk } from './ScopeAsk'
 import { NotifyAsk } from './NotifyAsk'
 import { ConflictNote } from './ConflictNote'
 import { RepeatFields } from './RepeatFields'
+import { ModalCard } from '../dialog/ModalCard'
 
 /// Creates or edits one event.
 ///
@@ -103,7 +104,12 @@ export function EventEditor() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeEditor}>
-      <div
+      <ModalCard
+        label={
+          isNew
+            ? t('calendar.newEvent', { defaultValue: 'New event' })
+            : t('calendar.editEvent', { defaultValue: 'Edit event' })
+        }
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-panel border border-border bg-app shadow-overlay"
         onClick={(e) => e.stopPropagation()}
       >
@@ -372,7 +378,7 @@ export function EventEditor() {
             </button>
           </div>
         </div>
-      </div>
+      </ModalCard>
     </div>
   )
 }

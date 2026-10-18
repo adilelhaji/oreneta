@@ -63,8 +63,7 @@ export function AttachmentsView() {
   }, [filter.account, filter.name, filter.sender, filter.kind, filter.within])
 
   const openMessage = (item: ListedAttachment) => {
-    ui$.attachmentsOpen.set(false)
-    ui$.messagingOpen.set(false)
+    ui$.module.set('mail')
     openMailAccount(item.account, item.folder, false)
     ui$.selectedThread.set(item.thread_id)
     ui$.mobilePane.set('conversation')
@@ -91,7 +90,7 @@ export function AttachmentsView() {
   const missing = uncovered(coverage)
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
         <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">

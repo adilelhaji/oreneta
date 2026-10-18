@@ -377,7 +377,7 @@ it('opens the organizer’s event in the editor with the proposed time, saving t
   const view = render(<InvitationCard message={proposal()} />)
   fireEvent.click(await view.findByRole('button', { name: 'Open in editor' }))
   const { calendar$: cal } = await import('../../states/calendar')
-  expect(ui$.calendarOpen.get()).toBe(true)
+  expect(ui$.module.get()).toBe('calendar')
   expect(cal.editing.get()).toMatchObject({
     id: kept.id,
     calendar_id: 'local:1',
@@ -409,7 +409,7 @@ it('opens the organizer’s event in the editor with the proposed time, saving t
   const sent = calls.find((c) => c.command === 'mail.send')!.payload
   expect(sent.to).toBe('cy@example.com')
   expect(sent.attachments[0].mime).toBe('text/calendar; method=REQUEST; charset=utf-8')
-  ui$.calendarOpen.set(false)
+  ui$.module.set('mail')
   cal.editing.set(null)
 })
 
