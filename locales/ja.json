@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "引用した元のメールに対する署名の位置",
   "settings.signature.placementWithText": "自分の文章と一緒に",
   "settings.signature.placementAbove": "引用の上",
-  "settings.signature.placementBelow": "引用の下"
+  "settings.signature.placementBelow": "引用の下",
+  "shell.region.mail": "メール",
+  "shell.region.modules": "モジュール"
 }

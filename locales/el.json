@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "Πού μπαίνει η υπογραφή σε σχέση με το παράθεμα του αρχικού",
   "settings.signature.placementWithText": "Μαζί με όσα γράφω",
   "settings.signature.placementAbove": "Πάνω από το παράθεμα",
-  "settings.signature.placementBelow": "Κάτω από το παράθεμα"
+  "settings.signature.placementBelow": "Κάτω από το παράθεμα",
+  "shell.region.mail": "Ταχυδρομείο",
+  "shell.region.modules": "Ενότητες"
 }

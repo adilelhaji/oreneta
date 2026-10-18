@@ -69,7 +69,7 @@ export function CalendarView() {
   ]
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <EventEditor />
       <EventDetails />
       {menu && <EventContextMenu state={menu} onClose={() => setMenu(null)} />}

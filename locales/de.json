@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "Wo die Signatur im Verhältnis zum zitierten Original steht",
   "settings.signature.placementWithText": "Bei meinem Text",
   "settings.signature.placementAbove": "Über dem Zitat",
-  "settings.signature.placementBelow": "Unter dem Zitat"
+  "settings.signature.placementBelow": "Unter dem Zitat",
+  "shell.region.mail": "E-Mail",
+  "shell.region.modules": "Module"
 }

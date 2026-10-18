@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "Kuhu allkiri tsiteeritud algse sõnumi suhtes läheb",
   "settings.signature.placementWithText": "Koos minu tekstiga",
   "settings.signature.placementAbove": "Tsitaadi kohal",
-  "settings.signature.placementBelow": "Tsitaadi all"
+  "settings.signature.placementBelow": "Tsitaadi all",
+  "shell.region.mail": "E-post",
+  "shell.region.modules": "Moodulid"
 }

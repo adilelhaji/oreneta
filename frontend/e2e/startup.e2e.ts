@@ -3721,3 +3721,296 @@ for (const theme of ['oreneta-light', 'oreneta-dark']) {
     })
   }
 }
+
+// Application regions and F6 (#306, ADR-0068 step 1). The regions of today's
+// shell carry `data-region`; F6 and Shift+F6 go round the ones on screen in
+// the frame's order (folders, modules, list, reader, sidebar), which is the
+// same in right to left. Within a region the focus goes back to where it was.
+const arCatalog = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../locales/ar.json', import.meta.url)), 'utf8'),
+) as Record<string, string>
+const regionCatalogs: Record<string, Record<string, string>> = { en: enCatalog, ca: caCatalog, ar: arCatalog }
+
+// The kind of region the keyboard focus is in, or "none" outside every region.
+async function regionAtFocus(page: Page): Promise<string> {
+  return page.evaluate(
+    () => (document.activeElement?.closest('[data-region]') as HTMLElement | null)?.dataset.region ?? 'none',
+  )
+}
+
+// Presses a key a number of times and reads the region after each press.
+async function regionWalk(page: Page, key: string, presses: number): Promise<string[]> {
+  const kinds: string[] = []
+  for (let i = 0; i < presses; i++) {
+    await page.keyboard.press(key)
+    kinds.push(await regionAtFocus(page))
+  }
+  return kinds
+}
+
+// Marks the focused element, then says whether the focus is back on it.
+async function markFocus(page: Page, mark: string) {
+  await page.evaluate((name) => document.activeElement?.setAttribute(name, ''), mark)
+}
+async function focusIsMarked(page: Page, mark: string): Promise<boolean> {
+  return page.evaluate((name) => !!document.activeElement?.hasAttribute(name), mark)
+}
+
+// The axe rules about regions, which the WCAG tags the other audits use leave out.
+const REGION_RULES = ['region', 'landmark-unique', 'landmark-one-main']
+
+for (const language of ['en', 'ca', 'ar']) {
+  test(`F6 and Shift+F6 go round the regions in one order in every direction of writing: ${language}, 1440px (#306)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language })
+    const catalog = regionCatalogs[language]
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    // One <main>, named after the module, and the rail named as what it is.
+    await expect(page.getByRole('main')).toHaveCount(1)
+    await expect(page.getByRole('main', { name: catalog['shell.region.mail'], exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('complementary', { name: catalog['shell.region.modules'], exact: true }),
+    ).toBeVisible()
+
+    // A conversation open, with the details sidebar beside it, so every kind
+    // of region the shell has today is on screen.
+    const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+    await row.click()
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    await row.focus()
+    await page.keyboard.press('i')
+    await expect(page.locator('[data-details-panel]')).toBeVisible()
+    await row.focus()
+    await markFocus(page, 'data-test-f6-start')
+    expect(await regionAtFocus(page)).toBe('content')
+
+    expect(await regionWalk(page, 'F6', 5)).toEqual(['reader', 'sidebar', 'folders', 'modules', 'content'])
+    // Round once and back in the list, on the row it left.
+    expect(await focusIsMarked(page, 'data-test-f6-start')).toBe(true)
+    expect(await regionWalk(page, 'Shift+F6', 5)).toEqual(['modules', 'folders', 'sidebar', 'reader', 'content'])
+    expect(await focusIsMarked(page, 'data-test-f6-start')).toBe(true)
+    expect(errors).toEqual([])
+  })
+}
+
+test('F6 leaves a text field and the HTML message, and a modal dialog keeps the focus (#306)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true, readerStress: true })
+  await page.goto('/')
+  await page.getByRole('table').getByRole('button', { name: /Pilot checklist/ }).click()
+  const frame = page.frameLocator('iframe[title="Message HTML"]').first()
+  await expect(frame.getByText('Wide synthetic invoice')).toBeVisible()
+
+  // While typing in the list's search field: F6 types nothing and moves on.
+  const search = page.locator('[data-thread-list]').getByRole('textbox').first()
+  await search.click()
+  await search.fill('Pilot')
+  expect(await regionAtFocus(page)).toBe('content')
+  await page.keyboard.press('F6')
+  await expect(search).not.toBeFocused()
+  await expect(search).toHaveValue('Pilot')
+  expect(await regionAtFocus(page)).toBe('reader')
+
+  // From inside the message's own frame, which forwards F1–F12.
+  await frame.getByText('Wide synthetic invoice').click()
+  expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('IFRAME')
+  await page.keyboard.press('F6')
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('IFRAME')
+  // No sidebar is open, so after the reader comes the first region again.
+  expect(await regionAtFocus(page)).toBe('folders')
+  await frame.getByText('Wide synthetic invoice').click()
+  await page.keyboard.press('Shift+F6')
+  expect(await regionAtFocus(page)).toBe('content')
+
+  // A toast is not part of the module in <main>.
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await page.keyboard.press(`${mod}+Equal`)
+  await expect(page.getByRole('status').filter({ hasText: 'Size 110%' })).toBeVisible()
+  await expect(page.locator('main').getByRole('status').filter({ hasText: 'Size 110%' })).toHaveCount(0)
+  await page.keyboard.press(`${mod}+Digit0`)
+
+  // A modal dialog keeps the focus, and is not inside <main> either.
+  await page.keyboard.press('Control+Comma')
+  await expect(page.getByRole('dialog').first()).toBeVisible()
+  await expect(page.locator('main [aria-modal="true"]')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[aria-modal="true"]'))).toBe(true)
+  await markFocus(page, 'data-test-modal-focus')
+  await page.keyboard.press('F6')
+  await page.keyboard.press('Shift+F6')
+  expect(await focusIsMarked(page, 'data-test-modal-focus')).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('rebound to a letter, the next-region shortcut stands down while typing (#306)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const errors = await prepareStartup(page, true, {
+    navigation: true,
+    preferences: { shortcut_overrides: { 'pane.next': { key: 'g' } } },
+  })
+  await page.goto('/')
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  await row.click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  // Outside a text field the letter moves on, and Shift+F6 keeps its default.
+  await row.focus()
+  await page.keyboard.press('g')
+  expect(await regionAtFocus(page)).toBe('reader')
+  await page.keyboard.press('Shift+F6')
+  expect(await regionAtFocus(page)).toBe('content')
+  // F6 itself no longer moves.
+  await page.keyboard.press('F6')
+  expect(await regionAtFocus(page)).toBe('content')
+  // In a text field the letter is typed, and the focus stays.
+  const search = page.locator('[data-thread-list]').getByRole('textbox').first()
+  await search.click()
+  await page.keyboard.type('g')
+  await expect(search).toBeFocused()
+  await expect(search).toHaveValue('g')
+  expect(errors).toEqual([])
+})
+
+test('F6 skips the regions a narrow window hides, and keeps working at 200 percent (#306)', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 1000 })
+  const errors = await prepareStartup(page, true, { navigation: true })
+  await page.goto('/')
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+  // One pane at a time: the rail, the mail navigation and the reader are not shown.
+  await row.focus()
+  expect(await regionWalk(page, 'F6', 3)).toEqual(['content', 'content', 'content'])
+  expect(await regionWalk(page, 'Shift+F6', 2)).toEqual(['content', 'content'])
+  await row.click()
+  await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+  expect(await regionWalk(page, 'F6', 2)).toEqual(['reader', 'reader'])
+
+  // 1440 px at the app's own 200 %: the same frame, everything twice the size.
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await expect(page.locator('[data-thread-list]')).toBeVisible()
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
+  for (let i = 0; i < 6; i++) await page.keyboard.press(`${mod}+Equal`)
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('32px')
+  await row.focus()
+  const zoomed: string[] = []
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('F6')
+    zoomed.push(await regionAtFocus(page))
+    await expect(page.locator(':focus')).toBeInViewport()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  expect(zoomed).toEqual(['reader', 'folders', 'modules', 'content'])
+  await page.keyboard.press(`${mod}+Digit0`)
+  expect(errors).toEqual([])
+})
+
+// The region rules of axe on the mailbox and every module, in English,
+// Catalan and Arabic: one <main>, named after the module; no two regions of
+// one role with one name; nothing outside a region.
+for (const language of ['en', 'ca', 'ar']) {
+  test(`every screen keeps its content in named, unique regions: ${language}, 1440px (#306)`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const errors = await prepareStartup(page, true, { navigation: true, language })
+    const catalog = regionCatalogs[language]
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('lang', language)
+    await expect(page.locator('[data-thread-list]')).toBeVisible()
+    await page.evaluate(() => {
+      const replies = (window as any).startupProbe.replies
+      replies['people.list'] = {
+        people: [
+          {
+            id: 'local::morgan', source: 'local', account: '', book: 'local', name: 'Morgan Rivera',
+            organisation: 'Example Org', note: '', photo: '',
+            emails: [{ addr: 'morgan@example.test', label: '' }], phones: [], version: '1', editable: true,
+          },
+        ],
+      }
+      replies['tasks.lists'] = { lists: [{ id: 'mail', name: '', position: 0, open: 1 }] }
+      replies['tasks.list'] = {
+        tasks: [
+          {
+            id: 1, thread_id: '', account_id: '', folder_id: '', note: '', due_at: null, completed_at: null,
+            created_at: 0, subject: '', from_name: '', from_addr: '', linked: false, list_id: 'mail',
+            title: 'Review the figures', priority: 2, reminder_at: null, revision: 1,
+          },
+        ],
+      }
+      const note = {
+        id: 'note:regions', title: 'Meeting notes', html: '<p>Kept here.</p>', text: 'Kept here.', tags: [],
+        pinned: false, revision: 1, created_at: 0, updated_at: 1760000000, deleted_at: null,
+      }
+      replies['notes.list'] = { notes: [{ ...note, preview: note.text }], tags: [] }
+      replies['notes.get'] = { note }
+      replies['calendar.list'] = {
+        calendars: [{ id: 'local-team', name: 'Team', is_default: true, enabled: true, kind: 'local', read_only: false, synced_at: 0 }],
+      }
+      replies['calendar.events'] = { events: [] }
+      replies['chat.accounts'] = [{ id: 'c1', jid: 'ana@chat.test', host: '', port: 5222 }]
+      replies['chat.status'] = { c1: { account: 'c1', state: 'online' } }
+      replies['chat.conversations'] = [
+        { conversation: 'pau@chat.test', last_body: 'Hello', last_stamp: 1760000120, last_direction: 'in', unread: 1 },
+      ]
+      replies['chat.history'] = [
+        { account: 'c1', conversation: 'pau@chat.test', id: 'm1', stanza_id: 'a1', direction: 'in', sender: 'pau@chat.test', body: 'Hello Ana', stamp: 1760000000, state: 'received' },
+      ]
+    })
+
+    const found: string[] = []
+    const audit = async (screen: string, moduleName: string) => {
+      await expect(page.getByRole('main')).toHaveCount(1)
+      await expect(page.getByRole('main', { name: moduleName, exact: true })).toBeVisible()
+      await settled(page)
+      const results = await new AxeBuilder({ page }).withRules(REGION_RULES).analyze()
+      const body = JSON.stringify({ screen, language, violations: results.violations }, null, 2)
+      await info.attach(`axe-regions-${screen}-${language}`, { body, contentType: 'application/json' })
+      for (const violation of results.violations) {
+        const targets = violation.nodes.map((node) => node.target.join(' ')).join(', ')
+        found.push(`${screen}: ${violation.id} (${violation.impact}) on ${targets}`)
+      }
+      // F6 lands inside a region of the screen.
+      await page.keyboard.press('F6')
+      expect(await regionAtFocus(page), `${screen}: F6`).not.toBe('none')
+    }
+
+    await audit('mailbox', catalog['shell.region.mail'])
+    const row = page.getByRole('table').getByRole('button', { name: /Pilot checklist/ })
+    await row.click()
+    await expect(page.getByText('Thanks Morgan. I will review the checklist today.', { exact: true })).toBeVisible()
+    await row.focus()
+    await page.keyboard.press('i')
+    await expect(page.locator('[data-details-panel]')).toBeVisible()
+    await audit('conversation', catalog['shell.region.mail'])
+
+    await page.getByTitle(catalog['people.title'], { exact: true }).click()
+    await page.getByRole('option', { name: /Morgan Rivera/ }).click()
+    await audit('people', catalog['people.title'])
+
+    await page.getByTitle(catalog['tasks.title'], { exact: true }).click()
+    await expect(page.getByText('Review the figures')).toBeVisible()
+    await audit('tasks', catalog['tasks.title'])
+
+    await page.getByTitle(catalog['notes.title'], { exact: true }).click()
+    await page.getByRole('button', { name: /Meeting notes/ }).click()
+    await audit('notes', catalog['notes.title'])
+
+    await page.getByTitle(catalog['calendar.title'], { exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await audit('calendar', catalog['calendar.title'])
+
+    await page.getByTitle(catalog['messaging.title'], { exact: true }).click()
+    await page.getByRole('button', { name: /pau@chat.test/ }).click()
+    await expect(page.getByText('Hello Ana')).toBeVisible()
+    await audit('chat', catalog['messaging.title'])
+
+    await page.getByTitle(catalog['attachmentsView.title'], { exact: true }).click()
+    await audit('attachments', catalog['attachmentsView.title'])
+
+    expect(found).toEqual([])
+    expect(errors).toEqual([])
+  })
+}

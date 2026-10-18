@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "签名相对于引用原文的位置",
   "settings.signature.placementWithText": "跟随我写的内容",
   "settings.signature.placementAbove": "引用内容上方",
-  "settings.signature.placementBelow": "引用内容下方"
+  "settings.signature.placementBelow": "引用内容下方",
+  "shell.region.mail": "邮件",
+  "shell.region.modules": "模块"
 }

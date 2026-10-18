@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Download, Sparkles, X } from 'lucide-react'
 import { useValue } from '@legendapp/state/react'
 import { useTranslation } from '../../lib/i18n'
@@ -19,15 +20,21 @@ export function UpdateBanner() {
   const { t } = useTranslation()
   const status = useValue(update$.status)
   const dismissed = useValue(settings$.dismissedUpdateVersion)
+  const titleId = useId()
 
   if (!shouldShowUpdateBanner(status, dismissed)) return null
 
   const ready = status.state === 'ready'
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-2 border-b border-accent/20 bg-accent/10 px-3 py-1.5 text-xs font-medium text-primary">
+    // A named region, so the notice is not loose content outside every
+    // landmark (ADR-0068 §1); its name is the notice itself.
+    <section
+      aria-labelledby={titleId}
+      className="flex shrink-0 items-center justify-center gap-2 border-b border-accent/20 bg-accent/10 px-3 py-1.5 text-xs font-medium text-primary"
+    >
       <Sparkles size={14} className="shrink-0 text-accent" strokeWidth={1.75} />
-      <span className="min-w-0 truncate">
+      <span id={titleId} className="min-w-0 truncate">
         {ready
           ? t('updates.ready', { version: status.latestVersion })
           : t('updates.available', { version: status.latestVersion })}
@@ -56,6 +63,6 @@ export function UpdateBanner() {
       >
         <X size={14} strokeWidth={1.75} />
       </button>
-    </div>
+    </section>
   )
 }

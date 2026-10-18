@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "Vị trí chữ ký so với thư gốc được trích dẫn",
   "settings.signature.placementWithText": "Cùng với nội dung tôi viết",
   "settings.signature.placementAbove": "Phía trên phần trích dẫn",
-  "settings.signature.placementBelow": "Phía dưới phần trích dẫn"
+  "settings.signature.placementBelow": "Phía dưới phần trích dẫn",
+  "shell.region.mail": "Thư",
+  "shell.region.modules": "Mô-đun"
 }

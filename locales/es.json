@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "Dónde va la firma respecto al original citado",
   "settings.signature.placementWithText": "Con lo que escribo",
   "settings.signature.placementAbove": "Encima de la cita",
-  "settings.signature.placementBelow": "Debajo de la cita"
+  "settings.signature.placementBelow": "Debajo de la cita",
+  "shell.region.mail": "Correo",
+  "shell.region.modules": "Módulos"
 }

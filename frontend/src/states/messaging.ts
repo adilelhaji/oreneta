@@ -239,12 +239,7 @@ export async function loadOccupants(room = messaging$.conversation.peek()) {
 
 /** A system notification was clicked: the Chat view, its account, that conversation. */
 export async function openChatFromNotification(account: string, conversation: string) {
-  ui$.calendarOpen.set(false)
-  ui$.peopleOpen.set(false)
-  ui$.tasksOpen.set(false)
-  ui$.notesOpen.set(false)
-  ui$.attachmentsOpen.set(false)
-  ui$.messagingOpen.set(true)
+  ui$.module.set('chat')
   if (account) messaging$.account.set(account)
   await loadMessaging()
   await openConversation(conversation)

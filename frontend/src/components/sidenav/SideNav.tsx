@@ -23,7 +23,7 @@ import { moveFeed, RSS_FEED_DRAG_TYPE } from '../../states/feeds'
 import { kanban$, openMailAccount, reorderKanbanBoards, selectKanbanBoard } from '../../states/kanban'
 import { mail$, inboxUnread } from '../../states/mail'
 import { settings$, setUnifiedInboxSideNavVisible } from '../../states/settings'
-import { ui$ } from '../../states/ui'
+import { toggleModule, ui$ } from '../../states/ui'
 import { QuickSettingsMenu } from './QuickSettingsMenu'
 import { QuietIndicator } from './QuietIndicator'
 import { SortableBoard, SortableAccount } from './SortableRailItems'
@@ -40,12 +40,13 @@ export function SideNav() {
   const { t } = useTranslation()
   const accounts = useValue(accounts$)
   const boards = useValue(settings$.kanbanBoards)
-  const calendarOpen = useValue(ui$.calendarOpen)
-  const peopleOpen = useValue(ui$.peopleOpen)
-  const tasksOpen = useValue(ui$.tasksOpen)
-  const notesOpen = useValue(ui$.notesOpen)
-  const messagingOpen = useValue(ui$.messagingOpen)
-  const attachmentsOpen = useValue(ui$.attachmentsOpen)
+  const activeModule = useValue(ui$.module)
+  const calendarActive = activeModule === 'calendar'
+  const peopleActive = activeModule === 'people'
+  const tasksActive = activeModule === 'tasks'
+  const notesActive = activeModule === 'notes'
+  const chatActive = activeModule === 'chat'
+  const attachmentsActive = activeModule === 'attachments'
   const hiddenSideNavAccounts = useValue(settings$.hiddenSideNavAccounts)
   const showUnifiedInbox = useValue(settings$.showUnifiedInboxInSideNav)
   const showUnreadBadge = useValue(settings$.showUnreadAccountBadge)
@@ -147,17 +148,16 @@ export function SideNav() {
   // Picking any mail destination leaves the calendar: they occupy the same
   // pane, so staying would show mail's selection with the calendar drawn.
   const selectAccount = (id: string, folderId = 'inbox') => {
-    ui$.calendarOpen.set(false)
-    ui$.peopleOpen.set(false)
-    ui$.tasksOpen.set(false)
-    ui$.notesOpen.set(false)
-    ui$.attachmentsOpen.set(false)
-    ui$.messagingOpen.set(false)
+    ui$.module.set('mail')
     openMailAccount(id, folderId)
   }
 
   return (
     <aside
+      // Today's rail is the module selector (ADR-0068 §5 moves it to a strip
+      // later); named so it is not a second unnamed complementary region.
+      aria-label={t('shell.region.modules')}
+      data-region="modules"
       className="flex w-15 shrink-0 flex-col items-center gap-4 border-e border-border bg-sidenav px-0 py-4 max-[769px]:hidden select-none"
       onContextMenu={(event) => {
         if (event.defaultPrevented) return
@@ -205,23 +205,16 @@ export function SideNav() {
           <div className="relative w-full flex justify-center group">
             <div
               className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
-                calendarOpen ? 'h-7' : 'h-0 group-hover:h-3'
+                calendarActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
-                calendarOpen
+                calendarActive
                   ? 'bg-accent text-on-accent '
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
-              onClick={() => {
-                ui$.peopleOpen.set(false)
-                ui$.tasksOpen.set(false)
-                ui$.notesOpen.set(false)
-                ui$.attachmentsOpen.set(false)
-                ui$.messagingOpen.set(false)
-                ui$.calendarOpen.set(!calendarOpen)
-              }}
+              onClick={() => toggleModule('calendar')}
               title={t('calendar.title', { defaultValue: 'Calendar' })}
             >
               <CalendarDays size={20} strokeWidth={1.75} />
@@ -235,23 +228,16 @@ export function SideNav() {
           <div className="relative w-full flex justify-center group">
             <div
               className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
-                peopleOpen ? 'h-7' : 'h-0 group-hover:h-3'
+                peopleActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
-                peopleOpen
+                peopleActive
                   ? 'bg-accent text-on-accent '
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
-              onClick={() => {
-                ui$.calendarOpen.set(false)
-                ui$.tasksOpen.set(false)
-                ui$.notesOpen.set(false)
-                ui$.attachmentsOpen.set(false)
-                ui$.messagingOpen.set(false)
-                ui$.peopleOpen.set(!peopleOpen)
-              }}
+              onClick={() => toggleModule('people')}
               title={t('people.title')}
             >
               <BookUser size={20} strokeWidth={1.75} />
@@ -266,23 +252,16 @@ export function SideNav() {
           <div className="relative w-full flex justify-center group">
             <div
               className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
-                tasksOpen ? 'h-7' : 'h-0 group-hover:h-3'
+                tasksActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
-                tasksOpen
+                tasksActive
                   ? 'bg-accent text-on-accent '
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
-              onClick={() => {
-                ui$.calendarOpen.set(false)
-                ui$.peopleOpen.set(false)
-                ui$.notesOpen.set(false)
-                ui$.attachmentsOpen.set(false)
-                ui$.messagingOpen.set(false)
-                ui$.tasksOpen.set(!tasksOpen)
-              }}
+              onClick={() => toggleModule('tasks')}
               title={t('tasks.title')}
             >
               <ListTodo size={20} strokeWidth={1.75} />
@@ -295,23 +274,16 @@ export function SideNav() {
           <div className="relative w-full flex justify-center group">
             <div
               className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
-                notesOpen ? 'h-7' : 'h-0 group-hover:h-3'
+                notesActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
-                notesOpen
+                notesActive
                   ? 'bg-accent text-on-accent '
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
-              onClick={() => {
-                ui$.calendarOpen.set(false)
-                ui$.peopleOpen.set(false)
-                ui$.tasksOpen.set(false)
-                ui$.attachmentsOpen.set(false)
-                ui$.messagingOpen.set(false)
-                ui$.notesOpen.set(!notesOpen)
-              }}
+              onClick={() => toggleModule('notes')}
               title={t('notes.title', { defaultValue: 'Notes' })}
             >
               <StickyNote size={20} strokeWidth={1.75} />
@@ -324,23 +296,16 @@ export function SideNav() {
           <div className="relative w-full flex justify-center group">
             <div
               className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
-                messagingOpen ? 'h-7' : 'h-0 group-hover:h-3'
+                chatActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
-                messagingOpen
+                chatActive
                   ? 'bg-accent text-on-accent '
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
-              onClick={() => {
-                ui$.calendarOpen.set(false)
-                ui$.peopleOpen.set(false)
-                ui$.tasksOpen.set(false)
-                ui$.notesOpen.set(false)
-                ui$.attachmentsOpen.set(false)
-                ui$.messagingOpen.set(!messagingOpen)
-              }}
+              onClick={() => toggleModule('chat')}
               title={t('messaging.title', { defaultValue: 'Chat' })}
             >
               <MessagesSquare size={20} strokeWidth={1.75} />
@@ -353,23 +318,16 @@ export function SideNav() {
           <div className="relative w-full flex justify-center group">
             <div
               className={`absolute start-0 top-1/2 -translate-y-1/2 w-1 rounded-e bg-accent transition-all duration-200 ${
-                attachmentsOpen ? 'h-7' : 'h-0 group-hover:h-3'
+                attachmentsActive ? 'h-7' : 'h-0 group-hover:h-3'
               }`}
             />
             <button
               className={`flex h-11 w-11 items-center justify-center rounded-panel transition-all duration-200 cursor-pointer ${
-                attachmentsOpen
+                attachmentsActive
                   ? 'bg-accent text-on-accent '
                   : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white '
               }`}
-              onClick={() => {
-                ui$.calendarOpen.set(false)
-                ui$.peopleOpen.set(false)
-                ui$.tasksOpen.set(false)
-                ui$.notesOpen.set(false)
-                ui$.messagingOpen.set(false)
-                ui$.attachmentsOpen.set(!attachmentsOpen)
-              }}
+              onClick={() => toggleModule('attachments')}
               title={t('attachmentsView.title', { defaultValue: 'Attachments' })}
             >
               <Paperclip size={20} strokeWidth={1.75} />
@@ -395,12 +353,7 @@ export function SideNav() {
                     board={board}
                     active={board.id === activeBoardId}
                     onSelect={() => {
-                      ui$.calendarOpen.set(false)
-                      ui$.peopleOpen.set(false)
-                      ui$.tasksOpen.set(false)
-                      ui$.notesOpen.set(false)
-                      ui$.attachmentsOpen.set(false)
-                      ui$.messagingOpen.set(false)
+                      ui$.module.set('mail')
                       selectKanbanBoard(board.id)
                     }}
                     onContextMenu={(e) => {

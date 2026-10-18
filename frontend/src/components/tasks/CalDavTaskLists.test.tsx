@@ -75,7 +75,7 @@ beforeEach(() => {
     syncing: false,
   })
   ui$.taskEditor.set(null)
-  ui$.tasksOpen.set(true)
+  ui$.module.set('tasks')
 })
 afterEach(() => {
   cleanup()

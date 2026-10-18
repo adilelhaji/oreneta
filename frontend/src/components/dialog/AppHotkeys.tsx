@@ -36,6 +36,7 @@ import {
 import { compose$, openComposeTab, openReplyInFullEditor, closeMessageTab } from '../../states/compose'
 import { handleEditUndoKeyDown } from '../../lib/editUndo'
 import { zoom } from '../../states/zoom'
+import { focusAdjacentRegion, modalDialogOpen, trackRegionFocus } from '../../lib/regions'
 import {
   isBareShortcut,
   isMac,
@@ -358,6 +359,14 @@ export function AppHotkeys() {
           event.preventDefault()
           ui$.shortcutsOpen.set(!ui$.shortcutsOpen.peek())
           break
+        // From region to region (ADR-0068 §6), also from a text field: a
+        // function key types nothing. A modal dialog keeps the focus.
+        case 'pane.next':
+        case 'pane.prev':
+          event.preventDefault()
+          if (modalOpen() || modalDialogOpen()) break
+          focusAdjacentRegion(action === 'pane.next' ? 1 : -1)
+          break
         case 'thread.next':
           event.preventDefault()
           selectAdjacentThreadForView(1)
@@ -459,7 +468,9 @@ export function AppHotkeys() {
     window.addEventListener('focusin', clearThreadListDeleteScope)
     window.addEventListener('pointerdown', clearThreadListDeleteScope)
     window.addEventListener('oreneta.frameKeyDown', onFrameKeyDown)
+    const stopTrackingRegionFocus = trackRegionFocus()
     return () => {
+      stopTrackingRegionFocus()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('focusin', clearThreadListDeleteScope)
       window.removeEventListener('pointerdown', clearThreadListDeleteScope)

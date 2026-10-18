@@ -2833,5 +2833,7 @@
   "settings.signature.placementHint": "Kur paraksts atrodas attiecībā pret citēto oriģinālu",
   "settings.signature.placementWithText": "Kopā ar manu tekstu",
   "settings.signature.placementAbove": "Virs citāta",
-  "settings.signature.placementBelow": "Zem citāta"
+  "settings.signature.placementBelow": "Zem citāta",
+  "shell.region.mail": "Pasts",
+  "shell.region.modules": "Moduļi"
 }

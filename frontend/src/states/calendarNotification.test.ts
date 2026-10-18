@@ -9,8 +9,7 @@ import { ui$ } from './ui'
 beforeEach(() => {
   calendar$.view.set('month')
   calendar$.anchor.set(0)
-  ui$.calendarOpen.set(false)
-  ui$.messagingOpen.set(true)
+  ui$.module.set('chat')
 })
 
 test('a click on a missed-reminders notice opens the calendar on the day it names', () => {
@@ -19,15 +18,14 @@ test('a click on a missed-reminders notice opens the calendar on the day it name
   onNotificationClicked({ account: 'acc', threadId: 'calendar:2026-10-19' })
   expect(calendar$.anchor.get()).toBe(new Date(2026, 9, 19).getTime())
   expect(calendar$.view.get()).toBe('day')
-  expect(ui$.calendarOpen.get()).toBe(true)
-  expect(ui$.messagingOpen.get()).toBe(false)
+  expect(ui$.module.get()).toBe('calendar')
 })
 
 test('misses on several days open the week of the most recent one', () => {
   onNotificationClicked({ account: 'acc', threadKey: 'calendar:week:2026-10-21' })
   expect(calendar$.anchor.get()).toBe(new Date(2026, 9, 21).getTime())
   expect(calendar$.view.get()).toBe('week')
-  expect(ui$.calendarOpen.get()).toBe(true)
+  expect(ui$.module.get()).toBe('calendar')
 })
 
 test('a day it cannot read opens the calendar on today', () => {
