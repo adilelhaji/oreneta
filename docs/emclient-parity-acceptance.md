@@ -78,6 +78,13 @@ de mencions, però comptada com a no llegida) i les mencions sense llegir de cad
 compte. L'absència automàtica per inactivitat necessita una API nova del sistema: el propietari va
 triar l'opció A de l'ADR-0065, que encara no està implementada (#265). La fila es manté `partial` (hi falten aquest punt i
 l'evidència nativa de Windows).
+El 2026-10-18 (#220, esmena proposada de l'ADR-0044) el xat fa servir una còpia de tokio-xmpp 6.0.0
+amb un pedaç (`third_party/tokio-xmpp`, al registre SOUP): el receptor ja no perd l'avís quan se'l
+consulta mentre s'envia alguna cosa, i la sessió ja no es queda sense rebre res mentre continua
+connectada. Cada
+pregunta d'una pujada de fitxer té un termini de 30 s, que també cobreix l'espera per entrar a la
+cua de sortida quan és plena; sense resposta, la pujada acaba amb `disconnected`. SET-21 es manté
+`partial`: l'evidència nativa de Windows continua pendent.
 El 2026-10-17 (#273) SET-07 va incorporar amagar carpetes de l'arbre de carpetes i tornar-les
 a mostrar («Amaga la carpeta», «Mostra les carpetes amagades», «Torna a mostrar la carpeta»),
 amb les subcarpetes incloses, com a preferència local (`folder_hidden`) que no arriba mai al

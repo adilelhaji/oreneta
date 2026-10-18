@@ -132,3 +132,8 @@ async-imap = { git = "https://github.com/nonbili/async-imap.git", rev = "d04be74
 # empty BODYSTRUCTURE parameter list as `()` instead of the RFC-mandated NIL.
 # Keep the compatibility patch local and covered by the vendored crate's tests.
 imap-proto = { path = "../third_party/imap-proto" }
+# tokio-xmpp 6.0.0 loses a wake-up when its receiver is polled while a send
+# holds the stream lock, and the chat session stops receiving (#220). Patched
+# locally, with its regression test in the vendored crate, until upstream
+# fixes it.
+tokio-xmpp = { path = "../third_party/tokio-xmpp" }
