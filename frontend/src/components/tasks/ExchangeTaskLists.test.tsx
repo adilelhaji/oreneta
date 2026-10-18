@@ -72,6 +72,7 @@ beforeEach(() => {
     loading: false,
     includeCompleted: false,
     lists: [],
+    accountLists: [],
     selectedList: 'all',
     search: '',
     syncing: false,
@@ -94,6 +95,7 @@ afterEach(() => {
     loading: false,
     includeCompleted: false,
     lists: [],
+    accountLists: [],
     selectedList: 'all',
     search: '',
     syncing: false,
@@ -103,28 +105,44 @@ afterEach(() => {
 })
 
 describe('Exchange task lists (ADR-0058)', () => {
-  it('adds an Exchange account’s Tasks folder as a list kept on a server', async () => {
+  // ADR-0070: the list arrives with the account; one declined is added
+  // again from «Afegeix una llista», which is offered only then.
+  it('adds a declined Exchange account’s Tasks folder again from “Add a list”', async () => {
     let added = false
+    const declined = {
+      account: 'acc',
+      source: 'ews',
+      state: 'declined',
+      list_id: '',
+      adopted: false,
+      notified: true,
+      last_error: '',
+      kind: 'ews',
+      url: '',
+    }
     const calls = stubBridge({
       'tasks.list': () => ({ tasks: [] }),
-      'tasks.lists': () => ({ lists: added ? lists : lists.slice(0, 1) }),
+      'tasks.lists': () =>
+        added
+          ? { lists, account_lists: [{ ...declined, state: 'linked', list_id: 'list:ews' }] }
+          : { lists: lists.slice(0, 1), account_lists: [declined] },
       'tasks.exchangeAdd': () => {
         added = true
         return { ok: true, id: 'list:ews' }
       },
     })
     const view = render(<TasksView />)
-    await waitFor(() => expect(calls.some((c) => c.command === 'tasks.lists')).toBe(true))
+    await waitFor(() => expect(view.getByText(/Add a list/)).toBeTruthy())
+    // Not a button of its own in the list bar any more.
+    expect(view.queryByText(/Exchange tasks of me@corp\.example/)).toBeNull()
+    fireEvent.click(view.getByText(/Add a list/))
     fireEvent.click(view.getByText(/Exchange tasks of me@corp\.example/))
     await waitFor(() => expect(tasks$.selectedList.get()).toBe('list:ews'))
-    expect(calls.find((c) => c.command === 'tasks.exchangeAdd')!.payload).toEqual({
-      account: 'acc',
-      name: 'me@corp.example',
-    })
+    expect(calls.find((c) => c.command === 'tasks.exchangeAdd')!.payload).toEqual({ account: 'acc' })
     expect(isRemoteList(bound)).toBe(true)
     await waitFor(() => expect(view.getByText(/Kept on me@corp\.example/)).toBeTruthy())
-    // Once it is a list, the offer goes.
-    expect(view.queryByText(/Exchange tasks of/)).toBeNull()
+    // Once it is a list again, nothing is offered.
+    expect(view.queryByText(/Add a list/)).toBeNull()
     await settled()
   })
 

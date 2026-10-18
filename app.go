@@ -592,7 +592,10 @@ func (a *App) invoke(command string, payload map[string]any) (any, error) {
 	// Task lists kept on a CalDAV server (ADR-0039): the core finds, binds,
 	// syncs and settles conflicts; the password goes to the keychain there.
 	// The same for a list kept in an Exchange account's Tasks folder (ADR-0058).
-	case "tasks.caldavDiscover", "tasks.caldavAdd", "tasks.exchangeAdd", "tasks.sync", "tasks.resolveConflict":
+	// The lists that come with an account are declined or their upgrade
+	// notice confirmed in the core, which keeps that in the profile (ADR-0070).
+	case "tasks.caldavDiscover", "tasks.caldavAdd", "tasks.exchangeAdd", "tasks.sync", "tasks.resolveConflict",
+		"tasks.declineAccountList", "tasks.acknowledgeAccountList":
 		return a.tasksPassthrough(command, payload)
 	// Meeting invitations by mail (#102): the core reads, answers and files
 	// them; each call is the person's own action.

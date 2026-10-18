@@ -12,21 +12,37 @@ import {
   startOfDay,
   type CalendarEvent,
 } from '../../states/calendar'
-import { tasks$, type Task } from '../../states/tasks'
+import {
+  onTaskListsChanged,
+  tasks$,
+  waitingAccountLists,
+  type AccountTaskList,
+  type Task,
+  type TaskList,
+} from '../../states/tasks'
 import { ui$ } from '../../states/ui'
+import { AccountListNotices } from '../tasks/AccountTaskLists'
 
-type Agenda = { groups: AgendaGroup[]; incomplete: boolean }
+type Agenda = {
+  groups: AgendaGroup[]
+  incomplete: boolean
+  /** An account's task list has not been read yet (ADR-0070): its tasks may
+   * be missing from the week. */
+  tasksWaiting: boolean
+  lists: TaskList[]
+  accountLists: AccountTaskList[]
+}
 
 /**
  * Reads the coming week: every account's enabled calendars (the core leaves
  * out disabled ones) and every open task. A source that cannot be read is
- * said, never shown as an empty day.
+ * said, never shown as an empty day; nor is a task list not read yet.
  */
 export async function readAgenda(now: number, refresh: boolean): Promise<Agenda> {
   const { from, to } = agendaQueryWindow(now)
   let incomplete = false
   const accounts = accounts$.peek().filter((account) => !isFeedAccount(account.id))
-  const [perAccount, tasks] = await Promise.all([
+  const [perAccount, tasks, taskLists] = await Promise.all([
     Promise.all(
       accounts.map(async (account) => {
         try {
@@ -50,8 +66,20 @@ export async function readAgenda(now: number, refresh: boolean): Promise<Agenda>
         return [] as Task[]
       },
     ),
+    invoke<{ lists?: TaskList[]; account_lists?: AccountTaskList[] }>('tasks.lists', {}).then(
+      (res) => ({ lists: res?.lists ?? [], accountLists: res?.account_lists ?? [] }),
+      () => {
+        incomplete = true
+        return { lists: [] as TaskList[], accountLists: [] as AccountTaskList[] }
+      },
+    ),
   ])
-  return { groups: buildAgenda(perAccount.flat(), tasks, now), incomplete }
+  return {
+    groups: buildAgenda(perAccount.flat(), tasks, now),
+    incomplete,
+    tasksWaiting: waitingAccountLists(taskLists.accountLists).length > 0,
+    ...taskLists,
+  }
 }
 
 /**
@@ -135,6 +163,10 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
       if (value === null) void read(false)
     })
     const offTasks = tasks$.items.onChange(() => void read(false))
+    // A list of an account read in the background, or one declined or
+    // confirmed in Tasks, changes the week (ADR-0070).
+    const offLists = onTaskListsChanged(() => void read(false))
+    const offAccountLists = tasks$.accountLists.onChange(() => void read(false))
     // Today and Tomorrow move at midnight, and what was overdue with them.
     let timer: ReturnType<typeof setTimeout>
     const atMidnight = () => {
@@ -150,6 +182,8 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
       if (typeof offError === 'function') offError()
       offEditor()
       offTasks()
+      offLists()
+      offAccountLists()
       clearTimeout(timer)
     }
     // `now` is a clock, not an input: reading again on every render would loop.
@@ -195,6 +229,14 @@ export function SidebarAgenda({ now = () => Date.now() }: { now?: () => number }
 
   return (
     <div className="pb-3">
+      <AccountListNotices entries={agenda.accountLists} lists={agenda.lists} compact />
+      {agenda.tasksWaiting && !agenda.incomplete && (
+        <p role="status" className="mx-4 mt-3 rounded-control-sm bg-warning-soft px-3 py-2 text-caption text-primary">
+          {t('sidebar.agendaTasksWaiting', {
+            defaultValue: 'The tasks of some accounts have not been read yet, so this list may be incomplete.',
+          })}
+        </p>
+      )}
       {stale.size > 0 && (
         <p role="status" className="mx-4 mt-3 rounded-control-sm bg-warning-soft px-3 py-2 text-caption text-primary">
           {t('calendar.staleWarning')}

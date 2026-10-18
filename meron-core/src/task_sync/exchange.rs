@@ -27,6 +27,7 @@ use anyhow::{bail, Context as _, Result};
 use rusqlite::{params, Connection, OptionalExtension as _};
 use serde_json::{json, Value};
 
+use super::account_lists;
 use super::vtodo::Fields;
 use super::{lock, mark_conflict, Keep, Report};
 use crate::exchange::book::ListWrite;
@@ -77,6 +78,71 @@ pub fn bindings(conn: &Connection) -> Result<Vec<(String, String)>> {
     let mut stmt = conn.prepare("SELECT id, ews_account FROM task_lists WHERE ews_account <> '' ORDER BY position")?;
     let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The first read of an account's Tasks folder (ADR-0070, §3): read whole,
+/// and only then, in one transaction, the list made with its tasks and the
+/// account's entry linked. A read that fails makes nothing: a waiting entry
+/// keeps waiting, with the reason; one declined stays declined. A read that
+/// ends after the person declined the list, or removed the account, writes
+/// nothing.
+pub fn link_account(
+    db: &Mutex<Connection>,
+    client: &EwsClient,
+    account: &str,
+    mode: account_lists::Mode,
+    now: i64,
+) -> Result<account_lists::Linked> {
+    use account_lists::{Linked, Mode, EWS};
+    {
+        let conn = lock(db);
+        if !account_lists::may_write(&conn, account, EWS, mode)? {
+            return Ok(Linked::Discarded);
+        }
+        if mode == Mode::ByHand && conn.prepare("SELECT 1 FROM task_lists WHERE ews_account = ?1")?.exists(params![account])? {
+            bail!("the tasks of that account are already a list here");
+        }
+    }
+    let tasks = match client.read_tasks() {
+        Ok(tasks) => tasks,
+        Err(error) => {
+            if mode == Mode::Retry {
+                account_lists::record_failure(&lock(db), account, EWS, &format!("{error:#}"))?;
+            }
+            return Err(error);
+        }
+    };
+    let conn = lock(db);
+    let written = (|| -> Result<Linked> {
+        let tx = conn.unchecked_transaction()?;
+        if !account_lists::may_write(&tx, account, EWS, mode)? {
+            return Ok(Linked::Discarded);
+        }
+        // A list of the account made meanwhile is its list: taken, not doubled.
+        let existing: Option<String> = tx
+            .query_row("SELECT id FROM task_lists WHERE ews_account = ?1 ORDER BY position LIMIT 1", params![account], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        let list_id = match existing {
+            Some(id) => id,
+            None => {
+                let name = crate::store::account_email(&tx, account)?.filter(|email| !email.trim().is_empty());
+                let id = crate::store::task_lists::create_list(&tx, name.as_deref().unwrap_or(account), now)?;
+                tx.execute("UPDATE task_lists SET ews_account = ?2 WHERE id = ?1", params![id, account])?;
+                id
+            }
+        };
+        reconcile_in(&tx, &list_id, &tasks, now, &mut Report::default())?;
+        tx.execute("UPDATE task_lists SET synced_at = ?2, last_error = '' WHERE id = ?1", params![list_id, now])?;
+        account_lists::mark_linked(&tx, account, EWS, &list_id, false, now)?;
+        tx.commit()?;
+        Ok(Linked::Made(list_id))
+    })();
+    if let (Err(error), Mode::Retry) = (&written, mode) {
+        account_lists::record_failure(&conn, account, EWS, &format!("{error:#}"))?;
+    }
+    written
 }
 
 /// Drops the lists kept in `account` and their tasks, as the account goes
@@ -391,6 +457,14 @@ struct Known {
 
 fn reconcile(conn: &Connection, list_id: &str, tasks: &[RemoteTask], now: i64, report: &mut Report) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
+    reconcile_in(&tx, list_id, tasks, now, report)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// [`reconcile`] inside the caller's transaction: the first read of an
+/// account's list creates the list and its tasks in one (ADR-0070, §3).
+fn reconcile_in(tx: &Connection, list_id: &str, tasks: &[RemoteTask], now: i64, report: &mut Report) -> Result<()> {
     let (known, new_here): (HashMap<String, Known>, HashMap<String, i64>) = {
         let mut stmt =
             tx.prepare("SELECT remote_href, id, remote_etag, pending, conflict FROM tasks WHERE list_id = ?1 AND remote_href <> ''")?;
@@ -427,7 +501,7 @@ fn reconcile(conn: &Connection, list_id: &str, tasks: &[RemoteTask], now: i64, r
                 )?;
                 continue;
             }
-            insert_server_copy(&tx, list_id, remote, now)?;
+            insert_server_copy(tx, list_id, remote, now)?;
             report.pulled += 1;
             continue;
         };
@@ -435,10 +509,10 @@ fn reconcile(conn: &Connection, list_id: &str, tasks: &[RemoteTask], now: i64, r
             continue;
         }
         if local.pending.is_empty() {
-            take_server_copy(&tx, local.id, remote, now)?;
+            take_server_copy(tx, local.id, remote, now)?;
             report.pulled += 1;
         } else if local.conflict != "changed" {
-            mark_conflict(&tx, local.id, "changed")?;
+            mark_conflict(tx, local.id, "changed")?;
             report.conflicts += 1;
         }
     }
@@ -450,11 +524,10 @@ fn reconcile(conn: &Connection, list_id: &str, tasks: &[RemoteTask], now: i64, r
             tx.execute("DELETE FROM tasks WHERE id = ?1", params![local.id])?;
             report.removed += 1;
         } else if local.conflict != "deleted" {
-            mark_conflict(&tx, local.id, "deleted")?;
+            mark_conflict(tx, local.id, "deleted")?;
             report.conflicts += 1;
         }
     }
-    tx.commit()?;
     Ok(())
 }
 

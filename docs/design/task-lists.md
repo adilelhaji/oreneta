@@ -36,6 +36,14 @@
   - noves: `tasks.lists`, `tasks.createList`, `tasks.renameList`,
     `tasks.deleteList`, `tasks.create` i `tasks.update`;
   - ampliades: `tasks.list` i `tasks.get` retornen els camps nous.
+- **Llistes que arriben amb un compte (migració 66, ADR-0070).** La taula
+  `account_task_lists` diu, per a cada compte, quines llistes té i en quin
+  estat són: pendents de llegir, enllaçades, declinades o, per als servidors
+  CalDAV, ja llistades. Un compte d'Exchange nou hi desa la seva entrada a la
+  mateixa transacció que el compte. `tasks.lists` torna aquestes entrades a
+  `account_lists`, i `tasks.deleteList` declina la d'una llista del compte,
+  de manera que no torna sola. El detall és a
+  [caldav-tasks.md](caldav-tasks.md#llistes-que-arriben-amb-el-compte-281-adr-0070).
 
 ## Proves
 
@@ -51,5 +59,5 @@
 Repetició, delegació, subtasques i aparició a l'agenda del calendari.
 La sincronització amb CalDAV (VTODO) va arribar després, a l'ADR-0039
 ([registre](caldav-tasks.md)), i la carpeta Tasques d'un compte d'Exchange
-(EWS) a l'ADR-0058; Google Tasks i Graph To Do continuen
-pendents.
+(EWS) a l'ADR-0058. Des de l'ADR-0070, les dues arriben amb el compte, com
+els calendaris. Google Tasks i Graph To Do continuen pendents.

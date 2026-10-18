@@ -9,9 +9,12 @@ import {
   discoverCalDav,
   type RemoteCalendar,
   createLocalCalendar,
+  offeredAsCalendar,
+  offeredAsTaskList,
   subscribeCalendar,
   type CalendarKind,
 } from '../../states/calendar'
+import { loadTaskLists } from '../../states/tasks'
 import { accounts$ } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
 import { Button } from '../button/Button'
@@ -47,13 +50,17 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState('')
   const [found, setFound] = useState<RemoteCalendar[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
+  // The server's task lists (ADR-0070): the ones that are, already ticked.
+  const [pickedTasks, setPickedTasks] = useState<string[]>([])
 
   const pool = kind === 'account' ? capable : accounts
   const chosen = pool.some((account) => account.id === accountId) ? accountId : (pool[0]?.id ?? '')
+  const foundCalendars = (found ?? []).filter(offeredAsCalendar)
+  const foundTaskLists = (found ?? []).filter(offeredAsTaskList)
 
   const invalid =
     kind === 'caldav'
-      ? !chosen || !server.trim() || (found !== null && picked.length === 0)
+      ? !chosen || !server.trim() || (found !== null && picked.length === 0 && pickedTasks.length === 0)
       : !name.trim() || !chosen || (kind === 'subscribed' && !isSubscriptionUrl(url))
 
   const submit = async () => {
@@ -65,7 +72,12 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
         if (found === null) {
           const calendars = await discoverCalDav(chosen, server.trim(), username.trim(), password)
           setFound(calendars)
-          setPicked(calendars.filter((calendar) => calendar.writable !== false).map((calendar) => calendar.url))
+          setPicked(
+            calendars
+              .filter((calendar) => offeredAsCalendar(calendar) && calendar.writable !== false)
+              .map((calendar) => calendar.url),
+          )
+          setPickedTasks(calendars.filter((calendar) => calendar.tasks === true).map((calendar) => calendar.url))
           setBusy(false)
           return
         }
@@ -73,8 +85,14 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
           chosen,
           username.trim(),
           password,
-          found.filter((calendar) => picked.includes(calendar.url)),
+          foundCalendars.filter((calendar) => picked.includes(calendar.url)),
+          {
+            chosen: pickedTasks,
+            declined: foundTaskLists.map((list) => list.url).filter((url) => !pickedTasks.includes(url)),
+            server: server.trim(),
+          },
         )
+        if (foundTaskLists.length > 0) void loadTaskLists()
         onClose()
         return
       }
@@ -215,12 +233,12 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
                   className="w-full"
                 />
               </Labelled>
-              {found !== null && (
+              {found !== null && foundCalendars.length > 0 && (
                 <fieldset className="flex flex-col gap-1.5">
                   <legend className="mb-1 ps-0.5 text-caption font-semibold text-secondary">
                     {t('calendar.foundCalendars', { defaultValue: 'Calendars on this server' })}
                   </legend>
-                  {found.map((calendar) => (
+                  {foundCalendars.map((calendar) => (
                     <label key={calendar.url} className="flex items-center gap-2 text-caption text-primary">
                       <input
                         type="checkbox"
@@ -238,6 +256,37 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
                         </span>
                       )}
                     </label>
+                  ))}
+                </fieldset>
+              )}
+              {found !== null && foundTaskLists.length > 0 && (
+                <fieldset className="flex flex-col gap-1.5">
+                  <legend className="mb-1 ps-0.5 text-caption font-semibold text-secondary">
+                    {t('calendar.foundTaskLists', { defaultValue: 'Task lists on this server' })}
+                  </legend>
+                  {foundTaskLists.map((list) => (
+                    <div key={list.url} className="flex flex-col gap-0.5">
+                      <label className="flex items-center gap-2 text-caption text-primary">
+                        <input
+                          type="checkbox"
+                          checked={pickedTasks.includes(list.url)}
+                          onChange={(e) =>
+                            setPickedTasks((lists) =>
+                              e.target.checked ? [...lists, list.url] : lists.filter((url) => url !== list.url),
+                            )
+                          }
+                        />
+                        <span>{list.name}</span>
+                      </label>
+                      {list.tasks === null && list.tasks_error && (
+                        <span className="ps-6 text-2xs text-secondary wrap-anywhere">
+                          {t('calendar.taskListUnknown', {
+                            error: list.tasks_error,
+                            defaultValue: 'Could not tell whether it holds tasks: {error}',
+                          })}
+                        </span>
+                      )}
+                    </div>
                   ))}
                 </fieldset>
               )}

@@ -16,6 +16,7 @@ afterEach(() => {
     loading: false,
     includeCompleted: false,
     lists: [],
+    accountLists: [],
     selectedList: 'all',
     search: '',
     syncing: false,

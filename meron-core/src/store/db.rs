@@ -526,7 +526,7 @@ fn config_dir() -> PathBuf {
 
 /// The schema this build writes: the last migration below. A store from a
 /// newer build is refused rather than opened (a restored archive included).
-pub const SCHEMA_VERSION: i64 = 65;
+pub const SCHEMA_VERSION: i64 = 66;
 
 /// Apply schema migrations in order, tracked by SQLite's `PRAGMA user_version`.
 ///
@@ -813,6 +813,12 @@ pub(super) fn run_migrations(conn: &Connection) -> Result<()> {
         super::contact_groups::migrate_member_addresses(&tx)?;
         crate::task_sync::exchange::migrate(&tx)?;
         tx.execute_batch(crate::folder_move::RENAMES_SCHEMA)?;
+        tx.pragma_update(None, "user_version", 65)?;
+    }
+    if version < 66 {
+        // The task lists that come with an account, and what the upgrade
+        // brings once (ADR-0070).
+        crate::task_sync::account_lists::migrate(&tx)?;
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
     }
 

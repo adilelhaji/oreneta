@@ -110,7 +110,10 @@ fn calendars_are_found_through_the_principal_with_their_rights_and_colours() {
     let server = Server::default();
     let found = discover(&server, "ana@dav.example").unwrap();
     assert_eq!(found.len(), 2, "the address book is not a calendar");
-    assert_eq!(found[0], RemoteCalendar { url: CAL.into(), name: "Work".into(), color: Some("#33AA55".into()), writable: Some(true) });
+    assert_eq!(
+        found[0],
+        RemoteCalendar { url: CAL.into(), name: "Work".into(), color: Some("#33AA55".into()), writable: Some(true), components: None }
+    );
     assert_eq!(found[1].name, "holidays");
     assert_eq!(found[1].writable, Some(false));
 }

@@ -19,7 +19,7 @@ import { clsx } from '../../lib/utils'
 import { dueStatus, formatDueDate } from '../../lib/date'
 import {
   MAIL_LIST,
-  addExchangeTaskList,
+  accountEntryOf,
   createTaskList,
   deleteTask,
   deleteTaskList,
@@ -27,6 +27,7 @@ import {
   listName,
   loadTaskLists,
   loadTasks,
+  onTaskListsChanged,
   renameTaskList,
   repeats,
   resolveTaskConflict,
@@ -34,9 +35,11 @@ import {
   syncTaskLists,
   taskTitle,
   tasks$,
+  waitingAccountLists,
   type Task,
   type TaskList,
 } from '../../states/tasks'
+import { AccountListNotices, AddAccountListMenu, WaitingAccountLists } from './AccountTaskLists'
 import { openMailAccount } from '../../states/kanban'
 import { accounts$ } from '../../states/accounts'
 import { confirmAction, showToast, ui$ } from '../../states/ui'
@@ -97,31 +100,23 @@ export function TasksView() {
   // this occurrence is done or the repetition is over (ADR-0053).
   const [choosing, setChoosing] = useState<number | null>(null)
   const syncing = useValue(tasks$.syncing)
+  const accountLists = useValue(tasks$.accountLists)
   const listsById = new Map(lists.map((list) => [list.id, list]))
-  // Exchange accounts whose Tasks folder is not a list yet (ADR-0058).
-  const accounts = useValue(accounts$)
-  const exchangeWithout = accounts.filter(
-    (account) => !!account.ews_url && !lists.some((list) => list.ews_account === account.id),
-  )
-  // One at a time: the first read of a folder can take a while.
-  const [addingExchange, setAddingExchange] = useState('')
-  const addExchange = (account: string, email: string) => {
-    setAddingExchange(account)
-    addExchangeTaskList(account, email)
-      .catch((error) =>
-        showToast(error instanceof Error ? error.message : t('tasks.syncFailed', { defaultValue: 'Sync failed' }), 'error'),
-      )
-      .finally(() => setAddingExchange(''))
-  }
+  // An account whose lists have not been read is never «no tasks» (ADR-0070).
+  const waiting = waitingAccountLists(accountLists)
 
   useEffect(() => {
     if (!loaded) void loadTasks()
   }, [loaded])
   useEffect(() => {
-    // Lists kept on a server are synced each time the view opens (ADR-0039).
+    // Lists kept on a server are synced each time the view opens (ADR-0039),
+    // and the accounts' lists that wait are read then (ADR-0070).
     void loadTaskLists().then(() => {
-      if (tasks$.lists.get().some(isRemoteList)) void syncTaskLists()
+      if (tasks$.lists.get().some(isRemoteList) || waitingAccountLists(tasks$.accountLists.get()).length > 0)
+        void syncTaskLists()
     })
+    // A list of an account read behind the view arrives while it is open.
+    return onTaskListsChanged(() => void Promise.all([loadTaskLists(), loadTasks()]))
   }, [])
 
   const needle = search.trim().toLowerCase()
@@ -152,9 +147,25 @@ export function TasksView() {
 
   const removeList = async () => {
     if (!current) return
+    // A list of an account does not come back on its own, and is added
+    // again from «Afegeix una llista»; only a CalDAV one has a password of
+    // its own to say goes with it (ADR-0070, §5).
+    const ofAccount = !!accountEntryOf(accountLists, current.id)
     const confirmed = await confirmAction({
       title: t('tasks.deleteListTitle', { defaultValue: 'Delete list?' }),
-      message: isRemoteList(current)
+      message: ofAccount
+        ? current.remote_url
+          ? t('tasks.deleteAccountListPasswordText', {
+              name: current.name,
+              defaultValue:
+                '{name} and its tasks will be removed from this computer, with its saved password. Nothing is deleted on the server. It does not come back on its own: add it again from “Add a list”.',
+            })
+          : t('tasks.deleteAccountListText', {
+              name: current.name,
+              defaultValue:
+                '{name} and its tasks will be removed from this computer. Nothing is deleted on the server. It does not come back on its own: add it again from “Add a list”.',
+            })
+        : isRemoteList(current)
         ? t('tasks.deleteRemoteListText', {
             name: current.name,
             defaultValue:
@@ -285,18 +296,7 @@ export function TasksView() {
         >
           + {t('tasks.addCalDavList', { defaultValue: 'CalDAV task list…' })}
         </button>
-        {exchangeWithout.map((account) => (
-          <button
-            key={account.id}
-            type="button"
-            onClick={() => addExchange(account.id, account.email)}
-            disabled={!!addingExchange}
-            aria-busy={addingExchange === account.id}
-            className="rounded-control-sm px-2 py-1 text-caption text-secondary hover:bg-hover cursor-pointer disabled:cursor-wait disabled:opacity-50"
-          >
-            + {t('tasks.addExchangeList', { email: account.email, defaultValue: 'Exchange tasks of {email}' })}
-          </button>
-        ))}
+        <AddAccountListMenu entries={accountLists} />
         {current && current.id !== MAIL_LIST && (
           <span className="ms-auto flex gap-1">
             <button
@@ -329,10 +329,20 @@ export function TasksView() {
       {current && isRemoteList(current) && (
         <SyncStatus list={current} syncing={syncing} onSync={() => void syncTaskLists(current.id)} />
       )}
+      <WaitingAccountLists entries={accountLists} syncing={syncing} />
+      <AccountListNotices entries={accountLists} lists={lists} />
       {addingCalDav && <CalDavTaskListDialog onClose={() => setAddingCalDav(false)} />}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!loaded && loading ? (
           <LoadingState title={t('tasks.loading')} />
+        ) : shown.length === 0 && waiting.length > 0 && selectedList === 'all' ? (
+          // Not read yet is not «no tasks» (ADR-0070, §3).
+          <EmptyState
+            title={t('tasks.notReadYet', { defaultValue: 'The tasks of some accounts have not been read yet' })}
+            text={t('tasks.notReadYetText', {
+              defaultValue: 'They show here once they are read. What stops them, if anything, is said above.',
+            })}
+          />
         ) : shown.length === 0 ? (
           <EmptyState title={t('tasks.emptyTitle')} text={t('tasks.emptyText')} />
         ) : (

@@ -28,6 +28,39 @@ pub struct RemoteCalendar {
     pub color: Option<String>,
     /// What `current-user-privilege-set` says, when the server says.
     pub writable: Option<bool>,
+    /// What `supported-calendar-component-set` says (ADR-0070): "VEVENT",
+    /// "VTODO"… `None` when the server did not say, which means every one.
+    pub components: Option<Vec<String>>,
+}
+
+impl RemoteCalendar {
+    /// Whether it takes events: it says so, or it does not say.
+    pub fn takes_events(&self) -> bool {
+        self.components.as_ref().is_none_or(|kinds| kinds.iter().any(|kind| kind == "VEVENT"))
+    }
+
+    /// Whether it can hold an account's task list, by what it declares
+    /// (ADR-0070, §1).
+    pub fn task_kind(&self) -> TaskKind {
+        match &self.components {
+            None => TaskKind::Maybe,
+            Some(kinds) if !kinds.iter().any(|kind| kind == "VTODO") => TaskKind::No,
+            Some(kinds) if kinds.iter().all(|kind| kind == "VTODO") => TaskKind::Only,
+            Some(_) => TaskKind::Maybe,
+        }
+    }
+}
+
+/// Whether a collection is an account's task list (ADR-0070, §1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskKind {
+    /// It takes tasks only: it is one.
+    Only,
+    /// It takes events and tasks, or does not say: it is one only if it
+    /// holds a task already, which [`has_todos`] asks.
+    Maybe,
+    /// It takes no tasks.
+    No,
 }
 
 /// One stored object: an event (with its exceptions), where it lives and
@@ -47,9 +80,12 @@ const PROP_HOME_SET: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   <d:prop><c:calendar-home-set/></d:prop></d:propfind>"#;
 
 const PROP_CALENDARS: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:a="http://apple.com/ns/ical/">
-  <d:prop><d:resourcetype/><d:displayname/><a:calendar-color/><d:current-user-privilege-set/></d:prop>
+<d:propfind xmlns:d="DAV:" xmlns:a="http://apple.com/ns/ical/" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:resourcetype/><d:displayname/><a:calendar-color/><d:current-user-privilege-set/><c:supported-calendar-component-set/></d:prop>
 </d:propfind>"#;
+
+const PROP_NAME: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:"><d:prop><d:displayname/></d:prop></d:propfind>"#;
 
 /// Finds the calendars a server holds for whoever signs in. Like CardDAV
 /// discovery, each step falls back rather than failing, and nothing is
@@ -121,6 +157,7 @@ pub fn discover(transport: &dyn Transport, input: &str) -> Result<Vec<RemoteCale
                         .map(|c| c.trim().chars().take(7).collect::<String>())
                         .filter(|c| c.starts_with('#') && c.len() == 7),
                     writable,
+                    components: response.components.clone(),
                     url,
                 });
             }
@@ -164,6 +201,46 @@ pub fn fetch_todos(transport: &dyn Transport, calendar_url: &str) -> Result<Vec<
   <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/></c:comp-filter></c:filter>
 </c:calendar-query>"#;
     query(transport, calendar_url, body.to_string(), "tasks")
+}
+
+/// Whether a collection holds at least one task (ADR-0070, §1): the
+/// question asked of one that takes events and tasks, or does not say. Only
+/// versions are asked for, not the tasks. An answer that cannot be read is
+/// an error, never a "no".
+pub fn has_todos(transport: &dyn Transport, calendar_url: &str) -> Result<bool> {
+    let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:getetag/></d:prop>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/></c:comp-filter></c:filter>
+</c:calendar-query>"#;
+    let reply = transport.send(&DavRequest {
+        method: "REPORT",
+        url: calendar_url.to_string(),
+        depth: Some("1"),
+        body: Some(body.to_string()),
+        ..Default::default()
+    })?;
+    match reply.status {
+        401 | 403 => bail!("the server refused those credentials"),
+        404 | 410 => bail!("this calendar is no longer on the server"),
+        status if status >= 300 => bail!("the server would not say whether the calendar holds tasks (HTTP {status})"),
+        _ => {}
+    }
+    Ok(parse_multistatus_complete(&reply.body)?.iter().any(|response| !is_the_book(response, calendar_url)))
+}
+
+/// What the server calls a collection, or a name made from its address
+/// when it gives none. A name is not worth failing a read over: an answer
+/// that cannot be read gives the name from the address too.
+pub fn collection_name(transport: &dyn Transport, calendar_url: &str) -> String {
+    propfind(transport, calendar_url, "0", PROP_NAME)
+        .ok()
+        .and_then(|(responses, _)| {
+            responses
+                .iter()
+                .find_map(|response| response.prop("displayname").map(str::trim).filter(|name| !name.is_empty()).map(str::to_string))
+        })
+        .unwrap_or_else(|| name_from_url(calendar_url))
 }
 
 /// A calendar query, every object in the answer or an error. An object on

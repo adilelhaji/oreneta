@@ -147,6 +147,9 @@ func TestSidecarCallTimeouts(t *testing.T) {
 		"tasks.exchangeAdd":     60 * time.Second,
 		"tasks.resolveConflict": 60 * time.Second,
 		"tasks.sync":            5 * time.Minute,
+		// CalDAV discovery asks the collections that may hold tasks (ADR-0070).
+		"caldav.discover": 3 * time.Minute,
+		"caldav.add":      60 * time.Second,
 		// Exchange contacts and distribution lists (ADR-0058).
 		"exchange.contacts.sync": 2 * time.Hour,
 		"people.groupSave":       60 * time.Second,

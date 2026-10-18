@@ -70,6 +70,80 @@ it('finds the calendars on a CalDAV server and keeps only the ones chosen', asyn
   expect(added.calendars.map((c: any) => c.name)).toEqual(['Work'])
 })
 
+// ADR-0070: the server's task lists come with it, already ticked.
+it('offers the server’s task lists ticked, and sends the unticked ones as not wanted', async () => {
+  const found = [
+    { url: 'https://dav.example/a/work/', name: 'Work', color: null, writable: true, components: ['VEVENT'], events: true, tasks: false },
+    { url: 'https://dav.example/a/chores/', name: 'Chores', color: null, writable: true, components: ['VTODO'], events: false, tasks: true },
+    { url: 'https://dav.example/a/family/', name: 'Family', color: null, writable: true, components: null, events: true, tasks: true },
+    {
+      url: 'https://dav.example/a/odd/',
+      name: 'Odd',
+      color: null,
+      writable: true,
+      components: ['VEVENT', 'VTODO'],
+      events: true,
+      tasks: null,
+      tasks_error: 'the server would not say (HTTP 500)',
+    },
+  ]
+  const calls = bridge((command) => {
+    if (command === 'caldav.discover') return { calendars: found }
+    if (command === 'caldav.add') return { ids: [] }
+    if (command === 'calendar.list') return { calendars: [] }
+    if (command === 'tasks.lists') return { lists: [], account_lists: [] }
+    return {}
+  })
+  let closed = 0
+  const view = render(<NewCalendarDialog onClose={() => closed++} />)
+  fireEvent.click(view.getByRole('radio', { name: 'CalDAV server' }))
+  fireEvent.change(view.getByLabelText('Server or address'), { target: { value: 'dav.example' } })
+  fireEvent.click(view.getByRole('button', { name: 'Find calendars' }))
+  await waitFor(() => expect(view.getByText('Task lists on this server')).toBeTruthy())
+  const lists = view.getByText('Task lists on this server').closest('fieldset')!
+  const calendars = view.getByText('Calendars on this server').closest('fieldset')!
+  expect(calendars.textContent).not.toContain('Chores')
+  expect(lists.textContent).not.toContain('Work')
+  const box = (within: HTMLElement, name: string) =>
+    Array.from(within.querySelectorAll('label')).find((label) => label.textContent?.includes(name))!.querySelector('input')!
+  expect(box(lists, 'Chores').checked).toBe(true)
+  expect(box(lists, 'Family').checked).toBe(true)
+  expect(box(lists, 'Odd').checked).toBe(false)
+  expect(lists.textContent).toContain('Could not tell whether it holds tasks: the server would not say (HTTP 500)')
+  fireEvent.click(box(lists, 'Family'))
+
+  fireEvent.click(view.getByRole('button', { name: 'Add' }))
+  await waitFor(() => expect(closed).toBe(1))
+  const added = calls.find((c) => c.command === 'caldav.add')!.payload
+  expect(added.calendars.map((c: any) => c.name)).toEqual(['Work', 'Family', 'Odd'])
+  expect(added.task_lists).toEqual(['https://dav.example/a/chores/'])
+  expect(added.declined_task_lists).toEqual(['https://dav.example/a/family/', 'https://dav.example/a/odd/'])
+  expect(added.server).toBe('dav.example')
+})
+
+it('adds a server that keeps only task lists', async () => {
+  const chores = { url: 'https://dav.example/a/chores/', name: 'Chores', color: null, writable: true, components: ['VTODO'], events: false, tasks: true }
+  const calls = bridge((command) => {
+    if (command === 'caldav.discover') return { calendars: [chores] }
+    if (command === 'caldav.add') return { ids: [] }
+    if (command === 'calendar.list') return { calendars: [] }
+    if (command === 'tasks.lists') return { lists: [], account_lists: [] }
+    return {}
+  })
+  let closed = 0
+  const view = render(<NewCalendarDialog onClose={() => closed++} />)
+  fireEvent.click(view.getByRole('radio', { name: 'CalDAV server' }))
+  fireEvent.change(view.getByLabelText('Server or address'), { target: { value: 'dav.example' } })
+  fireEvent.click(view.getByRole('button', { name: 'Find calendars' }))
+  await waitFor(() => expect(view.getByText('Task lists on this server')).toBeTruthy())
+  expect(view.queryByText('Calendars on this server')).toBeNull()
+  fireEvent.click(view.getByRole('button', { name: 'Add' }))
+  await waitFor(() => expect(closed).toBe(1))
+  const added = calls.find((c) => c.command === 'caldav.add')!.payload
+  expect((added.calendars as unknown[]).length).toBe(0)
+  expect(added.task_lists).toEqual([chores.url])
+})
+
 it('says why the server was not reached and keeps the dialog open', async () => {
   bridge((command) => {
     if (command === 'caldav.discover') throw new Error('the server refused those credentials')

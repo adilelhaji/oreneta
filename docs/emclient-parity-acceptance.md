@@ -88,6 +88,17 @@ El 2026-10-17 (#277, ADR-0047 esmenada el 2026-10-18, `docs/design/quicktext-pla
 signatura a les respostes i els reenviaments: amb el text propi (com fins ara), damunt de la citació o sota la
 citació, com a preferència local (`signature_placement`). Cap fila no canvia d'estat: SET-10
 es manté `implemented-unverified` i l'evidència nativa de Windows continua pendent.
+El 2026-10-18 (#281, ADR-0070) SET-20 va incorporar les llistes de tasques que arriben amb
+el compte, com els calendaris: la carpeta Tasques d'un compte d'Exchange i les col·leccions
+de tasques d'un servidor CalDAV que s'afegeix a un compte (les que només admeten tasques, i
+les que admeten esdeveniments i tasques si ja en tenen alguna). Cada llista es llegeix
+sencera i després es crea, en una transacció que torna a comprovar que el compte existeix i
+que la llista encara és pendent. Una llista que no s'ha llegit no es mostra mai com a «Cap
+tasca». Una llista suprimida queda declinada i no torna. En actualitzar, les llistes dels
+comptes existents s'activen una vegada, amb un avís («Treu-la», «D'acord»); una llista
+suprimida abans d'aquesta versió pot tornar una vegada (decisió 1 del propietari). Està
+provat amb respostes CalDAV i SOAP enregistrades i amb Radicale. SET-20 es manté `partial`
+(falten Google Tasks i To Do de Graph), i l'evidència nativa de Windows continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

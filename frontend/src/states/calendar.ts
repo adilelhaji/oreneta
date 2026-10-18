@@ -1002,8 +1002,29 @@ export async function createLocalCalendar(accountId: string, name: string): Prom
   return res.id
 }
 
-/// A calendar collection found on a CalDAV server (#101, ADR-0018).
-export type RemoteCalendar = { url: string; name: string; color: string | null; writable: boolean | null }
+/// A calendar collection found on a CalDAV server (#101, ADR-0018), with what
+/// it takes (ADR-0070): `events`, and `tasks`, whether it is one of the
+/// account's task lists; `null` with `tasks_error` when that could not be
+/// told.
+export type RemoteCalendar = {
+  url: string
+  name: string
+  color: string | null
+  writable: boolean | null
+  components?: string[] | null
+  events?: boolean
+  tasks?: boolean | null
+  tasks_error?: string
+}
+
+/// Whether a collection is offered as a calendar: it takes events, or did
+/// not say.
+export const offeredAsCalendar = (collection: RemoteCalendar) => collection.events !== false
+
+/// Whether a collection is offered as one of the account's task lists: it
+/// is one, or it could not be told (offered unchecked, with the reason).
+export const offeredAsTaskList = (collection: RemoteCalendar) =>
+  collection.tasks === true || (collection.tasks === null && !!collection.tasks_error)
 
 /// Asks a CalDAV server which calendars it holds for this sign-in. The account
 /// it will be kept under decides the route the request takes (its own proxy,
@@ -1023,15 +1044,26 @@ export async function discoverCalDav(
   return res?.calendars ?? []
 }
 
-/// Keeps the chosen CalDAV calendars, listed under an account. The password
-/// goes to the system keychain, one entry per calendar.
+/// Keeps the chosen CalDAV calendars, listed under an account, and the
+/// server's task lists chosen (ADR-0070): those are read behind the answer,
+/// and the ones left unchecked are remembered as not wanted. The password
+/// goes to the system keychain, one entry per calendar and per list.
 export async function addCalDav(
   accountId: string,
   username: string,
   password: string,
   calendars: RemoteCalendar[],
+  taskLists: { chosen: string[]; declined: string[]; server: string } = { chosen: [], declined: [], server: '' },
 ): Promise<string[]> {
-  const res = await invoke<{ ids: string[] }>('caldav.add', { account: accountId, username, password, calendars })
+  const res = await invoke<{ ids: string[] }>('caldav.add', {
+    account: accountId,
+    username,
+    password,
+    calendars,
+    ...(taskLists.chosen.length > 0 || taskLists.declined.length > 0
+      ? { task_lists: taskLists.chosen, declined_task_lists: taskLists.declined, server: taskLists.server }
+      : {}),
+  })
   await loadCalendars()
   return res?.ids ?? []
 }
