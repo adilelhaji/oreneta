@@ -148,6 +148,18 @@ d'accent sòlid i els radis de 4/6/8/12 px. Els temes personalitzats desats cons
 seus colors i s'hi afegeix la vora de camp derivada. Vuit temes integrats mantenen l'accent per
 sota de 4,5:1 com a text, com abans; corregir-ho espera la decisió del propietari. Cap
 fila no canvia d'estat: l'evidència nativa de Windows continua pendent.
+El 2026-10-18 (#270, ADR-0071) cada compte de correu va incorporar l'interval de
+comprovació («Només manualment» o cada 5, 10, 15, 30, 60 o 120 minuts): els comptes
+nous comencen amb 15 minuts i els que ja existien es comproven només manualment. El
+nucli l'aplica a les carpetes seleccionables que la notificació del servidor (IDLE) no
+cobreix, sense Paperera, Correu brossa ni «Tots» de Gmail; als comptes Exchange i Graph,
+que no en tenen, també la safata d'entrada, i als POP3, només la safata d'entrada. IDLE
+continua igual sigui quin sigui l'interval. El correu nou de la safata d'entrada que arriba
+així passa per les regles i per la resposta automàtica d'absència; el de POP3 només es
+notifica com a correu nou. La comprovació amb un servidor no té cap prova automàtica. Vegeu
+[mail-check-interval.md](design/mail-check-interval.md). Cap fila no canvia d'estat: no hi ha
+cap fila de sincronització, S15-01 (POP3) es manté `implemented-unverified` i GRAPH-01
+`partial`, i l'evidència nativa de Windows (N4) i amb servidors reals (N5) continua pendent.
 
 | Row | Issue | Section | Status | N | P |
 |---|---|---|---|---|---|

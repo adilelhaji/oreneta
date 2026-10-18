@@ -42,6 +42,14 @@ type Account struct {
 	// accepted, if any, so a reconnect keeps them instead of re-asking.
 	CertPin     string `json:"cert_pin,omitempty"`
 	SMTPCertPin string `json:"smtp_cert_pin,omitempty"`
+	// MailCheckIntervalMinutes is how often a mail account is checked for
+	// what push does not cover, 0 = manual only (#270). A pointer so an
+	// account the engine did not report it for (RSS) stays without one rather
+	// than reading as "manual only".
+	MailCheckIntervalMinutes *int `json:"mail_check_interval_minutes,omitempty"`
+	// RSSSyncIntervalMinutes is an RSS account's refresh interval. Dropped by
+	// this struct before #270, so the desktop always showed the default.
+	RSSSyncIntervalMinutes *int `json:"rss_sync_interval_minutes,omitempty"`
 }
 
 // Alias is a send-as identity for an account: an address the user owns plus an

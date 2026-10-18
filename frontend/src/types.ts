@@ -62,6 +62,9 @@ export type Account = {
   ews_exchange_online?: boolean
   /** RSS automatic sync interval in minutes (default 60). */
   rss_sync_interval_minutes?: number
+  /** Mail accounts: periodic check interval in minutes for what push does not
+   * cover, 0 = manual only (#270). */
+  mail_check_interval_minutes?: number
   feed_url?: string
   sender_name?: string
   /** Additional send-as addresses (besides the primary `email`). */
