@@ -2835,5 +2835,10 @@
   "search.scope.unified": "Αναζητά στο «{folder}»: αυτόν τον φάκελο σε κάθε λογαριασμό των ενοποιημένων φακέλων, ακόμη κι αν είναι κρυφός.",
   "search.scope.folder": "Αναζητά μόνο στο «{folder}». Οι κρυφοί φάκελοι δεν περιλαμβάνονται.",
   "search.scope.hiddenFolder": "Αναζητά μόνο στο «{folder}», έναν κρυφό φάκελο.",
-  "search.scope.unifiedInbox": "Αναζητά στο «{folder}»: τα εισερχόμενα κάθε λογαριασμού των ενοποιημένων φακέλων."
+  "search.scope.unifiedInbox": "Αναζητά στο «{folder}»: τα εισερχόμενα κάθε λογαριασμού των ενοποιημένων φακέλων.",
+  "settings.signature.placement": "Σε απαντήσεις και προωθήσεις",
+  "settings.signature.placementHint": "Πού μπαίνει η υπογραφή σε σχέση με το παράθεμα του αρχικού",
+  "settings.signature.placementWithText": "Μαζί με όσα γράφω",
+  "settings.signature.placementAbove": "Πάνω από το παράθεμα",
+  "settings.signature.placementBelow": "Κάτω από το παράθεμα"
 }

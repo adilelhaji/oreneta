@@ -2835,5 +2835,10 @@
   "search.scope.unified": "Meklē mapē “{folder}”: šajā mapē katrā apvienotajās mapēs iekļautajā kontā, arī tad, ja tā ir paslēpta.",
   "search.scope.folder": "Meklē tikai mapē “{folder}”. Paslēptās mapes netiek iekļautas.",
   "search.scope.hiddenFolder": "Meklē tikai mapē “{folder}”, kas ir paslēpta.",
-  "search.scope.unifiedInbox": "Meklē mapē “{folder}”: katra apvienotajās mapēs iekļautā konta iesūtnē."
+  "search.scope.unifiedInbox": "Meklē mapē “{folder}”: katra apvienotajās mapēs iekļautā konta iesūtnē.",
+  "settings.signature.placement": "Atbildēs un pārsūtījumos",
+  "settings.signature.placementHint": "Kur paraksts atrodas attiecībā pret citēto oriģinālu",
+  "settings.signature.placementWithText": "Kopā ar manu tekstu",
+  "settings.signature.placementAbove": "Virs citāta",
+  "settings.signature.placementBelow": "Zem citāta"
 }
