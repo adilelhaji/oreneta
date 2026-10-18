@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Calendari su questo server",
   "calendar.foundTaskLists": "Elenchi di attività su questo server",
   "calendar.taskListUnknown": "Impossibile sapere se contiene attività: {error}",
+  "calendar.taskListDeclined": "Hai rimosso questo elenco. Aggiungilo di nuovo da «Aggiungi un elenco», in Attività.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Importa",
   "calendar.importFailed": "Il file di calendario non è stato importato",

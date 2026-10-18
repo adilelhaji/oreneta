@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Calendaris d'aquest servidor",
   "calendar.foundTaskLists": "Llistes de tasques d'aquest servidor",
   "calendar.taskListUnknown": "No s'ha pogut saber si té tasques: {error}",
+  "calendar.taskListDeclined": "Vas suprimir aquesta llista. La pots tornar a afegir des d'«Afegeix una llista», a Tasques.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Importa",
   "calendar.importFailed": "No s'ha importat el fitxer de calendari",

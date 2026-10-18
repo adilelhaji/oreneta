@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Kalendrar på den här servern",
   "calendar.foundTaskLists": "Uppgiftslistor på den här servern",
   "calendar.taskListUnknown": "Det gick inte att avgöra om den innehåller uppgifter: {error}",
+  "calendar.taskListDeclined": "Du tog bort den här listan. Lägg till den igen från ”Lägg till en lista” i Uppgifter.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Importera",
   "calendar.importFailed": "Kalenderfilen importerades inte",

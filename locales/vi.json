@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Lịch trên máy chủ này",
   "calendar.foundTaskLists": "Danh sách tác vụ trên máy chủ này",
   "calendar.taskListUnknown": "Không thể biết nó có chứa tác vụ hay không: {error}",
+  "calendar.taskListDeclined": "Bạn đã gỡ danh sách này. Hãy thêm lại từ “Thêm danh sách” trong Tác vụ.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Nhập",
   "calendar.importFailed": "Không nhập được tệp lịch",

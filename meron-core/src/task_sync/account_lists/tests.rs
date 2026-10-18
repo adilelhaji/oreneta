@@ -193,7 +193,7 @@ fn choose(db: &Mutex<Connection>, wanted: &[&str], declined: &[&str]) -> Choice 
 }
 
 fn link(db: &Mutex<Connection>, dav: &Dav, url: &str, mode: Mode) -> Result<Linked> {
-    link_collection(db, dav, &collection(url), mode, 10)
+    link_collection(db, dav, &collection(url), mode, &|| Ok(()), 10)
 }
 
 #[test]
@@ -260,14 +260,27 @@ fn a_chosen_collection_is_read_whole_and_then_made_with_its_tasks() {
 
     let target = collection(TASKS);
     let watcher = db.clone();
+    let kept = std::rc::Rc::new(std::cell::Cell::new(false));
+    let seen = kept.clone();
     *dav.during_read.borrow_mut() = Some(Box::new(move || {
-        // While the read is on the network, no list exists yet: an
-        // interrupted read leaves no list half made.
+        // While the read is on the network, no list exists yet and no
+        // password of its own is kept: an interrupted read leaves neither.
         let conn = watcher.lock().unwrap();
         let made: i64 = conn.query_row("SELECT COUNT(*) FROM task_lists WHERE remote_url <> ''", [], |row| row.get(0)).unwrap();
         assert_eq!(made, 0);
+        assert!(!seen.get());
     }));
-    assert_eq!(link_collection(&db, &dav, &target, Mode::Retry, 10).unwrap(), Linked::Made(target.list_id.clone()));
+    let made_yet = db.clone();
+    let keep = || -> Result<()> {
+        // Kept after the read and before the list is written.
+        let made: i64 =
+            made_yet.lock().unwrap().query_row("SELECT COUNT(*) FROM task_lists WHERE remote_url <> ''", [], |row| row.get(0))?;
+        assert_eq!(made, 0);
+        kept.set(true);
+        Ok(())
+    };
+    assert_eq!(link_collection(&db, &dav, &target, Mode::Retry, &keep, 10).unwrap(), Linked::Made(target.list_id.clone()));
+    assert!(kept.get());
     assert_eq!(lists(&db), [(target.list_id.clone(), "Feina".to_string(), TASKS.to_string())]);
     assert_eq!(task_count(&db, &target.list_id), 2);
     let linked = entry_for(&db, TASKS).unwrap();
@@ -572,4 +585,54 @@ fn the_password_goes_only_to_the_collections_origin() {
     assert!(record_choice(&nobody.lock().unwrap(), "nobody@x", "ana", &[], &wanted, &[], 1).is_err(), "no account, no list");
     assert_eq!(record_choice(&nobody.lock().unwrap(), "nobody@x", "ana", &[ORIGIN.to_string()], &[], &[], 1).unwrap(), Choice::default());
     assert!(entries(&nobody.lock().unwrap()).unwrap().is_empty(), "nothing kept for an account that is not here");
+}
+
+#[test]
+fn adding_the_server_again_from_the_dialog_does_not_bring_a_declined_list_back() {
+    let (db, dav) = (store(), Dav::new());
+    choose(&db, &[TASKS], &[]);
+    let Linked::Made(list) = link(&db, &dav, TASKS, Mode::Retry).unwrap() else { panic!("not made") };
+    delete_list(&db.lock().unwrap(), &list, 20).unwrap();
+    // The dialog offers the server's lists again, and the person keeps them ticked.
+    let again = choose(&db, &[TASKS], &[]);
+    assert_eq!(again.still_declined, [TASKS]);
+    assert!(again.to_read.is_empty());
+    assert_eq!(entry_for(&db, TASKS).unwrap().state, "declined", "only «Afegeix una llista» brings it back");
+}
+
+#[test]
+fn a_password_is_kept_only_once_the_read_is_whole() {
+    let (db, dav) = (store(), Dav::new());
+    choose(&db, &[TASKS], &[]);
+    *dav.refuse.borrow_mut() = Some(500);
+    let kept = std::cell::Cell::new(false);
+    let keep = || -> Result<()> {
+        kept.set(true);
+        Ok(())
+    };
+    assert!(link_collection(&db, &dav, &collection(TASKS), Mode::Retry, &keep, 10).is_err());
+    assert!(!kept.get(), "a read that failed keeps no password");
+    // One that cannot be kept makes no list, and the entry says why.
+    *dav.refuse.borrow_mut() = None;
+    let refuse = || -> Result<()> { bail!("the keychain is locked") };
+    assert!(link_collection(&db, &dav, &collection(TASKS), Mode::Retry, &refuse, 10).is_err());
+    assert!(lists(&db).is_empty());
+    assert!(entry_for(&db, TASKS).unwrap().last_error.contains("the keychain is locked"));
+}
+
+#[test]
+fn a_waiting_list_linked_by_hand_meanwhile_is_adopted_not_doubled() {
+    let (db, dav) = (store(), Dav::new());
+    choose(&db, &[TASKS], &[]);
+    let mine = crate::task_sync::add_list(&db.lock().unwrap(), "Meva", TASKS, "", "ana", 1).unwrap();
+    dav.log.borrow_mut().clear();
+    assert_eq!(link(&db, &dav, TASKS, Mode::Retry).unwrap(), Linked::Made(mine.clone()));
+    assert!(dav.log.borrow().is_empty(), "nothing to read: the list is here");
+    let adopted = entry_for(&db, TASKS).unwrap();
+    assert_eq!((adopted.state.as_str(), adopted.list_id.as_str(), adopted.adopted), ("linked", mine.as_str(), true));
+    assert_eq!(lists(&db).len(), 1);
+    // Added again by hand it is refused instead: it is here already.
+    let (db, dav) = (store(), Dav::new());
+    crate::task_sync::add_list(&db.lock().unwrap(), "Meva", TASKS, "", "ana", 1).unwrap();
+    assert!(link(&db, &dav, TASKS, Mode::ByHand).is_err());
 }

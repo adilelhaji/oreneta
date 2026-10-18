@@ -40,7 +40,7 @@
   `account_task_lists` diu, per a cada compte, quines llistes té i en quin
   estat són: pendents de llegir, enllaçades, declinades o, per als servidors
   CalDAV, ja llistades. Un compte d'Exchange nou hi desa la seva entrada a la
-  mateixa transacció que el compte. `tasks.lists` torna aquestes entrades a
+  mateixa transacció que el compte. `tasks.lists` retorna aquestes entrades a
   `account_lists`, i `tasks.deleteList` declina la d'una llista del compte,
   de manera que no torna sola. El detall és a
   [caldav-tasks.md](caldav-tasks.md#llistes-que-arriben-amb-el-compte-281-adr-0070).

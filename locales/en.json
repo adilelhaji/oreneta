@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Calendars on this server",
   "calendar.foundTaskLists": "Task lists on this server",
   "calendar.taskListUnknown": "Could not tell whether it holds tasks: {error}",
+  "calendar.taskListDeclined": "You removed this list. Add it again from “Add a list” in Tasks.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Import",
   "calendar.importFailed": "The calendar file was not imported",

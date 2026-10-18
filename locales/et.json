@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Selle serveri kalendrid",
   "calendar.foundTaskLists": "Selle serveri ülesandeloendid",
   "calendar.taskListUnknown": "Ei õnnestunud teada saada, kas selles on ülesandeid: {error}",
+  "calendar.taskListDeclined": "Sa eemaldasid selle loendi. Lisa see uuesti ülesannetes menüüst „Lisa loend”.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Impordi",
   "calendar.importFailed": "Kalendrifaili ei imporditud",

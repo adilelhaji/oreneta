@@ -84,7 +84,7 @@ export type AccountTaskList = {
    * list the upgrade added on its own. */
   notified: boolean
   last_error: string
-  kind: 'ews' | 'caldav' | 'caldav-server'
+  kind: 'ews' | 'caldav' | 'caldav-server' | 'unknown'
   /** The collection's address, or the server's origin; empty for Exchange. */
   url: string
 }
@@ -160,7 +160,7 @@ export function upgradeNotices(entries: AccountTaskList[]): AccountTaskList[] {
 
 /** What «Afegeix una llista» offers: the accounts' declined lists. */
 export function declinedAccountLists(entries: AccountTaskList[]): AccountTaskList[] {
-  return entries.filter((entry) => entry.state === 'declined' && entry.kind !== 'caldav-server')
+  return entries.filter((entry) => entry.state === 'declined' && (entry.kind === 'ews' || entry.kind === 'caldav'))
 }
 
 /** The account entry of a list, when it came with one. */

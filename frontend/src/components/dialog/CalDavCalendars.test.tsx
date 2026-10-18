@@ -117,8 +117,46 @@ it('offers the server’s task lists ticked, and sends the unticked ones as not 
   const added = calls.find((c) => c.command === 'caldav.add')!.payload
   expect(added.calendars.map((c: any) => c.name)).toEqual(['Work', 'Family', 'Odd'])
   expect(added.task_lists).toEqual(['https://dav.example/a/chores/'])
-  expect(added.declined_task_lists).toEqual(['https://dav.example/a/family/', 'https://dav.example/a/odd/'])
+  // Unticked by the person: not wanted. One whose tasks could not be told
+  // is no decision of theirs.
+  expect(added.declined_task_lists).toEqual(['https://dav.example/a/family/'])
   expect(added.server).toBe('dav.example')
+})
+
+it('shows a task list the person removed before as removed, not ticked', async () => {
+  const chores = { url: 'https://dav.example/a/chores/', name: 'Chores', color: null, writable: true, components: ['VTODO'], events: false, tasks: true }
+  const removed = {
+    account: 'a@example.test',
+    source: 'caldav:https://dav.example/a/chores/',
+    state: 'declined',
+    list_id: '',
+    adopted: false,
+    notified: true,
+    last_error: '',
+    kind: 'caldav',
+    url: 'https://DAV.example/a/chores',
+  }
+  const calls = bridge((command) => {
+    if (command === 'caldav.discover') return { calendars: [chores, { ...chores, url: 'https://dav.example/a/home/', name: 'Home' }] }
+    if (command === 'caldav.add') return { ids: [] }
+    if (command === 'calendar.list') return { calendars: [] }
+    if (command === 'tasks.lists') return { lists: [], account_lists: [removed] }
+    return {}
+  })
+  let closed = 0
+  const view = render(<NewCalendarDialog onClose={() => closed++} />)
+  fireEvent.click(view.getByRole('radio', { name: 'CalDAV server' }))
+  fireEvent.change(view.getByLabelText('Server or address'), { target: { value: 'dav.example' } })
+  fireEvent.click(view.getByRole('button', { name: 'Find calendars' }))
+  await waitFor(() => expect(view.getByText(/You removed this list/)).toBeTruthy())
+  const box = view.getByRole('checkbox', { name: 'Chores' }) as HTMLInputElement
+  expect(box.checked).toBe(false)
+  expect(box.disabled).toBe(true)
+  fireEvent.click(view.getByRole('button', { name: 'Add' }))
+  await waitFor(() => expect(closed).toBe(1))
+  const added = calls.find((c) => c.command === 'caldav.add')!.payload
+  expect(added.task_lists).toEqual(['https://dav.example/a/home/'])
+  expect(added.declined_task_lists).toEqual([])
 })
 
 it('adds a server that keeps only task lists', async () => {

@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Kalendāri šajā serverī",
   "calendar.foundTaskLists": "Uzdevumu saraksti šajā serverī",
   "calendar.taskListUnknown": "Neizdevās noskaidrot, vai tajā ir uzdevumi: {error}",
+  "calendar.taskListDeclined": "Jūs noņēmāt šo sarakstu. Pievienojiet to vēlreiz sadaļā Uzdevumi, izmantojot “Pievienot sarakstu”.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Importēt",
   "calendar.importFailed": "Kalendāra fails netika importēts",

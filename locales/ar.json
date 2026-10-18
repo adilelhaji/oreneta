@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "التقويمات على هذا الخادم",
   "calendar.foundTaskLists": "قوائم المهام على هذا الخادم",
   "calendar.taskListUnknown": "تعذّرت معرفة ما إذا كانت تحتوي على مهام: {error}",
+  "calendar.taskListDeclined": "أزلت هذه القائمة. أضفها مجددًا من «إضافة قائمة» في المهام.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "استيراد",
   "calendar.importFailed": "لم يتم استيراد ملف التقويم",

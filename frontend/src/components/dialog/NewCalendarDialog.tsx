@@ -14,7 +14,28 @@ import {
   subscribeCalendar,
   type CalendarKind,
 } from '../../states/calendar'
-import { loadTaskLists } from '../../states/tasks'
+import { loadTaskLists, tasks$ } from '../../states/tasks'
+
+/// Whether two addresses name the same collection, as the core compares
+/// them (ADR-0070, §2): host and scheme in any case, percent-encoding and a
+/// final slash aside. Only for what the dialog shows; the core decides.
+function sameCollection(a: string, b: string): boolean {
+  const loose = (url: string) => {
+    try {
+      const parsed = new URL(url)
+      let path = parsed.pathname
+      try {
+        path = decodeURIComponent(path)
+      } catch {
+        // Kept as written.
+      }
+      return `${parsed.protocol}//${parsed.host.toLowerCase()}${path.endsWith('/') ? path : `${path}/`}`
+    } catch {
+      return url
+    }
+  }
+  return loose(a) === loose(b)
+}
 import { accounts$ } from '../../states/accounts'
 import { isRssAccount } from '../../lib/threadActions'
 import { Button } from '../button/Button'
@@ -57,6 +78,14 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
   const chosen = pool.some((account) => account.id === accountId) ? accountId : (pool[0]?.id ?? '')
   const foundCalendars = (found ?? []).filter(offeredAsCalendar)
   const foundTaskLists = (found ?? []).filter(offeredAsTaskList)
+  // A list of this account the person removed stays removed: it is shown,
+  // not ticked, and comes back only from «Afegeix una llista» (ADR-0070, §5).
+  const accountLists = useValue(tasks$.accountLists)
+  const declinedHere = (url: string) =>
+    accountLists.some(
+      (entry) =>
+        entry.account === chosen && entry.kind === 'caldav' && entry.state === 'declined' && sameCollection(entry.url, url),
+    )
 
   const invalid =
     kind === 'caldav'
@@ -71,13 +100,23 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
         // First the server is asked what it holds; then the chosen ones are kept.
         if (found === null) {
           const calendars = await discoverCalDav(chosen, server.trim(), username.trim(), password)
+          if (calendars.some(offeredAsTaskList)) await loadTaskLists()
+          const removed = (url: string) =>
+            tasks$.accountLists
+              .get()
+              .some(
+                (entry) =>
+                  entry.account === chosen && entry.kind === 'caldav' && entry.state === 'declined' && sameCollection(entry.url, url),
+              )
           setFound(calendars)
           setPicked(
             calendars
               .filter((calendar) => offeredAsCalendar(calendar) && calendar.writable !== false)
               .map((calendar) => calendar.url),
           )
-          setPickedTasks(calendars.filter((calendar) => calendar.tasks === true).map((calendar) => calendar.url))
+          setPickedTasks(
+            calendars.filter((calendar) => calendar.tasks === true && !removed(calendar.url)).map((calendar) => calendar.url),
+          )
           setBusy(false)
           return
         }
@@ -88,7 +127,11 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
           foundCalendars.filter((calendar) => picked.includes(calendar.url)),
           {
             chosen: pickedTasks,
-            declined: foundTaskLists.map((list) => list.url).filter((url) => !pickedTasks.includes(url)),
+            // Unticked by the person: not wanted. One whose tasks could not
+            // be told, or removed before, is no new decision.
+            declined: foundTaskLists
+              .filter((list) => list.tasks === true && !declinedHere(list.url) && !pickedTasks.includes(list.url))
+              .map((list) => list.url),
             server: server.trim(),
           },
         )
@@ -269,6 +312,7 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
                       <label className="flex items-center gap-2 text-caption text-primary">
                         <input
                           type="checkbox"
+                          disabled={declinedHere(list.url)}
                           checked={pickedTasks.includes(list.url)}
                           onChange={(e) =>
                             setPickedTasks((lists) =>
@@ -278,6 +322,13 @@ export function NewCalendarDialog({ onClose }: { onClose: () => void }) {
                         />
                         <span>{list.name}</span>
                       </label>
+                      {declinedHere(list.url) && (
+                        <span className="ps-6 text-2xs text-secondary">
+                          {t('calendar.taskListDeclined', {
+                            defaultValue: 'You removed this list. Add it again from “Add a list” in Tasks.',
+                          })}
+                        </span>
+                      )}
                       {list.tasks === null && list.tasks_error && (
                         <span className="ps-6 text-2xs text-secondary wrap-anywhere">
                           {t('calendar.taskListUnknown', {

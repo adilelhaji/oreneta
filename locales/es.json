@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Calendarios en este servidor",
   "calendar.foundTaskLists": "Listas de tareas de este servidor",
   "calendar.taskListUnknown": "No se ha podido saber si contiene tareas: {error}",
+  "calendar.taskListDeclined": "Quitaste esta lista. Puedes volver a añadirla desde «Añadir una lista», en Tareas.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Importar",
   "calendar.importFailed": "No se importó el archivo de calendario",

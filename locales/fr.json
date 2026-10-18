@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Agendas sur ce serveur",
   "calendar.foundTaskLists": "Listes de tâches sur ce serveur",
   "calendar.taskListUnknown": "Impossible de savoir si elle contient des tâches : {error}",
+  "calendar.taskListDeclined": "Vous avez supprimé cette liste. Ajoutez-la à nouveau depuis « Ajouter une liste », dans Tâches.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Importer",
   "calendar.importFailed": "Le fichier d’agenda n’a pas été importé",

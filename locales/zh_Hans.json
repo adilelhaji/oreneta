@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "此服务器上的日历",
   "calendar.foundTaskLists": "此服务器上的任务列表",
   "calendar.taskListUnknown": "无法判断其中是否有任务：{error}",
+  "calendar.taskListDeclined": "你已移除此列表。请在“任务”的“添加列表”中再次添加。",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "导入",
   "calendar.importFailed": "日历文件未能导入",

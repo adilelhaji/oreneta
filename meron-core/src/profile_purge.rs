@@ -189,7 +189,7 @@ mod tests {
         let main = include_str!("main.rs");
         let writes = main.matches("secrets::store(").count();
         assert_eq!(
-            writes, 13,
+            writes, 16,
             "a secret is written somewhere new: name it in profile_purge::secret_names, then update this count"
         );
         let graph = include_str!("graph/auth.rs").matches("graph_record_store(").count();

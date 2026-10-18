@@ -114,7 +114,7 @@ pub fn link_account(
     };
     let conn = lock(db);
     let written = (|| -> Result<Linked> {
-        let tx = conn.unchecked_transaction()?;
+        let tx = account_lists::immediate(&conn)?;
         if !account_lists::may_write(&tx, account, EWS, mode)? {
             return Ok(Linked::Discarded);
         }

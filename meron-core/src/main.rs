@@ -470,6 +470,18 @@ mod tests {
         call("tasks.acknowledgeAccountList", json!({"account": "work@x", "source": "ews"})).await.unwrap();
         // A declined CalDAV list added again with no calendar of that server
         // and user to sign in with: the password is asked for, nothing sent.
+        let not_declined = call("tasks.caldavAdd", json!({"account": "work@x", "url": "https://dav.x/ana/tasks/", "username": "ana"})).await;
+        assert!(not_declined.unwrap_err().to_string().contains("not a declined list"));
+        account_lists::record_choice(
+            &engine.db.lock().unwrap(),
+            "work@x",
+            "ana",
+            &["https://dav.x".to_string()],
+            &[],
+            &["https://dav.x/ana/tasks/".to_string()],
+            1,
+        )
+        .unwrap();
         let again = call("tasks.caldavAdd", json!({"account": "work@x", "url": "https://dav.x/ana/tasks/", "username": "ana"})).await;
         assert!(again.unwrap_err().to_string().contains("type the password"));
 
@@ -485,7 +497,7 @@ mod tests {
         )
         .await;
         assert!(downgraded.unwrap_err().to_string().contains("must not go"));
-        assert_eq!(call("tasks.lists", json!({})).await.unwrap()["account_lists"].as_array().unwrap().len(), 1, "nothing kept");
+        assert_eq!(call("tasks.lists", json!({})).await.unwrap()["account_lists"].as_array().unwrap().len(), 2, "nothing kept by the refused requests");
     }
 
     #[tokio::test]
@@ -2299,17 +2311,34 @@ async fn link_exchange_account(
         Ok(AccountListLinked::Discarded) => {}
         Err(error) if mode == AccountListMode::Retry => {
             account_lists::record_failure(&engine.db.lock().unwrap(), &account, account_lists::EWS, &format!("{error:#}"))?;
+            emit_task_list_failed(out, &account, account_lists::EWS).await;
         }
         Err(_) => {}
     }
     outcome
 }
 
+/// Says why a read of an account's list failed is kept now: a view open
+/// while the read ran in the background shows it, with «Torna-ho a provar».
+async fn emit_task_list_failed(out: &Writer, account: &str, source: &str) {
+    emit(out, "tasks.changed", json!({ "account": account, "source": source })).await;
+}
+
+/// The password a waiting list or a calendar keeps. One that is not there
+/// any more is said, not sent empty as if it were the password.
+fn kept_password(key: &str) -> anyhow::Result<String> {
+    let password = secrets::load(key)?.password;
+    if password.is_empty() {
+        anyhow::bail!("the saved password is no longer there, so nothing was sent");
+    }
+    Ok(password)
+}
+
 /// The first read of an account's CalDAV collection (ADR-0070, §3). The
-/// password comes from where it waits (`Retry`) or from the caller (`ByHand`);
-/// it is kept under the new list's id before the read, and the waiting
-/// entry is deleted once the list exists. A read that wrote nothing leaves
-/// no password of its own behind.
+/// password comes from where it waits (`Retry`) or from the caller (`ByHand`).
+/// It is kept under the new list's id once the read is whole and before the
+/// list is written, and the waiting entry is deleted once the list exists. A
+/// read that wrote nothing leaves no password of its own behind.
 async fn link_account_collection(
     engine: &Arc<Engine>,
     out: &Writer,
@@ -2325,10 +2354,10 @@ async fn link_account_collection(
         let origin = account_lists::origin_of(&url)?;
         let (username, password) = match sign_in.clone() {
             Some(sign_in) => sign_in,
-            None => (
-                account_lists::username_for(&engine.db.lock().unwrap(), &account, &origin)?,
-                secrets::load(&waiting)?.password,
-            ),
+            None => {
+                let username = account_lists::username_for(&engine.db.lock().unwrap(), &account, &origin)?;
+                (username, kept_password(&waiting)?)
+            }
         };
         Ok((url, origin, username, password))
     })();
@@ -2337,22 +2366,26 @@ async fn link_account_collection(
         Err(error) => {
             if mode == AccountListMode::Retry {
                 account_lists::record_failure(&engine.db.lock().unwrap(), &account, &source, &format!("{error:#}"))?;
+                emit_task_list_failed(out, &account, &source).await;
             }
             return Err(error);
         }
     };
     let list_id = store::task_lists::new_list_id();
     let own = meron_core::task_sync::secret_key(&list_id);
-    secrets::store(&own, &secrets::Secrets { password: password.clone(), ..Default::default() })?;
-    let outcome = match account_list_transport(engine, &account, &origin, &username, password) {
+    let outcome = match account_list_transport(engine, &account, &origin, &username, password.clone()) {
         Err(error) => Err(error),
         Ok(transport) => {
             let db = engine.db.clone();
             let target = account_lists::Collection { account: account.clone(), url, username, list_id };
-            tokio::task::spawn_blocking(move || account_lists::link_collection(&db, &transport, &target, mode, now_seconds()))
-                .await
-                .map_err(anyhow::Error::from)
-                .and_then(|result| result)
+            let key = own.clone();
+            tokio::task::spawn_blocking(move || {
+                let keep = || secrets::store(&key, &secrets::Secrets { password: password.clone(), ..Default::default() });
+                account_lists::link_collection(&db, &transport, &target, mode, &keep, now_seconds())
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
         }
     };
     match &outcome {
@@ -2366,6 +2399,9 @@ async fn link_account_collection(
         }
         Err(_) => {
             let _ = secrets::delete(&own);
+            if mode == AccountListMode::Retry {
+                emit_task_list_failed(out, &account, &source).await;
+            }
         }
     }
     outcome
@@ -2380,10 +2416,16 @@ async fn rescan_account_server(engine: &Arc<Engine>, rescan: account_lists::Resc
     let (calendar_id, calendar_url) = rescan.calendar.context(
         "no calendar of this server is kept with the account any more, so it cannot be listed; add its task lists with «Llista de tasques CalDAV…»",
     )?;
-    let password = secrets::load(&calendar::caldav::secret_key(&mark.account, &calendar_id))?.password;
+    let password = kept_password(&calendar::caldav::secret_key(&mark.account, &calendar_id))?;
     let transport = account_list_transport(engine, &mark.account, &mark.url, &mark.username, password.clone())?;
+    let origin = mark.url.clone();
     let task_lists = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<String>> {
-        let found = calendar::caldav::discover(&transport, &calendar_url)?;
+        // A collection of another origin is never linked alone, nor asked
+        // anything with this password: it is left out before the questions.
+        let found: Vec<_> = calendar::caldav::discover(&transport, &calendar_url)?
+            .into_iter()
+            .filter(|collection| account_lists::origin_of(&collection.url).is_ok_and(|other| other == origin))
+            .collect();
         let mut lists = Vec::new();
         for (collection, answer) in account_lists::classify(&transport, &found) {
             if answer.with_context(|| format!("could not tell whether {} holds tasks", collection.url))? {
@@ -2394,19 +2436,27 @@ async fn rescan_account_server(engine: &Arc<Engine>, rescan: account_lists::Resc
     })
     .await??;
     let candidates = account_lists::rescan_candidates(&engine.db.lock().unwrap(), &mark, &task_lists)?;
-    let keys = candidates
-        .iter()
-        .map(|url| -> anyhow::Result<String> {
-            Ok(account_lists::pending_secret_key(&mark.account, &account_lists::collection_source(url)?))
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    for key in &keys {
-        secrets::store(key, &secrets::Secrets { password: password.clone(), ..Default::default() })?;
+    let mut keys = Vec::new();
+    for url in &candidates {
+        keys.push(account_lists::pending_secret_key(&mark.account, &account_lists::collection_source(url)?));
     }
-    let applied = account_lists::apply_rescan(&engine.db.lock().unwrap(), &mark, &candidates, now_seconds());
+    // Each waiting list's password before its entry; on any failure, none
+    // is left that no entry names.
+    let stored = keys
+        .iter()
+        .try_for_each(|key| secrets::store(key, &secrets::Secrets { password: password.clone(), ..Default::default() }));
+    let applied = stored.and_then(|()| account_lists::apply_rescan(&engine.db.lock().unwrap(), &mark, &candidates, now_seconds()));
     let created = applied.as_ref().map(|done| done.created.clone()).unwrap_or_default();
     for (url, key) in candidates.iter().zip(&keys) {
-        if !created.contains(url) {
+        if created.contains(url) {
+            continue;
+        }
+        // An entry made meanwhile by the dialog waits with this same key:
+        // it stays for that entry.
+        let waits = account_lists::collection_source(url)
+            .and_then(|source| account_lists::entry(&engine.db.lock().unwrap(), &mark.account, &source))
+            .is_ok_and(|entry| entry.is_some_and(|entry| entry.state == account_lists::PENDING));
+        if !waits {
             let _ = secrets::delete(key);
         }
     }
@@ -2418,6 +2468,11 @@ async fn rescan_account_server(engine: &Arc<Engine>, rescan: account_lists::Resc
 /// every entry waiting for its first read. Each outcome is answered and
 /// kept on its entry; one that fails stops none of the others.
 async fn read_account_task_lists(engine: &Arc<Engine>, out: &Writer) -> Vec<Value> {
+    // One pass at a time: opening Tasks again while a read is on the network
+    // waits for it, instead of reading the same lists twice and racing for
+    // their waiting passwords.
+    static ONE_PASS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _one = ONE_PASS.lock().await;
     let mut results = Vec::new();
     let rescans = account_lists::rescans(&engine.db.lock().unwrap());
     match rescans {
@@ -2433,6 +2488,7 @@ async fn read_account_task_lists(engine: &Arc<Engine>, out: &Writer) -> Vec<Valu
                     Err(error) => {
                         let reason = format!("{error:#}");
                         let _ = account_lists::record_failure(&engine.db.lock().unwrap(), &account, &source, &reason);
+                        emit_task_list_failed(out, &account, &source).await;
                         results.push(json!({ "account": account, "source": source, "ok": false, "error": reason }));
                     }
                 }
@@ -4521,8 +4577,10 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let account = req_str(p, "account")?;
             let source = req_str(p, "source")?;
             let secrets_to_delete = account_lists::decline(&engine.db.lock().unwrap(), &account, &source, now_seconds())?;
+            // The decline is kept already: each password goes, one that
+            // cannot be deleted stops none of the others.
             for key in &secrets_to_delete {
-                secrets::delete(key)?;
+                let _ = secrets::delete(key);
             }
             emit(out, "tasks.changed", json!({ "account": account })).await;
             Ok(json!({ "ok": true }))
@@ -4658,6 +4716,14 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             let given_password = p.get("password").and_then(Value::as_str).filter(|password| !password.is_empty());
             let sign_in = {
                 let db = engine.db.lock().unwrap();
+                // Only one of the account's lists declined before comes back
+                // this way (§5); any other collection is linked by hand.
+                let source = account_lists::collection_source(&url)?;
+                let declined = account_lists::entry(&db, &account, &source)?
+                    .is_some_and(|entry| entry.state == account_lists::DECLINED);
+                if !declined {
+                    anyhow::bail!("that collection is not a declined list of this account; add it with «Llista de tasques CalDAV…»");
+                }
                 let username = match given_user {
                     Some(user) => user.to_string(),
                     None => account_lists::username_for(&db, &account, &origin)?,
@@ -4667,7 +4733,8 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     None => {
                         let (calendar_id, _) = account_lists::calendar_for(&db, &account, &origin, &username)?
                             .context("no calendar of this account signs in there; type the password")?;
-                        secrets::load(&calendar::caldav::secret_key(&account, &calendar_id))?.password
+                        kept_password(&calendar::caldav::secret_key(&account, &calendar_id))
+                            .context("type the password")?
                     }
                 };
                 (username, password)
@@ -4713,14 +4780,15 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             }
         }
         // Syncs one bound list, or every one. A list that fails keeps what
-        // it had and records why; the others go on. Every one also reads the
+        // it had and records why; the others go on. Either also reads the
         // accounts' task lists that wait (ADR-0070): those just read are
         // whole, so they are not synced again here.
         "tasks.sync" => {
             let wanted = p.get("list_id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string);
             let bindings = meron_core::task_sync::bindings(&engine.db.lock().unwrap())?;
             let exchange = meron_core::task_sync::exchange::bindings(&engine.db.lock().unwrap())?;
-            let accounts = if wanted.is_none() { read_account_task_lists(engine, out).await } else { Vec::new() };
+            // «Sincronitza» of one list retries what waits too (ADR-0070, §3).
+            let accounts = read_account_task_lists(engine, out).await;
             let mut results = Vec::new();
             for binding in bindings.into_iter().filter(|b| wanted.as_ref().is_none_or(|id| *id == b.list_id)) {
                 results.push(sync_task_list(engine, binding).await);
@@ -7192,6 +7260,27 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                     }
                 }
             }
+            // Everything is checked before anything is kept: an address that
+            // cannot be read, or lists for an account that is not here, adds
+            // nothing at all.
+            let mut origins: Vec<String> = Vec::new();
+            for url in chosen.iter().map(|remote| &remote.url).chain(&wanted).chain(&declined) {
+                let origin = account_lists::origin_of(url)?;
+                if !origins.contains(&origin) {
+                    origins.push(origin);
+                }
+            }
+            let mut waiting = Vec::new();
+            for url in &wanted {
+                let key = account_lists::pending_secret_key(&account, &account_lists::collection_source(url)?);
+                waiting.push((account_lists::normalize_url(url)?, key));
+            }
+            for url in &declined {
+                account_lists::collection_source(url)?;
+            }
+            if (!wanted.is_empty() || !declined.is_empty()) && store::account_email(&engine.db.lock().unwrap(), &account)?.is_none() {
+                anyhow::bail!("that account is no longer here");
+            }
             for remote in &chosen {
                 meron_core::secrets::store(
                     &calendar::caldav::secret_key(&account, &remote.url),
@@ -7203,22 +7292,12 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
             } else {
                 calendar::caldav::add_calendars(&engine.db.lock().unwrap(), &account, &chosen, &username)?
             };
-            let mut origins: Vec<String> = Vec::new();
-            for url in chosen.iter().map(|remote| &remote.url).chain(&wanted).chain(&declined) {
-                let origin = account_lists::origin_of(url)?;
-                if !origins.contains(&origin) {
-                    origins.push(origin);
-                }
-            }
             // Each wanted list's password waits under its own key before its
-            // entry does (§3).
-            let mut waiting = Vec::new();
-            for url in &wanted {
-                let key = account_lists::pending_secret_key(&account, &account_lists::collection_source(url)?);
-                meron_core::secrets::store(&key, &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() })?;
-                waiting.push((account_lists::normalize_url(url)?, key));
-            }
-            let recorded = account_lists::record_choice(
+            // entry does (§3); a failure leaves none that no entry names.
+            let stored = waiting
+                .iter()
+                .try_for_each(|(_, key)| meron_core::secrets::store(key, &meron_core::secrets::Secrets { password: password.clone(), ..Default::default() }));
+            let recorded = stored.and_then(|()| account_lists::record_choice(
                 &engine.db.lock().unwrap(),
                 &account,
                 &username,
@@ -7226,7 +7305,7 @@ async fn dispatch(engine: &Arc<Engine>, req: &Request, out: &Writer) -> anyhow::
                 &wanted,
                 &declined,
                 now_seconds(),
-            );
+            ));
             let choice = match recorded {
                 Ok(choice) => choice,
                 Err(error) => {

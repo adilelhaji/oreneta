@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Ημερολόγια σε αυτόν τον διακομιστή",
   "calendar.foundTaskLists": "Λίστες εργασιών σε αυτόν τον διακομιστή",
   "calendar.taskListUnknown": "Δεν ήταν δυνατό να διαπιστωθεί αν περιέχει εργασίες: {error}",
+  "calendar.taskListDeclined": "Αφαιρέσατε αυτή τη λίστα. Προσθέστε την ξανά από την «Προσθήκη λίστας» στις Εργασίες.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "Εισαγωγή",
   "calendar.importFailed": "Το αρχείο ημερολογίου δεν εισήχθη",

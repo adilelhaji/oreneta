@@ -300,6 +300,12 @@ fn state_of(conn: &Connection, account: &str, source: &str) -> Result<Option<Str
         .optional()?)
 }
 
+/// A transaction that takes the write lock as it begins: what it reads is
+/// still so when it writes, whatever other connection is open (ADR-0070, §3).
+pub(crate) fn immediate(conn: &Connection) -> Result<rusqlite::Transaction<'_>> {
+    Ok(rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?)
+}
+
 fn account_exists(conn: &Connection, account: &str) -> Result<bool> {
     Ok(conn.prepare("SELECT 1 FROM accounts WHERE id = ?1")?.exists(params![account])?)
 }
@@ -359,9 +365,9 @@ fn set_declined(conn: &Connection, account: &str, source: &str, now: i64) -> Res
 /// list's own password and the one waiting for a first read. A calendar's
 /// password (`caldav:`) is never among them.
 pub fn decline(conn: &Connection, account: &str, source: &str, now: i64) -> Result<Vec<String>> {
-    let entry = entry(conn, account, source)?.context("that list is no longer one of the account's")?;
     let mut secrets = Vec::new();
-    let tx = conn.unchecked_transaction()?;
+    let tx = immediate(conn)?;
+    let entry = entry(&tx, account, source)?.context("that list is no longer one of the account's")?;
     match entry.state.as_str() {
         DECLINED => return Ok(secrets),
         SCANNED => bail!("that server was listed already; there is nothing to decline"),
@@ -388,7 +394,7 @@ pub fn delete_list(conn: &Connection, list_id: &str, now: i64) -> Result<()> {
     if list_id == crate::store::task_lists::MAIL_LIST {
         bail!("the mail follow-up list cannot be deleted");
     }
-    let tx = conn.unchecked_transaction()?;
+    let tx = immediate(conn)?;
     tx.execute(
         "UPDATE account_task_lists SET state = 'declined', list_id = '', last_error = '', notified = 1, updated_at = ?2
           WHERE list_id = ?1 AND state = 'linked'",
@@ -512,30 +518,56 @@ pub struct Collection {
 /// list with its tasks and links the entry (§3). A read that fails makes
 /// nothing; a waiting entry keeps waiting, with the reason. The transport
 /// must be bound to the collection's origin ([`OriginBound`], #28).
-pub fn link_collection(db: &Mutex<Connection>, transport: &dyn Transport, target: &Collection, mode: Mode, now: i64) -> Result<Linked> {
+///
+/// `keep_password` runs after the read and before the transaction: the
+/// caller keeps the list's own copy of the password there (§3), so a read
+/// that fails or is interrupted leaves none behind. A waiting entry whose
+/// collection was meanwhile linked here by hand (ADR-0039) adopts that list
+/// instead of making a second one.
+pub fn link_collection(
+    db: &Mutex<Connection>,
+    transport: &dyn Transport,
+    target: &Collection,
+    mode: Mode,
+    keep_password: &dyn Fn() -> Result<()>,
+    now: i64,
+) -> Result<Linked> {
     let source = collection_source(&target.url)?;
+    let fail = |error: anyhow::Error| -> Result<Linked> {
+        if mode == Mode::Retry {
+            record_failure(&lock(db), &target.account, &source, &format!("{error:#}"))?;
+        }
+        Err(error)
+    };
     {
         let conn = lock(db);
         if !may_write(&conn, &target.account, &source, mode)? {
             return Ok(Linked::Discarded);
         }
-        if list_for_url(&conn, &target.url)?.is_some() {
-            bail!("that collection is already a task list here");
+        if let Some(list) = list_for_url(&conn, &target.url)? {
+            if mode == Mode::ByHand {
+                bail!("that collection is already a task list here");
+            }
+            let tx = immediate(&conn)?;
+            if !may_write(&tx, &target.account, &source, mode)? {
+                return Ok(Linked::Discarded);
+            }
+            mark_linked(&tx, &target.account, &source, &list, true, now)?;
+            tx.commit()?;
+            return Ok(Linked::Made(list));
         }
     }
     let read = caldav::fetch_todos(transport, &target.url).map(|objects| (caldav::collection_name(transport, &target.url), objects));
     let (name, objects) = match read {
         Ok(read) => read,
-        Err(error) => {
-            if mode == Mode::Retry {
-                record_failure(&lock(db), &target.account, &source, &format!("{error:#}"))?;
-            }
-            return Err(error);
-        }
+        Err(error) => return fail(error),
     };
+    if let Err(error) = keep_password() {
+        return fail(error.context("the list's password could not be kept"));
+    }
     let conn = lock(db);
     let written = (|| -> Result<Linked> {
-        let tx = conn.unchecked_transaction()?;
+        let tx = immediate(&conn)?;
         if !may_write(&tx, &target.account, &source, mode)? {
             return Ok(Linked::Discarded);
         }
@@ -611,6 +643,8 @@ pub struct Choice {
     pub kept: Vec<String>,
     /// Waiting passwords of entries the person unchecked.
     pub dropped_keys: Vec<String>,
+    /// Collections chosen that were declined before: they stay declined.
+    pub still_declined: Vec<String>,
 }
 
 /// The task collections chosen in the CalDAV dialog (§3): the wanted ones
@@ -626,7 +660,7 @@ pub fn record_choice(
     declined: &[String],
     now: i64,
 ) -> Result<Choice> {
-    let tx = conn.unchecked_transaction()?;
+    let tx = immediate(conn)?;
     if !account_exists(&tx, account)? {
         // Calendars alone keep working as before; lists need their account.
         if wanted.is_empty() && declined.is_empty() {
@@ -649,6 +683,9 @@ pub fn record_choice(
         match state_of(&tx, account, &source)?.as_deref() {
             Some(LINKED) => choice.kept.push(url),
             Some(PENDING) => choice.to_read.push(url),
+            // Declined stays declined: only «Afegeix una llista» brings it
+            // back (§5), not adding the server again from the dialog.
+            Some(DECLINED) => choice.still_declined.push(url),
             _ => match list_for_url(&tx, &url)? {
                 Some(list) => {
                     mark_linked(&tx, account, &source, &list, true, now)?;
@@ -760,7 +797,7 @@ pub struct Rescanned {
 /// to come), or adopted when a list here is kept there already; and the mark
 /// as listed. Only while the account is there and the mark still waits.
 pub fn apply_rescan(conn: &Connection, mark: &Entry, candidates: &[String], now: i64) -> Result<Rescanned> {
-    let tx = conn.unchecked_transaction()?;
+    let tx = immediate(conn)?;
     if !may_write(&tx, &mark.account, &mark.source, Mode::Retry)? {
         return Ok(Rescanned { discarded: true, ..Default::default() });
     }

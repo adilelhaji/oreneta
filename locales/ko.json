@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "이 서버의 캘린더",
   "calendar.foundTaskLists": "이 서버의 작업 목록",
   "calendar.taskListUnknown": "작업이 있는지 확인할 수 없습니다: {error}",
+  "calendar.taskListDeclined": "이 목록을 제거했습니다. 작업의 “목록 추가”에서 다시 추가하세요.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "가져오기",
   "calendar.importFailed": "캘린더 파일을 가져오지 못했습니다",

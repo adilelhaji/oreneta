@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "このサーバー上のカレンダー",
   "calendar.foundTaskLists": "このサーバーのタスクリスト",
   "calendar.taskListUnknown": "タスクが含まれているか判別できませんでした: {error}",
+  "calendar.taskListDeclined": "このリストは削除されています。タスクの「リストを追加」から再度追加してください。",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "インポート",
   "calendar.importFailed": "カレンダーファイルをインポートできませんでした",

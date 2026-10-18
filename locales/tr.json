@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "Bu sunucudaki takvimler",
   "calendar.foundTaskLists": "Bu sunucudaki görev listeleri",
   "calendar.taskListUnknown": "Görev içerip içermediği anlaşılamadı: {error}",
+  "calendar.taskListDeclined": "Bu listeyi kaldırdınız. Görevler’deki “Liste ekle” menüsünden yeniden ekleyin.",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "İçe aktar",
   "calendar.importFailed": "Takvim dosyası içe aktarılamadı",

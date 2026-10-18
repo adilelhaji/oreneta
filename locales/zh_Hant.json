@@ -1761,6 +1761,7 @@
   "calendar.foundCalendars": "此伺服器上的行事曆",
   "calendar.foundTaskLists": "這台伺服器上的工作清單",
   "calendar.taskListUnknown": "無法判斷其中是否有工作：{error}",
+  "calendar.taskListDeclined": "你已移除此清單。請在「工作」的「新增清單」中再次新增。",
   "calendar.groupCalDav": "CalDAV",
   "calendar.importAction": "匯入",
   "calendar.importFailed": "未能匯入行事曆檔案",

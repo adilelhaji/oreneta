@@ -91,7 +91,7 @@ es manté `implemented-unverified` i l'evidència nativa de Windows continua pen
 El 2026-10-18 (#281, ADR-0070) SET-20 va incorporar les llistes de tasques que arriben amb
 el compte, com els calendaris: la carpeta Tasques d'un compte d'Exchange i les col·leccions
 de tasques d'un servidor CalDAV que s'afegeix a un compte (les que només admeten tasques, i
-les que admeten esdeveniments i tasques si ja en tenen alguna). Cada llista es llegeix
+les que admeten esdeveniments i tasques, o no ho diuen, si ja en tenen alguna). Cada llista es llegeix
 sencera i després es crea, en una transacció que torna a comprovar que el compte existeix i
 que la llista encara és pendent. Una llista que no s'ha llegit no es mostra mai com a «Cap
 tasca». Una llista suprimida queda declinada i no torna. En actualitzar, les llistes dels
