@@ -42,6 +42,7 @@ export function CalendarList() {
   return (
     <aside
       aria-label={t('calendar.title')}
+      data-region="folders"
       className="flex max-h-40 w-full shrink-0 flex-col gap-3 overflow-y-auto border-b border-border bg-raised px-3 py-3 min-[769px]:max-h-none min-[769px]:w-48 min-[769px]:border-b-0 min-[769px]:border-e"
     >
       {groups.map(({ account, calendars }) => (

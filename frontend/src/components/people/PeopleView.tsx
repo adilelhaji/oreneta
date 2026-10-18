@@ -119,7 +119,7 @@ export function PeopleView() {
     const owner = accounts.find((account) => account.id === person.account && isSendableAccount(account))
     const from = owner ?? accounts.find(isSendableAccount)
     if (!from) return
-    ui$.peopleOpen.set(false)
+    ui$.module.set('mail')
     openComposeTab({ accountId: from.id, to: person.name ? `${person.name} <${addr}>` : addr })
   }
 
@@ -129,7 +129,7 @@ export function PeopleView() {
     const from = accounts.find(isSendableAccount)
     const recipients = groupRecipients(group)
     if (!from || recipients.length === 0) return
-    ui$.peopleOpen.set(false)
+    ui$.module.set('mail')
     openComposeTab({
       accountId: from.id,
       to: recipients
@@ -183,8 +183,9 @@ export function PeopleView() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 bg-app">
       <section
+        data-region="folders"
         className={clsx(
           'min-w-0 w-full shrink-0 flex-col border-e border-border bg-chats min-[769px]:flex min-[769px]:w-72',
           selected ? 'hidden' : 'flex',

@@ -1,11 +1,12 @@
 import { useId, useState } from 'react'
-import { ChevronDown, ChevronRight, Eye, EyeOff, Info, RefreshCw, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, EyeOff, Info, Network, RefreshCw, Search } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { Field } from '../field/Field'
 import { securityAfterPortEdit, type MailSecurity } from './accountSecurity'
 import type { AccountDialogController } from './useAccountDialog'
 import type { DialogClasses } from './accountDialogStyles'
 import { accountSetupAddress } from './accountSetup'
+import { ConnectionTestPanel } from './ConnectionTestPanel'
 
 // The custom IMAP/SMTP section: email, an explicit "Find settings" lookup,
 // sender name, password, the app-password hint, and the collapsible advanced
@@ -39,8 +40,18 @@ export function AccountDialogCustom({
     save,
     saveDisabled,
     editing,
+    loading,
+    testing,
+    testConnection,
+    connectionReport,
+    connectionReportStale,
+    applyConnectionFix,
+    saveAnyway,
   } = ctl
   const { inputClass, fieldLabelClass, serverGridClass } = classes
+  // The test needs what a save needs: an address and a password (or, when
+  // editing, the stored one).
+  const testDisabled = saveDisabled
 
   return (
     <>
@@ -260,6 +271,33 @@ export function AccountDialogCustom({
             labelClassName={fieldLabelClass}
           />
         </>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <button
+          type="button"
+          onClick={() => void testConnection()}
+          disabled={testDisabled}
+          className="flex items-center gap-1.5 self-start rounded-control border border-border px-3 py-1.5 text-caption font-semibold text-primary transition-colors hover:bg-hover cursor-pointer disabled:cursor-default disabled:opacity-50"
+        >
+          {testing ? (
+            <RefreshCw size={14} aria-hidden="true" className="animate-spin" strokeWidth={1.75} />
+          ) : (
+            <Network size={14} aria-hidden="true" strokeWidth={1.75} />
+          )}
+          {testing ? t('accounts.connectionTest.testing') : t('accounts.connectionTest.action')}
+        </button>
+        <p className="px-1 text-caption leading-relaxed text-secondary">{t('accounts.connectionTest.hint')}</p>
+      </div>
+      {connectionReport && (
+        <ConnectionTestPanel
+          report={connectionReport}
+          stale={connectionReportStale}
+          form={{ username: form.username, email: form.email }}
+          busy={loading || testing}
+          onFix={(side, fix) => void applyConnectionFix(side, fix)}
+          onSaveAnyway={() => void saveAnyway()}
+        />
       )}
     </>
   )

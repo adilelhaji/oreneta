@@ -46,6 +46,10 @@ surt), `index.css`.
 | Missatges HTML al seu marc | `applyContentDirection` (`dir="auto"` a cada bloc de text si el missatge no en declara cap) |
 | Correu que surt | `markRightToLeftBlocks` des d'`inlineRichStyles` (`dir="rtl"` i citació amb la barra a la dreta) |
 
+F6 i Maj+F6 entre les regions de la finestra no depenen de la direcció: segueixen
+l'ordre del marc, que és el mateix en dreta a esquerra (ADR-0068 §6,
+[app-regions.md](app-regions.md)).
+
 ## Icones
 
 Es reflecteixen en mode de dreta a esquerra, per la seva classe de Lucide
@@ -80,3 +84,6 @@ es reflecteix; un xebró de desplegar amb `transition-transform` es gira 180°.
     seva fila, i es tanca amb la dreta, amb axe;
   - la tornada a l'anglès sense recarregar, i un assumpte en àrab a la interfície
     anglesa.
+- `e2e/startup.e2e.ts` («#306»): F6 i Maj+F6 recorren les regions en el mateix
+  ordre en àrab que en anglès i en català, i les regles de regions d'axe no
+  troben res a la bústia ni a cap mòdul en àrab.

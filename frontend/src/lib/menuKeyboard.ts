@@ -8,6 +8,7 @@
 // left-to-right, the other way round in right-to-left (ADR-0061).
 
 import { inlineArrowStep, type TextDirection } from './direction'
+import { TABBABLE } from './regions'
 
 /** The roles a menu's actionable rows carry. */
 export const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
@@ -175,12 +176,10 @@ export function focusMenuEdge(surface: HTMLElement | null, edge: 'first' | 'last
   return true
 }
 
-const TABBABLE_SELECTOR =
-  'a[href], area[href], button, input, select, textarea, iframe, summary, [tabindex], [contenteditable=""], [contenteditable="true"]'
-
+// Style-based rather than layout-based (unlike `isShown` in regions.ts), so
+// the same answer holds in the browser and in the unit tests' DOM.
 function tabbable(element: HTMLElement): boolean {
-  if (element.tabIndex < 0 || (element as HTMLButtonElement).disabled) return false
-  if (element instanceof HTMLInputElement && element.type === 'hidden') return false
+  if (element.tabIndex < 0) return false
   if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false
   for (let node: HTMLElement | null = element; node; node = node.parentElement) {
     const style = getComputedStyle(node)
@@ -195,7 +194,7 @@ function tabbable(element: HTMLElement): boolean {
  * from its opener, not from where the removed menu was (#289).
  */
 export function tabNeighbour(from: HTMLElement, step: 1 | -1): HTMLElement | null {
-  const all = [...document.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)]
+  const all = [...document.querySelectorAll<HTMLElement>(TABBABLE)]
   const index = all.indexOf(from)
   if (index === -1) return null
   for (let next = index + step; next >= 0 && next < all.length; next += step) {

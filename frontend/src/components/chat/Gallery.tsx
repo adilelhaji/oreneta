@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { ModalCard } from '../dialog/ModalCard'
 import { ChevronLeft, ChevronRight, Copy, Download, X } from 'lucide-react'
 import { useTranslation } from '../../lib/i18n'
 import { useEscapeKey } from '../../lib/useEscapeKey'
@@ -190,7 +191,11 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
   // overflow-clipped ancestor (e.g. a chat bubble's slide-up animation), which
   // would otherwise mis-position the overlay and clip its controls.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90 animate-fade-in select-none" onClick={onClose}>
+    <ModalCard
+      label={t('chat.media')}
+      className="fixed inset-0 z-50 flex flex-col bg-black/90 animate-fade-in select-none"
+      onClick={onClose}
+    >
       {/* Top bar: counter + close */}
       <div className="flex shrink-0 items-center justify-between px-4 py-3 text-white/90">
         <span className="text-xs font-semibold tabular-nums">{total > 1 ? `${index + 1} / ${total}` : ''}</span>
@@ -331,7 +336,7 @@ export function Gallery({ items, index, onIndexChange, onClose }: GalleryProps) 
           {current.caption || current.filename}
         </div>
       )}
-    </div>,
+    </ModalCard>,
     document.body,
   )
 }

@@ -86,8 +86,7 @@ afterEach(() => {
   delete (window as any).go
   delete (window as any).runtime
   calendar$.viewing.set(null)
-  ui$.calendarOpen.set(false)
-  ui$.tasksOpen.set(false)
+  ui$.module.set('mail')
   ui$.taskEditor.set(null)
 })
 
@@ -117,12 +116,11 @@ describe('sidebar agenda widget (#212)', () => {
   })
 
   it('opens an event on its day in the calendar, with the event shown', async () => {
-    ui$.tasksOpen.set(true)
+    ui$.module.set('tasks')
     const screen = render(<SidebarAgenda now={() => NOW} />)
     await waitFor(() => expect(screen.getByText('Dentist')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /Dentist/ }))
-    expect(ui$.calendarOpen.get()).toBe(true)
-    expect(ui$.tasksOpen.get()).toBe(false)
+    expect(ui$.module.get()).toBe('calendar')
     expect(calendar$.view.get()).toBe('day')
     expect(calendar$.anchor.get()).toBe(at(15))
     expect(calendar$.viewing.get()).toMatchObject({ subject: 'Dentist', accountId: 'home' })

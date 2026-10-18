@@ -42,7 +42,7 @@ export function NotesView() {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
+    <div data-region="content" className="flex min-h-0 min-w-0 flex-1 flex-col bg-app">
       <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-header px-4 py-3">
         <CompactNavigation />
         <h1 className="flex items-center gap-2 text-heading-sm font-bold text-primary">
@@ -73,6 +73,7 @@ export function NotesView() {
       <div className="flex min-h-0 flex-1">
         <section
           aria-label={t('notes.listLabel', { defaultValue: 'Notes' })}
+          data-region="folders"
           className={clsx(
             'flex min-h-0 w-full flex-col border-e border-border min-[900px]:w-80 min-[900px]:shrink-0',
             opened && 'max-[899px]:hidden',
