@@ -161,6 +161,9 @@ type AddPasswordAccountRequest struct {
 	SMTPCertPin string `json:"smtp_cert_pin"`
 	// "pop3" for a POP3 account (#97, ADR-0035); IMAP otherwise.
 	Incoming string `json:"incoming"`
+	// The person's explicit "Save anyway" after a connection test that did
+	// not pass (#269): the account is stored without validating it first.
+	SkipValidation bool `json:"skip_validation"`
 }
 
 type AddGmailOAuthRequest struct {

@@ -88,6 +88,27 @@ El 2026-10-17 (#277, ADR-0047 esmenada el 2026-10-18, `docs/design/quicktext-pla
 signatura a les respostes i els reenviaments: amb el text propi (com fins ara), damunt de la citació o sota la
 citació, com a preferència local (`signature_placement`). Cap fila no canvia d'estat: SET-10
 es manté `implemented-unverified` i l'evidència nativa de Windows continua pendent.
+El 2026-10-17 (#269) la configuració manual IMAP/POP3/SMTP va incorporar «Prova la
+connexió»: comprova el servidor d'entrada i el de sortida per separat, pas a pas (DNS, TCP,
+TLS i inici de sessió), diu què cal corregir en cada error i n'ofereix la correcció
+probable (parells de port i seguretat, forma del nom d'usuari, inspecció del certificat)
+sense desar res. «Desa el compte» fa la prova primer, i la contrasenya no es desa abans
+d'una prova satisfactòria tret que la persona triï «Desa igualment». Vegeu
+[account-setup.md](account-setup.md). Cap fila no canvia d'estat: no hi ha cap fila per a
+la configuració manual de comptes (S15-01, de POP3, tracta la baixada del correu i es
+manté `implemented-unverified`), i l'evidència nativa de Windows (N4) i amb proveïdors
+reals (N5) continua pendent; les proves amb servidors falsos i amb maddy (MAIL-17 del
+paquet d'acceptació de proveïdors) són sintètiques.
+El 2026-10-18 (#306, pas 1 d'ADR-0068, `docs/design/app-regions.md`) la finestra va
+incorporar regions amb nom i F6 / Maj+F6 per passar d'una a l'altra, sense cap canvi visual:
+un sol estat de mòdul, els diàlegs i els avisos fora de `<main>`, `<main>` amb el nom del
+mòdul i la barra vertical amb el nom «Mòduls». F6 també actua des d'un camp de text i des del
+missatge HTML, i no fa res si hi ha un diàleg modal obert (l'editor i el detall d'un
+esdeveniment, la revisió del context de l'assistent i la galeria ara es declaren modals).
+Les proves automàtiques de límits, de dreta a esquerra i de zoom es mantenen, i se n'hi
+afegeixen de noves: F6 en anglès, en català i en àrab, i les regles de regions d'axe. Cap fila no canvia d'estat (S01-04, S01-05, SET-02,
+SET-23, SET-27): l'evidència nativa de Windows continua pendent, i també cal comprovar que F6
+arriba a la pàgina a WebView2 i a WebKitGTK.
 El 2026-10-18 (#270, ADR-0071) cada compte de correu va incorporar l'interval de
 comprovació («Només manualment» o cada 5, 10, 15, 30, 60 o 120 minuts): els comptes
 nous comencen amb 15 minuts i els que ja existien es comproven només manualment. El

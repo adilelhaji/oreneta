@@ -5,33 +5,29 @@ import { ui$ } from '../../states/ui'
 
 afterEach(() => {
   cleanup()
-  ui$.peopleOpen.set(false)
-  ui$.tasksOpen.set(false)
-  ui$.calendarOpen.set(false)
+  ui$.module.set('mail')
 })
 
 describe('compact workspace navigation', () => {
   it('switches areas exclusively through the existing app menu', () => {
-    ui$.peopleOpen.set(true)
+    ui$.module.set('people')
     const view = render(<CompactNavigation />)
     fireEvent.click(view.getByRole('button', { name: 'More' }))
     fireEvent.click(view.getByRole('button', { name: 'Tasks' }))
-    expect(ui$.tasksOpen.peek()).toBe(true)
-    expect(ui$.peopleOpen.peek()).toBe(false)
-    expect(ui$.calendarOpen.peek()).toBe(false)
+    expect(ui$.module.peek()).toBe('tasks')
     expect(view.queryByRole('button', { name: 'Tasks' })).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'Back to Chats' }))
-    expect(ui$.tasksOpen.peek()).toBe(false)
+    expect(ui$.module.peek()).toBe('mail')
   })
 
   it('Escape returns focus to the opener without changing the current area', () => {
-    ui$.calendarOpen.set(true)
+    ui$.module.set('calendar')
     const view = render(<CompactNavigation />)
     const opener = view.getByRole('button', { name: 'More' })
     fireEvent.click(opener)
     view.getByRole('button', { name: 'People' }).focus()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(document.activeElement).toBe(opener)
-    expect(ui$.calendarOpen.peek()).toBe(true)
+    expect(ui$.module.peek()).toBe('calendar')
   })
 })

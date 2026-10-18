@@ -51,7 +51,7 @@ beforeEach(() => {
     loading: false,
     loaded: false,
   })
-  ui$.attachmentsOpen.set(true)
+  ui$.module.set('attachments')
 })
 afterEach(() => {
   cleanup()
@@ -76,7 +76,7 @@ it('lists files with their message, says how much mail is covered, and opens the
   expect(view.queryByRole('button', { name: 'Save old.zip' })).toBeNull()
 
   fireEvent.click(view.getByRole('button', { name: 'Open the message with scan.pdf' }))
-  expect(ui$.attachmentsOpen.get()).toBe(false)
+  expect(ui$.module.get()).toBe('mail')
   expect(ui$.selectedThread.get()).toBe('a@x#INBOX#t.aw')
 })
 

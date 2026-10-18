@@ -152,6 +152,9 @@ export type ConfirmState = {
   tone: ConfirmTone
 }
 
+/** The modules of the app (ADR-0068 §1). Chat is chat over XMPP (#111). */
+export const APP_MODULES = ['mail', 'calendar', 'people', 'tasks', 'notes', 'chat', 'attachments'] as const
+export type AppModule = (typeof APP_MODULES)[number]
 export type BulkSelectionSurface = 'thread-list' | 'kanban'
 export type BulkSelectionKind = 'mail' | 'feed'
 export type BulkSelectionItem = {
@@ -172,21 +175,13 @@ export const ui$ = observable({
   // Backend/system check, loaded once at boot.
   system: null as SystemCheck | null,
   // Current view selection.
-  // Whether the calendar is showing instead of mail. Kept beside the board
-  // selection rather than inside it: a board is a view of mail, a calendar is
-  // not mail at all.
-  calendarOpen: false,
-  // Whether the address book is showing instead of mail. Like the calendar,
-  // and exclusive with it: they take the same pane.
-  peopleOpen: false,
-  // Whether the task list is showing instead of mail. Same pane, same
-  // exclusivity, for the same reason: a task is about a message, but the
-  // list of them is not mail itself.
-  tasksOpen: false,
-  notesOpen: false,
-  attachmentsOpen: false,
-  /** Chat over XMPP (#111). */
-  messagingOpen: false,
+  /**
+   * The module on screen (ADR-0068 §1). One value, so two modules can never be
+   * open at once. Kept beside the board selection rather than inside it: a
+   * board is a view of mail, a calendar is not mail at all. Interface state,
+   * not stored: the app always starts in mail.
+   */
+  module: 'mail' as AppModule,
   // The task the "convert to task" dialog is open on, if any — the thread it
   // was opened from, and the existing task's fields when editing one already
   // open on that thread (absent when creating a new one).
@@ -259,6 +254,11 @@ export const ui$ = observable({
 })
 
 let pendingConfirmResolve: ((confirmed: boolean) => void) | null = null
+
+/** A module's button in the side rail: opens it, or goes back to mail if it is already open. */
+export function toggleModule(next: AppModule) {
+  ui$.module.set(ui$.module.peek() === next ? 'mail' : next)
+}
 
 // Open the command palette, resetting the query and selection so it always
 // starts fresh at the top.
