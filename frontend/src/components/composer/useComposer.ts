@@ -28,6 +28,7 @@ import { getComposeSession, registerComposeSession } from '../../states/composeS
 import { accounts$, isSendableAccount } from '../../states/accounts'
 import { keepsServerDrafts } from '../../lib/mailCapabilities'
 import { ResizableImage } from './composerImage'
+import { richTextExtensions } from './richText'
 import { GrammarChecker, harperEngine, type GrammarResult } from '../../lib/grammar'
 import { GrammarExtension, type PlacedIssue } from './grammarExtension'
 import {
@@ -144,6 +145,8 @@ export function useComposer(tabId: string) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
+      // Font, size, colours, alignment, indent and tables (#274, ADR-0067).
+      ...richTextExtensions(),
       GrammarExtension.configure({
         checker: grammarChecker,
         dialect: () => {

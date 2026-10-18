@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  composite,
   contrastRatio,
   darken,
   formatColor,
@@ -92,5 +93,23 @@ describe('isValidColor', () => {
     expect(isValidColor('#abc')).toBe(true)
     expect(isValidColor('rgba(0,0,0,0.5)')).toBe(true)
     expect(isValidColor('tomato')).toBe(false)
+  })
+})
+
+describe('composite', () => {
+  it('resolves a translucent color over its opaque surface', () => {
+    expect(composite('rgba(0, 0, 0, 0.5)', '#ffffff')).toBe('#808080')
+    expect(composite('rgba(30, 41, 59, 0.6)', '#0f172a')).toBe(mix('#0f172a', '#1e293b', 0.6))
+    expect(contrastRatio(composite('rgba(0, 0, 0, 0.5)', '#ffffff')!, '#000000')).toBeCloseTo(5.32, 1)
+  })
+
+  it('passes an opaque color through unchanged', () => {
+    expect(composite('#2056dd', '#ffffff')).toBe('#2056dd')
+  })
+
+  it('does not resolve over a translucent or unparseable surface', () => {
+    expect(composite('#2056dd', 'rgba(255, 255, 255, 0.5)')).toBeNull()
+    expect(composite('bogus', '#ffffff')).toBeNull()
+    expect(composite('#2056dd', 'bogus')).toBeNull()
   })
 })

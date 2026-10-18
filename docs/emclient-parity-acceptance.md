@@ -99,6 +99,12 @@ la configuració manual de comptes (S15-01, de POP3, tracta la baixada del corre
 manté `implemented-unverified`), i l'evidència nativa de Windows (N4) i amb proveïdors
 reals (N5) continua pendent; les proves amb servidors falsos i amb maddy (MAIL-17 del
 paquet d'acceptació de proveïdors) són sintètiques.
+El 2026-10-17 (#274, ADR-0067) el redactor va incorporar el tipus de lletra, la mida, el
+color del text i el de ressaltat, l'alineació, el sagnat i les taules (inserir i suprimir
+taules, i inserir i suprimir files i columnes), amb barra d'eines i dreceres. Els estils que
+arriben enganxats o citats es validen abans d'entrar a l'HTML enviat, i l'alternativa de text pla escriu
+cada fila d'una taula de dades en una línia. SET-10 es manté `implemented-unverified`: falten
+l'evidència nativa de Windows i la comprovació en clients de correu reals.
 El 2026-10-18 (#306, pas 1 d'ADR-0068, `docs/design/app-regions.md`) la finestra va
 incorporar regions amb nom i F6 / Maj+F6 per passar d'una a l'altra, sense cap canvi visual:
 un sol estat de mòdul, els diàlegs i els avisos fora de `<main>`, `<main>` amb el nom del
@@ -109,6 +115,39 @@ Les proves automàtiques de límits, de dreta a esquerra i de zoom es mantenen, 
 afegeixen de noves: F6 en anglès, en català i en àrab, i les regles de regions d'axe. Cap fila no canvia d'estat (S01-04, S01-05, SET-02,
 SET-23, SET-27): l'evidència nativa de Windows continua pendent, i també cal comprovar que F6
 arriba a la pàgina a WebView2 i a WebKitGTK.
+El 2026-10-17 (#283) la llista de missatges d'un perfil que no l'ha redimensionat mai
+comença a 360 px, i la vista per defecte passa a ser l'automàtica: files de dues línies
+(remitent i data; assumpte i previsualització), agrupades per data quan s'ordena per
+data, mentre la llista fa menys de 520 px, i la taula a partir d'aquesta amplada.
+L'amplada redimensionada es conserva entre reinicis, i una vista desada (taula o
+targetes) es respecta. Proves sintètiques del punt d'entrada de producció a 1280, 1456 i
+1920 px, en català, anglès i àrab, en clar i en fosc, i del recorregut d'obrir,
+respondre, seleccionar i navegar sobre les files. S01-03 (valors per defecte) i S01-06
+(colors d'estat de les files: la fila oberta passa a `bg-active`) no canvien d'estat:
+l'evidència nativa de Windows continua pendent.
+El 2026-10-18 (#266, #267) les visualitzacions de dia, de setmana laboral i de setmana
+del calendari van incorporar aquestes accions: moure un esdeveniment arrossegant-lo
+(ajustat a quarts d'hora; Esc ho cancel·la); canviar-ne l'inici o el final per les vores;
+deixar-lo anar en un dia d'un calendari mensual petit nou; moure'l i canviar-ne el final
+amb el teclat (Alt+fletxes i Alt+Maj+fletxes; Retorn desa), i crear esdeveniments
+arrossegant una franja, des del menú contextual d'una franja buida («Esdeveniment nou»,
+«Esdeveniment nou de tot el dia») o des d'una franja horària que pot rebre el focus del
+teclat (Retorn). Les sèries pregunten com a l'editor, els calendaris només de lectura ho
+rebutgen amb el motiu, i l'escriptura conserva les regles de conflicte del nucli. Els
+calendaris d'Exchange també ho rebutgen, de moment: el nucli hi escriu amb
+`AlwaysOverwrite` i reescriu les notes i els convidats; el canvi queda pendent d'una decisió
+del propietari (`docs/design/calendar-drag-and-create.md`). Hi ha proves unitàries i
+arrossegaments reals a l'entrada de producció (Chromium). Cap fila no canvia d'estat:
+SET-18 es manté `partial` (el temps meteorològic continua absent) i l'evidència nativa
+de Windows és pendent.
+El 2026-10-17 (#287) l'aparença (S01-01, S01-02) va incorporar la primera peça del
+redisseny aprovat pel propietari: dos tons de superfície a tots els temes (el marc per a
+la finestra, les capçaleres i el panell de carpetes; el contingut per a les llistes i el
+lector), el token `--me-border-input` per a la vora dels camps (3:1), l'anell de focus
+d'accent sòlid i els radis de 4/6/8/12 px. Els temes personalitzats desats conserven els
+seus colors i s'hi afegeix la vora de camp derivada. Vuit temes integrats mantenen l'accent per
+sota de 4,5:1 com a text, com abans; corregir-ho espera la decisió del propietari. Cap
+fila no canvia d'estat: l'evidència nativa de Windows continua pendent.
 El 2026-10-18 (#270, ADR-0071) cada compte de correu va incorporar l'interval de
 comprovació («Només manualment» o cada 5, 10, 15, 30, 60 o 120 minuts): els comptes
 nous comencen amb 15 minuts i els que ja existien es comproven només manualment. El

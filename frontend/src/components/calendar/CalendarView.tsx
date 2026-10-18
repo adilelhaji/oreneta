@@ -31,6 +31,9 @@ import { WeekView } from './WeekView'
 import { EventEditor } from './EventEditor'
 import { EventDetails } from './EventDetails'
 import { CalendarList } from './CalendarList'
+import { CalendarDnd } from './CalendarDnd'
+import { MiniCalendar } from './MiniCalendar'
+import { MoveQuestions, MoveStatus } from './MoveQuestions'
 import { CompactNavigation } from '../sidenav/CompactNavigation'
 import { EventContextMenu, type EventContextMenuState } from './EventContextMenu'
 import { settings$ } from '../../states/settings'
@@ -106,7 +109,7 @@ export function CalendarView() {
               title={t('calendar.workWeekHint', { defaultValue: 'Show only the working days of the week' })}
               className={`inline-flex min-h-8 items-center gap-1.5 rounded-control-sm px-2.5 py-1 text-caption font-medium transition-colors cursor-pointer ${
                 calendarPrefs.workWeekOnly
-                  ? 'bg-accent/10 text-accent ring-1 ring-accent/30'
+                  ? 'bg-active text-accent ring-1 ring-accent/30'
                   : 'text-secondary hover:bg-hover hover:text-primary'
               }`}
             >
@@ -177,13 +180,28 @@ export function CalendarView() {
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
-        <CalendarList />
-        {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
-        {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
-        {view === 'week' && <WeekView days={7} onEventMenu={onEventMenu} />}
-        {view === 'day' && <WeekView days={1} onEventMenu={onEventMenu} />}
+      <div className="relative shrink-0">
+        <MoveStatus />
       </div>
+      <MoveQuestions />
+
+      {/* One drag and drop for the views and the mini calendar beside them, so
+          an event held in the week can be dropped on a day of another month. */}
+      <CalendarDnd>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col min-[769px]:flex-row">
+          <div
+            data-region="folders"
+            className="flex shrink-0 flex-col border-border bg-raised min-[769px]:w-48 min-[769px]:border-e"
+          >
+            <MiniCalendar />
+            <CalendarList />
+          </div>
+          {view === 'agenda' && <AgendaList onEventMenu={onEventMenu} />}
+          {view === 'month' && <MonthView onEventMenu={onEventMenu} />}
+          {view === 'week' && <WeekView days={7} onEventMenu={onEventMenu} />}
+          {view === 'day' && <WeekView days={1} onEventMenu={onEventMenu} />}
+        </div>
+      </CalendarDnd>
     </div>
   )
 }
